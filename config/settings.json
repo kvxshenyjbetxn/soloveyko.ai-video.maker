@@ -1,16 +1,4 @@
 {
-    "theme": "Light",
     "language": "uk",
-    "openrouter_api_key": "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",
-    "openrouter_models": [
-        "google/gemini-2.5-flash"
-    ],
-    "language_settings": {
-        "uk": {
-            "prompt": "",
-            "model": "google/gemini-2.5-flash",
-            "temperature": 1.0,
-            "max_tokens": 128000
-        }
-    }
+    "theme": "dark"
 }
