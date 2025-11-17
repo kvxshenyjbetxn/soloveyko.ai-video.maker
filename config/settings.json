@@ -1,4 +1,8 @@
 {
     "language": "uk",
-    "theme": "black"
+    "theme": "black",
+    "openrouter_api_key": "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",
+    "openrouter_models": [
+        "google/gemini-2.5-flash"
+    ]
 }
