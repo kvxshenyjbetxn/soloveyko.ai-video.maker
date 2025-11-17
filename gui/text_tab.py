@@ -31,6 +31,13 @@ class TextTab(QWidget):
         self.text_edit.textChanged.connect(self.update_char_count)
         layout.addWidget(self.text_edit)
 
+        # Status bar
+        self.status_bar_layout = QHBoxLayout()
+        self.openrouter_balance_label = QLabel()
+        self.status_bar_layout.addWidget(self.openrouter_balance_label)
+        self.status_bar_layout.addStretch()
+        layout.addLayout(self.status_bar_layout)
+
         self.update_char_count() # Initial count
 
     def update_char_count(self):
@@ -52,3 +59,17 @@ class TextTab(QWidget):
 
     def retranslate_ui(self):
         self.update_char_count()
+        self.update_balance()
+
+    def update_balance(self):
+        from api.openrouter import OpenRouterAPI
+        
+        api = OpenRouterAPI()
+        usage = api.get_balance()
+
+        if usage is not None:
+            self.openrouter_balance_label.setText(f"{translator.translate('balance_label')} {usage:.4f}$")
+        elif api.api_key:
+            self.openrouter_balance_label.setText(f"{translator.translate('balance_label')} -")
+        else:
+            self.openrouter_balance_label.setText("")

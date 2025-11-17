@@ -20,5 +20,19 @@
     "black_theme": "Чорна (Amoled)",
     "total_chars_label": "Символів",
     "clean_chars_label": "Чистих символів",
-    "paragraphs_label": "Абзаців"
+    "paragraphs_label": "Абзаців",
+    "openrouter_api_key": "Ключ API OpenRouter:",
+    "enter_api_key": "Введіть ваш API ключ",
+    "check_connection": "Перевірити з'єднання",
+    "connection_status_not_checked": "Статус: Не перевірено",
+    "connection_status_checking": "Статус: Перевірка...",
+    "connection_status_connected": "Статус: Підключено",
+    "connection_status_error": "Статус: Помилка",
+    "connection_status_not_configured": "Статус: Не налаштовано",
+    "balance_label": "Баланс:",
+    "balance_loading": "Баланс: Завантаження...",
+    "models": "Моделі",
+    "enter_model_name": "Введіть назву моделі",
+    "add_model": "Додати",
+    "remove_model": "Видалити"
 }

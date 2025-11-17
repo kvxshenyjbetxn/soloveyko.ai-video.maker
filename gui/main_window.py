@@ -34,9 +34,17 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
         self.tabs.addTab(self.settings_tab, self.translator.translate('settings_tab'))
 
+        # Connect signals
+        self.settings_tab.api_tab.openrouter_tab.balance_updated.connect(self.update_balance)
+
+        self.update_balance()
+
     def update_title(self):
         app_name = self.translator.translate('app_title')
         self.setWindowTitle(f"{app_name} v{__version__}")
+
+    def update_balance(self):
+        self.text_tab.update_balance()
 
     def change_theme(self, theme_name):
         self.settings_manager.set('theme', theme_name)

@@ -20,5 +20,19 @@
     "black_theme": "Черная (Amoled)",
     "total_chars_label": "Символов",
     "clean_chars_label": "Чистых символов",
-    "paragraphs_label": "Абзацев"
+    "paragraphs_label": "Абзацев",
+    "openrouter_api_key": "Ключ API OpenRouter:",
+    "enter_api_key": "Введите ваш API ключ",
+    "check_connection": "Проверить соединение",
+    "connection_status_not_checked": "Статус: Не проверено",
+    "connection_status_checking": "Статус: Проверка...",
+    "connection_status_connected": "Статус: Подключено",
+    "connection_status_error": "Статус: Ошибка",
+    "connection_status_not_configured": "Статус: Не настроено",
+    "balance_label": "Баланс:",
+    "balance_loading": "Баланс: Загрузка...",
+    "models": "Модели",
+    "enter_model_name": "Введите название модели",
+    "add_model": "Добавить",
+    "remove_model": "Удалить"
 }
