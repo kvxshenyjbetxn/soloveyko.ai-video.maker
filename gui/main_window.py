@@ -22,7 +22,7 @@ class MainWindow(QMainWindow):
         }
 
         self.setWindowTitle("Modern PySide6 App")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1280, 720)
 
         # Create a central widget and layout
         self.central_widget = QWidget()

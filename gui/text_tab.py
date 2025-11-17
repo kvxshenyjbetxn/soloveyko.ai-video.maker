@@ -19,7 +19,7 @@ class TextTab(QWidget):
         # Bottom layout for version label
         bottom_layout = QHBoxLayout()
         bottom_layout.addStretch()
-        self.version_label = QLabel("версія 0.1.0")
+        self.version_label = QLabel("версія 0.1.1")
         self.version_label.setStyleSheet("color: grey;") # Make it less prominent
         bottom_layout.addWidget(self.version_label)
 
