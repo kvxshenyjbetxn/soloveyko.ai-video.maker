@@ -1,0 +1,40 @@
+/* Light Theme */
+QWidget {
+    background-color: #f0f0f0;
+    color: #000000;
+}
+
+QTabWidget::pane {
+    border-top: 2px solid #c2c7cb;
+}
+
+QTabBar::tab {
+    background: #e0e0e0;
+    border: 1px solid #c4c4c4;
+    padding: 8px;
+    min-width: 100px;
+}
+
+QTabBar::tab:selected {
+    background: #f0f0f0;
+    border-bottom-color: #f0f0f0; /* Same as pane background */
+}
+
+QTabBar::tab:!selected:hover {
+    background: #d5d5d5;
+}
+
+QTextEdit {
+    background-color: #ffffff;
+    border: 1px solid #c4c4c4;
+}
+
+QComboBox {
+    border: 1px solid #c4c4c4;
+    padding: 4px;
+    background-color: #ffffff;
+}
+
+QComboBox::drop-down {
+    border: none;
+}

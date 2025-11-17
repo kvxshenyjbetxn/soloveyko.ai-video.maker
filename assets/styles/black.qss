@@ -1,0 +1,41 @@
+/* Black (Amoled) Theme */
+QWidget {
+    background-color: #000000;
+    color: #f0f0f0;
+}
+
+QTabWidget::pane {
+    border-top: 2px solid #1c1c1c;
+}
+
+QTabBar::tab {
+    background: #0a0a0a;
+    border: 1px solid #1c1c1c;
+    padding: 8px;
+    min-width: 100px;
+}
+
+QTabBar::tab:selected {
+    background: #000000;
+    border-bottom-color: #000000;
+}
+
+QTabBar::tab:!selected:hover {
+    background: #1a1a1a;
+}
+
+QTextEdit {
+    background-color: #0a0a0a;
+    border: 1px solid #1c1c1c;
+    color: #f0f0f0;
+}
+
+QComboBox {
+    border: 1px solid #1c1c1c;
+    padding: 4px;
+    background-color: #0a0a0a;
+}
+
+QComboBox::drop-down {
+    border: none;
+}
