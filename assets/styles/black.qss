@@ -1,7 +1,9 @@
 /* Black (Amoled) Theme */
 QWidget {
     background-color: #000000;
-    color: #f0f0f0;
+    color: #e0e0e0;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 10pt;
 }
 
 QTabWidget::pane {
@@ -9,33 +11,58 @@ QTabWidget::pane {
 }
 
 QTabBar::tab {
-    background: #0a0a0a;
-    border: 1px solid #1c1c1c;
-    padding: 8px;
-    min-width: 100px;
+    background: #121212;
+    border: 1px solid #000000;
+    padding: 8px 15px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    color: #b0b0b0;
 }
 
 QTabBar::tab:selected {
     background: #000000;
     border-bottom-color: #000000;
+    color: #ffffff;
 }
 
 QTabBar::tab:!selected:hover {
-    background: #1a1a1a;
+    background: #1f1f1f;
 }
 
 QTextEdit {
-    background-color: #0a0a0a;
-    border: 1px solid #1c1c1c;
-    color: #f0f0f0;
+    background-color: #121212;
+    color: #e0e0e0;
+    border: 1px solid #2c2c2c;
+    border-radius: 8px;
+    padding: 5px;
+}
+
+QPushButton {
+    background-color: #1c1c1c;
+    border: 1px solid #2c2c2c;
+    padding: 5px 15px;
+    border-radius: 4px;
+}
+
+QPushButton:hover {
+    background-color: #2a2a2a;
+}
+
+QPushButton:pressed {
+    background-color: #333333;
 }
 
 QComboBox {
-    border: 1px solid #1c1c1c;
-    padding: 4px;
-    background-color: #0a0a0a;
+    border: 1px solid #2c2c2c;
+    border-radius: 4px;
+    padding: 3px 5px;
+    background-color: #121212;
 }
 
 QComboBox::drop-down {
-    border: none;
+    border-left: 1px solid #2c2c2c;
+}
+
+QLabel {
+    color: #b0b0b0;
 }

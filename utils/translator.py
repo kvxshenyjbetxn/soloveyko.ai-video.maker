@@ -1,40 +1,31 @@
 import json
 import os
-from PySide6.QtCore import QObject, Signal
+from utils.settings import settings_manager
 
-class Translator(QObject):
-    language_changed = Signal()
-
+class Translator:
     def __init__(self):
-        super().__init__()
-        self._translations = {}
-        self._current_lang = "en"
-        self._load_translations()
+        self.language = settings_manager.get('language')
+        self.translations = self.load_translations()
 
-    def _load_translations(self):
-        # Build an absolute path to the translations directory
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(current_dir)
-        translations_dir = os.path.join(project_root, "assets", "translations")
+    def load_translations(self):
+        lang_file = f"assets/translations/{self.language}.json"
+        if not os.path.exists(lang_file):
+            # Fallback to a default language if the selected one doesn't exist
+            self.language = 'en'
+            lang_file = f"assets/translations/{self.language}.json"
+            settings_manager.set('language', self.language)
 
-        if not os.path.isdir(translations_dir):
-            print(f"Error: Translations directory not found at {translations_dir}")
-            return
+        if os.path.exists(lang_file):
+            with open(lang_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
 
-        for filename in os.listdir(translations_dir):
-            if filename.endswith(".json"):
-                lang_code = filename.split(".")[0]
-                filepath = os.path.join(translations_dir, filename)
-                with open(filepath, "r", encoding="utf-8") as f:
-                    self._translations[lang_code] = json.load(f)
+    def translate(self, key):
+        return self.translations.get(key, key)
 
-    def set_language(self, lang_code):
-        if lang_code in self._translations:
-            self._current_lang = lang_code
-            self.language_changed.emit()
+    def set_language(self, language_code):
+        self.language = language_code
+        settings_manager.set('language', self.language)
+        self.translations = self.load_translations()
 
-    def tr(self, key):
-        return self._translations.get(self._current_lang, {}).get(key, key)
-
-# Singleton instance
 translator = Translator()
