@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel
 from utils.translator import translator
 
 class GeneralTab(QWidget):
@@ -31,7 +31,7 @@ class GeneralTab(QWidget):
         self.theme_combo.addItem(translator.translate('dark_theme'), 'dark')
         self.theme_combo.addItem(translator.translate('black_theme'), 'black')
 
-        current_theme = self.main_window.settings_manager.get('theme')
+        current_theme = self.main_window.settings_manager.get('theme', 'light')
         self.theme_combo.setCurrentIndex(self.theme_combo.findData(current_theme))
 
         self.theme_combo.currentIndexChanged.connect(self.theme_changed)
@@ -53,7 +53,7 @@ class GeneralTab(QWidget):
     def retranslate_ui(self):
         self.language_label.setText(translator.translate('language_label'))
         self.theme_label.setText(translator.translate('theme_label'))
-        # Update theme combo box texts without changing selection
         self.theme_combo.setItemText(0, translator.translate('light_theme'))
         self.theme_combo.setItemText(1, translator.translate('dark_theme'))
         self.theme_combo.setItemText(2, translator.translate('black_theme'))
+

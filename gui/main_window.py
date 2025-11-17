@@ -1,6 +1,7 @@
 import os
-from PyQt6.QtWidgets import QMainWindow, QTabWidget, QWidget
-from PyQt6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QApplication
+from PySide6.QtGui import QPalette, QColor
+from PySide6.QtCore import QCoreApplication
 
 from utils.settings import settings_manager
 from utils.translator import translator
@@ -15,7 +16,7 @@ class MainWindow(QMainWindow):
         self.settings_manager = settings_manager
         self.translator = translator
         self.init_ui()
-        self.apply_theme()
+        self.apply_theme(self.settings_manager.get('theme', 'light'))
 
     def init_ui(self):
         self.update_title()
@@ -37,21 +38,50 @@ class MainWindow(QMainWindow):
         app_name = self.translator.translate('app_title')
         self.setWindowTitle(f"{app_name} v{__version__}")
 
-    def apply_theme(self):
-        theme = self.settings_manager.get('theme')
-        style_sheet = self.load_style_sheet(theme)
-        self.setStyleSheet(style_sheet)
+    def apply_theme(self, theme_name):
+        app = QApplication.instance()
+        
+        # Start with a fresh palette
+        palette = QPalette()
 
-    def load_style_sheet(self, theme_name):
-        path = f"assets/styles/{theme_name}.qss"
-        if os.path.exists(path):
-            with open(path, "r") as f:
-                return f.read()
-        return ""
+        if theme_name == 'dark':
+            palette.setColor(QPalette.ColorRole.Window, QColor(53, 53, 53))
+            palette.setColor(QPalette.ColorRole.WindowText, QColor(255, 255, 255))
+            palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
+            palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 220))
+            palette.setColor(QPalette.ColorRole.ToolTipText, QColor(0, 0, 0))
+            palette.setColor(QPalette.ColorRole.Text, QColor(255, 255, 255))
+            palette.setColor(QPalette.ColorRole.Button, QColor(53, 53, 53))
+            palette.setColor(QPalette.ColorRole.ButtonText, QColor(255, 255, 255))
+            palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 0, 0))
+            palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+            palette.setColor(QPalette.ColorRole.HighlightedText, QColor(0, 0, 0))
+        elif theme_name == 'black':
+            palette.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0))
+            palette.setColor(QPalette.ColorRole.WindowText, QColor(225, 225, 225))
+            palette.setColor(QPalette.ColorRole.Base, QColor(18, 18, 18))
+            palette.setColor(QPalette.ColorRole.AlternateBase, QColor(28, 28, 28))
+            palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(255, 255, 220))
+            palette.setColor(QPalette.ColorRole.ToolTipText, QColor(0, 0, 0))
+            palette.setColor(QPalette.ColorRole.Text, QColor(225, 225, 225))
+            palette.setColor(QPalette.ColorRole.Button, QColor(28, 28, 28))
+            palette.setColor(QPalette.ColorRole.ButtonText, QColor(225, 225, 225))
+            palette.setColor(QPalette.ColorRole.BrightText, QColor(255, 0, 0))
+            palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+            palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+            palette.setColor(QPalette.ColorRole.HighlightedText, QColor(255, 255, 255))
+        else: # 'light' theme
+            # Use the default system palette for the light theme
+            app.setPalette(app.style().standardPalette())
+            return
+
+        app.setPalette(palette)
 
     def change_theme(self, theme_name):
         self.settings_manager.set('theme', theme_name)
-        self.apply_theme()
+        self.apply_theme(theme_name)
 
     def change_language(self, lang_code):
         self.translator.set_language(lang_code)
@@ -62,7 +92,6 @@ class MainWindow(QMainWindow):
         self.tabs.setTabText(0, self.translator.translate('text_processing_tab'))
         self.tabs.setTabText(1, self.translator.translate('settings_tab'))
         
-        # Retranslate all tabs
         self.text_tab.retranslate_ui()
         self.settings_tab.retranslate_ui()
 
