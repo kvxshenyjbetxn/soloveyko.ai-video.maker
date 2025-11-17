@@ -17,5 +17,8 @@
     "theme_label": "Theme:",
     "light_theme": "Light",
     "dark_theme": "Dark",
-    "black_theme": "Black (Amoled)"
+    "black_theme": "Black (Amoled)",
+    "total_chars_label": "Characters",
+    "clean_chars_label": "Clean characters",
+    "paragraphs_label": "Paragraphs"
 }

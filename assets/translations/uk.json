@@ -17,5 +17,8 @@
     "theme_label": "Тема оформлення:",
     "light_theme": "Світла",
     "dark_theme": "Темна",
-    "black_theme": "Чорна (Amoled)"
+    "black_theme": "Чорна (Amoled)",
+    "total_chars_label": "Символів",
+    "clean_chars_label": "Чистих символів",
+    "paragraphs_label": "Абзаців"
 }
