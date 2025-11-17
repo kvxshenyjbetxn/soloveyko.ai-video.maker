@@ -15,7 +15,7 @@ def main():
     settings = AppSettings()
     translator.set_language(settings.get_language())
 
-    window = MainWindow()
+    window = MainWindow(settings)
     window.show()
     return app.exec()
 

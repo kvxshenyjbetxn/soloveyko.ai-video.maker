@@ -24,7 +24,10 @@ class AppSettings:
             # Default settings
             self.data = {
                 "theme": "Light",
-                "language": "en"
+                "language": "en",
+                "openrouter_api_key": "",
+                "language_settings": {},
+                "openrouter_models": []
             }
             self._save()
 
@@ -45,4 +48,25 @@ class AppSettings:
 
     def set_language(self, lang_code):
         self.data["language"] = lang_code
+        self._save()
+
+    def get_openrouter_api_key(self):
+        return self.data.get("openrouter_api_key", "")
+
+    def set_openrouter_api_key(self, api_key):
+        self.data["openrouter_api_key"] = api_key
+        self._save()
+
+    def get_language_settings(self):
+        return self.data.get("language_settings", {})
+
+    def set_language_settings(self, settings):
+        self.data["language_settings"] = settings
+        self._save()
+
+    def get_openrouter_models(self):
+        return self.data.get("openrouter_models", [])
+
+    def set_openrouter_models(self, models):
+        self.data["openrouter_models"] = models
         self._save()
