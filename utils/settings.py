@@ -29,8 +29,10 @@ class SettingsManager:
         with open(self.settings_file, 'w', encoding='utf-8') as f:
             json.dump(self.settings, f, indent=4)
 
-    def get(self, key):
-        return self.settings.get(key, self.defaults.get(key))
+    def get(self, key, default=None):
+        if default is None:
+            default = self.defaults.get(key)
+        return self.settings.get(key, default)
 
     def set(self, key, value):
         self.settings[key] = value
