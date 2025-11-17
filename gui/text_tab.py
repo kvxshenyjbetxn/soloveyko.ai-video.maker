@@ -16,11 +16,13 @@ class TextTab(QWidget):
         # Add to layout
         self.layout.addWidget(self.text_edit)
 
-        # Bottom layout for version label
+        # Bottom layout for balance and version
         bottom_layout = QHBoxLayout()
+        self.balance_label = QLabel(f"{translator.tr('OpenRouter Usage')}: -")
+        bottom_layout.addWidget(self.balance_label)
         bottom_layout.addStretch()
-        self.version_label = QLabel("версія 0.1.1")
-        self.version_label.setStyleSheet("color: grey;") # Make it less prominent
+        self.version_label = QLabel("версія 0.1.2")
+        self.version_label.setStyleSheet("color: grey;")
         bottom_layout.addWidget(self.version_label)
 
         self.layout.addLayout(bottom_layout)
@@ -31,4 +33,6 @@ class TextTab(QWidget):
 
     def retranslate_ui(self):
         self.text_edit.setPlaceholderText(translator.tr("Enter your text here..."))
+        # Balance label is updated through a separate method to handle dynamic values
+        # self.balance_label.setText(f"{translator.tr('OpenRouter Usage')}: ...")
         # The version label is static and doesn't need translation
