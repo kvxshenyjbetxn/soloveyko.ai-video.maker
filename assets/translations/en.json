@@ -34,5 +34,10 @@
     "models": "Models",
     "enter_model_name": "Enter model name",
     "add_model": "Add",
-    "remove_model": "Remove"
+    "remove_model": "Remove",
+    "log_tab": "Log",
+    "app_started": "Application started.",
+    "app_closing": "Application closing.",
+    "balance_update_started": "Updating balance...",
+    "balance_updated": "Balance updated."
 }

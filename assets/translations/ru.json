@@ -34,5 +34,10 @@
     "models": "Модели",
     "enter_model_name": "Введите название модели",
     "add_model": "Добавить",
-    "remove_model": "Удалить"
+    "remove_model": "Удалить",
+    "log_tab": "Лог",
+    "app_started": "Приложение запущено.",
+    "app_closing": "Приложение закрывается.",
+    "balance_update_started": "Обновление баланса...",
+    "balance_updated": "Баланс обновлен."
 }

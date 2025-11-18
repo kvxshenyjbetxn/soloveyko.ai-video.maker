@@ -3,6 +3,7 @@ from PySide6.QtCore import Signal
 from utils.translator import translator
 from utils.settings import settings_manager
 from api.openrouter import OpenRouterAPI
+from utils.logger import logger
 
 class OpenRouterTab(QWidget):
     balance_updated = Signal()

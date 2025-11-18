@@ -9,6 +9,8 @@ from config.version import __version__
 
 from gui.text_tab import TextTab
 from gui.settings_tab import SettingsTab
+from gui.log_tab import LogTab
+from utils.logger import logger
 
 class MainWindow(QMainWindow):
     def __init__(self, app):
@@ -17,6 +19,7 @@ class MainWindow(QMainWindow):
         self.settings_manager = settings_manager
         self.translator = translator
         self.init_ui()
+        logger.log(translator.translate('app_started'))
 
     def init_ui(self):
         self.update_title()
@@ -30,9 +33,12 @@ class MainWindow(QMainWindow):
 
         self.text_tab = TextTab()
         self.settings_tab = SettingsTab(main_window=self)
+        self.log_tab = LogTab()
+        logger.set_log_widget(self.log_tab)
 
         self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
         self.tabs.addTab(self.settings_tab, self.translator.translate('settings_tab'))
+        self.tabs.addTab(self.log_tab, self.translator.translate('log_tab'))
 
         # Connect signals
         self.settings_tab.api_tab.openrouter_tab.balance_updated.connect(self.update_balance)
@@ -64,7 +70,12 @@ class MainWindow(QMainWindow):
         self.update_title()
         self.tabs.setTabText(0, self.translator.translate('text_processing_tab'))
         self.tabs.setTabText(1, self.translator.translate('settings_tab'))
+        self.tabs.setTabText(2, self.translator.translate('log_tab'))
         
         self.text_tab.retranslate_ui()
         self.settings_tab.retranslate_ui()
+
+    def closeEvent(self, event):
+        logger.log(translator.translate('app_closing'))
+        super().closeEvent(event)
 
