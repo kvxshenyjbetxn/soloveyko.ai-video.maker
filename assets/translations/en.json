@@ -58,5 +58,7 @@
     "stage_images": "Images",
     "stage_voiceover": "Voiceover",
     "stage_subtitles": "Subtitles",
-    "stage_montage": "Montage"
+    "stage_montage": "Montage",
+    "select_all": "Select All",
+    "deselect_all": "Deselect All"
 }

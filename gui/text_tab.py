@@ -1,7 +1,7 @@
 import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QCheckBox
+    QPushButton, QFrame, QCheckBox, QToolButton
 )
 from PySide6.QtCore import Qt
 from functools import partial
@@ -19,28 +19,40 @@ class StageSelectionWidget(QWidget):
         self.lang_label = QLabel(f"{language_name}:")
         layout.addWidget(self.lang_label)
 
+        self.select_all_button = QToolButton()
+        self.select_all_button.setText(translator.translate("select_all"))
+        self.select_all_button.clicked.connect(self.select_all)
+        layout.addWidget(self.select_all_button)
+
+        self.deselect_all_button = QToolButton()
+        self.deselect_all_button.setText(translator.translate("deselect_all"))
+        self.deselect_all_button.clicked.connect(self.deselect_all)
+        layout.addWidget(self.deselect_all_button)
+
         line = QFrame()
         line.setFrameShape(QFrame.Shape.VLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(line)
         
-        self.translation_check = QCheckBox(translator.translate("stage_translation"))
-        self.img_prompts_check = QCheckBox(translator.translate("stage_img_prompts"))
-        self.images_check = QCheckBox(translator.translate("stage_images"))
-        self.voiceover_check = QCheckBox(translator.translate("stage_voiceover"))
-        self.subtitles_check = QCheckBox(translator.translate("stage_subtitles"))
-        self.montage_check = QCheckBox(translator.translate("stage_montage"))
-
-        self.stages_layout = QHBoxLayout()
-        self.stages_layout.addWidget(self.translation_check)
-        self.stages_layout.addWidget(self.img_prompts_check)
-        self.stages_layout.addWidget(self.images_check)
-        self.stages_layout.addWidget(self.voiceover_check)
-        self.stages_layout.addWidget(self.subtitles_check)
-        self.stages_layout.addWidget(self.montage_check)
-        self.stages_layout.addStretch()
+        self.checkboxes = []
+        stage_keys = ["stage_translation", "stage_img_prompts", "stage_images", 
+                      "stage_voiceover", "stage_subtitles", "stage_montage"]
         
-        layout.addLayout(self.stages_layout)
+        for key in stage_keys:
+            checkbox = QCheckBox(translator.translate(key))
+            checkbox.setChecked(True)
+            layout.addWidget(checkbox)
+            self.checkboxes.append(checkbox)
+            
+        layout.addStretch()
+
+    def select_all(self):
+        for checkbox in self.checkboxes:
+            checkbox.setChecked(True)
+
+    def deselect_all(self):
+        for checkbox in self.checkboxes:
+            checkbox.setChecked(False)
 
 class TextTab(QWidget):
     def __init__(self):
@@ -138,11 +150,9 @@ class TextTab(QWidget):
         if not visible_labels:
             return
 
-        # First pass: find the maximum required width
         for label in visible_labels:
             max_width = max(max_width, label.sizeHint().width())
         
-        # Second pass: apply the maximum width to all visible labels
         for label in visible_labels:
             label.setMinimumWidth(max_width)
 
@@ -159,8 +169,6 @@ class TextTab(QWidget):
     def retranslate_ui(self):
         self.update_char_count()
         self.update_balance()
-        # A full retranslation would require recreating the stage widgets.
-        # This is a limitation for now.
         self.load_languages_menu()
 
     def update_balance(self):
