@@ -8,8 +8,9 @@ from utils.logger import logger
 class OpenRouterTab(QWidget):
     balance_updated = Signal()
 
-    def __init__(self):
+    def __init__(self, main_window=None):
         super().__init__()
+        self.main_window = main_window
         self.settings = settings_manager
         self.api = OpenRouterAPI()
         self.init_ui()
@@ -77,7 +78,7 @@ class OpenRouterTab(QWidget):
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
         self.update_connection_status_label()
-        self.update_balance_label()
+        # self.update_balance_label()
         self.models_label.setText(translator.translate("models"))
         self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
         self.add_model_button.setText(translator.translate("add_model"))
@@ -96,20 +97,13 @@ class OpenRouterTab(QWidget):
 
     def check_connection(self):
         self.update_connection_status_label("checking")
-        self.update_balance_label()
+        self.balance_label.setText(translator.translate("balance_loading"))
         
         status = self.api.check_connection()
         self.update_connection_status_label(status)
         
         if status == "connected":
-            self.fetch_balance()
-        else:
-            self.update_balance_label(0)
-
-    def fetch_balance(self):
-        usage = self.api.get_balance()
-        self.update_balance_label(usage)
-        self.balance_updated.emit()
+            self.balance_updated.emit()
 
     def update_connection_status_label(self, status=None):
         if status == "checking":
@@ -123,11 +117,8 @@ class OpenRouterTab(QWidget):
         else:
             self.connection_status_label.setText(translator.translate("connection_status_not_checked"))
 
-    def update_balance_label(self, usage=None):
-        if usage is not None:
-            self.balance_label.setText(f"{translator.translate('balance_label')} {usage:.4f}$")
-        else:
-            self.balance_label.setText(translator.translate("balance_loading"))
+    def update_balance_label(self, balance_text):
+        self.balance_label.setText(balance_text)
 
     def add_model(self):
         model_name = self.add_model_input.text().strip()

@@ -221,19 +221,11 @@ class TextTab(QWidget):
 
     def retranslate_ui(self):
         self.update_char_count()
-        self.update_balance()
+        # self.update_balance() # This will be called from main_window
         self.load_languages_menu()
         self.add_to_queue_button.setText(translator.translate('add_to_queue'))
 
 
-    def update_balance(self):
-        from api.openrouter import OpenRouterAPI
-        api = OpenRouterAPI()
-        usage = api.get_balance()
-        if usage is not None:
-            self.openrouter_balance_label.setText(f"{translator.translate('balance_label')} {usage:.4f}$")
-        elif api.api_key:
-            self.openrouter_balance_label.setText(f"{translator.translate('balance_label')} -")
-        else:
-            self.openrouter_balance_label.setText("")
+    def update_balance(self, balance_text):
+        self.openrouter_balance_label.setText(balance_text)
 

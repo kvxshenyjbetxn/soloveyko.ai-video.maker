@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QPushButton, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QPushButton, QHBoxLayout, QLabel
 from utils.translator import translator
 
 class QueueTab(QWidget):
@@ -11,6 +11,12 @@ class QueueTab(QWidget):
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
+
+        top_layout = QHBoxLayout()
+        self.balance_label = QLabel()
+        top_layout.addWidget(self.balance_label)
+        top_layout.addStretch()
+        main_layout.addLayout(top_layout)
         
         # Button layout
         button_layout = QHBoxLayout()
@@ -88,6 +94,9 @@ class QueueTab(QWidget):
             self.expand_all_button.setText(translator.translate('collapse_all'))
         else:
             self.expand_all_button.setText(translator.translate('expand_all'))
+
+    def update_balance(self, balance_text):
+        self.balance_label.setText(balance_text)
 
     def retranslate_ui(self):
         self.task_tree.setHeaderLabels([translator.translate('task_header')])
