@@ -1,5 +1,5 @@
 import os
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox
 from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtGui import QWheelEvent
 from gui.qt_material import apply_stylesheet
@@ -13,6 +13,7 @@ from gui.settings_tab import SettingsTab
 from gui.log_tab import LogTab
 from gui.queue_tab import QueueTab
 from core.queue_manager import QueueManager
+from core.task_processor import TaskProcessor
 from utils.logger import logger
 
 class MainWindow(QMainWindow):
@@ -22,6 +23,7 @@ class MainWindow(QMainWindow):
         self.settings_manager = settings_manager
         self.translator = translator
         self.queue_manager = QueueManager()
+        self.task_processor = TaskProcessor(self.queue_manager)
         self.init_ui()
         logger.log(translator.translate('app_started'))
         self.app.installEventFilter(self)
@@ -80,8 +82,15 @@ class MainWindow(QMainWindow):
         # Connect signals
         self.settings_tab.api_tab.openrouter_tab.balance_updated.connect(self.update_balance)
         self.queue_manager.task_added.connect(self.queue_tab.add_task)
+        self.queue_tab.start_processing_button.clicked.connect(self.task_processor.start_processing)
+        self.task_processor.processing_finished.connect(self.show_processing_finished_dialog)
 
         self.update_balance()
+
+    def show_processing_finished_dialog(self, elapsed_time):
+        title = translator.translate('processing_complete_title')
+        message = translator.translate('processing_complete_message').format(elapsed_time)
+        QMessageBox.information(self, title, message)
 
     def update_title(self):
         app_name = self.translator.translate('app_title')

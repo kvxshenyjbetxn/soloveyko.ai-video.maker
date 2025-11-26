@@ -22,6 +22,10 @@ class QueueTab(QWidget):
         self.expand_all_button.clicked.connect(self.toggle_expand_all)
         button_layout.addWidget(self.expand_all_button)
         button_layout.addStretch()
+
+        self.start_processing_button = QPushButton()
+        button_layout.addWidget(self.start_processing_button)
+
         main_layout.addLayout(button_layout)
 
         self.task_tree = QTreeWidget()
@@ -87,4 +91,5 @@ class QueueTab(QWidget):
 
     def retranslate_ui(self):
         self.task_tree.setHeaderLabels([translator.translate('task_header')])
+        self.start_processing_button.setText(translator.translate('start_processing'))
         self.update_button_text()

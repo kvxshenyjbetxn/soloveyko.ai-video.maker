@@ -73,5 +73,9 @@
     "expand_jobs": "Розгорнути завдання",
     "expand_all": "Розгорнути все",
     "collapse_jobs": "Згорнути завдання",
-    "collapse_all": "Згорнути все"
+    "collapse_all": "Згорнути все",
+    "tokens_label": "Макс. токенів:",
+    "start_processing": "Почати обробку",
+    "processing_complete_title": "Обробку завершено",
+    "processing_complete_message": "Обробку черги завершено.\n\nЗагальний час: {}"
 }
