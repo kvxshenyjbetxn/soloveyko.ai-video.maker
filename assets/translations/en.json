@@ -47,5 +47,10 @@
     "prompts_settings_label": "Prompts Settings",
     "montage_settings_label": "Montage Settings",
     "subtitles_settings_label": "Subtitles Settings",
-    "templates_settings_label": "Templates Settings"
+    "templates_settings_label": "Templates Settings",
+    "manage_languages": "Manage Languages",
+    "language_name_label": "Display Name:",
+    "language_id_label": "Language ID (e.g. uk-UK):",
+    "language_prompt_label": "Prompt for this language:",
+    "translation_model_label": "Translation Model:"
 }

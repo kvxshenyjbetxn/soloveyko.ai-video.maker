@@ -47,5 +47,10 @@
     "prompts_settings_label": "Настройки промтов",
     "montage_settings_label": "Настройки монтажа",
     "subtitles_settings_label": "Настройки субтитров",
-    "templates_settings_label": "Настройки шаблонов"
+    "templates_settings_label": "Настройки шаблонов",
+    "manage_languages": "Управление языками",
+    "language_name_label": "Отображаемое имя:",
+    "language_id_label": "Идентификатор языка (напр. ru-RU):",
+    "language_prompt_label": "Промт для этого языка:",
+    "translation_model_label": "Модель для перевода:"
 }
