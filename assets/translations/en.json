@@ -68,5 +68,6 @@
     "add_to_queue": "Add to Queue",
     "enter_task_name_title": "Enter task name",
     "enter_task_name_label": "Task name:",
-    "default_task_name": "Task"
+    "default_task_name": "Task",
+    "task_header": "Tasks and Stages"
 }
