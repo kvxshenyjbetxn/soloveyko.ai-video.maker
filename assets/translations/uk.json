@@ -39,5 +39,13 @@
     "app_started": "Додаток запущено.",
     "app_closing": "Додаток закривається.",
     "balance_update_started": "Оновлення балансу...",
-    "balance_updated": "Баланс оновлено."
+    "balance_updated": "Баланс оновлено.",
+    "audio_settings_label": "Налаштування аудіо",
+    "image_settings_label": "Налаштування зображень",
+    "dataimpulse_settings_label": "Налаштування DataImpulse",
+    "language_settings_label": "Налаштування мов",
+    "prompts_settings_label": "Налаштування промтів",
+    "montage_settings_label": "Налаштування монтажу",
+    "subtitles_settings_label": "Налаштування субтитрів",
+    "templates_settings_label": "Налаштування шаблонів"
 }

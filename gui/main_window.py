@@ -1,6 +1,7 @@
 import os
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout
+from PySide6.QtCore import QCoreApplication, QEvent
+from PySide6.QtGui import QWheelEvent
 from gui.qt_material import apply_stylesheet
 
 from utils.settings import settings_manager
@@ -20,6 +21,36 @@ class MainWindow(QMainWindow):
         self.translator = translator
         self.init_ui()
         logger.log(translator.translate('app_started'))
+        self.app.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Wheel and isinstance(obj, (QComboBox, QAbstractSpinBox, QSlider)):
+            
+            # Search for a scrollable ancestor.
+            parent = obj.parent()
+            while parent:
+                if isinstance(parent, QAbstractScrollArea):
+                    # Found a scroll area. Forward a new event to it to make it scroll.
+                    # A new event is created to prevent infinite recursion.
+                    parent_pos = parent.mapFromGlobal(event.globalPosition())
+                    new_event = QWheelEvent(
+                        parent_pos,
+                        event.globalPosition(),
+                        event.pixelDelta(),
+                        event.angleDelta(),
+                        event.buttons(),
+                        event.modifiers(),
+                        event.phase(),
+                        event.inverted(),
+                        event.source()
+                    )
+                    QCoreApplication.postEvent(parent, new_event)
+                    return True # Swallow the original event.
+                parent = parent.parent()
+
+            # No scrollable ancestor found. Just swallow the event to prevent the widget's value from changing.
+            return True
+        return super().eventFilter(obj, event)
 
     def init_ui(self):
         self.update_title()
@@ -28,8 +59,9 @@ class MainWindow(QMainWindow):
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         
-        self.tabs = QTabWidget(self.central_widget)
-        self.tabs.setGeometry(0, 0, 1280, 720)
+        layout = QVBoxLayout(self.central_widget)
+        self.tabs = QTabWidget()
+        layout.addWidget(self.tabs)
 
         self.text_tab = TextTab()
         self.settings_tab = SettingsTab(main_window=self)

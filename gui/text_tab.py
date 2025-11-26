@@ -1,5 +1,6 @@
 import re
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel, QScrollArea
+from PySide6.QtCore import Qt
 from utils.translator import translator
 
 class TextTab(QWidget):
@@ -8,7 +9,22 @@ class TextTab(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout(self)
+        # Main layout for the TextTab
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Scroll Area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        main_layout.addWidget(scroll_area)
+
+        # Container widget for the scroll area content
+        scroll_content = QWidget()
+        scroll_area.setWidget(scroll_content)
+
+        # Layout for the scroll area content
+        layout = QVBoxLayout(scroll_content)
         layout.setContentsMargins(10, 10, 10, 10)
 
         # Character count labels

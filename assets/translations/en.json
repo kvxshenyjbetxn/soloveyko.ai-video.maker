@@ -39,5 +39,13 @@
     "app_started": "Application started.",
     "app_closing": "Application closing.",
     "balance_update_started": "Updating balance...",
-    "balance_updated": "Balance updated."
+    "balance_updated": "Balance updated.",
+    "audio_settings_label": "Audio Settings",
+    "image_settings_label": "Image Settings",
+    "dataimpulse_settings_label": "DataImpulse Settings",
+    "language_settings_label": "Language Settings",
+    "prompts_settings_label": "Prompts Settings",
+    "montage_settings_label": "Montage Settings",
+    "subtitles_settings_label": "Subtitles Settings",
+    "templates_settings_label": "Templates Settings"
 }
