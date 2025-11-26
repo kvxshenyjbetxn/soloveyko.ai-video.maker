@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem
 from utils.translator import translator
 
 class QueueTab(QWidget):
@@ -9,14 +9,29 @@ class QueueTab(QWidget):
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
-        self.task_list = QListWidget()
-        main_layout.addWidget(self.task_list)
+        self.task_tree = QTreeWidget()
+        self.task_tree.setHeaderLabels([translator.translate('task_header')])
+        self.task_tree.setIndentation(10)
+        self.task_tree.setStyleSheet("QTreeView::item { padding: 1px 0px; }")
+        main_layout.addWidget(self.task_tree)
 
-    def add_task(self, task):
-        item = QListWidgetItem(task['name'])
-        self.task_list.addItem(item)
+    def add_task(self, job):
+        # Create top-level item for the job
+        job_item = QTreeWidgetItem(self.task_tree, [job['name']])
+
+        # Create child items for each language
+        for lang_id, lang_data in job['languages'].items():
+            lang_item = QTreeWidgetItem(job_item, [lang_data['display_name']])
+            
+            # Create grand-child items for each stage
+            for stage_key in lang_data['stages']:
+                stage_name = translator.translate(stage_key)
+                stage_item = QTreeWidgetItem(lang_item, [stage_name])
+        
+        self.task_tree.expandAll()
+
 
     def retranslate_ui(self):
-        # The queue tab itself doesn't have much text to retranslate
-        # but we might need it later.
-        pass
+        self.task_tree.setHeaderLabels([translator.translate('task_header')])
+        # Note: Retranslating existing items is more complex and not implemented here.
+        # It would require iterating through the tree and updating each item's text.

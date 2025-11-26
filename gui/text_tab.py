@@ -189,28 +189,25 @@ class TextTab(QWidget):
 
             text = self.text_edit.toPlainText()
             
-            tasks_to_add = []
+            languages_data = {}
             for lang_id, btn in self.language_buttons.items():
                 if btn.isChecked():
                     stage_widget = self.stage_widgets.get(lang_id)
                     if stage_widget and stage_widget.isVisible():
                         selected_stages = stage_widget.get_selected_stages()
                         if selected_stages:
-                            # If only one language is selected, don't add the language name to the task name
-                            final_task_name = task_name
-                            if sum(1 for b in self.language_buttons.values() if b.isChecked()) > 1:
-                                final_task_name = f"{task_name} ({btn.text()})"
-
-                            task = {
-                                "name": final_task_name,
-                                "text": text,
-                                "language_id": lang_id,
+                            languages_data[lang_id] = {
+                                "display_name": btn.text(),
                                 "stages": selected_stages
                             }
-                            tasks_to_add.append(task)
             
-            for task in tasks_to_add:
-                 self.main_window.queue_manager.add_task(task)
+            if languages_data:
+                job = {
+                    "name": task_name,
+                    "text": text,
+                    "languages": languages_data
+                }
+                self.main_window.queue_manager.add_task(job)
 
     def update_char_count(self):
         text = self.text_edit.toPlainText()
