@@ -67,5 +67,6 @@
     "queue_tab": "Queue",
     "add_to_queue": "Add to Queue",
     "enter_task_name_title": "Enter task name",
-    "enter_task_name_label": "Task name:"
+    "enter_task_name_label": "Task name:",
+    "default_task_name": "Task"
 }
