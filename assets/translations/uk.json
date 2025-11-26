@@ -63,5 +63,9 @@
     "deselect_all": "Зняти вибір",
     "results_path_label": "Шлях для збереження результатів:",
     "browse_button": "Огляд...",
-    "select_directory": "Виберіть папку"
+    "select_directory": "Виберіть папку",
+    "queue_tab": "Черга",
+    "add_to_queue": "Додати до черги",
+    "enter_task_name_title": "Введіть назву завдання",
+    "enter_task_name_label": "Назва завдання:"
 }

@@ -63,5 +63,9 @@
     "deselect_all": "Снять выбор",
     "results_path_label": "Путь для сохранения результатов:",
     "browse_button": "Обзор...",
-    "select_directory": "Выберите папку"
+    "select_directory": "Выберите папку",
+    "queue_tab": "Очередь",
+    "add_to_queue": "Добавить в очередь",
+    "enter_task_name_title": "Введите название задачи",
+    "enter_task_name_label": "Название задачи:"
 }

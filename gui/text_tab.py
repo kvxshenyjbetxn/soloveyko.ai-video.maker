@@ -1,7 +1,7 @@
 import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QCheckBox, QToolButton
+    QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog
 )
 from PySide6.QtCore import Qt
 from functools import partial
@@ -10,8 +10,9 @@ from utils.settings import settings_manager
 
 class StageSelectionWidget(QWidget):
     """A compact widget representing the processing stages for a single language."""
-    def __init__(self, language_name):
+    def __init__(self, language_name, parent_tab):
         super().__init__()
+        self.parent_tab = parent_tab
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(6)
@@ -34,29 +35,34 @@ class StageSelectionWidget(QWidget):
         line.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(line)
         
-        self.checkboxes = []
+        self.checkboxes = {}
         stage_keys = ["stage_translation", "stage_img_prompts", "stage_images", 
                       "stage_voiceover", "stage_subtitles", "stage_montage"]
         
         for key in stage_keys:
             checkbox = QCheckBox(translator.translate(key))
             checkbox.setChecked(True)
+            checkbox.stateChanged.connect(self.parent_tab.check_queue_button_visibility)
             layout.addWidget(checkbox)
-            self.checkboxes.append(checkbox)
+            self.checkboxes[key] = checkbox
             
         layout.addStretch()
 
     def select_all(self):
-        for checkbox in self.checkboxes:
+        for checkbox in self.checkboxes.values():
             checkbox.setChecked(True)
 
     def deselect_all(self):
-        for checkbox in self.checkboxes:
+        for checkbox in self.checkboxes.values():
             checkbox.setChecked(False)
 
+    def get_selected_stages(self):
+        return [key for key, checkbox in self.checkboxes.items() if checkbox.isChecked()]
+
 class TextTab(QWidget):
-    def __init__(self):
+    def __init__(self, main_window=None):
         super().__init__()
+        self.main_window = main_window
         self.settings = settings_manager
         self.language_buttons = {}
         self.stage_widgets = {}
@@ -83,6 +89,7 @@ class TextTab(QWidget):
         self.text_edit = QTextEdit()
         self.text_edit.setObjectName("textEdit")
         self.text_edit.textChanged.connect(self.update_char_count)
+        self.text_edit.textChanged.connect(self.check_queue_button_visibility)
         layout.addWidget(self.text_edit, 1)
 
         # --- Languages Menu ---
@@ -97,6 +104,12 @@ class TextTab(QWidget):
         self.stages_container_layout.setContentsMargins(0,0,0,0)
         self.stages_container_layout.setSpacing(2)
         layout.addWidget(self.stages_container)
+        
+        # --- Add to Queue Button ---
+        self.add_to_queue_button = QPushButton(translator.translate('add_to_queue'))
+        self.add_to_queue_button.setVisible(False)
+        self.add_to_queue_button.clicked.connect(self.add_to_queue)
+        layout.addWidget(self.add_to_queue_button, 0, Qt.AlignmentFlag.AlignRight)
 
         # Status bar
         self.status_bar_layout = QHBoxLayout()
@@ -122,25 +135,24 @@ class TextTab(QWidget):
             btn.setCheckable(True)
             btn.setFixedHeight(25)
             btn.toggled.connect(partial(self.on_language_toggled, lang_id, display_name))
-            self.languages_menu_layout.addWidget(btn)
             self.language_buttons[lang_id] = btn
+            self.languages_menu_layout.addWidget(btn)
         
         self.languages_menu_layout.addStretch()
 
     def on_language_toggled(self, lang_id, lang_name, checked):
         if checked:
             if lang_id not in self.stage_widgets:
-                stage_widget = StageSelectionWidget(lang_name)
+                stage_widget = StageSelectionWidget(lang_name, self)
                 self.stages_container_layout.addWidget(stage_widget)
                 self.stage_widgets[lang_id] = stage_widget
             self.stage_widgets[lang_id].setVisible(True)
         else:
             if lang_id in self.stage_widgets:
-                widget_to_remove = self.stage_widgets.pop(lang_id)
-                self.stages_container_layout.removeWidget(widget_to_remove)
-                widget_to_remove.deleteLater()
+                self.stage_widgets[lang_id].setVisible(False)
         
         self.update_stage_label_widths()
+        self.check_queue_button_visibility()
 
     def update_stage_label_widths(self):
         max_width = 0
@@ -156,6 +168,41 @@ class TextTab(QWidget):
         for label in visible_labels:
             label.setMinimumWidth(max_width)
 
+    def check_queue_button_visibility(self):
+        lang_selected = any(btn.isChecked() for btn in self.language_buttons.values())
+        
+        stages_selected = False
+        if lang_selected:
+            for lang_id, widget in self.stage_widgets.items():
+                if widget.isVisible() and any(cb.isChecked() for cb in widget.checkboxes.values()):
+                    stages_selected = True
+                    break
+
+        self.add_to_queue_button.setVisible(lang_selected and stages_selected)
+
+    def add_to_queue(self):
+        task_name, ok = QInputDialog.getText(self, translator.translate('enter_task_name_title'), translator.translate('enter_task_name_label'))
+        if ok and task_name:
+            text = self.text_edit.toPlainText()
+            
+            tasks_to_add = []
+            for lang_id, btn in self.language_buttons.items():
+                if btn.isChecked():
+                    stage_widget = self.stage_widgets.get(lang_id)
+                    if stage_widget and stage_widget.isVisible():
+                        selected_stages = stage_widget.get_selected_stages()
+                        if selected_stages:
+                            task = {
+                                "name": f"{task_name} ({btn.text()})",
+                                "text": text,
+                                "language_id": lang_id,
+                                "stages": selected_stages
+                            }
+                            tasks_to_add.append(task)
+            
+            for task in tasks_to_add:
+                 self.main_window.queue_manager.add_task(task)
+
     def update_char_count(self):
         text = self.text_edit.toPlainText()
         total_chars = len(text)
@@ -170,6 +217,8 @@ class TextTab(QWidget):
         self.update_char_count()
         self.update_balance()
         self.load_languages_menu()
+        self.add_to_queue_button.setText(translator.translate('add_to_queue'))
+
 
     def update_balance(self):
         from api.openrouter import OpenRouterAPI
@@ -181,3 +230,4 @@ class TextTab(QWidget):
             self.openrouter_balance_label.setText(f"{translator.translate('balance_label')} -")
         else:
             self.openrouter_balance_label.setText("")
+
