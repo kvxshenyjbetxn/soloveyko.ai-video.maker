@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea
+from PySide6.QtCore import Qt
 from utils.translator import translator
 
 class GeneralTab(QWidget):
@@ -8,7 +9,19 @@ class GeneralTab(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        main_layout.addWidget(scroll_area)
+
+        scroll_content = QWidget()
+        scroll_area.setWidget(scroll_content)
+
+        content_layout = QVBoxLayout(scroll_content)
+
         form_layout = QFormLayout()
 
         # Language selection
@@ -38,8 +51,8 @@ class GeneralTab(QWidget):
 
         form_layout.addRow(self.theme_label, self.theme_combo)
 
-        layout.addLayout(form_layout)
-        layout.addStretch()
+        content_layout.addLayout(form_layout)
+        content_layout.addStretch()
 
     def language_changed(self, index):
         lang_map = {0: "uk", 1: "en", 2: "ru"}
@@ -56,4 +69,3 @@ class GeneralTab(QWidget):
         self.theme_combo.setItemText(0, translator.translate('light_theme'))
         self.theme_combo.setItemText(1, translator.translate('dark_theme'))
         self.theme_combo.setItemText(2, translator.translate('black_theme'))
-

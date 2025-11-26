@@ -1,5 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QListWidget, QHBoxLayout
-from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QListWidget, QHBoxLayout, QScrollArea
+from PySide6.QtCore import Signal, Qt
 from utils.translator import translator
 from utils.settings import settings_manager
 from api.openrouter import OpenRouterAPI
@@ -17,8 +17,19 @@ class OpenRouterTab(QWidget):
         self.retranslate_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout(self)
-        
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0,0,0,0)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        main_layout.addWidget(scroll_area)
+
+        scroll_content = QWidget()
+        scroll_area.setWidget(scroll_content)
+
+        layout = QVBoxLayout(scroll_content)
+
         # API Key
         api_key_layout = QHBoxLayout()
         self.api_key_label = QLabel("OpenRouter API Key:")

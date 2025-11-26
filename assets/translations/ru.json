@@ -39,5 +39,13 @@
     "app_started": "Приложение запущено.",
     "app_closing": "Приложение закрывается.",
     "balance_update_started": "Обновление баланса...",
-    "balance_updated": "Баланс обновлен."
+    "balance_updated": "Баланс обновлен.",
+    "audio_settings_label": "Настройки аудио",
+    "image_settings_label": "Настройки изображений",
+    "dataimpulse_settings_label": "Настройки DataImpulse",
+    "language_settings_label": "Настройки языков",
+    "prompts_settings_label": "Настройки промтов",
+    "montage_settings_label": "Настройки монтажа",
+    "subtitles_settings_label": "Настройки субтитров",
+    "templates_settings_label": "Настройки шаблонов"
 }
