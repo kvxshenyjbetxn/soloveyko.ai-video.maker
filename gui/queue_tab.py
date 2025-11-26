@@ -1,19 +1,36 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem, QPushButton, QHBoxLayout
 from utils.translator import translator
 
 class QueueTab(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
         self.main_window = main_window
+        self.jobs_expanded = False
+        self.all_expanded = False
         self.init_ui()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
+        
+        # Button layout
+        button_layout = QHBoxLayout()
+        self.expand_jobs_button = QPushButton()
+        self.expand_jobs_button.clicked.connect(self.toggle_expand_jobs)
+        button_layout.addWidget(self.expand_jobs_button)
+
+        self.expand_all_button = QPushButton()
+        self.expand_all_button.clicked.connect(self.toggle_expand_all)
+        button_layout.addWidget(self.expand_all_button)
+        button_layout.addStretch()
+        main_layout.addLayout(button_layout)
+
         self.task_tree = QTreeWidget()
         self.task_tree.setHeaderLabels([translator.translate('task_header')])
         self.task_tree.setIndentation(10)
         self.task_tree.setStyleSheet("QTreeView::item { padding: 1px 0px; }")
         main_layout.addWidget(self.task_tree)
+        
+        self.retranslate_ui() # Set initial button text
 
     def add_task(self, job):
         # Create top-level item for the job
@@ -28,10 +45,46 @@ class QueueTab(QWidget):
                 stage_name = translator.translate(stage_key)
                 stage_item = QTreeWidgetItem(lang_item, [stage_name])
         
-        self.task_tree.expandAll()
+        # Reset state and expand to job level
+        self.jobs_expanded = False 
+        self.all_expanded = False
+        self.toggle_expand_jobs()
 
+    def toggle_expand_jobs(self):
+        if self.jobs_expanded:
+            self.task_tree.collapseAll()
+            self.jobs_expanded = False
+            self.all_expanded = False
+        else:
+            self.task_tree.collapseAll()
+            for i in range(self.task_tree.topLevelItemCount()):
+                self.task_tree.topLevelItem(i).setExpanded(True)
+            self.jobs_expanded = True
+            self.all_expanded = False # Expanding jobs is a subset of expanding all
+        self.update_button_text()
+            
+    def toggle_expand_all(self):
+        if self.all_expanded:
+            self.task_tree.collapseAll()
+            self.all_expanded = False
+            self.jobs_expanded = False
+        else:
+            self.task_tree.expandAll()
+            self.all_expanded = True
+            self.jobs_expanded = True
+        self.update_button_text()
+
+    def update_button_text(self):
+        if self.jobs_expanded:
+            self.expand_jobs_button.setText(translator.translate('collapse_jobs'))
+        else:
+            self.expand_jobs_button.setText(translator.translate('expand_jobs'))
+            
+        if self.all_expanded:
+            self.expand_all_button.setText(translator.translate('collapse_all'))
+        else:
+            self.expand_all_button.setText(translator.translate('expand_all'))
 
     def retranslate_ui(self):
         self.task_tree.setHeaderLabels([translator.translate('task_header')])
-        # Note: Retranslating existing items is more complex and not implemented here.
-        # It would require iterating through the tree and updating each item's text.
+        self.update_button_text()

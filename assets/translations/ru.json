@@ -69,5 +69,9 @@
     "enter_task_name_title": "Введите название задачи",
     "enter_task_name_label": "Название задачи:",
     "default_task_name": "Задача",
-    "task_header": "Задачи и этапы"
+    "task_header": "Задачи и этапы",
+    "expand_jobs": "Развернуть задачи",
+    "expand_all": "Развернуть все",
+    "collapse_jobs": "Свернуть задачи",
+    "collapse_all": "Свернуть все"
 }
