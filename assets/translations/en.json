@@ -69,5 +69,9 @@
     "enter_task_name_title": "Enter task name",
     "enter_task_name_label": "Task name:",
     "default_task_name": "Task",
-    "task_header": "Tasks and Stages"
+    "task_header": "Tasks and Stages",
+    "expand_jobs": "Expand Jobs",
+    "expand_all": "Expand All",
+    "collapse_jobs": "Collapse Jobs",
+    "collapse_all": "Collapse All"
 }

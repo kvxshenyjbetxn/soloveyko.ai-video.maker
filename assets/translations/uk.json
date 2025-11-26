@@ -69,5 +69,9 @@
     "enter_task_name_title": "Введіть назву завдання",
     "enter_task_name_label": "Назва завдання:",
     "default_task_name": "Завдання",
-    "task_header": "Завдання та етапи"
+    "task_header": "Завдання та етапи",
+    "expand_jobs": "Розгорнути завдання",
+    "expand_all": "Розгорнути все",
+    "collapse_jobs": "Згорнути завдання",
+    "collapse_all": "Згорнути все"
 }
