@@ -63,5 +63,9 @@
     "deselect_all": "Deselect All",
     "results_path_label": "Path to save results:",
     "browse_button": "Browse...",
-    "select_directory": "Select Folder"
+    "select_directory": "Select Folder",
+    "queue_tab": "Queue",
+    "add_to_queue": "Add to Queue",
+    "enter_task_name_title": "Enter task name",
+    "enter_task_name_label": "Task name:"
 }

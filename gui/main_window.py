@@ -11,6 +11,8 @@ from config.version import __version__
 from gui.text_tab import TextTab
 from gui.settings_tab import SettingsTab
 from gui.log_tab import LogTab
+from gui.queue_tab import QueueTab
+from core.queue_manager import QueueManager
 from utils.logger import logger
 
 class MainWindow(QMainWindow):
@@ -19,6 +21,7 @@ class MainWindow(QMainWindow):
         self.app = app
         self.settings_manager = settings_manager
         self.translator = translator
+        self.queue_manager = QueueManager()
         self.init_ui()
         logger.log(translator.translate('app_started'))
         self.app.installEventFilter(self)
@@ -63,17 +66,20 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
 
-        self.text_tab = TextTab()
+        self.text_tab = TextTab(main_window=self)
         self.settings_tab = SettingsTab(main_window=self)
         self.log_tab = LogTab()
+        self.queue_tab = QueueTab(main_window=self)
         logger.set_log_widget(self.log_tab)
 
         self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
+        self.tabs.addTab(self.queue_tab, self.translator.translate('queue_tab'))
         self.tabs.addTab(self.settings_tab, self.translator.translate('settings_tab'))
         self.tabs.addTab(self.log_tab, self.translator.translate('log_tab'))
 
         # Connect signals
         self.settings_tab.api_tab.openrouter_tab.balance_updated.connect(self.update_balance)
+        self.queue_manager.task_added.connect(self.queue_tab.add_task)
 
         self.update_balance()
 
@@ -101,11 +107,13 @@ class MainWindow(QMainWindow):
     def retranslate_ui(self):
         self.update_title()
         self.tabs.setTabText(0, self.translator.translate('text_processing_tab'))
-        self.tabs.setTabText(1, self.translator.translate('settings_tab'))
-        self.tabs.setTabText(2, self.translator.translate('log_tab'))
+        self.tabs.setTabText(1, self.translator.translate('queue_tab'))
+        self.tabs.setTabText(2, self.translator.translate('settings_tab'))
+        self.tabs.setTabText(3, self.translator.translate('log_tab'))
         
         self.text_tab.retranslate_ui()
         self.settings_tab.retranslate_ui()
+        self.queue_tab.retranslate_ui()
 
     def closeEvent(self, event):
         logger.log(translator.translate('app_closing'))
