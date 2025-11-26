@@ -52,5 +52,11 @@
     "language_name_label": "Отображаемое имя:",
     "language_id_label": "Идентификатор языка (напр. ru-RU):",
     "language_prompt_label": "Промт для этого языка:",
-    "translation_model_label": "Модель для перевода:"
+    "translation_model_label": "Модель для перевода:",
+    "stage_translation": "Перевод",
+    "stage_img_prompts": "Промты для картинок",
+    "stage_images": "Картинки",
+    "stage_voiceover": "Озвучка",
+    "stage_subtitles": "Субтитры",
+    "stage_montage": "Монтаж"
 }
