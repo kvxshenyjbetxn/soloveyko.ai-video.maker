@@ -73,5 +73,9 @@
     "expand_jobs": "Expand Jobs",
     "expand_all": "Expand All",
     "collapse_jobs": "Collapse Jobs",
-    "collapse_all": "Collapse All"
+    "collapse_all": "Collapse All",
+    "tokens_label": "Max tokens:",
+    "start_processing": "Start Processing",
+    "processing_complete_title": "Processing Complete",
+    "processing_complete_message": "Queue processing has finished.\n\nTotal time: {}"
 }

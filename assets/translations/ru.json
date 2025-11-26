@@ -73,5 +73,9 @@
     "expand_jobs": "Развернуть задачи",
     "expand_all": "Развернуть все",
     "collapse_jobs": "Свернуть задачи",
-    "collapse_all": "Свернуть все"
+    "collapse_all": "Свернуть все",
+    "tokens_label": "Макс. токенов:",
+    "start_processing": "Начать обработку",
+    "processing_complete_title": "Обработка завершена",
+    "processing_complete_message": "Обработка очереди завершена.\n\nОбщее время: {}"
 }

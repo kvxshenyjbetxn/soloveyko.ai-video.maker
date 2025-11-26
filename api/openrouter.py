@@ -30,3 +30,26 @@ class OpenRouterAPI:
             usage = data.get("data", {}).get("usage")
             return usage
         return None
+
+    def get_chat_completion(self, model, messages, max_tokens=4096):
+        if not self.api_key:
+            raise ValueError("API key is not configured.")
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens
+        }
+        
+        try:
+            response = requests.post(f"{self.base_url}/chat/completions", headers=headers, json=data)
+            response.raise_for_status() # Raises an HTTPError for bad responses (4xx or 5xx)
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            # You might want to log this error or handle it more gracefully
+            print(f"An error occurred: {e}")
+            return None

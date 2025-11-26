@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLineEdit,
-    QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox
+    QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox
 )
 from PySide6.QtCore import Qt
 from utils.translator import translator
@@ -62,16 +62,22 @@ class LanguagesTab(QWidget):
         self.prompt_edit = QTextEdit()
         self.prompt_edit.textChanged.connect(self.save_current_language_settings)
         
-        model_layout = QHBoxLayout()
+        settings_layout = QFormLayout()
+        
         self.model_label = QLabel()
         self.model_combo = QComboBox()
         self.model_combo.currentIndexChanged.connect(self.save_current_language_settings)
-        model_layout.addWidget(self.model_label)
-        model_layout.addWidget(self.model_combo)
+        settings_layout.addRow(self.model_label, self.model_combo)
+
+        self.tokens_label = QLabel()
+        self.tokens_spinbox = QSpinBox()
+        self.tokens_spinbox.setRange(0, 128000)
+        self.tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.tokens_label, self.tokens_spinbox)
 
         right_layout.addWidget(self.prompt_label)
         right_layout.addWidget(self.prompt_edit)
-        right_layout.addLayout(model_layout)
+        right_layout.addLayout(settings_layout)
         right_layout.addStretch()
 
         # Set initial state
@@ -114,14 +120,17 @@ class LanguagesTab(QWidget):
 
         self.prompt_edit.blockSignals(True)
         self.model_combo.blockSignals(True)
+        self.tokens_spinbox.blockSignals(True)
 
         self.prompt_edit.setPlainText(config.get("prompt", ""))
         current_model = config.get("model", "")
         index = self.model_combo.findText(current_model)
         self.model_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
 
         self.prompt_edit.blockSignals(False)
         self.model_combo.blockSignals(False)
+        self.tokens_spinbox.blockSignals(False)
         
         self.right_panel.setVisible(True)
 
@@ -136,7 +145,12 @@ class LanguagesTab(QWidget):
         if lang_id in languages:
             return
             
-        languages[lang_id] = {"display_name": display_name, "prompt": "", "model": ""}
+        languages[lang_id] = {
+            "display_name": display_name, 
+            "prompt": "", 
+            "model": "",
+            "max_tokens": 4096
+        }
         self.settings.set("languages_config", languages)
         
         self.lang_name_input.clear()
@@ -169,6 +183,7 @@ class LanguagesTab(QWidget):
         if self.current_lang_id in languages:
             languages[self.current_lang_id]["prompt"] = self.prompt_edit.toPlainText()
             languages[self.current_lang_id]["model"] = self.model_combo.currentText()
+            languages[self.current_lang_id]["max_tokens"] = self.tokens_spinbox.value()
             self.settings.set("languages_config", languages)
 
     def retranslate_ui(self):
@@ -179,3 +194,4 @@ class LanguagesTab(QWidget):
         self.remove_lang_button.setText(translator.translate("remove_model"))
         self.prompt_label.setText(translator.translate("language_prompt_label"))
         self.model_label.setText(translator.translate("translation_model_label"))
+        self.tokens_label.setText(translator.translate("tokens_label"))

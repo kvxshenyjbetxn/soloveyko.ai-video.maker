@@ -8,8 +8,9 @@
     "languages_config": {
         "uk-UK": {
             "display_name": "Україна",
-            "prompt": "тестовий промт",
-            "model": "google/gemini-2.5-flash"
+            "prompt": "дай відповідь і скажи в кінці Олег",
+            "model": "google/gemini-2.5-flash",
+            "max_tokens": 128000
         },
         "us-US": {
             "display_name": "Англійська",
