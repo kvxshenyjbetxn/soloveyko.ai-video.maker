@@ -60,5 +60,8 @@
     "stage_subtitles": "Subtitles",
     "stage_montage": "Montage",
     "select_all": "Select All",
-    "deselect_all": "Deselect All"
+    "deselect_all": "Deselect All",
+    "results_path_label": "Path to save results:",
+    "browse_button": "Browse...",
+    "select_directory": "Select Folder"
 }
