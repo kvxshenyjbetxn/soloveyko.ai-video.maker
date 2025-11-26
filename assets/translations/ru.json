@@ -58,5 +58,7 @@
     "stage_images": "Картинки",
     "stage_voiceover": "Озвучка",
     "stage_subtitles": "Субтитры",
-    "stage_montage": "Монтаж"
+    "stage_montage": "Монтаж",
+    "select_all": "Выбрать все",
+    "deselect_all": "Снять выбор"
 }
