@@ -10,6 +10,31 @@
             "display_name": "Україна",
             "prompt": "тестовий промт",
             "model": "google/gemini-2.5-flash"
+        },
+        "us-US": {
+            "display_name": "Англійська",
+            "prompt": "тест",
+            "model": "google/gemini-2.5-flash"
+        },
+        "ru-RU": {
+            "display_name": "Російська",
+            "prompt": "",
+            "model": ""
+        },
+        "pl-PL": {
+            "display_name": "Польська",
+            "prompt": "",
+            "model": ""
+        },
+        "ro-RO": {
+            "display_name": "Румунська",
+            "prompt": "",
+            "model": ""
+        },
+        "dl-DL": {
+            "display_name": "Німецька",
+            "prompt": "",
+            "model": ""
         }
     }
 }

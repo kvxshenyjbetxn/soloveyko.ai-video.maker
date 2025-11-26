@@ -52,5 +52,11 @@
     "language_name_label": "Відображувана назва:",
     "language_id_label": "Ідентифікатор мови (напр. uk-UK):",
     "language_prompt_label": "Промт для цієї мови:",
-    "translation_model_label": "Модель для перекладу:"
+    "translation_model_label": "Модель для перекладу:",
+    "stage_translation": "Переклад",
+    "stage_img_prompts": "Промти для картинок",
+    "stage_images": "Картинки",
+    "stage_voiceover": "Озвучка",
+    "stage_subtitles": "Субтитри",
+    "stage_montage": "Монтаж"
 }

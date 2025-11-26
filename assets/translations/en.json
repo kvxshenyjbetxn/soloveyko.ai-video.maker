@@ -52,5 +52,11 @@
     "language_name_label": "Display Name:",
     "language_id_label": "Language ID (e.g. uk-UK):",
     "language_prompt_label": "Prompt for this language:",
-    "translation_model_label": "Translation Model:"
+    "translation_model_label": "Translation Model:",
+    "stage_translation": "Translation",
+    "stage_img_prompts": "Image Prompts",
+    "stage_images": "Images",
+    "stage_voiceover": "Voiceover",
+    "stage_subtitles": "Subtitles",
+    "stage_montage": "Montage"
 }
