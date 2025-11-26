@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea, QPushButton, QLineEdit, QFileDialog, QHBoxLayout
 from PySide6.QtCore import Qt
 from utils.translator import translator
 
@@ -51,6 +51,21 @@ class GeneralTab(QWidget):
 
         form_layout.addRow(self.theme_label, self.theme_combo)
 
+        # Results path selection
+        self.results_path_label = QLabel(translator.translate('results_path_label'))
+        self.results_path_edit = QLineEdit()
+        self.results_path_edit.setReadOnly(True)
+        self.results_path_edit.setText(self.main_window.settings_manager.get('results_path'))
+        
+        self.browse_button = QPushButton(translator.translate('browse_button'))
+        self.browse_button.clicked.connect(self.browse_results_path)
+
+        path_layout = QHBoxLayout()
+        path_layout.addWidget(self.results_path_edit)
+        path_layout.addWidget(self.browse_button)
+
+        form_layout.addRow(self.results_path_label, path_layout)
+
         content_layout.addLayout(form_layout)
         content_layout.addStretch()
 
@@ -63,9 +78,17 @@ class GeneralTab(QWidget):
         theme_name = self.theme_combo.itemData(index)
         self.main_window.change_theme(theme_name)
 
+    def browse_results_path(self):
+        directory = QFileDialog.getExistingDirectory(self, translator.translate('select_directory'))
+        if directory:
+            self.results_path_edit.setText(directory)
+            self.main_window.settings_manager.set('results_path', directory)
+
     def retranslate_ui(self):
         self.language_label.setText(translator.translate('language_label'))
         self.theme_label.setText(translator.translate('theme_label'))
         self.theme_combo.setItemText(0, translator.translate('light_theme'))
         self.theme_combo.setItemText(1, translator.translate('dark_theme'))
         self.theme_combo.setItemText(2, translator.translate('black_theme'))
+        self.results_path_label.setText(translator.translate('results_path_label'))
+        self.browse_button.setText(translator.translate('browse_button'))

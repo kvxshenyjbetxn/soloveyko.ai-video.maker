@@ -6,7 +6,8 @@ class SettingsManager:
         self.settings_file = settings_file
         self.defaults = {
             'language': 'uk',
-            'theme': 'dark'
+            'theme': 'dark',
+            'results_path': ''
         }
         self.settings = self.load_settings()
 

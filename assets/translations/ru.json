@@ -60,5 +60,8 @@
     "stage_subtitles": "Субтитры",
     "stage_montage": "Монтаж",
     "select_all": "Выбрать все",
-    "deselect_all": "Снять выбор"
+    "deselect_all": "Снять выбор",
+    "results_path_label": "Путь для сохранения результатов:",
+    "browse_button": "Обзор...",
+    "select_directory": "Выберите папку"
 }
