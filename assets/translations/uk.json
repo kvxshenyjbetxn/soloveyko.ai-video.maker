@@ -67,5 +67,6 @@
     "queue_tab": "Черга",
     "add_to_queue": "Додати до черги",
     "enter_task_name_title": "Введіть назву завдання",
-    "enter_task_name_label": "Назва завдання:"
+    "enter_task_name_label": "Назва завдання:",
+    "default_task_name": "Завдання"
 }

@@ -182,7 +182,11 @@ class TextTab(QWidget):
 
     def add_to_queue(self):
         task_name, ok = QInputDialog.getText(self, translator.translate('enter_task_name_title'), translator.translate('enter_task_name_label'))
-        if ok and task_name:
+        if ok:
+            if not task_name:
+                task_count = self.main_window.queue_manager.get_task_count()
+                task_name = f"{translator.translate('default_task_name')} {task_count + 1}"
+
             text = self.text_edit.toPlainText()
             
             tasks_to_add = []
@@ -192,8 +196,13 @@ class TextTab(QWidget):
                     if stage_widget and stage_widget.isVisible():
                         selected_stages = stage_widget.get_selected_stages()
                         if selected_stages:
+                            # If only one language is selected, don't add the language name to the task name
+                            final_task_name = task_name
+                            if sum(1 for b in self.language_buttons.values() if b.isChecked()) > 1:
+                                final_task_name = f"{task_name} ({btn.text()})"
+
                             task = {
-                                "name": f"{task_name} ({btn.text()})",
+                                "name": final_task_name,
                                 "text": text,
                                 "language_id": lang_id,
                                 "stages": selected_stages
