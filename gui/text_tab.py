@@ -2,10 +2,11 @@ import re
 import uuid
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog
+    QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog, QGridLayout
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtCore import Qt, QMimeData
+from utils.flow_layout import FlowLayout
 from functools import partial
 from utils.translator import translator
 from utils.settings import settings_manager
@@ -169,15 +170,27 @@ class TextTab(QWidget):
         layout.addWidget(self.stages_container)
 
         # --- Languages Menu ---
+        self.languages_menu_container = QWidget()
+        self.languages_menu_grid_layout = QGridLayout(self.languages_menu_container)
+        self.languages_menu_grid_layout.setContentsMargins(0,0,0,0)
+
         self.languages_menu_widget = QWidget()
-        self.languages_menu_layout = QHBoxLayout(self.languages_menu_widget)
+        self.languages_menu_layout = FlowLayout(self.languages_menu_widget)
         self.languages_menu_layout.setContentsMargins(0,0,0,0)
-        layout.addWidget(self.languages_menu_widget)
+        self.languages_menu_layout.setSpacing(5)
+
+        self.languages_menu_grid_layout.addWidget(self.languages_menu_widget, 0, 0)
         
         # --- Add to Queue Button ---
         self.add_to_queue_button = QPushButton(translator.translate('add_to_queue'))
         self.add_to_queue_button.setEnabled(False)
         self.add_to_queue_button.clicked.connect(self.add_to_queue)
+        self.languages_menu_grid_layout.addWidget(self.add_to_queue_button, 0, 1)
+
+        self.languages_menu_grid_layout.setColumnStretch(0, 1)
+        self.languages_menu_grid_layout.setColumnStretch(1, 0)
+
+        layout.addWidget(self.languages_menu_container)
 
         # Status bar
         self.status_bar_layout = QHBoxLayout()
@@ -190,11 +203,7 @@ class TextTab(QWidget):
         self.retranslate_ui()
 
     def load_languages_menu(self):
-        # Temporarily remove the button from the layout to prevent it from being deleted.
-        # It's okay if it's not in the layout the first time, removeWidget does nothing.
-        self.languages_menu_layout.removeWidget(self.add_to_queue_button)
-
-        # Clear all previous widgets (language buttons) and stretchers from the layout
+        # Clear all previous widgets (language buttons)
         while self.languages_menu_layout.count():
             item = self.languages_menu_layout.takeAt(0)
             if item.widget():
@@ -211,9 +220,6 @@ class TextTab(QWidget):
             btn.toggled.connect(partial(self.on_language_toggled, lang_id, display_name))
             self.language_buttons[lang_id] = btn
             self.languages_menu_layout.addWidget(btn)
-        
-        self.languages_menu_layout.addStretch()
-        self.languages_menu_layout.addWidget(self.add_to_queue_button)
 
     def on_language_toggled(self, lang_id, lang_name, checked):
         if checked:

@@ -36,6 +36,36 @@
             "display_name": "Німецька",
             "prompt": "",
             "model": ""
+        },
+        "1": {
+            "display_name": "1",
+            "prompt": "",
+            "model": "",
+            "max_tokens": 4096
+        },
+        "2": {
+            "display_name": "2",
+            "prompt": "",
+            "model": "",
+            "max_tokens": 4096
+        },
+        "3": {
+            "display_name": "3",
+            "prompt": "",
+            "model": "",
+            "max_tokens": 4096
+        },
+        "4": {
+            "display_name": "4",
+            "prompt": "",
+            "model": "",
+            "max_tokens": 4096
+        },
+        "6": {
+            "display_name": "5",
+            "prompt": "",
+            "model": "",
+            "max_tokens": 4096
         }
     },
     "results_path": "C:/Users/kvxshenyjbetxn/Desktop/test"
