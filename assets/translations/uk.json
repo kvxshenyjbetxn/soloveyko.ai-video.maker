@@ -92,5 +92,13 @@
     "original_text": "Оригінальний текст",
     "all_levels": "Всі рівні",
     "search_logs": "Пошук по логах...",
-    "autoscroll": "Автопрокрутка"
+    "autoscroll": "Автопрокрутка",
+    "general_tab_title": "Загальні",
+    "pollinations_tab_title": "Pollinations",
+    "pollinations_model_label": "Модель:",
+    "pollinations_token_label": "Токен (необов'язково):",
+    "pollinations_token_placeholder": "Введіть ваш токен",
+    "image_size_label": "Розмір (Ширина x Висота):",
+    "nologo_label": "Прибрати логотип",
+    "enhance_prompt_label": "Покращити промт"
 }
