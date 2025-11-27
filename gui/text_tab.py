@@ -4,10 +4,38 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
     QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog
 )
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtCore import Qt, QMimeData
 from functools import partial
 from utils.translator import translator
 from utils.settings import settings_manager
+
+class DroppableTextEdit(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if any(url.toLocalFile().endswith('.txt') for url in urls):
+                event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dropEvent(self, event: QDropEvent):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            for url in event.mimeData().urls():
+                file_path = url.toLocalFile()
+                if file_path.endswith('.txt'):
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            self.insertPlainText(f.read())
+                    except Exception as e:
+                        print(f"Error reading file {file_path}: {e}")
+        else:
+            super().dropEvent(event)
 
 class StageSelectionWidget(QWidget):
     """A compact widget representing the processing stages for a single language."""
@@ -127,7 +155,7 @@ class TextTab(QWidget):
         layout.addLayout(self.char_count_layout)
 
         # Main text input
-        self.text_edit = QTextEdit()
+        self.text_edit = DroppableTextEdit()
         self.text_edit.setObjectName("textEdit")
         self.text_edit.textChanged.connect(self.update_char_count)
         self.text_edit.textChanged.connect(self.check_queue_button_visibility)
