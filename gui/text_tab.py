@@ -185,6 +185,7 @@ class TextTab(QWidget):
         self.add_to_queue_button = QPushButton(translator.translate('add_to_queue'))
         self.add_to_queue_button.setEnabled(False)
         self.add_to_queue_button.clicked.connect(self.add_to_queue)
+        self.add_to_queue_button.setFixedHeight(25)
         self.languages_menu_grid_layout.addWidget(self.add_to_queue_button, 0, 1)
 
         self.languages_menu_grid_layout.setColumnStretch(0, 1)
