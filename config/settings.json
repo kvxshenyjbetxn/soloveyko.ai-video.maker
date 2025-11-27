@@ -68,5 +68,10 @@
             "max_tokens": 4096
         }
     },
+    "image_prompt_settings": {
+        "prompt": "",
+        "model": "google/gemini-2.5-flash",
+        "max_tokens": 10000
+    },
     "results_path": "C:/Users/kvxshenyjbetxn/Desktop/test"
 }
