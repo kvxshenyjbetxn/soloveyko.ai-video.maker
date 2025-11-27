@@ -69,7 +69,7 @@
         }
     },
     "image_prompt_settings": {
-        "prompt": "",
+        "prompt": "зроби пару промтів для генерації зображень",
         "model": "google/gemini-2.5-flash",
         "max_tokens": 10000
     },
