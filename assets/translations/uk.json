@@ -86,5 +86,7 @@
     "confirm_deletion_title": "Підтвердження видалення",
     "confirm_task_deletion_message": "Ви впевнені, що хочете видалити завдання \"{}\"?",
     "confirm_language_deletion_message": "Ви впевнені, що бажаєте видалити мову \"{}\" з завдання \"{}\"",
-    "confirm_stage_deletion_message": "Ви впевнені, що бажаєте видалити етап \"{}\" для мови \"{}\" з завдання \"{}\""
+    "confirm_stage_deletion_message": "Ви впевнені, що бажаєте видалити етап \"{}\" для мови \"{}\" з завдання \"{}\"",
+    "prompt_content_label": "Промт для генерації зображень:",
+    "image_model_label": "Модель для зображень:"
 }

@@ -86,5 +86,7 @@
     "confirm_deletion_title": "Подтверждение удаления",
     "confirm_task_deletion_message": "Вы уверены, что хотите удалить задачу \"{}\"?",
     "confirm_language_deletion_message": "Вы уверены, что хотите удалить язык \"{}\" из задачи \"{}\"?",
-    "confirm_stage_deletion_message": "Вы уверены, что хотите удалить этап \"{}\" для языка \"{}\" из задачи \"{}\"?"
+    "confirm_stage_deletion_message": "Вы уверены, что хотите удалить этап \"{}\" для языка \"{}\" из задачи \"{}\"?",
+    "prompt_content_label": "Промт для генерации изображений:",
+    "image_model_label": "Модель для изображений:"
 }
