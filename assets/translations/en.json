@@ -92,5 +92,13 @@
     "original_text": "Original Text",
     "all_levels": "All Levels",
     "search_logs": "Search logs...",
-    "autoscroll": "Autoscroll"
+    "autoscroll": "Autoscroll",
+    "general_tab_title": "General",
+    "pollinations_tab_title": "Pollinations",
+    "pollinations_model_label": "Model:",
+    "pollinations_token_label": "Token (optional):",
+    "pollinations_token_placeholder": "Enter your token",
+    "image_size_label": "Size (Width x Height):",
+    "nologo_label": "Remove Logo",
+    "enhance_prompt_label": "Enhance Prompt"
 }

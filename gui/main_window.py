@@ -148,6 +148,7 @@ class MainWindow(QMainWindow):
         self.update_balance()
 
     def closeEvent(self, event):
+        self.settings_tab.api_tab.image_tab.pollinations_tab.save_settings()
         logger.log(translator.translate('app_closing'), level=LogLevel.INFO)
         super().closeEvent(event)
 
