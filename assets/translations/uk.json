@@ -89,5 +89,8 @@
     "confirm_stage_deletion_message": "Ви впевнені, що бажаєте видалити етап \"{}\" для мови \"{}\" з завдання \"{}\"",
     "prompt_content_label": "Промт для генерації зображень:",
     "image_model_label": "Модель для зображень:",
-    "original_text": "Оригінальний текст"
+    "original_text": "Оригінальний текст",
+    "all_levels": "Всі рівні",
+    "search_logs": "Пошук по логах...",
+    "autoscroll": "Автопрокрутка"
 }

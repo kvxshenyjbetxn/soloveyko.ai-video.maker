@@ -15,10 +15,11 @@ from gui.log_tab import LogTab
 from gui.queue_tab import QueueTab
 from core.queue_manager import QueueManager
 from core.task_processor import TaskProcessor
-from utils.logger import logger
+from utils.logger import logger, LogLevel
 
 class BalanceWorkerSignals(QObject):
     finished = Signal(float)
+
 
 class BalanceWorker(QRunnable):
     def __init__(self):
@@ -41,7 +42,7 @@ class MainWindow(QMainWindow):
         self.task_processor = TaskProcessor(self.queue_manager)
         self.threadpool = QThreadPool()
         self.init_ui()
-        logger.log(translator.translate('app_started'))
+        logger.log(translator.translate('app_started'), level=LogLevel.INFO)
         self.app.installEventFilter(self)
 
     def eventFilter(self, obj, event):
@@ -147,6 +148,6 @@ class MainWindow(QMainWindow):
         self.update_balance()
 
     def closeEvent(self, event):
-        logger.log(translator.translate('app_closing'))
+        logger.log(translator.translate('app_closing'), level=LogLevel.INFO)
         super().closeEvent(event)
 
