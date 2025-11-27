@@ -14,8 +14,9 @@
         },
         "us-US": {
             "display_name": "Англійська",
-            "prompt": "тест",
-            "model": "google/gemini-2.5-flash"
+            "prompt": "переклади на англійську:",
+            "model": "google/gemini-2.5-flash",
+            "max_tokens": 4096
         },
         "ru-RU": {
             "display_name": "Російська",
