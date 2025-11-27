@@ -81,6 +81,8 @@
     "delete_task": "Удалить задачу",
     "delete_language": "Удалить язык",
     "delete_stage": "Удалить этап",
+    "delete_language_formatted": "Удалить язык \"{}\"",
+    "delete_stage_formatted": "Удалить этап \"{}\"",
     "confirm_deletion_title": "Подтверждение удаления",
     "confirm_task_deletion_message": "Вы уверены, что хотите удалить задачу \"{}\"?",
     "confirm_language_deletion_message": "Вы уверены, что хотите удалить язык \"{}\" из задачи \"{}\"?",

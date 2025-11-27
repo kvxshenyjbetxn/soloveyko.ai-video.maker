@@ -81,8 +81,10 @@
     "delete_task": "Delete Task",
     "delete_language": "Delete Language",
     "delete_stage": "Delete Stage",
+    "delete_language_formatted": "Delete language \"{}\"",
+    "delete_stage_formatted": "Delete stage \"{}\"",
     "confirm_deletion_title": "Confirm Deletion",
-    "confirm_task_deletion_message": "Are you sure you want to delete task \"{}\"",
+    "confirm_task_deletion_message": "Are you sure you want to delete task \"{}\"?",
     "confirm_language_deletion_message": "Are you sure you want to delete language \"{}\" from task \"{}\"",
     "confirm_stage_deletion_message": "Are you sure you want to delete stage \"{}\" for language \"{}\" from task \"{}\""
 }

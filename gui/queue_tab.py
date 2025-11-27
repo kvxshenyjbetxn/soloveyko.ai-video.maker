@@ -31,13 +31,14 @@ class DeletableStageWidget(QWidget):
     def __init__(self, stage_key, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(24)
+        self.stage_name = translator.translate(stage_key)
         
         layout = QHBoxLayout()
         layout.setContentsMargins(4, 0, 4, 0)
         self.setLayout(layout)
 
         self.dot = StatusDot(self)
-        self.label = QLabel(translator.translate(stage_key), self)
+        self.label = QLabel(self.stage_name, self)
         
         layout.addWidget(self.dot)
         layout.addWidget(self.label)
@@ -45,7 +46,7 @@ class DeletableStageWidget(QWidget):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        delete_action = QAction(translator.translate("delete_stage"), self)
+        delete_action = QAction(translator.translate("delete_stage_formatted").format(self.stage_name), self)
         delete_action.triggered.connect(self.delete_requested.emit)
         menu.addAction(delete_action)
         menu.exec(event.globalPos())
@@ -59,18 +60,19 @@ class DeletableLanguageHeader(QWidget):
 
     def __init__(self, display_name, parent=None):
         super().__init__(parent)
+        self.display_name = display_name
 
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
-        self.label = QLabel(f"<b>{display_name}</b>", self)
+        self.label = QLabel(f"<b>{self.display_name}</b>", self)
         layout.addWidget(self.label)
         layout.addStretch()
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
-        delete_action = QAction(translator.translate("delete_language"), self)
+        delete_action = QAction(translator.translate("delete_language_formatted").format(self.display_name), self)
         delete_action.triggered.connect(self.delete_requested.emit)
         menu.addAction(delete_action)
         menu.exec(event.globalPos())
@@ -138,9 +140,12 @@ class TaskCard(QGroupBox):
 
     def hide_stage(self, lang_id, stage_key):
         if lang_id in self.stage_widgets:
+            stage_name_to_find = translator.translate(stage_key)
             for stage_widget in self.stage_widgets[lang_id]:
-                if stage_widget.label.text() == translator.translate(stage_key):
+                if stage_widget.label.text() == stage_name_to_find:
                     stage_widget.setVisible(False)
+                    # Also remove it from the list to avoid finding it again
+                    self.stage_widgets[lang_id].remove(stage_widget)
                     break
     
     def contextMenuEvent(self, event):
@@ -168,8 +173,9 @@ class TaskCard(QGroupBox):
 
     def update_stage_status(self, lang_id, stage_key, status):
         if lang_id in self.stage_widgets:
+            stage_name_to_find = translator.translate(stage_key)
             for stage_widget in self.stage_widgets[lang_id]:
-                if stage_widget.label.text() == translator.translate(stage_key):
+                if stage_widget.label.text() == stage_name_to_find:
                     stage_widget.get_dot().set_status(status)
                     break
 
@@ -234,7 +240,14 @@ class QueueTab(QWidget):
         elif lang_id and stage_key: # Deleting a stage
             if q_manager.delete_stage_from_language(job_id, lang_id, stage_key):
                 card.hide_stage(lang_id, stage_key)
-        
+                
+                # Check if the language is now empty
+                updated_job = q_manager.get_job(job_id)
+                if updated_job and not updated_job['languages'].get(lang_id, {}).get('stages'):
+                    if q_manager.delete_language_from_job(job_id, lang_id):
+                        card.hide_language(lang_id)
+
+        # Check if the entire job is now empty
         updated_job = q_manager.get_job(job_id)
         if updated_job and not updated_job.get('languages'):
             self.on_task_deleted(job_id)

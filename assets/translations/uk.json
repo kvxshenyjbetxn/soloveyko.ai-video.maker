@@ -81,8 +81,10 @@
     "delete_task": "Видалити завдання",
     "delete_language": "Видалити мову",
     "delete_stage": "Видалити етап",
+    "delete_language_formatted": "Видалити мову \"{}\"",
+    "delete_stage_formatted": "Видалити етап \"{}\"",
     "confirm_deletion_title": "Підтвердження видалення",
-    "confirm_task_deletion_message": "Ви впевнені, що бажаєте видалити завдання \"{}\"",
+    "confirm_task_deletion_message": "Ви впевнені, що хочете видалити завдання \"{}\"?",
     "confirm_language_deletion_message": "Ви впевнені, що бажаєте видалити мову \"{}\" з завдання \"{}\"",
     "confirm_stage_deletion_message": "Ви впевнені, що бажаєте видалити етап \"{}\" для мови \"{}\" з завдання \"{}\""
 }
