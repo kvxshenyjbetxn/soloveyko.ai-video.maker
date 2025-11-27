@@ -162,6 +162,8 @@ class TextTab(QWidget):
         self.text_edit.textChanged.connect(self.check_queue_button_visibility)
         layout.addWidget(self.text_edit, 1)
 
+        self.apply_text_color_to_text_edit()
+
         # --- Stages Container ---
         self.stages_container = QWidget()
         self.stages_container_layout = QVBoxLayout(self.stages_container)
@@ -311,7 +313,18 @@ class TextTab(QWidget):
         for widget in self.stage_widgets.values():
             widget.retranslate_ui()
 
+        self.apply_text_color_to_text_edit()
+
 
     def update_balance(self, balance_text):
         self.openrouter_balance_label.setText(balance_text)
+
+    def apply_text_color_to_text_edit(self):
+        current_theme = self.settings.get('theme', 'dark')
+        if current_theme == 'light':
+            text_color = 'black'
+        else:
+            text_color = 'white'
+        self.text_edit.setStyleSheet(f"QTextEdit#textEdit {{ color: {text_color}; }}")
+
 
