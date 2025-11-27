@@ -70,17 +70,17 @@
         }
     },
     "image_prompt_settings": {
-        "prompt": "зроби 5 промтів для генерації зображень.\nкожен промт з нумераціею 1. промт 2 промт. і так далі\nбез зайвих коментарів.",
+        "prompt": "зроби 5 промтів для генерації зображень.\nкожен промт з нумераціею 1. промт 2 промт. і так далі\nбез зайвих коментарів.\nпромти на англ мові.",
         "model": "google/gemini-2.5-flash",
         "max_tokens": 10000
     },
     "results_path": "C:/Users/kvxshenyjbetxn/Desktop/test",
     "pollinations": {
-        "model": "dall-e-3",
+        "model": "flux-realism",
         "token": "DidsYB2KjDBFtn6_",
         "width": 1280,
         "height": 720,
         "nologo": true,
-        "enhance": true
+        "enhance": false
     }
 }
