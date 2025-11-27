@@ -20,15 +20,39 @@ class StageSelectionWidget(QWidget):
         self.lang_label = QLabel(f"{language_name}:")
         layout.addWidget(self.lang_label)
 
-        self.select_all_button = QToolButton()
-        self.select_all_button.setText(translator.translate("select_all"))
-        self.select_all_button.clicked.connect(self.select_all)
-        layout.addWidget(self.select_all_button)
+        self.toggle_all_button = QToolButton()
+        self.toggle_all_button.setObjectName("toggleAllButton")
+        self.toggle_all_button.setCheckable(True)
+        self.toggle_all_button.clicked.connect(self.toggle_all)
 
-        self.deselect_all_button = QToolButton()
-        self.deselect_all_button.setText(translator.translate("deselect_all"))
-        self.deselect_all_button.clicked.connect(self.deselect_all)
-        layout.addWidget(self.deselect_all_button)
+        theme_colors = {
+            'light': {'primary': '#2979ff', 'text': '#3c3c3c'},
+            'dark':  {'primary': '#2979ff', 'text': '#000000'},
+            'black': {'primary': '#2979ff', 'text': '#ffffff'}
+        }
+        current_theme = self.parent_tab.settings.get('theme', 'dark')
+        primary_color = theme_colors.get(current_theme, {}).get('primary', '#2979ff')
+        text_color_on_primary = theme_colors.get(current_theme, {}).get('text', '#000000')
+
+
+        self.toggle_all_button.setStyleSheet(f"""
+            QToolButton#toggleAllButton {{
+                color: {primary_color};
+                border: 1px solid {primary_color};
+                border-radius: 12px;
+                padding: 0 8px;
+                background-color: transparent;
+            }}
+            QToolButton#toggleAllButton:hover {{
+                background-color: {primary_color}20; /* 20 is for alpha */
+            }}
+            QToolButton#toggleAllButton:checked, QToolButton#toggleAllButton:pressed {{
+                background-color: {primary_color};
+                color: {text_color_on_primary};
+            }}
+        """)
+        self.toggle_all_button.setFixedHeight(25)
+        layout.addWidget(self.toggle_all_button)
 
         line = QFrame()
         line.setFrameShape(QFrame.Shape.VLine)
@@ -42,19 +66,35 @@ class StageSelectionWidget(QWidget):
         for key in stage_keys:
             checkbox = QCheckBox(translator.translate(key))
             checkbox.setChecked(True)
+            checkbox.stateChanged.connect(self.update_toggle_button_text)
             checkbox.stateChanged.connect(self.parent_tab.check_queue_button_visibility)
             layout.addWidget(checkbox)
             self.checkboxes[key] = checkbox
             
         layout.addStretch()
+        self.update_toggle_button_text()
+        
+    def retranslate_ui(self):
+        for key, checkbox in self.checkboxes.items():
+            checkbox.setText(translator.translate(key))
+        self.update_toggle_button_text()
 
-    def select_all(self):
-        for checkbox in self.checkboxes.values():
-            checkbox.setChecked(True)
+    def are_all_selected(self):
+        return all(checkbox.isChecked() for checkbox in self.checkboxes.values())
 
-    def deselect_all(self):
+    def toggle_all(self):
+        new_state = not self.are_all_selected()
         for checkbox in self.checkboxes.values():
-            checkbox.setChecked(False)
+            checkbox.setChecked(new_state)
+        self.update_toggle_button_text()
+
+    def update_toggle_button_text(self, state=None):
+        all_selected = self.are_all_selected()
+        self.toggle_all_button.setChecked(all_selected)
+        if all_selected:
+            self.toggle_all_button.setText(translator.translate("deselect_all"))
+        else:
+            self.toggle_all_button.setText(translator.translate("select_all"))
 
     def get_selected_stages(self):
         return [key for key, checkbox in self.checkboxes.items() if checkbox.isChecked()]
@@ -224,6 +264,9 @@ class TextTab(QWidget):
         # self.update_balance() # This will be called from main_window
         self.load_languages_menu()
         self.add_to_queue_button.setText(translator.translate('add_to_queue'))
+
+        for widget in self.stage_widgets.values():
+            widget.retranslate_ui()
 
 
     def update_balance(self, balance_text):
