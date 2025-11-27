@@ -66,60 +66,88 @@ class JobWorker(QRunnable):
         all_languages_config = self.settings.get("languages_config", {})
         
         for lang_id, lang_data in self.job['languages'].items():
-            stage_key = 'stage_translation'
-            if stage_key in lang_data['stages']:
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
-                lang_config = all_languages_config.get(lang_id)
-                if not lang_config:
-                    logger.log(f"  - Skipping translation for {lang_data['display_name']}: Configuration not found.")
-                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                    continue
-                
-                logger.log(f"  - Starting translation for: {lang_data['display_name']}")
-                
-                prompt = lang_config.get('prompt', '')
-                model = lang_config.get('model', '')
-                max_tokens = lang_config.get('max_tokens', 4096)
-                
-                if not model:
-                    logger.log(f"  - Skipping translation for {lang_data['display_name']}: Model not configured.")
-                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                    continue
-                
-                full_prompt = f"{prompt}\n\n{self.job['text']}"
-                
-                try:
-                    logger.log(f"    - Calling model '{model}' with max_tokens={max_tokens}.")
-                    response = self.api.get_chat_completion(
-                        model=model,
-                        messages=[{"role": "user", "content": full_prompt}],
-                        max_tokens=max_tokens
-                    )
-                    
-                    if response and response['choices'][0]['message']['content']:
-                        translated_text = response['choices'][0]['message']['content']
-                        logger.log(f"    - Translation successful for {lang_data['display_name']}.")
-                        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-                        
-                        if base_save_path:
-                            saved_path = self.save_result(base_save_path, self.job['name'], lang_data['display_name'], translated_text)
-                            self.process_image_prompts(job_id, lang_id, lang_data, translated_text, saved_path)
-                    else:
-                        logger.log(f"    - Translation failed for {lang_data['display_name']}: Empty or invalid response from API.")
-                        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            lang_dir_path = self._get_save_path(base_save_path, self.job['name'], lang_data['display_name'])
+            
+            text_for_processing = self.job['text']
+            translation_successful = False
 
-                except Exception as e:
-                    logger.log(f"    - An error occurred during translation for {lang_data['display_name']}: {e}")
-                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            # --- Translation Stage ---
+            if 'stage_translation' in lang_data['stages']:
+                translated_text = self._perform_translation(job_id, lang_id, lang_data, all_languages_config)
+                if translated_text:
+                    text_for_processing = translated_text
+                    translation_successful = True
+                    if lang_dir_path:
+                        self.save_translation(lang_dir_path, translated_text)
+            
+            # --- Image Prompts Stage ---
+            if 'stage_img_prompts' in lang_data['stages']:
+                self.process_image_prompts(job_id, lang_id, lang_data, text_for_processing, lang_dir_path)
 
         logger.log(f"Finished processing job: {self.job['name']}")
         self.signals.finished.emit()
 
-    def process_image_prompts(self, job_id, lang_id, lang_data, translated_text, saved_translation_path):
-        stage_key = 'stage_img_prompts'
-        if stage_key not in lang_data['stages']:
-            return
+    def _get_save_path(self, base_path, job_name, lang_name):
+        if not base_path:
+            return None
+        try:
+            safe_job_name = "".join(c for c in job_name if c.isalnum() or c in (' ', '_')).rstrip()
+            safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
+            dir_path = os.path.join(base_path, safe_job_name, safe_lang_name)
+            os.makedirs(dir_path, exist_ok=True)
+            return dir_path
+        except Exception as e:
+            logger.log(f"    - Failed to create save directory. Error: {e}")
+            return None
 
+    def _perform_translation(self, job_id, lang_id, lang_data, all_languages_config):
+        stage_key = 'stage_translation'
+        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
+        
+        lang_config = all_languages_config.get(lang_id)
+        if not lang_config:
+            logger.log(f"  - Skipping translation for {lang_data['display_name']}: Configuration not found.")
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return None
+        
+        logger.log(f"  - Starting translation for: {lang_data['display_name']}")
+        
+        prompt = lang_config.get('prompt', '')
+        model = lang_config.get('model', '')
+        max_tokens = lang_config.get('max_tokens', 4096)
+        
+        if not model:
+            logger.log(f"  - Skipping translation for {lang_data['display_name']}: Model not configured.")
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return None
+        
+        full_prompt = f"{prompt}\n\n{self.job['text']}"
+        
+        try:
+            logger.log(f"    - Calling model '{model}' with max_tokens={max_tokens}.")
+            response = self.api.get_chat_completion(
+                model=model,
+                messages=[{"role": "user", "content": full_prompt}],
+                max_tokens=max_tokens
+            )
+            
+            if response and response['choices'][0]['message']['content']:
+                translated_text = response['choices'][0]['message']['content']
+                logger.log(f"    - Translation successful for {lang_data['display_name']}.")
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+                return translated_text
+            else:
+                logger.log(f"    - Translation failed for {lang_data['display_name']}: Empty or invalid response from API.")
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return None
+
+        except Exception as e:
+            logger.log(f"    - An error occurred during translation for {lang_data['display_name']}: {e}")
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return None
+
+    def process_image_prompts(self, job_id, lang_id, lang_data, text_to_use, dir_path):
+        stage_key = 'stage_img_prompts'
         self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
         logger.log(f"  - Starting image prompt generation for: {lang_data['display_name']}")
         
@@ -133,7 +161,7 @@ class JobWorker(QRunnable):
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
             return
 
-        full_prompt = f"{prompt_template}\n\n{translated_text}"
+        full_prompt = f"{prompt_template}\n\n{text_to_use}"
 
         try:
             logger.log(f"    - Calling model '{model}' for image prompts with max_tokens={max_tokens}.")
@@ -147,8 +175,8 @@ class JobWorker(QRunnable):
                 image_prompts_text = response['choices'][0]['message']['content']
                 logger.log(f"    - Image prompt generation successful for {lang_data['display_name']}.")
                 
-                if saved_translation_path:
-                    self.save_image_prompts(saved_translation_path, image_prompts_text)
+                if dir_path:
+                    self.save_image_prompts(dir_path, image_prompts_text)
                 
                 self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
             else:
@@ -159,35 +187,20 @@ class JobWorker(QRunnable):
             logger.log(f"    - An error occurred during image prompt generation for {lang_data['display_name']}: {e}")
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
-    def save_result(self, base_path, job_name, lang_name, content):
+    def save_translation(self, dir_path, content):
         try:
-            # Sanitize names to be safe for directory/file creation
-            safe_job_name = "".join(c for c in job_name if c.isalnum() or c in (' ', '_')).rstrip()
-            safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
-            
-            dir_path = os.path.join(base_path, safe_job_name, safe_lang_name)
-            os.makedirs(dir_path, exist_ok=True)
-            
             file_path = os.path.join(dir_path, "translation.txt")
-            
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            
-            logger.log(f"    - Result saved to: {file_path}")
-            return dir_path
-
+            logger.log(f"    - Translation result saved to: {file_path}")
         except Exception as e:
-            logger.log(f"    - Failed to save result. Error: {e}")
-            return None
+            logger.log(f"    - Failed to save translation result. Error: {e}")
 
     def save_image_prompts(self, dir_path, content):
         try:
             file_path = os.path.join(dir_path, "image_prompts.txt")
-            
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            
             logger.log(f"    - Image prompts saved to: {file_path}")
-
         except Exception as e:
             logger.log(f"    - Failed to save image prompts. Error: {e}")
