@@ -116,11 +116,25 @@ class TaskCard(QGroupBox):
 
         for lang_id, lang_data in job['languages'].items():
             lang_header = DeletableLanguageHeader(lang_data['display_name'], self)
-            lang_header.delete_requested.connect(lambda lid=lang_id: self.on_language_delete(lid))
+            self.language_widgets[lang_id] = lang_header
             layout.addWidget(lang_header)
             
-            self.language_widgets[lang_id] = lang_header
             self.stage_widgets[lang_id] = []
+
+            # If translation is not a selected stage, show 'Original'
+            if 'stage_translation' not in lang_data['stages']:
+                original_widget = QWidget()
+                original_layout = QHBoxLayout(original_widget)
+                original_layout.setContentsMargins(4, 0, 4, 0)
+                
+                dot = StatusDot(self)
+                dot.set_status('success') # Original text is always 'successful'
+                label = QLabel(translator.translate('original_text'), self)
+                
+                original_layout.addWidget(dot)
+                original_layout.addWidget(label)
+                original_layout.addStretch()
+                layout.addWidget(original_widget)
 
             for stage_key in lang_data['stages']:
                 stage_widget = DeletableStageWidget(stage_key, self)
