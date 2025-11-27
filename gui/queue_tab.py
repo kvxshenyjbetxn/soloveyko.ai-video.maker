@@ -3,32 +3,66 @@ from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.flow_layout import FlowLayout
 
+class StatusDot(QLabel):
+    """A circular widget to indicate status."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(12, 12)
+        self.set_status('pending')
+
+    def set_status(self, status):
+        if status == 'processing':
+            color = '#ffa500' # Orange
+        elif status == 'success':
+            color = '#28a745' # Green
+        elif status == 'error':
+            color = '#dc3545' # Red
+        else: # 'pending'
+            color = '#6c757d' # Grey
+        
+        self.setStyleSheet(f"background-color: {color}; border-radius: 6px;")
+
 class TaskCard(QGroupBox):
-    """A widget that displays a single task as a card."""
+    """A widget that displays a single task and its stage statuses."""
     def __init__(self, job, parent=None):
         super().__init__(job['name'], parent)
+        self.job_id = job['id']
+        self.stage_dots = {}
+
         self.setMinimumWidth(250)
         self.setMaximumWidth(350)
 
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
         
         for lang_id, lang_data in job['languages'].items():
             lang_label = QLabel(f"<b>{lang_data['display_name']}</b>")
-            layout.addWidget(lang_label)
+            main_layout.addWidget(lang_label)
             
-            # Use a single label with rich text for stages
-            stages_text = "<br>".join(f"&nbsp;&nbsp;• {translator.translate(stage_key)}" for stage_key in lang_data['stages'])
-            stages_label = QLabel(stages_text)
-            stages_label.setWordWrap(True)
-            stages_label.setAlignment(Qt.AlignmentFlag.AlignTop)
-            layout.addWidget(stages_label)
+            for stage_key in lang_data['stages']:
+                stage_layout = QHBoxLayout()
+                
+                dot = StatusDot()
+                self.stage_dots[(lang_id, stage_key)] = dot
+                
+                stage_label = QLabel(translator.translate(stage_key))
+                
+                stage_layout.addWidget(dot)
+                stage_layout.addWidget(stage_label)
+                stage_layout.addStretch()
+                
+                main_layout.addLayout(stage_layout)
         
-        layout.addStretch()
+        main_layout.addStretch()
+
+    def update_stage_status(self, lang_id, stage_key, status):
+        if (lang_id, stage_key) in self.stage_dots:
+            self.stage_dots[(lang_id, stage_key)].set_status(status)
 
 class QueueTab(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
         self.main_window = main_window
+        self.task_cards = {} # To store card references by job_id
         self.init_ui()
 
     def init_ui(self):
@@ -60,16 +94,17 @@ class QueueTab(QWidget):
     def add_task(self, job):
         task_card = TaskCard(job)
         self.tasks_layout.addWidget(task_card)
+        self.task_cards[job['id']] = task_card
+
+    def update_stage_status(self, job_id, lang_id, stage_key, status):
+        if job_id in self.task_cards:
+            card = self.task_cards[job_id]
+            card.update_stage_status(lang_id, stage_key, status)
 
     def update_balance(self, balance_text):
         self.balance_label.setText(balance_text)
 
     def retranslate_ui(self):
         self.start_processing_button.setText(translator.translate('start_processing'))
-        # We might need to retranslate existing cards if language changes
-        for i in range(self.tasks_layout.count()):
-            widget = self.tasks_layout.itemAt(i).widget()
-            if isinstance(widget, TaskCard):
-                # This is complex, as the card is built with translated text.
-                # For now, we assume cards are not re-translated after creation.
-                pass
+        # Retranslating cards would be complex. For now, this is omitted.
+        pass

@@ -1,4 +1,5 @@
 import re
+import uuid
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
     QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog
@@ -249,6 +250,7 @@ class TextTab(QWidget):
             
             if languages_data:
                 job = {
+                    "id": str(uuid.uuid4()),
                     "name": task_name,
                     "text": text,
                     "languages": languages_data

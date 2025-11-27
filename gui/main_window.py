@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
         self.queue_tab.start_processing_button.clicked.connect(self.task_processor.start_processing)
         self.task_processor.processing_finished.connect(self.show_processing_finished_dialog)
         self.task_processor.processing_finished.connect(self.update_balance)
+        self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
 
 
         self.update_balance()

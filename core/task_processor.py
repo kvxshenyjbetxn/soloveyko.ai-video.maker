@@ -7,6 +7,7 @@ from api.openrouter import OpenRouterAPI
 
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
+    stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
 
     def __init__(self, queue_manager):
         super().__init__()
@@ -30,6 +31,8 @@ class TaskProcessor(QObject):
         for job in jobs:
             worker = JobWorker(self.openrouter_api, self.settings, job)
             worker.signals.finished.connect(self.job_finished)
+            # Propagate the stage status signal
+            worker.signals.stage_status_changed.connect(self.stage_status_changed)
             self.threadpool.start(worker)
 
     def job_finished(self):
@@ -42,6 +45,7 @@ class TaskProcessor(QObject):
 
 class JobWorkerSignals(QObject):
     finished = Signal()
+    stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
 
 class JobWorker(QRunnable):
     def __init__(self, api, settings, job):
@@ -53,6 +57,7 @@ class JobWorker(QRunnable):
 
     def run(self):
         logger.log(f"Processing job: {self.job['name']}")
+        job_id = self.job['id']
         
         base_save_path = self.settings.get('results_path')
         if not base_save_path:
@@ -61,10 +66,13 @@ class JobWorker(QRunnable):
         all_languages_config = self.settings.get("languages_config", {})
         
         for lang_id, lang_data in self.job['languages'].items():
-            if 'stage_translation' in lang_data['stages']:
+            stage_key = 'stage_translation'
+            if stage_key in lang_data['stages']:
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
                 lang_config = all_languages_config.get(lang_id)
                 if not lang_config:
                     logger.log(f"  - Skipping translation for {lang_data['display_name']}: Configuration not found.")
+                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
                     continue
                 
                 logger.log(f"  - Starting translation for: {lang_data['display_name']}")
@@ -75,6 +83,7 @@ class JobWorker(QRunnable):
                 
                 if not model:
                     logger.log(f"  - Skipping translation for {lang_data['display_name']}: Model not configured.")
+                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
                     continue
                 
                 full_prompt = f"{prompt}\n\n{self.job['text']}"
@@ -87,18 +96,20 @@ class JobWorker(QRunnable):
                         max_tokens=max_tokens
                     )
                     
-                    if response:
+                    if response and response['choices'][0]['message']['content']:
                         translated_text = response['choices'][0]['message']['content']
                         logger.log(f"    - Translation successful for {lang_data['display_name']}.")
+                        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
                         
                         if base_save_path:
                             self.save_result(base_save_path, self.job['name'], lang_data['display_name'], translated_text)
-
                     else:
-                        logger.log(f"    - Translation failed for {lang_data['display_name']}: Empty response from API.")
+                        logger.log(f"    - Translation failed for {lang_data['display_name']}: Empty or invalid response from API.")
+                        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
                 except Exception as e:
                     logger.log(f"    - An error occurred during translation for {lang_data['display_name']}: {e}")
+                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
         logger.log(f"Finished processing job: {self.job['name']}")
         self.signals.finished.emit()
