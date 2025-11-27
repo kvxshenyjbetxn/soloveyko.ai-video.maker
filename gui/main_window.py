@@ -76,7 +76,7 @@ class MainWindow(QMainWindow):
         self.text_tab = TextTab(main_window=self)
         self.settings_tab = SettingsTab(main_window=self)
         self.log_tab = LogTab()
-        self.queue_tab = QueueTab(main_window=self)
+        self.queue_tab = QueueTab(parent=self.tabs, main_window=self)
         logger.set_log_widget(self.log_tab)
 
         self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
