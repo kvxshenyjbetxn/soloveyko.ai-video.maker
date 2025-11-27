@@ -1,9 +1,11 @@
 import os
+import re
 import time
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager
 from api.openrouter import OpenRouterAPI
+from api.pollinations import PollinationsAPI
 
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
@@ -14,6 +16,7 @@ class TaskProcessor(QObject):
         self.queue_manager = queue_manager
         self.settings = settings_manager
         self.openrouter_api = OpenRouterAPI()
+        self.pollinations_api = PollinationsAPI()
         self.threadpool = QThreadPool()
         self.active_jobs = 0
         self.timer = QElapsedTimer()
@@ -29,7 +32,7 @@ class TaskProcessor(QObject):
         logger.log(f"Starting to process {self.active_jobs} jobs in the queue.", level=LogLevel.INFO)
         
         for job in jobs:
-            worker = JobWorker(self.openrouter_api, self.settings, job)
+            worker = JobWorker(self.openrouter_api, self.pollinations_api, self.settings, job)
             worker.signals.finished.connect(self.job_finished)
             # Propagate the stage status signal
             worker.signals.stage_status_changed.connect(self.stage_status_changed)
@@ -48,9 +51,10 @@ class JobWorkerSignals(QObject):
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
 
 class JobWorker(QRunnable):
-    def __init__(self, api, settings, job):
+    def __init__(self, openrouter_api, pollinations_api, settings, job):
         super().__init__()
-        self.api = api
+        self.openrouter_api = openrouter_api
+        self.pollinations_api = pollinations_api
         self.settings = settings
         self.job = job
         self.signals = JobWorkerSignals()
@@ -69,20 +73,22 @@ class JobWorker(QRunnable):
             lang_dir_path = self._get_save_path(base_save_path, self.job['name'], lang_data['display_name'])
             
             text_for_processing = self.job['text']
-            translation_successful = False
-
+            
             # --- Translation Stage ---
             if 'stage_translation' in lang_data['stages']:
                 translated_text = self._perform_translation(job_id, lang_id, lang_data, all_languages_config)
                 if translated_text:
                     text_for_processing = translated_text
-                    translation_successful = True
                     if lang_dir_path:
                         self.save_translation(lang_dir_path, translated_text)
             
             # --- Image Prompts Stage ---
             if 'stage_img_prompts' in lang_data['stages']:
                 self.process_image_prompts(job_id, lang_id, lang_data, text_for_processing, lang_dir_path)
+
+            # --- Image Generation Stage ---
+            if 'stage_images' in lang_data['stages']:
+                self.process_image_generation(job_id, lang_id, lang_data, lang_dir_path)
 
         logger.log(f"Finished processing job: {self.job['name']}", level=LogLevel.INFO)
         self.signals.finished.emit()
@@ -125,7 +131,7 @@ class JobWorker(QRunnable):
         
         try:
             logger.log(f"    - Calling model '{model}' with max_tokens={max_tokens}.", level=LogLevel.INFO)
-            response = self.api.get_chat_completion(
+            response = self.openrouter_api.get_chat_completion(
                 model=model,
                 messages=[{"role": "user", "content": full_prompt}],
                 max_tokens=max_tokens
@@ -165,7 +171,7 @@ class JobWorker(QRunnable):
 
         try:
             logger.log(f"    - Calling model '{model}' for image prompts with max_tokens={max_tokens}.", level=LogLevel.INFO)
-            response = self.api.get_chat_completion(
+            response = self.openrouter_api.get_chat_completion(
                 model=model,
                 messages=[{"role": "user", "content": full_prompt}],
                 max_tokens=max_tokens
@@ -186,6 +192,47 @@ class JobWorker(QRunnable):
         except Exception as e:
             logger.log(f"    - An error occurred during image prompt generation for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            
+    def process_image_generation(self, job_id, lang_id, lang_data, lang_dir_path):
+        stage_key = 'stage_images'
+        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
+        logger.log(f"  - Starting image generation for: {lang_data['display_name']}", level=LogLevel.INFO)
+
+        if not lang_dir_path:
+            logger.log(f"    - Skipping image generation: No save path defined.", level=LogLevel.WARNING)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        prompts_file_path = os.path.join(lang_dir_path, "image_prompts.txt")
+        if not os.path.exists(prompts_file_path):
+            logger.log(f"    - Skipping image generation: 'image_prompts.txt' not found.", level=LogLevel.WARNING)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        with open(prompts_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        prompts = re.findall(r"^\d+\.\s*(.*)", content, re.MULTILINE)
+        logger.log(f"    - Found {len(prompts)} prompts to process.", level=LogLevel.INFO)
+
+        images_dir = os.path.join(lang_dir_path, "images")
+        os.makedirs(images_dir, exist_ok=True)
+
+        for i, prompt in enumerate(prompts, 1):
+            image_data = self.pollinations_api.generate_image(prompt)
+            if image_data:
+                try:
+                    image_path = os.path.join(images_dir, f"{i}.png")
+                    with open(image_path, 'wb') as f:
+                        f.write(image_data)
+                    logger.log(f"      - Successfully saved image {i} to {image_path}", level=LogLevel.SUCCESS)
+                except Exception as e:
+                    logger.log(f"      - Failed to save image {i}. Error: {e}", level=LogLevel.ERROR)
+            else:
+                logger.log(f"      - Failed to generate image {i} for prompt: '{prompt}'", level=LogLevel.WARNING)
+        
+        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+
 
     def save_translation(self, dir_path, content):
         try:
