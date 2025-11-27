@@ -89,5 +89,8 @@
     "confirm_stage_deletion_message": "Are you sure you want to delete stage \"{}\" for language \"{}\" from task \"{}\"",
     "prompt_content_label": "Prompt for image generation:",
     "image_model_label": "Image Model:",
-    "original_text": "Original Text"
+    "original_text": "Original Text",
+    "all_levels": "All Levels",
+    "search_logs": "Search logs...",
+    "autoscroll": "Autoscroll"
 }
