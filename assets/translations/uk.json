@@ -102,5 +102,18 @@
     "pollinations_token_placeholder": "Введіть ваш токен",
     "image_size_label": "Розмір (Ширина x Висота):",
     "nologo_label": "Прибрати логотип",
-    "enhance_prompt_label": "Покращити промт"
+    "enhance_prompt_label": "Покращити промт",
+    "image_generation_provider_label": "Сервіс генерації зображень:",
+    "googler_tab_title": "Googler",
+    "googler_api_key_label": "Ключ API:",
+    "googler_api_key_placeholder": "Введіть ваш ключ API",
+    "googler_usage_label": "Використання:",
+    "googler_check_usage_button": "Перевірити",
+    "googler_aspect_ratio_label": "Співвідношення сторін:",
+    "googler_max_threads_label": "Макс. потоків:",
+    "googler_seed_label": "Seed:",
+    "googler_negative_prompt_label": "Негативний промпт:",
+    "googler_negative_prompt_placeholder": "Введіть негативний промпт",
+    "googler_api_key_missing": "Ключ API відсутній",
+    "googler_usage_failed": "Не вдалося отримати дані"
 }

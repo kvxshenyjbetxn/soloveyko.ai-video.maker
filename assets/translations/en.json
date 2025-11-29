@@ -102,5 +102,18 @@
     "pollinations_token_placeholder": "Enter your token",
     "image_size_label": "Size (Width x Height):",
     "nologo_label": "Remove Logo",
-    "enhance_prompt_label": "Enhance Prompt"
+    "enhance_prompt_label": "Enhance Prompt",
+    "image_generation_provider_label": "Image Generation Provider:",
+    "googler_tab_title": "Googler",
+    "googler_api_key_label": "API Key:",
+    "googler_api_key_placeholder": "Enter your API key",
+    "googler_usage_label": "Usage:",
+    "googler_check_usage_button": "Check",
+    "googler_aspect_ratio_label": "Aspect Ratio:",
+    "googler_max_threads_label": "Max Threads:",
+    "googler_seed_label": "Seed:",
+    "googler_negative_prompt_label": "Negative Prompt:",
+    "googler_negative_prompt_placeholder": "Enter negative prompt",
+    "googler_api_key_missing": "API key is missing",
+    "googler_usage_failed": "Failed to get usage data"
 }

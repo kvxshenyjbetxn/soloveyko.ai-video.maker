@@ -8,6 +8,7 @@ from utils.settings import settings_manager
 from utils.translator import translator
 from config.version import __version__
 from api.openrouter import OpenRouterAPI
+from api.googler import GooglerAPI
 
 from gui.text_tab import TextTab
 from gui.settings_tab import SettingsTab
@@ -20,6 +21,8 @@ from utils.logger import logger, LogLevel
 class BalanceWorkerSignals(QObject):
     finished = Signal(float)
 
+class GooglerUsageWorkerSignals(QObject):
+    finished = Signal(dict)
 
 class BalanceWorker(QRunnable):
     def __init__(self):
@@ -31,6 +34,17 @@ class BalanceWorker(QRunnable):
         balance = api.get_balance()
         if balance is not None:
             self.signals.finished.emit(balance)
+
+class GooglerUsageWorker(QRunnable):
+    def __init__(self):
+        super().__init__()
+        self.signals = GooglerUsageWorkerSignals()
+
+    def run(self):
+        api = GooglerAPI()
+        usage = api.get_usage()
+        if usage is not None:
+            self.signals.finished.emit(usage)
 
 class MainWindow(QMainWindow):
     def __init__(self, app):
@@ -90,10 +104,12 @@ class MainWindow(QMainWindow):
         self.queue_tab.start_processing_button.clicked.connect(self.task_processor.start_processing)
         self.task_processor.processing_finished.connect(self.show_processing_finished_dialog)
         self.task_processor.processing_finished.connect(self.update_balance)
+        self.task_processor.processing_finished.connect(self.update_googler_usage)
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
 
 
         self.update_balance()
+        self.update_googler_usage()
 
     def show_processing_finished_dialog(self, elapsed_time):
         title = translator.translate('processing_complete_title')
@@ -109,6 +125,11 @@ class MainWindow(QMainWindow):
         worker.signals.finished.connect(self._on_balance_updated)
         self.threadpool.start(worker)
 
+    def update_googler_usage(self):
+        worker = GooglerUsageWorker()
+        worker.signals.finished.connect(self._on_googler_usage_updated)
+        self.threadpool.start(worker)
+
     def _on_balance_updated(self, balance):
         api_key = self.settings_manager.get("openrouter_api_key")
         if api_key:
@@ -119,6 +140,26 @@ class MainWindow(QMainWindow):
         self.text_tab.update_balance(balance_text)
         self.queue_tab.update_balance(balance_text)
         self.settings_tab.api_tab.openrouter_tab.update_balance_label(balance_text)
+
+    def _on_googler_usage_updated(self, usage_data):
+        googler_settings = self.settings_manager.get("googler", {})
+        api_key = googler_settings.get("api_key")
+
+        if api_key and usage_data:
+            img_usage = usage_data.get("current_usage", {}).get("hourly_usage", {}).get("image_generation", {})
+            current_usage = img_usage.get("current_usage", "N/A")
+            
+            img_limits = usage_data.get("account_limits", {})
+            limit = img_limits.get("img_gen_per_hour_limit", "N/A")
+
+            usage_text = f"Googler: {current_usage} / {limit}"
+        else:
+            usage_text = ""
+
+        self.text_tab.update_googler_usage(usage_text)
+        self.queue_tab.update_googler_usage(usage_text)
+        self.settings_tab.api_tab.image_tab.googler_tab.usage_display_label.setText(f"{current_usage} / {limit}" if api_key and usage_data else "N/A")
+
 
     def change_theme(self, theme_name):
         self.settings_manager.set('theme', theme_name)
@@ -145,9 +186,11 @@ class MainWindow(QMainWindow):
         self.settings_tab.retranslate_ui()
         self.queue_tab.retranslate_ui()
         self.update_balance()
+        self.update_googler_usage()
 
     def closeEvent(self, event):
         self.settings_tab.api_tab.image_tab.pollinations_tab.save_settings()
+        self.settings_tab.api_tab.image_tab.googler_tab.save_settings()
         logger.log(translator.translate('app_closing'), level=LogLevel.INFO)
         super().closeEvent(event)
 

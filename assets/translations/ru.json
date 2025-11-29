@@ -102,5 +102,18 @@
     "pollinations_token_placeholder": "Введите ваш токен",
     "image_size_label": "Размер (Ширина x Высота):",
     "nologo_label": "Убрать логотип",
-    "enhance_prompt_label": "Улучшить промт"
+    "enhance_prompt_label": "Улучшить промт",
+    "image_generation_provider_label": "Сервис генерации изображений:",
+    "googler_tab_title": "Googler",
+    "googler_api_key_label": "Ключ API:",
+    "googler_api_key_placeholder": "Введите ваш ключ API",
+    "googler_usage_label": "Использование:",
+    "googler_check_usage_button": "Проверить",
+    "googler_aspect_ratio_label": "Соотношение сторон:",
+    "googler_max_threads_label": "Макс. потоков:",
+    "googler_seed_label": "Seed:",
+    "googler_negative_prompt_label": "Негативный промт:",
+    "googler_negative_prompt_placeholder": "Введите негативный промт",
+    "googler_api_key_missing": "Ключ API отсутствует",
+    "googler_usage_failed": "Не удалось получить данные"
 }
