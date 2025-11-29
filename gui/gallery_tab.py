@@ -1,9 +1,12 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLabel
+import os
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLabel, QMessageBox
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from utils.translator import translator
 from gui.collapsible_group import CollapsibleGroup
-from gui.widgets.clickable_label import ClickableLabel
+from gui.widgets.image_thumbnail import ImageThumbnail
+from gui.dialogs.regenerate_config_dialog import RegenerateConfigDialog
+from utils.logger import logger, LogLevel
 
 class GalleryTab(QWidget):
     image_clicked = Signal(str)
@@ -19,7 +22,6 @@ class GalleryTab(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # Total images count label
         self.total_images_label = QLabel()
         main_layout.addWidget(self.total_images_label, alignment=Qt.AlignmentFlag.AlignRight)
 
@@ -36,24 +38,65 @@ class GalleryTab(QWidget):
 
         self.update_total_images_count()
 
-    def add_image(self, task_name, image_path):
+    def add_image(self, task_name, image_path, prompt):
         if task_name not in self.task_groups:
             group = CollapsibleGroup(task_name)
             self.content_layout.addWidget(group)
             self.task_groups[task_name] = group
         
         group = self.task_groups[task_name]
-        
-        image_label = ClickableLabel()
+
+        # Create and scale the pixmap here
         pixmap = QPixmap(image_path)
-        image_label.setPixmap(pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        image_label.clicked.connect(lambda: self._on_image_clicked(image_path))
+        scaled_pixmap = pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         
-        group.add_widget(image_label)
+        # Pass the scaled pixmap to the thumbnail
+        thumbnail = ImageThumbnail(image_path, prompt, scaled_pixmap)
+        
+        thumbnail.image_clicked.connect(lambda: self._on_image_clicked(image_path))
+        thumbnail.delete_requested.connect(lambda: self._on_delete_requested(thumbnail, group))
+        thumbnail.regenerate_requested.connect(lambda: self._on_regenerate_requested(thumbnail))
+
+        group.add_widget(thumbnail)
         self.update_total_images_count()
 
     def _on_image_clicked(self, image_path):
         self.image_clicked.emit(image_path)
+
+    def _on_regenerate_requested(self, thumbnail_widget):
+        dialog = RegenerateConfigDialog(thumbnail_widget.prompt, self)
+        if dialog.exec():
+            new_values = dialog.get_values()
+            logger.log(f"Regeneration requested for image {thumbnail_widget.image_path}:", level=LogLevel.INFO)
+            logger.log(f"  - New Provider: {new_values['provider']}", level=LogLevel.INFO)
+            logger.log(f"  - New Prompt: {new_values['prompt']}", level=LogLevel.INFO)
+            # Actual regeneration logic is not implemented yet, as per request.
+
+    def _on_delete_requested(self, thumbnail_widget, group):
+        confirm_msg = translator.translate("confirm_image_deletion_message").format(thumbnail_widget.image_path)
+        reply = QMessageBox.question(self, 
+                                     translator.translate("confirm_deletion_title"), 
+                                     confirm_msg,
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                                     QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # 1. Delete from disk
+                os.remove(thumbnail_widget.image_path)
+                logger.log(f"Deleted image from disk: {thumbnail_widget.image_path}", level=LogLevel.INFO)
+
+                # 2. Remove from layout
+                group.content_flow_layout.removeWidget(thumbnail_widget)
+                thumbnail_widget.deleteLater()
+
+                # 3. Update counts
+                group.update_title()
+                self.update_total_images_count()
+
+            except OSError as e:
+                logger.log(f"Error deleting image file {thumbnail_widget.image_path}: {e}", level=LogLevel.ERROR)
+                QMessageBox.critical(self, "Error", f"Could not delete image file:\n{e}")
 
     def update_total_images_count(self):
         total_count = sum(group.get_image_count() for group in self.task_groups.values())
@@ -63,3 +106,5 @@ class GalleryTab(QWidget):
         self.update_total_images_count()
         for group in self.task_groups.values():
             group.translate_ui()
+        # Need to re-translate any visible dialogs if they are open during language change
+        # For now, this is not implemented as dialogs are modal and short-lived.

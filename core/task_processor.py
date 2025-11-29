@@ -12,7 +12,7 @@ from api.googler import GooglerAPI
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
-    image_generated = Signal(str, str) # task_name, image_path
+    image_generated = Signal(str, str, str) # task_name, image_path, prompt
 
     def __init__(self, queue_manager):
         super().__init__()
@@ -95,7 +95,7 @@ class ImageGenerationWorker(QRunnable):
                 f.write(data_to_write)
                 
             logger.log(f"      - Successfully saved image {self.index + 1} to {image_path}", level=LogLevel.SUCCESS)
-            self.processor.image_generated.emit(self.task_name, image_path) # Emit signal for the gallery
+            self.processor.image_generated.emit(self.task_name, image_path, self.prompt) # Emit signal for the gallery
             self.signals.finished.emit(self.index, True)
 
         except Exception as e:
