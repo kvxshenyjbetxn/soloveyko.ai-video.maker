@@ -115,5 +115,8 @@
     "googler_negative_prompt_label": "Негативный промт:",
     "googler_negative_prompt_placeholder": "Введите негативный промт",
     "googler_api_key_missing": "Ключ API отсутствует",
-    "googler_usage_failed": "Не удалось получить данные"
+    "googler_usage_failed": "Не удалось получить данные",
+    "gallery_tab_title": "Галерея",
+    "gallery_total_images_label": "Всего изображений: {count}",
+    "gallery_task_group_title": "{title} ({count} изображений)"
 }

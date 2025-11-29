@@ -14,6 +14,7 @@ from gui.text_tab import TextTab
 from gui.settings_tab import SettingsTab
 from gui.log_tab import LogTab
 from gui.queue_tab import QueueTab
+from gui.gallery_tab import GalleryTab
 from core.queue_manager import QueueManager
 from core.task_processor import TaskProcessor
 from utils.logger import logger, LogLevel
@@ -92,10 +93,12 @@ class MainWindow(QMainWindow):
         self.settings_tab = SettingsTab(main_window=self)
         self.log_tab = LogTab()
         self.queue_tab = QueueTab(parent=self.tabs, main_window=self)
+        self.gallery_tab = GalleryTab()
         logger.set_log_widget(self.log_tab)
 
         self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
         self.tabs.addTab(self.queue_tab, self.translator.translate('queue_tab'))
+        self.tabs.addTab(self.gallery_tab, self.translator.translate('gallery_tab_title'))
         self.tabs.addTab(self.settings_tab, self.translator.translate('settings_tab'))
         self.tabs.addTab(self.log_tab, self.translator.translate('log_tab'))
 
@@ -106,6 +109,7 @@ class MainWindow(QMainWindow):
         self.task_processor.processing_finished.connect(self.update_balance)
         self.task_processor.processing_finished.connect(self.update_googler_usage)
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
+        self.task_processor.image_generated.connect(self.gallery_tab.add_image)
 
 
         self.update_balance()
@@ -177,14 +181,16 @@ class MainWindow(QMainWindow):
 
     def retranslate_ui(self):
         self.update_title()
-        self.tabs.setTabText(0, self.translator.translate('text_processing_tab'))
-        self.tabs.setTabText(1, self.translator.translate('queue_tab'))
-        self.tabs.setTabText(2, self.translator.translate('settings_tab'))
-        self.tabs.setTabText(3, self.translator.translate('log_tab'))
+        self.tabs.setTabText(self.tabs.indexOf(self.text_tab), self.translator.translate('text_processing_tab'))
+        self.tabs.setTabText(self.tabs.indexOf(self.queue_tab), self.translator.translate('queue_tab'))
+        self.tabs.setTabText(self.tabs.indexOf(self.gallery_tab), self.translator.translate('gallery_tab_title'))
+        self.tabs.setTabText(self.tabs.indexOf(self.settings_tab), self.translator.translate('settings_tab'))
+        self.tabs.setTabText(self.tabs.indexOf(self.log_tab), self.translator.translate('log_tab'))
         
         self.text_tab.retranslate_ui()
         self.settings_tab.retranslate_ui()
         self.queue_tab.retranslate_ui()
+        self.gallery_tab.retranslate_ui()
         self.update_balance()
         self.update_googler_usage()
 
