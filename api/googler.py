@@ -64,8 +64,13 @@ class GooglerAPI:
         data, status = self._make_request("post", "images", json=json_data)
 
         if status == "connected" and data and data.get("success"):
-            logger.log(f"Successfully generated image for prompt: {prompt}", level=LogLevel.SUCCESS)
-            return data.get("result")
+            result = data.get("result")
+            if result and isinstance(result, str):
+                logger.log(f"Successfully generated image for prompt: {prompt}", level=LogLevel.SUCCESS)
+                return result
+            else:
+                logger.log(f"API call successful but got empty or invalid result for prompt: {prompt}. Result: {result}", level=LogLevel.WARNING)
+                return None
         
         error_message = data.get("error") if data else "Unknown error"
         logger.log(f"Failed to generate image for prompt: {prompt}. Error: {error_message}", level=LogLevel.ERROR)
