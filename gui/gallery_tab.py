@@ -1,10 +1,13 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLabel
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from utils.translator import translator
 from gui.collapsible_group import CollapsibleGroup
+from gui.widgets.clickable_label import ClickableLabel
 
 class GalleryTab(QWidget):
+    image_clicked = Signal(str)
+
     def __init__(self):
         super().__init__()
         self.task_groups = {}
@@ -41,14 +44,16 @@ class GalleryTab(QWidget):
         
         group = self.task_groups[task_name]
         
-        # Create a widget to display the image
-        image_label = QLabel()
+        image_label = ClickableLabel()
         pixmap = QPixmap(image_path)
-        # Scale image to a thumbnail size, keeping aspect ratio
         image_label.setPixmap(pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        image_label.clicked.connect(lambda: self._on_image_clicked(image_path))
         
         group.add_widget(image_label)
         self.update_total_images_count()
+
+    def _on_image_clicked(self, image_path):
+        self.image_clicked.emit(image_path)
 
     def update_total_images_count(self):
         total_count = sum(group.get_image_count() for group in self.task_groups.values())
