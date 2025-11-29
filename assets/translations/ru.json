@@ -118,5 +118,7 @@
     "googler_usage_failed": "Не удалось получить данные",
     "gallery_tab_title": "Галерея",
     "gallery_total_images_label": "Всего изображений: {count}",
-    "gallery_task_group_title": "{title} ({count} изображений)"
+    "gallery_task_group_title": "{title} ({count} изображений)",
+    "confirm_image_deletion_message": "Вы уверены, что хотите навсегда удалить это изображение с диска?\n\n{}",
+    "regenerate_image_title": "Перегенерировать изображение"
 }

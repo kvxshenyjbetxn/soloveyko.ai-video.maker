@@ -118,5 +118,7 @@
     "googler_usage_failed": "Failed to get usage data",
     "gallery_tab_title": "Gallery",
     "gallery_total_images_label": "Total images: {count}",
-    "gallery_task_group_title": "{title} ({count} images)"
+    "gallery_task_group_title": "{title} ({count} images)",
+    "confirm_image_deletion_message": "Are you sure you want to permanently delete this image from your disk?\n\n{}",
+    "regenerate_image_title": "Regenerate Image"
 }

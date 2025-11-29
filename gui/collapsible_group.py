@@ -23,7 +23,7 @@ class CollapsibleGroup(QWidget):
         self.content_area = QFrame()
         self.content_area.setFrameShape(QFrame.Shape.NoFrame)
         self.content_area.setContentsMargins(5, 5, 5, 5)
-        self.content_flow_layout = FlowLayout(self.content_area, hSpacing=10, vSpacing=10)
+        self.content_flow_layout = FlowLayout(self.content_area, hSpacing=10, vSpacing=2)
         
         main_layout.addWidget(self.content_area)
 
