@@ -7,13 +7,15 @@ class OpenRouterAPI:
         self.api_key = api_key or settings_manager.get("openrouter_api_key")
         self.base_url = "https://openrouter.ai/api/v1"
 
-    def _make_request(self, endpoint):
+    def _make_request(self, method, endpoint, **kwargs):
         if not self.api_key:
             return None, "not_configured"
         
         headers = {"Authorization": f"Bearer {self.api_key}"}
+        kwargs["headers"] = headers
+        
         try:
-            response = requests.get(f"{self.base_url}/{endpoint}", headers=headers)
+            response = requests.request(method, f"{self.base_url}/{endpoint}", **kwargs)
             if response.status_code == 200:
                 return response.json(), "connected"
             else:
@@ -25,7 +27,7 @@ class OpenRouterAPI:
 
     def check_connection(self):
         logger.log("Checking OpenRouter API connection...", level=LogLevel.INFO)
-        _, status = self._make_request("auth/key")
+        _, status = self._make_request("get", "auth/key")
         if status == "connected":
             logger.log("OpenRouter API connection successful.", level=LogLevel.SUCCESS)
         else:
@@ -34,11 +36,13 @@ class OpenRouterAPI:
 
     def get_balance(self):
         logger.log("Requesting OpenRouter account balance...", level=LogLevel.INFO)
-        data, status = self._make_request("auth/key")
+        data, status = self._make_request("get", "credits")
         if status == "connected" and data:
-            usage = data.get("data", {}).get("usage")
-            logger.log(f"Successfully retrieved balance: {usage:.4f}$", level=LogLevel.SUCCESS)
-            return usage
+            credits = data.get("data", {}).get("total_credits", 0.0)
+            usage = data.get("data", {}).get("total_usage", 0.0)
+            balance = credits - usage
+            logger.log(f"Successfully retrieved balance: {balance:.4f}$", level=LogLevel.SUCCESS)
+            return balance
         logger.log("Failed to retrieve OpenRouter balance.", level=LogLevel.ERROR)
         return None
 

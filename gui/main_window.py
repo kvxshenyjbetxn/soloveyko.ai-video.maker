@@ -86,7 +86,6 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.log_tab, self.translator.translate('log_tab'))
 
         # Connect signals
-        self.settings_tab.api_tab.openrouter_tab.balance_updated.connect(self.update_balance)
         self.queue_manager.task_added.connect(self.queue_tab.add_task)
         self.queue_tab.start_processing_button.clicked.connect(self.task_processor.start_processing)
         self.task_processor.processing_finished.connect(self.show_processing_finished_dialog)

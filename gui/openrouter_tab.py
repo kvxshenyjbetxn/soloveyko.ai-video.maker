@@ -6,8 +6,6 @@ from api.openrouter import OpenRouterAPI
 from utils.logger import logger
 
 class OpenRouterTab(QWidget):
-    balance_updated = Signal()
-
     def __init__(self, main_window=None):
         super().__init__()
         self.main_window = main_window
@@ -78,7 +76,6 @@ class OpenRouterTab(QWidget):
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
         self.update_connection_status_label()
-        # self.update_balance_label()
         self.models_label.setText(translator.translate("models"))
         self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
         self.add_model_button.setText(translator.translate("add_model"))
@@ -93,7 +90,7 @@ class OpenRouterTab(QWidget):
     def save_api_key(self, key):
         self.settings.set("openrouter_api_key", key)
         self.api.api_key = key
-        self.balance_updated.emit()
+        self.main_window.update_balance()
 
     def check_connection(self):
         self.update_connection_status_label("checking")
@@ -103,7 +100,7 @@ class OpenRouterTab(QWidget):
         self.update_connection_status_label(status)
         
         if status == "connected":
-            self.balance_updated.emit()
+            self.main_window.update_balance()
 
     def update_connection_status_label(self, status=None):
         if status == "checking":

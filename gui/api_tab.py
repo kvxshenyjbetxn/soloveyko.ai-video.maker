@@ -7,15 +7,16 @@ from gui.image_tab import ImageTab
 from gui.dataimpulse_tab import DataImpulseTab
 
 class ApiTab(QWidget):
-    def __init__(self):
+    def __init__(self, main_window=None):
         super().__init__()
+        self.main_window = main_window
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget()
         
-        self.openrouter_tab = OpenRouterTab()
+        self.openrouter_tab = OpenRouterTab(main_window=self.main_window)
         self.audio_tab = AudioTab()
         self.image_tab = ImageTab()
         self.dataimpulse_tab = DataImpulseTab()

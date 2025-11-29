@@ -31,6 +31,8 @@
     "connection_status_not_configured": "Статус: Не настроено",
     "balance_label": "Баланс:",
     "balance_loading": "Баланс: Загрузка...",
+    "balance": "Баланс",
+    "balance_error": "Баланс: Ошибка",
     "models": "Модели",
     "enter_model_name": "Введите название модели",
     "add_model": "Добавить",
