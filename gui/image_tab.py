@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from utils.translator import translator
 from gui.pollinations_tab import PollinationsTab
+from gui.googler_tab import GooglerTab
 
 class ImageTab(QWidget):
     def __init__(self):
@@ -19,6 +20,12 @@ class ImageTab(QWidget):
         self.pollinations_tab = PollinationsTab()
         self.tabs.addTab(self.pollinations_tab, "Pollinations")
 
+        # Add Googler Tab
+        self.googler_tab = GooglerTab()
+        self.tabs.addTab(self.googler_tab, "Googler")
+
     def retranslate_ui(self):
         self.tabs.setTabText(0, translator.translate("pollinations_tab_title"))
+        self.tabs.setTabText(1, translator.translate("googler_tab_title"))
         self.pollinations_tab.translate_ui()
+        self.googler_tab.translate_ui()

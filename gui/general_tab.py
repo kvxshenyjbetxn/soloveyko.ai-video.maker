@@ -51,6 +51,19 @@ class GeneralTab(QWidget):
 
         form_layout.addRow(self.theme_label, self.theme_combo)
 
+        # Image generation provider selection
+        self.image_provider_label = QLabel(translator.translate('image_generation_provider_label'))
+        self.image_provider_combo = QComboBox()
+        self.image_provider_combo.addItem("Pollinations", "pollinations")
+        self.image_provider_combo.addItem("Googler", "googler")
+
+        current_provider = self.main_window.settings_manager.get('image_generation_provider', 'pollinations')
+        self.image_provider_combo.setCurrentIndex(self.image_provider_combo.findData(current_provider))
+
+        self.image_provider_combo.currentIndexChanged.connect(self.image_provider_changed)
+
+        form_layout.addRow(self.image_provider_label, self.image_provider_combo)
+
         # Results path selection
         self.results_path_label = QLabel(translator.translate('results_path_label'))
         self.results_path_edit = QLineEdit()
@@ -77,6 +90,10 @@ class GeneralTab(QWidget):
     def theme_changed(self, index):
         theme_name = self.theme_combo.itemData(index)
         self.main_window.change_theme(theme_name)
+    
+    def image_provider_changed(self, index):
+        provider_name = self.image_provider_combo.itemData(index)
+        self.main_window.settings_manager.set('image_generation_provider', provider_name)
 
     def browse_results_path(self):
         directory = QFileDialog.getExistingDirectory(self, translator.translate('select_directory'))
@@ -90,5 +107,6 @@ class GeneralTab(QWidget):
         self.theme_combo.setItemText(0, translator.translate('light_theme'))
         self.theme_combo.setItemText(1, translator.translate('dark_theme'))
         self.theme_combo.setItemText(2, translator.translate('black_theme'))
+        self.image_provider_label.setText(translator.translate('image_generation_provider_label'))
         self.results_path_label.setText(translator.translate('results_path_label'))
         self.browse_button.setText(translator.translate('browse_button'))

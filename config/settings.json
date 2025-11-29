@@ -82,5 +82,13 @@
         "height": 720,
         "nologo": true,
         "enhance": false
+    },
+    "image_generation_provider": "googler",
+    "googler": {
+        "api_key": "PWeLRZwXmKbgFPpywTi2icJBPFblUUkD",
+        "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE",
+        "max_threads": 5,
+        "seed": "",
+        "negative_prompt": "blood"
     }
 }
