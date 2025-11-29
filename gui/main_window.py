@@ -15,6 +15,7 @@ from gui.settings_tab import SettingsTab
 from gui.log_tab import LogTab
 from gui.queue_tab import QueueTab
 from gui.gallery_tab import GalleryTab
+from gui.image_viewer import ImageViewer
 from core.queue_manager import QueueManager
 from core.task_processor import TaskProcessor
 from utils.logger import logger, LogLevel
@@ -59,6 +60,18 @@ class MainWindow(QMainWindow):
         self.init_ui()
         logger.log(translator.translate('app_started'), level=LogLevel.INFO)
         self.app.installEventFilter(self)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'viewer') and self.viewer:
+            try:
+                if self.viewer.isVisible():
+                    self.viewer.setGeometry(self.central_widget.rect())
+            except RuntimeError:
+                # This can happen if the C++ part of the viewer object is deleted
+                # before this event is processed. We can safely ignore it.
+                self.viewer = None
+
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.Wheel and isinstance(obj, (QComboBox, QAbstractSpinBox, QSlider)):
@@ -110,10 +123,17 @@ class MainWindow(QMainWindow):
         self.task_processor.processing_finished.connect(self.update_googler_usage)
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
         self.task_processor.image_generated.connect(self.gallery_tab.add_image)
+        self.gallery_tab.image_clicked.connect(self.show_image_viewer)
 
 
         self.update_balance()
         self.update_googler_usage()
+
+    def show_image_viewer(self, image_path):
+        self.viewer = ImageViewer(image_path, self.central_widget)
+        self.viewer.setGeometry(self.central_widget.rect())
+        self.viewer.show()
+        self.viewer.setFocus()
 
     def show_processing_finished_dialog(self, elapsed_time):
         title = translator.translate('processing_complete_title')
