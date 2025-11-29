@@ -20,7 +20,7 @@ class SettingsTab(QWidget):
         self.tabs = QTabWidget()
 
         self.general_tab = GeneralTab(self.main_window)
-        self.api_tab = ApiTab()
+        self.api_tab = ApiTab(main_window=self.main_window)
         self.languages_tab = LanguagesTab()
         self.prompts_tab = PromptsTab()
         self.montage_tab = MontageTab()
