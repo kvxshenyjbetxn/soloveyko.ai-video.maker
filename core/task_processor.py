@@ -12,6 +12,7 @@ from api.googler import GooglerAPI
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
+    image_generated = Signal(str, str) # task_name, image_path
 
     def __init__(self, queue_manager):
         super().__init__()
@@ -57,8 +58,10 @@ class ImageGenerationWorkerSignals(QObject):
     finished = Signal(int, bool) # index, success
 
 class ImageGenerationWorker(QRunnable):
-    def __init__(self, api, prompt, index, images_dir, file_extension, provider, **kwargs):
+    def __init__(self, processor, task_name, api, prompt, index, images_dir, file_extension, provider, **kwargs):
         super().__init__()
+        self.processor = processor
+        self.task_name = task_name
         self.api = api
         self.prompt = prompt
         self.index = index
@@ -92,6 +95,7 @@ class ImageGenerationWorker(QRunnable):
                 f.write(data_to_write)
                 
             logger.log(f"      - Successfully saved image {self.index + 1} to {image_path}", level=LogLevel.SUCCESS)
+            self.processor.image_generated.emit(self.task_name, image_path) # Emit signal for the gallery
             self.signals.finished.emit(self.index, True)
 
         except Exception as e:
@@ -257,7 +261,7 @@ class JobWorker(QRunnable):
             semaphore.release()
 
         for index, prompt in prompts_to_process:
-            worker = ImageGenerationWorker(api, prompt, index, images_dir, file_extension, provider, **kwargs)
+            worker = ImageGenerationWorker(self.processor, self.job['name'], api, prompt, index, images_dir, file_extension, provider, **kwargs)
             worker.signals.finished.connect(on_worker_finished, Qt.DirectConnection)
             thread_pool.start(worker)
         

@@ -115,5 +115,8 @@
     "googler_negative_prompt_label": "Negative Prompt:",
     "googler_negative_prompt_placeholder": "Enter negative prompt",
     "googler_api_key_missing": "API key is missing",
-    "googler_usage_failed": "Failed to get usage data"
+    "googler_usage_failed": "Failed to get usage data",
+    "gallery_tab_title": "Gallery",
+    "gallery_total_images_label": "Total images: {count}",
+    "gallery_task_group_title": "{title} ({count} images)"
 }
