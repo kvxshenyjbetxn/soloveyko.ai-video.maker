@@ -7,7 +7,7 @@ class GooglerAPI:
     def __init__(self, api_key=None):
         self.settings = settings_manager.get("googler", {})
         self.api_key = api_key or self.settings.get("api_key")
-        self.base_url = "https://app.recrafter.fun/api/v1"
+        self.base_url = "https://app.recrafter.fun/api/v2"
 
     def _make_request(self, method, endpoint, **kwargs):
         if not self.api_key:
