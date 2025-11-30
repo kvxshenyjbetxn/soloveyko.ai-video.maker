@@ -1,7 +1,8 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton, QFrame
-from PySide6.QtCore import Signal, QSize
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton
+from PySide6.QtCore import Signal, QSize, Qt
 from PySide6.QtGui import QIcon
 from .clickable_label import ClickableLabel
+from utils.translator import translator
 
 class ImageThumbnail(QWidget):
     delete_requested = Signal()
@@ -27,15 +28,42 @@ class ImageThumbnail(QWidget):
         image_width = pixmap.width()
         controls_layout = QHBoxLayout()
         controls_layout.setContentsMargins(5, 5, 5, 5)
+        controls_layout.setSpacing(5)
+
+        icon_size = QSize(18, 18)
 
         self.regenerate_button = QToolButton()
-        self.regenerate_button.setText("Regen")
-        self.regenerate_button.setToolTip("Regenerate")
+        self.regenerate_button.setText(translator.translate("thumbnail_regen_button"))
+        self.regenerate_button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        regen_button_height = icon_size.height() + 8 # Match delete button height
+        # Use a sensible width based on text, but enforce height
+        self.regenerate_button.setFixedHeight(regen_button_height)
+        self.regenerate_button.setToolTip(translator.translate("thumbnail_regen_button"))
+        self.regenerate_button.setStyleSheet("""
+            QToolButton { 
+                padding: 1px 5px; 
+                border: 1px solid #888;
+                border-radius: 4px; 
+            }
+        """)
         self.regenerate_button.clicked.connect(self.regenerate_requested.emit)
 
         self.delete_button = QToolButton()
-        self.delete_button.setText("Delete")
-        self.delete_button.setToolTip("Delete")
+        self.delete_button.setIcon(QIcon("gui/qt_material/resources/source/close.svg"))
+        self.delete_button.setIconSize(icon_size)
+        self.delete_button.setFixedSize(icon_size + QSize(8, 8)) # Icon size + padding
+        self.delete_button.setToolTip(translator.translate("thumbnail_delete_button"))
+        self.delete_button.setStyleSheet("""
+            QToolButton { 
+                border: 1px solid #888;
+                border-radius: 4px;
+            }
+            QToolButton:hover { 
+                background-color: #E53935;
+                border-color: #D32F2F;
+                color: white; /* Зробити іконку білою при наведенні для контрасту */
+            }
+        """)
         self.delete_button.clicked.connect(self.delete_requested.emit)
 
         controls_layout.addWidget(self.regenerate_button)
@@ -50,6 +78,9 @@ class ImageThumbnail(QWidget):
         main_layout.addWidget(controls_container)
 
     def set_pixmap(self, pixmap):
-        # This method is no longer needed as pixmap is passed in constructor
-        # but we keep it to avoid breaking old code if it's called somewhere else.
         self.image_label.setPixmap(pixmap)
+
+    def retranslate_ui(self):
+        self.regenerate_button.setText(translator.translate("thumbnail_regen_button"))
+        self.regenerate_button.setToolTip(translator.translate("thumbnail_regen_button"))
+        self.delete_button.setToolTip(translator.translate("thumbnail_delete_button"))
