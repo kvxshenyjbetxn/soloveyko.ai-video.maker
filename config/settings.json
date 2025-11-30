@@ -10,7 +10,8 @@
             "display_name": "Україна",
             "prompt": "дай відповідь і скажи в кінці Олег",
             "model": "google/gemini-2.5-flash",
-            "max_tokens": 128000
+            "max_tokens": 128000,
+            "elevenlabs_template_uuid": "5fbd9e4a-4861-4e46-9836-1138f5d4a356"
         },
         "us-US": {
             "display_name": "Англійська",

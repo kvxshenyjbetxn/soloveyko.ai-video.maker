@@ -5,14 +5,18 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
+from api.elevenlabs import ElevenLabsAPI
 
 class LanguagesTab(QWidget):
     def __init__(self):
         super().__init__()
         self.settings = settings_manager
+        self.elevenlabs_api = ElevenLabsAPI()
+        self.elevenlabs_templates = []
         self.current_lang_id = None
         self.init_ui()
         self.load_languages()
+        self.load_elevenlabs_templates()
         self.retranslate_ui()
         if self.lang_list_widget.count() > 0:
             self.lang_list_widget.setCurrentRow(0)
@@ -69,6 +73,11 @@ class LanguagesTab(QWidget):
         self.model_combo.currentIndexChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.model_label, self.model_combo)
 
+        self.elevenlabs_template_label = QLabel()
+        self.elevenlabs_template_combo = QComboBox()
+        self.elevenlabs_template_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.elevenlabs_template_label, self.elevenlabs_template_combo)
+
         self.tokens_label = QLabel()
         self.tokens_spinbox = QSpinBox()
         self.tokens_spinbox.setRange(0, 128000)
@@ -97,6 +106,15 @@ class LanguagesTab(QWidget):
         models = self.settings.get("openrouter_models", [])
         self.model_combo.addItems(models)
 
+    def load_elevenlabs_templates(self):
+        self.elevenlabs_template_combo.clear()
+        self.elevenlabs_templates, status = self.elevenlabs_api.get_templates()
+        if status == "connected" and self.elevenlabs_templates:
+            for template in self.elevenlabs_templates:
+                self.elevenlabs_template_combo.addItem(template["name"], template["uuid"])
+        else:
+            self.elevenlabs_template_combo.addItem(translator.translate("no_templates_found"), "")
+
     def on_language_selected(self, current, previous):
         if not current:
             self.right_panel.setVisible(False)
@@ -121,16 +139,24 @@ class LanguagesTab(QWidget):
         self.prompt_edit.blockSignals(True)
         self.model_combo.blockSignals(True)
         self.tokens_spinbox.blockSignals(True)
+        self.elevenlabs_template_combo.blockSignals(True)
 
         self.prompt_edit.setPlainText(config.get("prompt", ""))
+        
         current_model = config.get("model", "")
         index = self.model_combo.findText(current_model)
         self.model_combo.setCurrentIndex(index if index >= 0 else 0)
+
+        current_template_uuid = config.get("elevenlabs_template_uuid", "")
+        template_index = self.elevenlabs_template_combo.findData(current_template_uuid)
+        self.elevenlabs_template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
+
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
 
         self.prompt_edit.blockSignals(False)
         self.model_combo.blockSignals(False)
         self.tokens_spinbox.blockSignals(False)
+        self.elevenlabs_template_combo.blockSignals(False)
         
         self.right_panel.setVisible(True)
 
@@ -149,7 +175,8 @@ class LanguagesTab(QWidget):
             "display_name": display_name, 
             "prompt": "", 
             "model": "",
-            "max_tokens": 4096
+            "max_tokens": 4096,
+            "elevenlabs_template_uuid": ""
         }
         self.settings.set("languages_config", languages)
         
@@ -184,6 +211,10 @@ class LanguagesTab(QWidget):
             languages[self.current_lang_id]["prompt"] = self.prompt_edit.toPlainText()
             languages[self.current_lang_id]["model"] = self.model_combo.currentText()
             languages[self.current_lang_id]["max_tokens"] = self.tokens_spinbox.value()
+            selected_template_index = self.elevenlabs_template_combo.currentIndex()
+            if selected_template_index >= 0:
+                template_uuid = self.elevenlabs_template_combo.itemData(selected_template_index)
+                languages[self.current_lang_id]["elevenlabs_template_uuid"] = template_uuid
             self.settings.set("languages_config", languages)
 
     def retranslate_ui(self):
@@ -194,4 +225,5 @@ class LanguagesTab(QWidget):
         self.remove_lang_button.setText(translator.translate("remove_model"))
         self.prompt_label.setText(translator.translate("language_prompt_label"))
         self.model_label.setText(translator.translate("translation_model_label"))
+        self.elevenlabs_template_label.setText(translator.translate("elevenlabs_template_label"))
         self.tokens_label.setText(translator.translate("tokens_label"))

@@ -126,5 +126,7 @@
     "load_demo_button": "Load Demo",
     "elevenlabs_api_key": "ElevenLabs API Key:",
     "elevenlabs": "ElevenLabs",
-    "balance_not_loaded": "Balance not loaded"
+    "balance_not_loaded": "Balance not loaded",
+    "elevenlabs_template_label": "Voice template:",
+    "no_templates_found": "No templates found"
 }

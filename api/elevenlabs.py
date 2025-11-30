@@ -43,3 +43,12 @@ class ElevenLabsAPI:
             return balance, status
         logger.log("Failed to retrieve ElevenLabs balance.", level=LogLevel.ERROR)
         return None, status
+        
+    def get_templates(self):
+        logger.log("Requesting ElevenLabs templates...", level=LogLevel.INFO)
+        data, status = self._make_request("get", "templates")
+        if status == "connected" and data:
+            logger.log("Successfully retrieved templates.", level=LogLevel.SUCCESS)
+            return data, status
+        logger.log("Failed to retrieve ElevenLabs templates.", level=LogLevel.ERROR)
+        return None, status
