@@ -123,5 +123,8 @@
     "regenerate_image_title": "Regenerate Image",
     "thumbnail_regen_button": "Regenerate",
     "thumbnail_delete_button": "Delete",
-    "load_demo_button": "Load Demo"
+    "load_demo_button": "Load Demo",
+    "elevenlabs_api_key": "ElevenLabs API Key:",
+    "elevenlabs": "ElevenLabs",
+    "balance_not_loaded": "Balance not loaded"
 }

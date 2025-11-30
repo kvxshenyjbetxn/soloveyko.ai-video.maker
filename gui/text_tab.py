@@ -199,9 +199,12 @@ class TextTab(QWidget):
         self.status_bar_layout = QHBoxLayout()
         self.openrouter_balance_label = QLabel()
         self.googler_usage_label = QLabel()
+        self.elevenlabs_balance_label = QLabel()
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
         self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.googler_usage_label)
+        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
         self.status_bar_layout.addStretch()
         layout.addLayout(self.status_bar_layout)
 
@@ -324,6 +327,9 @@ class TextTab(QWidget):
 
     def update_googler_usage(self, usage_text):
         self.googler_usage_label.setText(usage_text)
+
+    def update_elevenlabs_balance(self, balance_text):
+        self.elevenlabs_balance_label.setText(balance_text)
 
     def apply_text_color_to_text_edit(self):
         current_theme = self.settings.get('theme', 'dark')

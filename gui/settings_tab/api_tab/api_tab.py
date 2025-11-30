@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from utils.translator import translator
 
 from .openrouter_tab import OpenRouterTab
-from .audio_tab import AudioTab
+from .audio_tab.audio_tab import AudioTab
 from .image_tab.image_tab import ImageTab
 from .dataimpulse_tab import DataImpulseTab
 
@@ -17,7 +17,7 @@ class ApiTab(QWidget):
         self.tabs = QTabWidget()
         
         self.openrouter_tab = OpenRouterTab(main_window=self.main_window)
-        self.audio_tab = AudioTab()
+        self.audio_tab = AudioTab(main_window=self.main_window)
         self.image_tab = ImageTab()
         self.dataimpulse_tab = DataImpulseTab()
 
