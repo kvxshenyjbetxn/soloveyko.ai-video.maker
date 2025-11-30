@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
         return super().eventFilter(obj, event)
 
     def init_ui(self):
+        self.update_balance()
         self.update_title()
         self.setGeometry(100, 100, 1280, 720)
 
@@ -126,7 +127,6 @@ class MainWindow(QMainWindow):
         self.gallery_tab.image_clicked.connect(self.show_image_viewer)
 
 
-        self.update_balance()
         self.update_googler_usage()
 
     def show_image_viewer(self, image_path):
@@ -211,8 +211,6 @@ class MainWindow(QMainWindow):
         self.settings_tab.retranslate_ui()
         self.queue_tab.retranslate_ui()
         self.gallery_tab.retranslate_ui()
-        self.update_balance()
-        self.update_googler_usage()
 
     def closeEvent(self, event):
         self.settings_tab.api_tab.image_tab.pollinations_tab.save_settings()

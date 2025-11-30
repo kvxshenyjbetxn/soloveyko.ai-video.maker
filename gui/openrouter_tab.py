@@ -84,13 +84,12 @@ class OpenRouterTab(QWidget):
     def load_settings(self):
         api_key = self.settings.get("openrouter_api_key", "")
         self.api_key_input.setText(api_key)
+        self.api.api_key = api_key
         self.update_models_list()
-        self.check_connection()
 
     def save_api_key(self, key):
         self.settings.set("openrouter_api_key", key)
         self.api.api_key = key
-        self.main_window.update_balance()
 
     def check_connection(self):
         self.update_connection_status_label("checking")
