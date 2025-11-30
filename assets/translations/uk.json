@@ -126,5 +126,7 @@
     "load_demo_button": "Завантажити демо",
     "elevenlabs_api_key": "Ключ API ElevenLabs:",
     "elevenlabs": "ElevenLabs",
-    "balance_not_loaded": "Баланс не завантажено"
+    "balance_not_loaded": "Баланс не завантажено",
+    "elevenlabs_template_label": "Шаблон голосу:",
+    "no_templates_found": "Шаблони не знайдені"
 }
