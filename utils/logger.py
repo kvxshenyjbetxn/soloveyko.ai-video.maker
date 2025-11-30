@@ -41,9 +41,13 @@ class _Logger:
             "message": message
         }
 
-        if self.log_widget:
+        if self.log_widget and self.log_widget.isVisible():
             # The widget will handle the formatting
-            self.log_widget.add_log_message(log_data)
+            try:
+                self.log_widget.add_log_message(log_data)
+            except RuntimeError:
+                # This can happen if the widget is being deleted
+                pass
         
         # Console output remains simple
         print(f"[{timestamp}] [{level.name}] {message}")

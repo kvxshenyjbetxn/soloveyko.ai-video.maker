@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton
 from PySide6.QtCore import Signal, QSize, Qt
 from PySide6.QtGui import QIcon, QPixmap
 from .clickable_label import ClickableLabel
+from .loading_spinner import LoadingSpinner
 from utils.translator import translator
 
 class ImageThumbnail(QWidget):
@@ -18,12 +19,23 @@ class ImageThumbnail(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
+        
+        # --- Image Container ---
+        image_container = QWidget()
+        image_layout = QVBoxLayout(image_container)
+        image_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Image
         self.image_label = ClickableLabel()
         self.image_label.setPixmap(pixmap)
         self.image_label.clicked.connect(self.image_clicked.emit)
-        main_layout.addWidget(self.image_label)
+        image_layout.addWidget(self.image_label)
+        
+        # --- Loading Spinner (Overlay) ---
+        self.spinner = LoadingSpinner(image_container)
+        self.spinner.setFixedSize(pixmap.size()) # Match the image size
+        self.spinner.stop() # Hidden by default
+        
+        main_layout.addWidget(image_container)
 
         # Controls Layout
         image_width = pixmap.width()
@@ -37,7 +49,6 @@ class ImageThumbnail(QWidget):
         self.regenerate_button.setText(translator.translate("thumbnail_regen_button"))
         self.regenerate_button.setToolButtonStyle(Qt.ToolButtonTextOnly)
         regen_button_height = icon_size.height() + 8 # Match delete button height
-        # Use a sensible width based on text, but enforce height
         self.regenerate_button.setFixedHeight(regen_button_height)
         self.regenerate_button.setToolTip(translator.translate("thumbnail_regen_button"))
         self.regenerate_button.setStyleSheet("""
@@ -65,7 +76,7 @@ class ImageThumbnail(QWidget):
             QToolButton:hover { 
                 background-color: #E53935;
                 border-color: #D32F2F;
-                color: white; /* Зробити іконку білою при наведенні для контрасту */
+                color: white; /* Make icon white on hover for contrast */
             }
         """)
         self.delete_button.clicked.connect(self.delete_requested.emit)
@@ -74,12 +85,21 @@ class ImageThumbnail(QWidget):
         controls_layout.addStretch()
         controls_layout.addWidget(self.delete_button)
         
-        # We wrap the layout in a QWidget to set a fixed width
         controls_container = QWidget()
         controls_container.setFixedWidth(image_width)
         controls_container.setLayout(controls_layout)
         
         main_layout.addWidget(controls_container)
+
+    def set_regenerating_state(self, is_regenerating):
+        if is_regenerating:
+            self.spinner.start()
+            self.regenerate_button.setEnabled(False)
+            self.delete_button.setEnabled(False)
+        else:
+            self.spinner.stop()
+            self.regenerate_button.setEnabled(True)
+            self.delete_button.setEnabled(True)
 
     def update_image(self, new_path):
         self.image_path = new_path

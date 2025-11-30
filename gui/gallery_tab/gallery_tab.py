@@ -168,7 +168,16 @@ class GalleryTab(QWidget):
         if dialog.exec():
             new_values = dialog.get_values()
             
-            logger.log(f"  - New Config: {new_values}", level=LogLevel.INFO)
+            # Find thumbnail and activate regenerating state
+            thumbnail_to_update = None
+            for group in self.task_groups.values():
+                thumbnail = group.find_thumbnail_by_path(image_data['image_path'])
+                if thumbnail:
+                    thumbnail_to_update = thumbnail
+                    break
+            
+            if thumbnail_to_update:
+                thumbnail_to_update.set_regenerating_state(True)
 
             worker = RegenerateImageWorker(image_data['image_path'], new_values)
             worker.signals.finished.connect(self._on_regeneration_finished)
@@ -180,6 +189,7 @@ class GalleryTab(QWidget):
         for group in self.task_groups.values():
             thumbnail = group.find_thumbnail_by_path(old_path)
             if thumbnail:
+                thumbnail.set_regenerating_state(False) # Restore appearance
                 thumbnail.update_image(new_path)
                 logger.log(f"Updated thumbnail for {old_path} with new image {new_path}", level=LogLevel.INFO)
                 
@@ -194,6 +204,13 @@ class GalleryTab(QWidget):
                 break
 
     def _on_regeneration_error(self, old_path, error_message):
+        # Find the thumbnail and restore its state
+        for group in self.task_groups.values():
+            thumbnail = group.find_thumbnail_by_path(old_path)
+            if thumbnail:
+                thumbnail.set_regenerating_state(False)
+                break
+        
         QMessageBox.critical(self, "Regeneration Failed", f"Could not regenerate image for '{os.path.basename(old_path)}':\n\n{error_message}")
 
 
