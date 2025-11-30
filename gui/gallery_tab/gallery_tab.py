@@ -1,12 +1,77 @@
 import os
+import uuid
+import base64
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QScrollArea, QLabel, QMessageBox
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QObject, QRunnable, QThreadPool
 from PySide6.QtGui import QPixmap
 from utils.translator import translator
 from gui.gallery_tab.collapsible_group import CollapsibleGroup
 from gui.gallery_tab.image_thumbnail import ImageThumbnail
 from gui.gallery_tab.regenerate_config_dialog import RegenerateConfigDialog
 from utils.logger import logger, LogLevel
+from api.pollinations import PollinationsAPI
+from api.googler import GooglerAPI
+
+class RegenerateImageWorkerSignals(QObject):
+    finished = Signal(str, str) # old_path, new_path
+    error = Signal(str, str)    # old_path, error_message
+
+class RegenerateImageWorker(QRunnable):
+    def __init__(self, old_image_path, regen_config):
+        super().__init__()
+        self.signals = RegenerateImageWorkerSignals()
+        self.old_image_path = old_image_path
+        self.config = regen_config
+        self.googler_api = GooglerAPI()
+        self.pollinations_api = PollinationsAPI()
+
+    def run(self):
+        try:
+            provider = self.config['provider']
+            prompt = self.config['prompt']
+            
+            api = None
+            api_kwargs = {}
+            file_extension = 'png'
+
+            if provider == 'googler':
+                api = self.googler_api
+                googler_config = self.config.get('googler_config', {})
+                api_kwargs['aspect_ratio'] = googler_config.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE')
+                api_kwargs['seed'] = googler_config.get('seed')
+                api_kwargs['negative_prompt'] = googler_config.get('negative_prompt')
+                file_extension = 'jpg'
+            elif provider == 'pollinations':
+                api = self.pollinations_api
+                # Add any pollinations specific kwargs here in the future
+            
+            if not api:
+                raise ValueError(f"Invalid image generation provider: {provider}")
+
+            logger.log(f"Starting regeneration with {provider} for prompt: '{prompt}'", level=LogLevel.INFO)
+            image_data = api.generate_image(prompt, **api_kwargs)
+
+            if not image_data:
+                raise ValueError("API returned no data.")
+
+            # Save to a new file, overwriting the old one (or creating a new one if extension changes)
+            base_name, _ = os.path.splitext(self.old_image_path)
+            new_image_path = f"{base_name}.{file_extension}"
+            
+            data_to_write = image_data
+            if provider == 'googler' and isinstance(image_data, str):
+                data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
+
+            with open(new_image_path, 'wb') as f:
+                f.write(data_to_write)
+            
+            logger.log(f"Successfully saved regenerated image to {new_image_path}", level=LogLevel.SUCCESS)
+            self.signals.finished.emit(self.old_image_path, new_image_path)
+
+        except Exception as e:
+            logger.log(f"Failed to regenerate image. Error: {e}", level=LogLevel.ERROR)
+            self.signals.error.emit(self.old_image_path, str(e))
+
 
 class GalleryTab(QWidget):
     image_clicked = Signal(str)
@@ -14,6 +79,7 @@ class GalleryTab(QWidget):
     def __init__(self):
         super().__init__()
         self.task_groups = {}
+        self.threadpool = QThreadPool()
         self.init_ui()
         self.retranslate_ui()
 
@@ -87,7 +153,7 @@ class GalleryTab(QWidget):
         
         thumbnail.image_clicked.connect(lambda: self._on_image_clicked(image_path))
         thumbnail.delete_requested.connect(lambda: self._on_delete_requested(thumbnail, group))
-        thumbnail.regenerate_requested.connect(lambda: self._on_regenerate_requested(thumbnail))
+        thumbnail.regenerate_requested.connect(self._on_regenerate_requested)
 
         group.add_widget(thumbnail)
         self.update_total_images_count()
@@ -95,13 +161,39 @@ class GalleryTab(QWidget):
     def _on_image_clicked(self, image_path):
         self.image_clicked.emit(image_path)
 
-    def _on_regenerate_requested(self, thumbnail_widget):
-        dialog = RegenerateConfigDialog(thumbnail_widget.prompt, self)
+    def _on_regenerate_requested(self, image_data):
+        dialog = RegenerateConfigDialog(image_data, self)
         if dialog.exec():
             new_values = dialog.get_values()
-            logger.log(f"Regeneration requested for image {thumbnail_widget.image_path}:", level=LogLevel.INFO)
-            logger.log(f"  - New Provider: {new_values['provider']}", level=LogLevel.INFO)
-            logger.log(f"  - New Prompt: {new_values['prompt']}", level=LogLevel.INFO)
+            
+            logger.log(f"  - New Config: {new_values}", level=LogLevel.INFO)
+
+            worker = RegenerateImageWorker(image_data['image_path'], new_values)
+            worker.signals.finished.connect(self._on_regeneration_finished)
+            worker.signals.error.connect(self._on_regeneration_error)
+            self.threadpool.start(worker)
+
+    def _on_regeneration_finished(self, old_path, new_path):
+        # Find the thumbnail and update it
+        for group in self.task_groups.values():
+            thumbnail = group.find_thumbnail_by_path(old_path)
+            if thumbnail:
+                thumbnail.update_image(new_path)
+                logger.log(f"Updated thumbnail for {old_path} with new image {new_path}", level=LogLevel.INFO)
+                
+                # If the path changed (e.g. extension), delete the old image file
+                if old_path != new_path:
+                    try:
+                        if os.path.exists(old_path):
+                            os.remove(old_path)
+                            logger.log(f"Deleted old image file: {old_path}", level=LogLevel.INFO)
+                    except OSError as e:
+                        logger.log(f"Error deleting old image file {old_path}: {e}", level=LogLevel.ERROR)
+                break
+
+    def _on_regeneration_error(self, old_path, error_message):
+        QMessageBox.critical(self, "Regeneration Failed", f"Could not regenerate image for '{os.path.basename(old_path)}':\n\n{error_message}")
+
 
     def _on_delete_requested(self, thumbnail_widget, group):
         try:

@@ -44,6 +44,13 @@ class CollapsibleGroup(QWidget):
     def get_image_count(self):
         return self.content_flow_layout.count()
 
+    def find_thumbnail_by_path(self, path):
+        for i in range(self.content_flow_layout.count()):
+            widget = self.content_flow_layout.itemAt(i).widget()
+            if hasattr(widget, 'image_path') and widget.image_path == path:
+                return widget
+        return None
+
     def update_title(self):
         self.set_title(self.title, self.get_image_count())
 
