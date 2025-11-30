@@ -8,6 +8,7 @@ from utils.settings import settings_manager
 from api.openrouter import OpenRouterAPI
 from api.pollinations import PollinationsAPI
 from api.googler import GooglerAPI
+from api.elevenlabs import ElevenLabsAPI
 
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
@@ -21,6 +22,7 @@ class TaskProcessor(QObject):
         self.openrouter_api = OpenRouterAPI()
         self.pollinations_api = PollinationsAPI()
         self.googler_api = GooglerAPI()
+        self.elevenlabs_api = ElevenLabsAPI()
         self.threadpool = QThreadPool()
         self.active_jobs = 0
         self.timer = QElapsedTimer()
@@ -109,6 +111,7 @@ class JobWorker(QRunnable):
         self.openrouter_api = processor.openrouter_api
         self.pollinations_api = processor.pollinations_api
         self.googler_api = processor.googler_api
+        self.elevenlabs_api = processor.elevenlabs_api
         self.settings = settings
         self.job = job
         self.signals = JobWorkerSignals()
@@ -137,6 +140,10 @@ class JobWorker(QRunnable):
                         if lang_dir_path:
                             self.save_translation(lang_dir_path, translated_text)
                 
+                # --- Voiceover Stage ---
+                if 'stage_voiceover' in lang_data['stages']:
+                    self._process_voiceover_stage(job_id, lang_id, lang_data, all_languages_config, text_for_processing, lang_dir_path)
+
                 # --- Image Prompts Stage ---
                 if 'stage_img_prompts' in lang_data['stages']:
                     self.process_image_prompts(job_id, lang_id, lang_data, text_for_processing, lang_dir_path)
@@ -207,6 +214,58 @@ class JobWorker(QRunnable):
             logger.log(f"    - An error occurred during translation for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
             return None
+
+    def _process_voiceover_stage(self, job_id, lang_id, lang_data, all_languages_config, text_to_voice, dir_path):
+        stage_key = 'stage_voiceover'
+        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
+        logger.log(f"  - Starting voiceover for: {lang_data['display_name']}", level=LogLevel.INFO)
+
+        lang_config = all_languages_config.get(lang_id)
+        if not lang_config or not lang_config.get('elevenlabs_template_uuid'):
+            logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: ElevenLabs template not configured.", level=LogLevel.WARNING)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        if not dir_path:
+            logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: Results path not set.", level=LogLevel.WARNING)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        template_uuid = lang_config['elevenlabs_template_uuid']
+        
+        try:
+            task_id, status = self.elevenlabs_api.create_task(text_to_voice, template_uuid)
+            if status != 'connected' or not task_id:
+                raise Exception("Failed to create task.")
+
+            # Polling for result
+            for _ in range(30): # 5 minutes timeout (30 * 10 seconds)
+                task_status, status = self.elevenlabs_api.get_task_status(task_id)
+                if status != 'connected':
+                    raise Exception("Failed to get task status.")
+                
+                if task_status in ['ending', 'ending_processed']:
+                    audio_content, status = self.elevenlabs_api.get_task_result(task_id)
+                    if status == 'connected' and audio_content:
+                        self.save_voiceover(dir_path, audio_content)
+                        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+                        return
+                    elif status == 'not_ready':
+                        time.sleep(10)
+                        continue
+                    else:
+                        raise Exception("Failed to download audio content.")
+                
+                elif task_status in ['error', 'error_handled']:
+                    raise Exception("Task processing resulted in an error.")
+                
+                time.sleep(10)
+
+            raise Exception("Timeout while waiting for voiceover result.")
+
+        except Exception as e:
+            logger.log(f"    - An error occurred during voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
     def process_image_prompts(self, job_id, lang_id, lang_data, text_to_use, dir_path):
         stage_key = 'stage_img_prompts'
@@ -359,21 +418,11 @@ class JobWorker(QRunnable):
         except Exception as e:
             logger.log(f"    - Failed to save image prompts. Error: {e}", level=LogLevel.ERROR)
 
-
-    def save_translation(self, dir_path, content):
+    def save_voiceover(self, dir_path, content):
         try:
-            file_path = os.path.join(dir_path, "translation.txt")
-            with open(file_path, 'w', encoding='utf-8') as f:
+            file_path = os.path.join(dir_path, "voice.mp3")
+            with open(file_path, 'wb') as f:
                 f.write(content)
-            logger.log(f"    - Translation result saved to: {file_path}", level=LogLevel.INFO)
+            logger.log(f"    - Voiceover audio saved to: {file_path}", level=LogLevel.SUCCESS)
         except Exception as e:
-            logger.log(f"    - Failed to save translation result. Error: {e}", level=LogLevel.ERROR)
-
-    def save_image_prompts(self, dir_path, content):
-        try:
-            file_path = os.path.join(dir_path, "image_prompts.txt")
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            logger.log(f"    - Image prompts saved to: {file_path}", level=LogLevel.INFO)
-        except Exception as e:
-            logger.log(f"    - Failed to save image prompts. Error: {e}", level=LogLevel.ERROR)
+            logger.log(f"    - Failed to save voiceover audio. Error: {e}", level=LogLevel.ERROR)

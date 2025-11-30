@@ -7,20 +7,25 @@ class ElevenLabsAPI:
         self.api_key = api_key or settings_manager.get("elevenlabs_api_key")
         self.base_url = "https://voiceapi.csv666.ru"
 
-    def _make_request(self, method, endpoint, **kwargs):
+    def _make_request(self, method, endpoint, json=None, **kwargs):
         if not self.api_key:
             return None, "not_configured"
         
         headers = {"X-API-Key": self.api_key}
-        kwargs["headers"] = headers
+        if json:
+            headers["Content-Type"] = "application/json"
         
         try:
-            response = requests.request(method, f"{self.base_url}/{endpoint}", **kwargs)
+            response = requests.request(method, f"{self.base_url}/{endpoint}", headers=headers, json=json, **kwargs)
+            response.raise_for_status() 
             if response.status_code == 200:
+                if "audio/mpeg" in response.headers.get("Content-Type", ""):
+                    return response.content, "connected"
                 return response.json(), "connected"
-            else:
-                logger.log(f"API request to {endpoint} failed with status {response.status_code}: {response.text}", level=LogLevel.ERROR)
-                return None, "error"
+            return response, "connected"
+        except requests.exceptions.HTTPError as e:
+            logger.log(f"API request to {endpoint} failed with status {e.response.status_code}: {e.response.text}", level=LogLevel.ERROR)
+            return e.response, "error"
         except requests.exceptions.RequestException as e:
             logger.log(f"API request to {endpoint} failed: {e}", level=LogLevel.ERROR)
             return None, "error"
@@ -52,3 +57,48 @@ class ElevenLabsAPI:
             return data, status
         logger.log("Failed to retrieve ElevenLabs templates.", level=LogLevel.ERROR)
         return None, status
+
+    def create_task(self, text, template_uuid=None):
+        logger.log("Creating ElevenLabs voiceover task...", level=LogLevel.INFO)
+        payload = {"text": text}
+        if template_uuid:
+            payload["template_uuid"] = template_uuid
+        
+        data, status = self._make_request("post", "tasks", json=payload)
+        if status == "connected" and data:
+            task_id = data.get("task_id")
+            logger.log(f"Successfully created task with ID: {task_id}", level=LogLevel.SUCCESS)
+            return task_id, status
+        logger.log("Failed to create ElevenLabs task.", level=LogLevel.ERROR)
+        return None, status
+
+    def get_task_status(self, task_id):
+        logger.log(f"Checking status for task {task_id}...", level=LogLevel.INFO)
+        data, status = self._make_request("get", f"tasks/{task_id}/status")
+        if status == "connected" and data:
+            task_status = data.get("status")
+            logger.log(f"Task {task_id} status: {task_status}", level=LogLevel.INFO)
+            return task_status, status
+        logger.log(f"Failed to get status for task {task_id}.", level=LogLevel.ERROR)
+        return None, status
+
+    def get_task_result(self, task_id):
+        logger.log(f"Getting result for task {task_id}...", level=LogLevel.INFO)
+        
+        headers = {"X-API-Key": self.api_key}
+        url = f"{self.base_url}/tasks/{task_id}/result"
+        
+        try:
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                logger.log(f"Successfully downloaded audio for task {task_id}", level=LogLevel.SUCCESS)
+                return response.content, "connected"
+            elif response.status_code == 202:
+                logger.log(f"Audio for task {task_id} is not ready yet.", level=LogLevel.INFO)
+                return None, "not_ready"
+            else:
+                logger.log(f"Failed to download audio for task {task_id}. Status: {response.status_code}", level=LogLevel.ERROR)
+                return None, "error"
+        except requests.exceptions.RequestException as e:
+            logger.log(f"Request failed for task {task_id} result: {e}", level=LogLevel.ERROR)
+            return None, "error"
