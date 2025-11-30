@@ -14,8 +14,8 @@ from gui.text_tab import TextTab
 from gui.settings_tab import SettingsTab
 from gui.log_tab import LogTab
 from gui.queue_tab import QueueTab
-from gui.gallery_tab import GalleryTab
-from gui.image_viewer import ImageViewer
+from gui.gallery_tab.gallery_tab import GalleryTab
+from gui.gallery_tab.image_viewer import ImageViewer
 from core.queue_manager import QueueManager
 from core.task_processor import TaskProcessor
 from utils.logger import logger, LogLevel
