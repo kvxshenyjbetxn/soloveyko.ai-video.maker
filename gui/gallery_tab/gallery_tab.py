@@ -3,9 +3,9 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QS
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from utils.translator import translator
-from gui.collapsible_group import CollapsibleGroup
-from gui.widgets.image_thumbnail import ImageThumbnail
-from gui.dialogs.regenerate_config_dialog import RegenerateConfigDialog
+from gui.gallery_tab.collapsible_group import CollapsibleGroup
+from gui.gallery_tab.image_thumbnail import ImageThumbnail
+from gui.gallery_tab.regenerate_config_dialog import RegenerateConfigDialog
 from utils.logger import logger, LogLevel
 
 class GalleryTab(QWidget):
