@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from utils.translator import translator
-from gui.pollinations_tab import PollinationsTab
-from gui.googler_tab import GooglerTab
+from .pollinations_tab import PollinationsTab
+from .googler_tab import GooglerTab
 
 class ImageTab(QWidget):
     def __init__(self):

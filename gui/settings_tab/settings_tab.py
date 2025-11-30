@@ -1,13 +1,13 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from utils.translator import translator
 
-from gui.general_tab import GeneralTab
-from gui.api_tab import ApiTab
-from gui.languages_tab import LanguagesTab
-from gui.prompts_tab import PromptsTab
-from gui.montage_tab import MontageTab
-from gui.subtitles_tab import SubtitlesTab
-from gui.templates_tab import TemplatesTab
+from .general_tab import GeneralTab
+from .api_tab.api_tab import ApiTab
+from .languages_tab import LanguagesTab
+from .prompts_tab import PromptsTab
+from .montage_tab import MontageTab
+from .subtitles_tab import SubtitlesTab
+from .templates_tab import TemplatesTab
 
 class SettingsTab(QWidget):
     def __init__(self, main_window=None):
