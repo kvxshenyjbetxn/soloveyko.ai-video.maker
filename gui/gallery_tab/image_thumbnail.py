@@ -1,12 +1,12 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton
 from PySide6.QtCore import Signal, QSize, Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmap
 from .clickable_label import ClickableLabel
 from utils.translator import translator
 
 class ImageThumbnail(QWidget):
     delete_requested = Signal()
-    regenerate_requested = Signal()
+    regenerate_requested = Signal(dict)
     image_clicked = Signal()
 
     def __init__(self, image_path, prompt, pixmap, parent=None):
@@ -46,7 +46,10 @@ class ImageThumbnail(QWidget):
                 border-radius: 4px; 
             }
         """)
-        self.regenerate_button.clicked.connect(self.regenerate_requested.emit)
+        self.regenerate_button.clicked.connect(lambda: self.regenerate_requested.emit({
+            'image_path': self.image_path,
+            'prompt': self.prompt
+        }))
 
         self.delete_button = QToolButton()
         self.delete_button.setIcon(QIcon("gui/qt_material/resources/source/close.svg"))
@@ -76,6 +79,12 @@ class ImageThumbnail(QWidget):
         controls_container.setLayout(controls_layout)
         
         main_layout.addWidget(controls_container)
+
+    def update_image(self, new_path):
+        self.image_path = new_path
+        pixmap = QPixmap(new_path)
+        scaled_pixmap = pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        self.image_label.setPixmap(scaled_pixmap)
 
     def set_pixmap(self, pixmap):
         self.image_label.setPixmap(pixmap)
