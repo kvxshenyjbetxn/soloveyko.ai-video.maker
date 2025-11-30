@@ -206,9 +206,12 @@ class QueueTab(QWidget):
         top_layout = QHBoxLayout()
         self.balance_label = QLabel()
         self.googler_usage_label = QLabel()
+        self.elevenlabs_balance_label = QLabel()
         top_layout.addWidget(self.balance_label)
         top_layout.addSpacing(20)
         top_layout.addWidget(self.googler_usage_label)
+        top_layout.addSpacing(20)
+        top_layout.addWidget(self.elevenlabs_balance_label)
         top_layout.addStretch()
         
         self.start_processing_button = QPushButton()
@@ -279,6 +282,9 @@ class QueueTab(QWidget):
 
     def update_googler_usage(self, usage_text):
         self.googler_usage_label.setText(usage_text)
+
+    def update_elevenlabs_balance(self, balance_text):
+        self.elevenlabs_balance_label.setText(balance_text)
 
     def retranslate_ui(self):
         self.start_processing_button.setText(translator.translate('start_processing'))

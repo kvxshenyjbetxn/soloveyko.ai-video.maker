@@ -90,5 +90,6 @@
         "max_threads": 5,
         "seed": "",
         "negative_prompt": "blood"
-    }
+    },
+    "elevenlabs_api_key": "427641798:6f346a2f6566757954354b5732517977625a416457513d3d"
 }

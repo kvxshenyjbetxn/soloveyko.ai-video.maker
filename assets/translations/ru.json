@@ -123,5 +123,8 @@
     "regenerate_image_title": "Перегенерировать изображение",
     "thumbnail_regen_button": "Перегенерировать",
     "thumbnail_delete_button": "Удалить",
-    "load_demo_button": "Загрузить демо"
+    "load_demo_button": "Загрузить демо",
+    "elevenlabs_api_key": "Ключ API ElevenLabs:",
+    "elevenlabs": "ElevenLabs",
+    "balance_not_loaded": "Баланс не загружен"
 }
