@@ -9,10 +9,11 @@ class ImageThumbnail(QWidget):
     regenerate_requested = Signal(dict)
     image_clicked = Signal()
 
-    def __init__(self, image_path, prompt, pixmap, parent=None):
+    def __init__(self, image_path, prompt, pixmap, parent_group, parent=None):
         super().__init__(parent)
         self.image_path = image_path
         self.prompt = prompt
+        self.parent_group = parent_group
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -85,6 +86,7 @@ class ImageThumbnail(QWidget):
         pixmap = QPixmap(new_path)
         scaled_pixmap = pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         self.image_label.setPixmap(scaled_pixmap)
+        self.parent_group.sort_thumbnails()
 
     def set_pixmap(self, pixmap):
         self.image_label.setPixmap(pixmap)
