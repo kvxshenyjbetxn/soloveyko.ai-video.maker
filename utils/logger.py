@@ -41,7 +41,7 @@ class _Logger:
             "message": message
         }
 
-        if self.log_widget and self.log_widget.isVisible():
+        if self.log_widget:
             # The widget will handle the formatting
             try:
                 self.log_widget.add_log_message(log_data)
