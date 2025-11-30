@@ -1,10 +1,10 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from utils.translator import translator
 
-from gui.openrouter_tab import OpenRouterTab
-from gui.audio_tab import AudioTab
-from gui.image_tab import ImageTab
-from gui.dataimpulse_tab import DataImpulseTab
+from .openrouter_tab import OpenRouterTab
+from .audio_tab import AudioTab
+from .image_tab.image_tab import ImageTab
+from .dataimpulse_tab import DataImpulseTab
 
 class ApiTab(QWidget):
     def __init__(self, main_window=None):

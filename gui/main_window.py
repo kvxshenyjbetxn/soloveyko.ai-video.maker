@@ -11,7 +11,7 @@ from api.openrouter import OpenRouterAPI
 from api.googler import GooglerAPI
 
 from gui.text_tab import TextTab
-from gui.settings_tab import SettingsTab
+from gui.settings_tab.settings_tab import SettingsTab
 from gui.log_tab import LogTab
 from gui.queue_tab import QueueTab
 from gui.gallery_tab.gallery_tab import GalleryTab
