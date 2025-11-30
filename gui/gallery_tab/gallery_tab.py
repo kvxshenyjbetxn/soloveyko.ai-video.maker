@@ -43,7 +43,9 @@ class RegenerateImageWorker(QRunnable):
                 file_extension = 'jpg'
             elif provider == 'pollinations':
                 api = self.pollinations_api
-                # Add any pollinations specific kwargs here in the future
+                pollinations_config = self.config.get('pollinations_config', {})
+                # Temporarily set the model on the API instance
+                api.model = pollinations_config.get('model', 'flux')
             
             if not api:
                 raise ValueError(f"Invalid image generation provider: {provider}")

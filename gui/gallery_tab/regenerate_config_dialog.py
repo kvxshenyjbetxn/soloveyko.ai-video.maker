@@ -12,6 +12,7 @@ class RegenerateConfigDialog(QDialog):
         self.initial_provider = image_data.get('provider', self.settings.get('image_generation_provider', 'pollinations'))
         self.initial_prompt = image_data.get('prompt', '')
         self.initial_googler_config = image_data.get('googler_config', self.settings.get('googler', {}))
+        self.initial_pollinations_config = image_data.get('pollinations_config', self.settings.get('pollinations', {}))
 
         # Layouts
         main_layout = QVBoxLayout(self)
@@ -28,6 +29,16 @@ class RegenerateConfigDialog(QDialog):
         self.prompt_edit = QTextEdit()
         self.prompt_edit.setPlainText(self.initial_prompt)
         form_layout.addRow(translator.translate("prompt_content_label"), self.prompt_edit)
+
+        # --- Pollinations Specific Options ---
+        self.pollinations_options_widget = QWidget()
+        pollinations_layout = QFormLayout(self.pollinations_options_widget)
+        pollinations_layout.setContentsMargins(0, 0, 0, 0)
+        self.pollinations_model_combo = QComboBox()
+        self.pollinations_model_combo.addItems(["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"])
+        self.pollinations_model_combo.setCurrentText(self.initial_pollinations_config.get('model', 'flux'))
+        pollinations_layout.addRow(translator.translate("pollinations_model_label"), self.pollinations_model_combo)
+        form_layout.addRow(self.pollinations_options_widget)
 
         # --- Googler Specific Options ---
         self.googler_options_widget = QWidget()
@@ -67,6 +78,7 @@ class RegenerateConfigDialog(QDialog):
 
     def update_visible_options(self, provider):
         self.googler_options_widget.setVisible(provider == 'googler')
+        self.pollinations_options_widget.setVisible(provider == 'pollinations')
 
     def get_values(self):
         config = {
@@ -79,9 +91,9 @@ class RegenerateConfigDialog(QDialog):
                 "seed": self.seed_spinbox.value(),
                 "negative_prompt": self.negative_prompt_edit.text()
             }
-        
-        # In the future, add Pollinations specific config here if needed
-        # elif config["provider"] == 'pollinations':
-        #     config['pollinations_config'] = {}
+        elif config["provider"] == 'pollinations':
+            config['pollinations_config'] = {
+                "model": self.pollinations_model_combo.currentText()
+            }
             
         return config
