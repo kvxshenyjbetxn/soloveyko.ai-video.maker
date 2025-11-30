@@ -1,5 +1,5 @@
 import os
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLabel, QMessageBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QScrollArea, QLabel, QMessageBox
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from utils.translator import translator
@@ -22,9 +22,21 @@ class GalleryTab(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        self.total_images_label = QLabel()
-        main_layout.addWidget(self.total_images_label, alignment=Qt.AlignmentFlag.AlignRight)
+        # Top bar layout
+        top_bar_layout = QHBoxLayout()
+        
+        self.load_demo_button = QPushButton()
+        self.load_demo_button.clicked.connect(self.load_demo_images)
+        top_bar_layout.addWidget(self.load_demo_button)
 
+        top_bar_layout.addStretch()
+
+        self.total_images_label = QLabel()
+        top_bar_layout.addWidget(self.total_images_label)
+        
+        main_layout.addLayout(top_bar_layout)
+
+        # Scroll Area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -38,7 +50,29 @@ class GalleryTab(QWidget):
 
         self.update_total_images_count()
 
+    def load_demo_images(self):
+        demo_dir = "demo"
+        if not os.path.isdir(demo_dir):
+            logger.log(f"Demo directory '{demo_dir}' not found.", level=LogLevel.WARNING)
+            return
+
+        image_files = [f for f in os.listdir(demo_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        if not image_files:
+            logger.log(f"No images found in demo directory '{demo_dir}'.", level=LogLevel.INFO)
+            return
+        
+        logger.log(f"Loading {len(image_files)} demo images.", level=LogLevel.INFO)
+        for i, filename in enumerate(image_files):
+            image_path = os.path.join(demo_dir, filename)
+            task_name = f"Demo Task {(i % 2) + 1}" # Alternate between two demo tasks
+            prompt = f"This is a demo image: {filename}"
+            self.add_image(task_name, image_path, prompt)
+
     def add_image(self, task_name, image_path, prompt):
+        if not os.path.exists(image_path):
+            logger.log(f"Image path does not exist: {image_path}", level=LogLevel.WARNING)
+            return
+            
         if task_name not in self.task_groups:
             group = CollapsibleGroup(task_name)
             self.content_layout.addWidget(group)
@@ -46,11 +80,9 @@ class GalleryTab(QWidget):
         
         group = self.task_groups[task_name]
 
-        # Create and scale the pixmap here
         pixmap = QPixmap(image_path)
         scaled_pixmap = pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         
-        # Pass the scaled pixmap to the thumbnail
         thumbnail = ImageThumbnail(image_path, prompt, scaled_pixmap)
         
         thumbnail.image_clicked.connect(lambda: self._on_image_clicked(image_path))
@@ -70,33 +102,26 @@ class GalleryTab(QWidget):
             logger.log(f"Regeneration requested for image {thumbnail_widget.image_path}:", level=LogLevel.INFO)
             logger.log(f"  - New Provider: {new_values['provider']}", level=LogLevel.INFO)
             logger.log(f"  - New Prompt: {new_values['prompt']}", level=LogLevel.INFO)
-            # Actual regeneration logic is not implemented yet, as per request.
 
     def _on_delete_requested(self, thumbnail_widget, group):
-        confirm_msg = translator.translate("confirm_image_deletion_message").format(thumbnail_widget.image_path)
-        reply = QMessageBox.question(self, 
-                                     translator.translate("confirm_deletion_title"), 
-                                     confirm_msg,
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-                                     QMessageBox.StandardButton.No)
-
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                # 1. Delete from disk
+        try:
+            # We don't delete demo files, just remove them from the UI
+            is_demo_file = os.path.dirname(thumbnail_widget.image_path).endswith('demo')
+            if not is_demo_file:
                 os.remove(thumbnail_widget.image_path)
                 logger.log(f"Deleted image from disk: {thumbnail_widget.image_path}", level=LogLevel.INFO)
+            else:
+                logger.log(f"Removed demo image from gallery: {thumbnail_widget.image_path}", level=LogLevel.INFO)
 
-                # 2. Remove from layout
-                group.content_flow_layout.removeWidget(thumbnail_widget)
-                thumbnail_widget.deleteLater()
+            group.content_flow_layout.removeWidget(thumbnail_widget)
+            thumbnail_widget.deleteLater()
 
-                # 3. Update counts
-                group.update_title()
-                self.update_total_images_count()
+            group.update_title()
+            self.update_total_images_count()
 
-            except OSError as e:
-                logger.log(f"Error deleting image file {thumbnail_widget.image_path}: {e}", level=LogLevel.ERROR)
-                QMessageBox.critical(self, "Error", f"Could not delete image file:\n{e}")
+        except OSError as e:
+            logger.log(f"Error deleting image file {thumbnail_widget.image_path}: {e}", level=LogLevel.ERROR)
+            QMessageBox.critical(self, "Error", f"Could not delete image file:\n{e}")
 
     def update_total_images_count(self):
         total_count = sum(group.get_image_count() for group in self.task_groups.values())
@@ -104,7 +129,6 @@ class GalleryTab(QWidget):
 
     def retranslate_ui(self):
         self.update_total_images_count()
+        self.load_demo_button.setText(translator.translate("load_demo_button"))
         for group in self.task_groups.values():
             group.translate_ui()
-        # Need to re-translate any visible dialogs if they are open during language change
-        # For now, this is not implemented as dialogs are modal and short-lived.

@@ -120,5 +120,8 @@
     "gallery_total_images_label": "Всього зображень: {count}",
     "gallery_task_group_title": "{title} ({count} зображень)",
     "confirm_image_deletion_message": "Ви впевнені, що хочете назавжди видалити це зображення з диска?\n\n{}",
-    "regenerate_image_title": "Перегенерувати зображення"
+    "regenerate_image_title": "Перегенерувати зображення",
+    "thumbnail_regen_button": "Перегенерувати",
+    "thumbnail_delete_button": "Видалити",
+    "load_demo_button": "Завантажити демо"
 }
