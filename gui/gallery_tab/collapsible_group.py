@@ -40,6 +40,7 @@ class CollapsibleGroup(QWidget):
     def add_widget(self, widget):
         self.content_flow_layout.addWidget(widget)
         self.update_title()
+        self.sort_thumbnails()
 
     def get_image_count(self):
         return self.content_flow_layout.count()
@@ -50,6 +51,24 @@ class CollapsibleGroup(QWidget):
             if hasattr(widget, 'image_path') and widget.image_path == path:
                 return widget
         return None
+
+    def sort_thumbnails(self):
+        thumbnails = []
+        for i in range(self.content_flow_layout.count()):
+            item = self.content_flow_layout.itemAt(i)
+            if item and item.widget():
+                thumbnails.append(item.widget())
+        
+        # Sort thumbnails by image_path (filename)
+        thumbnails.sort(key=lambda x: x.image_path)
+
+        # Clear existing layout
+        while self.content_flow_layout.count():
+            self.content_flow_layout.takeAt(0)
+        
+        # Add sorted thumbnails back
+        for thumb in thumbnails:
+            self.content_flow_layout.addWidget(thumb)
 
     def update_title(self):
         self.set_title(self.title, self.get_image_count())

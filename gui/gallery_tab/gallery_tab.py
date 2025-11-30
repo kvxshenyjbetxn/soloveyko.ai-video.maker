@@ -149,7 +149,7 @@ class GalleryTab(QWidget):
         pixmap = QPixmap(image_path)
         scaled_pixmap = pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         
-        thumbnail = ImageThumbnail(image_path, prompt, scaled_pixmap)
+        thumbnail = ImageThumbnail(image_path, prompt, scaled_pixmap, group)
         
         thumbnail.image_clicked.connect(lambda: self._on_image_clicked(image_path))
         thumbnail.delete_requested.connect(lambda: self._on_delete_requested(thumbnail, group))
