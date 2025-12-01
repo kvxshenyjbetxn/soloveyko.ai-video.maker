@@ -7,7 +7,8 @@ class SettingsManager:
         self.defaults = {
             'language': 'uk',
             'theme': 'dark',
-            'results_path': ''
+            'results_path': '',
+            'voicemaker_api_key': ''
         }
         self.settings = self.load_settings()
 
