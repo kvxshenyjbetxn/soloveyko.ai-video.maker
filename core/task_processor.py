@@ -140,10 +140,6 @@ class JobWorker(QRunnable):
                         if lang_dir_path:
                             self.save_translation(lang_dir_path, translated_text)
                 
-                # --- Voiceover Stage ---
-                if 'stage_voiceover' in lang_data['stages']:
-                    self._process_voiceover_stage(job_id, lang_id, lang_data, all_languages_config, text_for_processing, lang_dir_path)
-
                 # --- Image Prompts Stage ---
                 if 'stage_img_prompts' in lang_data['stages']:
                     self.process_image_prompts(job_id, lang_id, lang_data, text_for_processing, lang_dir_path)
@@ -151,6 +147,10 @@ class JobWorker(QRunnable):
                 # --- Image Generation Stage ---
                 if 'stage_images' in lang_data['stages']:
                     self.process_image_generation(job_id, lang_id, lang_data, lang_dir_path)
+                
+                # --- Voiceover Stage ---
+                if 'stage_voiceover' in lang_data['stages']:
+                    self._process_voiceover_stage(job_id, lang_id, lang_data, all_languages_config, text_for_processing, lang_dir_path)
 
             logger.log(f"Finished processing job: {self.job['name']}", level=LogLevel.INFO)
         finally:
