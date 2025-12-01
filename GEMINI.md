@@ -1,13 +1,39 @@
--   завжди відповідай на українськії мові
--   завжди слідкуй за чистотою коду, не дублюй код просто так
--   якшо користувач просить щось змінити або переробити, то перевіряй чи е в коді вже схожа функція для того щоб не дудлювати код.
--   при помилках які довго не вирішуються шукай відповіді в інтернеті.
--   не забувай про переклад інтерфейсу программи якщо ти щось додаеш у програмсму або видаляеш.
--   программа модульна, дотримуйся модульності яка наразі є в программі, кожен сервіс як окремий модуль, кожна вкладка як окремий модуль і так далі.
--   дотримуйся единого стилю коду.
--   дотримуйся единого візуального стилю программи яка зараз є.
--   не залишай безкорисні коментарі в коді, наприклад "тут зміни" або "туту я замінив шось на шось". залишай тільки важливі коментарі на українськії мові, які описують якийсь важливий участок коду або модуль.
--   вся логіка запитів апі сервісіва мають бути в файлах відповідних апі сервісів в папці api
--   программа мае бути адаптована і для windows і для macos
--   всі логи в программі якшо ти їх будеш додавати мають бути в одному стилі написані і англійською мовою. якшо бачиш вже існуючі логи іншою мовою то перепиши англійською
--   апсолютно всі запити до апі будь якого сервісу повинні відображатись в логах, в компактному вигляді але повинні
+# Gemini Project: Multimedia Content Generation Tool
+
+## Project Overview
+
+This project is a desktop application for generating multimedia content, including translated text, voiceovers, and images. It provides a graphical user interface (GUI) built with PySide6 that allows users to create and manage content generation jobs. The application leverages several external APIs for its core functionality:
+
+*   **OpenRouter API:** Used for text translation and image prompt generation.
+*   **Googler API & Pollinations API:** Used for generating images from text prompts.
+*   **ElevenLabs API:** Used for generating voiceovers from text.
+
+The application is highly configurable, with settings stored in a `config/settings.json` file. These settings include API keys, language-specific prompts, and image generation parameters.
+
+## Building and Running
+
+This is a Python project that requires `PySide6`. To run the application, follow these steps:
+
+1.  **Install Dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+2.  **Configure the Application:**
+    *   Open the `config/settings.json` file.
+    *   Enter your API keys for OpenRouter, Googler, and ElevenLabs.
+    *   Configure the language settings, models, and other parameters as needed.
+
+3.  **Run the Application:**
+    ```bash
+    python main.py
+    ```
+
+## Development Conventions
+
+*   **GUI:** The user interface is built using the PySide6 framework. The main window is structured with a tabbed interface to separate different functionalities (text processing, queue management, gallery, settings, and logs).
+*   **Task Processing:** A queue-based system is used to manage content generation jobs. The `TaskProcessor` class processes jobs from the `QueueManager` in a separate thread pool to keep the UI responsive.
+*   **API Integration:** Each external API is encapsulated in its own class within the `api/` directory. These classes handle the details of making API requests and processing the responses.
+*   **Settings Management:** The `SettingsManager` class provides a centralized way to manage application settings, which are stored in a JSON file.
+*   **Internationalization:** The application supports multiple languages using a `Translator` class that loads translations from JSON files in the `assets/translations/` directory.
+*   **Styling:** The application uses a custom stylesheet based on `qt_material` to provide a modern look and feel. Themes are configurable in the settings.

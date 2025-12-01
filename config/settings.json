@@ -17,7 +17,8 @@
             "display_name": "Англійська",
             "prompt": "переклади на англійську:",
             "model": "google/gemini-2.5-flash",
-            "max_tokens": 128000
+            "max_tokens": 128000,
+            "elevenlabs_template_uuid": "438a060f-e952-435f-b873-9b18eee4dbfe"
         },
         "ru-RU": {
             "display_name": "Російська",
