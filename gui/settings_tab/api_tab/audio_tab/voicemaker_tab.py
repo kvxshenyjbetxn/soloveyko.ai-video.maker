@@ -26,15 +26,6 @@ class VoicemakerTab(QWidget):
         api_key_layout.addWidget(self.api_key_input)
         layout.addLayout(api_key_layout)
 
-        # Balance Label
-        balance_layout = QHBoxLayout()
-        self.balance_title_label = QLabel("Characters remaining:") 
-        self.balance_value_label = QLabel("Unknown")
-        balance_layout.addWidget(self.balance_title_label)
-        balance_layout.addWidget(self.balance_value_label)
-        balance_layout.addStretch()
-        layout.addLayout(balance_layout)
-
         # Connection Status
         connection_layout = QHBoxLayout()
         self.connection_status_label = QLabel()
@@ -50,7 +41,6 @@ class VoicemakerTab(QWidget):
         # Використовуємо існуючі ключі перекладу де це можливо, або хардкод для нових елементів поки що
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
-        self.balance_title_label.setText(translator.translate("balance_label"))
         self.update_connection_status_label()
 
     def load_settings(self):
@@ -79,9 +69,3 @@ class VoicemakerTab(QWidget):
             self.connection_status_label.setText(translator.translate("connection_status_not_configured"))
         else:
             self.connection_status_label.setText(translator.translate("connection_status_not_checked"))
-
-    def update_balance_label(self, balance):
-        if balance is not None:
-            self.balance_value_label.setText(str(balance))
-        else:
-            self.balance_value_label.setText("Unknown")
