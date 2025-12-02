@@ -20,7 +20,6 @@ class VoicemakerTab(QWidget):
         api_key_layout = QHBoxLayout()
         self.api_key_label = QLabel("Voicemaker API Key:")
         self.api_key_input = QLineEdit()
-        self.api_key_input.setEchoMode(QLineEdit.Password)
         self.api_key_input.textChanged.connect(self.save_api_key)
         api_key_layout.addWidget(self.api_key_label)
         api_key_layout.addWidget(self.api_key_input)
