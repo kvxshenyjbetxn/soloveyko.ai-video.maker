@@ -19,7 +19,7 @@
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
             "elevenlabs_template_uuid": "438a060f-e952-435f-b873-9b18eee4dbfe",
-            "tts_provider": "VoiceMaker",
+            "tts_provider": "ElevenLabs",
             "voicemaker_voice_id": "ai4-Harry"
         },
         "ru-RU": {

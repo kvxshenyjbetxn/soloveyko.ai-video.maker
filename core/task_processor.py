@@ -34,7 +34,7 @@ class TaskProcessor(QObject):
 
     def load_voicemaker_voices(self):
         try:
-            with open("config/voicemaker_voices.json", "r", encoding="utf-8") as f:
+            with open("assets/voicemaker_voices.json", "r", encoding="utf-8") as f:
                 self.voicemaker_voices = json.load(f)
         except Exception as e:
             logger.log(f"Error loading voicemaker voices: {e}", level=LogLevel.ERROR)
@@ -238,7 +238,6 @@ class JobWorker(QRunnable):
     def _process_voiceover_stage(self, job_id, lang_id, lang_data, all_languages_config, text_to_voice, dir_path):
         stage_key = 'stage_voiceover'
         self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
-        logger.log(f"  - Starting voiceover for: {lang_data['display_name']}", level=LogLevel.INFO)
 
         lang_config = all_languages_config.get(lang_id)
         if not lang_config:
@@ -246,12 +245,15 @@ class JobWorker(QRunnable):
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
             return
 
+        tts_provider = lang_config.get('tts_provider', 'ElevenLabs')
+        logger.log(f"  - Starting voiceover for: {lang_data['display_name']} using {tts_provider}", level=LogLevel.INFO)
+
         if not dir_path:
             logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: Results path not set.", level=LogLevel.WARNING)
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
             return
 
-        tts_provider = lang_config.get('tts_provider', 'ElevenLabs')
+        # tts_provider variable is already set above
 
         if tts_provider == 'VoiceMaker':
             voice_id = lang_config.get('voicemaker_voice_id')

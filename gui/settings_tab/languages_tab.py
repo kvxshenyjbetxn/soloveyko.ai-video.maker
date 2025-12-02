@@ -27,7 +27,7 @@ class LanguagesTab(QWidget):
 
     def load_voicemaker_voices(self):
         try:
-            with open("config/voicemaker_voices.json", "r", encoding="utf-8") as f:
+            with open("assets/voicemaker_voices.json", "r", encoding="utf-8") as f:
                 self.voicemaker_voices = json.load(f)
         except Exception as e:
             print(f"Error loading voicemaker voices: {e}")
