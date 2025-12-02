@@ -264,7 +264,7 @@ class JobWorker(QRunnable):
             
             try:
                 language_code = self.processor._get_voicemaker_language_code(voice_id)
-                audio_content, status = self.voicemaker_api.generate_audio(text_to_voice, voice_id, language_code)
+                audio_content, status = self.voicemaker_api.generate_audio(text_to_voice, voice_id, language_code, temp_dir=dir_path)
                 
                 if status == 'success' and audio_content:
                     self.save_voiceover(dir_path, audio_content)

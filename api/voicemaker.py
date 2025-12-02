@@ -1,4 +1,7 @@
 import requests
+import re
+import os
+import concurrent.futures
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
 
@@ -56,10 +59,52 @@ class VoicemakerAPI:
             logger.log(f"Voicemaker connection check failed: {e}", level=LogLevel.ERROR)
             return None, "error"
 
-    def generate_audio(self, text, voice_id, language_code="en-US"):
-        if not self.api_key:
-            return None, "not_configured"
+    def _split_text(self, text, limit):
+        """Splits text into chunks respecting punctuation and character limit."""
+        if len(text) <= limit:
+            return [text]
+        
+        chunks = []
+        # Split by sentence endings (. ! ?), keeping the delimiter
+        # The lookbehind (?<=[.!?]) splits *after* the delimiter
+        # But lookbehind requires fixed width, so we use a simpler regex and reconstruct
+        # Or simply split by space and accumulate. 
+        # Better: regex to find sentence boundaries.
+        
+        # Try to split by sentence delimiters
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        current_chunk = ""
+        
+        for sentence in sentences:
+            if len(current_chunk) + len(sentence) <= limit:
+                current_chunk += sentence + " "
+            else:
+                # If current chunk is not empty, add it to chunks
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                    current_chunk = ""
+                
+                # If the sentence itself is longer than limit (rare, but possible), split by comma
+                if len(sentence) > limit:
+                    sub_parts = re.split(r'(?<=,)\s+', sentence)
+                    for part in sub_parts:
+                        if len(current_chunk) + len(part) <= limit:
+                            current_chunk += part + " "
+                        else:
+                            if current_chunk:
+                                chunks.append(current_chunk.strip())
+                            current_chunk = part + " "
+                else:
+                    current_chunk = sentence + " "
+        
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+            
+        return chunks
 
+    def _generate_chunk(self, text, voice_id, language_code):
+        """Internal method to generate audio for a single chunk."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -86,26 +131,83 @@ class VoicemakerAPI:
                 if data.get("success"):
                     audio_url = data.get("path")
                     if audio_url:
-                        # Download the audio file
                         audio_response = requests.get(audio_url)
                         if audio_response.status_code == 200:
-                             return audio_response.content, "success"
+                             return audio_response.content, None
                         else:
-                             logger.log(f"Voicemaker audio download failed: {audio_response.status_code}", level=LogLevel.ERROR)
-                             return None, "download_error"
+                             return None, f"Download failed: {audio_response.status_code}"
                     else:
-                        logger.log("Voicemaker API returned success but no audio path.", level=LogLevel.ERROR)
-                        return None, "error"
+                        return None, "No audio path in response"
                 else:
-                    logger.log(f"Voicemaker API error: {data.get('message')}", level=LogLevel.ERROR)
-                    return None, "error"
+                    return None, f"API error: {data.get('message')}"
             elif response.status_code == 401:
-                logger.log("Voicemaker unauthorized (401). Check API Key.", level=LogLevel.ERROR)
-                return None, "auth_error"
+                return None, "Unauthorized"
             else:
-                logger.log(f"Voicemaker HTTP error: {response.status_code} - {response.text}", level=LogLevel.ERROR)
-                return None, "http_error"
+                return None, f"HTTP error: {response.status_code}"
 
         except requests.exceptions.RequestException as e:
-            logger.log(f"Voicemaker generation failed: {e}", level=LogLevel.ERROR)
-            return None, "connection_error"
+            return None, str(e)
+
+    def generate_audio(self, text, voice_id, language_code="en-US", temp_dir=None):
+        if not self.api_key:
+            return None, "not_configured"
+
+        limit = settings_manager.get("voicemaker_char_limit", 3000)
+        chunks = self._split_text(text, int(limit))
+        
+        logger.log(f"Voicemaker: Text length {len(text)}. Split into {len(chunks)} chunks (Limit: {limit}).", level=LogLevel.INFO)
+
+        if len(chunks) == 1:
+            # Simple case: just one chunk
+            content, error = self._generate_chunk(chunks[0], voice_id, language_code)
+            if content:
+                return content, "success"
+            else:
+                logger.log(f"Voicemaker error: {error}", level=LogLevel.ERROR)
+                return None, error
+
+        # Multiple chunks: Parallel execution
+        combined_audio = b""
+        temp_audio_folder = None
+        
+        if temp_dir:
+            temp_audio_folder = os.path.join(temp_dir, "temp_audio")
+            os.makedirs(temp_audio_folder, exist_ok=True)
+
+        results = [None] * len(chunks)
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_index = {
+                executor.submit(self._generate_chunk, chunk, voice_id, language_code): i 
+                for i, chunk in enumerate(chunks)
+            }
+            
+            for future in concurrent.futures.as_completed(future_to_index):
+                index = future_to_index[future]
+                try:
+                    content, error = future.result()
+                    if content:
+                        results[index] = content
+                        
+                        # Save temp chunk if folder exists
+                        if temp_audio_folder:
+                            chunk_filename = f"chunk_{index:03d}.mp3"
+                            chunk_path = os.path.join(temp_audio_folder, chunk_filename)
+                            with open(chunk_path, "wb") as f:
+                                f.write(content)
+                            logger.log(f"Voicemaker: Saved chunk {index+1}/{len(chunks)} to {chunk_path}", level=LogLevel.INFO)
+                    else:
+                        logger.log(f"Voicemaker: Failed to generate chunk {index}: {error}", level=LogLevel.ERROR)
+                        return None, f"Chunk {index} failed: {error}"
+                except Exception as e:
+                    logger.log(f"Voicemaker: Exception in chunk {index}: {e}", level=LogLevel.ERROR)
+                    return None, f"Exception in chunk {index}"
+
+        # Concatenate in order
+        for content in results:
+            if content:
+                combined_audio += content
+            else:
+                return None, "Missing chunk data"
+                
+        return combined_audio, "success"

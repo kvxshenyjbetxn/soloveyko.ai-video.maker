@@ -128,5 +128,6 @@
     "elevenlabs": "ElevenLabs",
     "balance_not_loaded": "Баланс не загружен",
     "elevenlabs_template_label": "Шаблон голоса:",
-    "no_templates_found": "Шаблоны не найдены"
+    "no_templates_found": "Шаблоны не найдены",
+    "char_limit": "Лимит символов:"
 }
