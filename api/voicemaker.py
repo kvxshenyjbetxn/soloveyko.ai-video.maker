@@ -1,6 +1,7 @@
 import requests
 import re
 import os
+import time
 import concurrent.futures
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
@@ -176,11 +177,14 @@ class VoicemakerAPI:
 
         results = [None] * len(chunks)
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-            future_to_index = {
-                executor.submit(self._generate_chunk, chunk, voice_id, language_code): i 
-                for i, chunk in enumerate(chunks)
-            }
+        # Increased max_workers to allow more parallel processing while throttling submission
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_index = {}
+            for i, chunk in enumerate(chunks):
+                future = executor.submit(self._generate_chunk, chunk, voice_id, language_code)
+                future_to_index[future] = i
+                # Small delay to avoid burst rate limits
+                time.sleep(0.5)
             
             for future in concurrent.futures.as_completed(future_to_index):
                 index = future_to_index[future]
