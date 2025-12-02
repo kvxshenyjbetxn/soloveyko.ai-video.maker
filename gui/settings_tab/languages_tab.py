@@ -1,3 +1,5 @@
+import json
+import os
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLineEdit,
     QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox
@@ -13,13 +15,23 @@ class LanguagesTab(QWidget):
         self.settings = settings_manager
         self.elevenlabs_api = ElevenLabsAPI()
         self.elevenlabs_templates = []
+        self.voicemaker_voices = []
         self.current_lang_id = None
+        self.load_voicemaker_voices()
         self.init_ui()
         self.load_languages()
         self.load_elevenlabs_templates()
         self.retranslate_ui()
         if self.lang_list_widget.count() > 0:
             self.lang_list_widget.setCurrentRow(0)
+
+    def load_voicemaker_voices(self):
+        try:
+            with open("config/voicemaker_voices.json", "r", encoding="utf-8") as f:
+                self.voicemaker_voices = json.load(f)
+        except Exception as e:
+            print(f"Error loading voicemaker voices: {e}")
+            self.voicemaker_voices = []
 
     def init_ui(self):
         main_layout = QHBoxLayout(self)
@@ -73,10 +85,25 @@ class LanguagesTab(QWidget):
         self.model_combo.currentIndexChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.model_label, self.model_combo)
 
+        # TTS Provider
+        self.tts_provider_label = QLabel("TTS Provider:")
+        self.tts_provider_combo = QComboBox()
+        self.tts_provider_combo.addItems(["ElevenLabs", "VoiceMaker"])
+        self.tts_provider_combo.currentIndexChanged.connect(self.on_tts_provider_changed)
+        self.tts_provider_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.tts_provider_label, self.tts_provider_combo)
+
+        # ElevenLabs Settings
         self.elevenlabs_template_label = QLabel()
         self.elevenlabs_template_combo = QComboBox()
         self.elevenlabs_template_combo.currentIndexChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.elevenlabs_template_label, self.elevenlabs_template_combo)
+
+        # VoiceMaker Settings
+        self.voicemaker_voice_label = QLabel("VoiceMaker Voice:")
+        self.voicemaker_voice_combo = QComboBox()
+        self.voicemaker_voice_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.voicemaker_voice_label, self.voicemaker_voice_combo)
 
         self.tokens_label = QLabel()
         self.tokens_spinbox = QSpinBox()
@@ -115,6 +142,58 @@ class LanguagesTab(QWidget):
         else:
             self.elevenlabs_template_combo.addItem(translator.translate("no_templates_found"), "")
 
+    def populate_voicemaker_voices(self, lang_id):
+        self.voicemaker_voice_combo.clear()
+        
+        # Try to find voices matching the lang_id (e.g. "en-US", "uk-UA")
+        matched_voices = []
+        other_voices = []
+        
+        # Normalize lang_id for comparison
+        normalized_lang_id = lang_id.lower().replace("_", "-")
+        
+        for lang_data in self.voicemaker_voices:
+            code = lang_data.get("LanguageCode", "").lower()
+            # Check for exact match or prefix match (e.g. 'en' matches 'en-US', 'en-GB')
+            # But be careful: 'en' should match 'en-*'
+            is_match = False
+            if code == normalized_lang_id:
+                is_match = True
+            elif normalized_lang_id in code: # Loose matching
+                is_match = True
+            elif code.startswith(normalized_lang_id + "-"):
+                is_match = True
+                
+            for voice_id in lang_data.get("Voices", []):
+                item_text = f"{lang_data['Language']}: {voice_id}"
+                if is_match:
+                    matched_voices.append((item_text, voice_id))
+                else:
+                    other_voices.append((item_text, voice_id))
+        
+        # Add matched voices first
+        if matched_voices:
+             for text, data in matched_voices:
+                 self.voicemaker_voice_combo.addItem(text, data)
+             self.voicemaker_voice_combo.insertSeparator(self.voicemaker_voice_combo.count())
+        
+        # Add other voices
+        for text, data in other_voices:
+            self.voicemaker_voice_combo.addItem(text, data)
+
+    def on_tts_provider_changed(self, index):
+        provider = self.tts_provider_combo.currentText()
+        if provider == "ElevenLabs":
+            self.elevenlabs_template_label.setVisible(True)
+            self.elevenlabs_template_combo.setVisible(True)
+            self.voicemaker_voice_label.setVisible(False)
+            self.voicemaker_voice_combo.setVisible(False)
+        else:
+            self.elevenlabs_template_label.setVisible(False)
+            self.elevenlabs_template_combo.setVisible(False)
+            self.voicemaker_voice_label.setVisible(True)
+            self.voicemaker_voice_combo.setVisible(True)
+
     def on_language_selected(self, current, previous):
         if not current:
             self.right_panel.setVisible(False)
@@ -140,6 +219,8 @@ class LanguagesTab(QWidget):
         self.model_combo.blockSignals(True)
         self.tokens_spinbox.blockSignals(True)
         self.elevenlabs_template_combo.blockSignals(True)
+        self.tts_provider_combo.blockSignals(True)
+        self.voicemaker_voice_combo.blockSignals(True)
 
         self.prompt_edit.setPlainText(config.get("prompt", ""))
         
@@ -147,16 +228,32 @@ class LanguagesTab(QWidget):
         index = self.model_combo.findText(current_model)
         self.model_combo.setCurrentIndex(index if index >= 0 else 0)
 
+        # TTS Provider
+        tts_provider = config.get("tts_provider", "ElevenLabs")
+        provider_index = self.tts_provider_combo.findText(tts_provider)
+        self.tts_provider_combo.setCurrentIndex(provider_index if provider_index >= 0 else 0)
+
+        # ElevenLabs Template
         current_template_uuid = config.get("elevenlabs_template_uuid", "")
         template_index = self.elevenlabs_template_combo.findData(current_template_uuid)
         self.elevenlabs_template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
 
+        # VoiceMaker Voice
+        self.populate_voicemaker_voices(self.current_lang_id)
+        current_voicemaker_voice = config.get("voicemaker_voice_id", "")
+        voice_index = self.voicemaker_voice_combo.findData(current_voicemaker_voice)
+        self.voicemaker_voice_combo.setCurrentIndex(voice_index if voice_index >= 0 else 0)
+
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
+
+        self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
 
         self.prompt_edit.blockSignals(False)
         self.model_combo.blockSignals(False)
         self.tokens_spinbox.blockSignals(False)
         self.elevenlabs_template_combo.blockSignals(False)
+        self.tts_provider_combo.blockSignals(False)
+        self.voicemaker_voice_combo.blockSignals(False)
         
         self.right_panel.setVisible(True)
 
@@ -176,7 +273,9 @@ class LanguagesTab(QWidget):
             "prompt": "", 
             "model": "",
             "max_tokens": 4096,
-            "elevenlabs_template_uuid": ""
+            "tts_provider": "ElevenLabs",
+            "elevenlabs_template_uuid": "",
+            "voicemaker_voice_id": ""
         }
         self.settings.set("languages_config", languages)
         
@@ -211,10 +310,19 @@ class LanguagesTab(QWidget):
             languages[self.current_lang_id]["prompt"] = self.prompt_edit.toPlainText()
             languages[self.current_lang_id]["model"] = self.model_combo.currentText()
             languages[self.current_lang_id]["max_tokens"] = self.tokens_spinbox.value()
+            
+            languages[self.current_lang_id]["tts_provider"] = self.tts_provider_combo.currentText()
+            
             selected_template_index = self.elevenlabs_template_combo.currentIndex()
             if selected_template_index >= 0:
                 template_uuid = self.elevenlabs_template_combo.itemData(selected_template_index)
                 languages[self.current_lang_id]["elevenlabs_template_uuid"] = template_uuid
+            
+            selected_voice_index = self.voicemaker_voice_combo.currentIndex()
+            if selected_voice_index >= 0:
+                voice_id = self.voicemaker_voice_combo.itemData(selected_voice_index)
+                languages[self.current_lang_id]["voicemaker_voice_id"] = voice_id
+
             self.settings.set("languages_config", languages)
 
     def retranslate_ui(self):
@@ -227,3 +335,5 @@ class LanguagesTab(QWidget):
         self.model_label.setText(translator.translate("translation_model_label"))
         self.elevenlabs_template_label.setText(translator.translate("elevenlabs_template_label"))
         self.tokens_label.setText(translator.translate("tokens_label"))
+        self.tts_provider_label.setText(translator.translate("tts_provider_label"))
+        self.voicemaker_voice_label.setText(translator.translate("voicemaker_voice_label"))

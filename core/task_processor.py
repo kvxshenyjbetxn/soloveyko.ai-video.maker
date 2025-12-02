@@ -2,6 +2,7 @@ import os
 import re
 import time
 import base64
+import json
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager
@@ -9,6 +10,7 @@ from api.openrouter import OpenRouterAPI
 from api.pollinations import PollinationsAPI
 from api.googler import GooglerAPI
 from api.elevenlabs import ElevenLabsAPI
+from api.voicemaker import VoicemakerAPI
 
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
@@ -23,9 +25,20 @@ class TaskProcessor(QObject):
         self.pollinations_api = PollinationsAPI()
         self.googler_api = GooglerAPI()
         self.elevenlabs_api = ElevenLabsAPI()
+        self.voicemaker_api = VoicemakerAPI()
         self.threadpool = QThreadPool()
         self.active_jobs = 0
         self.timer = QElapsedTimer()
+        self.voicemaker_voices = []
+        self.load_voicemaker_voices()
+
+    def load_voicemaker_voices(self):
+        try:
+            with open("config/voicemaker_voices.json", "r", encoding="utf-8") as f:
+                self.voicemaker_voices = json.load(f)
+        except Exception as e:
+            logger.log(f"Error loading voicemaker voices: {e}", level=LogLevel.ERROR)
+            self.voicemaker_voices = []
 
     def start_processing(self):
         jobs = self.queue_manager.get_tasks()
@@ -51,6 +64,12 @@ class TaskProcessor(QObject):
             elapsed_str = time.strftime('%H:%M:%S', time.gmtime(elapsed_ms / 1000))
             logger.log(f"Queue processing finished in {elapsed_str}.", level=LogLevel.SUCCESS)
             self.processing_finished.emit(elapsed_str)
+            
+    def _get_voicemaker_language_code(self, voice_id):
+        for lang_data in self.voicemaker_voices:
+            if voice_id in lang_data.get("Voices", []):
+                return lang_data.get("LanguageCode")
+        return "en-US" # Default fallback
 
 class JobWorkerSignals(QObject):
     finished = Signal()
@@ -112,6 +131,7 @@ class JobWorker(QRunnable):
         self.pollinations_api = processor.pollinations_api
         self.googler_api = processor.googler_api
         self.elevenlabs_api = processor.elevenlabs_api
+        self.voicemaker_api = processor.voicemaker_api
         self.settings = settings
         self.job = job
         self.signals = JobWorkerSignals()
@@ -221,8 +241,8 @@ class JobWorker(QRunnable):
         logger.log(f"  - Starting voiceover for: {lang_data['display_name']}", level=LogLevel.INFO)
 
         lang_config = all_languages_config.get(lang_id)
-        if not lang_config or not lang_config.get('elevenlabs_template_uuid'):
-            logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: ElevenLabs template not configured.", level=LogLevel.WARNING)
+        if not lang_config:
+            logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: Lang config not found.", level=LogLevel.WARNING)
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
             return
 
@@ -231,41 +251,71 @@ class JobWorker(QRunnable):
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
             return
 
-        template_uuid = lang_config['elevenlabs_template_uuid']
-        
-        try:
-            task_id, status = self.elevenlabs_api.create_task(text_to_voice, template_uuid)
-            if status != 'connected' or not task_id:
-                raise Exception("Failed to create task.")
+        tts_provider = lang_config.get('tts_provider', 'ElevenLabs')
 
-            # Polling for result
-            for _ in range(30): # 5 minutes timeout (30 * 10 seconds)
-                task_status, status = self.elevenlabs_api.get_task_status(task_id)
-                if status != 'connected':
-                    raise Exception("Failed to get task status.")
+        if tts_provider == 'VoiceMaker':
+            voice_id = lang_config.get('voicemaker_voice_id')
+            if not voice_id:
+                logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: VoiceMaker Voice ID not configured.", level=LogLevel.WARNING)
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return
+            
+            try:
+                language_code = self.processor._get_voicemaker_language_code(voice_id)
+                audio_content, status = self.voicemaker_api.generate_audio(text_to_voice, voice_id, language_code)
                 
-                if task_status in ['ending', 'ending_processed']:
-                    audio_content, status = self.elevenlabs_api.get_task_result(task_id)
-                    if status == 'connected' and audio_content:
-                        self.save_voiceover(dir_path, audio_content)
-                        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-                        return
-                    elif status == 'not_ready':
-                        time.sleep(10)
-                        continue
-                    else:
-                        raise Exception("Failed to download audio content.")
-                
-                elif task_status in ['error', 'error_handled']:
-                    raise Exception("Task processing resulted in an error.")
-                
-                time.sleep(10)
+                if status == 'success' and audio_content:
+                    self.save_voiceover(dir_path, audio_content)
+                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+                else:
+                    logger.log(f"    - VoiceMaker generation failed: {status}", level=LogLevel.ERROR)
+                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
-            raise Exception("Timeout while waiting for voiceover result.")
+            except Exception as e:
+                logger.log(f"    - An error occurred during VoiceMaker voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
-        except Exception as e:
-            logger.log(f"    - An error occurred during voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+        else: # ElevenLabs
+            if not lang_config.get('elevenlabs_template_uuid'):
+                logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: ElevenLabs template not configured.", level=LogLevel.WARNING)
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return
+
+            template_uuid = lang_config['elevenlabs_template_uuid']
+            
+            try:
+                task_id, status = self.elevenlabs_api.create_task(text_to_voice, template_uuid)
+                if status != 'connected' or not task_id:
+                    raise Exception("Failed to create task.")
+
+                # Polling for result
+                for _ in range(30): # 5 minutes timeout (30 * 10 seconds)
+                    task_status, status = self.elevenlabs_api.get_task_status(task_id)
+                    if status != 'connected':
+                        raise Exception("Failed to get task status.")
+                    
+                    if task_status in ['ending', 'ending_processed']:
+                        audio_content, status = self.elevenlabs_api.get_task_result(task_id)
+                        if status == 'connected' and audio_content:
+                            self.save_voiceover(dir_path, audio_content)
+                            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+                            return
+                        elif status == 'not_ready':
+                            time.sleep(10)
+                            continue
+                        else:
+                            raise Exception("Failed to download audio content.")
+                    
+                    elif task_status in ['error', 'error_handled']:
+                        raise Exception("Task processing resulted in an error.")
+                    
+                    time.sleep(10)
+
+                raise Exception("Timeout while waiting for voiceover result.")
+
+            except Exception as e:
+                logger.log(f"    - An error occurred during voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
     def process_image_prompts(self, job_id, lang_id, lang_data, text_to_use, dir_path):
         stage_key = 'stage_img_prompts'
