@@ -8,7 +8,9 @@ class SettingsManager:
             'language': 'uk',
             'theme': 'dark',
             'results_path': '',
-            'voicemaker_api_key': ''
+            'voicemaker_api_key': '',
+            'gemini_tts_api_key': '',
+            'gemini_tts_url': 'http://127.0.0.1:8000'
         }
         self.settings = self.load_settings()
 

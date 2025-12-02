@@ -201,6 +201,7 @@ class TextTab(QWidget):
         self.googler_usage_label = QLabel()
         self.elevenlabs_balance_label = QLabel()
         self.voicemaker_balance_label = QLabel()
+        self.gemini_tts_balance_label = QLabel()
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
         self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.googler_usage_label)
@@ -208,6 +209,8 @@ class TextTab(QWidget):
         self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
         self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.voicemaker_balance_label)
+        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.gemini_tts_balance_label)
         self.status_bar_layout.addStretch()
         layout.addLayout(self.status_bar_layout)
 
@@ -336,6 +339,9 @@ class TextTab(QWidget):
 
     def update_voicemaker_balance(self, balance_text):
         self.voicemaker_balance_label.setText(balance_text)
+
+    def update_gemini_tts_balance(self, balance_text):
+        self.gemini_tts_balance_label.setText(balance_text)
 
     def apply_text_color_to_text_edit(self):
         current_theme = self.settings.get('theme', 'dark')

@@ -88,7 +88,7 @@ class LanguagesTab(QWidget):
         # TTS Provider
         self.tts_provider_label = QLabel("TTS Provider:")
         self.tts_provider_combo = QComboBox()
-        self.tts_provider_combo.addItems(["ElevenLabs", "VoiceMaker"])
+        self.tts_provider_combo.addItems(["ElevenLabs", "VoiceMaker", "GeminiTTS"])
         self.tts_provider_combo.currentIndexChanged.connect(self.on_tts_provider_changed)
         self.tts_provider_combo.currentIndexChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.tts_provider_label, self.tts_provider_combo)
@@ -104,6 +104,19 @@ class LanguagesTab(QWidget):
         self.voicemaker_voice_combo = QComboBox()
         self.voicemaker_voice_combo.currentIndexChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.voicemaker_voice_label, self.voicemaker_voice_combo)
+
+        # GeminiTTS Settings
+        self.gemini_voice_label = QLabel("Gemini Voice:")
+        self.gemini_voice_input = QLineEdit()
+        self.gemini_voice_input.setPlaceholderText("Puck")
+        self.gemini_voice_input.textChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.gemini_voice_label, self.gemini_voice_input)
+
+        self.gemini_tone_label = QLabel("Gemini Tone:")
+        self.gemini_tone_input = QLineEdit()
+        self.gemini_tone_input.setPlaceholderText("sad, excited, whispering... or a full instruction")
+        self.gemini_tone_input.textChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.gemini_tone_label, self.gemini_tone_input)
 
         self.tokens_label = QLabel()
         self.tokens_spinbox = QSpinBox()
@@ -188,11 +201,28 @@ class LanguagesTab(QWidget):
             self.elevenlabs_template_combo.setVisible(True)
             self.voicemaker_voice_label.setVisible(False)
             self.voicemaker_voice_combo.setVisible(False)
-        else:
+            self.gemini_voice_label.setVisible(False)
+            self.gemini_voice_input.setVisible(False)
+            self.gemini_tone_label.setVisible(False)
+            self.gemini_tone_input.setVisible(False)
+        elif provider == "VoiceMaker":
             self.elevenlabs_template_label.setVisible(False)
             self.elevenlabs_template_combo.setVisible(False)
             self.voicemaker_voice_label.setVisible(True)
             self.voicemaker_voice_combo.setVisible(True)
+            self.gemini_voice_label.setVisible(False)
+            self.gemini_voice_input.setVisible(False)
+            self.gemini_tone_label.setVisible(False)
+            self.gemini_tone_input.setVisible(False)
+        elif provider == "GeminiTTS":
+            self.elevenlabs_template_label.setVisible(False)
+            self.elevenlabs_template_combo.setVisible(False)
+            self.voicemaker_voice_label.setVisible(False)
+            self.voicemaker_voice_combo.setVisible(False)
+            self.gemini_voice_label.setVisible(True)
+            self.gemini_voice_input.setVisible(True)
+            self.gemini_tone_label.setVisible(True)
+            self.gemini_tone_input.setVisible(True)
 
     def on_language_selected(self, current, previous):
         if not current:
@@ -244,6 +274,10 @@ class LanguagesTab(QWidget):
         voice_index = self.voicemaker_voice_combo.findData(current_voicemaker_voice)
         self.voicemaker_voice_combo.setCurrentIndex(voice_index if voice_index >= 0 else 0)
 
+        # GeminiTTS Settings
+        self.gemini_voice_input.setText(config.get("gemini_voice", "Puck"))
+        self.gemini_tone_input.setText(config.get("gemini_tone", ""))
+
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
 
         self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
@@ -254,6 +288,8 @@ class LanguagesTab(QWidget):
         self.elevenlabs_template_combo.blockSignals(False)
         self.tts_provider_combo.blockSignals(False)
         self.voicemaker_voice_combo.blockSignals(False)
+        self.gemini_voice_input.blockSignals(False)
+        self.gemini_tone_input.blockSignals(False)
         
         self.right_panel.setVisible(True)
 
@@ -275,7 +311,9 @@ class LanguagesTab(QWidget):
             "max_tokens": 4096,
             "tts_provider": "ElevenLabs",
             "elevenlabs_template_uuid": "",
-            "voicemaker_voice_id": ""
+            "voicemaker_voice_id": "",
+            "gemini_voice": "Puck",
+            "gemini_tone": ""
         }
         self.settings.set("languages_config", languages)
         
@@ -322,6 +360,9 @@ class LanguagesTab(QWidget):
             if selected_voice_index >= 0:
                 voice_id = self.voicemaker_voice_combo.itemData(selected_voice_index)
                 languages[self.current_lang_id]["voicemaker_voice_id"] = voice_id
+
+            languages[self.current_lang_id]["gemini_voice"] = self.gemini_voice_input.text()
+            languages[self.current_lang_id]["gemini_tone"] = self.gemini_tone_input.text()
 
             self.settings.set("languages_config", languages)
 

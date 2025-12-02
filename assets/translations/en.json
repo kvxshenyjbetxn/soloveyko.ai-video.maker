@@ -129,5 +129,11 @@
     "balance_not_loaded": "Balance not loaded",
     "elevenlabs_template_label": "Voice template:",
     "no_templates_found": "No templates found",
-    "char_limit": "Character Limit:"
+    "char_limit": "Character Limit:",
+    "gemini_tts_url": "GeminiTTS URL:",
+    "gemini_tts_api_key": "GeminiTTS API Key:",
+    "tts_provider_label": "TTS Provider:",
+    "voicemaker_voice_label": "VoiceMaker Voice:",
+    "gemini_voice_label": "Gemini Voice:",
+    "gemini_tone_label": "Gemini Tone:"
 }
