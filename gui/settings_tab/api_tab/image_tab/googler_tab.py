@@ -17,7 +17,6 @@ class GooglerTab(QWidget):
         # API Key
         self.api_key_label = QLabel()
         self.api_key_input = QLineEdit()
-        self.api_key_input.setEchoMode(QLineEdit.Password)
         layout.addRow(self.api_key_label, self.api_key_input)
 
         # Usage
