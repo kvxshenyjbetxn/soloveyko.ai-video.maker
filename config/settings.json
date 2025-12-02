@@ -10,8 +10,12 @@
             "display_name": "Україна",
             "prompt": "дай відповідь і скажи в кінці Олег",
             "model": "google/gemini-2.5-flash",
-            "max_tokens": 128000,
-            "elevenlabs_template_uuid": "5fbd9e4a-4861-4e46-9836-1138f5d4a356"
+            "max_tokens": 0,
+            "elevenlabs_template_uuid": "5fbd9e4a-4861-4e46-9836-1138f5d4a356",
+            "tts_provider": "GeminiTTS",
+            "voicemaker_voice_id": "ai3-af-ZA-Kungawo",
+            "gemini_voice": "Enceladus",
+            "gemini_tone": ""
         },
         "us-US": {
             "display_name": "Англійська",
@@ -20,7 +24,9 @@
             "max_tokens": 128000,
             "elevenlabs_template_uuid": "438a060f-e952-435f-b873-9b18eee4dbfe",
             "tts_provider": "ElevenLabs",
-            "voicemaker_voice_id": "ai4-Harry"
+            "voicemaker_voice_id": "ai4-Harry",
+            "gemini_voice": "Puck",
+            "gemini_tone": "Read aloud in a warm and friendly tone: "
         },
         "ru-RU": {
             "display_name": "Російська",
@@ -29,7 +35,9 @@
             "max_tokens": 128000,
             "tts_provider": "VoiceMaker",
             "elevenlabs_template_uuid": "1ff95d26-7660-45d1-a615-ba947d730bea",
-            "voicemaker_voice_id": "ai5-ru-RU-Vladimir"
+            "voicemaker_voice_id": "ai5-ru-RU-Vladimir",
+            "gemini_voice": "Puck",
+            "gemini_tone": ""
         },
         "pl-PL": {
             "display_name": "Польська",
@@ -101,5 +109,7 @@
     },
     "elevenlabs_api_key": "427641798:6f346a2f6566757954354b5732517977625a416457513d3d",
     "voicemaker_api_key": "6fa26760-923d-11f0-9347-11ea6ac82a77",
-    "voicemaker_char_limit": 2900
+    "voicemaker_char_limit": 2900,
+    "gemini_tts_api_key": "VGJffif22OKOdKZ6l7UDutQOZWM46tUNJ-GxHaGFCbM",
+    "gemini_tts_url": "https://gemini-tts-server-beta-production.up.railway.app"
 }

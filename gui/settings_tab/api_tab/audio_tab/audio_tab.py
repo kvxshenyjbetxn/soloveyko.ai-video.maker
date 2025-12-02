@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
 from utils.translator import translator
 from .elevenlabs_tab import ElevenLabsTab
 from .voicemaker_tab import VoicemakerTab
+from .gemini_tts_tab import GeminiTTSTab
 
 class AudioTab(QWidget):
     def __init__(self, main_window=None):
@@ -19,9 +20,13 @@ class AudioTab(QWidget):
         
         self.voicemaker_tab = VoicemakerTab(self.main_window)
         self.tab_widget.addTab(self.voicemaker_tab, "Voicemaker")
+
+        self.gemini_tts_tab = GeminiTTSTab(self.main_window)
+        self.tab_widget.addTab(self.gemini_tts_tab, "GeminiTTS")
         
         layout.addWidget(self.tab_widget)
 
     def retranslate_ui(self):
         self.tab_widget.setTabText(0, translator.translate("elevenlabs"))
         self.tab_widget.setTabText(1, "Voicemaker")
+        self.tab_widget.setTabText(2, "GeminiTTS")

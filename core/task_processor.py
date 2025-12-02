@@ -11,6 +11,7 @@ from api.pollinations import PollinationsAPI
 from api.googler import GooglerAPI
 from api.elevenlabs import ElevenLabsAPI
 from api.voicemaker import VoicemakerAPI
+from api.gemini_tts import GeminiTTSAPI
 
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
@@ -26,6 +27,7 @@ class TaskProcessor(QObject):
         self.googler_api = GooglerAPI()
         self.elevenlabs_api = ElevenLabsAPI()
         self.voicemaker_api = VoicemakerAPI()
+        self.gemini_tts_api = GeminiTTSAPI()
         self.threadpool = QThreadPool()
         self.active_jobs = 0
         self.timer = QElapsedTimer()
@@ -132,6 +134,7 @@ class JobWorker(QRunnable):
         self.googler_api = processor.googler_api
         self.elevenlabs_api = processor.elevenlabs_api
         self.voicemaker_api = processor.voicemaker_api
+        self.gemini_tts_api = processor.gemini_tts_api
         self.settings = settings
         self.job = job
         self.signals = JobWorkerSignals()
@@ -267,7 +270,7 @@ class JobWorker(QRunnable):
                 audio_content, status = self.voicemaker_api.generate_audio(text_to_voice, voice_id, language_code, temp_dir=dir_path)
                 
                 if status == 'success' and audio_content:
-                    self.save_voiceover(dir_path, audio_content)
+                    self.save_voiceover(dir_path, audio_content, "voice.mp3")
                     self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
                 else:
                     logger.log(f"    - VoiceMaker generation failed: {status}", level=LogLevel.ERROR)
@@ -275,6 +278,42 @@ class JobWorker(QRunnable):
 
             except Exception as e:
                 logger.log(f"    - An error occurred during VoiceMaker voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+
+        elif tts_provider == 'GeminiTTS':
+            voice = lang_config.get('gemini_voice', 'Puck')
+            tone = lang_config.get('gemini_tone', '')
+            
+            try:
+                task_id, status = self.gemini_tts_api.create_task(text_to_voice, voice, tone)
+                if status != 'connected' or not task_id:
+                     raise Exception("Failed to create GeminiTTS task.")
+                
+                # Polling for result
+                for _ in range(60): # 10 minutes timeout (60 * 10 seconds)
+                    task_status, status = self.gemini_tts_api.get_task_status(task_id)
+                    if status != 'connected':
+                        raise Exception("Failed to get task status.")
+
+                    if task_status == 'completed':
+                        context_info = f"Task: {self.job['name']}, Lang: {lang_data['display_name']}"
+                        audio_content, status = self.gemini_tts_api.download_audio(task_id, context_info=context_info)
+                        if status == 'connected' and audio_content:
+                             self.save_voiceover(dir_path, audio_content, "voice.wav")
+                             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+                             return
+                        else:
+                             raise Exception("Failed to download audio content.")
+                    
+                    elif task_status == 'failed':
+                         raise Exception("Task processing failed on server side.")
+                    
+                    time.sleep(5) # Poll every 5 seconds
+
+                raise Exception("Timeout while waiting for GeminiTTS result.")
+
+            except Exception as e:
+                logger.log(f"    - An error occurred during GeminiTTS voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
                 self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
         else: # ElevenLabs
@@ -299,7 +338,7 @@ class JobWorker(QRunnable):
                     if task_status in ['ending', 'ending_processed']:
                         audio_content, status = self.elevenlabs_api.get_task_result(task_id)
                         if status == 'connected' and audio_content:
-                            self.save_voiceover(dir_path, audio_content)
+                            self.save_voiceover(dir_path, audio_content, "voice.mp3")
                             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
                             return
                         elif status == 'not_ready':
@@ -470,9 +509,9 @@ class JobWorker(QRunnable):
         except Exception as e:
             logger.log(f"    - Failed to save image prompts. Error: {e}", level=LogLevel.ERROR)
 
-    def save_voiceover(self, dir_path, content):
+    def save_voiceover(self, dir_path, content, filename="voice.mp3"):
         try:
-            file_path = os.path.join(dir_path, "voice.mp3")
+            file_path = os.path.join(dir_path, filename)
             with open(file_path, 'wb') as f:
                 f.write(content)
             logger.log(f"    - Voiceover audio saved to: {file_path}", level=LogLevel.SUCCESS)

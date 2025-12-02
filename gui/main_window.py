@@ -11,6 +11,7 @@ from api.openrouter import OpenRouterAPI
 from api.googler import GooglerAPI
 from api.elevenlabs import ElevenLabsAPI
 from api.voicemaker import VoicemakerAPI
+from api.gemini_tts import GeminiTTSAPI
 
 from gui.text_tab import TextTab
 from gui.settings_tab.settings_tab import SettingsTab
@@ -33,6 +34,9 @@ class ElevenLabsBalanceWorkerSignals(QObject):
 
 class VoicemakerBalanceWorkerSignals(QObject):
     finished = Signal(int)
+
+class GeminiTTSBalanceWorkerSignals(QObject):
+    finished = Signal(float)
 
 class BalanceWorker(QRunnable):
     def __init__(self):
@@ -77,6 +81,17 @@ class VoicemakerBalanceWorker(QRunnable):
         balance, status = api.get_balance()
         if balance is not None:
             self.signals.finished.emit(int(balance))
+
+class GeminiTTSBalanceWorker(QRunnable):
+    def __init__(self):
+        super().__init__()
+        self.signals = GeminiTTSBalanceWorkerSignals()
+
+    def run(self):
+        api = GeminiTTSAPI()
+        balance, status = api.get_balance()
+        if balance is not None:
+            self.signals.finished.emit(float(balance))
 
 class MainWindow(QMainWindow):
     def __init__(self, app):
@@ -154,6 +169,7 @@ class MainWindow(QMainWindow):
         self.task_processor.processing_finished.connect(self.update_googler_usage)
         self.task_processor.processing_finished.connect(self.update_elevenlabs_balance)
         self.task_processor.processing_finished.connect(self.update_voicemaker_balance)
+        self.task_processor.processing_finished.connect(self.update_gemini_tts_balance)
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
         self.task_processor.image_generated.connect(self.gallery_tab.add_image)
         self.gallery_tab.image_clicked.connect(self.show_image_viewer)
@@ -162,6 +178,7 @@ class MainWindow(QMainWindow):
         self.update_googler_usage()
         self.update_elevenlabs_balance()
         self.update_voicemaker_balance()
+        self.update_gemini_tts_balance()
 
     def show_image_viewer(self, image_path):
         self.viewer = ImageViewer(image_path, self.central_widget)
@@ -196,6 +213,11 @@ class MainWindow(QMainWindow):
     def update_voicemaker_balance(self):
         worker = VoicemakerBalanceWorker()
         worker.signals.finished.connect(self._on_voicemaker_balance_updated)
+        self.threadpool.start(worker)
+
+    def update_gemini_tts_balance(self):
+        worker = GeminiTTSBalanceWorker()
+        worker.signals.finished.connect(self._on_gemini_tts_balance_updated)
         self.threadpool.start(worker)
 
     def _on_balance_updated(self, balance):
@@ -253,6 +275,19 @@ class MainWindow(QMainWindow):
         self.text_tab.update_voicemaker_balance(balance_text)
         self.queue_tab.update_voicemaker_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.voicemaker_tab.update_balance_label(balance_to_display_on_settings_tab)
+
+    def _on_gemini_tts_balance_updated(self, balance):
+        api_key = self.settings_manager.get("gemini_tts_api_key")
+        if api_key:
+            balance_text = f"GeminiTTS: {balance}"
+            balance_to_display_on_settings_tab = balance
+        else:
+            balance_text = ""
+            balance_to_display_on_settings_tab = None
+
+        self.text_tab.update_gemini_tts_balance(balance_text)
+        self.queue_tab.update_gemini_tts_balance(balance_text)
+        self.settings_tab.api_tab.audio_tab.gemini_tts_tab.update_balance_label(balance_to_display_on_settings_tab)
 
     def change_theme(self, theme_name):
         self.settings_manager.set('theme', theme_name)
