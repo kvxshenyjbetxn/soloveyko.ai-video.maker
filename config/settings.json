@@ -10,12 +10,12 @@
             "display_name": "Україна",
             "prompt": "дай відповідь і скажи в кінці Олег",
             "model": "google/gemini-2.5-flash",
-            "max_tokens": 0,
+            "max_tokens": 128000,
             "elevenlabs_template_uuid": "5fbd9e4a-4861-4e46-9836-1138f5d4a356",
             "tts_provider": "GeminiTTS",
             "voicemaker_voice_id": "ai3-af-ZA-Kungawo",
             "gemini_voice": "Enceladus",
-            "gemini_tone": ""
+            "gemini_tone": "Read aloud in a warm and friendly tone: "
         },
         "us-US": {
             "display_name": "Англійська",
@@ -37,17 +37,29 @@
             "elevenlabs_template_uuid": "1ff95d26-7660-45d1-a615-ba947d730bea",
             "voicemaker_voice_id": "ai5-ru-RU-Vladimir",
             "gemini_voice": "Puck",
-            "gemini_tone": ""
+            "gemini_tone": "Read aloud in a warm and friendly tone: "
         },
         "pl-PL": {
             "display_name": "Польська",
             "prompt": "",
-            "model": ""
+            "model": "google/gemini-2.5-flash",
+            "max_tokens": 128000,
+            "tts_provider": "ElevenLabs",
+            "elevenlabs_template_uuid": "1ff95d26-7660-45d1-a615-ba947d730bea",
+            "voicemaker_voice_id": "ai2-pl-PL-Hanna",
+            "gemini_voice": "Puck",
+            "gemini_tone": ""
         },
         "ro-RO": {
             "display_name": "Румунська",
             "prompt": "",
-            "model": ""
+            "model": "google/gemini-2.5-flash",
+            "max_tokens": 128000,
+            "tts_provider": "ElevenLabs",
+            "elevenlabs_template_uuid": "1ff95d26-7660-45d1-a615-ba947d730bea",
+            "voicemaker_voice_id": "ai3-ro-RO-Alina",
+            "gemini_voice": "Puck",
+            "gemini_tone": ""
         },
         "dl-DL": {
             "display_name": "Німецька",
