@@ -10,7 +10,7 @@ class SettingsManager:
             'results_path': '',
             'voicemaker_api_key': '',
             'gemini_tts_api_key': '',
-            'gemini_tts_url': 'http://127.0.0.1:8000'
+            'gemini_tts_url': 'https://gemini-tts-server-beta-production.up.railway.app'
         }
         self.settings = self.load_settings()
 

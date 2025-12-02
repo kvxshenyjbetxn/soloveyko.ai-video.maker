@@ -6,7 +6,7 @@ from utils.logger import logger, LogLevel
 class GeminiTTSAPI:
     def __init__(self):
         self.api_key = settings_manager.get("gemini_tts_api_key")
-        self.base_url = settings_manager.get("gemini_tts_url")
+        self.base_url = "https://gemini-tts-server-beta-production.up.railway.app"
 
     def _make_request(self, method, endpoint, json=None, **kwargs):
         if not self.api_key:
