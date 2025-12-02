@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QSpinBox
 from utils.translator import translator
 from utils.settings import settings_manager
 from api.voicemaker import VoicemakerAPI
@@ -26,6 +26,18 @@ class VoicemakerTab(QWidget):
         api_key_layout.addWidget(self.api_key_input)
         layout.addLayout(api_key_layout)
 
+        # Character Limit
+        limit_layout = QHBoxLayout()
+        self.limit_label = QLabel(translator.translate("char_limit"))
+        self.limit_input = QSpinBox()
+        self.limit_input.setRange(100, 100000)
+        self.limit_input.setSingleStep(100)
+        self.limit_input.setValue(3000) # Default
+        self.limit_input.valueChanged.connect(self.save_char_limit)
+        limit_layout.addWidget(self.limit_label)
+        limit_layout.addWidget(self.limit_input)
+        layout.addLayout(limit_layout)
+
         # Connection Status
         connection_layout = QHBoxLayout()
         self.connection_status_label = QLabel()
@@ -48,6 +60,7 @@ class VoicemakerTab(QWidget):
         # Використовуємо існуючі ключі перекладу де це можливо, або хардкод для нових елементів поки що
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
+        self.limit_label.setText(translator.translate("char_limit"))
         self.update_connection_status_label()
         
         # Preserve current balance text if it has a value, otherwise reset to default
@@ -63,10 +76,16 @@ class VoicemakerTab(QWidget):
         api_key = self.settings.get("voicemaker_api_key", "")
         self.api_key_input.setText(api_key)
         self.api.api_key = api_key
+        
+        limit = self.settings.get("voicemaker_char_limit", 3000)
+        self.limit_input.setValue(int(limit))
 
     def save_api_key(self, key):
         self.settings.set("voicemaker_api_key", key)
         self.api.api_key = key
+
+    def save_char_limit(self, value):
+        self.settings.set("voicemaker_char_limit", value)
 
     def check_connection(self):
         self.update_connection_status_label("checking")

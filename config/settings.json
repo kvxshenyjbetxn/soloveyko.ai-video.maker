@@ -100,5 +100,6 @@
         "negative_prompt": "blood"
     },
     "elevenlabs_api_key": "427641798:6f346a2f6566757954354b5732517977625a416457513d3d",
-    "voicemaker_api_key": "6fa26760-923d-11f0-9347-11ea6ac82a77"
+    "voicemaker_api_key": "6fa26760-923d-11f0-9347-11ea6ac82a77",
+    "voicemaker_char_limit": 100
 }
