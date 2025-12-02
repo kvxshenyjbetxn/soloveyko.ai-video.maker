@@ -129,5 +129,11 @@
     "balance_not_loaded": "Баланс не завантажено",
     "elevenlabs_template_label": "Шаблон голосу:",
     "no_templates_found": "Шаблони не знайдені",
-    "char_limit": "Ліміт символів:"
+    "char_limit": "Ліміт символів:",
+    "gemini_tts_url": "URL GeminiTTS:",
+    "gemini_tts_api_key": "API Ключ GeminiTTS:",
+    "tts_provider_label": "Сервіс озвучки:",
+    "voicemaker_voice_label": "Голос VoiceMaker:",
+    "gemini_voice_label": "Голос Gemini:",
+    "gemini_tone_label": "Тон Gemini:"
 }

@@ -85,6 +85,13 @@ class LanguagesTab(QWidget):
         self.model_combo.currentIndexChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.model_label, self.model_combo)
 
+        self.tokens_label = QLabel()
+        self.tokens_spinbox = QSpinBox()
+        self.tokens_spinbox.setRange(0, 128000)
+        self.tokens_spinbox.setValue(4096)
+        self.tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.tokens_label, self.tokens_spinbox)
+
         # TTS Provider
         self.tts_provider_label = QLabel("TTS Provider:")
         self.tts_provider_combo = QComboBox()
@@ -117,12 +124,6 @@ class LanguagesTab(QWidget):
         self.gemini_tone_input.setPlaceholderText("sad, excited, whispering... or a full instruction")
         self.gemini_tone_input.textChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.gemini_tone_label, self.gemini_tone_input)
-
-        self.tokens_label = QLabel()
-        self.tokens_spinbox = QSpinBox()
-        self.tokens_spinbox.setRange(0, 128000)
-        self.tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
-        settings_layout.addRow(self.tokens_label, self.tokens_spinbox)
 
         right_layout.addWidget(self.prompt_label)
         right_layout.addWidget(self.prompt_edit)
@@ -251,6 +252,8 @@ class LanguagesTab(QWidget):
         self.elevenlabs_template_combo.blockSignals(True)
         self.tts_provider_combo.blockSignals(True)
         self.voicemaker_voice_combo.blockSignals(True)
+        self.gemini_voice_input.blockSignals(True)
+        self.gemini_tone_input.blockSignals(True)
 
         self.prompt_edit.setPlainText(config.get("prompt", ""))
         
