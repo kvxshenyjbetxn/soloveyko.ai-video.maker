@@ -7,21 +7,22 @@ class VoicemakerAPI:
         self.api_key = api_key or settings_manager.get("voicemaker_api_key")
         self.base_url = "https://developer.voicemaker.in/voice/api"
 
-    def get_balance(self):
+    def check_connection(self):
+        logger.log("Checking Voicemaker API connection...", level=LogLevel.INFO)
         if not self.api_key:
-            return None, "not_configured"
+            return "not_configured"
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
         
-        # Мінімальний запит для перевірки балансу (1 символ)
+        # Виправлено VoiceID на ai3-Jony, який точно є в документації
         payload = {
             "Engine": "neural",
             "VoiceId": "ai3-Jony", 
             "LanguageCode": "en-US",
-            "Text": ".",
+            "Text": "Connection check",
             "OutputFormat": "mp3",
             "SampleRate": "48000",
             "Effect": "default",
@@ -36,28 +37,19 @@ class VoicemakerAPI:
             if response.status_code == 200:
                 data = response.json()
                 if data.get("success"):
-                    remaining = data.get("remainChars", 0)
-                    return remaining, "connected"
+                    remaining = data.get("remainChars", "Unknown")
+                    logger.log(f"Voicemaker connection successful. Remaining chars: {remaining}", level=LogLevel.SUCCESS)
+                    return "connected"
                 else:
                     logger.log(f"Voicemaker API error: {data.get('message')}", level=LogLevel.ERROR)
-                    return None, "error"
+                    return "error"
             elif response.status_code == 401:
-                return None, "error"
+                logger.log("Voicemaker unauthorized (401). Check API Key.", level=LogLevel.ERROR)
+                return "error"
             else:
-                return None, "error"
+                logger.log(f"Voicemaker HTTP error: {response.status_code} - {response.text}", level=LogLevel.ERROR)
+                return "error"
 
-        except Exception as e:
-            logger.log(f"Voicemaker balance check failed: {e}", level=LogLevel.ERROR)
-            return None, "error"
-
-    def check_connection(self):
-        logger.log("Checking Voicemaker API connection...", level=LogLevel.INFO)
-        balance, status = self.get_balance()
-        
-        if status == "connected":
-            logger.log(f"Voicemaker connection successful. Remaining chars: {balance}", level=LogLevel.SUCCESS)
-            return "connected"
-        elif status == "not_configured":
-            return "not_configured"
-        else:
+        except requests.exceptions.RequestException as e:
+            logger.log(f"Voicemaker connection check failed: {e}", level=LogLevel.ERROR)
             return "error"
