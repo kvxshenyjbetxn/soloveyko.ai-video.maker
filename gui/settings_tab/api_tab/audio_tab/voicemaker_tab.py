@@ -35,6 +35,13 @@ class VoicemakerTab(QWidget):
         connection_layout.addWidget(self.check_connection_button)
         layout.addLayout(connection_layout)
 
+        # Balance Label
+        balance_layout = QHBoxLayout()
+        self.balance_label = QLabel(translator.translate("balance_label"))
+        balance_layout.addWidget(self.balance_label)
+        balance_layout.addStretch()
+        layout.addLayout(balance_layout)
+
         layout.addStretch()
 
     def retranslate_ui(self):
@@ -42,6 +49,15 @@ class VoicemakerTab(QWidget):
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
         self.update_connection_status_label()
+        
+        # Preserve current balance text if it has a value, otherwise reset to default
+        current_text = self.balance_label.text()
+        if ":" in current_text:
+             # Just update the prefix "Balance" part if needed, but keeping it simple for now
+             pass
+        else:
+             self.balance_label.setText(translator.translate("balance_label"))
+
 
     def load_settings(self):
         api_key = self.settings.get("voicemaker_api_key", "")
@@ -55,8 +71,18 @@ class VoicemakerTab(QWidget):
     def check_connection(self):
         self.update_connection_status_label("checking")
         
-        status = self.api.check_connection()
+        # We can update balance here too if check is successful
+        balance, status = self.api.get_balance()
         self.update_connection_status_label(status)
+        
+        if balance is not None:
+             self.update_balance_label(balance)
+
+    def update_balance_label(self, balance):
+        if balance is not None:
+            self.balance_label.setText(f"{translator.translate('balance_label')} {balance}")
+        else:
+            self.balance_label.setText(translator.translate("balance_label"))
 
     def update_connection_status_label(self, status=None):
         if status == "checking":
