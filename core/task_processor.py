@@ -556,37 +556,41 @@ class JobWorker(QRunnable):
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
             return
 
-        # --- Визначення шляхів ---
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
-        whisper_exe = os.path.join(whisper_base_path, "main.exe")
-        
         sub_settings = self.settings.get('subtitles', {})
+        whisper_type = sub_settings.get('whisper_type', 'amd')
         model_name = sub_settings.get('whisper_model', 'base.bin')
-        whisper_model = os.path.join(whisper_base_path, model_name)
+        
+        whisper_exe = None
+        whisper_model_path = model_name # За замовчуванням (для standard) це просто назва
 
-        if not os.path.exists(whisper_exe):
-            logger.log(f"    - Error: Whisper EXE not found at {whisper_exe}", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
+        if whisper_type == 'amd':
+            # --- Логіка шляхів для AMD ---
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+            whisper_exe = os.path.join(whisper_base_path, "main.exe")
+            whisper_model_path = os.path.join(whisper_base_path, model_name)
 
-        if not os.path.exists(whisper_model):
-            logger.log(f"    - Error: Whisper Model not found at {whisper_model}", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
+            if not os.path.exists(whisper_exe):
+                logger.log(f"    - Error: Whisper EXE not found at {whisper_exe}", level=LogLevel.ERROR)
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return
 
-        # --- ВИПРАВЛЕННЯ МОВНОГО КОДУ ---
-        # Беремо першу частину до дефісу та переводимо в нижній регістр (наприклад, 'ru-RU' -> 'ru')
+            if not os.path.exists(whisper_model_path):
+                logger.log(f"    - Error: Whisper Model not found at {whisper_model_path}", level=LogLevel.ERROR)
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return
+        
+        # Визначаємо код мови (ru-RU -> ru)
         lang_code = lang_id.split('-')[0].lower()
 
-        logger.log(f"  - Starting subtitles generation for: {lang_data['display_name']} (Lang Code: {lang_code})", level=LogLevel.INFO)
+        logger.log(f"  - Starting subtitles generation ({whisper_type.upper()}) for: {lang_data['display_name']} (Lang: {lang_code})", level=LogLevel.INFO)
         
         try:
             output_filename = os.path.splitext(os.path.basename(audio_path))[0] + ".ass"
             output_path = os.path.join(dir_path, output_filename)
 
-            engine = SubtitleEngine(whisper_exe, whisper_model)
-            # Передаємо виправлений код мови
+            # Передаємо whisper_model_path (це або шлях до .bin, або рядок 'base')
+            engine = SubtitleEngine(whisper_exe, whisper_model_path)
             engine.generate_ass(audio_path, output_path, sub_settings, language=lang_code)
             
             logger.log(f"    - Subtitles generated successfully: {output_path}", level=LogLevel.SUCCESS)
@@ -594,4 +598,5 @@ class JobWorker(QRunnable):
 
         except Exception as e:
             logger.log(f"    - Error generating subtitles for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
+            logger.log(traceback.format_exc(), level=LogLevel.ERROR)
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')

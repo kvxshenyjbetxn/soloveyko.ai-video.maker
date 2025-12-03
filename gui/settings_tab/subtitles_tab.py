@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QFormLayout, 
     QPushButton, QSpinBox, QFontComboBox, QColorDialog, 
-    QGroupBox, QComboBox
+    QGroupBox, QComboBox, QRadioButton, QButtonGroup, QHBoxLayout
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -32,15 +32,42 @@ class SubtitlesTab(QWidget):
 
         layout = QVBoxLayout(scroll_content)
         
-        # --- Whisper Configuration ---
-        whisper_group = QGroupBox("Whisper Model Selection")
+        # --- Engine Selection ---
+        engine_group = QGroupBox("Whisper Engine")
+        engine_layout = QHBoxLayout()
+        
+        self.engine_group_btn = QButtonGroup(self)
+        
+        self.rb_amd = QRadioButton("AMD (GPU/Fork)")
+        self.rb_standard = QRadioButton("Standard (Python)")
+        
+        self.engine_group_btn.addButton(self.rb_amd)
+        self.engine_group_btn.addButton(self.rb_standard)
+        
+        # Встановлюємо збережений стан
+        saved_type = self.settings.get('whisper_type', 'amd')
+        if saved_type == 'standard':
+            self.rb_standard.setChecked(True)
+        else:
+            self.rb_amd.setChecked(True)
+            
+        self.rb_amd.toggled.connect(self.on_engine_changed)
+        self.rb_standard.toggled.connect(self.on_engine_changed)
+        
+        engine_layout.addWidget(self.rb_amd)
+        engine_layout.addWidget(self.rb_standard)
+        engine_group.setLayout(engine_layout)
+        layout.addWidget(engine_group)
+
+        # --- Model Selection ---
+        whisper_group = QGroupBox("Model Selection")
         whisper_layout = QFormLayout()
         
-        # Model Selection (Dropdown)
         self.model_combo = QComboBox()
-        self.model_combo.addItems(["base.bin", "medium.bin", "small.bin"])
+        # Список моделей буде заповнено в update_models_list
+        self.update_models_list()
         
-        # Встановлюємо збережену модель або дефолтну
+        # Відновлюємо збережену модель
         saved_model = self.settings.get('whisper_model', 'base.bin')
         index = self.model_combo.findText(saved_model)
         if index != -1:
@@ -118,6 +145,36 @@ class SubtitlesTab(QWidget):
 
         layout.addStretch()
 
+    def update_models_list(self):
+        self.model_combo.blockSignals(True)
+        self.model_combo.clear()
+        
+        if self.rb_standard.isChecked():
+            # Standard models (no extension)
+            models = ["tiny", "base", "small", "medium", "large"]
+        else:
+            # AMD models (.bin)
+            models = ["base.bin", "small.bin", "medium.bin", "large.bin"]
+            
+        self.model_combo.addItems(models)
+        self.model_combo.blockSignals(False)
+
+    def on_engine_changed(self):
+        self.update_models_list()
+        # Спробуємо зберегти поточний вибір (наприклад, якщо було base.bin -> стане base)
+        current_text = self.model_combo.currentText()
+        # Простий мапінг для зручності
+        if self.rb_standard.isChecked() and current_text.endswith(".bin"):
+             new_text = current_text.replace(".bin", "")
+             index = self.model_combo.findText(new_text)
+             if index != -1: self.model_combo.setCurrentIndex(index)
+        elif self.rb_amd.isChecked() and not current_text.endswith(".bin"):
+             new_text = current_text + ".bin"
+             index = self.model_combo.findText(new_text)
+             if index != -1: self.model_combo.setCurrentIndex(index)
+             
+        self.save_settings()
+
     def update_color_btn_style(self):
         color = QColor(self.current_color[0], self.current_color[1], self.current_color[2])
         self.color_btn.setStyleSheet(f"background-color: {color.name()};")
@@ -131,7 +188,10 @@ class SubtitlesTab(QWidget):
             self.save_settings()
 
     def save_settings(self):
+        whisper_type = 'standard' if self.rb_standard.isChecked() else 'amd'
+        
         new_settings = {
+            'whisper_type': whisper_type,
             'whisper_model': self.model_combo.currentText(),
             'font': self.font_combo.currentFont().family(),
             'fontsize': self.fontsize_spin.value(),

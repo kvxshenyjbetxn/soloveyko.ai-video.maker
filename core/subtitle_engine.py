@@ -5,79 +5,93 @@ import datetime
 import time
 
 class SubtitleEngine:
-    def __init__(self, exe_path, model_path):
+    def __init__(self, exe_path=None, model_path=None):
         self.exe_path = exe_path
         self.model_path = model_path
 
     def generate_ass(self, audio_path, output_path, settings, language='en'):
-        # Перевірка вхідних файлів
-        if not os.path.exists(self.exe_path):
-            raise FileNotFoundError(f"Не знайдено Whisper EXE: {self.exe_path}")
-        if not os.path.exists(self.model_path):
-            raise FileNotFoundError(f"Не знайдено файл моделі: {self.model_path}")
-
-        # Визначаємо можливі імена файлів
-        path_1 = audio_path + ".srt"
-        path_2 = os.path.splitext(audio_path)[0] + ".srt"
-        filename = os.path.basename(audio_path)
-        path_3 = os.path.abspath(filename + ".srt")
-        path_4 = os.path.abspath(os.path.splitext(filename)[0] + ".srt")
-
-        possible_files = [path_1, path_2, path_3, path_4]
-
-        # Видаляємо старі файли
-        for p in possible_files:
-            if os.path.exists(p):
-                try:
-                    os.remove(p)
-                except:
-                    pass
-
-        # --- КРОК 1: Запуск Whisper ---
-        cmd = [
-            self.exe_path,
-            "-m", self.model_path,
-            "-f", audio_path,
-            "-l", language,   # Використовуємо переданий код мови (напр. 'uk', 'en')
-            "-osrt"       
-        ]
-
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
-        print(f"🚀 Running Whisper CLI: {' '.join(cmd)}")
+        engine_type = settings.get('whisper_type', 'amd')
         
-        process = subprocess.run(cmd, startupinfo=startupinfo, capture_output=True, text=True)
+        segments = []
 
-        if process.stdout:
-            print(f"📄 Whisper Stdout: {process.stdout[:200]}...") 
-        if process.stderr:
-            print(f"⚠️ Whisper Stderr: {process.stderr[:200]}...")
+        if engine_type == 'standard':
+            # --- Standard Python Whisper ---
+            print(f"🚀 Running Standard Whisper (Python): Model={self.model_path}, Lang={language}")
+            try:
+                import whisper
+            except ImportError:
+                raise ImportError("Library 'openai-whisper' not installed. Run: pip install openai-whisper")
 
-        # --- КРОК 2: Пошук SRT ---
-        time.sleep(1.0)
-        
-        found_srt = None
-        for p in possible_files:
-            if os.path.exists(p):
-                found_srt = p
-                print(f"✅ Знайдено субтитри: {found_srt}")
-                break
-        
-        if not found_srt:
-            err_msg = f"Whisper завершив роботу, але SRT файл не знайдено.\nПеревірені шляхи:\n" + "\n".join(possible_files)
+            # Завантажуємо модель (тут self.model_path - це просто назва, наприклад 'base')
+            model = whisper.load_model(self.model_path)
+            
+            # Транскрибація
+            result = model.transcribe(audio_path, language=language)
+            
+            # Конвертація результату у наш формат сегментів
+            for s in result['segments']:
+                segments.append({
+                    'start': s['start'],
+                    'end': s['end'],
+                    'text': s['text'].strip()
+                })
+
+        else:
+            # --- AMD / Fork Whisper (EXE) ---
+            if not self.exe_path or not os.path.exists(self.exe_path):
+                raise FileNotFoundError(f"Whisper EXE not found: {self.exe_path}")
+            if not self.model_path or not os.path.exists(self.model_path):
+                raise FileNotFoundError(f"Model file not found: {self.model_path}")
+
+            # Видаляємо старі SRT якщо є
+            srt_path = os.path.splitext(audio_path)[0] + ".srt"
+            if os.path.exists(srt_path):
+                os.remove(srt_path)
+
+            cmd = [
+                self.exe_path,
+                "-m", self.model_path,
+                "-f", audio_path,
+                "-l", language,
+                "-osrt"       
+            ]
+
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+            print(f"🚀 Running Whisper CLI (AMD): {' '.join(cmd)}")
+            process = subprocess.run(cmd, startupinfo=startupinfo, capture_output=True, text=True)
+
             if process.stderr:
-                err_msg += f"\n\nПомилка Whisper CLI:\n{process.stderr}"
-            raise Exception(err_msg)
+                print(f"Whisper Log: {process.stderr[:200]}...")
 
-        # --- КРОК 3: Парсинг і конвертація ---
-        try:
-            segments = self._parse_srt(found_srt)
-        finally:
-            if os.path.exists(found_srt):
-                os.remove(found_srt)
+            # Шукаємо створений SRT
+            # CLI зазвичай створює файл поруч з аудіо: audio.srt (якщо audio.wav) або audio.wav.srt
+            possible_files = [
+                audio_path + ".srt",
+                os.path.splitext(audio_path)[0] + ".srt"
+            ]
+            
+            found_srt = None
+            time.sleep(0.5)
+            for p in possible_files:
+                if os.path.exists(p):
+                    found_srt = p
+                    break
+            
+            if not found_srt:
+                 raise Exception(f"SRT file not generated by Whisper CLI.\nStderr: {process.stderr}")
 
-        # --- КРОК 4: Генерація ASS ---
+            try:
+                segments = self._parse_srt(found_srt)
+            finally:
+                if os.path.exists(found_srt):
+                    os.remove(found_srt)
+
+        # --- Генерація ASS (Спільна для обох методів) ---
+        if not segments:
+            raise Exception("No subtitles generated (segments list empty).")
+
         processed_segments = self._split_long_lines(segments, settings.get('max_words', 10))
         self._write_ass_file(processed_segments, output_path, settings)
 
@@ -85,17 +99,12 @@ class SubtitleEngine:
         with open(filename, "r", encoding="utf-8") as f:
             content = f.read()
         
-        if not content.strip():
-            raise Exception("Файл субтитрів порожній! Можливо, Whisper не розпізнав голос.")
-
         pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.*?)(?=\n\n|\Z)', re.DOTALL)
-        
         segments = []
         for match in pattern.finditer(content):
             start_str = match.group(2).replace(',', '.')
             end_str = match.group(3).replace(',', '.')
             text = match.group(4).replace('\n', ' ')
-
             segments.append({
                 'start': self._time_to_seconds(start_str),
                 'end': self._time_to_seconds(end_str),
