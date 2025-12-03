@@ -130,9 +130,9 @@
         "font": "Impact",
         "fontsize": 60,
         "color": [
-            255,
-            85,
-            255
+            157,
+            157,
+            157
         ],
         "margin_v": 100,
         "fade_in": 200,
@@ -150,7 +150,7 @@
         "zoom_speed_factor": 1.0,
         "zoom_intensity": 0.15,
         "enable_sway": true,
-        "sway_speed_factor": 2.0,
-        "max_concurrent_montages": 2
+        "sway_speed_factor": 1.5,
+        "max_concurrent_montages": 3
     }
 }
