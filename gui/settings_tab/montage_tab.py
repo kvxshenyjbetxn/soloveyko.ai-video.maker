@@ -126,6 +126,19 @@ class MontageTab(QWidget):
         self.sway_group.setLayout(sway_layout)
         self.layout.addWidget(self.sway_group)
 
+        # --- Performance Settings ---
+        self.perf_group = QGroupBox()
+        perf_layout = QFormLayout()
+
+        self.max_concurrent_montages_label = QLabel()
+        self.max_concurrent_montages_spin = QSpinBox()
+        self.max_concurrent_montages_spin.setRange(1, 10)
+        self.max_concurrent_montages_spin.valueChanged.connect(self.save_settings)
+        perf_layout.addRow(self.max_concurrent_montages_label, self.max_concurrent_montages_spin)
+
+        self.perf_group.setLayout(perf_layout)
+        self.layout.addWidget(self.perf_group)
+
         self.layout.addStretch()
 
     def load_settings(self):
@@ -146,6 +159,8 @@ class MontageTab(QWidget):
         self.enable_sway_cb.setChecked(m_settings.get("enable_sway", False))
         self.sway_speed_spin.setValue(m_settings.get("sway_speed_factor", 1.0))
 
+        self.max_concurrent_montages_spin.setValue(m_settings.get("max_concurrent_montages", 1))
+
     def save_settings(self, *args):
         m_settings = {
             "codec": self.codec_combo.currentText(),
@@ -158,7 +173,8 @@ class MontageTab(QWidget):
             "zoom_speed_factor": self.zoom_speed_spin.value(),
             "zoom_intensity": self.zoom_int_spin.value(),
             "enable_sway": self.enable_sway_cb.isChecked(),
-            "sway_speed_factor": self.sway_speed_spin.value()
+            "sway_speed_factor": self.sway_speed_spin.value(),
+            "max_concurrent_montages": self.max_concurrent_montages_spin.value()
         }
         self.settings.set("montage", m_settings)
 
@@ -181,3 +197,6 @@ class MontageTab(QWidget):
         self.sway_group.setTitle(translator.translate("sway_effects"))
         self.enable_sway_cb.setText(translator.translate("enable_sway_label"))
         self.sway_speed_label.setText(translator.translate("sway_speed_factor_label"))
+        
+        self.perf_group.setTitle(translator.translate("performance_group"))
+        self.max_concurrent_montages_label.setText(translator.translate("max_concurrent_montages_label"))
