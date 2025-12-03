@@ -10,7 +10,17 @@ class SettingsManager:
             'results_path': '',
             'voicemaker_api_key': '',
             'gemini_tts_api_key': '',
-            'gemini_tts_url': 'https://gemini-tts-server-beta-production.up.railway.app'
+            'gemini_tts_url': 'https://gemini-tts-server-beta-production.up.railway.app',
+            'subtitles': {
+                'whisper_model': 'base.bin', # Замість whisper_exe тепер зберігаємо тільки модель
+                'font': 'Arial',
+                'fontsize': 60,
+                'color': [255, 255, 255],
+                'fade_in': 0,
+                'fade_out': 0,
+                'margin_v': 50,
+                'max_words': 10
+            }
         }
         self.settings = self.load_settings()
 

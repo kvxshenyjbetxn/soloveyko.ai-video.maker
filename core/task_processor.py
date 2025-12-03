@@ -3,6 +3,7 @@ import re
 import time
 import base64
 import json
+import traceback
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager
@@ -12,6 +13,7 @@ from api.googler import GooglerAPI
 from api.elevenlabs import ElevenLabsAPI
 from api.voicemaker import VoicemakerAPI
 from api.gemini_tts import GeminiTTSAPI
+from core.subtitle_engine import SubtitleEngine
 
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
@@ -96,34 +98,49 @@ class ImageGenerationWorker(QRunnable):
 
     def run(self):
         try:
-            image_data = self.api.generate_image(self.prompt, **self.kwargs)
+            logger.log(f"Processing job: {self.job['name']}", level=LogLevel.INFO)
+            job_id = self.job['id']
             
-            if not image_data:
-                logger.log(f"      - Failed to generate image {self.index + 1} for prompt: '{self.prompt}' (no data returned).", level=LogLevel.WARNING)
-                self.signals.finished.emit(self.index, False)
-                return
+            base_save_path = self.settings.get('results_path')
+            if not base_save_path:
+                logger.log("Warning: 'results_path' is not configured in settings. Results will not be saved.", level=LogLevel.WARNING)
 
-            # --- Saving Logic moved inside the worker ---
-            image_path = os.path.join(self.images_dir, f"{self.index + 1}.{self.file_extension}")
+            all_languages_config = self.settings.get("languages_config", {})
             
-            data_to_write = image_data
-            if self.provider == 'googler' and isinstance(image_data, str):
-                if "," in image_data:
-                    _, encoded = image_data.split(",", 1)
-                    data_to_write = base64.b64decode(encoded)
-                else:
-                    data_to_write = base64.b64decode(image_data)
-            
-            with open(image_path, 'wb') as f:
-                f.write(data_to_write)
+            for lang_id, lang_data in self.job['languages'].items():
+                lang_dir_path = self._get_save_path(base_save_path, self.job['name'], lang_data['display_name'])
                 
-            logger.log(f"      - Successfully saved image {self.index + 1} to {image_path}", level=LogLevel.SUCCESS)
-            self.processor.image_generated.emit(self.task_name, image_path, self.prompt) # Emit signal for the gallery
-            self.signals.finished.emit(self.index, True)
+                text_for_processing = self.job['text']
+                
+                # --- Translation Stage ---
+                if 'stage_translation' in lang_data['stages']:
+                    translated_text = self._perform_translation(job_id, lang_id, lang_data, all_languages_config)
+                    if translated_text:
+                        text_for_processing = translated_text
+                        if lang_dir_path:
+                            self.save_translation(lang_dir_path, translated_text)
+                
+                # --- Image Prompts Stage ---
+                if 'stage_img_prompts' in lang_data['stages']:
+                    self.process_image_prompts(job_id, lang_id, lang_data, text_for_processing, lang_dir_path)
 
-        except Exception as e:
-            logger.log(f"      - Failed to generate or save image {self.index + 1} for prompt '{self.prompt}'. Error: {e}", level=LogLevel.ERROR)
-            self.signals.finished.emit(self.index, False)
+                # --- Image Generation Stage ---
+                if 'stage_images' in lang_data['stages']:
+                    self.process_image_generation(job_id, lang_id, lang_data, lang_dir_path)
+                
+                # --- Voiceover Stage ---
+                voice_file_path = None
+                if 'stage_voiceover' in lang_data['stages']:
+                    # Тепер цей метод повертає шлях до файлу
+                    voice_file_path = self._process_voiceover_stage(job_id, lang_id, lang_data, all_languages_config, text_for_processing, lang_dir_path)
+
+                # --- Subtitles Stage ---
+                if 'stage_subtitles' in lang_data['stages']:
+                    self._process_subtitles_stage(job_id, lang_id, lang_data, voice_file_path, lang_dir_path)
+
+            logger.log(f"Finished processing job: {self.job['name']}", level=LogLevel.INFO)
+        finally:
+            self.signals.finished.emit()
 
 class JobWorker(QRunnable):
     def __init__(self, processor, settings, job):
@@ -172,10 +189,19 @@ class JobWorker(QRunnable):
                     self.process_image_generation(job_id, lang_id, lang_data, lang_dir_path)
                 
                 # --- Voiceover Stage ---
+                voice_file_path = None
                 if 'stage_voiceover' in lang_data['stages']:
-                    self._process_voiceover_stage(job_id, lang_id, lang_data, all_languages_config, text_for_processing, lang_dir_path)
+                    voice_file_path = self._process_voiceover_stage(job_id, lang_id, lang_data, all_languages_config, text_for_processing, lang_dir_path)
+
+                # --- Subtitles Stage ---
+                if 'stage_subtitles' in lang_data['stages']:
+                    self._process_subtitles_stage(job_id, lang_id, lang_data, voice_file_path, lang_dir_path)
 
             logger.log(f"Finished processing job: {self.job['name']}", level=LogLevel.INFO)
+
+        except Exception as e:
+            logger.log(f"CRITICAL ERROR in job processing: {e}", level=LogLevel.ERROR)
+            logger.log(traceback.format_exc(), level=LogLevel.ERROR)
         finally:
             self.signals.finished.emit()
 
@@ -246,7 +272,7 @@ class JobWorker(QRunnable):
         if not lang_config:
             logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: Lang config not found.", level=LogLevel.WARNING)
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
+            return None
 
         tts_provider = lang_config.get('tts_provider', 'ElevenLabs')
         logger.log(f"  - Starting voiceover for: {lang_data['display_name']} using {tts_provider}", level=LogLevel.INFO)
@@ -254,31 +280,32 @@ class JobWorker(QRunnable):
         if not dir_path:
             logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: Results path not set.", level=LogLevel.WARNING)
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
-
-        # tts_provider variable is already set above
+            return None
 
         if tts_provider == 'VoiceMaker':
             voice_id = lang_config.get('voicemaker_voice_id')
             if not voice_id:
                 logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: VoiceMaker Voice ID not configured.", level=LogLevel.WARNING)
                 self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return
+                return None
             
             try:
                 language_code = self.processor._get_voicemaker_language_code(voice_id)
                 audio_content, status = self.voicemaker_api.generate_audio(text_to_voice, voice_id, language_code, temp_dir=dir_path)
                 
                 if status == 'success' and audio_content:
-                    self.save_voiceover(dir_path, audio_content, "voice.mp3")
+                    saved_path = self.save_voiceover(dir_path, audio_content, "voice.mp3")
                     self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+                    return saved_path
                 else:
                     logger.log(f"    - VoiceMaker generation failed: {status}", level=LogLevel.ERROR)
                     self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                    return None
 
             except Exception as e:
                 logger.log(f"    - An error occurred during VoiceMaker voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
                 self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return None
 
         elif tts_provider == 'GeminiTTS':
             voice = lang_config.get('gemini_voice', 'Puck')
@@ -289,8 +316,7 @@ class JobWorker(QRunnable):
                 if status != 'connected' or not task_id:
                      raise Exception("Failed to create GeminiTTS task.")
                 
-                # Polling for result
-                for _ in range(60): # 10 minutes timeout (60 * 10 seconds)
+                for _ in range(60): 
                     task_status, status = self.gemini_tts_api.get_task_status(task_id)
                     if status != 'connected':
                         raise Exception("Failed to get task status.")
@@ -299,28 +325,29 @@ class JobWorker(QRunnable):
                         context_info = f"Task: {self.job['name']}, Lang: {lang_data['display_name']}"
                         audio_content, status = self.gemini_tts_api.download_audio(task_id, context_info=context_info)
                         if status == 'connected' and audio_content:
-                             self.save_voiceover(dir_path, audio_content, "voice.wav")
+                             saved_path = self.save_voiceover(dir_path, audio_content, "voice.wav")
                              self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-                             return
+                             return saved_path
                         else:
                              raise Exception("Failed to download audio content.")
                     
                     elif task_status == 'failed':
                          raise Exception("Task processing failed on server side.")
                     
-                    time.sleep(5) # Poll every 5 seconds
+                    time.sleep(5) 
 
                 raise Exception("Timeout while waiting for GeminiTTS result.")
 
             except Exception as e:
                 logger.log(f"    - An error occurred during GeminiTTS voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
                 self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return None
 
         else: # ElevenLabs
             if not lang_config.get('elevenlabs_template_uuid'):
                 logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: ElevenLabs template not configured.", level=LogLevel.WARNING)
                 self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return
+                return None
 
             template_uuid = lang_config['elevenlabs_template_uuid']
             
@@ -329,8 +356,7 @@ class JobWorker(QRunnable):
                 if status != 'connected' or not task_id:
                     raise Exception("Failed to create task.")
 
-                # Polling for result
-                for _ in range(30): # 5 minutes timeout (30 * 10 seconds)
+                for _ in range(30):
                     task_status, status = self.elevenlabs_api.get_task_status(task_id)
                     if status != 'connected':
                         raise Exception("Failed to get task status.")
@@ -338,9 +364,9 @@ class JobWorker(QRunnable):
                     if task_status in ['ending', 'ending_processed']:
                         audio_content, status = self.elevenlabs_api.get_task_result(task_id)
                         if status == 'connected' and audio_content:
-                            self.save_voiceover(dir_path, audio_content, "voice.mp3")
+                            saved_path = self.save_voiceover(dir_path, audio_content, "voice.mp3")
                             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-                            return
+                            return saved_path
                         elif status == 'not_ready':
                             time.sleep(10)
                             continue
@@ -357,6 +383,7 @@ class JobWorker(QRunnable):
             except Exception as e:
                 logger.log(f"    - An error occurred during voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
                 self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return None
 
     def process_image_prompts(self, job_id, lang_id, lang_data, text_to_use, dir_path):
         stage_key = 'stage_img_prompts'
@@ -515,5 +542,56 @@ class JobWorker(QRunnable):
             with open(file_path, 'wb') as f:
                 f.write(content)
             logger.log(f"    - Voiceover audio saved to: {file_path}", level=LogLevel.SUCCESS)
+            return file_path
         except Exception as e:
             logger.log(f"    - Failed to save voiceover audio. Error: {e}", level=LogLevel.ERROR)
+            return None
+        
+    def _process_subtitles_stage(self, job_id, lang_id, lang_data, audio_path, dir_path):
+        stage_key = 'stage_subtitles'
+        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
+        
+        if not audio_path or not os.path.exists(audio_path):
+            logger.log(f"    - Skipping subtitles for {lang_data['display_name']}: Audio file not found.", level=LogLevel.WARNING)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        # --- Визначення шляхів ---
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+        whisper_exe = os.path.join(whisper_base_path, "main.exe")
+        
+        sub_settings = self.settings.get('subtitles', {})
+        model_name = sub_settings.get('whisper_model', 'base.bin')
+        whisper_model = os.path.join(whisper_base_path, model_name)
+
+        if not os.path.exists(whisper_exe):
+            logger.log(f"    - Error: Whisper EXE not found at {whisper_exe}", level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        if not os.path.exists(whisper_model):
+            logger.log(f"    - Error: Whisper Model not found at {whisper_model}", level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        # --- ВИПРАВЛЕННЯ МОВНОГО КОДУ ---
+        # Беремо першу частину до дефісу та переводимо в нижній регістр (наприклад, 'ru-RU' -> 'ru')
+        lang_code = lang_id.split('-')[0].lower()
+
+        logger.log(f"  - Starting subtitles generation for: {lang_data['display_name']} (Lang Code: {lang_code})", level=LogLevel.INFO)
+        
+        try:
+            output_filename = os.path.splitext(os.path.basename(audio_path))[0] + ".ass"
+            output_path = os.path.join(dir_path, output_filename)
+
+            engine = SubtitleEngine(whisper_exe, whisper_model)
+            # Передаємо виправлений код мови
+            engine.generate_ass(audio_path, output_path, sub_settings, language=lang_code)
+            
+            logger.log(f"    - Subtitles generated successfully: {output_path}", level=LogLevel.SUCCESS)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+
+        except Exception as e:
+            logger.log(f"    - Error generating subtitles for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')

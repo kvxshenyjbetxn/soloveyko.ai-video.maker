@@ -33,8 +33,8 @@
             "prompt": "",
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
-            "tts_provider": "VoiceMaker",
-            "elevenlabs_template_uuid": "1ff95d26-7660-45d1-a615-ba947d730bea",
+            "tts_provider": "ElevenLabs",
+            "elevenlabs_template_uuid": "38cedea9-5381-474f-a82d-874a5fb6b311",
             "voicemaker_voice_id": "ai5-ru-RU-Vladimir",
             "gemini_voice": "Puck",
             "gemini_tone": "Read aloud in a warm and friendly tone: "
@@ -123,5 +123,19 @@
     "voicemaker_api_key": "6fa26760-923d-11f0-9347-11ea6ac82a77",
     "voicemaker_char_limit": 2900,
     "gemini_tts_api_key": "VGJffif22OKOdKZ6l7UDutQOZWM46tUNJ-GxHaGFCbM",
-    "gemini_tts_url": "https://gemini-tts-server-beta-production.up.railway.app"
+    "gemini_tts_url": "https://gemini-tts-server-beta-production.up.railway.app",
+    "subtitles": {
+        "whisper_model": "base.bin",
+        "font": "Impact",
+        "fontsize": 60,
+        "color": [
+            255,
+            85,
+            255
+        ],
+        "margin_v": 100,
+        "fade_in": 200,
+        "fade_out": 200,
+        "max_words": 10
+    }
 }
