@@ -125,6 +125,7 @@
     "gemini_tts_api_key": "VGJffif22OKOdKZ6l7UDutQOZWM46tUNJ-GxHaGFCbM",
     "gemini_tts_url": "https://gemini-tts-server-beta-production.up.railway.app",
     "subtitles": {
+        "whisper_type": "amd",
         "whisper_model": "base.bin",
         "font": "Impact",
         "fontsize": 60,
