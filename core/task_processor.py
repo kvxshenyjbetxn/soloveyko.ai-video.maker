@@ -14,6 +14,7 @@ from api.elevenlabs import ElevenLabsAPI
 from api.voicemaker import VoicemakerAPI
 from api.gemini_tts import GeminiTTSAPI
 from core.subtitle_engine import SubtitleEngine
+from core.montage_engine import MontageEngine
 
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
@@ -30,6 +31,7 @@ class TaskProcessor(QObject):
         self.elevenlabs_api = ElevenLabsAPI()
         self.voicemaker_api = VoicemakerAPI()
         self.gemini_tts_api = GeminiTTSAPI()
+        self.montage_engine = MontageEngine()
         self.threadpool = QThreadPool()
         self.active_jobs = 0
         self.timer = QElapsedTimer()
@@ -159,6 +161,7 @@ class JobWorker(QRunnable):
         self.elevenlabs_api = processor.elevenlabs_api
         self.voicemaker_api = processor.voicemaker_api
         self.gemini_tts_api = processor.gemini_tts_api
+        self.montage_engine = processor.montage_engine
         self.settings = settings
         self.job = job
         self.signals = JobWorkerSignals()
@@ -204,6 +207,10 @@ class JobWorker(QRunnable):
                 if 'stage_subtitles' in lang_data['stages']:
                     self._process_subtitles_stage(job_id, lang_id, lang_data, voice_file_path, lang_dir_path)
 
+                # --- Montage Stage (NEW) ---
+                if 'stage_montage' in lang_data['stages']:
+                    self._process_montage_stage(job_id, lang_id, lang_data, voice_file_path, lang_dir_path)
+                    
             logger.log(f"Finished processing job: {self.job['name']}", level=LogLevel.INFO)
 
         except Exception as e:
@@ -556,6 +563,83 @@ class JobWorker(QRunnable):
 
         except Exception as e:
             logger.log(f"    - Error generating subtitles for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
+            logger.log(traceback.format_exc(), level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+
+    def _process_montage_stage(self, job_id, lang_id, lang_data, audio_path, dir_path):
+        stage_key = 'stage_montage'
+        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
+        
+        logger.log(f"  - Starting Montage for: {lang_data['display_name']}", level=LogLevel.INFO)
+
+        # Перевірки наявності файлів
+        if not dir_path or not os.path.exists(dir_path):
+            logger.log(f"    - Montage failed: Directory not found.", level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        if not audio_path or not os.path.exists(audio_path):
+            logger.log(f"    - Montage failed: Audio file not found.", level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        # Знаходимо файл субтитрів (.ass)
+        ass_path = None
+        for file in os.listdir(dir_path):
+            if file.endswith(".ass"):
+                ass_path = os.path.join(dir_path, file)
+                break
+        
+        if not ass_path:
+            logger.log(f"    - Montage failed: ASS subtitles not found in {dir_path}", level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        # Збираємо картинки (сортуємо за номером)
+        images_dir = os.path.join(dir_path, "images")
+        if not os.path.exists(images_dir):
+            logger.log(f"    - Montage failed: Images directory not found.", level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        visual_files = []
+        try:
+            # Фільтруємо та сортуємо файли (1.png, 2.png, ..., 10.png)
+            files = [f for f in os.listdir(images_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            # Сортування за числовим значенням у назві
+            files.sort(key=lambda x: int(os.path.splitext(x)[0]) if os.path.splitext(x)[0].isdigit() else x)
+            visual_files = [os.path.join(images_dir, f) for f in files]
+        except Exception as e:
+            logger.log(f"    - Error listing images: {e}", level=LogLevel.ERROR)
+
+        if not visual_files:
+            logger.log(f"    - Montage failed: No images found.", level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        # Формування вихідного шляху: {TaskName}_{Language}.mp4
+        # Видаляємо спецсимволи з назви завдання для безпеки
+        safe_task_name = "".join(c for c in self.job['name'] if c.isalnum() or c in (' ', '_')).strip()
+        safe_lang_name = "".join(c for c in lang_data['display_name'] if c.isalnum() or c in (' ', '_')).strip()
+        output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
+        output_path = os.path.join(dir_path, output_filename)
+
+        # Отримуємо налаштування монтажу
+        montage_settings = self.settings.get("montage", {})
+
+        try:
+            self.montage_engine.create_video(
+                visual_files=visual_files,
+                audio_path=audio_path,
+                output_path=output_path,
+                ass_path=ass_path,
+                settings=montage_settings
+            )
+            logger.log(f"    - Montage completed successfully: {output_path}", level=LogLevel.SUCCESS)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+
+        except Exception as e:
+            logger.log(f"    - Montage CRITICAL ERROR: {e}", level=LogLevel.ERROR)
             logger.log(traceback.format_exc(), level=LogLevel.ERROR)
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
