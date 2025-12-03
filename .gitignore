@@ -1,0 +1,34 @@
+__pycache__/
+qt-material-master
+doc/API ElevenLabsBot.txt
+doc/API Gemini TTS.txt
+doc/API OpenRouter.txt
+doc/API pollinations.txt
+doc/API Reacraft.txt
+doc/API VoiceMaker.txt
+doc/googler api.txt
+doc/pollinations+.txt
+doc/voicemaker+.txt
+GEMINI.md
+GEMINI.md
+demo/image_001.jpg
+demo/image_002.jpg
+demo/image_003.jpg
+demo/image_004.jpg
+demo/image_005.jpg
+demo/image_006.jpg
+demo/image_007.jpg
+demo/image_008.jpg
+demo/image_009.jpg
+demo/image_010.jpg
+.gemini/settings.json
+core/whisper-cli-amd/doc.txt
+core/whisper-cli-amd/ggml-base.bin
+core/whisper-cli-amd/ggml-medium.bin
+core/whisper-cli-amd/ggml-small.bin
+core/whisper-cli-amd/lz4.txt
+core/whisper-cli-amd/main.exe
+core/whisper-cli-amd/Whisper.dll
+core/whisper-cli-amd/base.bin
+core/whisper-cli-amd/medium.bin
+core/whisper-cli-amd/small.bin
