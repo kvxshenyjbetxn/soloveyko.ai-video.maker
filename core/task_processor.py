@@ -60,6 +60,26 @@ class TaskProcessor(QObject):
             # Propagate the stage status signal
             worker.signals.stage_status_changed.connect(self.stage_status_changed)
             self.threadpool.start(worker)
+            
+    def _run_image_generation_batch(self, prompts_to_process, task_name, api, thread_pool, images_dir, file_extension, provider, **kwargs):
+        results = {}
+        if not prompts_to_process:
+            return results
+
+        semaphore = QSemaphore(0)
+        
+        def on_worker_finished(index, success_bool):
+            results[index] = success_bool
+            semaphore.release()
+
+        for index, prompt in prompts_to_process:
+            # Передаємо self (як processor) і task_name
+            worker = ImageGenerationWorker(self, task_name, api, prompt, index, images_dir, file_extension, provider, **kwargs)
+            worker.signals.finished.connect(on_worker_finished, Qt.DirectConnection)
+            thread_pool.start(worker)
+        
+        semaphore.acquire(len(prompts_to_process))
+        return results
 
     def job_finished(self):
         self.active_jobs -= 1
@@ -98,49 +118,36 @@ class ImageGenerationWorker(QRunnable):
 
     def run(self):
         try:
-            logger.log(f"Processing job: {self.job['name']}", level=LogLevel.INFO)
-            job_id = self.job['id']
+            image_data = self.api.generate_image(self.prompt, **self.kwargs)
             
-            base_save_path = self.settings.get('results_path')
-            if not base_save_path:
-                logger.log("Warning: 'results_path' is not configured in settings. Results will not be saved.", level=LogLevel.WARNING)
+            if not image_data:
+                logger.log(f"      - Failed to generate image {self.index + 1} for prompt: '{self.prompt}' (no data returned).", level=LogLevel.WARNING)
+                self.signals.finished.emit(self.index, False)
+                return
 
-            all_languages_config = self.settings.get("languages_config", {})
+            # --- Saving Logic ---
+            image_path = os.path.join(self.images_dir, f"{self.index + 1}.{self.file_extension}")
             
-            for lang_id, lang_data in self.job['languages'].items():
-                lang_dir_path = self._get_save_path(base_save_path, self.job['name'], lang_data['display_name'])
+            data_to_write = image_data
+            if self.provider == 'googler' and isinstance(image_data, str):
+                if "," in image_data:
+                    _, encoded = image_data.split(",", 1)
+                    data_to_write = base64.b64decode(encoded)
+                else:
+                    data_to_write = base64.b64decode(image_data)
+            
+            with open(image_path, 'wb') as f:
+                f.write(data_to_write)
                 
-                text_for_processing = self.job['text']
-                
-                # --- Translation Stage ---
-                if 'stage_translation' in lang_data['stages']:
-                    translated_text = self._perform_translation(job_id, lang_id, lang_data, all_languages_config)
-                    if translated_text:
-                        text_for_processing = translated_text
-                        if lang_dir_path:
-                            self.save_translation(lang_dir_path, translated_text)
-                
-                # --- Image Prompts Stage ---
-                if 'stage_img_prompts' in lang_data['stages']:
-                    self.process_image_prompts(job_id, lang_id, lang_data, text_for_processing, lang_dir_path)
+            logger.log(f"      - Successfully saved image {self.index + 1} to {image_path}", level=LogLevel.SUCCESS)
+            self.processor.image_generated.emit(self.task_name, image_path, self.prompt)
+            self.signals.finished.emit(self.index, True)
 
-                # --- Image Generation Stage ---
-                if 'stage_images' in lang_data['stages']:
-                    self.process_image_generation(job_id, lang_id, lang_data, lang_dir_path)
-                
-                # --- Voiceover Stage ---
-                voice_file_path = None
-                if 'stage_voiceover' in lang_data['stages']:
-                    # Тепер цей метод повертає шлях до файлу
-                    voice_file_path = self._process_voiceover_stage(job_id, lang_id, lang_data, all_languages_config, text_for_processing, lang_dir_path)
-
-                # --- Subtitles Stage ---
-                if 'stage_subtitles' in lang_data['stages']:
-                    self._process_subtitles_stage(job_id, lang_id, lang_data, voice_file_path, lang_dir_path)
-
-            logger.log(f"Finished processing job: {self.job['name']}", level=LogLevel.INFO)
-        finally:
-            self.signals.finished.emit()
+        except Exception as e:
+            logger.log(f"      - Failed to generate or save image {self.index + 1} for prompt '{self.prompt}'. Error: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(self.index, False)
+            
+    
 
 class JobWorker(QRunnable):
     def __init__(self, processor, settings, job):
@@ -426,25 +433,6 @@ class JobWorker(QRunnable):
             logger.log(f"    - An error occurred during image prompt generation for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
-    def _run_image_generation_batch(self, prompts_to_process, api, thread_pool, images_dir, file_extension, provider, **kwargs):
-        results = {}
-        if not prompts_to_process:
-            return results
-
-        semaphore = QSemaphore(0)
-        
-        def on_worker_finished(index, success_bool):
-            results[index] = success_bool
-            semaphore.release()
-
-        for index, prompt in prompts_to_process:
-            worker = ImageGenerationWorker(self.processor, self.job['name'], api, prompt, index, images_dir, file_extension, provider, **kwargs)
-            worker.signals.finished.connect(on_worker_finished, Qt.DirectConnection)
-            thread_pool.start(worker)
-        
-        semaphore.acquire(len(prompts_to_process))
-        return results
-
     def process_image_generation(self, job_id, lang_id, lang_data, lang_dir_path):
         stage_key = 'stage_images'
         self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
@@ -495,7 +483,8 @@ class JobWorker(QRunnable):
         for i in range(0, len(prompts_to_process), max_threads):
             batch = prompts_to_process[i:i+max_threads]
             logger.log(f"    - Processing batch of {len(batch)} images...", level=LogLevel.INFO)
-            batch_results = self._run_image_generation_batch(batch, api, thread_pool, images_dir, file_extension, provider, **api_kwargs)
+            # ТУТ ЗМІНА: Додано self.job['name']
+            batch_results = self.processor._run_image_generation_batch(batch, self.job['name'], api, thread_pool, images_dir, file_extension, provider, **api_kwargs)
             all_results.update(batch_results)
 
         # --- Retry Pass ---
@@ -505,7 +494,8 @@ class JobWorker(QRunnable):
             for i in range(0, len(failed_prompts), max_threads):
                 batch = failed_prompts[i:i+max_threads]
                 logger.log(f"    - Processing retry batch of {len(batch)} images...", level=LogLevel.INFO)
-                retry_results = self._run_image_generation_batch(batch, api, thread_pool, images_dir, file_extension, provider, **api_kwargs)
+                # ТУТ ЗМІНА: Додано self.job['name']
+                retry_results = self.processor._run_image_generation_batch(batch, self.job['name'], api, thread_pool, images_dir, file_extension, provider, **api_kwargs)
                 all_results.update(retry_results)
 
         # --- Final Status Check ---
@@ -517,6 +507,57 @@ class JobWorker(QRunnable):
         else:
             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
             logger.log(f"  - Image generation completed with {final_fail_count} errors for: {lang_data['display_name']}", level=LogLevel.ERROR)
+
+    def _process_subtitles_stage(self, job_id, lang_id, lang_data, audio_path, dir_path):
+        stage_key = 'stage_subtitles'
+        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
+        
+        if not audio_path or not os.path.exists(audio_path):
+            logger.log(f"    - Skipping subtitles for {lang_data['display_name']}: Audio file not found.", level=LogLevel.WARNING)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+            return
+
+        sub_settings = self.settings.get('subtitles', {})
+        whisper_type = sub_settings.get('whisper_type', 'amd')
+        model_name = sub_settings.get('whisper_model', 'base.bin')
+        
+        whisper_exe = None
+        whisper_model_path = model_name 
+
+        if whisper_type == 'amd':
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+            whisper_exe = os.path.join(whisper_base_path, "main.exe")
+            whisper_model_path = os.path.join(whisper_base_path, model_name)
+
+            if not os.path.exists(whisper_exe):
+                logger.log(f"    - Error: Whisper EXE not found at {whisper_exe}", level=LogLevel.ERROR)
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return
+
+            if not os.path.exists(whisper_model_path):
+                logger.log(f"    - Error: Whisper Model not found at {whisper_model_path}", level=LogLevel.ERROR)
+                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                return
+        
+        lang_code = lang_id.split('-')[0].lower()
+
+        logger.log(f"  - Starting subtitles generation ({whisper_type.upper()}) for: {lang_data['display_name']} (Lang: {lang_code})", level=LogLevel.INFO)
+        
+        try:
+            output_filename = os.path.splitext(os.path.basename(audio_path))[0] + ".ass"
+            output_path = os.path.join(dir_path, output_filename)
+
+            engine = SubtitleEngine(whisper_exe, whisper_model_path)
+            engine.generate_ass(audio_path, output_path, sub_settings, language=lang_code)
+            
+            logger.log(f"    - Subtitles generated successfully: {output_path}", level=LogLevel.SUCCESS)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+
+        except Exception as e:
+            logger.log(f"    - Error generating subtitles for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
+            logger.log(traceback.format_exc(), level=LogLevel.ERROR)
+            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
 
     def save_translation(self, dir_path, content):
         try:

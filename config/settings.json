@@ -17,7 +17,7 @@
             "gemini_voice": "Enceladus",
             "gemini_tone": "Read aloud in a warm and friendly tone: "
         },
-        "us-US": {
+        "en-US": {
             "display_name": "Англійська",
             "prompt": "переклади на англійську:",
             "model": "google/gemini-2.5-flash",
