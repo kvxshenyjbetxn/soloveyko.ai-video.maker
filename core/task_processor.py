@@ -4,7 +4,9 @@ import time
 import base64
 import json
 import traceback
-from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt
+import threading
+from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt, Slot
+
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager
 from api.openrouter import OpenRouterAPI
@@ -16,212 +18,221 @@ from api.gemini_tts import GeminiTTSAPI
 from core.subtitle_engine import SubtitleEngine
 from core.montage_engine import MontageEngine
 
-class TaskProcessor(QObject):
-    processing_finished = Signal(str)
-    stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
-    image_generated = Signal(str, str, str) # task_name, image_path, prompt
+# =================================================================================================================
+# region WORKER DEFINITIONS
+# =================================================================================================================
 
-    def __init__(self, queue_manager):
+class WorkerSignals(QObject):
+    finished = Signal(str, object)  # task_id, result
+    error = Signal(str, str)        # task_id, error_message
+    status_changed = Signal(str, str) # task_id, status_message
+
+class BaseWorker(QRunnable):
+    def __init__(self, task_id, config):
         super().__init__()
-        self.queue_manager = queue_manager
-        self.settings = settings_manager
-        self.openrouter_api = OpenRouterAPI()
-        self.pollinations_api = PollinationsAPI()
-        self.googler_api = GooglerAPI()
-        self.elevenlabs_api = ElevenLabsAPI()
-        self.voicemaker_api = VoicemakerAPI()
-        self.gemini_tts_api = GeminiTTSAPI()
-        self.montage_engine = MontageEngine()
-        self.threadpool = QThreadPool()
-        self.active_jobs = 0
-        self.timer = QElapsedTimer()
-        self.voicemaker_voices = []
-        self.load_voicemaker_voices()
-
-    def load_voicemaker_voices(self):
-        try:
-            with open("assets/voicemaker_voices.json", "r", encoding="utf-8") as f:
-                self.voicemaker_voices = json.load(f)
-        except Exception as e:
-            logger.log(f"Error loading voicemaker voices: {e}", level=LogLevel.ERROR)
-            self.voicemaker_voices = []
-
-    def start_processing(self):
-        jobs = self.queue_manager.get_tasks()
-        if not jobs:
-            logger.log("Queue is empty. Nothing to process.", level=LogLevel.INFO)
-            return
-
-        self.active_jobs = len(jobs)
-        self.timer.start()
-        logger.log(f"Starting to process {self.active_jobs} jobs in the queue.", level=LogLevel.INFO)
-        
-        for job in jobs:
-            worker = JobWorker(self, self.settings, job)
-            worker.signals.finished.connect(self.job_finished)
-            # Propagate the stage status signal
-            worker.signals.stage_status_changed.connect(self.stage_status_changed)
-            self.threadpool.start(worker)
-            
-    def _run_image_generation_batch(self, prompts_to_process, task_name, api, thread_pool, images_dir, file_extension, provider, **kwargs):
-        results = {}
-        if not prompts_to_process:
-            return results
-
-        semaphore = QSemaphore(0)
-        
-        def on_worker_finished(index, success_bool):
-            results[index] = success_bool
-            semaphore.release()
-
-        for index, prompt in prompts_to_process:
-            # Передаємо self (як processor) і task_name
-            worker = ImageGenerationWorker(self, task_name, api, prompt, index, images_dir, file_extension, provider, **kwargs)
-            worker.signals.finished.connect(on_worker_finished, Qt.DirectConnection)
-            thread_pool.start(worker)
-        
-        semaphore.acquire(len(prompts_to_process))
-        return results
-
-    def job_finished(self):
-        self.active_jobs -= 1
-        if self.active_jobs == 0:
-            elapsed_ms = self.timer.elapsed()
-            elapsed_str = time.strftime('%H:%M:%S', time.gmtime(elapsed_ms / 1000))
-            logger.log(f"Queue processing finished in {elapsed_str}.", level=LogLevel.SUCCESS)
-            self.processing_finished.emit(elapsed_str)
-            
-    def _get_voicemaker_language_code(self, voice_id):
-        for lang_data in self.voicemaker_voices:
-            if voice_id in lang_data.get("Voices", []):
-                return lang_data.get("LanguageCode")
-        return "en-US" # Default fallback
-
-class JobWorkerSignals(QObject):
-    finished = Signal()
-    stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
-
-class ImageGenerationWorkerSignals(QObject):
-    finished = Signal(int, bool) # index, success
-
-class ImageGenerationWorker(QRunnable):
-    def __init__(self, processor, task_name, api, prompt, index, images_dir, file_extension, provider, **kwargs):
-        super().__init__()
-        self.processor = processor
-        self.task_name = task_name
-        self.api = api
-        self.prompt = prompt
-        self.index = index
-        self.images_dir = images_dir
-        self.file_extension = file_extension
-        self.provider = provider
-        self.kwargs = kwargs
-        self.signals = ImageGenerationWorkerSignals()
+        self.task_id = task_id
+        self.config = config
+        self.signals = WorkerSignals()
 
     def run(self):
         try:
-            image_data = self.api.generate_image(self.prompt, **self.kwargs)
-            
-            if not image_data:
-                logger.log(f"      - Failed to generate image {self.index + 1} for prompt: '{self.prompt}' (no data returned).", level=LogLevel.WARNING)
-                self.signals.finished.emit(self.index, False)
-                return
-
-            # --- Saving Logic ---
-            image_path = os.path.join(self.images_dir, f"{self.index + 1}.{self.file_extension}")
-            
-            data_to_write = image_data
-            if self.provider == 'googler' and isinstance(image_data, str):
-                if "," in image_data:
-                    _, encoded = image_data.split(",", 1)
-                    data_to_write = base64.b64decode(encoded)
-                else:
-                    data_to_write = base64.b64decode(image_data)
-            
-            with open(image_path, 'wb') as f:
-                f.write(data_to_write)
-                
-            logger.log(f"      - Successfully saved image {self.index + 1} to {image_path}", level=LogLevel.SUCCESS)
-            self.processor.image_generated.emit(self.task_name, image_path, self.prompt)
-            self.signals.finished.emit(self.index, True)
-
+            logger.log(f"Starting worker for task: {self.task_id}", level=LogLevel.INFO)
+            result = self.do_work()
+            self.signals.finished.emit(self.task_id, result)
+            logger.log(f"Finished worker for task: {self.task_id}", level=LogLevel.INFO)
         except Exception as e:
-            logger.log(f"      - Failed to generate or save image {self.index + 1} for prompt '{self.prompt}'. Error: {e}", level=LogLevel.ERROR)
-            self.signals.finished.emit(self.index, False)
-            
-    
-
-class JobWorker(QRunnable):
-    def __init__(self, processor, settings, job):
-        super().__init__()
-        self.processor = processor
-        self.openrouter_api = processor.openrouter_api
-        self.pollinations_api = processor.pollinations_api
-        self.googler_api = processor.googler_api
-        self.elevenlabs_api = processor.elevenlabs_api
-        self.voicemaker_api = processor.voicemaker_api
-        self.gemini_tts_api = processor.gemini_tts_api
-        self.montage_engine = processor.montage_engine
-        self.settings = settings
-        self.job = job
-        self.signals = JobWorkerSignals()
-
-    def run(self):
-        try:
-            logger.log(f"Processing job: {self.job['name']}", level=LogLevel.INFO)
-            job_id = self.job['id']
-            
-            base_save_path = self.settings.get('results_path')
-            if not base_save_path:
-                logger.log("Warning: 'results_path' is not configured in settings. Results will not be saved.", level=LogLevel.WARNING)
-
-            all_languages_config = self.settings.get("languages_config", {})
-            
-            for lang_id, lang_data in self.job['languages'].items():
-                lang_dir_path = self._get_save_path(base_save_path, self.job['name'], lang_data['display_name'])
-                
-                text_for_processing = self.job['text']
-                
-                # --- Translation Stage ---
-                if 'stage_translation' in lang_data['stages']:
-                    translated_text = self._perform_translation(job_id, lang_id, lang_data, all_languages_config)
-                    if translated_text:
-                        text_for_processing = translated_text
-                        if lang_dir_path:
-                            self.save_translation(lang_dir_path, translated_text)
-                
-                # --- Image Prompts Stage ---
-                if 'stage_img_prompts' in lang_data['stages']:
-                    self.process_image_prompts(job_id, lang_id, lang_data, text_for_processing, lang_dir_path)
-
-                # --- Image Generation Stage ---
-                if 'stage_images' in lang_data['stages']:
-                    self.process_image_generation(job_id, lang_id, lang_data, lang_dir_path)
-                
-                # --- Voiceover Stage ---
-                voice_file_path = None
-                if 'stage_voiceover' in lang_data['stages']:
-                    voice_file_path = self._process_voiceover_stage(job_id, lang_id, lang_data, all_languages_config, text_for_processing, lang_dir_path)
-
-                # --- Subtitles Stage ---
-                if 'stage_subtitles' in lang_data['stages']:
-                    self._process_subtitles_stage(job_id, lang_id, lang_data, voice_file_path, lang_dir_path)
-
-                # --- Montage Stage (NEW) ---
-                if 'stage_montage' in lang_data['stages']:
-                    self._process_montage_stage(job_id, lang_id, lang_data, voice_file_path, lang_dir_path)
-                    
-            logger.log(f"Finished processing job: {self.job['name']}", level=LogLevel.INFO)
-
-        except Exception as e:
-            logger.log(f"CRITICAL ERROR in job processing: {e}", level=LogLevel.ERROR)
+            error_msg = f"Error in task '{self.task_id}': {e}"
+            logger.log(error_msg, level=LogLevel.ERROR)
             logger.log(traceback.format_exc(), level=LogLevel.ERROR)
-        finally:
-            self.signals.finished.emit()
+            self.signals.error.emit(self.task_id, str(e))
+
+    def do_work(self):
+        raise NotImplementedError
+
+# --- Specific Workers ---
+
+class TranslationWorker(BaseWorker):
+    def do_work(self):
+        api = OpenRouterAPI()
+        lang_config = self.config['lang_config']
+        full_prompt = f"{lang_config.get('prompt', '')}\n\n{self.config['text']}"
+        response = api.get_chat_completion(
+            model=lang_config.get('model'),
+            messages=[{"role": "user", "content": full_prompt}],
+            max_tokens=lang_config.get('max_tokens', 4096)
+        )
+        if response and response['choices'][0]['message']['content']:
+            return response['choices'][0]['message']['content']
+        else:
+            raise Exception("Empty or invalid response from translation API.")
+
+class ImagePromptWorker(BaseWorker):
+    def do_work(self):
+        api = OpenRouterAPI()
+        img_prompt_settings = self.config['img_prompt_settings']
+        full_prompt = f"{img_prompt_settings.get('prompt', '')}\n\n{self.config['text']}"
+        response = api.get_chat_completion(
+            model=img_prompt_settings.get('model'),
+            messages=[{"role": "user", "content": full_prompt}],
+            max_tokens=img_prompt_settings.get('max_tokens', 4096)
+        )
+        if response and response['choices'][0]['message']['content']:
+            return response['choices'][0]['message']['content']
+        else:
+            raise Exception("Empty or invalid response from image prompt API.")
+
+class VoiceoverWorker(BaseWorker):
+    def do_work(self):
+        text = self.config['text']
+        dir_path = self.config['dir_path']
+        lang_config = self.config['lang_config']
+        tts_provider = lang_config.get('tts_provider', 'ElevenLabs')
+
+        if tts_provider == 'VoiceMaker':
+            api = VoicemakerAPI()
+            voice_id = lang_config.get('voicemaker_voice_id')
+            language_code = self.config['voicemaker_lang_code']
+            audio_content, status = api.generate_audio(text, voice_id, language_code, temp_dir=dir_path)
+            if status == 'success' and audio_content:
+                return self.save_audio(audio_content, "voice.mp3")
+            else:
+                raise Exception(f"VoiceMaker generation failed: {status}")
+
+        elif tts_provider == 'GeminiTTS':
+            api = GeminiTTSAPI()
+            task_id, status = api.create_task(text, lang_config.get('gemini_voice', 'Puck'), lang_config.get('gemini_tone', ''))
+            if status != 'connected' or not task_id:
+                raise Exception("Failed to create GeminiTTS task.")
+            
+            for _ in range(60): # 5 min timeout
+                task_status, status = api.get_task_status(task_id)
+                if status != 'connected': raise Exception("Failed to get GeminiTTS task status.")
+                if task_status == 'completed':
+                    context = f"Task: {self.config['job_name']}, Lang: {self.config['lang_name']}"
+                    audio_content, status = api.download_audio(task_id, context_info=context)
+                    if status == 'connected' and audio_content:
+                        return self.save_audio(audio_content, "voice.wav")
+                    else:
+                        raise Exception("Failed to download GeminiTTS audio.")
+                elif task_status == 'failed':
+                    raise Exception("GeminiTTS task failed on server side.")
+                time.sleep(5)
+            raise Exception("Timeout waiting for GeminiTTS result.")
+
+        else: # ElevenLabs
+            api = ElevenLabsAPI()
+            task_id, status = api.create_task(text, lang_config['elevenlabs_template_uuid'])
+            if status != 'connected' or not task_id:
+                raise Exception("Failed to create ElevenLabs task.")
+            
+            for _ in range(30): # 5 min timeout
+                task_status, status = api.get_task_status(task_id)
+                if status != 'connected': raise Exception("Failed to get ElevenLabs task status.")
+                if task_status in ['ending', 'ending_processed']:
+                    audio_content, status = api.get_task_result(task_id)
+                    if status == 'connected' and audio_content:
+                        return self.save_audio(audio_content, "voice.mp3")
+                    elif status == 'not_ready': time.sleep(10); continue
+                    else: raise Exception("Failed to download ElevenLabs audio.")
+                elif task_status in ['error', 'error_handled']:
+                    raise Exception("ElevenLabs task processing resulted in an error.")
+                time.sleep(10)
+            raise Exception("Timeout waiting for ElevenLabs result.")
+
+    def save_audio(self, content, filename):
+        path = os.path.join(self.config['dir_path'], filename)
+        with open(path, 'wb') as f: f.write(content)
+        return path
+
+class SubtitleWorker(BaseWorker):
+    def do_work(self):
+        engine = SubtitleEngine(self.config['whisper_exe'], self.config['whisper_model_path'])
+        output_filename = os.path.splitext(os.path.basename(self.config['audio_path']))[0] + ".ass"
+        output_path = os.path.join(self.config['dir_path'], output_filename)
+        engine.generate_ass(self.config['audio_path'], output_path, self.config['sub_settings'], language=self.config['lang_code'])
+        return output_path
+
+class ImageGenerationWorker(BaseWorker):
+    def do_work(self):
+        prompts_text = self.config['prompts_text']
+        prompts = re.findall(r"^\d+\.\s*(.*)", prompts_text, re.MULTILINE)
+        if not prompts:
+            raise Exception("No prompts found in the generated text.")
+
+        provider = self.config['provider']
+        images_dir = os.path.join(self.config['dir_path'], "images")
+        os.makedirs(images_dir, exist_ok=True)
+        
+        if provider == 'googler':
+            api = GooglerAPI()
+            file_extension = 'jpg'
+            api_kwargs = self.config['api_kwargs']
+        else: # pollinations
+            api = PollinationsAPI()
+            file_extension = 'png'
+            api_kwargs = {}
+        
+        generated_paths = []
+        for i, prompt in enumerate(prompts):
+            image_data = api.generate_image(prompt, **api_kwargs)
+            if not image_data:
+                logger.log(f"      - Failed to generate image {i + 1} for prompt: '{prompt}' (no data).", level=LogLevel.WARNING)
+                continue
+
+            image_path = os.path.join(images_dir, f"{i + 1}.{file_extension}")
+            data_to_write = image_data
+            if provider == 'googler' and isinstance(image_data, str):
+                data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
+            
+            with open(image_path, 'wb') as f: f.write(data_to_write)
+            
+            logger.log(f"      - Saved image {i + 1} to {image_path}", level=LogLevel.SUCCESS)
+            generated_paths.append(image_path)
+            # Emit signal for gallery update
+            self.signals.status_changed.emit(self.task_id, image_path)
+
+        
+        if len(generated_paths) == 0 and len(prompts) > 0:
+            raise Exception("Failed to generate any images.")
+
+        return {'paths': generated_paths, 'total_prompts': len(prompts)}
+
+class MontageWorker(BaseWorker):
+    def do_work(self):
+        engine = MontageEngine()
+        engine.create_video(**self.config)
+        return self.config['output_path']
+
+# endregion
+# =================================================================================================================
+# region TASK PROCESSOR
+# =================================================================================================================
+
+class TaskState:
+    """Holds the state and data for a single language within a single job."""
+    def __init__(self, job, lang_id, lang_data, base_save_path):
+        self.job_id = job['id']
+        self.lang_id = lang_id
+        self.task_id = f"{self.job_id}_{self.lang_id}"
+
+        self.job_name = job['name']
+        self.lang_name = lang_data['display_name']
+        self.stages = lang_data['stages']
+        self.original_text = job['text']
+
+        self.dir_path = self._get_save_path(base_save_path, self.job_name, self.lang_name)
+
+        self.text_for_processing = None
+        self.image_prompts = None
+        self.audio_path = None
+        self.subtitle_path = None
+        self.image_paths = None
+        self.final_video_path = None
+
+        self.status = {stage: 'pending' for stage in self.stages}
 
     def _get_save_path(self, base_path, job_name, lang_name):
-        if not base_path:
-            return None
+        if not base_path: return None
         try:
             safe_job_name = "".join(c for c in job_name if c.isalnum() or c in (' ', '_')).rstrip()
             safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
@@ -229,499 +240,382 @@ class JobWorker(QRunnable):
             os.makedirs(dir_path, exist_ok=True)
             return dir_path
         except Exception as e:
-            logger.log(f"    - Failed to create save directory. Error: {e}", level=LogLevel.ERROR)
+            logger.log(f"    - Failed to create save directory {dir_path}. Error: {e}", level=LogLevel.ERROR)
             return None
 
-    def _perform_translation(self, job_id, lang_id, lang_data, all_languages_config):
-        stage_key = 'stage_translation'
-        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
+class TaskProcessor(QObject):
+    processing_finished = Signal(str)
+    stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
+    image_generated = Signal(str, str, str) # task_name, image_path, prompt (TaskID, image_path, prompt)
+
+    def __init__(self, queue_manager):
+        super().__init__()
+        self.queue_manager = queue_manager
+        self.settings = settings_manager
+        self.threadpool = QThreadPool()
+        self.timer = QElapsedTimer()
+        self.voicemaker_voices = self._load_voicemaker_voices()
         
-        lang_config = all_languages_config.get(lang_id)
-        if not lang_config:
-            logger.log(f"  - Skipping translation for {lang_data['display_name']}: Configuration not found.", level=LogLevel.WARNING)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return None
-        
-        logger.log(f"  - Starting translation for: {lang_data['display_name']}", level=LogLevel.INFO)
-        
-        prompt = lang_config.get('prompt', '')
-        model = lang_config.get('model', '')
-        max_tokens = lang_config.get('max_tokens', 4096)
-        
-        if not model:
-            logger.log(f"  - Skipping translation for {lang_data['display_name']}: Model not configured.", level=LogLevel.WARNING)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return None
-        
-        full_prompt = f"{prompt}\n\n{self.job['text']}"
-        
+        self.task_states = {}
+        self.total_subtitle_tasks = 0
+        self.completed_subtitle_tasks = 0
+        self.subtitle_barrier_passed = False
+        self.is_finished = False
+        self.subtitle_lock = threading.Lock() # Used to sync counter access
+
+        # --- Semaphores for concurrency control ---
+        self.subtitle_semaphore = QSemaphore(1)
+        montage_settings = self.settings.get("montage", {})
+        max_montage = montage_settings.get("max_concurrent_montages", 1)
+        self.montage_semaphore = QSemaphore(max_montage)
+        logger.log(f"Task Processor initialized. Subtitle concurrency: 1, Montage concurrency: {max_montage}", level=LogLevel.INFO)
+
+    def _load_voicemaker_voices(self):
         try:
-            logger.log(f"    - Calling model '{model}' with max_tokens={max_tokens}.", level=LogLevel.INFO)
-            response = self.openrouter_api.get_chat_completion(
-                model=model,
-                messages=[{"role": "user", "content": full_prompt}],
-                max_tokens=max_tokens
-            )
-            
-            if response and response['choices'][0]['message']['content']:
-                translated_text = response['choices'][0]['message']['content']
-                logger.log(f"    - Translation successful for {lang_data['display_name']}.", level=LogLevel.SUCCESS)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-                return translated_text
-            else:
-                logger.log(f"    - Translation failed for {lang_data['display_name']}: Empty or invalid response from API.", level=LogLevel.ERROR)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return None
-
+            with open("assets/voicemaker_voices.json", "r", encoding="utf-8") as f:
+                return json.load(f)
         except Exception as e:
-            logger.log(f"    - An error occurred during translation for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return None
+            logger.log(f"Error loading voicemaker voices: {e}", level=LogLevel.ERROR)
+            return []
 
-    def _process_voiceover_stage(self, job_id, lang_id, lang_data, all_languages_config, text_to_voice, dir_path):
-        stage_key = 'stage_voiceover'
-        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
+    def _get_voicemaker_language_code(self, voice_id):
+        for lang_data in self.voicemaker_voices:
+            if voice_id in lang_data.get("Voices", []):
+                return lang_data.get("LanguageCode")
+        return "en-US"
 
-        lang_config = all_languages_config.get(lang_id)
-        if not lang_config:
-            logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: Lang config not found.", level=LogLevel.WARNING)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return None
-
-        tts_provider = lang_config.get('tts_provider', 'ElevenLabs')
-        logger.log(f"  - Starting voiceover for: {lang_data['display_name']} using {tts_provider}", level=LogLevel.INFO)
-
-        if not dir_path:
-            logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: Results path not set.", level=LogLevel.WARNING)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return None
-
-        if tts_provider == 'VoiceMaker':
-            voice_id = lang_config.get('voicemaker_voice_id')
-            if not voice_id:
-                logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: VoiceMaker Voice ID not configured.", level=LogLevel.WARNING)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return None
-            
-            try:
-                language_code = self.processor._get_voicemaker_language_code(voice_id)
-                audio_content, status = self.voicemaker_api.generate_audio(text_to_voice, voice_id, language_code, temp_dir=dir_path)
-                
-                if status == 'success' and audio_content:
-                    saved_path = self.save_voiceover(dir_path, audio_content, "voice.mp3")
-                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-                    return saved_path
-                else:
-                    logger.log(f"    - VoiceMaker generation failed: {status}", level=LogLevel.ERROR)
-                    self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                    return None
-
-            except Exception as e:
-                logger.log(f"    - An error occurred during VoiceMaker voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return None
-
-        elif tts_provider == 'GeminiTTS':
-            voice = lang_config.get('gemini_voice', 'Puck')
-            tone = lang_config.get('gemini_tone', '')
-            
-            try:
-                task_id, status = self.gemini_tts_api.create_task(text_to_voice, voice, tone)
-                if status != 'connected' or not task_id:
-                     raise Exception("Failed to create GeminiTTS task.")
-                
-                for _ in range(60): 
-                    task_status, status = self.gemini_tts_api.get_task_status(task_id)
-                    if status != 'connected':
-                        raise Exception("Failed to get task status.")
-
-                    if task_status == 'completed':
-                        context_info = f"Task: {self.job['name']}, Lang: {lang_data['display_name']}"
-                        audio_content, status = self.gemini_tts_api.download_audio(task_id, context_info=context_info)
-                        if status == 'connected' and audio_content:
-                             saved_path = self.save_voiceover(dir_path, audio_content, "voice.wav")
-                             self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-                             return saved_path
-                        else:
-                             raise Exception("Failed to download audio content.")
-                    
-                    elif task_status == 'failed':
-                         raise Exception("Task processing failed on server side.")
-                    
-                    time.sleep(5) 
-
-                raise Exception("Timeout while waiting for GeminiTTS result.")
-
-            except Exception as e:
-                logger.log(f"    - An error occurred during GeminiTTS voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return None
-
-        else: # ElevenLabs
-            if not lang_config.get('elevenlabs_template_uuid'):
-                logger.log(f"    - Skipping voiceover for {lang_data['display_name']}: ElevenLabs template not configured.", level=LogLevel.WARNING)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return None
-
-            template_uuid = lang_config['elevenlabs_template_uuid']
-            
-            try:
-                task_id, status = self.elevenlabs_api.create_task(text_to_voice, template_uuid)
-                if status != 'connected' or not task_id:
-                    raise Exception("Failed to create task.")
-
-                for _ in range(30):
-                    task_status, status = self.elevenlabs_api.get_task_status(task_id)
-                    if status != 'connected':
-                        raise Exception("Failed to get task status.")
-                    
-                    if task_status in ['ending', 'ending_processed']:
-                        audio_content, status = self.elevenlabs_api.get_task_result(task_id)
-                        if status == 'connected' and audio_content:
-                            saved_path = self.save_voiceover(dir_path, audio_content, "voice.mp3")
-                            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-                            return saved_path
-                        elif status == 'not_ready':
-                            time.sleep(10)
-                            continue
-                        else:
-                            raise Exception("Failed to download audio content.")
-                    
-                    elif task_status in ['error', 'error_handled']:
-                        raise Exception("Task processing resulted in an error.")
-                    
-                    time.sleep(10)
-
-                raise Exception("Timeout while waiting for voiceover result.")
-
-            except Exception as e:
-                logger.log(f"    - An error occurred during voiceover for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return None
-
-    def process_image_prompts(self, job_id, lang_id, lang_data, text_to_use, dir_path):
-        stage_key = 'stage_img_prompts'
-        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
-        logger.log(f"  - Starting image prompt generation for: {lang_data['display_name']}", level=LogLevel.INFO)
-        
-        img_prompt_settings = self.settings.get("image_prompt_settings", {})
-        prompt_template = img_prompt_settings.get('prompt', '')
-        model = img_prompt_settings.get('model', '')
-        max_tokens = img_prompt_settings.get('max_tokens', 4096)
-
-        if not model or not prompt_template:
-            logger.log(f"  - Skipping image prompt generation for {lang_data['display_name']}: Model or prompt template not configured.", level=LogLevel.WARNING)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+    def start_processing(self):
+        jobs = self.queue_manager.get_tasks()
+        if not jobs:
+            logger.log("Queue is empty.", level=LogLevel.INFO)
             return
 
-        full_prompt = f"{prompt_template}\n\n{text_to_use}"
+        self.timer.start()
+        self.task_states = {}
+        self.total_subtitle_tasks = 0
+        self.completed_subtitle_tasks = 0
+        
+        base_save_path = self.settings.get('results_path')
+        all_languages_config = self.settings.get("languages_config", {})
 
-        try:
-            logger.log(f"    - Calling model '{model}' for image prompts with max_tokens={max_tokens}.", level=LogLevel.INFO)
-            response = self.openrouter_api.get_chat_completion(
-                model=model,
-                messages=[{"role": "user", "content": full_prompt}],
-                max_tokens=max_tokens
-            )
+        # 1. Initialize all task states
+        for job in jobs:
+            for lang_id, lang_data in job['languages'].items():
+                state = TaskState(job, lang_id, lang_data, base_save_path)
+                self.task_states[state.task_id] = state
+                if 'stage_subtitles' in state.stages:
+                    self.total_subtitle_tasks += 1
 
-            if response and response['choices'][0]['message']['content']:
-                image_prompts_text = response['choices'][0]['message']['content']
-                logger.log(f"    - Image prompt generation successful for {lang_data['display_name']}.", level=LogLevel.SUCCESS)
-                
-                if dir_path:
-                    self.save_image_prompts(dir_path, image_prompts_text)
-                
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
+        logger.log(f"Starting processing for {len(self.task_states)} language tasks.", level=LogLevel.INFO)
+
+        # 2. Fire initial workers
+        for task_id, state in self.task_states.items():
+            if 'stage_translation' in state.stages:
+                self._start_translation(task_id, all_languages_config)
+                time.sleep(0.5) # Per user request
             else:
-                logger.log(f"    - Image prompt generation failed for {lang_data['display_name']}: Empty or invalid response from API.", level=LogLevel.ERROR)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+                state.text_for_processing = state.original_text
+                self._on_text_ready(task_id)
+    
+    def _start_worker(self, worker_class, task_id, stage_key, config, on_finish_slot, on_error_slot):
+        self.stage_status_changed.emit(self.task_states[task_id].job_id, self.task_states[task_id].lang_id, stage_key, 'processing')
+        worker = worker_class(task_id, config)
+        worker.signals.finished.connect(on_finish_slot)
+        worker.signals.error.connect(on_error_slot)
+        worker.signals.status_changed.connect(self._on_worker_status_changed) # For gallery updates
+        self.threadpool.start(worker)
 
-        except Exception as e:
-            logger.log(f"    - An error occurred during image prompt generation for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+    @Slot(str, str)
+    def _on_worker_status_changed(self, task_id, message):
+        """Used for intermediate status updates, like an image being generated."""
+        state = self.task_states.get(task_id)
+        if state:
+            # We assume the message is the image path for now
+            self.image_generated.emit(state.job_name, message, "") # task_name, image_path, prompt
 
-    def process_image_generation(self, job_id, lang_id, lang_data, lang_dir_path):
-        stage_key = 'stage_images'
-        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
-        logger.log(f"  - Starting image generation for: {lang_data['display_name']}", level=LogLevel.INFO)
+    def _set_stage_status(self, task_id, stage_key, status, error_message=None):
+        state = self.task_states.get(task_id)
+        if not state: return
 
-        if not lang_dir_path:
-            logger.log(f"    - Skipping image generation: No save path defined.", level=LogLevel.WARNING)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
-
-        prompts_file_path = os.path.join(lang_dir_path, "image_prompts.txt")
-        if not os.path.exists(prompts_file_path):
-            logger.log(f"    - Skipping image generation: 'image_prompts.txt' not found.", level=LogLevel.WARNING)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
-
-        with open(prompts_file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        prompts = re.findall(r"^\d+\.\s*(.*)", content, re.MULTILINE)
-        logger.log(f"    - Found {len(prompts)} prompts to process.", level=LogLevel.INFO)
-
-        images_dir = os.path.join(lang_dir_path, "images")
-        os.makedirs(images_dir, exist_ok=True)
-
-        provider = self.settings.get('image_generation_provider', 'pollinations')
-        api_kwargs = {}
-        max_threads = 1
-        file_extension = 'png'
-
-        if provider == 'googler':
-            api = self.googler_api
-            googler_settings = self.settings.get('googler', {})
-            max_threads = googler_settings.get('max_threads', 1)
-            api_kwargs['aspect_ratio'] = googler_settings.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE')
-            api_kwargs['seed'] = googler_settings.get('seed')
-            api_kwargs['negative_prompt'] = googler_settings.get('negative_prompt')
-            file_extension = 'jpg'
-        else: # pollinations
-            api = self.pollinations_api
-            max_threads = 1
-            
-        thread_pool = self.processor.threadpool
-        all_results = {}
+        state.status[stage_key] = status
+        self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, status)
         
-        # --- First Pass ---
-        prompts_to_process = list(enumerate(prompts))
-        for i in range(0, len(prompts_to_process), max_threads):
-            batch = prompts_to_process[i:i+max_threads]
-            logger.log(f"    - Processing batch of {len(batch)} images...", level=LogLevel.INFO)
-            # ТУТ ЗМІНА: Додано self.job['name']
-            batch_results = self.processor._run_image_generation_batch(batch, self.job['name'], api, thread_pool, images_dir, file_extension, provider, **api_kwargs)
-            all_results.update(batch_results)
-
-        # --- Retry Pass ---
-        failed_prompts = [(idx, prompt) for idx, prompt in prompts_to_process if not all_results.get(idx)]
-        if failed_prompts:
-            logger.log(f"    - Retrying {len(failed_prompts)} failed prompts...", level=LogLevel.WARNING)
-            for i in range(0, len(failed_prompts), max_threads):
-                batch = failed_prompts[i:i+max_threads]
-                logger.log(f"    - Processing retry batch of {len(batch)} images...", level=LogLevel.INFO)
-                # ТУТ ЗМІНА: Додано self.job['name']
-                retry_results = self.processor._run_image_generation_batch(batch, self.job['name'], api, thread_pool, images_dir, file_extension, provider, **api_kwargs)
-                all_results.update(retry_results)
-
-        # --- Final Status Check ---
-        final_fail_count = len([res for res in all_results.values() if not res])
+        if status in ['success', 'warning']:
+             log_level = LogLevel.SUCCESS if status == 'success' else LogLevel.WARNING
+             logger.log(f"Stage '{stage_key}' completed with status '{status}' for task '{task_id}'", level=log_level)
+        else: # error
+            logger.log(f"Stage '{stage_key}' failed for task '{task_id}': {error_message}", level=LogLevel.ERROR)
         
-        if final_fail_count == 0:
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-            logger.log(f"  - Image generation completed successfully for: {lang_data['display_name']}", level=LogLevel.SUCCESS)
+        # Always check if the whole queue is finished after a status change.
+        # This simplifies logic in error handlers.
+        self.check_if_all_finished()
+
+    # --- Pipeline Logic ---
+
+    def _start_translation(self, task_id, all_languages_config):
+        state = self.task_states[task_id]
+        config = {
+            'text': state.original_text,
+            'lang_config': all_languages_config.get(state.lang_id, {})
+        }
+        self._start_worker(TranslationWorker, task_id, 'stage_translation', config, self._on_translation_finished, self._on_translation_error)
+
+    @Slot(str, object)
+    def _on_translation_finished(self, task_id, translated_text):
+        state = self.task_states[task_id]
+        state.text_for_processing = translated_text
+        with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
+            f.write(translated_text)
+        self._set_stage_status(task_id, 'stage_translation', 'success')
+        self._on_text_ready(task_id)
+
+    @Slot(str, str)
+    def _on_translation_error(self, task_id, error):
+        self._set_stage_status(task_id, 'stage_translation', 'error', error)
+
+    def _on_text_ready(self, task_id):
+        state = self.task_states[task_id]
+        if 'stage_img_prompts' in state.stages:
+            self._start_image_prompts(task_id)
+        if 'stage_voiceover' in state.stages:
+            self._start_voiceover(task_id)
+        # If neither of the above, check if finished
+        if 'stage_img_prompts' not in state.stages and 'stage_voiceover' not in state.stages:
+            self.check_if_all_finished()
+
+    def _start_image_prompts(self, task_id):
+        state = self.task_states[task_id]
+        config = {
+            'text': state.text_for_processing,
+            'img_prompt_settings': self.settings.get("image_prompt_settings", {})
+        }
+        self._start_worker(ImagePromptWorker, task_id, 'stage_img_prompts', config, self._on_img_prompts_finished, self._on_img_prompts_error)
+
+    @Slot(str, object)
+    def _on_img_prompts_finished(self, task_id, prompts_text):
+        state = self.task_states[task_id]
+        state.image_prompts = prompts_text
+        with open(os.path.join(state.dir_path, "image_prompts.txt"), 'w', encoding='utf-8') as f:
+            f.write(prompts_text)
+        self._set_stage_status(task_id, 'stage_img_prompts', 'success')
+        
+        if 'stage_images' in state.stages:
+            self._start_image_generation(task_id)
         else:
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            logger.log(f"  - Image generation completed with {final_fail_count} errors for: {lang_data['display_name']}", level=LogLevel.ERROR)
+            self.check_if_all_finished()
 
-    def _process_subtitles_stage(self, job_id, lang_id, lang_data, audio_path, dir_path):
-        stage_key = 'stage_subtitles'
-        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
+    @Slot(str, str)
+    def _on_img_prompts_error(self, task_id, error):
+        self._set_stage_status(task_id, 'stage_img_prompts', 'error', error)
+
+    def _start_voiceover(self, task_id):
+        state = self.task_states[task_id]
+        lang_config = self.settings.get("languages_config", {}).get(state.lang_id, {})
+        config = {
+            'text': state.text_for_processing,
+            'dir_path': state.dir_path,
+            'lang_config': lang_config,
+            'voicemaker_lang_code': self._get_voicemaker_language_code(lang_config.get('voicemaker_voice_id')),
+            'job_name': state.job_name,
+            'lang_name': state.lang_name
+        }
+        self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
         
-        if not audio_path or not os.path.exists(audio_path):
-            logger.log(f"    - Skipping subtitles for {lang_data['display_name']}: Audio file not found.", level=LogLevel.WARNING)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+    @Slot(str, object)
+    def _on_voiceover_finished(self, task_id, audio_path):
+        state = self.task_states[task_id]
+        state.audio_path = audio_path
+        self._set_stage_status(task_id, 'stage_voiceover', 'success')
+        
+        if 'stage_subtitles' in state.stages:
+            self._start_subtitles(task_id)
+        else:
+            self.check_if_all_finished()
+
+    @Slot(str, str)
+    def _on_voiceover_error(self, task_id, error):
+        self._set_stage_status(task_id, 'stage_voiceover', 'error', error)
+        if 'stage_subtitles' in self.task_states[task_id].stages:
+            self._increment_subtitle_counter()
+
+    def _start_subtitles(self, task_id):
+        worker = self._create_subtitle_runnable(task_id)
+        # This worker will only run when the semaphore is free
+        self.threadpool.start(worker)
+
+    def _create_subtitle_runnable(self, task_id):
+        # Create a QRunnable that waits for the semaphore
+        class SemaphoreRunnable(QRunnable):
+            def __init__(self, processor, task_id):
+                super().__init__()
+                self.processor = processor
+                self.task_id = task_id
+            def run(self):
+                self.processor.subtitle_semaphore.acquire()
+                try:
+                    state = self.processor.task_states[self.task_id]
+                    sub_settings = self.processor.settings.get('subtitles', {})
+                    whisper_type = sub_settings.get('whisper_type', 'amd')
+                    model_name = sub_settings.get('whisper_model', 'base.bin')
+                    
+                    whisper_exe = None; whisper_model_path = model_name
+                    if whisper_type == 'amd':
+                        current_dir = os.path.dirname(os.path.abspath(__file__))
+                        whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+                        whisper_exe = os.path.join(whisper_base_path, "main.exe")
+                        whisper_model_path = os.path.join(whisper_base_path, model_name)
+                    
+                    config = {
+                        'audio_path': state.audio_path, 'dir_path': state.dir_path,
+                        'sub_settings': sub_settings, 'lang_code': state.lang_id.split('-')[0].lower(),
+                        'whisper_exe': whisper_exe, 'whisper_model_path': whisper_model_path
+                    }
+                    self.processor._start_worker(SubtitleWorker, self.task_id, 'stage_subtitles', config,
+                                                 self.processor._on_subtitles_finished, self.processor._on_subtitles_error)
+                except Exception as e:
+                    # If creating the worker fails, we must handle the error and release the semaphore
+                    self.processor._on_subtitles_error(self.task_id, f"Failed to start subtitle worker: {e}")
+
+        return SemaphoreRunnable(self, task_id)
+        
+    @Slot(str, object)
+    def _on_subtitles_finished(self, task_id, subtitle_path):
+        self.subtitle_semaphore.release()
+        self.task_states[task_id].subtitle_path = subtitle_path
+        self._set_stage_status(task_id, 'stage_subtitles', 'success')
+        self._increment_subtitle_counter()
+
+    @Slot(str, str)
+    def _on_subtitles_error(self, task_id, error):
+        self.subtitle_semaphore.release()
+        self._set_stage_status(task_id, 'stage_subtitles', 'error', error)
+        self._increment_subtitle_counter()
+
+    def _increment_subtitle_counter(self):
+        with self.subtitle_lock:
+            self.completed_subtitle_tasks += 1
+            logger.log(f"Subtitle task progress: {self.completed_subtitle_tasks}/{self.total_subtitle_tasks}", level=LogLevel.INFO)
+        
+        if not self.subtitle_barrier_passed and self.completed_subtitle_tasks >= self.total_subtitle_tasks:
+            self.subtitle_barrier_passed = True
+            logger.log("All subtitle tasks completed. Barrier passed. Checking for pending montages.", level=LogLevel.SUCCESS)
+            self._check_and_start_montages()
+
+    def _start_image_generation(self, task_id):
+        state = self.task_states[task_id]
+        googler_settings = self.settings.get('googler', {})
+        config = {
+            'prompts_text': state.image_prompts,
+            'dir_path': state.dir_path,
+            'provider': self.settings.get('image_generation_provider', 'pollinations'),
+            'api_kwargs': {
+                'aspect_ratio': googler_settings.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE'),
+                'seed': googler_settings.get('seed'),
+                'negative_prompt': googler_settings.get('negative_prompt')
+            }
+        }
+        self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
+
+    @Slot(str, object)
+    def _on_img_generation_finished(self, task_id, result_dict):
+        generated_paths = result_dict.get('paths', [])
+        total_prompts = result_dict.get('total_prompts', 0)
+        
+        status = 'error'
+        # Ensure total_prompts is not zero to avoid division by zero or success on empty prompts
+        if total_prompts > 0 and len(generated_paths) == total_prompts:
+            status = 'success'
+        elif len(generated_paths) > 0:
+            status = 'warning'
+
+        self.task_states[task_id].image_paths = generated_paths
+        self._set_stage_status(task_id, 'stage_images', status, "Failed to generate all images." if status != 'success' else None)
+
+        # After image status is set, check if the subtitle barrier has passed and if we can start montages.
+        if self.subtitle_barrier_passed:
+            self._check_and_start_montages()
+
+    @Slot(str, str)
+    def _on_img_generation_error(self, task_id, error):
+        self._set_stage_status(task_id, 'stage_images', 'error', error)
+
+    def _check_and_start_montages(self):
+        for task_id, state in self.task_states.items():
+            if 'stage_montage' in state.stages and state.status.get('stage_montage') == 'pending':
+                # Check if all prerequisites are met
+                subtitles_done = 'stage_subtitles' not in state.stages or state.status.get('stage_subtitles') in ('success', 'warning')
+                images_done = 'stage_images' not in state.stages or state.status.get('stage_images') in ('success', 'warning')
+                
+                if subtitles_done and images_done:
+                    # Montage can proceed if audio and subtitles are OK, and there's at least one image
+                    if state.status.get('stage_subtitles') == 'success' and state.status.get('stage_images') in ('success', 'warning'):
+                        # SET PROCESSING STATUS SYNCHRONOUSLY TO PREVENT DOUBLE START
+                        self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
+                        state.status['stage_montage'] = 'processing'
+                        self._start_montage(task_id)
+                    else:
+                        self._set_stage_status(task_id, 'stage_montage', 'error', "Prerequisites failed.")
+                        self.check_if_all_finished()
+
+
+    def _start_montage(self, task_id):
+        # Wrapper to handle semaphore
+        class MontageRunnable(QRunnable):
+            def __init__(self, processor, task_id):
+                super().__init__()
+                self.processor = processor
+                self.task_id = task_id
+            def run(self):
+                self.processor.montage_semaphore.acquire()
+                try:
+                    state = self.processor.task_states[self.task_id]
+                    safe_task_name = "".join(c for c in state.job_name if c.isalnum() or c in (' ', '_')).strip()
+                    safe_lang_name = "".join(c for c in state.lang_name if c.isalnum() or c in (' ', '_')).strip()
+                    output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
+                    output_path = os.path.join(state.dir_path, output_filename)
+                    
+                    config = {
+                        'visual_files': state.image_paths, 'audio_path': state.audio_path,
+                        'output_path': output_path, 'ass_path': state.subtitle_path,
+                        'settings': self.processor.settings.get("montage", {})
+                    }
+                    self.processor._start_worker(MontageWorker, self.task_id, 'stage_montage', config,
+                                                 self.processor._on_montage_finished, self.processor._on_montage_error)
+                except Exception as e:
+                    self.processor._on_montage_error(self.task_id, f"Failed to start montage worker: {e}")
+
+        self.threadpool.start(MontageRunnable(self, task_id))
+
+
+    @Slot(str, object)
+    def _on_montage_finished(self, task_id, video_path):
+        self.montage_semaphore.release()
+        self.task_states[task_id].final_video_path = video_path
+        self._set_stage_status(task_id, 'stage_montage', 'success')
+
+    @Slot(str, str)
+    def _on_montage_error(self, task_id, error):
+        self.montage_semaphore.release()
+        self._set_stage_status(task_id, 'stage_montage', 'error', error)
+
+    def check_if_all_finished(self):
+        if self.is_finished:
             return
 
-        sub_settings = self.settings.get('subtitles', {})
-        whisper_type = sub_settings.get('whisper_type', 'amd')
-        model_name = sub_settings.get('whisper_model', 'base.bin')
-        
-        whisper_exe = None
-        whisper_model_path = model_name 
-
-        if whisper_type == 'amd':
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
-            whisper_exe = os.path.join(whisper_base_path, "main.exe")
-            whisper_model_path = os.path.join(whisper_base_path, model_name)
-
-            if not os.path.exists(whisper_exe):
-                logger.log(f"    - Error: Whisper EXE not found at {whisper_exe}", level=LogLevel.ERROR)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return
-
-            if not os.path.exists(whisper_model_path):
-                logger.log(f"    - Error: Whisper Model not found at {whisper_model_path}", level=LogLevel.ERROR)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return
-        
-        lang_code = lang_id.split('-')[0].lower()
-
-        logger.log(f"  - Starting subtitles generation ({whisper_type.upper()}) for: {lang_data['display_name']} (Lang: {lang_code})", level=LogLevel.INFO)
-        
-        try:
-            output_filename = os.path.splitext(os.path.basename(audio_path))[0] + ".ass"
-            output_path = os.path.join(dir_path, output_filename)
-
-            engine = SubtitleEngine(whisper_exe, whisper_model_path)
-            engine.generate_ass(audio_path, output_path, sub_settings, language=lang_code)
-            
-            logger.log(f"    - Subtitles generated successfully: {output_path}", level=LogLevel.SUCCESS)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-
-        except Exception as e:
-            logger.log(f"    - Error generating subtitles for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
-            logger.log(traceback.format_exc(), level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-
-    def _process_montage_stage(self, job_id, lang_id, lang_data, audio_path, dir_path):
-        stage_key = 'stage_montage'
-        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
-        
-        logger.log(f"  - Starting Montage for: {lang_data['display_name']}", level=LogLevel.INFO)
-
-        # Перевірки наявності файлів
-        if not dir_path or not os.path.exists(dir_path):
-            logger.log(f"    - Montage failed: Directory not found.", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
-
-        if not audio_path or not os.path.exists(audio_path):
-            logger.log(f"    - Montage failed: Audio file not found.", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
-
-        # Знаходимо файл субтитрів (.ass)
-        ass_path = None
-        for file in os.listdir(dir_path):
-            if file.endswith(".ass"):
-                ass_path = os.path.join(dir_path, file)
+        all_done = True
+        for state in self.task_states.values():
+            for stage_key in state.stages:
+                if state.status.get(stage_key) == 'pending' or state.status.get(stage_key) == 'processing':
+                    all_done = False
+                    break
+            if not all_done:
                 break
         
-        if not ass_path:
-            logger.log(f"    - Montage failed: ASS subtitles not found in {dir_path}", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
+        if all_done:
+            self.is_finished = True
+            elapsed_ms = self.timer.elapsed()
+            elapsed_str = time.strftime('%H:%M:%S', time.gmtime(elapsed_ms / 1000))
+            logger.log(f"Queue processing finished in {elapsed_str}.", level=LogLevel.SUCCESS)
+            self.processing_finished.emit(elapsed_str)
 
-        # Збираємо картинки (сортуємо за номером)
-        images_dir = os.path.join(dir_path, "images")
-        if not os.path.exists(images_dir):
-            logger.log(f"    - Montage failed: Images directory not found.", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
-
-        visual_files = []
-        try:
-            # Фільтруємо та сортуємо файли (1.png, 2.png, ..., 10.png)
-            files = [f for f in os.listdir(images_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-            # Сортування за числовим значенням у назві
-            files.sort(key=lambda x: int(os.path.splitext(x)[0]) if os.path.splitext(x)[0].isdigit() else x)
-            visual_files = [os.path.join(images_dir, f) for f in files]
-        except Exception as e:
-            logger.log(f"    - Error listing images: {e}", level=LogLevel.ERROR)
-
-        if not visual_files:
-            logger.log(f"    - Montage failed: No images found.", level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
-
-        # Формування вихідного шляху: {TaskName}_{Language}.mp4
-        # Видаляємо спецсимволи з назви завдання для безпеки
-        safe_task_name = "".join(c for c in self.job['name'] if c.isalnum() or c in (' ', '_')).strip()
-        safe_lang_name = "".join(c for c in lang_data['display_name'] if c.isalnum() or c in (' ', '_')).strip()
-        output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
-        output_path = os.path.join(dir_path, output_filename)
-
-        # Отримуємо налаштування монтажу
-        montage_settings = self.settings.get("montage", {})
-
-        try:
-            self.montage_engine.create_video(
-                visual_files=visual_files,
-                audio_path=audio_path,
-                output_path=output_path,
-                ass_path=ass_path,
-                settings=montage_settings
-            )
-            logger.log(f"    - Montage completed successfully: {output_path}", level=LogLevel.SUCCESS)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-
-        except Exception as e:
-            logger.log(f"    - Montage CRITICAL ERROR: {e}", level=LogLevel.ERROR)
-            logger.log(traceback.format_exc(), level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-
-    def save_translation(self, dir_path, content):
-        try:
-            file_path = os.path.join(dir_path, "translation.txt")
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            logger.log(f"    - Translation result saved to: {file_path}", level=LogLevel.INFO)
-        except Exception as e:
-            logger.log(f"    - Failed to save translation result. Error: {e}", level=LogLevel.ERROR)
-
-    def save_image_prompts(self, dir_path, content):
-        try:
-            file_path = os.path.join(dir_path, "image_prompts.txt")
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            logger.log(f"    - Image prompts saved to: {file_path}", level=LogLevel.INFO)
-        except Exception as e:
-            logger.log(f"    - Failed to save image prompts. Error: {e}", level=LogLevel.ERROR)
-
-    def save_voiceover(self, dir_path, content, filename="voice.mp3"):
-        try:
-            file_path = os.path.join(dir_path, filename)
-            with open(file_path, 'wb') as f:
-                f.write(content)
-            logger.log(f"    - Voiceover audio saved to: {file_path}", level=LogLevel.SUCCESS)
-            return file_path
-        except Exception as e:
-            logger.log(f"    - Failed to save voiceover audio. Error: {e}", level=LogLevel.ERROR)
-            return None
-        
-    def _process_subtitles_stage(self, job_id, lang_id, lang_data, audio_path, dir_path):
-        stage_key = 'stage_subtitles'
-        self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'processing')
-        
-        if not audio_path or not os.path.exists(audio_path):
-            logger.log(f"    - Skipping subtitles for {lang_data['display_name']}: Audio file not found.", level=LogLevel.WARNING)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-            return
-
-        sub_settings = self.settings.get('subtitles', {})
-        whisper_type = sub_settings.get('whisper_type', 'amd')
-        model_name = sub_settings.get('whisper_model', 'base.bin')
-        
-        whisper_exe = None
-        whisper_model_path = model_name # За замовчуванням (для standard) це просто назва
-
-        if whisper_type == 'amd':
-            # --- Логіка шляхів для AMD ---
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
-            whisper_exe = os.path.join(whisper_base_path, "main.exe")
-            whisper_model_path = os.path.join(whisper_base_path, model_name)
-
-            if not os.path.exists(whisper_exe):
-                logger.log(f"    - Error: Whisper EXE not found at {whisper_exe}", level=LogLevel.ERROR)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return
-
-            if not os.path.exists(whisper_model_path):
-                logger.log(f"    - Error: Whisper Model not found at {whisper_model_path}", level=LogLevel.ERROR)
-                self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
-                return
-        
-        # Визначаємо код мови (ru-RU -> ru)
-        lang_code = lang_id.split('-')[0].lower()
-
-        logger.log(f"  - Starting subtitles generation ({whisper_type.upper()}) for: {lang_data['display_name']} (Lang: {lang_code})", level=LogLevel.INFO)
-        
-        try:
-            output_filename = os.path.splitext(os.path.basename(audio_path))[0] + ".ass"
-            output_path = os.path.join(dir_path, output_filename)
-
-            # Передаємо whisper_model_path (це або шлях до .bin, або рядок 'base')
-            engine = SubtitleEngine(whisper_exe, whisper_model_path)
-            engine.generate_ass(audio_path, output_path, sub_settings, language=lang_code)
-            
-            logger.log(f"    - Subtitles generated successfully: {output_path}", level=LogLevel.SUCCESS)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'success')
-
-        except Exception as e:
-            logger.log(f"    - Error generating subtitles for {lang_data['display_name']}: {e}", level=LogLevel.ERROR)
-            logger.log(traceback.format_exc(), level=LogLevel.ERROR)
-            self.signals.stage_status_changed.emit(job_id, lang_id, stage_key, 'error')
+# endregion

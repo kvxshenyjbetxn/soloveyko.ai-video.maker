@@ -15,6 +15,8 @@ class StatusDot(QLabel):
     def set_status(self, status):
         if status == 'processing':
             color = '#ffa500' # Orange
+        elif status == 'warning':
+            color = '#ffa500' # Orange
         elif status == 'success':
             color = '#28a745' # Green
         elif status == 'error':

@@ -150,6 +150,7 @@
         "zoom_speed_factor": 1.0,
         "zoom_intensity": 0.15,
         "enable_sway": true,
-        "sway_speed_factor": 2.0
+        "sway_speed_factor": 2.0,
+        "max_concurrent_montages": 2
     }
 }
