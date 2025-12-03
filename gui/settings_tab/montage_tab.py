@@ -47,6 +47,15 @@ class MontageTab(QWidget):
         self.bitrate_spin.setSuffix(" Mbps")
         self.bitrate_spin.valueChanged.connect(self.save_settings)
         render_layout.addRow("Bitrate:", self.bitrate_spin)
+
+        # Додано Upscale Factor
+        self.upscale_spin = QDoubleSpinBox()
+        self.upscale_spin.setRange(1.0, 5.0)
+        self.upscale_spin.setSingleStep(0.1)
+        self.upscale_spin.setSuffix("x")
+        self.upscale_spin.setToolTip("Image upscale factor before processing (Default: 3.0)")
+        self.upscale_spin.valueChanged.connect(self.save_settings)
+        render_layout.addRow("Upscale Factor:", self.upscale_spin)
         
         self.render_group.setLayout(render_layout)
         self.layout.addWidget(self.render_group)
@@ -117,6 +126,7 @@ class MontageTab(QWidget):
         self.codec_combo.setCurrentText(m_settings.get("codec", "libx264"))
         self.preset_combo.setCurrentText(m_settings.get("preset", "medium"))
         self.bitrate_spin.setValue(m_settings.get("bitrate_mbps", 15))
+        self.upscale_spin.setValue(m_settings.get("upscale_factor", 3.0)) # Завантаження upscale
         
         self.enable_trans_cb.setChecked(m_settings.get("enable_transitions", True))
         self.trans_dur_spin.setValue(m_settings.get("transition_duration", 0.5))
@@ -133,14 +143,14 @@ class MontageTab(QWidget):
             "codec": self.codec_combo.currentText(),
             "preset": self.preset_combo.currentText(),
             "bitrate_mbps": self.bitrate_spin.value(),
+            "upscale_factor": self.upscale_spin.value(), # Збереження upscale
             "enable_transitions": self.enable_trans_cb.isChecked(),
             "transition_duration": self.trans_dur_spin.value(),
             "enable_zoom": self.enable_zoom_cb.isChecked(),
             "zoom_speed_factor": self.zoom_speed_spin.value(),
             "zoom_intensity": self.zoom_int_spin.value(),
             "enable_sway": self.enable_sway_cb.isChecked(),
-            "sway_speed_factor": self.sway_speed_spin.value(),
-            "upscale_factor": 3.0
+            "sway_speed_factor": self.sway_speed_spin.value()
         }
         self.settings.set("montage", m_settings)
 
