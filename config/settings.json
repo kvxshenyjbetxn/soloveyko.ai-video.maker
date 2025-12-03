@@ -143,13 +143,13 @@
         "codec": "libx264",
         "preset": "ultrafast",
         "bitrate_mbps": 10,
+        "upscale_factor": 2.0,
         "enable_transitions": true,
         "transition_duration": 0.5,
         "enable_zoom": true,
         "zoom_speed_factor": 1.0,
         "zoom_intensity": 0.15,
         "enable_sway": true,
-        "sway_speed_factor": 2.0,
-        "upscale_factor": 3.0
+        "sway_speed_factor": 2.0
     }
 }
