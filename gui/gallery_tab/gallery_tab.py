@@ -44,7 +44,6 @@ class RegenerateImageWorker(QRunnable):
             elif provider == 'pollinations':
                 api = self.pollinations_api
                 pollinations_config = self.config.get('pollinations_config', {})
-                # Temporarily set the model on the API instance
                 api.model = pollinations_config.get('model', 'flux')
             
             if not api:
@@ -56,7 +55,6 @@ class RegenerateImageWorker(QRunnable):
             if not image_data:
                 raise ValueError("API returned no data.")
 
-            # Save to a new file, overwriting the old one (or creating a new one if extension changes)
             base_name, _ = os.path.splitext(self.old_image_path)
             new_image_path = f"{base_name}.{file_extension}"
             
@@ -90,7 +88,6 @@ class GalleryTab(QWidget):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # Top bar layout
         top_bar_layout = QHBoxLayout()
         
         self.load_demo_button = QPushButton()
@@ -104,7 +101,6 @@ class GalleryTab(QWidget):
         
         main_layout.addLayout(top_bar_layout)
 
-        # Scroll Area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -132,32 +128,40 @@ class GalleryTab(QWidget):
         logger.log(f"Loading {len(image_files)} demo images.", level=LogLevel.INFO)
         for i, filename in enumerate(image_files):
             image_path = os.path.join(demo_dir, filename)
-            task_name = f"Demo Task {(i % 2) + 1}" # Alternate between two demo tasks
+            task_name = f"Demo Task {(i % 4) // 2 + 1}"
+            language = f"Lang {(i % 2) + 1}"
             prompt = f"This is a demo image: {filename}"
-            self.add_image(task_name, image_path, prompt)
+            self.add_image(task_name, language, image_path, prompt)
 
-    def add_image(self, task_name, image_path, prompt):
+    def add_image(self, task_name, language, image_path, prompt):
         if not os.path.exists(image_path):
             logger.log(f"Image path does not exist: {image_path}", level=LogLevel.WARNING)
             return
-            
+
         if task_name not in self.task_groups:
-            group = CollapsibleGroup(task_name)
-            self.content_layout.addWidget(group)
-            self.task_groups[task_name] = group
+            task_group = CollapsibleGroup(task_name)
+            self.content_layout.addWidget(task_group)
+            self.task_groups[task_name] = task_group
         
-        group = self.task_groups[task_name]
+        task_group = self.task_groups[task_name]
+
+        if language not in task_group.language_groups:
+            lang_group = CollapsibleGroup(language, use_flow_layout=True, is_language_group=True, parent_group=task_group)
+            task_group.add_widget(lang_group)
+            task_group.language_groups[language] = lang_group
+
+        lang_group = task_group.language_groups[language]
 
         pixmap = QPixmap(image_path)
         scaled_pixmap = pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         
-        thumbnail = ImageThumbnail(image_path, prompt, scaled_pixmap, group)
+        thumbnail = ImageThumbnail(image_path, prompt, scaled_pixmap, lang_group)
         
         thumbnail.image_clicked.connect(lambda: self._on_image_clicked(image_path))
-        thumbnail.delete_requested.connect(lambda: self._on_delete_requested(thumbnail, group))
+        thumbnail.delete_requested.connect(lambda: self._on_delete_requested(thumbnail, lang_group))
         thumbnail.regenerate_requested.connect(self._on_regenerate_requested)
 
-        group.add_widget(thumbnail)
+        lang_group.add_widget(thumbnail)
         self.update_total_images_count()
 
     def _on_image_clicked(self, image_path):
@@ -168,7 +172,6 @@ class GalleryTab(QWidget):
         if dialog.exec():
             new_values = dialog.get_values()
             
-            # Find thumbnail and activate regenerating state
             thumbnail_to_update = None
             for group in self.task_groups.values():
                 thumbnail = group.find_thumbnail_by_path(image_data['image_path'])
@@ -185,15 +188,13 @@ class GalleryTab(QWidget):
             self.threadpool.start(worker)
 
     def _on_regeneration_finished(self, old_path, new_path):
-        # Find the thumbnail and update it
         for group in self.task_groups.values():
             thumbnail = group.find_thumbnail_by_path(old_path)
             if thumbnail:
-                thumbnail.set_regenerating_state(False) # Restore appearance
+                thumbnail.set_regenerating_state(False)
                 thumbnail.update_image(new_path)
                 logger.log(f"Updated thumbnail for {old_path} with new image {new_path}", level=LogLevel.INFO)
                 
-                # If the path changed (e.g. extension), delete the old image file
                 if old_path != new_path:
                     try:
                         if os.path.exists(old_path):
@@ -204,7 +205,6 @@ class GalleryTab(QWidget):
                 break
 
     def _on_regeneration_error(self, old_path, error_message):
-        # Find the thumbnail and restore its state
         for group in self.task_groups.values():
             thumbnail = group.find_thumbnail_by_path(old_path)
             if thumbnail:
@@ -214,9 +214,8 @@ class GalleryTab(QWidget):
         QMessageBox.critical(self, "Regeneration Failed", f"Could not regenerate image for '{os.path.basename(old_path)}':\n\n{error_message}")
 
 
-    def _on_delete_requested(self, thumbnail_widget, group):
+    def _on_delete_requested(self, thumbnail_widget, lang_group):
         try:
-            # We don't delete demo files, just remove them from the UI
             is_demo_file = os.path.dirname(thumbnail_widget.image_path).endswith('demo')
             if not is_demo_file:
                 os.remove(thumbnail_widget.image_path)
@@ -224,11 +223,22 @@ class GalleryTab(QWidget):
             else:
                 logger.log(f"Removed demo image from gallery: {thumbnail_widget.image_path}", level=LogLevel.INFO)
 
-            group.content_flow_layout.removeWidget(thumbnail_widget)
+            lang_group.content_layout.removeWidget(thumbnail_widget)
             thumbnail_widget.deleteLater()
 
-            group.update_title()
+            lang_group.update_title()
             self.update_total_images_count()
+
+            task_group = lang_group.parent_group
+            if lang_group.get_image_count() == 0:
+                task_group.content_layout.removeWidget(lang_group)
+                lang_group.deleteLater()
+                del task_group.language_groups[lang_group.title]
+
+            if task_group.get_image_count() == 0:
+                self.content_layout.removeWidget(task_group)
+                task_group.deleteLater()
+                del self.task_groups[task_group.title]
 
         except OSError as e:
             logger.log(f"Error deleting image file {thumbnail_widget.image_path}: {e}", level=LogLevel.ERROR)
