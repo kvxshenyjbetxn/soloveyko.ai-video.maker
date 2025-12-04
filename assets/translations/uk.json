@@ -120,6 +120,7 @@
     "gallery_tab_title": "Галерея",
     "gallery_total_images_label": "Всього зображень: {count}",
     "gallery_task_group_title": "{title} ({count} зображень)",
+    "gallery_language_group_title": "{title} ({count} зображень)",
     "confirm_image_deletion_message": "Ви впевнені, що хочете назавжди видалити це зображення з диска?\n\n{}",
     "regenerate_image_title": "Перегенерувати зображення",
     "thumbnail_regen_button": "Перегенерувати",
