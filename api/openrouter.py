@@ -46,7 +46,7 @@ class OpenRouterAPI:
         logger.log("Failed to retrieve OpenRouter balance.", level=LogLevel.ERROR)
         return None
 
-    def get_chat_completion(self, model, messages, max_tokens=4096):
+    def get_chat_completion(self, model, messages, max_tokens=4096, temperature=None):
         if not self.api_key:
             error_msg = "API key is not configured."
             logger.log(error_msg, level=LogLevel.ERROR)
@@ -61,6 +61,10 @@ class OpenRouterAPI:
             "messages": messages,
             "max_tokens": max_tokens
         }
+        
+        # Add optional parameters if provided
+        if temperature is not None:
+            data["temperature"] = temperature
         
         logger.log(f"Requesting chat completion from model: {model}", level=LogLevel.INFO)
         try:
