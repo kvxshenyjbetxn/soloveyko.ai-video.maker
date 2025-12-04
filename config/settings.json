@@ -98,7 +98,7 @@
         }
     },
     "image_prompt_settings": {
-        "prompt": "зроби 5 промтів для генерації зображень.\nкожен промт з нумераціею 1. промт 2 промт. і так далі\nбез зайвих коментарів.\nпромти на англ мові.",
+        "prompt": "зроби 50 промтів для генерації зображень.\nкожен промт з нумераціею 1. промт 2 промт. і так далі\nбез зайвих коментарів.\nпромти на англ мові.",
         "model": "google/gemini-2.5-flash",
         "max_tokens": 10000
     },
@@ -115,7 +115,7 @@
     "googler": {
         "api_key": "PWeLRZwXmKbgFPpywTi2icJBPFblUUkD",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE",
-        "max_threads": 2,
+        "max_threads": 15,
         "seed": "",
         "negative_prompt": "blood"
     },
