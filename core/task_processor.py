@@ -56,14 +56,23 @@ class TranslationWorker(BaseWorker):
     def do_work(self):
         api = OpenRouterAPI()
         lang_config = self.config['lang_config']
+        model = lang_config.get('model', 'unknown')
+        temp = lang_config.get('temperature', 0.7)
+        max_tokens = lang_config.get('max_tokens', 4096)
+        
+        logger.log(f"[{self.task_id}] [{model}] Starting translation (temp: {temp}, max_tokens: {max_tokens})", level=LogLevel.INFO)
+        
         full_prompt = f"{lang_config.get('prompt', '')}\n\n{self.config['text']}"
         response = api.get_chat_completion(
-            model=lang_config.get('model'),
+            model=model,
             messages=[{"role": "user", "content": full_prompt}],
-            max_tokens=lang_config.get('max_tokens', 4096)
+            max_tokens=max_tokens,
+            temperature=temp
         )
         if response and response['choices'][0]['message']['content']:
-            return response['choices'][0]['message']['content']
+            result = response['choices'][0]['message']['content']
+            logger.log(f"[{self.task_id}] [{model}] Translation completed", level=LogLevel.SUCCESS)
+            return result
         else:
             raise Exception("Empty or invalid response from translation API.")
 
@@ -71,14 +80,26 @@ class ImagePromptWorker(BaseWorker):
     def do_work(self):
         api = OpenRouterAPI()
         img_prompt_settings = self.config['img_prompt_settings']
+        model = img_prompt_settings.get('model', 'unknown')
+        temp = img_prompt_settings.get('temperature', 0.7)
+        max_tokens = img_prompt_settings.get('max_tokens', 4096)
+        
+        logger.log(f"[{self.task_id}] [{model}] Starting image prompts generation (temp: {temp}, max_tokens: {max_tokens})", level=LogLevel.INFO)
+        
         full_prompt = f"{img_prompt_settings.get('prompt', '')}\n\n{self.config['text']}"
         response = api.get_chat_completion(
-            model=img_prompt_settings.get('model'),
+            model=model,
             messages=[{"role": "user", "content": full_prompt}],
-            max_tokens=img_prompt_settings.get('max_tokens', 4096)
+            max_tokens=max_tokens,
+            temperature=temp
         )
         if response and response['choices'][0]['message']['content']:
-            return response['choices'][0]['message']['content']
+            result = response['choices'][0]['message']['content']
+            # Count prompts
+            prompts = re.findall(r"^\d+\.\s*(.*)", result, re.MULTILINE)
+            prompts_count = len(prompts)
+            logger.log(f"[{self.task_id}] [{model}] Image prompts generated ({prompts_count} prompts)", level=LogLevel.SUCCESS)
+            return result
         else:
             raise Exception("Empty or invalid response from image prompt API.")
 
@@ -88,6 +109,8 @@ class VoiceoverWorker(BaseWorker):
         dir_path = self.config['dir_path']
         lang_config = self.config['lang_config']
         tts_provider = lang_config.get('tts_provider', 'ElevenLabs')
+        
+        logger.log(f"[{self.task_id}] [{tts_provider}] Starting voiceover generation", level=LogLevel.INFO)
 
         if tts_provider == 'VoiceMaker':
             api = VoicemakerAPI()
@@ -143,20 +166,27 @@ class VoiceoverWorker(BaseWorker):
     def save_audio(self, content, filename):
         path = os.path.join(self.config['dir_path'], filename)
         with open(path, 'wb') as f: f.write(content)
+        tts_provider = self.config['lang_config'].get('tts_provider', 'ElevenLabs')
+        logger.log(f"[{self.task_id}] [{tts_provider}] Voiceover saved", level=LogLevel.SUCCESS)
         return path
 
 class SubtitleWorker(BaseWorker):
     def do_work(self):
-        logger.log(f"[{self.task_id}] Starting subtitle generation", level=LogLevel.INFO)
+        whisper_type = self.config['sub_settings'].get('whisper_type', 'amd')
+        whisper_label = 'amd-fork' if whisper_type == 'amd' else 'whisper'
+        
+        logger.log(f"[{self.task_id}] [{whisper_label}] Starting subtitle generation", level=LogLevel.INFO)
         engine = SubtitleEngine(self.config['whisper_exe'], self.config['whisper_model_path'])
         output_filename = os.path.splitext(os.path.basename(self.config['audio_path']))[0] + ".ass"
         output_path = os.path.join(self.config['dir_path'], output_filename)
         engine.generate_ass(self.config['audio_path'], output_path, self.config['sub_settings'], language=self.config['lang_code'])
-        # Success log is handled by _set_stage_status
+        logger.log(f"[{self.task_id}] [{whisper_label}] Subtitles saved", level=LogLevel.SUCCESS)
         return output_path
 
 class ImageGenerationWorker(BaseWorker):
     def do_work(self):
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         prompts_text = self.config['prompts_text']
         prompts = re.findall(r"^\d+\.\s*(.*)", prompts_text, re.MULTILINE)
         if not prompts:
@@ -170,30 +200,61 @@ class ImageGenerationWorker(BaseWorker):
             api = GooglerAPI()
             file_extension = 'jpg'
             api_kwargs = self.config['api_kwargs']
+            max_threads = self.config.get('max_threads', 1)
         else: # pollinations
             api = PollinationsAPI()
             file_extension = 'png'
             api_kwargs = {}
+            max_threads = 1  # Pollinations doesn't support parallel generation
         
         generated_paths = []
-        for i, prompt in enumerate(prompts):
-            image_data = api.generate_image(prompt, **api_kwargs)
-            if not image_data:
-                logger.log(f"[{self.task_id}] Failed to generate image {i + 1} for prompt: '{prompt}' (no data).", level=LogLevel.WARNING)
+        service_name = provider.capitalize()
+        
+        def generate_single_image(index, prompt):
+            """Generate a single image and return its data"""
+            try:
+                logger.log(f"[{self.task_id}] [{service_name}] Generating image {index + 1}/{len(prompts)}", level=LogLevel.INFO)
+                
+                image_data = api.generate_image(prompt, **api_kwargs)
+                if not image_data:
+                    logger.log(f"[{self.task_id}] [{service_name}] Failed to generate image {index + 1}/{len(prompts)} (no data)", level=LogLevel.WARNING)
+                    return None
+                
+                return (index, image_data)
+            except Exception as e:
+                logger.log(f"[{self.task_id}] [{service_name}] Error generating image {index + 1}: {e}", level=LogLevel.ERROR)
+                return None
+        
+        # Generate images in parallel using ThreadPoolExecutor
+        results = {}
+        with ThreadPoolExecutor(max_workers=max_threads) as executor:
+            future_to_index = {executor.submit(generate_single_image, i, prompt): i for i, prompt in enumerate(prompts)}
+            
+            for future in as_completed(future_to_index):
+                result = future.result()
+                if result:
+                    index, image_data = result
+                    results[index] = image_data
+        
+        # Save images in order
+        for i in range(len(prompts)):
+            if i not in results:
                 continue
-
+            
+            image_data = results[i]
             image_path = os.path.join(images_dir, f"{i + 1}.{file_extension}")
             data_to_write = image_data
+            
             if provider == 'googler' and isinstance(image_data, str):
                 data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
             
-            with open(image_path, 'wb') as f: f.write(data_to_write)
+            with open(image_path, 'wb') as f:
+                f.write(data_to_write)
             
-            logger.log(f"[{self.task_id}] Saved image {i + 1} to {image_path}", level=LogLevel.SUCCESS)
+            logger.log(f"[{self.task_id}] [{service_name}] Image {i + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
             generated_paths.append(image_path)
             # Emit signal for gallery update
             self.signals.status_changed.emit(self.task_id, image_path)
-
         
         if len(generated_paths) == 0 and len(prompts) > 0:
             raise Exception("Failed to generate any images.")
@@ -202,13 +263,20 @@ class ImageGenerationWorker(BaseWorker):
 
 class MontageWorker(BaseWorker):
     def do_work(self):
-        logger.log(f"[{self.task_id}] Starting video montage", level=LogLevel.INFO)
+        import time
+        
+        start_time = time.time()
         engine = MontageEngine()
         # Pass task_id and progress callback to the engine
         self.config['task_id'] = self.task_id
         self.config['progress_callback'] = lambda msg: self.signals.progress_log.emit(self.task_id, msg)
+        self.config['start_time'] = start_time  # Pass start time for logging
         engine.create_video(**self.config)
-        # Success log is handled by _set_stage_status
+        
+        elapsed = time.time() - start_time
+        elapsed_str = time.strftime('%M:%S', time.gmtime(elapsed))
+        logger.log(f"[{self.task_id}] [FFmpeg] Video montage completed (duration: {elapsed_str})", level=LogLevel.SUCCESS)
+        
         return self.config['output_path']
 
 # endregion
@@ -303,6 +371,8 @@ class TaskProcessor(QObject):
         self.task_states = {}
         self.total_subtitle_tasks = 0
         self.completed_subtitle_tasks = 0
+        self.subtitle_barrier_passed = False  # IMPORTANT: Reset barrier between runs
+        self.is_finished = False  # Reset finished flag
         
         base_save_path = self.settings.get('results_path')
         all_languages_config = self.settings.get("languages_config", {})
@@ -316,6 +386,11 @@ class TaskProcessor(QObject):
                     self.total_subtitle_tasks += 1
 
         logger.log(f"Starting processing for {len(self.task_states)} language tasks.", level=LogLevel.INFO)
+        
+        # If there are no subtitle tasks at all, pass the barrier immediately
+        if self.total_subtitle_tasks == 0:
+            self.subtitle_barrier_passed = True
+            logger.log("No subtitle tasks in queue. Barrier passed immediately.", level=LogLevel.INFO)
 
         # 2. Fire initial workers
         for task_id, state in self.task_states.items():
@@ -349,22 +424,19 @@ class TaskProcessor(QObject):
         state.status[stage_key] = status
         self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, status)
         
-        # Human-readable stage names
-        stage_names = {
-            'stage_translation': 'Translation',
-            'stage_img_prompts': 'Image prompts generation',
-            'stage_voiceover': 'Voiceover generation',
-            'stage_subtitles': 'Subtitle generation',
-            'stage_images': 'Image generation',
-            'stage_montage': 'Video montage'
-        }
-        stage_name = stage_names.get(stage_key, stage_key)
-        
-        if status in ['success', 'warning']:
-             log_level = LogLevel.SUCCESS if status == 'success' else LogLevel.WARNING
-             logger.log(f"[{task_id}] ✅ {stage_name} completed", level=log_level)
-        else: # error
-            logger.log(f"[{task_id}] ❌ {stage_name} failed: {error_message}", level=LogLevel.ERROR)
+        # Only log errors here - success logs are handled by individual workers
+        if status == 'error':
+            # Human-readable stage names
+            stage_names = {
+                'stage_translation': 'Translation',
+                'stage_img_prompts': 'Image prompts generation',
+                'stage_voiceover': 'Voiceover generation',
+                'stage_subtitles': 'Subtitle generation',
+                'stage_images': 'Image generation',
+                'stage_montage': 'Video montage'
+            }
+            stage_name = stage_names.get(stage_key, stage_key)
+            logger.log(f"[{task_id}] {stage_name} failed: {error_message}", level=LogLevel.ERROR)
         
         # Always check if the whole queue is finished after a status change.
         # This simplifies logic in error handlers.
@@ -528,6 +600,7 @@ class TaskProcessor(QObject):
             'prompts_text': state.image_prompts,
             'dir_path': state.dir_path,
             'provider': self.settings.get('image_generation_provider', 'pollinations'),
+            'max_threads': googler_settings.get('max_threads', 1),
             'api_kwargs': {
                 'aspect_ratio': googler_settings.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE'),
                 'seed': googler_settings.get('seed'),
@@ -551,7 +624,8 @@ class TaskProcessor(QObject):
         self.task_states[task_id].image_paths = generated_paths
         self._set_stage_status(task_id, 'stage_images', status, "Failed to generate all images." if status != 'success' else None)
 
-        # After image status is set, check if the subtitle barrier has passed and if we can start montages.
+        # After image status is set, check if we can start montages
+        # (only if subtitle barrier has passed)
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
 
@@ -561,21 +635,38 @@ class TaskProcessor(QObject):
 
     def _check_and_start_montages(self):
         for task_id, state in self.task_states.items():
-            if 'stage_montage' in state.stages and state.status.get('stage_montage') == 'pending':
-                # Check if all prerequisites are met
-                subtitles_done = 'stage_subtitles' not in state.stages or state.status.get('stage_subtitles') in ('success', 'warning')
-                images_done = 'stage_images' not in state.stages or state.status.get('stage_images') in ('success', 'warning')
-                
-                if subtitles_done and images_done:
-                    # Montage can proceed if audio and subtitles are OK, and there's at least one image
-                    if state.status.get('stage_subtitles') == 'success' and state.status.get('stage_images') in ('success', 'warning'):
-                        # SET PROCESSING STATUS SYNCHRONOUSLY TO PREVENT DOUBLE START
-                        self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
-                        state.status['stage_montage'] = 'processing'
-                        self._start_montage(task_id)
-                    else:
-                        self._set_stage_status(task_id, 'stage_montage', 'error', "Prerequisites failed.")
+            if 'stage_montage' not in state.stages:
+                continue
+            
+            montage_status = state.status.get('stage_montage')
+            if montage_status != 'pending':
+                continue
+            
+            # Check if all prerequisites are met
+            subtitles_done = 'stage_subtitles' not in state.stages or state.status.get('stage_subtitles') in ('success', 'warning')
+            images_done = 'stage_images' not in state.stages or state.status.get('stage_images') in ('success', 'warning')
+            
+            if subtitles_done and images_done:
+                # Montage can proceed if audio and subtitles are OK, and there's at least one image
+                if state.status.get('stage_subtitles') == 'success' and state.status.get('stage_images') in ('success', 'warning'):
+                    # Check if audio file exists and is valid
+                    if not state.audio_path or not os.path.exists(state.audio_path):
+                        logger.log(f"[{task_id}] Audio file missing or invalid, cannot start montage", level=LogLevel.ERROR)
+                        self._set_stage_status(task_id, 'stage_montage', 'error', "Audio file missing")
                         self.check_if_all_finished()
+                        continue
+                    
+                    # Check if we have at least one image
+                    if not state.image_paths or len(state.image_paths) == 0:
+                        logger.log(f"[{task_id}] No images generated, cannot start montage", level=LogLevel.ERROR)
+                        self._set_stage_status(task_id, 'stage_montage', 'error', "No images available")
+                        self.check_if_all_finished()
+                        continue
+                    
+                    # SET PROCESSING STATUS SYNCHRONOUSLY TO PREVENT DOUBLE START
+                    self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
+                    state.status['stage_montage'] = 'processing'
+                    self._start_montage(task_id)
 
 
     def _start_montage(self, task_id):

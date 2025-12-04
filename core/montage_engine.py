@@ -5,9 +5,8 @@ import sys
 from utils.logger import logger, LogLevel
 
 class MontageEngine:
-    def create_video(self, visual_files, audio_path, output_path, ass_path, settings, task_id=None, progress_callback=None):
+    def create_video(self, visual_files, audio_path, output_path, ass_path, settings, task_id=None, progress_callback=None, start_time=None):
         prefix = f"[{task_id}] " if task_id else ""
-        # logger.log(f"{prefix}--- FFmpeg Engine: Pro Dynamics (Speed & Intensity Controls) ---", level=LogLevel.INFO)
         
         def log_progress(msg):
             """Log to card only (not to main log)"""
@@ -75,8 +74,8 @@ class MontageEngine:
             if ext not in VIDEO_EXTS:
                 final_clip_durations[i] = img_duration
 
-        logger.log(f"{prefix}📊 Audio: {audio_dur:.2f}s. Videos took: {total_video_time:.2f}s.", level=LogLevel.INFO)
-        logger.log(f"{prefix}🖼 Images: {num_images}. Time per image: {img_duration:.2f}s.", level=LogLevel.INFO)
+        # Log compact montage info (single line)
+        logger.log(f"{prefix}[FFmpeg] Starting montage | Audio: {audio_dur:.2f}s, Images: {num_images} ({img_duration:.2f}s each)", level=LogLevel.INFO)
         
         # 3. ГЕНЕРАЦІЯ FFmpeg КОМАНДИ
         inputs = []
@@ -193,8 +192,6 @@ class MontageEngine:
         
         cmd.extend(["-shortest", output_path])
 
-        logger.log(f"{prefix}🚀 Rendering video with FFmpeg...", level=LogLevel.INFO)
-
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         
@@ -214,16 +211,16 @@ class MontageEngine:
                 # Send FFmpeg progress to card only (not to main log)
                 if "frame=" in c or "time=" in c:
                     log_progress(c)
-                # Log errors to both main log and card
-                elif "Error" in c:
-                    logger.log(f"{prefix}{c}", level=LogLevel.ERROR)
-                    log_progress(f"❌ {c}")
+                # Log errors to both main log and card (but ignore mp3 decoder errors - they're non-fatal)
+                elif "Error" in c and "Error submitting packet to decoder" not in c:
+                    logger.log(f"{prefix}[FFmpeg] {c}", level=LogLevel.ERROR)
+                    log_progress(f"[FFmpeg] Error: {c}")
 
         if process.returncode != 0:
             err = "\n".join(full_log[-20:])
-            logger.log(f"{prefix}❌ FFmpeg Error:\n{err}", level=LogLevel.ERROR)
+            logger.log(f"{prefix}[FFmpeg] Rendering failed:\n{err}", level=LogLevel.ERROR)
             raise Exception("FFmpeg failed.")
-        # Success log is handled by MontageWorker completion
+        # Success log is handled by MontageWorker
 
     def _get_duration(self, path):
         cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", 

@@ -33,7 +33,7 @@
             "prompt": "",
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
-            "tts_provider": "ElevenLabs",
+            "tts_provider": "VoiceMaker",
             "elevenlabs_template_uuid": "38cedea9-5381-474f-a82d-874a5fb6b311",
             "voicemaker_voice_id": "ai5-ru-RU-Vladimir",
             "gemini_voice": "Puck",
@@ -115,13 +115,13 @@
     "googler": {
         "api_key": "PWeLRZwXmKbgFPpywTi2icJBPFblUUkD",
         "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE",
-        "max_threads": 5,
+        "max_threads": 2,
         "seed": "",
         "negative_prompt": "blood"
     },
     "elevenlabs_api_key": "427641798:6f346a2f6566757954354b5732517977625a416457513d3d",
     "voicemaker_api_key": "6fa26760-923d-11f0-9347-11ea6ac82a77",
-    "voicemaker_char_limit": 2900,
+    "voicemaker_char_limit": 100,
     "gemini_tts_api_key": "VGJffif22OKOdKZ6l7UDutQOZWM46tUNJ-GxHaGFCbM",
     "gemini_tts_url": "https://gemini-tts-server-beta-production.up.railway.app",
     "subtitles": {
