@@ -167,5 +167,8 @@
     "animation_logic_group": "Анімація та логіка",
     "fade_in_label": "Плавне з'явлення:",
     "fade_out_label": "Плавне зникнення:",
-    "max_words_per_line_label": "Макс. слів у рядку:"
+    "max_words_per_line_label": "Макс. слів у рядку:",
+    "clear_queue": "Очистити чергу",
+    "confirm_clear_queue_title": "Підтвердження очищення черги",
+    "confirm_clear_queue_message": "Ви впевнені, що хочете очистити всю чергу? Це також очистить галерею."
 }

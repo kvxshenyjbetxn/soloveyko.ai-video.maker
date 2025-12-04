@@ -167,5 +167,8 @@
     "animation_logic_group": "Animation & Logic",
     "fade_in_label": "Fade In:",
     "fade_out_label": "Fade Out:",
-    "max_words_per_line_label": "Max Words per Line:"
+    "max_words_per_line_label": "Max Words per Line:",
+    "clear_queue": "Clear Queue",
+    "confirm_clear_queue_title": "Confirm Clear Queue",
+    "confirm_clear_queue_message": "Are you sure you want to clear the entire queue? This will also clear the gallery."
 }

@@ -167,5 +167,8 @@
     "animation_logic_group": "Анимация и логика",
     "fade_in_label": "Появление:",
     "fade_out_label": "Исчезновение:",
-    "max_words_per_line_label": "Макс. слов в строке:"
+    "max_words_per_line_label": "Макс. слов в строке:",
+    "clear_queue": "Очистить очередь",
+    "confirm_clear_queue_title": "Подтверждение очистки очереди",
+    "confirm_clear_queue_message": "Вы уверены, что хотите очистить всю очередь? Это также очистит галерею."
 }
