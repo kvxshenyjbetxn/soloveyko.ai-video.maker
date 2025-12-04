@@ -90,7 +90,7 @@ class MontageEngine:
             this_dur = final_clip_durations[i]
             this_dur_str = fmt(this_dur)
             
-            inputs.append("-i"); inputs.append(f)
+            inputs.append("-i"); inputs.append(f.replace("\\", "/"))
             v_in = f"[{i}:v]"; v_out = f"v{i}_final"
             
             if is_video:
@@ -173,7 +173,7 @@ class MontageEngine:
         filter_parts.append(subs)
 
         full_graph = ";".join(filter_parts)
-        inputs.append("-i"); inputs.append(audio_path)
+        inputs.append("-i"); inputs.append(audio_path.replace("\\", "/"))
         
         cmd = ["ffmpeg", "-y"]
         cmd.extend(inputs)
@@ -190,7 +190,7 @@ class MontageEngine:
         else:
             cmd.extend(["-preset", preset, "-b:v", bitrate_str, "-maxrate", bitrate_str, "-bufsize", f"{bitrate*2}M", "-pix_fmt", "yuv420p"])
         
-        cmd.extend(["-shortest", output_path])
+        cmd.extend(["-shortest", output_path.replace("\\", "/")])
 
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -223,8 +223,9 @@ class MontageEngine:
         # Success log is handled by MontageWorker
 
     def _get_duration(self, path):
+        normalized_path = path.replace("\\", "/")
         cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", 
-               "-of", "default=noprint_wrappers=1:nokey=1", path]
+               "-of", "default=noprint_wrappers=1:nokey=1", normalized_path]
         try:
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.STARTF_USESHOWWINDOW

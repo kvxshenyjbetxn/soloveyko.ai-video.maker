@@ -25,7 +25,7 @@ from core.montage_engine import MontageEngine
 class WorkerSignals(QObject):
     finished = Signal(str, object)  # task_id, result
     error = Signal(str, str)        # task_id, error_message
-    status_changed = Signal(str, str) # task_id, status_message
+    status_changed = Signal(str, str, str) # task_id, image_path, prompt
     progress_log = Signal(str, str)  # task_id, log_message (for card-only logs)
 
 class BaseWorker(QRunnable):
@@ -190,6 +190,10 @@ class ImageGenerationWorker(BaseWorker):
         prompts_text = self.config['prompts_text']
         prompts = re.findall(r"^\d+\.\s*(.*)", prompts_text, re.MULTILINE)
         if not prompts:
+            logger.log(f"[{self.task_id}] Не знайдено нумерованих промптів. Спроба розбору по рядках.", level=LogLevel.INFO)
+            prompts = [line.strip() for line in prompts_text.split('\n') if line.strip()]
+
+        if not prompts:
             raise Exception("No prompts found in the generated text.")
 
         provider = self.config['provider']
@@ -230,7 +234,7 @@ class ImageGenerationWorker(BaseWorker):
                     logger.log(f"[{self.task_id}] [{service_name}] Failed to generate image {index + 1}/{len(prompts)} (no data)", level=LogLevel.WARNING)
                     return None
                 
-                return (index, image_data)
+                return (index, image_data, prompt)
             except Exception as e:
                 logger.log(f"[{self.task_id}] [{service_name}] Error generating image {index + 1}: {e}", level=LogLevel.ERROR)
                 return None
@@ -245,7 +249,7 @@ class ImageGenerationWorker(BaseWorker):
             for future in as_completed(future_to_index):
                 result = future.result()
                 if result:
-                    index, image_data = result
+                    index, image_data, prompt = result
                     
                     # Save the image as soon as it's downloaded
                     image_path = os.path.join(images_dir, f"{index + 1}.{file_extension}")
@@ -265,7 +269,7 @@ class ImageGenerationWorker(BaseWorker):
                         logger.log(f"[{self.task_id}] [{service_name}] Image {index + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
                         generated_paths[index] = image_path
                         # Emit signal for gallery update as soon as one image is ready
-                        self.signals.status_changed.emit(self.task_id, image_path)
+                        self.signals.status_changed.emit(self.task_id, image_path, prompt)
                     except IOError as e:
                         logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index + 1} to {image_path}: {e}", level=LogLevel.ERROR)
 
@@ -338,7 +342,7 @@ class TaskState:
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
-    image_generated = Signal(str, str, str) # task_name, image_path, prompt (TaskID, image_path, prompt)
+    image_generated = Signal(str, str, str, str) # job_name, lang_name, image_path, prompt
     task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
 
     def __init__(self, queue_manager):
@@ -429,13 +433,12 @@ class TaskProcessor(QObject):
         worker.signals.status_changed.connect(self._on_worker_status_changed) # For gallery updates
         self.threadpool.start(worker)
 
-    @Slot(str, str)
-    def _on_worker_status_changed(self, task_id, message):
+    @Slot(str, str, str)
+    def _on_worker_status_changed(self, task_id, image_path, prompt):
         """Used for intermediate status updates, like an image being generated."""
         state = self.task_states.get(task_id)
         if state:
-            # We assume the message is the image path for now
-            self.image_generated.emit(state.job_name, message, "") # task_name, image_path, prompt
+            self.image_generated.emit(state.job_name, state.lang_name, image_path, prompt)
 
     def _set_stage_status(self, task_id, stage_key, status, error_message=None):
         state = self.task_states.get(task_id)
@@ -653,6 +656,10 @@ class TaskProcessor(QObject):
     @Slot(str, str)
     def _on_img_generation_error(self, task_id, error):
         self._set_stage_status(task_id, 'stage_images', 'error', error)
+        # After image status is set, check if we can start montages
+        # (only if subtitle barrier has passed)
+        if self.subtitle_barrier_passed:
+            self._check_and_start_montages()
 
     def _check_and_start_montages(self):
         for task_id, state in self.task_states.items():
@@ -663,31 +670,41 @@ class TaskProcessor(QObject):
             if montage_status != 'pending':
                 continue
             
-            # Check if all prerequisites are met
-            subtitles_done = 'stage_subtitles' not in state.stages or state.status.get('stage_subtitles') in ('success', 'warning')
-            images_done = 'stage_images' not in state.stages or state.status.get('stage_images') in ('success', 'warning')
-            
-            if subtitles_done and images_done:
-                # Montage can proceed if audio and subtitles are OK, and there's at least one image
-                if state.status.get('stage_subtitles') == 'success' and state.status.get('stage_images') in ('success', 'warning'):
-                    # Check if audio file exists and is valid
-                    if not state.audio_path or not os.path.exists(state.audio_path):
-                        logger.log(f"[{task_id}] Audio file missing or invalid, cannot start montage", level=LogLevel.ERROR)
-                        self._set_stage_status(task_id, 'stage_montage', 'error', "Audio file missing")
-                        self.check_if_all_finished()
-                        continue
-                    
-                    # Check if we have at least one image
-                    if not state.image_paths or len(state.image_paths) == 0:
-                        logger.log(f"[{task_id}] No images generated, cannot start montage", level=LogLevel.ERROR)
-                        self._set_stage_status(task_id, 'stage_montage', 'error', "No images available")
-                        self.check_if_all_finished()
-                        continue
-                    
-                    # SET PROCESSING STATUS SYNCHRONOUSLY TO PREVENT DOUBLE START
-                    self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
-                    state.status['stage_montage'] = 'processing'
-                    self._start_montage(task_id)
+            # Check if prerequisite stages are finished (not pending or processing)
+            sub_status = state.status.get('stage_subtitles') if 'stage_subtitles' in state.stages else 'success'
+            img_status = state.status.get('stage_images') if 'stage_images' in state.stages else 'success'
+
+            prerequisites_are_done = sub_status not in ['pending', 'processing'] and \
+                                     img_status not in ['pending', 'processing']
+
+            if prerequisites_are_done:
+                # If prerequisites have failed, fail the montage stage as well.
+                if sub_status == 'error':
+                    self._set_stage_status(task_id, 'stage_montage', 'error', "Prerequisite stage 'Subtitles' failed.")
+                    continue
+                if img_status == 'error':
+                    self._set_stage_status(task_id, 'stage_montage', 'error', "Prerequisite stage 'Image Generation' failed.")
+                    continue
+
+                # Prerequisites are done and haven't failed, so they are 'success' or 'warning'.
+                # Now proceed with the original checks.
+                # Check if audio file exists and is valid
+                if not state.audio_path or not os.path.exists(state.audio_path):
+                    logger.log(f"[{task_id}] Audio file missing or invalid, cannot start montage", level=LogLevel.ERROR)
+                    self._set_stage_status(task_id, 'stage_montage', 'error', "Audio file missing")
+                    continue
+                
+                # Check if we have at least one image
+                if not state.image_paths or len(state.image_paths) == 0:
+                    logger.log(f"[{task_id}] No images generated, cannot start montage", level=LogLevel.ERROR)
+                    self._set_stage_status(task_id, 'stage_montage', 'error', "No images available")
+                    continue
+                
+                # All checks passed, start the montage.
+                # SET PROCESSING STATUS SYNCHRONOUSLY TO PREVENT DOUBLE START
+                self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
+                state.status['stage_montage'] = 'processing'
+                self._start_montage(task_id)
 
 
     def _start_montage(self, task_id):
