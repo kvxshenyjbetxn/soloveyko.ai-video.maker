@@ -210,8 +210,9 @@ class ImageGenerationWorker(BaseWorker):
             api_kwargs = {}
             max_threads = 1  # Pollinations doesn't support parallel generation
         
-        generated_paths = []
         service_name = provider.capitalize()
+        # Initialize results list to maintain order
+        generated_paths = [None] * len(prompts)
         
         def generate_single_image(index, prompt):
             """Generate a single image and return its data"""
@@ -237,8 +238,7 @@ class ImageGenerationWorker(BaseWorker):
                 if is_googler:
                     googler_semaphore.release()
         
-        # Generate images in parallel using ThreadPoolExecutor
-        results = {}
+        # Generate and save images in parallel
         with ThreadPoolExecutor(max_workers=max_threads) as executor:
             future_to_index = {executor.submit(generate_single_image, i, prompt): i for i, prompt in enumerate(prompts)}
             
@@ -246,32 +246,36 @@ class ImageGenerationWorker(BaseWorker):
                 result = future.result()
                 if result:
                     index, image_data = result
-                    results[index] = image_data
-        
-        # Save images in order
-        for i in range(len(prompts)):
-            if i not in results:
-                continue
-            
-            image_data = results[i]
-            image_path = os.path.join(images_dir, f"{i + 1}.{file_extension}")
-            data_to_write = image_data
-            
-            if provider == 'googler' and isinstance(image_data, str):
-                data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
-            
-            with open(image_path, 'wb') as f:
-                f.write(data_to_write)
-            
-            logger.log(f"[{self.task_id}] [{service_name}] Image {i + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
-            generated_paths.append(image_path)
-            # Emit signal for gallery update
-            self.signals.status_changed.emit(self.task_id, image_path)
-        
-        if len(generated_paths) == 0 and len(prompts) > 0:
+                    
+                    # Save the image as soon as it's downloaded
+                    image_path = os.path.join(images_dir, f"{index + 1}.{file_extension}")
+                    data_to_write = image_data
+
+                    if provider == 'googler' and isinstance(image_data, str):
+                        try:
+                            data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
+                        except Exception as e:
+                            logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index + 1}: {e}", level=LogLevel.ERROR)
+                            continue # Skip saving this image
+                    
+                    try:
+                        with open(image_path, 'wb') as f:
+                            f.write(data_to_write)
+                        
+                        logger.log(f"[{self.task_id}] [{service_name}] Image {index + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
+                        generated_paths[index] = image_path
+                        # Emit signal for gallery update as soon as one image is ready
+                        self.signals.status_changed.emit(self.task_id, image_path)
+                    except IOError as e:
+                        logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index + 1} to {image_path}: {e}", level=LogLevel.ERROR)
+
+        # Filter out any None values from failed downloads
+        final_paths = [path for path in generated_paths if path is not None]
+
+        if len(final_paths) == 0 and len(prompts) > 0:
             raise Exception("Failed to generate any images.")
 
-        return {'paths': generated_paths, 'total_prompts': len(prompts)}
+        return {'paths': final_paths, 'total_prompts': len(prompts)}
 
 class MontageWorker(BaseWorker):
     def do_work(self):
