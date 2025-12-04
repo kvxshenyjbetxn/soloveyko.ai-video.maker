@@ -8,7 +8,7 @@
     "languages_config": {
         "uk-UK": {
             "display_name": "Україна",
-            "prompt": "дай відповідь і скажи в кінці Олег",
+            "prompt": "переклади без зайвих коментарів на українську:",
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
             "elevenlabs_template_uuid": "5fbd9e4a-4861-4e46-9836-1138f5d4a356",
@@ -19,7 +19,7 @@
         },
         "en-US": {
             "display_name": "Англійська",
-            "prompt": "переклади на англійську:",
+            "prompt": "переклади на англійську, без зайвих коментарів:",
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
             "elevenlabs_template_uuid": "438a060f-e952-435f-b873-9b18eee4dbfe",
@@ -33,7 +33,7 @@
             "prompt": "",
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
-            "tts_provider": "ElevenLabs",
+            "tts_provider": "VoiceMaker",
             "elevenlabs_template_uuid": "38cedea9-5381-474f-a82d-874a5fb6b311",
             "voicemaker_voice_id": "ai5-ru-RU-Vladimir",
             "gemini_voice": "Puck",
