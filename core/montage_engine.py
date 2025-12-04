@@ -5,8 +5,14 @@ import sys
 from utils.logger import logger, LogLevel
 
 class MontageEngine:
-    def create_video(self, visual_files, audio_path, output_path, ass_path, settings):
-        logger.log("--- FFmpeg Engine: Pro Dynamics (Speed & Intensity Controls) ---", level=LogLevel.INFO)
+    def create_video(self, visual_files, audio_path, output_path, ass_path, settings, task_id=None, progress_callback=None):
+        prefix = f"[{task_id}] " if task_id else ""
+        # logger.log(f"{prefix}--- FFmpeg Engine: Pro Dynamics (Speed & Intensity Controls) ---", level=LogLevel.INFO)
+        
+        def log_progress(msg):
+            """Log to card only (not to main log)"""
+            if progress_callback:
+                progress_callback(msg)
         
         # 1. ОТРИМУЄМО ДАНІ
         audio_dur = self._get_duration(audio_path)
@@ -69,8 +75,8 @@ class MontageEngine:
             if ext not in VIDEO_EXTS:
                 final_clip_durations[i] = img_duration
 
-        logger.log(f"📊 Аудіо: {audio_dur:.2f}s. Відео зайняли: {total_video_time:.2f}s.", level=LogLevel.INFO)
-        logger.log(f"🖼 Картинок: {num_images}. Час на одну картинку: {img_duration:.2f}s.", level=LogLevel.INFO)
+        logger.log(f"{prefix}📊 Audio: {audio_dur:.2f}s. Videos took: {total_video_time:.2f}s.", level=LogLevel.INFO)
+        logger.log(f"{prefix}🖼 Images: {num_images}. Time per image: {img_duration:.2f}s.", level=LogLevel.INFO)
         
         # 3. ГЕНЕРАЦІЯ FFmpeg КОМАНДИ
         inputs = []
@@ -187,7 +193,7 @@ class MontageEngine:
         
         cmd.extend(["-shortest", output_path])
 
-        logger.log("🚀 Sending command to FFmpeg...", level=LogLevel.INFO)
+        logger.log(f"{prefix}🚀 Rendering video with FFmpeg...", level=LogLevel.INFO)
 
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -204,16 +210,21 @@ class MontageEngine:
             if line:
                 c = line.strip()
                 full_log.append(c)
-                # Логуємо не кожен рядок, щоб не спамити, або тільки помилки
-                if "Error" in c:
-                    logger.log(c, level=LogLevel.ERROR)
+                
+                # Send FFmpeg progress to card only (not to main log)
+                if "frame=" in c or "time=" in c:
+                    log_progress(c)
+                # Log errors to both main log and card
+                elif "Error" in c:
+                    logger.log(f"{prefix}{c}", level=LogLevel.ERROR)
+                    log_progress(f"❌ {c}")
 
         if process.returncode != 0:
             err = "\n".join(full_log[-20:])
-            logger.log(f"❌ Error:\n{err}", level=LogLevel.ERROR)
+            logger.log(f"{prefix}❌ FFmpeg Error:\n{err}", level=LogLevel.ERROR)
             raise Exception("FFmpeg failed.")
         else:
-             logger.log(f"✅ Video created successfully: {output_path}", level=LogLevel.SUCCESS)
+             logger.log(f"{prefix}✅ Video created successfully: {os.path.basename(output_path)}", level=LogLevel.SUCCESS)
 
     def _get_duration(self, path):
         cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", 

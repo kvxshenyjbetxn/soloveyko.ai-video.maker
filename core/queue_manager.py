@@ -6,8 +6,16 @@ class QueueManager(QObject):
     def __init__(self):
         super().__init__()
         self.tasks = []
+        self.task_counter = 0
+
+    def generate_task_id(self):
+        self.task_counter += 1
+        return f"Task-{self.task_counter}"
 
     def add_task(self, task):
+        # Generate simple ID if not provided
+        if 'id' not in task or not task['id']:
+            task['id'] = self.generate_task_id()
         self.tasks.append(task)
         self.task_added.emit(task)
 
