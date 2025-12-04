@@ -147,8 +147,8 @@ class TaskCard(QGroupBox):
         stages_container = QWidget()
         grid_layout = QGridLayout(stages_container)
         grid_layout.setContentsMargins(0, 0, 0, 4)
-        grid_layout.setHorizontalSpacing(3)
-        grid_layout.setVerticalSpacing(25)
+        grid_layout.setHorizontalSpacing(8)
+        grid_layout.setVerticalSpacing(2)
         
         self.stages_containers[lang_id] = stages_container
         self.stage_widgets[lang_id] = []
@@ -200,7 +200,7 @@ class TaskCard(QGroupBox):
                 arrow_container = QWidget()
                 arrow_layout = QVBoxLayout(arrow_container)
                 arrow_layout.setContentsMargins(0, 0, 0, 0)
-                arrow_layout.setSpacing(35)
+                arrow_layout.setSpacing(15)
                 
                 if upper_branch:
                     arrow_up = QLabel("↗", self)
@@ -265,7 +265,7 @@ class TaskCard(QGroupBox):
             arrow_container = QWidget()
             arrow_layout = QVBoxLayout(arrow_container)
             arrow_layout.setContentsMargins(0, 0, 0, 0)
-            arrow_layout.setSpacing(0)
+            arrow_layout.setSpacing(15)
             
             if upper_branch:
                 arrow_down = QLabel("↘", self)
