@@ -333,6 +333,10 @@ class QueueTab(QWidget):
         top_layout.addSpacing(20)
         top_layout.addWidget(self.gemini_tts_balance_label)
         top_layout.addStretch()
+
+        self.clear_queue_button = QPushButton()
+        self.clear_queue_button.clicked.connect(self.on_clear_queue_clicked)
+        top_layout.addWidget(self.clear_queue_button)
         
         self.start_processing_button = QPushButton()
         top_layout.addWidget(self.start_processing_button)
@@ -350,6 +354,27 @@ class QueueTab(QWidget):
         main_layout.addWidget(scroll_area)
         
         self.retranslate_ui()
+
+    def on_clear_queue_clicked(self):
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(translator.translate("confirm_clear_queue_title"))
+        msg_box.setText(translator.translate("confirm_clear_queue_message"))
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        
+        if msg_box.exec() == QMessageBox.StandardButton.Yes:
+            # Clear the backend queue
+            self.main_window.queue_manager.clear_queue()
+            
+            # Clear the UI cards
+            for job_id in list(self.task_cards.keys()):
+                card = self.task_cards.pop(job_id)
+                self.tasks_layout.removeWidget(card)
+                card.deleteLater()
+            
+            # Clear the gallery
+            if hasattr(self.main_window, 'gallery_tab') and self.main_window.gallery_tab:
+                self.main_window.gallery_tab.clear_gallery()
 
     def add_task(self, job):
         task_card = TaskCard(job, log_tab=self.log_tab)
@@ -420,5 +445,6 @@ class QueueTab(QWidget):
 
     def retranslate_ui(self):
         self.start_processing_button.setText(translator.translate('start_processing'))
+        self.clear_queue_button.setText(translator.translate('clear_queue'))
         # Retranslating cards would be complex. For now, this is omitted.
         pass

@@ -22,6 +22,9 @@ class QueueManager(QObject):
     def get_tasks(self):
         return self.tasks
 
+    def clear_queue(self):
+        self.tasks.clear()
+
     def get_task_count(self):
         return len(self.tasks)
 

@@ -114,6 +114,20 @@ class GalleryTab(QWidget):
 
         self.update_total_images_count()
 
+    def clear_gallery(self):
+        """Removes all images and groups from the gallery view."""
+        # Clear the data model
+        self.task_groups.clear()
+
+        # Clear the UI by deleting all widgets in the content layout
+        while self.content_layout.count():
+            child = self.content_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        self.update_total_images_count()
+        logger.log("Gallery has been cleared.", level=LogLevel.INFO)
+
     def load_demo_images(self):
         demo_dir = "demo"
         if not os.path.isdir(demo_dir):
