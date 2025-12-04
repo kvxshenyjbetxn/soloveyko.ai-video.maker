@@ -1,9 +1,11 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QTextBrowser, QHBoxLayout, QLineEdit, QComboBox, QCheckBox
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from utils.logger import LogLevel
 from utils.translator import translator
 
 class LogTab(QWidget):
+    log_added = Signal(dict)  # Emits log_data when a new log is added
+    
     def __init__(self):
         super().__init__()
         self.all_logs = []
@@ -43,6 +45,7 @@ class LogTab(QWidget):
     def add_log_message(self, log_data):
         self.all_logs.append(log_data)
         self.display_log(log_data)
+        self.log_added.emit(log_data)  # Notify subscribers about new log
 
     def display_log(self, log_data):
         level = log_data["level"]

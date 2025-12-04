@@ -26,6 +26,7 @@ class WorkerSignals(QObject):
     finished = Signal(str, object)  # task_id, result
     error = Signal(str, str)        # task_id, error_message
     status_changed = Signal(str, str) # task_id, status_message
+    progress_log = Signal(str, str)  # task_id, log_message (for card-only logs)
 
 class BaseWorker(QRunnable):
     def __init__(self, task_id, config):
@@ -36,14 +37,14 @@ class BaseWorker(QRunnable):
 
     def run(self):
         try:
-            logger.log(f"Starting worker for task: {self.task_id}", level=LogLevel.INFO)
+            # logger.log(f"[{self.task_id}] Starting worker", level=LogLevel.INFO)
             result = self.do_work()
             self.signals.finished.emit(self.task_id, result)
-            logger.log(f"Finished worker for task: {self.task_id}", level=LogLevel.INFO)
+            # logger.log(f"[{self.task_id}] Finished worker", level=LogLevel.INFO)
         except Exception as e:
-            error_msg = f"Error in task '{self.task_id}': {e}"
+            error_msg = f"[{self.task_id}] Error: {e}"
             logger.log(error_msg, level=LogLevel.ERROR)
-            logger.log(traceback.format_exc(), level=LogLevel.ERROR)
+            logger.log(f"[{self.task_id}] Traceback:\n{traceback.format_exc()}", level=LogLevel.ERROR)
             self.signals.error.emit(self.task_id, str(e))
 
     def do_work(self):
@@ -146,10 +147,12 @@ class VoiceoverWorker(BaseWorker):
 
 class SubtitleWorker(BaseWorker):
     def do_work(self):
+        logger.log(f"[{self.task_id}] Starting subtitle generation", level=LogLevel.INFO)
         engine = SubtitleEngine(self.config['whisper_exe'], self.config['whisper_model_path'])
         output_filename = os.path.splitext(os.path.basename(self.config['audio_path']))[0] + ".ass"
         output_path = os.path.join(self.config['dir_path'], output_filename)
         engine.generate_ass(self.config['audio_path'], output_path, self.config['sub_settings'], language=self.config['lang_code'])
+        logger.log(f"[{self.task_id}] Subtitle generation completed: {output_filename}", level=LogLevel.SUCCESS)
         return output_path
 
 class ImageGenerationWorker(BaseWorker):
@@ -176,7 +179,7 @@ class ImageGenerationWorker(BaseWorker):
         for i, prompt in enumerate(prompts):
             image_data = api.generate_image(prompt, **api_kwargs)
             if not image_data:
-                logger.log(f"      - Failed to generate image {i + 1} for prompt: '{prompt}' (no data).", level=LogLevel.WARNING)
+                logger.log(f"[{self.task_id}] Failed to generate image {i + 1} for prompt: '{prompt}' (no data).", level=LogLevel.WARNING)
                 continue
 
             image_path = os.path.join(images_dir, f"{i + 1}.{file_extension}")
@@ -186,7 +189,7 @@ class ImageGenerationWorker(BaseWorker):
             
             with open(image_path, 'wb') as f: f.write(data_to_write)
             
-            logger.log(f"      - Saved image {i + 1} to {image_path}", level=LogLevel.SUCCESS)
+            logger.log(f"[{self.task_id}] Saved image {i + 1} to {image_path}", level=LogLevel.SUCCESS)
             generated_paths.append(image_path)
             # Emit signal for gallery update
             self.signals.status_changed.emit(self.task_id, image_path)
@@ -199,8 +202,13 @@ class ImageGenerationWorker(BaseWorker):
 
 class MontageWorker(BaseWorker):
     def do_work(self):
+        logger.log(f"[{self.task_id}] Starting video montage", level=LogLevel.INFO)
         engine = MontageEngine()
+        # Pass task_id and progress callback to the engine
+        self.config['task_id'] = self.task_id
+        self.config['progress_callback'] = lambda msg: self.signals.progress_log.emit(self.task_id, msg)
         engine.create_video(**self.config)
+        logger.log(f"[{self.task_id}] Video montage completed: {os.path.basename(self.config['output_path'])}", level=LogLevel.SUCCESS)
         return self.config['output_path']
 
 # endregion
@@ -240,13 +248,14 @@ class TaskState:
             os.makedirs(dir_path, exist_ok=True)
             return dir_path
         except Exception as e:
-            logger.log(f"    - Failed to create save directory {dir_path}. Error: {e}", level=LogLevel.ERROR)
+            logger.log(f"[{self.task_id}] Failed to create save directory {dir_path}. Error: {e}", level=LogLevel.ERROR)
             return None
 
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
     image_generated = Signal(str, str, str) # task_name, image_path, prompt (TaskID, image_path, prompt)
+    task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
 
     def __init__(self, queue_manager):
         super().__init__()
@@ -342,9 +351,9 @@ class TaskProcessor(QObject):
         
         if status in ['success', 'warning']:
              log_level = LogLevel.SUCCESS if status == 'success' else LogLevel.WARNING
-             logger.log(f"Stage '{stage_key}' completed with status '{status}' for task '{task_id}'", level=log_level)
+             logger.log(f"[{task_id}] Stage '{stage_key}' completed with status '{status}'", level=log_level)
         else: # error
-            logger.log(f"Stage '{stage_key}' failed for task '{task_id}': {error_message}", level=LogLevel.ERROR)
+            logger.log(f"[{task_id}] Stage '{stage_key}' failed: {error_message}", level=LogLevel.ERROR)
         
         # Always check if the whole queue is finished after a status change.
         # This simplifies logic in error handlers.
@@ -579,8 +588,13 @@ class TaskProcessor(QObject):
                         'output_path': output_path, 'ass_path': state.subtitle_path,
                         'settings': self.processor.settings.get("montage", {})
                     }
-                    self.processor._start_worker(MontageWorker, self.task_id, 'stage_montage', config,
-                                                 self.processor._on_montage_finished, self.processor._on_montage_error)
+                    worker = MontageWorker(self.task_id, config)
+                    worker.signals.finished.connect(self.processor._on_montage_finished)
+                    worker.signals.error.connect(self.processor._on_montage_error)
+                    # Connect progress_log to emit job_id based signal
+                    worker.signals.progress_log.connect(self.processor._on_montage_progress)
+                    self.processor.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
+                    self.processor.threadpool.start(worker)
                 except Exception as e:
                     self.processor._on_montage_error(self.task_id, f"Failed to start montage worker: {e}")
 
@@ -597,6 +611,13 @@ class TaskProcessor(QObject):
     def _on_montage_error(self, task_id, error):
         self.montage_semaphore.release()
         self._set_stage_status(task_id, 'stage_montage', 'error', error)
+    
+    @Slot(str, str)
+    def _on_montage_progress(self, task_id, message):
+        """Handle FFmpeg progress messages (card-only logs)"""
+        # Extract job_id from task_id (Task-1_uk-UK -> Task-1)
+        job_id = task_id.split('_')[0] if '_' in task_id else task_id
+        self.task_progress_log.emit(job_id, message)
 
     def check_if_all_finished(self):
         if self.is_finished:

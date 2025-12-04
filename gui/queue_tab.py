@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QLabel, QScrollArea, QGroupBox, QMenu, QToolButton, QMessageBox, QTextEdit, QFrame, QGridLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QLabel, QScrollArea, QGroupBox, QMenu, QToolButton, QMessageBox, QTextBrowser
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QCursor, QPalette, QColor
+from PySide6.QtGui import QAction, QCursor
 from functools import partial
 from utils.translator import translator
 from utils.flow_layout import FlowLayout
@@ -26,19 +26,17 @@ class StatusDot(QLabel):
         
         self.setStyleSheet(f"background-color: {color}; border-radius: 6px;")
 
-class CompactStageWidget(QWidget):
-    """Compact horizontal widget for a single stage."""
+class DeletableStageWidget(QWidget):
+    """A widget for a single stage, allowing deletion via context menu."""
     delete_requested = Signal()
 
-    def __init__(self, stage_key, parent=None, is_original=False):
+    def __init__(self, stage_key, parent=None):
         super().__init__(parent)
-        self.stage_key = stage_key
-        self.stage_name = translator.translate(stage_key) if not is_original else stage_key
-        self.is_original = is_original
+        self.setMinimumHeight(24)
+        self.stage_name = translator.translate(stage_key)
         
         layout = QHBoxLayout()
-        layout.setContentsMargins(2, 2, 2, 2)
-        layout.setSpacing(4)
+        layout.setContentsMargins(4, 0, 4, 0)
         self.setLayout(layout)
 
         self.dot = StatusDot(self)
@@ -46,23 +44,14 @@ class CompactStageWidget(QWidget):
         
         layout.addWidget(self.dot)
         layout.addWidget(self.label)
-        
-        self.setStyleSheet("""
-            CompactStageWidget {
-                background-color: transparent;
-                border: 1px solid palette(mid);
-                border-radius: 4px;
-                padding: 2px;
-            }
-        """)
+        layout.addStretch()
 
     def contextMenuEvent(self, event):
-        if not self.is_original:
-            menu = QMenu(self)
-            delete_action = QAction(translator.translate("delete_stage_formatted").format(self.stage_name), self)
-            delete_action.triggered.connect(self.delete_requested.emit)
-            menu.addAction(delete_action)
-            menu.exec(event.globalPos())
+        menu = QMenu(self)
+        delete_action = QAction(translator.translate("delete_stage_formatted").format(self.stage_name), self)
+        delete_action.triggered.connect(self.delete_requested.emit)
+        menu.addAction(delete_action)
+        menu.exec(event.globalPos())
 
     def get_dot(self):
         return self.dot
@@ -76,7 +65,7 @@ class DeletableLanguageHeader(QWidget):
         self.display_name = display_name
 
         layout = QHBoxLayout()
-        layout.setContentsMargins(0, 4, 0, 2)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(layout)
 
         self.label = QLabel(f"<b>{self.display_name}</b>", self)
@@ -90,215 +79,42 @@ class DeletableLanguageHeader(QWidget):
         menu.addAction(delete_action)
         menu.exec(event.globalPos())
 
-class LogWidget(QTextEdit):
-    """Widget for displaying task logs."""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setReadOnly(True)
-        self.setMaximumHeight(150)
-        self.setMinimumHeight(150)
-        self.setPlaceholderText("Лог завантажується...")
-        self.setVisible(False)
-        self.setStyleSheet("""
-            QTextEdit {
-                background-color: #1e1e1e;
-                color: #cccccc;
-                border: 1px solid #444;
-                border-radius: 4px;
-                padding: 4px;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 10pt;
-            }
-        """)
-
 class TaskCard(QGroupBox):
     """A widget that displays a single task and its stage statuses."""
     task_delete_requested = Signal(str) # job_id
     language_delete_requested = Signal(str, str) # job_id, lang_id
     stage_delete_requested = Signal(str, str, str) # job_id, lang_id, stage_key
 
-    def __init__(self, job, parent=None):
+    def __init__(self, job, log_tab=None, parent=None):
         super().__init__("", parent)
         self.job_id = job['id']
         self.job_name = job['name']
-        self.log_expanded = False
-        
+        self.log_tab = log_tab
+        self.is_expanded = False
         self.setStyleSheet("""
             QGroupBox { 
-                padding: 8px; 
-                border: 1px solid #555;
-                border-radius: 6px;
-                background-color: transparent;
+                padding-top: 8px; 
+                padding-bottom: 8px; 
             }
-            QGroupBox:hover {
-                background-color: rgba(255, 255, 255, 0.05);
+            QGroupBox:hover { 
+                background-color: rgba(255, 255, 255, 0.05); 
             }
         """)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         self.language_widgets = {}
         self.stage_widgets = {}
-        self.stages_containers = {}
 
         self.init_ui(job)
 
-    def _create_branched_layout(self, lang_id, lang_data):
-        """Create a branched visualization of stages."""
-        stages_container = QWidget()
-        grid_layout = QGridLayout(stages_container)
-        grid_layout.setContentsMargins(0, 0, 0, 4)
-        grid_layout.setHorizontalSpacing(8)
-        grid_layout.setVerticalSpacing(2)
-        
-        self.stages_containers[lang_id] = stages_container
-        self.stage_widgets[lang_id] = []
-        
-        # Classify stages into branches
-        start_stage = None
-        upper_branch = []  # Visual stages (prompts, images)
-        lower_branch = []  # Audio stages (voiceover, subtitles)
-        end_stage = None
-        
-        # Add original/translation as start
-        if 'stage_translation' not in lang_data['stages']:
-            start_stage = ('original_text', translator.translate('original_text'), True)
-        else:
-            if 'stage_translation' in lang_data['stages']:
-                start_stage = ('stage_translation', None, False)
-        
-        # Classify stages
-        for stage_key in lang_data['stages']:
-            if stage_key == 'stage_translation':
-                continue
-            elif stage_key in ['stage_img_prompts', 'stage_images']:
-                upper_branch.append(stage_key)
-            elif stage_key in ['stage_voiceover', 'stage_subtitles']:
-                lower_branch.append(stage_key)
-            elif stage_key == 'stage_montage':
-                end_stage = stage_key
-        
-        col = 0
-        
-        # Add start stage (middle row)
-        if start_stage:
-            stage_key, stage_name, is_original = start_stage
-            if is_original:
-                start_widget = CompactStageWidget(stage_name, self, is_original=True)
-                start_widget.get_dot().set_status('success')
-            else:
-                start_widget = CompactStageWidget(stage_key, self)
-                start_widget.delete_requested.connect(
-                    lambda checked=False, lid=lang_id, skey=stage_key: self.on_stage_delete(lid, skey)
-                )
-            
-            self.stage_widgets[lang_id].append(start_widget)
-            grid_layout.addWidget(start_widget, 1, col)
-            col += 1
-            
-            # Add diagonal arrows if there are branches
-            if upper_branch or lower_branch:
-                arrow_container = QWidget()
-                arrow_layout = QVBoxLayout(arrow_container)
-                arrow_layout.setContentsMargins(0, 0, 0, 0)
-                arrow_layout.setSpacing(15)
-                
-                if upper_branch:
-                    arrow_up = QLabel("↗", self)
-                    arrow_up.setStyleSheet("color: #888; font-size: 18pt; padding: 0px; margin: 0px;")
-                    arrow_layout.addWidget(arrow_up, alignment=Qt.AlignmentFlag.AlignCenter)
-                else:
-                    arrow_layout.addStretch()
-                
-                if lower_branch:
-                    arrow_down = QLabel("↘", self)
-                    arrow_down.setStyleSheet("color: #888; font-size: 18pt; padding: 0px; margin: 0px;")
-                    arrow_layout.addWidget(arrow_down, alignment=Qt.AlignmentFlag.AlignCenter)
-                else:
-                    arrow_layout.addStretch()
-                
-                grid_layout.addWidget(arrow_container, 0, col, 3, 1)
-                col += 1
-        
-        # Add both branches in parallel columns
-        max_branch_len = max(len(upper_branch), len(lower_branch))
-        
-        for i in range(max_branch_len):
-            # Add arrows before stages (except first column)
-            if i > 0:
-                if i < len(upper_branch):
-                    arrow = QLabel("→", self)
-                    arrow.setStyleSheet("color: #888; font-size: 14pt;")
-                    grid_layout.addWidget(arrow, 0, col)
-                
-                if i < len(lower_branch):
-                    arrow = QLabel("→", self)
-                    arrow.setStyleSheet("color: #888; font-size: 14pt;")
-                    grid_layout.addWidget(arrow, 2, col)
-                
-                col += 1
-            
-            # Add upper branch stage
-            if i < len(upper_branch):
-                stage_key = upper_branch[i]
-                stage_widget = CompactStageWidget(stage_key, self)
-                stage_widget.delete_requested.connect(
-                    lambda checked=False, lid=lang_id, skey=stage_key: self.on_stage_delete(lid, skey)
-                )
-                self.stage_widgets[lang_id].append(stage_widget)
-                grid_layout.addWidget(stage_widget, 0, col)
-            
-            # Add lower branch stage
-            if i < len(lower_branch):
-                stage_key = lower_branch[i]
-                stage_widget = CompactStageWidget(stage_key, self)
-                stage_widget.delete_requested.connect(
-                    lambda checked=False, lid=lang_id, skey=stage_key: self.on_stage_delete(lid, skey)
-                )
-                self.stage_widgets[lang_id].append(stage_widget)
-                grid_layout.addWidget(stage_widget, 2, col)
-            
-            col += 1
-        
-        # Add end stage (montage) in the middle row
-        if end_stage:
-            # Diagonal arrows converging to montage
-            arrow_container = QWidget()
-            arrow_layout = QVBoxLayout(arrow_container)
-            arrow_layout.setContentsMargins(0, 0, 0, 0)
-            arrow_layout.setSpacing(15)
-            
-            if upper_branch:
-                arrow_down = QLabel("↘", self)
-                arrow_down.setStyleSheet("color: #888; font-size: 18pt; padding: 0px; margin: 0px;")
-                arrow_layout.addWidget(arrow_down, alignment=Qt.AlignmentFlag.AlignCenter)
-            else:
-                arrow_layout.addStretch()
-            
-            if lower_branch:
-                arrow_up = QLabel("↗", self)
-                arrow_up.setStyleSheet("color: #888; font-size: 18pt; padding: 0px; margin: 0px;")
-                arrow_layout.addWidget(arrow_up, alignment=Qt.AlignmentFlag.AlignCenter)
-            else:
-                arrow_layout.addStretch()
-            
-            grid_layout.addWidget(arrow_container, 0, col, 3, 1)
-            col += 1
-            
-            end_widget = CompactStageWidget(end_stage, self)
-            end_widget.delete_requested.connect(
-                lambda checked=False, lid=lang_id, skey=end_stage: self.on_stage_delete(lid, skey)
-            )
-            self.stage_widgets[lang_id].append(end_widget)
-            grid_layout.addWidget(end_widget, 1, col)
-        
-        # Add stretch to push everything to the left
-        grid_layout.setColumnStretch(col + 1, 1)
-        
-        return stages_container
-
     def init_ui(self, job):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(4)
+        # Main horizontal layout for left content and right logs
+        main_layout = QHBoxLayout(self)
+        
+        # Left content widget
+        left_content = QWidget()
+        layout = QVBoxLayout(left_content)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # Custom header
         header_layout = QHBoxLayout()
@@ -319,39 +135,63 @@ class TaskCard(QGroupBox):
 
         for lang_id, lang_data in job['languages'].items():
             lang_header = DeletableLanguageHeader(lang_data['display_name'], self)
-            lang_header.delete_requested.connect(
-                lambda checked=False, lid=lang_id: self.on_language_delete(lid)
-            )
             self.language_widgets[lang_id] = lang_header
             layout.addWidget(lang_header)
             
-            # Create branched layout
-            stages_container = self._create_branched_layout(lang_id, lang_data)
-            layout.addWidget(stages_container)
+            self.stage_widgets[lang_id] = []
+
+            # If translation is not a selected stage, show 'Original'
+            if 'stage_translation' not in lang_data['stages']:
+                original_widget = QWidget()
+                original_layout = QHBoxLayout(original_widget)
+                original_layout.setContentsMargins(4, 0, 4, 0)
+                
+                dot = StatusDot(self)
+                dot.set_status('success') # Original text is always 'successful'
+                label = QLabel(translator.translate('original_text'), self)
+                
+                original_layout.addWidget(dot)
+                original_layout.addWidget(label)
+                original_layout.addStretch()
+                layout.addWidget(original_widget)
+
+            for stage_key in lang_data['stages']:
+                stage_widget = DeletableStageWidget(stage_key, self)
+                stage_widget.delete_requested.connect(lambda lid=lang_id, skey=stage_key: self.on_stage_delete(lid, skey))
+                
+                self.stage_widgets[lang_id].append(stage_widget)
+                layout.addWidget(stage_widget)
         
-        self.log_widget = LogWidget(self)
-        layout.addWidget(self.log_widget)
+        layout.addStretch()
+        
+        # Add left content to main layout
+        main_layout.addWidget(left_content)
+        
+        # Right logs widget
+        self.log_browser = QTextBrowser()
+        self.log_browser.setReadOnly(True)
+        self.log_browser.setVisible(False)
+        self.log_browser.setMinimumWidth(600)
+        self.log_browser.setMaximumWidth(800)
+        self.log_browser.setStyleSheet("QTextBrowser { font-family: 'Courier New', monospace; }")
+        main_layout.addWidget(self.log_browser)
 
     def hide_language(self, lang_id):
         if lang_id in self.language_widgets:
             self.language_widgets[lang_id].setVisible(False)
-        if lang_id in self.stages_containers:
-            self.stages_containers[lang_id].setVisible(False)
+        if lang_id in self.stage_widgets:
+            for stage_widget in self.stage_widgets[lang_id]:
+                stage_widget.setVisible(False)
 
     def hide_stage(self, lang_id, stage_key):
         if lang_id in self.stage_widgets:
             stage_name_to_find = translator.translate(stage_key)
             for stage_widget in self.stage_widgets[lang_id]:
-                if hasattr(stage_widget, 'stage_key') and stage_widget.stage_key == stage_key:
+                if stage_widget.label.text() == stage_name_to_find:
                     stage_widget.setVisible(False)
+                    # Also remove it from the list to avoid finding it again
                     self.stage_widgets[lang_id].remove(stage_widget)
                     break
-    
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.log_expanded = not self.log_expanded
-            self.log_widget.setVisible(self.log_expanded)
-        super().mousePressEvent(event)
     
     def contextMenuEvent(self, event):
         menu = QMenu(self)
@@ -378,15 +218,99 @@ class TaskCard(QGroupBox):
 
     def update_stage_status(self, lang_id, stage_key, status):
         if lang_id in self.stage_widgets:
+            stage_name_to_find = translator.translate(stage_key)
             for stage_widget in self.stage_widgets[lang_id]:
-                if hasattr(stage_widget, 'stage_key') and stage_widget.stage_key == stage_key:
+                if stage_widget.label.text() == stage_name_to_find:
                     stage_widget.get_dot().set_status(status)
                     break
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.toggle_logs()
+        super().mousePressEvent(event)
+    
+    def toggle_logs(self):
+        self.is_expanded = not self.is_expanded
+        self.log_browser.setVisible(self.is_expanded)
+        if self.is_expanded:
+            self.load_logs()
+            # Subscribe to new logs
+            if self.log_tab:
+                self.log_tab.log_added.connect(self.on_new_log)
+        else:
+            # Unsubscribe when collapsed
+            if self.log_tab:
+                try:
+                    self.log_tab.log_added.disconnect(self.on_new_log)
+                except:
+                    pass  # Already disconnected
+    
+    def load_logs(self):
+        if not self.log_tab:
+            return
+        
+        self.log_browser.clear()
+        for log_data in self.log_tab.all_logs:
+            # Filter logs by job_id (task_id contains job_id)
+            if self.job_id in log_data["message"]:
+                self._append_log_message(log_data)
+    
+    def on_new_log(self, log_data):
+        """Called when a new log is added to log_tab"""
+        if not self.is_expanded:
+            return
+        
+        # Filter by job_id
+        if self.job_id in log_data["message"]:
+            self._append_log_message(log_data)
+            # Auto-scroll to bottom
+            self.log_browser.verticalScrollBar().setValue(
+                self.log_browser.verticalScrollBar().maximum()
+            )
+    
+    def on_progress_log(self, message):
+        """Called for card-only logs (FFmpeg progress)"""
+        if not self.is_expanded:
+            return
+        
+        # Format and append progress message (plain text, no colored icons)
+        formatted_message = f'<font color="#00ffff">{message}</font>'
+        self.log_browser.append(formatted_message)
+        # Auto-scroll to bottom
+        self.log_browser.verticalScrollBar().setValue(
+            self.log_browser.verticalScrollBar().maximum()
+        )
+    
+    def _append_log_message(self, log_data):
+        """Format and append a log message to the browser"""
+        level = log_data["level"]
+        color = level.to_color()
+        icon = level.to_icon()
+        
+        formatted_message = (
+            f'<font color="{color}">'
+            f'<b>[{log_data["timestamp"]}]</b> '
+            f'{icon} '
+            f'<b>{level.name: <7}</b> - '
+            f'{log_data["message"]}'
+            f'</font>'
+        )
+        
+        self.log_browser.append(formatted_message)
+    
+    def __del__(self):
+        """Clean up signal connections when card is deleted"""
+        if self.log_tab and self.is_expanded:
+            try:
+                self.log_tab.log_added.disconnect(self.on_new_log)
+            except:
+                pass
 
 class QueueTab(QWidget):
-    def __init__(self, parent=None, main_window=None):
+    def __init__(self, parent=None, main_window=None, log_tab=None):
         super().__init__(parent)
         self.main_window = main_window
+        self.log_tab = log_tab
         self.task_cards = {}
         self.init_ui()
 
@@ -428,7 +352,7 @@ class QueueTab(QWidget):
         self.retranslate_ui()
 
     def add_task(self, job):
-        task_card = TaskCard(job)
+        task_card = TaskCard(job, log_tab=self.log_tab)
         task_card.task_delete_requested.connect(self.on_task_deleted)
         task_card.language_delete_requested.connect(self.on_partial_delete)
         task_card.stage_delete_requested.connect(self.on_partial_delete)
@@ -472,6 +396,12 @@ class QueueTab(QWidget):
         if job_id in self.task_cards:
             card = self.task_cards[job_id]
             card.update_stage_status(lang_id, stage_key, status)
+    
+    def on_task_progress_log(self, job_id, message):
+        """Forward progress log to specific task card"""
+        if job_id in self.task_cards:
+            card = self.task_cards[job_id]
+            card.on_progress_log(message)
 
     def update_balance(self, balance_text):
         self.balance_label.setText(balance_text)

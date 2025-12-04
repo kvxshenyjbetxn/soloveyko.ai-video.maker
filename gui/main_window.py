@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
         self.text_tab = TextTab(main_window=self)
         self.settings_tab = SettingsTab(main_window=self)
         self.log_tab = LogTab()
-        self.queue_tab = QueueTab(parent=self.tabs, main_window=self)
+        self.queue_tab = QueueTab(parent=self.tabs, main_window=self, log_tab=self.log_tab)
         self.gallery_tab = GalleryTab()
         logger.set_log_widget(self.log_tab)
 
@@ -172,6 +172,7 @@ class MainWindow(QMainWindow):
         self.task_processor.processing_finished.connect(self.update_gemini_tts_balance)
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
         self.task_processor.image_generated.connect(self.gallery_tab.add_image)
+        self.task_processor.task_progress_log.connect(self.queue_tab.on_task_progress_log)
         self.gallery_tab.image_clicked.connect(self.show_image_viewer)
 
 
