@@ -196,10 +196,13 @@ class ImageGenerationWorker(BaseWorker):
         images_dir = os.path.join(self.config['dir_path'], "images")
         os.makedirs(images_dir, exist_ok=True)
         
+        googler_semaphore = self.config.get('googler_semaphore')
+
         if provider == 'googler':
             api = GooglerAPI()
             file_extension = 'jpg'
             api_kwargs = self.config['api_kwargs']
+            # This is now the pool size for this specific task, not the global limit
             max_threads = self.config.get('max_threads', 1)
         else: # pollinations
             api = PollinationsAPI()
@@ -212,7 +215,13 @@ class ImageGenerationWorker(BaseWorker):
         
         def generate_single_image(index, prompt):
             """Generate a single image and return its data"""
+            
+            is_googler = provider == 'googler' and googler_semaphore is not None
+            
             try:
+                if is_googler:
+                    googler_semaphore.acquire()
+
                 logger.log(f"[{self.task_id}] [{service_name}] Generating image {index + 1}/{len(prompts)}", level=LogLevel.INFO)
                 
                 image_data = api.generate_image(prompt, **api_kwargs)
@@ -224,6 +233,9 @@ class ImageGenerationWorker(BaseWorker):
             except Exception as e:
                 logger.log(f"[{self.task_id}] [{service_name}] Error generating image {index + 1}: {e}", level=LogLevel.ERROR)
                 return None
+            finally:
+                if is_googler:
+                    googler_semaphore.release()
         
         # Generate images in parallel using ThreadPoolExecutor
         results = {}
@@ -345,7 +357,11 @@ class TaskProcessor(QObject):
         montage_settings = self.settings.get("montage", {})
         max_montage = montage_settings.get("max_concurrent_montages", 1)
         self.montage_semaphore = QSemaphore(max_montage)
-        logger.log(f"Task Processor initialized. Subtitle concurrency: 1, Montage concurrency: {max_montage}", level=LogLevel.INFO)
+
+        googler_settings = self.settings.get("googler", {})
+        max_googler = googler_settings.get("max_threads", 1)
+        self.googler_semaphore = QSemaphore(max_googler)
+        logger.log(f"Task Processor initialized. Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}", level=LogLevel.INFO)
 
     def _load_voicemaker_voices(self):
         try:
@@ -605,7 +621,8 @@ class TaskProcessor(QObject):
                 'aspect_ratio': googler_settings.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE'),
                 'seed': googler_settings.get('seed'),
                 'negative_prompt': googler_settings.get('negative_prompt')
-            }
+            },
+            'googler_semaphore': self.googler_semaphore
         }
         self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
 
