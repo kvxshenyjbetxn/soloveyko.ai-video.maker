@@ -173,6 +173,10 @@ class MainWindow(QMainWindow):
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
         self.task_processor.image_generated.connect(self.gallery_tab.add_image)
         self.task_processor.task_progress_log.connect(self.queue_tab.on_task_progress_log)
+        self.task_processor.image_review_required.connect(self._on_image_review_required)
+        self.gallery_tab.continue_montage_requested.connect(self.task_processor.resume_montage)
+        self.gallery_tab.image_deleted.connect(self.task_processor._on_image_deleted)
+        self.gallery_tab.image_regenerated.connect(self.task_processor._on_image_regenerated)
         self.gallery_tab.image_clicked.connect(self.show_image_viewer)
 
 
@@ -180,6 +184,13 @@ class MainWindow(QMainWindow):
         self.update_elevenlabs_balance()
         self.update_voicemaker_balance()
         self.update_gemini_tts_balance()
+
+    def _on_image_review_required(self, task_id):
+        title = translator.translate('image_review_title')
+        message = translator.translate('image_review_message')
+        QMessageBox.information(self, title, message)
+        self.tabs.setCurrentWidget(self.gallery_tab)
+        self.gallery_tab.show_continue_button(task_id)
 
     def show_image_viewer(self, image_path):
         self.viewer = ImageViewer(image_path, self.central_widget)

@@ -4,6 +4,7 @@ from PySide6.QtGui import QAction, QCursor
 from functools import partial
 from utils.translator import translator
 from utils.flow_layout import FlowLayout
+from utils.logger import logger, LogLevel
 
 class StatusDot(QLabel):
     """A circular widget to indicate status."""

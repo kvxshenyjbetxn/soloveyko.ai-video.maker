@@ -168,16 +168,19 @@ class MontageEngine:
             final_v = "[v_concat]"
 
         # 5. SUBS & AUDIO
-        ass_clean = ass_path.replace("\\", "/").replace(":", "\\:")
-        subs = f"{final_v}subtitles='{ass_clean}'[v_out]"
-        filter_parts.append(subs)
+        output_v_stream = final_v 
+        if ass_path and os.path.exists(ass_path):
+            ass_clean = ass_path.replace("\\", "/").replace(":", "\\:")
+            subs = f"{final_v}subtitles='{ass_clean}'[v_out]"
+            filter_parts.append(subs)
+            output_v_stream = "[v_out]"
 
         full_graph = ";".join(filter_parts)
         inputs.append("-i"); inputs.append(audio_path.replace("\\", "/"))
         
         cmd = ["ffmpeg", "-y"]
         cmd.extend(inputs)
-        cmd.extend(["-filter_complex", full_graph, "-map", "[v_out]", "-map", f"{num_files}:a", "-c:v", codec])
+        cmd.extend(["-filter_complex", full_graph, "-map", output_v_stream, "-map", f"{num_files}:a", "-c:v", codec])
         
         bitrate_str = f"{bitrate}M"
         if codec == "h264_amf":
@@ -191,6 +194,12 @@ class MontageEngine:
             cmd.extend(["-preset", preset, "-b:v", bitrate_str, "-maxrate", bitrate_str, "-bufsize", f"{bitrate*2}M", "-pix_fmt", "yuv420p"])
         
         cmd.extend(["-shortest", output_path.replace("\\", "/")])
+
+        # # --- LOG COMMAND FOR DEBUGGING ---
+        # # Create a printable version of the command
+        # cmd_str = " ".join(f'"{c}"' if " " in c or ":" in c else c for c in cmd)
+        # logger.log(f"{prefix}[FFmpeg] Executing command: {cmd_str}", level=LogLevel.INFO)
+        # # --- END LOGGING ---
 
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW

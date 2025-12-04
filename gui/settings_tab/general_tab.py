@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea, QPushButton, QLineEdit, QFileDialog, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea, QPushButton, QLineEdit, QFileDialog, QHBoxLayout, QCheckBox
 from PySide6.QtCore import Qt
 from utils.translator import translator
 
@@ -79,8 +79,18 @@ class GeneralTab(QWidget):
 
         form_layout.addRow(self.results_path_label, path_layout)
 
+        # Image review checkbox
+        self.image_review_label = QLabel(translator.translate('image_review_label'))
+        self.image_review_checkbox = QCheckBox()
+        self.image_review_checkbox.setChecked(self.main_window.settings_manager.get('image_review_enabled', False))
+        self.image_review_checkbox.stateChanged.connect(self.image_review_changed)
+        form_layout.addRow(self.image_review_label, self.image_review_checkbox)
+
         content_layout.addLayout(form_layout)
         content_layout.addStretch()
+
+    def image_review_changed(self, state):
+        self.main_window.settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
 
     def language_changed(self, index):
         lang_map = {0: "uk", 1: "en", 2: "ru"}
@@ -110,3 +120,4 @@ class GeneralTab(QWidget):
         self.image_provider_label.setText(translator.translate('image_generation_provider_label'))
         self.results_path_label.setText(translator.translate('results_path_label'))
         self.browse_button.setText(translator.translate('browse_button'))
+        self.image_review_label.setText(translator.translate('image_review_label'))
