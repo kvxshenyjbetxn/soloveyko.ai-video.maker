@@ -75,6 +75,9 @@ class RegenerateImageWorker(QRunnable):
 
 class GalleryTab(QWidget):
     image_clicked = Signal(str)
+    image_deleted = Signal(str)
+    image_regenerated = Signal(str, str) # old_path, new_path
+    continue_montage_requested = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -111,6 +114,12 @@ class GalleryTab(QWidget):
 
         self.content_layout = QVBoxLayout(self.content_widget)
         self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self.continue_task_id = None
+        self.continue_button = QPushButton()
+        self.continue_button.clicked.connect(self._on_continue_clicked)
+        self.continue_button.hide()
+        main_layout.addWidget(self.continue_button)
 
         self.update_total_images_count()
 
@@ -202,6 +211,7 @@ class GalleryTab(QWidget):
             self.threadpool.start(worker)
 
     def _on_regeneration_finished(self, old_path, new_path):
+        self.image_regenerated.emit(old_path, new_path)
         for group in self.task_groups.values():
             thumbnail = group.find_thumbnail_by_path(old_path)
             if thumbnail:
@@ -230,12 +240,15 @@ class GalleryTab(QWidget):
 
     def _on_delete_requested(self, thumbnail_widget, lang_group):
         try:
-            is_demo_file = os.path.dirname(thumbnail_widget.image_path).endswith('demo')
+            image_path = thumbnail_widget.image_path
+            self.image_deleted.emit(image_path) # Повідомити про видалення
+
+            is_demo_file = os.path.dirname(image_path).endswith('demo')
             if not is_demo_file:
-                os.remove(thumbnail_widget.image_path)
-                logger.log(f"Deleted image from disk: {thumbnail_widget.image_path}", level=LogLevel.INFO)
+                os.remove(image_path)
+                logger.log(f"Deleted image from disk: {image_path}", level=LogLevel.INFO)
             else:
-                logger.log(f"Removed demo image from gallery: {thumbnail_widget.image_path}", level=LogLevel.INFO)
+                logger.log(f"Removed demo image from gallery: {image_path}", level=LogLevel.INFO)
 
             lang_group.content_layout.removeWidget(thumbnail_widget)
             thumbnail_widget.deleteLater()
@@ -265,5 +278,16 @@ class GalleryTab(QWidget):
     def retranslate_ui(self):
         self.update_total_images_count()
         self.load_demo_button.setText(translator.translate("load_demo_button"))
+        self.continue_button.setText(translator.translate("continue_montage_button"))
         for group in self.task_groups.values():
             group.translate_ui()
+
+    def show_continue_button(self, task_id):
+        self.continue_task_id = task_id
+        self.continue_button.show()
+
+    def _on_continue_clicked(self):
+        if self.continue_task_id:
+            self.continue_montage_requested.emit(self.continue_task_id)
+        self.continue_button.hide()
+        self.continue_task_id = None

@@ -344,6 +344,7 @@ class TaskProcessor(QObject):
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
     image_generated = Signal(str, str, str, str) # job_name, lang_name, image_path, prompt
     task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
+    image_review_required = Signal(str) # task_id
 
     def __init__(self, queue_manager):
         super().__init__()
@@ -359,6 +360,7 @@ class TaskProcessor(QObject):
         self.subtitle_barrier_passed = False
         self.is_finished = False
         self.subtitle_lock = threading.Lock() # Used to sync counter access
+        self.tasks_awaiting_review = []
 
         # --- Semaphores for concurrency control ---
         self.subtitle_semaphore = QSemaphore(1)
@@ -397,6 +399,7 @@ class TaskProcessor(QObject):
         self.completed_subtitle_tasks = 0
         self.subtitle_barrier_passed = False  # IMPORTANT: Reset barrier between runs
         self.is_finished = False  # Reset finished flag
+        self.tasks_awaiting_review = []
         
         base_save_path = self.settings.get('results_path')
         all_languages_config = self.settings.get("languages_config", {})
@@ -700,7 +703,23 @@ class TaskProcessor(QObject):
                     self._set_stage_status(task_id, 'stage_montage', 'error', "No images available")
                     continue
                 
-                # All checks passed, start the montage.
+                # All checks passed, check for image review
+                if self.settings.get('image_review_enabled') and task_id not in self.tasks_awaiting_review:
+                    logger.log(f"[{task_id}] Pausing for image review.", level=LogLevel.INFO)
+                    self.tasks_awaiting_review.append(task_id)
+                    self.image_review_required.emit(task_id)
+                else:
+                    # SET PROCESSING STATUS SYNCHRONOUSLY TO PREVENT DOUBLE START
+                    self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
+                    state.status['stage_montage'] = 'processing'
+                    self._start_montage(task_id)
+
+    @Slot(str)
+    def resume_montage(self, task_id):
+        if task_id in self.tasks_awaiting_review:
+            self.tasks_awaiting_review.remove(task_id)
+            state = self.task_states.get(task_id)
+            if state:
                 # SET PROCESSING STATUS SYNCHRONOUSLY TO PREVENT DOUBLE START
                 self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
                 state.status['stage_montage'] = 'processing'
@@ -718,22 +737,43 @@ class TaskProcessor(QObject):
                 self.processor.montage_semaphore.acquire()
                 try:
                     state = self.processor.task_states[self.task_id]
+
+                    # --- NEW: Re-scan image directory for the most up-to-date file list ---
+                    images_dir = os.path.join(state.dir_path, "images")
+                    final_image_paths = []
+                    if not os.path.isdir(images_dir):
+                        self.processor._on_montage_error(self.task_id, f"Image directory not found: {images_dir}")
+                        return
+
+                    try:
+                        image_files = [f for f in os.listdir(images_dir) if os.path.isfile(os.path.join(images_dir, f))]
+                        image_files.sort(key=lambda f: int(os.path.splitext(f)[0]))
+                        final_image_paths = [os.path.join(images_dir, f) for f in image_files]
+                    except (ValueError, TypeError) as e:
+                        error_msg = f"Could not sort image files numerically in '{images_dir}'. Error: {e}"
+                        self.processor._on_montage_error(self.task_id, error_msg)
+                        return
+                        
+                    if not final_image_paths:
+                        self.processor._on_montage_error(self.task_id, "No images found in the directory after review.")
+                        return
+                    # --- END NEW LOGIC ---
+                    
                     safe_task_name = "".join(c for c in state.job_name if c.isalnum() or c in (' ', '_')).strip()
                     safe_lang_name = "".join(c for c in state.lang_name if c.isalnum() or c in (' ', '_')).strip()
                     output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
                     output_path = os.path.join(state.dir_path, output_filename)
                     
                     config = {
-                        'visual_files': state.image_paths, 'audio_path': state.audio_path,
+                        'visual_files': final_image_paths, 'audio_path': state.audio_path,
                         'output_path': output_path, 'ass_path': state.subtitle_path,
                         'settings': self.processor.settings.get("montage", {})
                     }
                     worker = MontageWorker(self.task_id, config)
                     worker.signals.finished.connect(self.processor._on_montage_finished)
                     worker.signals.error.connect(self.processor._on_montage_error)
-                    # Connect progress_log to emit job_id based signal
                     worker.signals.progress_log.connect(self.processor._on_montage_progress)
-                    self.processor.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
+                    # Note: Status is already set to 'processing' before this runnable is started
                     self.processor.threadpool.start(worker)
                 except Exception as e:
                     self.processor._on_montage_error(self.task_id, f"Failed to start montage worker: {e}")
@@ -758,6 +798,23 @@ class TaskProcessor(QObject):
         # Extract job_id from task_id (Task-1_uk-UK -> Task-1)
         job_id = task_id.split('_')[0] if '_' in task_id else task_id
         self.task_progress_log.emit(job_id, message)
+
+    @Slot(str)
+    def _on_image_deleted(self, image_path):
+        logger.log(f"Received request to remove image '{image_path}' from task states.", level=LogLevel.INFO)
+        for task_id, state in self.task_states.items():
+            if state.image_paths and image_path in state.image_paths:
+                state.image_paths.remove(image_path)
+                logger.log(f"Removed '{os.path.basename(image_path)}' from task {task_id}. Remaining images: {len(state.image_paths)}", level=LogLevel.INFO)
+
+    @Slot(str, str)
+    def _on_image_regenerated(self, old_path, new_path):
+        logger.log(f"Received request to update image path from '{old_path}' to '{new_path}'.", level=LogLevel.INFO)
+        for task_id, state in self.task_states.items():
+            if state.image_paths and old_path in state.image_paths:
+                index = state.image_paths.index(old_path)
+                state.image_paths[index] = new_path
+                logger.log(f"Updated path in task {task_id}. New path: '{new_path}'", level=LogLevel.INFO)
 
     def check_if_all_finished(self):
         if self.is_finished:

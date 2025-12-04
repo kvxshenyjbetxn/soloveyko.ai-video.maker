@@ -67,6 +67,7 @@
     "results_path_label": "Path to save results:",
     "browse_button": "Browse...",
     "select_directory": "Select Folder",
+    "image_review_label": "Image Review:",
     "queue_tab": "Queue",
     "add_to_queue": "Add to Queue",
     "enter_task_name_title": "Enter task name",
@@ -170,5 +171,8 @@
     "max_words_per_line_label": "Max Words per Line:",
     "clear_queue": "Clear Queue",
     "confirm_clear_queue_title": "Confirm Clear Queue",
-    "confirm_clear_queue_message": "Are you sure you want to clear the entire queue? This will also clear the gallery."
+    "confirm_clear_queue_message": "Are you sure you want to clear the entire queue? This will also clear the gallery.",
+    "image_review_title": "Image Review Required",
+    "image_review_message": "Please review the generated images in the Gallery tab. You can regenerate any images you don't like. When you are ready, press the 'Continue Montage' button at the bottom of the gallery.",
+    "continue_montage_button": "Continue Montage"
 }
