@@ -152,7 +152,7 @@ class SubtitleWorker(BaseWorker):
         output_filename = os.path.splitext(os.path.basename(self.config['audio_path']))[0] + ".ass"
         output_path = os.path.join(self.config['dir_path'], output_filename)
         engine.generate_ass(self.config['audio_path'], output_path, self.config['sub_settings'], language=self.config['lang_code'])
-        logger.log(f"[{self.task_id}] Subtitle generation completed: {output_filename}", level=LogLevel.SUCCESS)
+        # Success log is handled by _set_stage_status
         return output_path
 
 class ImageGenerationWorker(BaseWorker):
@@ -208,7 +208,7 @@ class MontageWorker(BaseWorker):
         self.config['task_id'] = self.task_id
         self.config['progress_callback'] = lambda msg: self.signals.progress_log.emit(self.task_id, msg)
         engine.create_video(**self.config)
-        logger.log(f"[{self.task_id}] Video montage completed: {os.path.basename(self.config['output_path'])}", level=LogLevel.SUCCESS)
+        # Success log is handled by _set_stage_status
         return self.config['output_path']
 
 # endregion
@@ -349,11 +349,22 @@ class TaskProcessor(QObject):
         state.status[stage_key] = status
         self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, status)
         
+        # Human-readable stage names
+        stage_names = {
+            'stage_translation': 'Translation',
+            'stage_img_prompts': 'Image prompts generation',
+            'stage_voiceover': 'Voiceover generation',
+            'stage_subtitles': 'Subtitle generation',
+            'stage_images': 'Image generation',
+            'stage_montage': 'Video montage'
+        }
+        stage_name = stage_names.get(stage_key, stage_key)
+        
         if status in ['success', 'warning']:
              log_level = LogLevel.SUCCESS if status == 'success' else LogLevel.WARNING
-             logger.log(f"[{task_id}] Stage '{stage_key}' completed with status '{status}'", level=log_level)
+             logger.log(f"[{task_id}] ✅ {stage_name} completed", level=log_level)
         else: # error
-            logger.log(f"[{task_id}] Stage '{stage_key}' failed: {error_message}", level=LogLevel.ERROR)
+            logger.log(f"[{task_id}] ❌ {stage_name} failed: {error_message}", level=LogLevel.ERROR)
         
         # Always check if the whole queue is finished after a status change.
         # This simplifies logic in error handlers.

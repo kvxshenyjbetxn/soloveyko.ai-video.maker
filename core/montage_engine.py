@@ -223,8 +223,7 @@ class MontageEngine:
             err = "\n".join(full_log[-20:])
             logger.log(f"{prefix}❌ FFmpeg Error:\n{err}", level=LogLevel.ERROR)
             raise Exception("FFmpeg failed.")
-        else:
-             logger.log(f"{prefix}✅ Video created successfully: {os.path.basename(output_path)}", level=LogLevel.SUCCESS)
+        # Success log is handled by MontageWorker completion
 
     def _get_duration(self, path):
         cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", 
