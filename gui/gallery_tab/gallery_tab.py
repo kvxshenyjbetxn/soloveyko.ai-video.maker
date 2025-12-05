@@ -77,7 +77,7 @@ class GalleryTab(QWidget):
     image_clicked = Signal(str)
     image_deleted = Signal(str)
     image_regenerated = Signal(str, str) # old_path, new_path
-    continue_montage_requested = Signal(str)
+    continue_montage_requested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -115,7 +115,6 @@ class GalleryTab(QWidget):
         self.content_layout = QVBoxLayout(self.content_widget)
         self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        self.continue_task_id = None
         self.continue_button = QPushButton()
         self.continue_button.clicked.connect(self._on_continue_clicked)
         self.continue_button.hide()
@@ -282,12 +281,9 @@ class GalleryTab(QWidget):
         for group in self.task_groups.values():
             group.translate_ui()
 
-    def show_continue_button(self, task_id):
-        self.continue_task_id = task_id
+    def show_continue_button(self):
         self.continue_button.show()
 
     def _on_continue_clicked(self):
-        if self.continue_task_id:
-            self.continue_montage_requested.emit(self.continue_task_id)
+        self.continue_montage_requested.emit()
         self.continue_button.hide()
-        self.continue_task_id = None

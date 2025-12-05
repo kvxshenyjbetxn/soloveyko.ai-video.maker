@@ -344,7 +344,7 @@ class TaskProcessor(QObject):
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
     image_generated = Signal(str, str, str, str) # job_name, lang_name, image_path, prompt
     task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
-    image_review_required = Signal(str) # task_id
+    image_review_required = Signal()
 
     def __init__(self, queue_manager):
         super().__init__()
@@ -361,6 +361,8 @@ class TaskProcessor(QObject):
         self.is_finished = False
         self.subtitle_lock = threading.Lock() # Used to sync counter access
         self.tasks_awaiting_review = []
+        self.montage_tasks_ids = set()
+        self.failed_montage_tasks_ids = set()
 
         # --- Semaphores for concurrency control ---
         self.subtitle_semaphore = QSemaphore(1)
@@ -400,6 +402,8 @@ class TaskProcessor(QObject):
         self.subtitle_barrier_passed = False  # IMPORTANT: Reset barrier between runs
         self.is_finished = False  # Reset finished flag
         self.tasks_awaiting_review = []
+        self.montage_tasks_ids = set()
+        self.failed_montage_tasks_ids = set()
         
         base_save_path = self.settings.get('results_path')
         all_languages_config = self.settings.get("languages_config", {})
@@ -411,8 +415,10 @@ class TaskProcessor(QObject):
                 self.task_states[state.task_id] = state
                 if 'stage_subtitles' in state.stages:
                     self.total_subtitle_tasks += 1
+                if 'stage_montage' in state.stages:
+                    self.montage_tasks_ids.add(state.task_id)
 
-        logger.log(f"Starting processing for {len(self.task_states)} language tasks.", level=LogLevel.INFO)
+        logger.log(f"Starting processing for {len(self.task_states)} language tasks. Montage tasks: {len(self.montage_tasks_ids)}", level=LogLevel.INFO)
         
         # If there are no subtitle tasks at all, pass the barrier immediately
         if self.total_subtitle_tasks == 0:
@@ -450,22 +456,19 @@ class TaskProcessor(QObject):
         state.status[stage_key] = status
         self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, status)
         
-        # Only log errors here - success logs are handled by individual workers
         if status == 'error':
-            # Human-readable stage names
+            if task_id in self.montage_tasks_ids and stage_key != 'stage_montage':
+                self.failed_montage_tasks_ids.add(task_id)
+                self._check_if_all_are_ready_or_failed()
+
             stage_names = {
-                'stage_translation': 'Translation',
-                'stage_img_prompts': 'Image prompts generation',
-                'stage_voiceover': 'Voiceover generation',
-                'stage_subtitles': 'Subtitle generation',
-                'stage_images': 'Image generation',
-                'stage_montage': 'Video montage'
+                'stage_translation': 'Translation', 'stage_img_prompts': 'Image prompts generation',
+                'stage_voiceover': 'Voiceover generation', 'stage_subtitles': 'Subtitle generation',
+                'stage_images': 'Image generation', 'stage_montage': 'Video montage'
             }
             stage_name = stage_names.get(stage_key, stage_key)
             logger.log(f"[{task_id}] {stage_name} failed: {error_message}", level=LogLevel.ERROR)
         
-        # Always check if the whole queue is finished after a status change.
-        # This simplifies logic in error handlers.
         self.check_if_all_finished()
 
     # --- Pipeline Logic ---
@@ -497,7 +500,6 @@ class TaskProcessor(QObject):
             self._start_image_prompts(task_id)
         if 'stage_voiceover' in state.stages:
             self._start_voiceover(task_id)
-        # If neither of the above, check if finished
         if 'stage_img_prompts' not in state.stages and 'stage_voiceover' not in state.stages:
             self.check_if_all_finished()
 
@@ -558,11 +560,9 @@ class TaskProcessor(QObject):
 
     def _start_subtitles(self, task_id):
         worker = self._create_subtitle_runnable(task_id)
-        # This worker will only run when the semaphore is free
         self.threadpool.start(worker)
 
     def _create_subtitle_runnable(self, task_id):
-        # Create a QRunnable that waits for the semaphore
         class SemaphoreRunnable(QRunnable):
             def __init__(self, processor, task_id):
                 super().__init__()
@@ -591,7 +591,6 @@ class TaskProcessor(QObject):
                     self.processor._start_worker(SubtitleWorker, self.task_id, 'stage_subtitles', config,
                                                  self.processor._on_subtitles_finished, self.processor._on_subtitles_error)
                 except Exception as e:
-                    # If creating the worker fails, we must handle the error and release the semaphore
                     self.processor._on_subtitles_error(self.task_id, f"Failed to start subtitle worker: {e}")
 
         return SemaphoreRunnable(self, task_id)
@@ -642,7 +641,6 @@ class TaskProcessor(QObject):
         total_prompts = result_dict.get('total_prompts', 0)
         
         status = 'error'
-        # Ensure total_prompts is not zero to avoid division by zero or success on empty prompts
         if total_prompts > 0 and len(generated_paths) == total_prompts:
             status = 'success'
         elif len(generated_paths) > 0:
@@ -651,83 +649,76 @@ class TaskProcessor(QObject):
         self.task_states[task_id].image_paths = generated_paths
         self._set_stage_status(task_id, 'stage_images', status, "Failed to generate all images." if status != 'success' else None)
 
-        # After image status is set, check if we can start montages
-        # (only if subtitle barrier has passed)
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
 
     @Slot(str, str)
     def _on_img_generation_error(self, task_id, error):
         self._set_stage_status(task_id, 'stage_images', 'error', error)
-        # After image status is set, check if we can start montages
-        # (only if subtitle barrier has passed)
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
 
     def _check_and_start_montages(self):
         for task_id, state in self.task_states.items():
-            if 'stage_montage' not in state.stages:
+            if 'stage_montage' not in state.stages or state.status.get('stage_montage') != 'pending':
                 continue
             
-            montage_status = state.status.get('stage_montage')
-            if montage_status != 'pending':
-                continue
-            
-            # Check if prerequisite stages are finished (not pending or processing)
             sub_status = state.status.get('stage_subtitles') if 'stage_subtitles' in state.stages else 'success'
             img_status = state.status.get('stage_images') if 'stage_images' in state.stages else 'success'
 
-            prerequisites_are_done = sub_status not in ['pending', 'processing'] and \
-                                     img_status not in ['pending', 'processing']
+            prerequisites_are_done = sub_status not in ['pending', 'processing'] and img_status not in ['pending', 'processing']
 
             if prerequisites_are_done:
-                # If prerequisites have failed, fail the montage stage as well.
-                if sub_status == 'error':
-                    self._set_stage_status(task_id, 'stage_montage', 'error', "Prerequisite stage 'Subtitles' failed.")
-                    continue
-                if img_status == 'error':
-                    self._set_stage_status(task_id, 'stage_montage', 'error', "Prerequisite stage 'Image Generation' failed.")
+                if sub_status == 'error' or img_status == 'error':
+                    error_msg = f"Prerequisite failed. Subtitles: {sub_status}, Images: {img_status}"
+                    self._set_stage_status(task_id, 'stage_montage', 'error', error_msg)
                     continue
 
-                # Prerequisites are done and haven't failed, so they are 'success' or 'warning'.
-                # Now proceed with the original checks.
-                # Check if audio file exists and is valid
                 if not state.audio_path or not os.path.exists(state.audio_path):
-                    logger.log(f"[{task_id}] Audio file missing or invalid, cannot start montage", level=LogLevel.ERROR)
                     self._set_stage_status(task_id, 'stage_montage', 'error', "Audio file missing")
                     continue
                 
-                # Check if we have at least one image
                 if not state.image_paths or len(state.image_paths) == 0:
-                    logger.log(f"[{task_id}] No images generated, cannot start montage", level=LogLevel.ERROR)
                     self._set_stage_status(task_id, 'stage_montage', 'error', "No images available")
                     continue
                 
-                # All checks passed, check for image review
-                if self.settings.get('image_review_enabled') and task_id not in self.tasks_awaiting_review:
-                    logger.log(f"[{task_id}] Pausing for image review.", level=LogLevel.INFO)
-                    self.tasks_awaiting_review.append(task_id)
-                    self.image_review_required.emit(task_id)
+                if self.settings.get('image_review_enabled'):
+                    if task_id not in self.tasks_awaiting_review:
+                        logger.log(f"[{task_id}] Ready for image review.", level=LogLevel.INFO)
+                        self.tasks_awaiting_review.append(task_id)
                 else:
-                    # SET PROCESSING STATUS SYNCHRONOUSLY TO PREVENT DOUBLE START
                     self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
                     state.status['stage_montage'] = 'processing'
                     self._start_montage(task_id)
+        
+        self._check_if_all_are_ready_or_failed()
 
-    @Slot(str)
-    def resume_montage(self, task_id):
-        if task_id in self.tasks_awaiting_review:
-            self.tasks_awaiting_review.remove(task_id)
+    def _check_if_all_are_ready_or_failed(self):
+        if not self.settings.get('image_review_enabled'):
+            return
+
+        ready_count = len(self.tasks_awaiting_review)
+        failed_count = len(self.failed_montage_tasks_ids)
+        total_montage_tasks = len(self.montage_tasks_ids)
+
+        if ready_count > 0 and (ready_count + failed_count >= total_montage_tasks):
+            logger.log(f"All {total_montage_tasks} tasks accounted for. Requesting review for {ready_count} tasks.", level=LogLevel.SUCCESS)
+            self.image_review_required.emit()
+
+    @Slot()
+    def resume_all_montages(self):
+        logger.log(f"Resuming montage for {len(self.tasks_awaiting_review)} tasks.", level=LogLevel.INFO)
+        tasks_to_start = list(self.tasks_awaiting_review)
+        self.tasks_awaiting_review.clear()
+        
+        for task_id in tasks_to_start:
             state = self.task_states.get(task_id)
             if state:
-                # SET PROCESSING STATUS SYNCHRONOUSLY TO PREVENT DOUBLE START
                 self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
                 state.status['stage_montage'] = 'processing'
                 self._start_montage(task_id)
 
-
     def _start_montage(self, task_id):
-        # Wrapper to handle semaphore
         class MontageRunnable(QRunnable):
             def __init__(self, processor, task_id):
                 super().__init__()
@@ -738,7 +729,6 @@ class TaskProcessor(QObject):
                 try:
                     state = self.processor.task_states[self.task_id]
 
-                    # --- NEW: Re-scan image directory for the most up-to-date file list ---
                     images_dir = os.path.join(state.dir_path, "images")
                     final_image_paths = []
                     if not os.path.isdir(images_dir):
@@ -750,14 +740,12 @@ class TaskProcessor(QObject):
                         image_files.sort(key=lambda f: int(os.path.splitext(f)[0]))
                         final_image_paths = [os.path.join(images_dir, f) for f in image_files]
                     except (ValueError, TypeError) as e:
-                        error_msg = f"Could not sort image files numerically in '{images_dir}'. Error: {e}"
-                        self.processor._on_montage_error(self.task_id, error_msg)
+                        self.processor._on_montage_error(self.task_id, f"Could not sort image files numerically. Error: {e}")
                         return
                         
                     if not final_image_paths:
-                        self.processor._on_montage_error(self.task_id, "No images found in the directory after review.")
+                        self.processor._on_montage_error(self.task_id, "No images found after review.")
                         return
-                    # --- END NEW LOGIC ---
                     
                     safe_task_name = "".join(c for c in state.job_name if c.isalnum() or c in (' ', '_')).strip()
                     safe_lang_name = "".join(c for c in state.lang_name if c.isalnum() or c in (' ', '_')).strip()
@@ -773,7 +761,6 @@ class TaskProcessor(QObject):
                     worker.signals.finished.connect(self.processor._on_montage_finished)
                     worker.signals.error.connect(self.processor._on_montage_error)
                     worker.signals.progress_log.connect(self.processor._on_montage_progress)
-                    # Note: Status is already set to 'processing' before this runnable is started
                     self.processor.threadpool.start(worker)
                 except Exception as e:
                     self.processor._on_montage_error(self.task_id, f"Failed to start montage worker: {e}")
@@ -794,8 +781,6 @@ class TaskProcessor(QObject):
     
     @Slot(str, str)
     def _on_montage_progress(self, task_id, message):
-        """Handle FFmpeg progress messages (card-only logs)"""
-        # Extract job_id from task_id (Task-1_uk-UK -> Task-1)
         job_id = task_id.split('_')[0] if '_' in task_id else task_id
         self.task_progress_log.emit(job_id, message)
 

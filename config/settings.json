@@ -1,7 +1,7 @@
 {
     "language": "uk",
     "theme": "black",
-    "openrouter_api_key": "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",
+    "openrouter_api_key": "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",
     "openrouter_models": [
         "google/gemini-2.5-flash"
     ],
@@ -12,7 +12,7 @@
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
             "elevenlabs_template_uuid": "5fbd9e4a-4861-4e46-9836-1138f5d4a356",
-            "tts_provider": "GeminiTTS",
+            "tts_provider": "ElevenLabs",
             "voicemaker_voice_id": "ai3-af-ZA-Kungawo",
             "gemini_voice": "Enceladus",
             "gemini_tone": "Read aloud in a warm and friendly tone: "
@@ -33,8 +33,8 @@
             "prompt": "",
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
-            "tts_provider": "GeminiTTS",
-            "elevenlabs_template_uuid": "38cedea9-5381-474f-a82d-874a5fb6b311",
+            "tts_provider": "VoiceMaker",
+            "elevenlabs_template_uuid": "e0693f2f-c12f-46fb-8966-a3b0a91d614c",
             "voicemaker_voice_id": "ai5-ru-RU-Vladimir",
             "gemini_voice": "Enceladus",
             "gemini_tone": "Read aloud in a warm and friendly tone: "
@@ -98,7 +98,7 @@
         }
     },
     "image_prompt_settings": {
-        "prompt": "зроби 5 промтів, кожен промт з нового рядка та пронумерований! без зайвих коментарів!",
+        "prompt": "зроби 10 промтів для генерації зображень, кожен промт з новго рядка та з нумераціею, без твоїх коментрів!",
         "model": "google/gemini-2.5-flash",
         "max_tokens": 128000
     },
@@ -120,7 +120,7 @@
         "negative_prompt": "blood"
     },
     "elevenlabs_api_key": "427641798:6f346a2f6566757954354b5732517977625a416457513d3d",
-    "voicemaker_api_key": "6fa26760-923d-11f0-9347-11ea6ac82a77",
+    "voicemaker_api_key": "8de23380-8848-11f0-8bc4-ffe00482a886",
     "voicemaker_char_limit": 2900,
     "gemini_tts_api_key": "VGJffif22OKOdKZ6l7UDutQOZWM46tUNJ-GxHaGFCbM",
     "gemini_tts_url": "https://gemini-tts-server-beta-production.up.railway.app",
