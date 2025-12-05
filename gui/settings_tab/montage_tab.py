@@ -126,6 +126,32 @@ class MontageTab(QWidget):
         self.sway_group.setLayout(sway_layout)
         self.layout.addWidget(self.sway_group)
 
+        # --- Special Processing ---
+        self.special_proc_group = QGroupBox()
+        special_proc_layout = QFormLayout()
+
+        self.enable_special_proc_cb = QCheckBox()
+        self.enable_special_proc_cb.toggled.connect(self.save_settings)
+        self.enable_special_proc_cb.toggled.connect(self.toggle_special_proc_widgets)
+        special_proc_layout.addRow(self.enable_special_proc_cb)
+
+        self.special_proc_img_count_label = QLabel()
+        self.special_proc_img_count_spin = QSpinBox()
+        self.special_proc_img_count_spin.setRange(1, 100)
+        self.special_proc_img_count_spin.valueChanged.connect(self.save_settings)
+        special_proc_layout.addRow(self.special_proc_img_count_label, self.special_proc_img_count_spin)
+
+        self.special_proc_dur_label = QLabel()
+        self.special_proc_dur_spin = QDoubleSpinBox()
+        self.special_proc_dur_spin.setRange(0.1, 10.0)
+        self.special_proc_dur_spin.setSingleStep(0.1)
+        self.special_proc_dur_spin.setSuffix(" s")
+        self.special_proc_dur_spin.valueChanged.connect(self.save_settings)
+        special_proc_layout.addRow(self.special_proc_dur_label, self.special_proc_dur_spin)
+
+        self.special_proc_group.setLayout(special_proc_layout)
+        self.layout.addWidget(self.special_proc_group)
+
         # --- Performance Settings ---
         self.perf_group = QGroupBox()
         perf_layout = QFormLayout()
@@ -159,7 +185,13 @@ class MontageTab(QWidget):
         self.enable_sway_cb.setChecked(m_settings.get("enable_sway", False))
         self.sway_speed_spin.setValue(m_settings.get("sway_speed_factor", 1.0))
 
+        self.enable_special_proc_cb.setChecked(m_settings.get("enable_special_processing", False))
+        self.special_proc_img_count_spin.setValue(m_settings.get("special_processing_image_count", 5))
+        self.special_proc_dur_spin.setValue(m_settings.get("special_processing_duration_per_image", 2.0))
+
         self.max_concurrent_montages_spin.setValue(m_settings.get("max_concurrent_montages", 1))
+
+        self.toggle_special_proc_widgets()
 
     def save_settings(self, *args):
         m_settings = {
@@ -174,6 +206,9 @@ class MontageTab(QWidget):
             "zoom_intensity": self.zoom_int_spin.value(),
             "enable_sway": self.enable_sway_cb.isChecked(),
             "sway_speed_factor": self.sway_speed_spin.value(),
+            "enable_special_processing": self.enable_special_proc_cb.isChecked(),
+            "special_processing_image_count": self.special_proc_img_count_spin.value(),
+            "special_processing_duration_per_image": self.special_proc_dur_spin.value(),
             "max_concurrent_montages": self.max_concurrent_montages_spin.value()
         }
         self.settings.set("montage", m_settings)
@@ -197,6 +232,18 @@ class MontageTab(QWidget):
         self.sway_group.setTitle(translator.translate("sway_effects"))
         self.enable_sway_cb.setText(translator.translate("enable_sway_label"))
         self.sway_speed_label.setText(translator.translate("sway_speed_factor_label"))
+
+        self.special_proc_group.setTitle(translator.translate("special_processing_group"))
+        self.enable_special_proc_cb.setText(translator.translate("enable_special_processing_label"))
+        self.special_proc_img_count_label.setText(translator.translate("image_count_label"))
+        self.special_proc_dur_label.setText(translator.translate("duration_per_image_label"))
         
         self.perf_group.setTitle(translator.translate("performance_group"))
         self.max_concurrent_montages_label.setText(translator.translate("max_concurrent_montages_label"))
+
+    def toggle_special_proc_widgets(self):
+        enabled = self.enable_special_proc_cb.isChecked()
+        self.special_proc_img_count_spin.setEnabled(enabled)
+        self.special_proc_img_count_label.setEnabled(enabled)
+        self.special_proc_dur_spin.setEnabled(enabled)
+        self.special_proc_dur_label.setEnabled(enabled)

@@ -44,38 +44,65 @@ class MontageEngine:
         # 2. МАТЕМАТИКА ЧАСУ (Аудіо - головне)
         VIDEO_EXTS = ['.mp4', '.mkv', '.mov', '.avi', '.webm']
         total_video_time = 0.0
-        num_images = 0
+        image_indices = []
         final_clip_durations = [0] * num_files
         
         for i, f in enumerate(visual_files):
             ext = os.path.splitext(f)[1].lower()
             if ext in VIDEO_EXTS:
                 d = self._get_duration(f)
-                if d == 0: d = 5.0
+                if d == 0: d = 5.0 # fallback
                 final_clip_durations[i] = d
                 total_video_time += d
             else:
-                num_images += 1
-        
+                image_indices.append(i)
+
+        num_images = len(image_indices)
         total_trans_loss = (num_files - 1) * trans_dur
         required_raw_time = audio_dur + total_trans_loss
-        time_for_images = required_raw_time - total_video_time
-        
+        time_for_all_images = required_raw_time - total_video_time
+
+        # --- Нова логіка для спецобробки ---
+        enable_special = settings.get("enable_special_processing", False)
+        special_count = settings.get("special_processing_image_count", 5)
+        special_dur = settings.get("special_processing_duration_per_image", 2.0)
+
+        time_for_normal_images = time_for_all_images
+        num_normal_images = num_images
+
+        if enable_special and num_images > 0:
+            num_special_images = min(num_images, special_count)
+            
+            special_time_total = 0
+            for i in range(num_special_images):
+                img_idx = image_indices[i]
+                final_clip_durations[img_idx] = special_dur
+                special_time_total += special_dur
+
+            time_for_normal_images = time_for_all_images - special_time_total
+            num_normal_images = num_images - num_special_images
+        # --- Кінець нової логіки ---
+
         img_duration = 0
-        if num_images > 0:
-            if time_for_images <= 0:
-                logger.log("⚠️ УВАГА: Відео довші за аудіо. Картинки будуть миттєві.", level=LogLevel.WARNING)
+        if num_normal_images > 0:
+            if time_for_normal_images <= 0:
+                logger.log("⚠️ УВАГА: Відео та спец. картинки довші за аудіо. Звичайні картинки будуть миттєві.", level=LogLevel.WARNING)
                 img_duration = 0.1 
             else:
-                img_duration = time_for_images / num_images
-        
-        for i, f in enumerate(visual_files):
-            ext = os.path.splitext(f)[1].lower()
-            if ext not in VIDEO_EXTS:
-                final_clip_durations[i] = img_duration
+                img_duration = time_for_normal_images / num_normal_images
 
+        # Призначаємо тривалість для "звичайних" картинок
+        start_index = min(num_images, special_count) if enable_special else 0
+        for i in range(start_index, num_images):
+            img_idx = image_indices[i]
+            final_clip_durations[img_idx] = img_duration
+        
         # Log compact montage info (single line)
-        logger.log(f"{prefix}[FFmpeg] Starting montage | Audio: {audio_dur:.2f}s, Images: {num_images} ({img_duration:.2f}s each)", level=LogLevel.INFO)
+        log_msg = f"{prefix}[FFmpeg] Starting montage | Audio: {audio_dur:.2f}s, Images: {num_images}"
+        if enable_special:
+            log_msg += f" (Special: {min(num_images, special_count)}x{special_dur:.2f}s)"
+        log_msg += f", Other Images: {num_normal_images}x{img_duration:.2f}s"
+        logger.log(log_msg, level=LogLevel.INFO)
         
         # 3. ГЕНЕРАЦІЯ FFmpeg КОМАНДИ
         inputs = []
