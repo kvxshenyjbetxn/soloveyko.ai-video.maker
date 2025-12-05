@@ -98,7 +98,7 @@
         }
     },
     "image_prompt_settings": {
-        "prompt": "зроби 10 промтів для генерації зображень, кожен промт з новго рядка та з нумераціею, без твоїх коментрів!",
+        "prompt": "зроби 20 промтів для генерації зображень, кожен промт з новго рядка та з нумераціею, без твоїх коментрів!",
         "model": "google/gemini-2.5-flash",
         "max_tokens": 128000
     },
@@ -151,6 +151,9 @@
         "zoom_intensity": 0.15,
         "enable_sway": true,
         "sway_speed_factor": 1.5,
+        "enable_special_processing": true,
+        "special_processing_image_count": 5,
+        "special_processing_duration_per_image": 2.0,
         "max_concurrent_montages": 3
     },
     "image_review_enabled": true
