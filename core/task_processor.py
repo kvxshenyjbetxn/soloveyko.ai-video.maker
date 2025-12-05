@@ -281,6 +281,74 @@ class ImageGenerationWorker(BaseWorker):
 
         return {'paths': final_paths, 'total_prompts': len(prompts)}
 
+class VideoGenerationWorker(BaseWorker):
+    def do_work(self):
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        image_paths_to_animate = self.config['image_paths']
+        video_prompt = self.config['prompt']
+        video_semaphore = self.config['video_semaphore']
+        
+        api = GooglerAPI()
+        
+        generated_videos = [None] * len(image_paths_to_animate)
+
+        def generate_single_video(index, image_path):
+            try:
+                video_semaphore.acquire()
+                logger.log(f"[{self.task_id}] [Googler Video] Animating image {index + 1}/{len(image_paths_to_animate)}: {os.path.basename(image_path)}", level=LogLevel.INFO)
+                
+                video_data = api.generate_video(image_path, video_prompt)
+                
+                if not video_data:
+                    logger.log(f"[{self.task_id}] [Googler Video] Failed to generate video for {os.path.basename(image_path)} (no data)", level=LogLevel.WARNING)
+                    return None
+                
+                # Replace extension
+                base_name = os.path.splitext(image_path)[0]
+                video_path = f"{base_name}.mp4"
+
+                # Decode and save
+                try:
+                    data_to_write = base64.b64decode(video_data.split(",", 1)[1] if "," in video_data else video_data)
+                    with open(video_path, 'wb') as f:
+                        f.write(data_to_write)
+                    
+                    # Delete original image
+                    try:
+                        os.remove(image_path)
+                    except OSError as e:
+                        logger.log(f"[{self.task_id}] [Googler Video] Could not delete original image {image_path}: {e}", level=LogLevel.WARNING)
+
+                    logger.log(f"[{self.task_id}] [Googler Video] Video {index + 1}/{len(image_paths_to_animate)} saved to {video_path}", level=LogLevel.SUCCESS)
+                    return (index, video_path)
+
+                except Exception as e:
+                    logger.log(f"[{self.task_id}] [Googler Video] Error saving video for {os.path.basename(image_path)}: {e}", level=LogLevel.ERROR)
+                    return None
+
+            except Exception as e:
+                logger.log(f"[{self.task_id}] [Googler Video] Error generating video for {os.path.basename(image_path)}: {e}", level=LogLevel.ERROR)
+                return None
+            finally:
+                video_semaphore.release()
+
+        with ThreadPoolExecutor(max_workers=self.config.get('max_threads', 1)) as executor:
+            future_to_index = {executor.submit(generate_single_video, i, path): i for i, path in enumerate(image_paths_to_animate)}
+            
+            for future in as_completed(future_to_index):
+                result = future.result()
+                if result:
+                    index, video_path = result
+                    generated_videos[index] = video_path
+        
+        final_paths = [path for path in generated_videos if path is not None]
+        
+        if len(final_paths) != len(image_paths_to_animate):
+            logger.log(f"[{self.task_id}] [Googler Video] Warning: only {len(final_paths)} of {len(image_paths_to_animate)} videos were generated.", level=LogLevel.WARNING)
+
+        return {'paths': final_paths}
+
 class MontageWorker(BaseWorker):
     def do_work(self):
         import time
@@ -373,7 +441,10 @@ class TaskProcessor(QObject):
         googler_settings = self.settings.get("googler", {})
         max_googler = googler_settings.get("max_threads", 1)
         self.googler_semaphore = QSemaphore(max_googler)
-        logger.log(f"Task Processor initialized. Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}", level=LogLevel.INFO)
+        
+        max_video = googler_settings.get("max_video_threads", 1)
+        self.video_semaphore = QSemaphore(max_video)
+        logger.log(f"Task Processor initialized. Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}, Video concurrency: {max_video}", level=LogLevel.INFO)
 
     def _load_voicemaker_voices(self):
         try:
@@ -649,14 +720,76 @@ class TaskProcessor(QObject):
         self.task_states[task_id].image_paths = generated_paths
         self._set_stage_status(task_id, 'stage_images', status, "Failed to generate all images." if status != 'success' else None)
 
-        if self.subtitle_barrier_passed:
-            self._check_and_start_montages()
+        # === NEW: Check if video generation is needed ===
+        montage_settings = self.settings.get("montage", {})
+        special_mode = montage_settings.get("special_processing_mode", "Disabled")
+        
+        logger.log(f"[{task_id}] Image generation finished. Checking special processing mode. Mode: '{special_mode}'", level=LogLevel.INFO)
+
+        if special_mode == "Video at the beginning" and generated_paths:
+            self._start_video_generation(task_id)
+        else:
+            if self.subtitle_barrier_passed:
+                self._check_and_start_montages()
 
     @Slot(str, str)
     def _on_img_generation_error(self, task_id, error):
         self._set_stage_status(task_id, 'stage_images', 'error', error)
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
+
+    def _start_video_generation(self, task_id):
+        state = self.task_states[task_id]
+        montage_settings = self.settings.get("montage", {})
+        googler_settings = self.settings.get("googler", {})
+
+        video_count = montage_settings.get("special_processing_video_count", 1)
+        paths_to_animate = state.image_paths[:video_count]
+
+        if not paths_to_animate:
+            logger.log(f"[{task_id}] No images to animate, skipping video generation.", level=LogLevel.INFO)
+            if self.subtitle_barrier_passed:
+                self._check_and_start_montages()
+            return
+            
+        logger.log(f"[{task_id}] Starting video generation for {len(paths_to_animate)} images.", level=LogLevel.INFO)
+
+        config = {
+            'image_paths': paths_to_animate,
+            'prompt': googler_settings.get("video_prompt", "Animate this scene, cinematic movement, 4k"),
+            'video_semaphore': self.video_semaphore,
+            'max_threads': googler_settings.get("max_video_threads", 1)
+        }
+        # Use a new stage key for clarity, or just log it
+        # self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing_video')
+        self._start_worker(VideoGenerationWorker, task_id, 'stage_images', config, self._on_video_generation_finished, self._on_video_generation_error)
+
+    @Slot(str, object)
+    def _on_video_generation_finished(self, task_id, result_dict):
+        state = self.task_states[task_id]
+        generated_videos = result_dict.get('paths', [])
+        
+        logger.log(f"[{task_id}] Video generation finished. Generated {len(generated_videos)} videos.", level=LogLevel.SUCCESS)
+
+        if generated_videos:
+            montage_settings = self.settings.get("montage", {})
+            video_count = montage_settings.get("special_processing_video_count", 1)
+
+            # Create a new list: generated videos + the rest of the original images
+            remaining_images = state.image_paths[video_count:]
+            state.image_paths = generated_videos + remaining_images
+
+        # Since this stage is complete, we can now check for montages
+        if self.subtitle_barrier_passed:
+            self._check_and_start_montages()
+
+    @Slot(str, str)
+    def _on_video_generation_error(self, task_id, error):
+        logger.log(f"[{task_id}] Video generation failed: {error}", level=LogLevel.ERROR)
+        # We don't stop the whole process, just log the error and proceed with the images we have
+        if self.subtitle_barrier_passed:
+            self._check_and_start_montages()
+
 
     def _check_and_start_montages(self):
         for task_id, state in self.task_states.items():
@@ -728,23 +861,12 @@ class TaskProcessor(QObject):
                 self.processor.montage_semaphore.acquire()
                 try:
                     state = self.processor.task_states[self.task_id]
-
-                    images_dir = os.path.join(state.dir_path, "images")
-                    final_image_paths = []
-                    if not os.path.isdir(images_dir):
-                        self.processor._on_montage_error(self.task_id, f"Image directory not found: {images_dir}")
-                        return
-
-                    try:
-                        image_files = [f for f in os.listdir(images_dir) if os.path.isfile(os.path.join(images_dir, f))]
-                        image_files.sort(key=lambda f: int(os.path.splitext(f)[0]))
-                        final_image_paths = [os.path.join(images_dir, f) for f in image_files]
-                    except (ValueError, TypeError) as e:
-                        self.processor._on_montage_error(self.task_id, f"Could not sort image files numerically. Error: {e}")
-                        return
+                    
+                    # Use the authoritative list of paths from the state, which may include videos
+                    final_image_paths = state.image_paths
                         
                     if not final_image_paths:
-                        self.processor._on_montage_error(self.task_id, "No images found after review.")
+                        self.processor._on_montage_error(self.task_id, "No visual files found for montage.")
                         return
                     
                     safe_task_name = "".join(c for c in state.job_name if c.isalnum() or c in (' ', '_')).strip()
