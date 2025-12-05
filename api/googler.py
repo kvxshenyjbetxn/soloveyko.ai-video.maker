@@ -1,5 +1,7 @@
-
 import requests
+import base64
+import time
+import os
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
 
@@ -13,19 +15,31 @@ class GooglerAPI:
         if not self.api_key:
             return None, "not_configured"
         
-        headers = {"X-API-Key": self.api_key}
+        headers = {
+            "X-API-Key": self.api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
         if "headers" in kwargs:
             kwargs["headers"].update(headers)
         else:
             kwargs["headers"] = headers
         
         try:
-            response = requests.request(method, f"{self.base_url}/{endpoint}", **kwargs)
-            if response.status_code == 200:
+            url = f"{self.base_url}/{endpoint}"
+            response = requests.request(method, url, **kwargs)
+            # No special 429 handling for now, just log it.
+            if response.status_code not in [200, 201]:
+                 logger.log(f"API request to {endpoint} failed with status {response.status_code}: {response.text}", level=LogLevel.ERROR)
+                 return None, "error"
+            
+            # For 200, we might get empty body on success (e.g. status checks)
+            # so we handle json decoding carefully
+            try:
                 return response.json(), "connected"
-            else:
-                logger.log(f"API request to {endpoint} failed with status {response.status_code}: {response.text}", level=LogLevel.ERROR)
-                return None, "error"
+            except requests.exceptions.JSONDecodeError:
+                return {}, "connected" # Return empty dict for empty body
+
         except requests.exceptions.RequestException as e:
             logger.log(f"API request to {endpoint} failed: {e}", level=LogLevel.ERROR)
             return None, "error"
@@ -74,4 +88,74 @@ class GooglerAPI:
         
         error_message = data.get("error") if data else "Unknown error"
         logger.log(f"Failed to generate image for prompt: {prompt}. Error: {error_message}", level=LogLevel.ERROR)
+        return None
+
+    def generate_video(self, image_path, prompt):
+        
+        def encode_image(path):
+            if not os.path.exists(path):
+                logger.log(f"Image file not found for video generation: {path}", level=LogLevel.ERROR)
+                return None
+            with open(path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                # Guess extension
+                ext = os.path.splitext(path)[1].lower().replace('.', '')
+                if ext not in ['jpeg', 'jpg', 'png']:
+                    ext = 'jpeg' # Default
+                return f"data:image/{ext};base64,{encoded_string}"
+
+        image_data_uri = encode_image(image_path)
+        if not image_data_uri:
+            return None
+
+        payload = {
+            "provider": "google_fx",
+            "operation": "generate_video_from_image",
+            "parameters": {
+                "prompt": prompt,
+                "input_image": image_data_uri,
+            }
+        }
+        
+        logger.log(f"Requesting video generation for image: {os.path.basename(image_path)}", level=LogLevel.INFO)
+        
+        start_data, start_status = self._make_request("post", "videos", json=payload)
+        
+        if start_status != "connected" or not start_data or "operation_id" not in start_data:
+            logger.log(f"Failed to start video generation for {os.path.basename(image_path)}. Response: {start_data}", level=LogLevel.ERROR)
+            return None
+            
+        operation_id = start_data["operation_id"]
+        logger.log(f"Video generation task created for {os.path.basename(image_path)}. Operation ID: {operation_id}", level=LogLevel.INFO)
+
+        # Polling for result
+        for i in range(60): # 5 minute timeout
+            time.sleep(5)
+            status_data, status_status = self._make_request("get", f"videos/status/{operation_id}")
+
+            if status_status != "connected":
+                logger.log(f"Failed to get status for operation {operation_id}", level=LogLevel.WARNING)
+                continue
+
+            status = status_data.get("status")
+            logger.log(f"Polling for {operation_id}: status is '{status}'", level=LogLevel.INFO)
+            
+            if status == "success":
+                result = status_data.get("result") or status_data.get("output")
+                if result:
+                    logger.log(f"Successfully generated video for {os.path.basename(image_path)}", level=LogLevel.SUCCESS)
+                    return result
+                else:
+                    logger.log(f"Video generation status is 'success' but no result/output field found for {operation_id}", level=LogLevel.ERROR)
+                    return None
+            
+            elif status == "error":
+                logger.log(f"Video generation failed for {operation_id}. Details: {status_data}", level=LogLevel.ERROR)
+                return None
+            
+            elif status not in ["pending", "processing"]:
+                logger.log(f"Unknown status '{status}' for operation {operation_id}. Aborting.", level=LogLevel.ERROR)
+                return None
+        
+        logger.log(f"Timeout waiting for video generation result for operation {operation_id}", level=LogLevel.ERROR)
         return None

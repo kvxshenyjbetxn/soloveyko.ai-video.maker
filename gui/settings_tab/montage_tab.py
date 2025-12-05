@@ -130,11 +130,16 @@ class MontageTab(QWidget):
         self.special_proc_group = QGroupBox()
         special_proc_layout = QFormLayout()
 
-        self.enable_special_proc_cb = QCheckBox()
-        self.enable_special_proc_cb.toggled.connect(self.save_settings)
-        self.enable_special_proc_cb.toggled.connect(self.toggle_special_proc_widgets)
-        special_proc_layout.addRow(self.enable_special_proc_cb)
+        self.special_proc_mode_label = QLabel()
+        self.special_proc_mode_combo = QComboBox()
+        self.special_proc_mode_combo.addItem(translator.translate("special_proc_mode_disabled"), "Disabled")
+        self.special_proc_mode_combo.addItem(translator.translate("special_proc_mode_quick_show"), "Quick show")
+        self.special_proc_mode_combo.addItem(translator.translate("special_proc_mode_video_at_beginning"), "Video at the beginning")
+        self.special_proc_mode_combo.currentIndexChanged.connect(self.save_settings)
+        self.special_proc_mode_combo.currentIndexChanged.connect(self.toggle_special_proc_widgets)
+        special_proc_layout.addRow(self.special_proc_mode_label, self.special_proc_mode_combo)
 
+        # Quick show settings
         self.special_proc_img_count_label = QLabel()
         self.special_proc_img_count_spin = QSpinBox()
         self.special_proc_img_count_spin.setRange(1, 100)
@@ -149,6 +154,13 @@ class MontageTab(QWidget):
         self.special_proc_dur_spin.valueChanged.connect(self.save_settings)
         special_proc_layout.addRow(self.special_proc_dur_label, self.special_proc_dur_spin)
 
+        # Video at the beginning settings
+        self.special_proc_video_count_label = QLabel()
+        self.special_proc_video_count_spin = QSpinBox()
+        self.special_proc_video_count_spin.setRange(1, 100)
+        self.special_proc_video_count_spin.valueChanged.connect(self.save_settings)
+        special_proc_layout.addRow(self.special_proc_video_count_label, self.special_proc_video_count_spin)
+        
         self.special_proc_group.setLayout(special_proc_layout)
         self.layout.addWidget(self.special_proc_group)
 
@@ -185,9 +197,14 @@ class MontageTab(QWidget):
         self.enable_sway_cb.setChecked(m_settings.get("enable_sway", False))
         self.sway_speed_spin.setValue(m_settings.get("sway_speed_factor", 1.0))
 
-        self.enable_special_proc_cb.setChecked(m_settings.get("enable_special_processing", False))
+        mode = m_settings.get("special_processing_mode", "Disabled")
+        index = self.special_proc_mode_combo.findData(mode)
+        if index != -1:
+            self.special_proc_mode_combo.setCurrentIndex(index)
+
         self.special_proc_img_count_spin.setValue(m_settings.get("special_processing_image_count", 5))
         self.special_proc_dur_spin.setValue(m_settings.get("special_processing_duration_per_image", 2.0))
+        self.special_proc_video_count_spin.setValue(m_settings.get("special_processing_video_count", 1))
 
         self.max_concurrent_montages_spin.setValue(m_settings.get("max_concurrent_montages", 1))
 
@@ -206,9 +223,10 @@ class MontageTab(QWidget):
             "zoom_intensity": self.zoom_int_spin.value(),
             "enable_sway": self.enable_sway_cb.isChecked(),
             "sway_speed_factor": self.sway_speed_spin.value(),
-            "enable_special_processing": self.enable_special_proc_cb.isChecked(),
+            "special_processing_mode": self.special_proc_mode_combo.currentData(),
             "special_processing_image_count": self.special_proc_img_count_spin.value(),
             "special_processing_duration_per_image": self.special_proc_dur_spin.value(),
+            "special_processing_video_count": self.special_proc_video_count_spin.value(),
             "max_concurrent_montages": self.max_concurrent_montages_spin.value()
         }
         self.settings.set("montage", m_settings)
@@ -234,16 +252,28 @@ class MontageTab(QWidget):
         self.sway_speed_label.setText(translator.translate("sway_speed_factor_label"))
 
         self.special_proc_group.setTitle(translator.translate("special_processing_group"))
-        self.enable_special_proc_cb.setText(translator.translate("enable_special_processing_label"))
+        self.special_proc_mode_label.setText(translator.translate("special_proc_mode_label"))
+        self.special_proc_mode_combo.setItemText(0, translator.translate("special_proc_mode_disabled"))
+        self.special_proc_mode_combo.setItemText(1, translator.translate("special_proc_mode_quick_show"))
+        self.special_proc_mode_combo.setItemText(2, translator.translate("special_proc_mode_video_at_beginning"))
+        
         self.special_proc_img_count_label.setText(translator.translate("image_count_label"))
         self.special_proc_dur_label.setText(translator.translate("duration_per_image_label"))
-        
+        self.special_proc_video_count_label.setText(translator.translate("special_proc_video_count_label"))
+
         self.perf_group.setTitle(translator.translate("performance_group"))
         self.max_concurrent_montages_label.setText(translator.translate("max_concurrent_montages_label"))
 
     def toggle_special_proc_widgets(self):
-        enabled = self.enable_special_proc_cb.isChecked()
-        self.special_proc_img_count_spin.setEnabled(enabled)
-        self.special_proc_img_count_label.setEnabled(enabled)
-        self.special_proc_dur_spin.setEnabled(enabled)
-        self.special_proc_dur_label.setEnabled(enabled)
+        mode = self.special_proc_mode_combo.currentData()
+
+        is_quick_show = (mode == "Quick show")
+        is_video = (mode == "Video at the beginning")
+        
+        self.special_proc_img_count_spin.setVisible(is_quick_show)
+        self.special_proc_img_count_label.setVisible(is_quick_show)
+        self.special_proc_dur_spin.setVisible(is_quick_show)
+        self.special_proc_dur_label.setVisible(is_quick_show)
+        
+        self.special_proc_video_count_spin.setVisible(is_video)
+        self.special_proc_video_count_label.setVisible(is_video)

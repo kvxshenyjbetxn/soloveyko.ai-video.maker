@@ -63,14 +63,14 @@ class MontageEngine:
         time_for_all_images = required_raw_time - total_video_time
 
         # --- Нова логіка для спецобробки ---
-        enable_special = settings.get("enable_special_processing", False)
+        special_mode = settings.get("special_processing_mode", "Disabled")
         special_count = settings.get("special_processing_image_count", 5)
         special_dur = settings.get("special_processing_duration_per_image", 2.0)
 
         time_for_normal_images = time_for_all_images
         num_normal_images = num_images
 
-        if enable_special and num_images > 0:
+        if special_mode == "Quick show" and num_images > 0:
             num_special_images = min(num_images, special_count)
             
             special_time_total = 0
@@ -81,6 +81,10 @@ class MontageEngine:
 
             time_for_normal_images = time_for_all_images - special_time_total
             num_normal_images = num_images - num_special_images
+        
+        # For "Video at the beginning", no special time math is needed here.
+        # The videos are already in visual_files and their durations are accounted for.
+
         # --- Кінець нової логіки ---
 
         img_duration = 0
@@ -92,14 +96,17 @@ class MontageEngine:
                 img_duration = time_for_normal_images / num_normal_images
 
         # Призначаємо тривалість для "звичайних" картинок
-        start_index = min(num_images, special_count) if enable_special else 0
+        start_index = 0
+        if special_mode == "Quick show":
+            start_index = min(num_images, special_count)
+
         for i in range(start_index, num_images):
             img_idx = image_indices[i]
             final_clip_durations[img_idx] = img_duration
         
         # Log compact montage info (single line)
         log_msg = f"{prefix}[FFmpeg] Starting montage | Audio: {audio_dur:.2f}s, Images: {num_images}"
-        if enable_special:
+        if special_mode == "Quick show":
             log_msg += f" (Special: {min(num_images, special_count)}x{special_dur:.2f}s)"
         log_msg += f", Other Images: {num_normal_images}x{img_duration:.2f}s"
         logger.log(log_msg, level=LogLevel.INFO)

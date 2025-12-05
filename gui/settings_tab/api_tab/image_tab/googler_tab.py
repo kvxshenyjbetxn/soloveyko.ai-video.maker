@@ -42,6 +42,18 @@ class GooglerTab(QWidget):
         self.max_threads_spinbox.setValue(1)
         layout.addRow(self.max_threads_label, self.max_threads_spinbox)
 
+        # Max Video Threads
+        self.max_video_threads_label = QLabel()
+        self.max_video_threads_spinbox = QSpinBox()
+        self.max_video_threads_spinbox.setRange(1, 25)
+        self.max_video_threads_spinbox.setValue(1)
+        layout.addRow(self.max_video_threads_label, self.max_video_threads_spinbox)
+
+        # Video Prompt
+        self.video_prompt_label = QLabel()
+        self.video_prompt_input = QLineEdit()
+        layout.addRow(self.video_prompt_label, self.video_prompt_input)
+
         # Seed
         self.seed_label = QLabel()
         self.seed_input = QLineEdit()
@@ -61,6 +73,9 @@ class GooglerTab(QWidget):
         self.check_usage_button.setText(translator.translate("googler_check_usage_button"))
         self.aspect_ratio_label.setText(translator.translate("googler_aspect_ratio_label"))
         self.max_threads_label.setText(translator.translate("googler_max_threads_label"))
+        self.max_video_threads_label.setText(translator.translate("googler_max_video_threads_label"))
+        self.video_prompt_label.setText(translator.translate("googler_video_prompt_label"))
+        self.video_prompt_input.setPlaceholderText(translator.translate("googler_video_prompt_placeholder"))
         self.seed_label.setText(translator.translate("googler_seed_label"))
         self.negative_prompt_label.setText(translator.translate("googler_negative_prompt_label"))
         self.negative_prompt_input.setPlaceholderText(translator.translate("googler_negative_prompt_placeholder"))
@@ -70,6 +85,8 @@ class GooglerTab(QWidget):
         self.api_key_input.setText(googler_settings.get("api_key", ""))
         self.aspect_ratio_combo.setCurrentText(googler_settings.get("aspect_ratio", "IMAGE_ASPECT_RATIO_LANDSCAPE"))
         self.max_threads_spinbox.setValue(googler_settings.get("max_threads", 1))
+        self.max_video_threads_spinbox.setValue(googler_settings.get("max_video_threads", 1))
+        self.video_prompt_input.setText(googler_settings.get("video_prompt", "Animate this scene, cinematic movement, 4k"))
         self.seed_input.setText(str(googler_settings.get("seed", "")))
         self.negative_prompt_input.setText(googler_settings.get("negative_prompt", ""))
 
@@ -78,6 +95,8 @@ class GooglerTab(QWidget):
             "api_key": self.api_key_input.text(),
             "aspect_ratio": self.aspect_ratio_combo.currentText(),
             "max_threads": self.max_threads_spinbox.value(),
+            "max_video_threads": self.max_video_threads_spinbox.value(),
+            "video_prompt": self.video_prompt_input.text(),
             "seed": self.seed_input.text(),
             "negative_prompt": self.negative_prompt_input.text(),
         }
