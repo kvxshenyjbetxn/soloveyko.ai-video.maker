@@ -11,7 +11,7 @@ class PromptsTab(QWidget):
         super().__init__()
         self.settings = settings_manager
         self.init_ui()
-        self.load_settings()
+        self.update_fields()
         self.retranslate_ui()
 
     def init_ui(self):
@@ -50,7 +50,7 @@ class PromptsTab(QWidget):
         layout.addLayout(settings_form_layout)
         layout.addStretch()
 
-    def load_settings(self):
+    def update_fields(self):
         config = self.settings.get("image_prompt_settings", {})
         
         self.prompt_edit.blockSignals(True)

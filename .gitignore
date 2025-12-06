@@ -32,3 +32,5 @@ core/whisper-cli-amd/Whisper.dll
 core/whisper-cli-amd/base.bin
 core/whisper-cli-amd/medium.bin
 core/whisper-cli-amd/small.bin
+config/templates/my.json
+config/templates/povod.json

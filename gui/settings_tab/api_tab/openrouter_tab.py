@@ -8,11 +8,11 @@ from utils.logger import logger
 class OpenRouterTab(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
-        self.main_window = main_window
+        self.main_window = main_window # Still needed for balance update
         self.settings = settings_manager
         self.api = OpenRouterAPI()
         self.init_ui()
-        self.load_settings()
+        self.update_fields()
         self.retranslate_ui()
 
     def init_ui(self):
@@ -81,12 +81,13 @@ class OpenRouterTab(QWidget):
         self.add_model_button.setText(translator.translate("add_model"))
         self.remove_model_button.setText(translator.translate("remove_model"))
 
-    def load_settings(self):
+    def update_fields(self):
+        self.api_key_input.blockSignals(True)
         api_key = self.settings.get("openrouter_api_key", "")
         self.api_key_input.setText(api_key)
         self.api.api_key = api_key
+        self.api_key_input.blockSignals(False)
         self.update_models_list()
-
     def save_api_key(self, key):
         self.settings.set("openrouter_api_key", key)
         self.api.api_key = key

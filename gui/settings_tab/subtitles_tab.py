@@ -11,9 +11,8 @@ from utils.translator import translator
 class SubtitlesTab(QWidget):
     def __init__(self):
         super().__init__()
-        self.settings = settings_manager.get('subtitles', {})
-        self.current_color = self.settings.get('color', [255, 255, 255])
         self.init_ui()
+        self.update_fields()
         self.retranslate_ui()
 
     def init_ui(self):
@@ -35,22 +34,13 @@ class SubtitlesTab(QWidget):
         engine_layout = QHBoxLayout()
 
         self.engine_group_btn = QButtonGroup(self)
-
         self.rb_amd = QRadioButton()
         self.rb_standard = QRadioButton()
-
         self.engine_group_btn.addButton(self.rb_amd)
         self.engine_group_btn.addButton(self.rb_standard)
-
-        saved_type = self.settings.get('whisper_type', 'amd')
-        if saved_type == 'standard':
-            self.rb_standard.setChecked(True)
-        else:
-            self.rb_amd.setChecked(True)
-
         self.rb_amd.toggled.connect(self.on_engine_changed)
-        self.rb_standard.toggled.connect(self.on_engine_changed)
-
+        # self.rb_standard.toggled.connect(self.on_engine_changed) # One connection is enough
+        
         engine_layout.addWidget(self.rb_amd)
         engine_layout.addWidget(self.rb_standard)
         self.engine_group.setLayout(engine_layout)
@@ -62,13 +52,6 @@ class SubtitlesTab(QWidget):
 
         self.model_label = QLabel()
         self.model_combo = QComboBox()
-        self.update_models_list()
-
-        saved_model = self.settings.get('whisper_model', 'base.bin')
-        index = self.model_combo.findText(saved_model)
-        if index != -1:
-            self.model_combo.setCurrentIndex(index)
-
         self.model_combo.currentTextChanged.connect(self.save_settings)
         whisper_layout.addRow(self.model_label, self.model_combo)
 
@@ -81,28 +64,23 @@ class SubtitlesTab(QWidget):
 
         self.font_label = QLabel()
         self.font_combo = QFontComboBox()
-        current_font = self.settings.get('font', 'Arial')
-        self.font_combo.setCurrentFont(current_font)
         self.font_combo.currentFontChanged.connect(self.save_settings)
         style_layout.addRow(self.font_label, self.font_combo)
 
         self.fontsize_label = QLabel()
         self.fontsize_spin = QSpinBox()
         self.fontsize_spin.setRange(10, 200)
-        self.fontsize_spin.setValue(self.settings.get('fontsize', 60))
         self.fontsize_spin.valueChanged.connect(self.save_settings)
         style_layout.addRow(self.fontsize_label, self.fontsize_spin)
 
         self.color_label = QLabel()
         self.color_btn = QPushButton()
-        self.update_color_btn_style()
         self.color_btn.clicked.connect(self.choose_color)
         style_layout.addRow(self.color_label, self.color_btn)
 
         self.margin_v_label = QLabel()
         self.margin_v_spin = QSpinBox()
         self.margin_v_spin.setRange(0, 500)
-        self.margin_v_spin.setValue(self.settings.get('margin_v', 50))
         self.margin_v_spin.valueChanged.connect(self.save_settings)
         style_layout.addRow(self.margin_v_label, self.margin_v_spin)
 
@@ -117,7 +95,6 @@ class SubtitlesTab(QWidget):
         self.fade_in_spin = QSpinBox()
         self.fade_in_spin.setRange(0, 5000)
         self.fade_in_spin.setSuffix(" ms")
-        self.fade_in_spin.setValue(self.settings.get('fade_in', 0))
         self.fade_in_spin.valueChanged.connect(self.save_settings)
         logic_layout.addRow(self.fade_in_label, self.fade_in_spin)
 
@@ -125,14 +102,12 @@ class SubtitlesTab(QWidget):
         self.fade_out_spin = QSpinBox()
         self.fade_out_spin.setRange(0, 5000)
         self.fade_out_spin.setSuffix(" ms")
-        self.fade_out_spin.setValue(self.settings.get('fade_out', 0))
         self.fade_out_spin.valueChanged.connect(self.save_settings)
         logic_layout.addRow(self.fade_out_label, self.fade_out_spin)
 
         self.max_words_label = QLabel()
         self.max_words_spin = QSpinBox()
         self.max_words_spin.setRange(1, 50)
-        self.max_words_spin.setValue(self.settings.get('max_words', 10))
         self.max_words_spin.valueChanged.connect(self.save_settings)
         logic_layout.addRow(self.max_words_label, self.max_words_spin)
 
@@ -140,6 +115,55 @@ class SubtitlesTab(QWidget):
         layout.addWidget(self.logic_group)
 
         layout.addStretch()
+        
+    def update_fields(self):
+        self.settings = settings_manager.get('subtitles', {})
+        
+        # Block signals
+        self.rb_amd.blockSignals(True)
+        self.rb_standard.blockSignals(True)
+        self.model_combo.blockSignals(True)
+        self.font_combo.blockSignals(True)
+        self.fontsize_spin.blockSignals(True)
+        self.margin_v_spin.blockSignals(True)
+        self.fade_in_spin.blockSignals(True)
+        self.fade_out_spin.blockSignals(True)
+        self.max_words_spin.blockSignals(True)
+
+        saved_type = self.settings.get('whisper_type', 'amd')
+        if saved_type == 'standard':
+            self.rb_standard.setChecked(True)
+        else:
+            self.rb_amd.setChecked(True)
+        
+        self.update_models_list()
+        saved_model = self.settings.get('whisper_model', 'base.bin')
+        index = self.model_combo.findText(saved_model)
+        if index != -1:
+            self.model_combo.setCurrentIndex(index)
+
+        current_font = self.settings.get('font', 'Arial')
+        self.font_combo.setCurrentFont(current_font)
+        self.fontsize_spin.setValue(self.settings.get('fontsize', 60))
+        
+        self.current_color = self.settings.get('color', [255, 255, 255])
+        self.update_color_btn_style()
+
+        self.margin_v_spin.setValue(self.settings.get('margin_v', 50))
+        self.fade_in_spin.setValue(self.settings.get('fade_in', 0))
+        self.fade_out_spin.setValue(self.settings.get('fade_out', 0))
+        self.max_words_spin.setValue(self.settings.get('max_words', 10))
+
+        # Unblock signals
+        self.rb_amd.blockSignals(False)
+        self.rb_standard.blockSignals(False)
+        self.model_combo.blockSignals(False)
+        self.font_combo.blockSignals(False)
+        self.fontsize_spin.blockSignals(False)
+        self.margin_v_spin.blockSignals(False)
+        self.fade_in_spin.blockSignals(False)
+        self.fade_out_spin.blockSignals(False)
+        self.max_words_spin.blockSignals(False)
 
     def retranslate_ui(self):
         self.engine_group.setTitle(translator.translate("whisper_engine_group"))

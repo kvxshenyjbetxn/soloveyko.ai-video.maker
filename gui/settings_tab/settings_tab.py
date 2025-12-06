@@ -14,6 +14,7 @@ class SettingsTab(QWidget):
         super().__init__()
         self.main_window = main_window
         self.init_ui()
+        self.templates_tab.template_applied.connect(self._update_all_tabs)
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -37,6 +38,14 @@ class SettingsTab(QWidget):
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
+
+    def _update_all_tabs(self):
+        self.general_tab.update_fields()
+        self.api_tab.update_fields()
+        self.languages_tab.update_fields()
+        self.prompts_tab.update_fields()
+        self.montage_tab.update_fields()
+        self.subtitles_tab.update_fields()
 
     def retranslate_ui(self):
         self.tabs.setTabText(0, translator.translate('general_tab'))

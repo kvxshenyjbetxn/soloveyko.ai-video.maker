@@ -8,7 +8,7 @@
     "languages_config": {
         "uk-UK": {
             "display_name": "Україна",
-            "prompt": "дай відповідь і скажи в кінці Олег",
+            "prompt": "олег",
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
             "elevenlabs_template_uuid": "9293bf1a-e95e-460d-8daa-86075e97004b",
@@ -144,7 +144,7 @@
     "montage": {
         "codec": "libx264",
         "preset": "ultrafast",
-        "bitrate_mbps": 10,
+        "bitrate_mbps": 15,
         "upscale_factor": 2.0,
         "enable_transitions": true,
         "transition_duration": 0.5,

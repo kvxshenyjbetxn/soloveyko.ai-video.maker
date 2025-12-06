@@ -8,7 +8,8 @@ class PollinationsTab(QWidget):
         super().__init__(parent)
         self.models = ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"]
         self.initUI()
-        self.load_settings()
+        self.update_fields()
+        self.connect_signals()
 
     def initUI(self):
         layout = QFormLayout(self)
@@ -29,10 +30,8 @@ class PollinationsTab(QWidget):
         size_layout = QHBoxLayout()
         self.width_spinbox = QSpinBox()
         self.width_spinbox.setRange(1, 4096)
-        self.width_spinbox.setValue(1024)
         self.height_spinbox = QSpinBox()
         self.height_spinbox.setRange(1, 4096)
-        self.height_spinbox.setValue(1024)
         size_layout.addWidget(self.width_spinbox)
         size_layout.addWidget(QLabel("x"))
         size_layout.addWidget(self.height_spinbox)
@@ -48,6 +47,14 @@ class PollinationsTab(QWidget):
 
         self.setLayout(layout)
 
+    def connect_signals(self):
+        self.model_combo.currentIndexChanged.connect(self.save_settings)
+        self.token_input.textChanged.connect(self.save_settings)
+        self.width_spinbox.valueChanged.connect(self.save_settings)
+        self.height_spinbox.valueChanged.connect(self.save_settings)
+        self.nologo_checkbox.stateChanged.connect(self.save_settings)
+        self.enhance_checkbox.stateChanged.connect(self.save_settings)
+        
     def translate_ui(self):
         self.model_label.setText(translator.translate("pollinations_model_label"))
         self.token_label.setText(translator.translate("pollinations_token_label"))
@@ -56,7 +63,14 @@ class PollinationsTab(QWidget):
         self.nologo_checkbox.setText(translator.translate("nologo_label"))
         self.enhance_checkbox.setText(translator.translate("enhance_prompt_label"))
 
-    def load_settings(self):
+    def update_fields(self):
+        self.model_combo.blockSignals(True)
+        self.token_input.blockSignals(True)
+        self.width_spinbox.blockSignals(True)
+        self.height_spinbox.blockSignals(True)
+        self.nologo_checkbox.blockSignals(True)
+        self.enhance_checkbox.blockSignals(True)
+
         pollinations_settings = settings_manager.get("pollinations", {})
         self.model_combo.setCurrentText(pollinations_settings.get("model", "flux"))
         self.token_input.setText(pollinations_settings.get("token", ""))
@@ -64,6 +78,13 @@ class PollinationsTab(QWidget):
         self.height_spinbox.setValue(pollinations_settings.get("height", 1024))
         self.nologo_checkbox.setChecked(pollinations_settings.get("nologo", False))
         self.enhance_checkbox.setChecked(pollinations_settings.get("enhance", False))
+
+        self.model_combo.blockSignals(False)
+        self.token_input.blockSignals(False)
+        self.width_spinbox.blockSignals(False)
+        self.height_spinbox.blockSignals(False)
+        self.nologo_checkbox.blockSignals(False)
+        self.enhance_checkbox.blockSignals(False)
 
     def save_settings(self):
         pollinations_settings = {

@@ -9,7 +9,8 @@ class GooglerTab(QWidget):
         super().__init__(parent)
         self.aspect_ratios = ["IMAGE_ASPECT_RATIO_LANDSCAPE", "IMAGE_ASPECT_RATIO_PORTRAIT", "IMAGE_ASPECT_RATIO_SQUARE"]
         self.initUI()
-        self.load_settings()
+        self.update_fields()
+        self.connect_signals()
 
     def initUI(self):
         layout = QFormLayout(self)
@@ -39,14 +40,12 @@ class GooglerTab(QWidget):
         self.max_threads_label = QLabel()
         self.max_threads_spinbox = QSpinBox()
         self.max_threads_spinbox.setRange(1, 25)
-        self.max_threads_spinbox.setValue(1)
         layout.addRow(self.max_threads_label, self.max_threads_spinbox)
 
         # Max Video Threads
         self.max_video_threads_label = QLabel()
         self.max_video_threads_spinbox = QSpinBox()
         self.max_video_threads_spinbox.setRange(1, 25)
-        self.max_video_threads_spinbox.setValue(1)
         layout.addRow(self.max_video_threads_label, self.max_video_threads_spinbox)
 
         # Video Prompt
@@ -66,6 +65,15 @@ class GooglerTab(QWidget):
 
         self.setLayout(layout)
 
+    def connect_signals(self):
+        self.api_key_input.textChanged.connect(self.save_settings)
+        self.aspect_ratio_combo.currentIndexChanged.connect(self.save_settings)
+        self.max_threads_spinbox.valueChanged.connect(self.save_settings)
+        self.max_video_threads_spinbox.valueChanged.connect(self.save_settings)
+        self.video_prompt_input.textChanged.connect(self.save_settings)
+        self.seed_input.textChanged.connect(self.save_settings)
+        self.negative_prompt_input.textChanged.connect(self.save_settings)
+
     def translate_ui(self):
         self.api_key_label.setText(translator.translate("googler_api_key_label"))
         self.api_key_input.setPlaceholderText(translator.translate("googler_api_key_placeholder"))
@@ -80,7 +88,15 @@ class GooglerTab(QWidget):
         self.negative_prompt_label.setText(translator.translate("googler_negative_prompt_label"))
         self.negative_prompt_input.setPlaceholderText(translator.translate("googler_negative_prompt_placeholder"))
 
-    def load_settings(self):
+    def update_fields(self):
+        self.api_key_input.blockSignals(True)
+        self.aspect_ratio_combo.blockSignals(True)
+        self.max_threads_spinbox.blockSignals(True)
+        self.max_video_threads_spinbox.blockSignals(True)
+        self.video_prompt_input.blockSignals(True)
+        self.seed_input.blockSignals(True)
+        self.negative_prompt_input.blockSignals(True)
+
         googler_settings = settings_manager.get("googler", {})
         self.api_key_input.setText(googler_settings.get("api_key", ""))
         self.aspect_ratio_combo.setCurrentText(googler_settings.get("aspect_ratio", "IMAGE_ASPECT_RATIO_LANDSCAPE"))
@@ -89,6 +105,14 @@ class GooglerTab(QWidget):
         self.video_prompt_input.setText(googler_settings.get("video_prompt", "Animate this scene, cinematic movement, 4k"))
         self.seed_input.setText(str(googler_settings.get("seed", "")))
         self.negative_prompt_input.setText(googler_settings.get("negative_prompt", ""))
+
+        self.api_key_input.blockSignals(False)
+        self.aspect_ratio_combo.blockSignals(False)
+        self.max_threads_spinbox.blockSignals(False)
+        self.max_video_threads_spinbox.blockSignals(False)
+        self.video_prompt_input.blockSignals(False)
+        self.seed_input.blockSignals(False)
+        self.negative_prompt_input.blockSignals(False)
 
     def save_settings(self):
         googler_settings = {

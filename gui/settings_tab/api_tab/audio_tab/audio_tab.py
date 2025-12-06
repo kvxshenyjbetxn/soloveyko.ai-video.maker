@@ -30,3 +30,8 @@ class AudioTab(QWidget):
         self.tab_widget.setTabText(0, translator.translate("elevenlabs"))
         self.tab_widget.setTabText(1, "Voicemaker")
         self.tab_widget.setTabText(2, "GeminiTTS")
+
+    def update_fields(self):
+        self.elevenlabs_tab.update_fields()
+        self.voicemaker_tab.update_fields()
+        self.gemini_tts_tab.update_fields()

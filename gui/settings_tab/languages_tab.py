@@ -386,6 +386,34 @@ class LanguagesTab(QWidget):
 
             self.settings.set("languages_config", languages)
 
+    def update_fields(self):
+        # Store current selection
+        current_item = self.lang_list_widget.currentItem()
+        current_lang_text = current_item.text() if current_item else None
+
+        # Reload languages and models from settings
+        self.load_languages()
+        self.load_models()
+        self.load_elevenlabs_templates()
+
+        # Try to restore selection
+        if current_lang_text:
+            items = self.lang_list_widget.findItems(current_lang_text, Qt.MatchExactly)
+            if items:
+                self.lang_list_widget.setCurrentItem(items[0])
+            elif self.lang_list_widget.count() > 0:
+                self.lang_list_widget.setCurrentRow(0)
+        elif self.lang_list_widget.count() > 0:
+            self.lang_list_widget.setCurrentRow(0)
+
+        # If no item is selected and list is not empty, select first
+        if self.lang_list_widget.currentItem() is None and self.lang_list_widget.count() > 0:
+            self.lang_list_widget.setCurrentRow(0)
+
+        # Manually trigger update if the selection didn't change but content did
+        if self.lang_list_widget.currentItem():
+            self.on_language_selected(self.lang_list_widget.currentItem(), None)
+
     def retranslate_ui(self):
         self.add_remove_group.setTitle(translator.translate("manage_languages"))
         self.lang_name_label.setText(translator.translate("language_name_label"))

@@ -10,7 +10,7 @@ class ElevenLabsTab(QWidget):
         self.settings = settings_manager
         self.api = ElevenLabsAPI()
         self.init_ui()
-        self.load_settings()
+        self.update_fields()
         self.retranslate_ui()
 
     def init_ui(self):
@@ -50,10 +50,12 @@ class ElevenLabsTab(QWidget):
         self.update_connection_status_label()
         self.update_balance_label()
 
-    def load_settings(self):
+    def update_fields(self):
+        self.api_key_input.blockSignals(True)
         api_key = self.settings.get("elevenlabs_api_key", "")
         self.api_key_input.setText(api_key)
         self.api.api_key = api_key
+        self.api_key_input.blockSignals(False)
 
     def save_api_key(self, key):
         self.settings.set("elevenlabs_api_key", key)
