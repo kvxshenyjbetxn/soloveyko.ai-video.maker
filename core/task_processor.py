@@ -5,6 +5,7 @@ import base64
 import json
 import traceback
 import threading
+import shutil
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt, Slot
 
 from utils.logger import logger, LogLevel
@@ -471,8 +472,8 @@ class TaskProcessor(QObject):
         self.task_states = {}
         self.total_subtitle_tasks = 0
         self.completed_subtitle_tasks = 0
-        self.subtitle_barrier_passed = False  # IMPORTANT: Reset barrier between runs
-        self.is_finished = False  # Reset finished flag
+        self.subtitle_barrier_passed = False
+        self.is_finished = False
         self.tasks_awaiting_review = []
         self.montage_tasks_ids = set()
         self.failed_montage_tasks_ids = set()
@@ -484,6 +485,48 @@ class TaskProcessor(QObject):
         for job in jobs:
             for lang_id, lang_data in job['languages'].items():
                 state = TaskState(job, lang_id, lang_data, base_save_path)
+                
+                # --- NEW LOGIC: Pre-process user-provided files ---
+                user_files = state.lang_data.get('user_provided_files', {})
+                if user_files and state.dir_path:
+                    if 'pre_found_files' not in state.lang_data:
+                        state.lang_data['pre_found_files'] = {}
+                    
+                    try:
+                        if 'stage_images' in user_files:
+                            stage_key = 'stage_images'
+                            source_list = user_files[stage_key]
+                            logger.log(f"[{state.task_id}] Copying {len(source_list)} user-provided images...", level=LogLevel.INFO)
+                            image_dir = os.path.join(state.dir_path, "images")
+                            os.makedirs(image_dir, exist_ok=True)
+                            for i, src_path in enumerate(source_list):
+                                _, ext = os.path.splitext(src_path)
+                                dest_path = os.path.join(image_dir, f"{i+1}{ext}")
+                                shutil.copy(src_path, dest_path)
+                            state.lang_data['pre_found_files'][stage_key] = image_dir
+                            
+                            if 'stage_img_prompts' in state.stages:
+                                prompt_dummy_path = os.path.join(state.dir_path, "image_prompts.txt")
+                                with open(prompt_dummy_path, 'w', encoding='utf-8') as f:
+                                    f.write("Prompts skipped due to user-provided images.")
+                                state.lang_data['pre_found_files']['stage_img_prompts'] = prompt_dummy_path
+
+                        if 'stage_voiceover' in user_files:
+                            stage_key = 'stage_voiceover'
+                            source_path = user_files[stage_key]
+                            logger.log(f"[{state.task_id}] Copying user-provided voiceover...", level=LogLevel.INFO)
+                            _, ext = os.path.splitext(source_path)
+                            if ext.lower() in ['.mp3', '.wav']:
+                                dest_path = os.path.join(state.dir_path, f"voice{ext}")
+                                shutil.copy(source_path, dest_path)
+                                state.lang_data['pre_found_files'][stage_key] = dest_path
+                            else:
+                                logger.log(f"[{state.task_id}] Unsupported audio format '{ext}' for user-provided file. Skipping.", level=LogLevel.WARNING)
+
+                    except Exception as e:
+                        logger.log(f"[{state.task_id}] Error processing user-provided files: {e}", level=LogLevel.ERROR)
+                        # Continue processing, the stages will just fail if the files weren't copied
+                
                 self.task_states[state.task_id] = state
                 if 'stage_subtitles' in state.stages:
                     self.total_subtitle_tasks += 1
@@ -492,16 +535,14 @@ class TaskProcessor(QObject):
 
         logger.log(f"Starting processing for {len(self.task_states)} language tasks. Montage tasks: {len(self.montage_tasks_ids)}", level=LogLevel.INFO)
         
-        # If there are no subtitle tasks at all, pass the barrier immediately
         if self.total_subtitle_tasks == 0:
             self.subtitle_barrier_passed = True
             logger.log("No subtitle tasks in queue. Barrier passed immediately.", level=LogLevel.INFO)
 
-        # 2. Fire initial workers
         for task_id, state in self.task_states.items():
             if 'stage_translation' in state.stages:
                 self._start_translation(task_id, all_languages_config)
-                time.sleep(0.5) # Per user request
+                time.sleep(0.5)
             else:
                 state.text_for_processing = state.original_text
                 self._on_text_ready(task_id)
@@ -522,7 +563,7 @@ class TaskProcessor(QObject):
                 elif stage_key == 'stage_images':
                     image_paths = sorted(
                         [os.path.join(file_path, f) for f in os.listdir(file_path) if os.path.isfile(os.path.join(file_path, f))],
-                        key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+                        key=lambda x: int(os.path.splitext(os.path.basename(x))[0]) if os.path.splitext(os.path.basename(x))[0].isdigit() else -1
                     )
                     result = {'paths': image_paths, 'total_prompts': len(image_paths)}
                 else:
@@ -584,8 +625,9 @@ class TaskProcessor(QObject):
     def _on_translation_finished(self, task_id, translated_text):
         state = self.task_states[task_id]
         state.text_for_processing = translated_text
-        with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
-            f.write(translated_text)
+        if state.dir_path:
+            with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
+                f.write(translated_text)
         self._set_stage_status(task_id, 'stage_translation', 'success')
         self._on_text_ready(task_id)
 
@@ -599,7 +641,9 @@ class TaskProcessor(QObject):
             self._start_image_prompts(task_id)
         if 'stage_voiceover' in state.stages:
             self._start_voiceover(task_id)
-        if 'stage_img_prompts' not in state.stages and 'stage_voiceover' not in state.stages:
+        if 'stage_img_prompts' not in state.stages and 'stage_images' in state.stages:
+             self._start_image_generation(task_id)
+        if 'stage_img_prompts' not in state.stages and 'stage_voiceover' not in state.stages and 'stage_images' not in state.stages:
             self.check_if_all_finished()
 
     def _start_image_prompts(self, task_id):
@@ -614,8 +658,9 @@ class TaskProcessor(QObject):
     def _on_img_prompts_finished(self, task_id, prompts_text):
         state = self.task_states[task_id]
         state.image_prompts = prompts_text
-        with open(os.path.join(state.dir_path, "image_prompts.txt"), 'w', encoding='utf-8') as f:
-            f.write(prompts_text)
+        if state.dir_path:
+            with open(os.path.join(state.dir_path, "image_prompts.txt"), 'w', encoding='utf-8') as f:
+                f.write(prompts_text)
         self._set_stage_status(task_id, 'stage_img_prompts', 'success')
         
         if 'stage_images' in state.stages:

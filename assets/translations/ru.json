@@ -212,5 +212,9 @@
     "found_existing_files_title": "Найдены существующие файлы",
     "use_existing_files_question": "Вы хотите использовать эти файлы и пропустить соответствующие этапы?",
     "images_label": "изоб",
-    "videos_label": "видео"
+    "videos_label": "видео",
+    "add_images_title": "Добавить изображения",
+    "add_images_desc": "Перетащите файлы изображений (.png, .jpg, .jpeg) сюда. Изображения будут отсортированы по имени файла.",
+    "add_audio_title": "Добавить аудио",
+    "add_audio_desc": "Перетащите аудиофайл (.mp3, .wav) сюда."
 }

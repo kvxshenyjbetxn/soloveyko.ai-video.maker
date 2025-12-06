@@ -212,5 +212,9 @@
     "found_existing_files_title": "Знайдено існуючі файли",
     "use_existing_files_question": "Ви хочете використати ці файли та пропустити відповідні етапи?",
     "images_label": "зобр",
-    "videos_label": "відео"
+    "videos_label": "відео",
+    "add_images_title": "Додати зображення",
+    "add_images_desc": "Перетягніть файли зображень (.png, .jpg, .jpeg) сюди. Зображення буде відсортовано за назвою файлу.",
+    "add_audio_title": "Додати аудіо",
+    "add_audio_desc": "Перетягніть аудіофайл (.mp3, .wav) сюди."
 }
