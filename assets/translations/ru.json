@@ -207,5 +207,10 @@
     "confirm_delete_title": "Подтвердить удаление",
     "confirm_delete_template_text": "Вы уверены, что хотите удалить шаблон '{name}'?",
     "rename_template_title": "Переименовать шаблон",
-    "enter_new_name_for_template": "Введите новое имя для шаблона '{name}':"
+    "enter_new_name_for_template": "Введите новое имя для шаблона '{name}':",
+    "found_existing_files_prompt": "Для задачи найдены следующие файлы завершенных этапов",
+    "found_existing_files_title": "Найдены существующие файлы",
+    "use_existing_files_question": "Вы хотите использовать эти файлы и пропустить соответствующие этапы?",
+    "images_label": "изоб",
+    "videos_label": "видео"
 }
