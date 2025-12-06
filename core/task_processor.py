@@ -146,13 +146,35 @@ class VoiceoverWorker(BaseWorker):
 
         else: # ElevenLabs
             api = ElevenLabsAPI()
-            task_id, status = api.create_task(text, lang_config['elevenlabs_template_uuid'])
-            if status != 'connected' or not task_id:
-                raise Exception("Failed to create ElevenLabs task.")
+            
+            # Retry logic for task creation
+            task_id = None
+            last_error = "Unknown error"
+            
+            for attempt in range(3):
+                try:
+                    task_id, status = api.create_task(text, lang_config['elevenlabs_template_uuid'])
+                    if status == 'connected' and task_id:
+                        break
+                    else:
+                        last_error = "Failed to obtain valid task_id"
+                        logger.log(f"[{self.task_id}] Attempt {attempt+1}/3 failed to create ElevenLabs task. Retrying...", level=LogLevel.WARNING)
+                except Exception as e:
+                    last_error = str(e)
+                    logger.log(f"[{self.task_id}] Attempt {attempt+1}/3 raised exception: {e}", level=LogLevel.WARNING)
+                time.sleep(5)
+                
+            if not task_id:
+                raise Exception(f"Failed to create ElevenLabs task after 3 attempts. Last error: {last_error}")
             
             for _ in range(30): # 5 min timeout
                 task_status, status = api.get_task_status(task_id)
-                if status != 'connected': raise Exception("Failed to get ElevenLabs task status.")
+                # Retry status check within the loop if network blips
+                if status != 'connected': 
+                    logger.log(f"[{self.task_id}] Weak connection getting status for {task_id}, retrying...", level=LogLevel.WARNING)
+                    time.sleep(5)
+                    continue
+
                 if task_status in ['ending', 'ending_processed']:
                     audio_content, status = api.get_task_result(task_id)
                     if status == 'connected' and audio_content:
@@ -854,7 +876,11 @@ class TaskProcessor(QObject):
     @Slot(str, str)
     def _on_voiceover_error(self, task_id, error):
         self._set_stage_status(task_id, 'stage_voiceover', 'error', error)
+        # CRITICAL FIX: If voiceover fails, we MUST fail or skip subtitles so the job doesn't hang forever in 'pending'
         if 'stage_subtitles' in self.task_states[task_id].stages:
+            logger.log(f"[{task_id}] Voiceover failed, marking dependent stage 'stage_subtitles' as error.", level=LogLevel.WARNING)
+            self._set_stage_status(task_id, 'stage_subtitles', 'error', "Dependency (Voiceover) failed")
+            # We still increment counter so the barrier can pass
             self._increment_subtitle_counter()
 
     def _start_subtitles(self, task_id):
