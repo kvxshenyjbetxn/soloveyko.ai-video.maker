@@ -10,7 +10,7 @@ class VoicemakerTab(QWidget):
         self.settings = settings_manager
         self.api = VoicemakerAPI()
         self.init_ui()
-        self.load_settings()
+        self.update_fields()
         self.retranslate_ui()
 
     def init_ui(self):
@@ -71,13 +71,19 @@ class VoicemakerTab(QWidget):
              self.balance_label.setText(translator.translate("balance_label"))
 
 
-    def load_settings(self):
+    def update_fields(self):
+        self.api_key_input.blockSignals(True)
+        self.limit_input.blockSignals(True)
+
         api_key = self.settings.get("voicemaker_api_key", "")
         self.api_key_input.setText(api_key)
         self.api.api_key = api_key
         
         limit = self.settings.get("voicemaker_char_limit", 3000)
         self.limit_input.setValue(int(limit))
+
+        self.api_key_input.blockSignals(False)
+        self.limit_input.blockSignals(False)
 
     def save_api_key(self, key):
         self.settings.set("voicemaker_api_key", key)

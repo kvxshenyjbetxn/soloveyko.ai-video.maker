@@ -10,7 +10,7 @@ class MontageTab(QWidget):
         super().__init__()
         self.settings = settings_manager
         self.init_ui()
-        self.load_settings()
+        self.update_fields()
         self.retranslate_ui()
 
     def init_ui(self):
@@ -179,8 +179,13 @@ class MontageTab(QWidget):
 
         self.layout.addStretch()
 
-    def load_settings(self):
+    def update_fields(self):
         m_settings = self.settings.get("montage", {})
+
+        # Block signals
+        for widget in self.findChildren(QWidget):
+            if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox)):
+                widget.blockSignals(True)
 
         self.codec_combo.setCurrentText(m_settings.get("codec", "libx264"))
         self.preset_combo.setCurrentText(m_settings.get("preset", "medium"))
@@ -207,6 +212,11 @@ class MontageTab(QWidget):
         self.special_proc_video_count_spin.setValue(m_settings.get("special_processing_video_count", 1))
 
         self.max_concurrent_montages_spin.setValue(m_settings.get("max_concurrent_montages", 1))
+
+        # Unblock signals
+        for widget in self.findChildren(QWidget):
+            if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox)):
+                widget.blockSignals(False)
 
         self.toggle_special_proc_widgets()
 

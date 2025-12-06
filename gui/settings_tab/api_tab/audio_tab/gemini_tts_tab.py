@@ -10,7 +10,7 @@ class GeminiTTSTab(QWidget):
         self.settings = settings_manager
         self.api = GeminiTTSAPI()
         self.init_ui()
-        self.load_settings()
+        self.update_fields()
         self.retranslate_ui()
 
     def init_ui(self):
@@ -50,13 +50,14 @@ class GeminiTTSTab(QWidget):
         self.update_connection_status_label()
         self.update_balance_label()
 
-    def load_settings(self):
+    def update_fields(self):
+        self.api_key_input.blockSignals(True)
         api_key = self.settings.get("gemini_tts_api_key", "")
         self.api_key_input.setText(api_key)
         self.api.api_key = api_key
+        self.api_key_input.blockSignals(False)
 
-    def save_settings(self):
-        key = self.api_key_input.text()
+    def save_settings(self, key):
         self.settings.set("gemini_tts_api_key", key)
         self.api.api_key = key
 

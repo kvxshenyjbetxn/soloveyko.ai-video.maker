@@ -53,4 +53,37 @@ class SettingsManager:
         self.settings[key] = value
         self.save_settings()
 
+class TemplateManager:
+    def __init__(self, template_dir='config/templates'):
+        self.template_dir = template_dir
+        os.makedirs(self.template_dir, exist_ok=True)
+
+    def get_templates(self):
+        templates = [f.split('.')[0] for f in os.listdir(self.template_dir) if f.endswith('.json')]
+        return sorted(templates)
+
+    def load_template(self, name):
+        file_path = os.path.join(self.template_dir, f"{name}.json")
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
+
+    def save_template(self, name, data):
+        file_path = os.path.join(self.template_dir, f"{name}.json")
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+    def delete_template(self, name):
+        file_path = os.path.join(self.template_dir, f"{name}.json")
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    def rename_template(self, old_name, new_name):
+        old_path = os.path.join(self.template_dir, f"{old_name}.json")
+        new_path = os.path.join(self.template_dir, f"{new_name}.json")
+        if os.path.exists(old_path) and not os.path.exists(new_path):
+            os.rename(old_path, new_path)
+
 settings_manager = SettingsManager()
+template_manager = TemplateManager()

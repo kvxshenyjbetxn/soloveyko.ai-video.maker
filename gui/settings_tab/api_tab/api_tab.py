@@ -9,7 +9,7 @@ from .dataimpulse_tab import DataImpulseTab
 class ApiTab(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
-        self.main_window = main_window
+        self.main_window = main_window # Keep for now for sub-tabs that might need it
         self.init_ui()
 
     def init_ui(self):
@@ -39,3 +39,9 @@ class ApiTab(QWidget):
         self.audio_tab.retranslate_ui()
         self.image_tab.retranslate_ui()
         self.dataimpulse_tab.retranslate_ui()
+
+    def update_fields(self):
+        self.openrouter_tab.update_fields()
+        self.audio_tab.update_fields()
+        self.image_tab.update_fields()
+        self.dataimpulse_tab.update_fields()
