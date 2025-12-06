@@ -215,14 +215,16 @@ class CustomStageWorker(BaseWorker):
         text = self.config['text']
         model = self.config.get('model', 'google/gemini-2.0-flash-exp:free') 
         max_tokens = self.config.get('max_tokens', 4096)
+        temperature = self.config.get('temperature', 0.7)
         
-        logger.log(f"[{self.task_id}] [Custom Stage: {stage_name}] Starting processing (model: {model}, tokens: {max_tokens})...", level=LogLevel.INFO)
+        logger.log(f"[{self.task_id}] [Custom Stage: {stage_name}] Starting processing (model: {model}, tokens: {max_tokens}, temp: {temperature})...", level=LogLevel.INFO)
         
         full_prompt = f"{prompt}\n\n{text}"
         response = api.get_chat_completion(
             model=model,
             messages=[{"role": "user", "content": full_prompt}],
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            temperature=temperature
         )
         
         if response and response['choices'][0]['message']['content']:
@@ -712,14 +714,15 @@ class TaskProcessor(QObject):
                 prompt = stage.get("prompt")
                 model = stage.get("model")
                 max_tokens = stage.get("max_tokens")
+                temperature = stage.get("temperature")
                 
                 # Check if this stage was selected for this job
                 stage_key = f"custom_{stage_name}"
                 if stage_key in state.stages:
                     if stage_name and prompt:
-                        self._start_custom_stage(task_id, stage_name, prompt, model, max_tokens)
+                        self._start_custom_stage(task_id, stage_name, prompt, model, max_tokens, temperature)
 
-    def _start_custom_stage(self, task_id, stage_name, prompt, model=None, max_tokens=None):
+    def _start_custom_stage(self, task_id, stage_name, prompt, model=None, max_tokens=None, temperature=None):
         state = self.task_states[task_id]
         
         # Fallback to defaults if not specified or empty
@@ -728,6 +731,8 @@ class TaskProcessor(QObject):
             model = self.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
         if not max_tokens:
              max_tokens = 4096
+        if temperature is None:
+            temperature = 0.7
 
         config = {
             'text': state.text_for_processing,
@@ -735,7 +740,8 @@ class TaskProcessor(QObject):
             'stage_name': stage_name,
             'prompt': prompt,
             'model': model,
-            'max_tokens': int(max_tokens)
+            'max_tokens': int(max_tokens),
+            'temperature': float(temperature)
         }
         
         # We use a unique stage key for each custom stage to track status if we wanted to block, 

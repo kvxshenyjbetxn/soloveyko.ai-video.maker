@@ -222,5 +222,6 @@
     "parallel_stage_name_label": "Название этапа:",
     "stage_name_placeholder": "Название этапа (напр. Итоги)",
     "prompt_label": "Промпт:",
-    "enter_prompt_placeholder": "Введите ваш промпт здесь..."
+    "enter_prompt_placeholder": "Введите ваш промпт здесь...",
+    "temperature_label": "Температура:"
 }
