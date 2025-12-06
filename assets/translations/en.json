@@ -207,5 +207,10 @@
     "confirm_delete_title": "Confirm Deletion",
     "confirm_delete_template_text": "Are you sure you want to delete the template '{name}'?",
     "rename_template_title": "Rename Template",
-    "enter_new_name_for_template": "Enter a new name for the template '{name}':"
+    "enter_new_name_for_template": "Enter a new name for the template '{name}':",
+    "found_existing_files_prompt": "The following completed stage files were found for task",
+    "found_existing_files_title": "Found existing files",
+    "use_existing_files_question": "Do you want to use these files and skip the corresponding stages?",
+    "images_label": "img",
+    "videos_label": "vid"
 }

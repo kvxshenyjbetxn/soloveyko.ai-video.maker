@@ -207,5 +207,10 @@
     "confirm_delete_title": "Підтвердити видалення",
     "confirm_delete_template_text": "Ви впевнені, що хочете видалити шаблон '{name}'?",
     "rename_template_title": "Перейменувати шаблон",
-    "enter_new_name_for_template": "Введіть нове ім'я для шаблону '{name}':"
+    "enter_new_name_for_template": "Введіть нове ім'я для шаблону '{name}':",
+    "found_existing_files_prompt": "Для завдання знайдено наступні файли завершених етапів",
+    "found_existing_files_title": "Знайдено існуючі файли",
+    "use_existing_files_question": "Ви хочете використати ці файли та пропустити відповідні етапи?",
+    "images_label": "зобр",
+    "videos_label": "відео"
 }

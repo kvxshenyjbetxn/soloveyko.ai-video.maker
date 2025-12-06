@@ -383,6 +383,7 @@ class TaskState:
         self.lang_name = lang_data['display_name']
         self.stages = lang_data['stages']
         self.original_text = job['text']
+        self.lang_data = lang_data
 
         self.dir_path = self._get_save_path(base_save_path, self.job_name, self.lang_name)
 
@@ -506,6 +507,33 @@ class TaskProcessor(QObject):
                 self._on_text_ready(task_id)
     
     def _start_worker(self, worker_class, task_id, stage_key, config, on_finish_slot, on_error_slot):
+        state = self.task_states[task_id]
+        pre_found_files = state.lang_data.get('pre_found_files', {})
+
+        if stage_key in pre_found_files:
+            file_path = pre_found_files[stage_key]
+            logger.log(f"[{task_id}] Skipping stage '{stage_key}' using existing file: {os.path.basename(file_path)}", level=LogLevel.INFO)
+            
+            result = None
+            try:
+                if stage_key == 'stage_translation' or stage_key == 'stage_img_prompts':
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        result = f.read()
+                elif stage_key == 'stage_images':
+                    image_paths = sorted(
+                        [os.path.join(file_path, f) for f in os.listdir(file_path) if os.path.isfile(os.path.join(file_path, f))],
+                        key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+                    )
+                    result = {'paths': image_paths, 'total_prompts': len(image_paths)}
+                else:
+                    result = file_path
+                
+                on_finish_slot(task_id, result)
+            except Exception as e:
+                error_msg = f"Failed to process existing file for stage '{stage_key}': {e}"
+                on_error_slot(task_id, error_msg)
+            return
+
         self.stage_status_changed.emit(self.task_states[task_id].job_id, self.task_states[task_id].lang_id, stage_key, 'processing')
         worker = worker_class(task_id, config)
         worker.signals.finished.connect(on_finish_slot)

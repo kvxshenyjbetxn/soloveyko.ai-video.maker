@@ -1,8 +1,9 @@
+import os
 import re
 import uuid
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog, QGridLayout
+    QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog, QGridLayout, QMessageBox
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtCore import Qt, QMimeData
@@ -285,26 +286,129 @@ class TextTab(QWidget):
 
             text = self.text_edit.toPlainText()
             
+            base_save_path = self.settings.get('results_path')
+            
+            found_files_per_lang = {}
+            found_files_details = {}
+
+            # --- Check for existing files ---
+            if base_save_path:
+                safe_job_name = "".join(c for c in task_name if c.isalnum() or c in (' ', '_')).rstrip()
+                for lang_id, btn in self.language_buttons.items():
+                    if btn.isChecked():
+                        lang_name = btn.text()
+                        safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
+                        dir_path = os.path.join(base_save_path, safe_job_name, safe_lang_name)
+                        
+                        if os.path.isdir(dir_path):
+                            found_files_for_lang = {}
+                            details_for_lang = {}
+                            
+                            def add_found(stage_key, path, display_name=None):
+                                if display_name is None:
+                                    display_name = translator.translate(stage_key)
+                                found_files_for_lang[stage_key] = display_name
+                                details_for_lang[stage_key] = path
+
+                            # Check for files
+                            translation_path = os.path.join(dir_path, "translation.txt")
+                            if os.path.isfile(translation_path):
+                                add_found("stage_translation", translation_path)
+
+                            prompts_path = os.path.join(dir_path, "image_prompts.txt")
+                            if os.path.isfile(prompts_path):
+                                add_found("stage_img_prompts", prompts_path)
+
+                            images_dir = os.path.join(dir_path, "images")
+                            if os.path.isdir(images_dir):
+                                files = os.listdir(images_dir)
+                                if files:
+                                    image_ext = ('.png', '.jpg', '.jpeg')
+                                    video_ext = ('.mp4',)
+                                    image_count = len([f for f in files if f.lower().endswith(image_ext)])
+                                    video_count = len([f for f in files if f.lower().endswith(video_ext)])
+                                    
+                                    display_name = translator.translate("stage_images")
+                                    counts = []
+                                    if image_count > 0:
+                                        counts.append(f"{image_count} {translator.translate('images_label')}")
+                                    if video_count > 0:
+                                        counts.append(f"{video_count} {translator.translate('videos_label')}")
+                                    
+                                    if counts:
+                                        display_name += f" ({', '.join(counts)})"
+
+                                    add_found("stage_images", images_dir, display_name=display_name)
+
+                            voice_mp3_path = os.path.join(dir_path, "voice.mp3")
+                            voice_wav_path = os.path.join(dir_path, "voice.wav")
+                            if os.path.isfile(voice_mp3_path):
+                                add_found("stage_voiceover", voice_mp3_path)
+                            elif os.path.isfile(voice_wav_path):
+                                add_found("stage_voiceover", voice_wav_path)
+
+                            subtitles_path = os.path.join(dir_path, "voice.ass")
+                            if os.path.isfile(subtitles_path):
+                                add_found("stage_subtitles", subtitles_path)
+                            
+                            if found_files_for_lang:
+                                found_files_per_lang[lang_name] = found_files_for_lang
+                                found_files_details[lang_name] = details_for_lang
+
+            use_existing = False
+            if found_files_per_lang:
+                display_order = ["stage_translation", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
+                
+                message = translator.translate("found_existing_files_prompt") + f" '{task_name}':\n\n"
+                for lang_name, found_stages in found_files_per_lang.items():
+                    message += f"<b>{lang_name}:</b>\n"
+                    # Iterate in the specified order
+                    for stage_key in display_order:
+                        if stage_key in found_stages:
+                            message += f"- {found_stages[stage_key]}\n"
+                    message += "\n"
+                message += translator.translate("use_existing_files_question")
+
+                msg_box = QMessageBox(self)
+                msg_box.setWindowTitle(translator.translate("found_existing_files_title"))
+                msg_box.setTextFormat(Qt.TextFormat.RichText)
+                msg_box.setText(message)
+                msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
+                
+                reply = msg_box.exec()
+                if reply == QMessageBox.StandardButton.Yes:
+                    use_existing = True
+            
+            # --- Prepare and add the job ---
             languages_data = {}
             for lang_id, btn in self.language_buttons.items():
                 if btn.isChecked():
                     stage_widget = self.stage_widgets.get(lang_id)
                     if stage_widget and stage_widget.isVisible():
                         selected_stages = stage_widget.get_selected_stages()
+                        
                         if selected_stages:
-                            languages_data[lang_id] = {
-                                "display_name": btn.text(),
+                            lang_name = btn.text()
+                            lang_data = {
+                                "display_name": lang_name,
                                 "stages": selected_stages
                             }
+                            
+                            if use_existing and lang_name in found_files_details:
+                                lang_data["pre_found_files"] = found_files_details[lang_name]
+
+                            languages_data[lang_id] = lang_data
             
             if languages_data:
                 job = {
-                    "id": None,  # Will be auto-generated by queue_manager
+                    "id": None,
                     "name": task_name,
                     "text": text,
                     "languages": languages_data
                 }
                 self.main_window.queue_manager.add_task(job)
+
 
     def update_char_count(self):
         text = self.text_edit.toPlainText()

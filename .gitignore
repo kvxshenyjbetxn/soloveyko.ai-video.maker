@@ -34,3 +34,4 @@ core/whisper-cli-amd/medium.bin
 core/whisper-cli-amd/small.bin
 config/templates/my.json
 config/templates/povod.json
+config/settings.json
