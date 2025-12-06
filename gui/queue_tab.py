@@ -34,7 +34,12 @@ class DeletableStageWidget(QWidget):
     def __init__(self, stage_key, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(24)
-        self.stage_name = translator.translate(stage_key)
+        
+        if stage_key.startswith("custom_"):
+            # Strip prefix for display custom stages
+            self.stage_name = stage_key.replace("custom_", "", 1)
+        else:
+            self.stage_name = translator.translate(stage_key)
         
         layout = QHBoxLayout()
         layout.setContentsMargins(4, 0, 4, 0)
@@ -186,7 +191,11 @@ class TaskCard(QGroupBox):
 
     def hide_stage(self, lang_id, stage_key):
         if lang_id in self.stage_widgets:
-            stage_name_to_find = translator.translate(stage_key)
+            if stage_key.startswith("custom_"):
+                 stage_name_to_find = stage_key.replace("custom_", "", 1)
+            else:
+                 stage_name_to_find = translator.translate(stage_key)
+
             for stage_widget in self.stage_widgets[lang_id]:
                 if stage_widget.label.text() == stage_name_to_find:
                     stage_widget.setVisible(False)
@@ -219,12 +228,16 @@ class TaskCard(QGroupBox):
 
     def update_stage_status(self, lang_id, stage_key, status):
         if lang_id in self.stage_widgets:
-            stage_name_to_find = translator.translate(stage_key)
+            if stage_key.startswith("custom_"):
+                 stage_name_to_find = stage_key.replace("custom_", "", 1)
+            else:
+                 stage_name_to_find = translator.translate(stage_key)
+            
             for stage_widget in self.stage_widgets[lang_id]:
                 if stage_widget.label.text() == stage_name_to_find:
                     stage_widget.get_dot().set_status(status)
                     break
-    
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.toggle_logs()

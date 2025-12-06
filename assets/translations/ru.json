@@ -216,5 +216,11 @@
     "add_images_title": "Добавить изображения",
     "add_images_desc": "Перетащите файлы изображений (.png, .jpg, .jpeg) сюда. Изображения будут отсортированы по имени файла.",
     "add_audio_title": "Добавить аудио",
-    "add_audio_desc": "Перетащите аудиофайл (.mp3, .wav) сюда."
+    "add_audio_desc": "Перетащите аудиофайл (.mp3, .wav) сюда.",
+    "custom_stages_label": "Кастомные этапы",
+    "add_stage_btn": "Добавить новый этап",
+    "parallel_stage_name_label": "Название этапа:",
+    "stage_name_placeholder": "Название этапа (напр. Итоги)",
+    "prompt_label": "Промпт:",
+    "enter_prompt_placeholder": "Введите ваш промпт здесь..."
 }

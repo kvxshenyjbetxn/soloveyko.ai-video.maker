@@ -21,7 +21,8 @@ class SettingsManager:
                 'fade_out': 0,
                 'margin_v': 50,
                 'max_words': 10
-            }
+            },
+            'custom_stages': []
         }
         self.settings = self.load_settings()
 

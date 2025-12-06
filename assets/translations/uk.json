@@ -216,5 +216,11 @@
     "add_images_title": "Додати зображення",
     "add_images_desc": "Перетягніть файли зображень (.png, .jpg, .jpeg) сюди. Зображення буде відсортовано за назвою файлу.",
     "add_audio_title": "Додати аудіо",
-    "add_audio_desc": "Перетягніть аудіофайл (.mp3, .wav) сюди."
+    "add_audio_desc": "Перетягніть аудіофайл (.mp3, .wav) сюди.",
+    "custom_stages_label": "Кастомні етапи",
+    "add_stage_btn": "Додати новий етап",
+    "parallel_stage_name_label": "Назва етапу:",
+    "stage_name_placeholder": "Назва етапу (напр. Підсумок)",
+    "prompt_label": "Промпт:",
+    "enter_prompt_placeholder": "Введіть ваш промпт тут..."
 }

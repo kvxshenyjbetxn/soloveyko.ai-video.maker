@@ -184,6 +184,42 @@ class SubtitleWorker(BaseWorker):
         logger.log(f"[{self.task_id}] [{whisper_label}] Subtitles saved", level=LogLevel.SUCCESS)
         return output_path
 
+class CustomStageWorker(BaseWorker):
+    def do_work(self):
+        api = OpenRouterAPI()
+        
+        stage_name = self.config['stage_name']
+        prompt = self.config['prompt']
+        text = self.config['text']
+        model = self.config.get('model', 'google/gemini-2.0-flash-exp:free') 
+        max_tokens = self.config.get('max_tokens', 4096)
+        
+        logger.log(f"[{self.task_id}] [Custom Stage: {stage_name}] Starting processing (model: {model}, tokens: {max_tokens})...", level=LogLevel.INFO)
+        
+        full_prompt = f"{prompt}\n\n{text}"
+        response = api.get_chat_completion(
+            model=model,
+            messages=[{"role": "user", "content": full_prompt}],
+            max_tokens=max_tokens
+        )
+        
+        if response and response['choices'][0]['message']['content']:
+            result = response['choices'][0]['message']['content']
+            
+            # Save to file
+            safe_name = "".join(c for c in stage_name if c.isalnum() or c in (' ', '_')).rstrip()
+            filename = f"{safe_name}.txt"
+            output_path = os.path.join(self.config['dir_path'], filename)
+            
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(result)
+                
+            logger.log(f"[{self.task_id}] [Custom Stage: {stage_name}] Completed and saved to {filename}", level=LogLevel.SUCCESS)
+            return {'path': output_path, 'stage_name': stage_name}
+        else:
+            raise Exception("Empty or invalid response from API.")
+
+
 class ImageGenerationWorker(BaseWorker):
     def do_work(self):
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -645,6 +681,125 @@ class TaskProcessor(QObject):
              self._start_image_generation(task_id)
         if 'stage_img_prompts' not in state.stages and 'stage_voiceover' not in state.stages and 'stage_images' not in state.stages:
             self.check_if_all_finished()
+
+        # --- Custom Stages (Parallel) ---
+        custom_stages = self.settings.get("custom_stages", [])
+        if custom_stages:
+            for stage in custom_stages:
+                stage_name = stage.get("name")
+                prompt = stage.get("prompt")
+                model = stage.get("model")
+                max_tokens = stage.get("max_tokens")
+                
+                # Check if this stage was selected for this job
+                stage_key = f"custom_{stage_name}"
+                if stage_key in state.stages:
+                    if stage_name and prompt:
+                        self._start_custom_stage(task_id, stage_name, prompt, model, max_tokens)
+
+    def _start_custom_stage(self, task_id, stage_name, prompt, model=None, max_tokens=None):
+        state = self.task_states[task_id]
+        
+        # Fallback to defaults if not specified or empty
+        # If model is not in custom stage settings, use the image prompt model or default
+        if not model:
+            model = self.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
+        if not max_tokens:
+             max_tokens = 4096
+
+        config = {
+            'text': state.text_for_processing,
+            'dir_path': state.dir_path,
+            'stage_name': stage_name,
+            'prompt': prompt,
+            'model': model,
+            'max_tokens': int(max_tokens)
+        }
+        
+        # We use a unique stage key for each custom stage to track status if we wanted to block, 
+        # but the requirement is "parallel and shouldn't block anything".
+        # However, it's good to track them in logs.
+        # We won't add them to state.stages so they don't prevent "Job Finished" status if they are slow,
+        # UNLESS we want them to be part of the job completion.
+        # The user said: "result simply saved... process shouldn't disturb anything absolutely"
+        # So we might treat them as fire-and-forget from the main pipeline's perspective,
+        # BUT usually users want to know when EVERYTHING is done.
+        # Let's run them as workers but not add them to the critical path for "voiceover finished" signals etc.
+        # But for "Job Finished" dialog, maybe we should wait? 
+        # The user said "parallel... result simply saved".
+        # Let's just fire them. If the user closes the app, they might be killed.
+        # Ideally we should verify.
+        
+        # Define callbacks with closures to capture stage_name safely
+        self._start_worker(CustomStageWorker, task_id, f"custom_{stage_name}", config, 
+                           self._on_custom_stage_finished, self._on_custom_stage_error_slot)
+
+    @Slot(str, object)
+    def _on_custom_stage_finished(self, task_id, result_data):
+        stage_name = result_data.get('stage_name')
+        # output_path = result_data.get('path') 
+        
+        stage_key = f"custom_{stage_name}"
+        logger.log(f"[{task_id}] Custom stage '{stage_name}' finished (UI update trigger).", level=LogLevel.INFO)
+        self._set_stage_status(task_id, stage_key, 'success')
+        # We also need to check if everything is finished, as this might be the last thing running
+        self.check_if_all_finished()
+
+    @Slot(str, str)
+    def _on_custom_stage_error_slot(self, task_id, error):
+         # We need to find which stage failed. 
+         # Since error signal is generic (task_id, error_msg), we might not know the stage name easily 
+         # if multiple custom stages run for the same task_id (which they do).
+         # BUT, BaseWorker emits error with task_id. 
+         # Wait, CustomStageWorker is started with task_id.
+         # If multiple custom stages run for the same language task, they share task_id!
+         # This is a problem in the original design too?
+         # No, the original design used a closure `on_custom_error` which captured `stage_name`.
+         # To fix this properly without closures, we need to pass stage_name in the error too, 
+         # OR rely on the fact that we might parse it from the worker config if we had access, but we don't here.
+         # Actually, the simplest way to keep error handling working with stage names 
+         # without closures is to arguably keep the closure for error or create a partial.
+         # BUT, using partial matches the Slot requirement better than a raw closure?
+         # Qt Slots can't easily take extra args unless signal provides them.
+         # 
+         # Let's look at how I replaced _start_custom_stage. 
+         # I need to handle the error case too.
+         
+         # Re-reading the plan: "Modify CustomStageWorker.do_work ... Modify TaskProcessor._on_custom_stage_finished ... Modify TaskProcessor._start_custom_stage"
+         # I didn't explicitly detail error handling in the plan, but I need to make sure I don't break it.
+         # 
+         # Issue: BaseWorker.error signal is Signal(str, str) -> (task_id, error_message).
+         # It doesn't include stage_name. 
+         # If I use a single slot `_on_custom_stage_error_slot(self, task_id, error)`, I don't know which stage failed if there are multiple.
+         # 
+         # However, the user request specifically complained about SUCCESS status not updating (green circle).
+         # The closure for success `on_custom_finished` was `lambda tid, res: self._on_custom_stage_finished(tid, res, stage_name)`.
+         # This closure was being called from a worker thread (likely), via the signal connection? 
+         # Qt signals related across threads are queued. 
+         # If `finish` signal is connected to a lambda, the lambda runs. 
+         # BUT lambdas are not Slots. If the sender is in a different thread, Qt queues the call. 
+         # When the slot is a lambda, does it execute in the receiver's thread? 
+         # Standard PySide/PyQt behavior: if receiver is QObject (self), auto-connection tries to run in receiver thread.
+         # But a lambda isn't a QObject method so it might default to direct connection or be problematic.
+         # 
+         # Converting to a proper Slot on TaskProcessor (which is in the main thread) guarantees execution in the main thread.
+         # 
+         # FOR ERROR HANDLING:
+         # I will define a specific wrapper/adaptor or use `sender()`?
+         # `sender()` in `_on_custom_stage_error` would give the Worker object.
+         # The Worker object has `self.config` which has `stage_name`.
+         # PERFECT.
+         
+        worker = self.sender()
+        stage_name = "unknown"
+        if worker and hasattr(worker, 'config') and 'stage_name' in worker.config:
+            stage_name = worker.config['stage_name']
+        
+        stage_key = f"custom_{stage_name}"
+        logger.log(f"[{task_id}] [Custom Stage: {stage_name}] Failed: {error}", level=LogLevel.ERROR)
+        self._set_stage_status(task_id, stage_key, 'error', error)
+        self.check_if_all_finished()
+
 
     def _start_image_prompts(self, task_id):
         state = self.task_states[task_id]
