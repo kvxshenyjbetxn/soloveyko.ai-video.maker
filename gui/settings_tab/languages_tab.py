@@ -2,7 +2,7 @@ import json
 import os
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLineEdit,
-    QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox
+    QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox
 )
 from PySide6.QtCore import Qt
 from utils.translator import translator
@@ -102,6 +102,14 @@ class LanguagesTab(QWidget):
         self.tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.tokens_label, self.tokens_spinbox)
 
+        self.temperature_label = QLabel(translator.translate("temperature_label"))
+        self.temperature_spinbox = QDoubleSpinBox()
+        self.temperature_spinbox.setRange(0.0, 2.0)
+        self.temperature_spinbox.setSingleStep(0.1)
+        self.temperature_spinbox.setValue(0.7)
+        self.temperature_spinbox.valueChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.temperature_label, self.temperature_spinbox)
+
         # TTS Provider
         self.tts_provider_label = QLabel("TTS Provider:")
         self.tts_provider_combo = QComboBox()
@@ -135,6 +143,8 @@ class LanguagesTab(QWidget):
         self.gemini_tone_input.setPlaceholderText("sad, excited, whispering... or a full instruction")
         self.gemini_tone_input.textChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.gemini_tone_label, self.gemini_tone_input)
+
+
 
         right_layout.addWidget(self.prompt_label)
         right_layout.addWidget(self.prompt_edit)
@@ -260,6 +270,7 @@ class LanguagesTab(QWidget):
         self.prompt_edit.blockSignals(True)
         self.model_combo.blockSignals(True)
         self.tokens_spinbox.blockSignals(True)
+        self.temperature_spinbox.blockSignals(True)
         self.elevenlabs_template_combo.blockSignals(True)
         self.tts_provider_combo.blockSignals(True)
         self.voicemaker_voice_combo.blockSignals(True)
@@ -295,12 +306,14 @@ class LanguagesTab(QWidget):
         self.gemini_tone_input.setText(config.get("gemini_tone", ""))
 
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
+        self.temperature_spinbox.setValue(config.get("temperature", 0.7))
 
         self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
 
         self.prompt_edit.blockSignals(False)
         self.model_combo.blockSignals(False)
         self.tokens_spinbox.blockSignals(False)
+        self.temperature_spinbox.blockSignals(False)
         self.elevenlabs_template_combo.blockSignals(False)
         self.tts_provider_combo.blockSignals(False)
         self.voicemaker_voice_combo.blockSignals(False)
@@ -325,6 +338,7 @@ class LanguagesTab(QWidget):
             "prompt": "", 
             "model": "",
             "max_tokens": 4096,
+            "temperature": 0.7,
             "tts_provider": "ElevenLabs",
             "elevenlabs_template_uuid": "",
             "voicemaker_voice_id": "",
@@ -364,6 +378,7 @@ class LanguagesTab(QWidget):
             languages[self.current_lang_id]["prompt"] = self.prompt_edit.toPlainText()
             languages[self.current_lang_id]["model"] = self.model_combo.currentText()
             languages[self.current_lang_id]["max_tokens"] = self.tokens_spinbox.value()
+            languages[self.current_lang_id]["temperature"] = self.temperature_spinbox.value()
             
             languages[self.current_lang_id]["tts_provider"] = self.tts_provider_combo.currentText()
             
@@ -427,4 +442,5 @@ class LanguagesTab(QWidget):
         self.tts_provider_label.setText(translator.translate("tts_provider_label"))
         self.voicemaker_voice_label.setText(translator.translate("voicemaker_voice_label"))
         self.gemini_voice_label.setText(translator.translate("gemini_voice_label"))
+        self.temperature_label.setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
 

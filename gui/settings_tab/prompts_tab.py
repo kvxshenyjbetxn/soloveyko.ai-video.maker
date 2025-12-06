@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit,
-    QPushButton, QTextEdit, QComboBox, QLabel, QFormLayout, QSpinBox, QScrollArea, QHBoxLayout, QGroupBox, QMessageBox
+    QPushButton, QTextEdit, QComboBox, QLabel, QFormLayout, QSpinBox, QScrollArea, QHBoxLayout, QGroupBox, QMessageBox, QDoubleSpinBox
 )
 from PySide6.QtCore import Qt
 from utils.translator import translator
@@ -49,6 +49,14 @@ class PromptsTab(QWidget):
         self.tokens_spinbox.setRange(0, 128000)
         self.tokens_spinbox.valueChanged.connect(self.save_settings)
         settings_form_layout.addRow(self.tokens_label, self.tokens_spinbox)
+
+        self.temperature_label = QLabel(translator.translate("temperature_label"))
+        self.temperature_spinbox = QDoubleSpinBox()
+        self.temperature_spinbox.setRange(0.0, 2.0)
+        self.temperature_spinbox.setSingleStep(0.1)
+        self.temperature_spinbox.setValue(0.7)
+        self.temperature_spinbox.valueChanged.connect(self.save_settings)
+        settings_form_layout.addRow(self.temperature_label, self.temperature_spinbox)
 
         self.img_group_layout.addWidget(self.prompt_content_label)
         self.img_group_layout.addWidget(self.prompt_edit)
@@ -120,9 +128,16 @@ class PromptsTab(QWidget):
         tokens_spinbox.setRange(0, 128000)
         tokens_spinbox.setValue(stage_data.get("max_tokens", 4096) if stage_data else 4096)
         tokens_spinbox.valueChanged.connect(self.save_custom_stages)
+
+        temperature_spinbox = QDoubleSpinBox()
+        temperature_spinbox.setRange(0.0, 2.0)
+        temperature_spinbox.setSingleStep(0.1)
+        temperature_spinbox.setValue(stage_data.get("temperature", 0.7) if stage_data else 0.7)
+        temperature_spinbox.valueChanged.connect(self.save_custom_stages)
         
         settings_form_layout.addRow(translator.translate("image_model_label"), model_combo)
         settings_form_layout.addRow(translator.translate("tokens_label"), tokens_spinbox)
+        settings_form_layout.addRow(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature", temperature_spinbox)
         stage_layout.addLayout(settings_form_layout)
 
         self.stages_container.addWidget(stage_group)
@@ -131,7 +146,8 @@ class PromptsTab(QWidget):
             "name_edit": name_edit,
             "prompt_edit": prompt_edit,
             "model_combo": model_combo,
-            "tokens_spinbox": tokens_spinbox
+            "tokens_spinbox": tokens_spinbox,
+            "temperature_spinbox": temperature_spinbox
         })
         
         if not stage_data: # If adding manually, save immediately
@@ -153,6 +169,7 @@ class PromptsTab(QWidget):
         self.prompt_edit.blockSignals(True)
         self.model_combo.blockSignals(True)
         self.tokens_spinbox.blockSignals(True)
+        self.temperature_spinbox.blockSignals(True)
 
         self.prompt_edit.setPlainText(config.get("prompt", ""))
         self.load_models()
@@ -160,10 +177,12 @@ class PromptsTab(QWidget):
         index = self.model_combo.findText(current_model)
         self.model_combo.setCurrentIndex(index if index >= 0 else 0)
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
+        self.temperature_spinbox.setValue(config.get("temperature", 0.7))
 
         self.prompt_edit.blockSignals(False)
         self.model_combo.blockSignals(False)
         self.tokens_spinbox.blockSignals(False)
+        self.temperature_spinbox.blockSignals(False)
 
         # Custom Stages
         # Clear existing
@@ -188,7 +207,8 @@ class PromptsTab(QWidget):
         config = {
             "prompt": self.prompt_edit.toPlainText(),
             "model": self.model_combo.currentText(),
-            "max_tokens": self.tokens_spinbox.value()
+            "max_tokens": self.tokens_spinbox.value(),
+            "temperature": self.temperature_spinbox.value()
         }
         self.settings.set("image_prompt_settings", config)
 
@@ -199,13 +219,15 @@ class PromptsTab(QWidget):
             prompt = stage["prompt_edit"].toPlainText()
             model = stage["model_combo"].currentText()
             max_tokens = stage["tokens_spinbox"].value()
+            temperature = stage["temperature_spinbox"].value()
             
             if name: # Only save if name exists
                 stages_data.append({
                     "name": name,
                     "prompt": prompt,
                     "model": model,
-                    "max_tokens": max_tokens
+                    "max_tokens": max_tokens,
+                    "temperature": temperature
                 })
         self.settings.set("custom_stages", stages_data)
 

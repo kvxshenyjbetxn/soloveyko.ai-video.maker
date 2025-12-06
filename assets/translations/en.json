@@ -222,5 +222,6 @@
     "parallel_stage_name_label": "Stage Name:",
     "stage_name_placeholder": "Stage Name (e.g. Summary)",
     "prompt_label": "Prompt:",
-    "enter_prompt_placeholder": "Enter your prompt here..."
+    "enter_prompt_placeholder": "Enter your prompt here...",
+    "temperature_label": "Temperature:"
 }
