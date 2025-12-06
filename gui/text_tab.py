@@ -3,7 +3,7 @@ import re
 import uuid
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog, QGridLayout, QMessageBox
+    QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog, QGridLayout, QMessageBox, QStyle
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtCore import Qt, QMimeData
@@ -11,6 +11,7 @@ from utils.flow_layout import FlowLayout
 from functools import partial
 from utils.translator import translator
 from utils.settings import settings_manager
+from gui.file_dialog import FileDialog
 
 class DroppableTextEdit(QTextEdit):
     def __init__(self, parent=None):
@@ -39,11 +40,16 @@ class DroppableTextEdit(QTextEdit):
         else:
             super().dropEvent(event)
 
+from gui.file_dialog import FileDialog
+
 class StageSelectionWidget(QWidget):
     """A compact widget representing the processing stages for a single language."""
     def __init__(self, language_name, parent_tab):
         super().__init__()
         self.parent_tab = parent_tab
+        self.user_images = []
+        self.user_audio = None
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(6)
@@ -91,6 +97,7 @@ class StageSelectionWidget(QWidget):
         layout.addWidget(line)
         
         self.checkboxes = {}
+        self.add_buttons = {}
         stage_keys = ["stage_translation", "stage_img_prompts", "stage_images", 
                       "stage_voiceover", "stage_subtitles", "stage_montage"]
         
@@ -101,9 +108,81 @@ class StageSelectionWidget(QWidget):
             checkbox.stateChanged.connect(self.parent_tab.check_queue_button_visibility)
             layout.addWidget(checkbox)
             self.checkboxes[key] = checkbox
+
+            if key in ["stage_images", "stage_voiceover"]:
+                add_button = QToolButton()
+                add_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+                add_button.setObjectName(f"addButton_{key}")
+                add_button.setFixedSize(22, 22)
+                add_button.setStyleSheet("QToolButton { border: none; background-color: transparent; }")
+                layout.addWidget(add_button)
+                self.add_buttons[key] = add_button
+
+                if key == "stage_images":
+                    add_button.clicked.connect(self.open_image_dialog)
+                else:
+                    add_button.clicked.connect(self.open_audio_dialog)
             
         layout.addStretch()
         self.update_toggle_button_text()
+
+    def open_image_dialog(self):
+        dialog = FileDialog(
+            self,
+            title=translator.translate("add_images_title"),
+            description=translator.translate("add_images_desc"),
+            extensions=[".png", ".jpg", ".jpeg"],
+            multi_file=True
+        )
+        dialog.files_selected.connect(self.set_user_images)
+        dialog.exec()
+
+    def open_audio_dialog(self):
+        dialog = FileDialog(
+            self,
+            title=translator.translate("add_audio_title"),
+            description=translator.translate("add_audio_desc"),
+            extensions=[".mp3", ".wav"],
+            multi_file=False
+        )
+        dialog.files_selected.connect(self.set_user_audio)
+        dialog.exec()
+
+    def set_user_images(self, files):
+        self.user_images = sorted(files)
+        button = self.add_buttons.get("stage_images")
+        if button:
+            if self.user_images:
+                button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton))
+                self.checkboxes["stage_img_prompts"].setChecked(False)
+                self.checkboxes["stage_img_prompts"].setEnabled(False)
+            else:
+                button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+                self.checkboxes["stage_img_prompts"].setEnabled(True)
+
+    def set_user_audio(self, files):
+        self.user_audio = files[0] if files else None
+        button = self.add_buttons.get("stage_voiceover")
+        translation_checkbox = self.checkboxes.get("stage_translation")
+
+        if button:
+            if self.user_audio:
+                button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton))
+                if translation_checkbox:
+                    translation_checkbox.setChecked(False)
+                    translation_checkbox.setEnabled(False)
+            else:
+                button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+                if translation_checkbox:
+                    translation_checkbox.setEnabled(True)
+        
+    def get_user_files(self):
+        files = {}
+        if self.user_images:
+            files["stage_images"] = self.user_images
+        if self.user_audio:
+            files["stage_voiceover"] = self.user_audio
+        return files
         
     def retranslate_ui(self):
         for key, checkbox in self.checkboxes.items():
@@ -397,6 +476,10 @@ class TextTab(QWidget):
                             
                             if use_existing and lang_name in found_files_details:
                                 lang_data["pre_found_files"] = found_files_details[lang_name]
+                            
+                            user_files = stage_widget.get_user_files()
+                            if user_files:
+                                lang_data["user_provided_files"] = user_files
 
                             languages_data[lang_id] = lang_data
             
