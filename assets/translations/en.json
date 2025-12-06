@@ -216,5 +216,11 @@
     "add_images_title": "Add Images",
     "add_images_desc": "Drag and drop image files (.png, .jpg, .jpeg) here. The images will be sorted by filename.",
     "add_audio_title": "Add Audio",
-    "add_audio_desc": "Drag and drop an audio file (.mp3, .wav) here."
+    "add_audio_desc": "Drag and drop an audio file (.mp3, .wav) here.",
+    "custom_stages_label": "Custom Stages",
+    "add_stage_btn": "Add New Stage",
+    "parallel_stage_name_label": "Stage Name:",
+    "stage_name_placeholder": "Stage Name (e.g. Summary)",
+    "prompt_label": "Prompt:",
+    "enter_prompt_placeholder": "Enter your prompt here..."
 }

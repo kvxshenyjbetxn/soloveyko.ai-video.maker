@@ -122,7 +122,33 @@ class StageSelectionWidget(QWidget):
                     add_button.clicked.connect(self.open_image_dialog)
                 else:
                     add_button.clicked.connect(self.open_audio_dialog)
-            
+        
+        # --- Custom Stages ---
+        custom_stages = self.parent_tab.settings.get("custom_stages", [])
+        for stage in custom_stages:
+            stage_name = stage.get("name")
+            if stage_name:
+                # Key format: "custom_<StageName>" - this needs to match logic in TaskProcessor
+                # But TaskProcessor iterates config "custom_stages" directly.
+                # Here we just need to pass it in the job description so TaskProcessor knows to run it?
+                # Actually TaskProcessor logic currently iterates ALL custom stages from settings if they exist.
+                # We need to change TaskProcessor to ONLY run the selected ones.
+                # So we will add them to the job's 'stages' list.
+                # TaskProcessor current logic:
+                # if custom_stages: for stage in custom_stages: ...
+                # It doesn't check if they are in state.stages. We should fix that too.
+                
+                key = f"custom_{stage_name}" 
+                # Use a unique key. We can prefix with "custom_" or just use name if unique.
+                # Let's use name for display, "custom_name" for internal key.
+                
+                checkbox = QCheckBox(stage_name)
+                checkbox.setChecked(True)
+                checkbox.stateChanged.connect(self.update_toggle_button_text)
+                checkbox.stateChanged.connect(self.parent_tab.check_queue_button_visibility)
+                layout.addWidget(checkbox)
+                self.checkboxes[key] = checkbox
+
         layout.addStretch()
         self.update_toggle_button_text()
 
