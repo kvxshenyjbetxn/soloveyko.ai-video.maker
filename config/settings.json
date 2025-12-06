@@ -11,8 +11,8 @@
             "prompt": "дай відповідь і скажи в кінці Олег",
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
-            "elevenlabs_template_uuid": "5fbd9e4a-4861-4e46-9836-1138f5d4a356",
-            "tts_provider": "ElevenLabs",
+            "elevenlabs_template_uuid": "9293bf1a-e95e-460d-8daa-86075e97004b",
+            "tts_provider": "GeminiTTS",
             "voicemaker_voice_id": "ai3-af-ZA-Kungawo",
             "gemini_voice": "Enceladus",
             "gemini_tone": "Read aloud in a warm and friendly tone: "
@@ -45,7 +45,7 @@
             "model": "google/gemini-2.5-flash",
             "max_tokens": 128000,
             "tts_provider": "ElevenLabs",
-            "elevenlabs_template_uuid": "3bba5178-ce2b-4c6c-9fff-281a40b32bc2",
+            "elevenlabs_template_uuid": "e0693f2f-c12f-46fb-8966-a3b0a91d614c",
             "voicemaker_voice_id": "ai2-pl-PL-Hanna",
             "gemini_voice": "Puck",
             "gemini_tone": ""
@@ -159,5 +159,6 @@
         "special_processing_video_count": 2,
         "max_concurrent_montages": 3
     },
-    "image_review_enabled": true
+    "image_review_enabled": true,
+    "gemini_tts_voice": "Zephyr"
 }

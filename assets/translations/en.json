@@ -139,6 +139,7 @@
     "gemini_tts_url": "GeminiTTS URL:",
     "gemini_tts_api_key": "GeminiTTS API Key:",
     "tts_provider_label": "TTS Provider:",
+    "voice": "Voice:",
     "voicemaker_voice_label": "VoiceMaker Voice:",
     "gemini_voice_label": "Gemini Voice:",
     "gemini_tone_label": "Gemini Tone:",
