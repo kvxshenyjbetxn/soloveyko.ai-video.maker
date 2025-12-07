@@ -167,7 +167,7 @@ class VoiceoverWorker(BaseWorker):
             if not task_id:
                 raise Exception(f"Failed to create ElevenLabs task after 3 attempts. Last error: {last_error}")
             
-            for _ in range(30): # 5 min timeout
+            while True:
                 task_status, status = api.get_task_status(task_id)
                 # Retry status check within the loop if network blips
                 if status != 'connected': 
@@ -179,12 +179,15 @@ class VoiceoverWorker(BaseWorker):
                     audio_content, status = api.get_task_result(task_id)
                     if status == 'connected' and audio_content:
                         return self.save_audio(audio_content, "voice.mp3")
-                    elif status == 'not_ready': time.sleep(10); continue
-                    else: raise Exception("Failed to download ElevenLabs audio.")
+                    elif status == 'not_ready': 
+                        time.sleep(10)
+                        continue
+                    else: 
+                        raise Exception("Failed to download ElevenLabs audio.")
                 elif task_status in ['error', 'error_handled']:
                     raise Exception("ElevenLabs task processing resulted in an error.")
+                
                 time.sleep(10)
-            raise Exception("Timeout waiting for ElevenLabs result.")
 
     def save_audio(self, content, filename):
         path = os.path.join(self.config['dir_path'], filename)
