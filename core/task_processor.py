@@ -1083,8 +1083,6 @@ class TaskProcessor(QObject):
                         logger.log(f"[{task_id}] Ready for image review.", level=LogLevel.INFO)
                         self.tasks_awaiting_review.append(task_id)
                 else:
-                    self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
-                    state.status['stage_montage'] = 'processing'
                     self._start_montage(task_id)
         
         self._check_if_all_are_ready_or_failed()
@@ -1110,8 +1108,6 @@ class TaskProcessor(QObject):
         for task_id in tasks_to_start:
             state = self.task_states.get(task_id)
             if state:
-                self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
-                state.status['stage_montage'] = 'processing'
                 self._start_montage(task_id)
 
     def _start_montage(self, task_id):
@@ -1124,6 +1120,10 @@ class TaskProcessor(QObject):
                 self.processor.montage_semaphore.acquire()
                 try:
                     state = self.processor.task_states[self.task_id]
+                    
+                    # Set status to 'processing' only after semaphore is acquired
+                    self.processor.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
+                    state.status['stage_montage'] = 'processing'
                     
                     # Use the authoritative list of paths from the state, which may include videos
                     final_image_paths = state.image_paths
