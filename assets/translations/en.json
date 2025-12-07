@@ -223,5 +223,10 @@
     "stage_name_placeholder": "Stage Name (e.g. Summary)",
     "prompt_label": "Prompt:",
     "enter_prompt_placeholder": "Enter your prompt here...",
-    "temperature_label": "Temperature:"
+    "temperature_label": "Temperature:",
+    "current_template_label": "Current Template",
+    "confirm_save_title": "Confirm Save",
+    "confirm_save_template_text": "Are you sure you want to save changes to template '{name}'?",
+    "confirm_apply_title": "Confirm Apply",
+    "confirm_apply_template_text": "Are you sure you want to apply template '{name}'? This will overwrite your current settings."
 }

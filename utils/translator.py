@@ -20,8 +20,8 @@ class Translator:
                 return json.load(f)
         return {}
 
-    def translate(self, key):
-        return self.translations.get(key, key)
+    def translate(self, key, default=None):
+        return self.translations.get(key, default if default is not None else key)
 
     def set_language(self, language_code):
         self.language = language_code

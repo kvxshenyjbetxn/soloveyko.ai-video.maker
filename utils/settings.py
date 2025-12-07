@@ -22,7 +22,8 @@ class SettingsManager:
                 'margin_v': 50,
                 'max_words': 10
             },
-            'custom_stages': []
+            'custom_stages': [],
+            'last_used_template_name': ''
         }
         self.settings = self.load_settings()
 

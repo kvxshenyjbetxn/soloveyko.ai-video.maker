@@ -223,5 +223,10 @@
     "stage_name_placeholder": "Назва етапу (напр. Підсумок)",
     "prompt_label": "Промпт:",
     "enter_prompt_placeholder": "Введіть ваш промпт тут...",
-    "temperature_label": "Температура:"
+    "temperature_label": "Температура:",
+    "current_template_label": "Поточний шаблон",
+    "confirm_save_title": "Підтвердити збереження",
+    "confirm_save_template_text": "Ви впевнені, що хочете зберегти зміни в шаблон '{name}'?",
+    "confirm_apply_title": "Підтвердити застосування",
+    "confirm_apply_template_text": "Ви впевнені, що хочете застосувати шаблон '{name}'? Це перезапише ваші поточні налаштування."
 }

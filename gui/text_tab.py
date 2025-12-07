@@ -247,6 +247,11 @@ class TextTab(QWidget):
         self.char_count_layout.addWidget(self.clean_chars_label)
         self.char_count_layout.addStretch()
         self.char_count_layout.addWidget(self.paragraphs_label)
+        
+        self.char_count_layout.addSpacing(20)
+        self.template_name_label = QLabel()
+        self.char_count_layout.addWidget(self.template_name_label)
+        
         layout.addLayout(self.char_count_layout)
 
         # Main text input
@@ -543,6 +548,12 @@ class TextTab(QWidget):
 
     def update_gemini_tts_balance(self, balance_text):
         self.gemini_tts_balance_label.setText(balance_text)
+
+    def update_template_name(self, name):
+        if name:
+            self.template_name_label.setText(f"{translator.translate('current_template_label', 'Template')}: {name}")
+        else:
+            self.template_name_label.setText("")
 
     def apply_text_color_to_text_edit(self):
         current_theme = self.settings.get('theme', 'dark')
