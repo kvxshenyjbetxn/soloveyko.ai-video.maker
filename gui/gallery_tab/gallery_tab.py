@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 import base64
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QScrollArea, QLabel, QMessageBox
@@ -143,6 +144,7 @@ class GalleryTab(QWidget):
             return
 
         image_files = [f for f in os.listdir(demo_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        image_files.sort(key=lambda s: [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)])
         if not image_files:
             logger.log(f"No images found in demo directory '{demo_dir}'.", level=LogLevel.INFO)
             return
