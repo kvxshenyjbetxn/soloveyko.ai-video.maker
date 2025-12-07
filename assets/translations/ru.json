@@ -228,5 +228,7 @@
     "confirm_save_title": "Подтвердить сохранение",
     "confirm_save_template_text": "Вы уверены, что хотите сохранить изменения в шаблон '{name}'?",
     "confirm_apply_title": "Подтвердить применение",
-    "confirm_apply_template_text": "Вы уверены, что хотите применить шаблон '{name}'? Это перезапишет ваши текущие настройки."
+    "confirm_apply_template_text": "Вы уверены, что хотите применить шаблон '{name}'? Это перезапишет ваши текущие настройки.",
+    "prompts_count": "промптов",
+    "characters_count": "символов"
 }

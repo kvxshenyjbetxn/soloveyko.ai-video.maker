@@ -172,6 +172,7 @@ class MainWindow(QMainWindow):
         self.task_processor.processing_finished.connect(self.update_voicemaker_balance)
         self.task_processor.processing_finished.connect(self.update_gemini_tts_balance)
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
+        self.task_processor.stage_metadata_updated.connect(self.queue_tab.update_stage_metadata)
         self.task_processor.image_generated.connect(self.gallery_tab.add_image)
         self.task_processor.task_progress_log.connect(self.queue_tab.on_task_progress_log)
         self.task_processor.image_review_required.connect(self._on_image_review_required)
