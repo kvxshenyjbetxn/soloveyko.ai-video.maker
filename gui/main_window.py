@@ -177,14 +177,32 @@ class MainWindow(QMainWindow):
         self.task_processor.image_review_required.connect(self._on_image_review_required)
         self.gallery_tab.continue_montage_requested.connect(self.task_processor.resume_all_montages)
         self.gallery_tab.image_deleted.connect(self.task_processor._on_image_deleted)
-        self.gallery_tab.image_regenerated.connect(self.task_processor._on_image_regenerated)
         self.gallery_tab.image_clicked.connect(self.show_image_viewer)
-
+        self.settings_tab.templates_tab.template_applied.connect(self.update_template_label)
 
         self.update_googler_usage()
         self.update_elevenlabs_balance()
         self.update_voicemaker_balance()
         self.update_gemini_tts_balance()
+        
+        # Apply last used template on startup
+        last_template = self.settings_manager.get('last_used_template_name')
+        if last_template:
+            # We need to manually load it here because we can't trigger the button click easily/safely without UI effects
+            from utils.settings import template_manager
+            template_data = template_manager.load_template(last_template)
+            if template_data:
+                for key, value in template_data.items():
+                    self.settings_manager.settings[key] = value
+                self.settings_manager.save_settings()
+                
+                # Update UI
+                self.settings_tab.templates_tab.populate_templates_combo() # ensure combo is updated
+                self.settings_tab.templates_tab.templates_combo.setCurrentText(last_template)
+                self.text_tab.update_template_name(last_template)
+                self.settings_tab._update_all_tabs()
+                self.retranslate_ui() # Ensure translations applied if language changed
+                logger.log(f"Applied last used template: {last_template}", level=LogLevel.INFO)
 
     def _on_image_review_required(self):
         title = translator.translate('image_review_title')
@@ -207,6 +225,10 @@ class MainWindow(QMainWindow):
     def update_title(self):
         app_name = self.translator.translate('app_title')
         self.setWindowTitle(f"{app_name} v{__version__}")
+
+    def update_template_label(self):
+        name = self.settings_manager.get('last_used_template_name')
+        self.text_tab.update_template_name(name)
 
     def update_balance(self):
         worker = BalanceWorker()

@@ -139,6 +139,16 @@ class TemplatesTab(QWidget):
             return
 
         data_to_save = self._gather_current_settings()
+
+        # Confirmation for saving
+        reply = QMessageBox.question(self, translator.translate("confirm_save_title"), 
+                                     translator.translate("confirm_save_template_text").format(name=name),
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                                     QMessageBox.StandardButton.No)
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
         template_manager.save_template(name, data_to_save)
         self.populate_templates_combo()
         self.templates_combo.setCurrentText(name)
@@ -159,6 +169,16 @@ class TemplatesTab(QWidget):
             QMessageBox.warning(self, translator.translate("error"), translator.translate("no_template_selected_error"))
             return
 
+        # Confirmation for applying
+        reply = QMessageBox.question(self, translator.translate("confirm_apply_title"), 
+                                     translator.translate("confirm_apply_template_text").format(name=name),
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
+                                     QMessageBox.StandardButton.No)
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        template_manager.load_template(name)
         template_data = template_manager.load_template(name)
         if not template_data:
             QMessageBox.critical(self, translator.translate("error"), translator.translate("template_load_error").format(name=name))
@@ -168,6 +188,7 @@ class TemplatesTab(QWidget):
         for key, value in template_data.items():
             settings_manager.settings[key] = value
         
+        settings_manager.set('last_used_template_name', name)
         settings_manager.save_settings()
         self.template_applied.emit()
         QMessageBox.information(self, translator.translate("success"), translator.translate("template_applied_success").format(name=name))
