@@ -75,7 +75,7 @@ class TranslationWorker(BaseWorker):
             logger.log(f"[{self.task_id}] [{model}] Translation completed", level=LogLevel.SUCCESS)
             return result
         else:
-            raise Exception("Empty or invalid response from translation API.")
+            raise Exception(f"Empty or invalid response from translation API for model '{model}'. Response: {response}")
 
 class ImagePromptWorker(BaseWorker):
     def do_work(self):

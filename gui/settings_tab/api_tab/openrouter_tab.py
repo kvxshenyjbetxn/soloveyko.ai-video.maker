@@ -1,9 +1,10 @@
+
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QListWidget, QHBoxLayout, QScrollArea
 from PySide6.QtCore import Signal, Qt
 from utils.translator import translator
 from utils.settings import settings_manager
 from api.openrouter import OpenRouterAPI
-from utils.logger import logger
+from utils.logger import logger, LogLevel
 
 class OpenRouterTab(QWidget):
     def __init__(self, main_window=None):
@@ -31,7 +32,7 @@ class OpenRouterTab(QWidget):
 
         # API Key
         api_key_layout = QHBoxLayout()
-        self.api_key_label = QLabel("OpenRouter API Key:")
+        self.api_key_label = QLabel(translator.translate("openrouter_api_key"))
         self.api_key_input = QLineEdit()
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.api_key_input.textChanged.connect(self.save_api_key)
@@ -88,6 +89,7 @@ class OpenRouterTab(QWidget):
         self.api.api_key = api_key
         self.api_key_input.blockSignals(False)
         self.update_models_list()
+        
     def save_api_key(self, key):
         self.settings.set("openrouter_api_key", key)
         self.api.api_key = key
