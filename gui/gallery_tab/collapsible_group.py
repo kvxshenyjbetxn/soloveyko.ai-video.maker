@@ -89,7 +89,12 @@ class CollapsibleGroup(QWidget):
             if item and item.widget():
                 thumbnails.append(item.widget())
         
-        thumbnails.sort(key=lambda x: x.image_path)
+        import re
+        def natural_sort_key(s):
+            return [int(text) if text.isdigit() else text.lower()
+                    for text in re.split('([0-9]+)', s)]
+
+        thumbnails.sort(key=lambda x: natural_sort_key(x.image_path))
 
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
