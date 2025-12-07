@@ -228,5 +228,7 @@
     "confirm_save_title": "Confirm Save",
     "confirm_save_template_text": "Are you sure you want to save changes to template '{name}'?",
     "confirm_apply_title": "Confirm Apply",
-    "confirm_apply_template_text": "Are you sure you want to apply template '{name}'? This will overwrite your current settings."
+    "confirm_apply_template_text": "Are you sure you want to apply template '{name}'? This will overwrite your current settings.",
+    "prompts_count": "prompts",
+    "characters_count": "characters"
 }

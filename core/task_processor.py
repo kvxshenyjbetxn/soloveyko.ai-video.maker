@@ -10,6 +10,7 @@ from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTime
 
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager
+from utils.translator import translator
 from api.openrouter import OpenRouterAPI
 from api.pollinations import PollinationsAPI
 from api.googler import GooglerAPI
@@ -459,6 +460,10 @@ class TaskState:
         self.final_video_path = None
 
         self.status = {stage: 'pending' for stage in self.stages}
+        
+        # Metadata counters
+        self.images_generated_count = 0
+        self.images_total_count = 0
 
     def _get_save_path(self, base_path, job_name, lang_name):
         if not base_path: return None
@@ -478,6 +483,8 @@ class TaskProcessor(QObject):
     image_generated = Signal(str, str, str, str) # job_name, lang_name, image_path, prompt
     task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
     image_review_required = Signal()
+    stage_metadata_updated = Signal(str, str, str, str) # job_id, lang_id, stage_key, metadata_text
+
 
     def __init__(self, queue_manager):
         super().__init__()
@@ -524,6 +531,32 @@ class TaskProcessor(QObject):
             if voice_id in lang_data.get("Voices", []):
                 return lang_data.get("LanguageCode")
         return "en-US"
+    
+    def _get_audio_duration(self, audio_path):
+        """Get audio duration in seconds"""
+        import wave
+        import struct
+        
+        ext = os.path.splitext(audio_path)[1].lower()
+        
+        if ext == '.wav':
+            with wave.open(audio_path, 'r') as audio_file:
+                frames = audio_file.getnframes()
+                rate = audio_file.getframerate()
+                duration = frames / float(rate)
+                return duration
+        elif ext == '.mp3':
+            # For MP3, we'll use a simple estimation based on file size
+            # This is not accurate but avoids additional dependencies
+            # Average bitrate assumption: 128 kbps
+            file_size = os.path.getsize(audio_path)
+            duration = (file_size * 8) / (128 * 1000)  # seconds
+            return duration
+        else:
+            # Fallback: estimate based on file size
+            file_size = os.path.getsize(audio_path)
+            duration = (file_size * 8) / (128 * 1000)  # assume 128 kbps
+            return duration
 
     def start_processing(self):
         jobs = self.queue_manager.get_tasks()
@@ -651,6 +684,11 @@ class TaskProcessor(QObject):
         state = self.task_states.get(task_id)
         if state:
             self.image_generated.emit(state.job_name, state.lang_name, image_path, prompt)
+            
+            # Update image counter and emit metadata
+            state.images_generated_count += 1
+            metadata_text = f"{state.images_generated_count}/{state.images_total_count}"
+            self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
 
     def _set_stage_status(self, task_id, stage_key, status, error_message=None):
         state = self.task_states.get(task_id)
@@ -692,7 +730,14 @@ class TaskProcessor(QObject):
             with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
                 f.write(translated_text)
         self._set_stage_status(task_id, 'stage_translation', 'success')
+        
+        # Update metadata with character count
+        char_count = len(translated_text)
+        metadata_text = f"{char_count} {translator.translate('characters_count')}"
+        self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_translation', metadata_text)
+        
         self._on_text_ready(task_id)
+
 
     @Slot(str, str)
     def _on_translation_error(self, task_id, error):
@@ -700,6 +745,14 @@ class TaskProcessor(QObject):
 
     def _on_text_ready(self, task_id):
         state = self.task_states[task_id]
+        
+        # If translation was not used, emit metadata for original text
+        if 'stage_translation' not in state.stages and state.text_for_processing:
+            char_count = len(state.text_for_processing)
+            metadata_text = f"{char_count} {translator.translate('characters_count')}"
+            # For original text, we use a special key 'original_text'
+            self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'original_text', metadata_text)
+        
         if 'stage_img_prompts' in state.stages:
             self._start_image_prompts(task_id)
         if 'stage_voiceover' in state.stages:
@@ -849,6 +902,12 @@ class TaskProcessor(QObject):
                 f.write(prompts_text)
         self._set_stage_status(task_id, 'stage_img_prompts', 'success')
         
+        # Count prompts and emit metadata
+        prompts = re.findall(r"^\d+\.\s*(.*)", prompts_text, re.MULTILINE)
+        prompts_count = len(prompts)
+        metadata_text = f"{prompts_count} {translator.translate('prompts_count')}"
+        self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_img_prompts', metadata_text)
+        
         if 'stage_images' in state.stages:
             self._start_image_generation(task_id)
         else:
@@ -876,6 +935,16 @@ class TaskProcessor(QObject):
         state = self.task_states[task_id]
         state.audio_path = audio_path
         self._set_stage_status(task_id, 'stage_voiceover', 'success')
+        
+        # Get audio duration and emit metadata
+        try:
+            duration_seconds = self._get_audio_duration(audio_path)
+            minutes = int(duration_seconds // 60)
+            seconds = int(duration_seconds % 60)
+            metadata_text = f"{minutes}:{seconds:02d}"
+            self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_voiceover', metadata_text)
+        except Exception as e:
+            logger.log(f"[{task_id}] Failed to get audio duration: {e}", level=LogLevel.WARNING)
         
         if 'stage_subtitles' in state.stages:
             self._start_subtitles(task_id)
@@ -955,6 +1024,18 @@ class TaskProcessor(QObject):
     def _start_image_generation(self, task_id):
         state = self.task_states[task_id]
         googler_settings = self.settings.get('googler', {})
+        
+        # Calculate total prompts count for metadata
+        prompts = re.findall(r"^\d+\.\s*(.*)", state.image_prompts, re.MULTILINE)
+        if not prompts:
+            prompts = [line.strip() for line in state.image_prompts.split('\n') if line.strip()]
+        state.images_total_count = len(prompts)
+        state.images_generated_count = 0  # Reset counter
+        
+        # Emit initial metadata (0/total)
+        metadata_text = f"0/{state.images_total_count}"
+        self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
+        
         config = {
             'prompts_text': state.image_prompts,
             'dir_path': state.dir_path,
@@ -1158,6 +1239,16 @@ class TaskProcessor(QObject):
         self.montage_semaphore.release()
         self.task_states[task_id].final_video_path = video_path
         self._set_stage_status(task_id, 'stage_montage', 'success')
+        
+        # Get file size and emit metadata
+        try:
+            state = self.task_states[task_id]
+            file_size_bytes = os.path.getsize(video_path)
+            file_size_gb = file_size_bytes / (1024 * 1024 * 1024)  # Convert to GB
+            metadata_text = f"{file_size_gb:.2f} GB"
+            self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_montage', metadata_text)
+        except Exception as e:
+            logger.log(f"[{task_id}] Failed to get video file size: {e}", level=LogLevel.WARNING)
 
     @Slot(str, str)
     def _on_montage_error(self, task_id, error):

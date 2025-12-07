@@ -34,6 +34,7 @@ class DeletableStageWidget(QWidget):
     def __init__(self, stage_key, parent=None):
         super().__init__(parent)
         self.setMinimumHeight(24)
+        self.stage_key = stage_key
         
         if stage_key.startswith("custom_"):
             # Strip prefix for display custom stages
@@ -48,9 +49,14 @@ class DeletableStageWidget(QWidget):
         self.dot = StatusDot(self)
         self.label = QLabel(self.stage_name, self)
         
+        # Metadata label (right-aligned, grey text)
+        self.metadata_label = QLabel("", self)
+        self.metadata_label.setStyleSheet("color: #888; font-size: 10px;")
+        
         layout.addWidget(self.dot)
         layout.addWidget(self.label)
         layout.addStretch()
+        layout.addWidget(self.metadata_label)
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
@@ -61,6 +67,11 @@ class DeletableStageWidget(QWidget):
 
     def get_dot(self):
         return self.dot
+    
+    def update_metadata(self, metadata_text):
+        """Update the metadata display text"""
+        self.metadata_label.setText(metadata_text)
+
 
 class DeletableLanguageHeader(QWidget):
     """A widget for the language header, allowing deletion via context menu."""
@@ -110,6 +121,7 @@ class TaskCard(QGroupBox):
 
         self.language_widgets = {}
         self.stage_widgets = {}
+        self.original_text_metadata_labels = {}  # For storing metadata labels for original text
 
         self.init_ui(job)
 
@@ -157,9 +169,15 @@ class TaskCard(QGroupBox):
                 dot.set_status('success') # Original text is always 'successful'
                 label = QLabel(translator.translate('original_text'), self)
                 
+                # Metadata label for original text
+                metadata_label = QLabel("", self)
+                metadata_label.setStyleSheet("color: #888; font-size: 10px;")
+                self.original_text_metadata_labels[lang_id] = metadata_label
+                
                 original_layout.addWidget(dot)
                 original_layout.addWidget(label)
                 original_layout.addStretch()
+                original_layout.addWidget(metadata_label)
                 layout.addWidget(original_widget)
 
             for stage_key in lang_data['stages']:
@@ -238,6 +256,22 @@ class TaskCard(QGroupBox):
                 if stage_widget.label.text() == stage_name_to_find:
                     stage_widget.get_dot().set_status(status)
                     break
+    
+    def update_stage_metadata(self, lang_id, stage_key, metadata_text):
+        """Update metadata display for a specific stage"""
+        # Handle original text metadata
+        if stage_key == 'original_text':
+            if lang_id in self.original_text_metadata_labels:
+                self.original_text_metadata_labels[lang_id].setText(metadata_text)
+            return
+        
+        # Handle regular stage metadata
+        if lang_id in self.stage_widgets:
+            for stage_widget in self.stage_widgets[lang_id]:
+                if stage_widget.stage_key == stage_key:
+                    stage_widget.update_metadata(metadata_text)
+                    break
+
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -437,11 +471,18 @@ class QueueTab(QWidget):
             card = self.task_cards[job_id]
             card.update_stage_status(lang_id, stage_key, status)
     
+    def update_stage_metadata(self, job_id, lang_id, stage_key, metadata_text):
+        """Update stage metadata display"""
+        if job_id in self.task_cards:
+            card = self.task_cards[job_id]
+            card.update_stage_metadata(lang_id, stage_key, metadata_text)
+    
     def on_task_progress_log(self, job_id, message):
         """Forward progress log to specific task card"""
         if job_id in self.task_cards:
             card = self.task_cards[job_id]
             card.on_progress_log(message)
+
 
     def update_balance(self, balance_text):
         self.balance_label.setText(balance_text)
