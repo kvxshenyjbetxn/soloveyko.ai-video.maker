@@ -46,6 +46,8 @@ class OpenRouterAPI:
         logger.log("Failed to retrieve OpenRouter balance.", level=LogLevel.ERROR)
         return None
 
+
+
     def get_chat_completion(self, model, messages, max_tokens=4096, temperature=None):
         if not self.api_key:
             error_msg = "API key is not configured."
@@ -54,19 +56,32 @@ class OpenRouterAPI:
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-Title": "Combine App"
         }
+        
+        # Prepare payload
         data = {
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens
         }
-        
+
         # Add optional parameters if provided
         if temperature is not None:
             data["temperature"] = temperature
-        
+
+        # Apply Google-specific safety settings to disable content filtering
+        if model.lower().startswith("google/"):
+             data["safety_settings"] = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+
         logger.log(f"Requesting chat completion from model: {model}", level=LogLevel.INFO)
+        
         try:
             response = requests.post(f"{self.base_url}/chat/completions", headers=headers, json=data)
             response.raise_for_status() # Raises an HTTPError for bad responses (4xx or 5xx)
@@ -74,7 +89,9 @@ class OpenRouterAPI:
             return response.json()
         except requests.exceptions.RequestException as e:
             error_msg = f"An error occurred during chat completion request: {e}"
+            if hasattr(e, 'response') and e.response is not None:
+                 error_msg += f"\nResponse status: {e.response.status_code}"
+                 error_msg += f"\nResponse body: {e.response.text}"
             logger.log(error_msg, level=LogLevel.ERROR)
-            # You might want to log this error or handle it more gracefully
             print(error_msg)
             return None
