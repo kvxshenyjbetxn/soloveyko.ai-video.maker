@@ -164,6 +164,7 @@
     "special_proc_mode_quick_show": "Быстрый показ",
     "special_proc_mode_video_at_beginning": "Видео в начале",
     "special_proc_video_count_label": "Количество видео:",
+    "special_proc_check_sequence_label": "Проверять последовательность изображений:",
     "image_count_label": "Количество изображений:",
     "duration_per_image_label": "Время на картинку:",
     "performance_group": "Производительность",

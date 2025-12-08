@@ -164,6 +164,7 @@
     "special_proc_mode_quick_show": "Quick show",
     "special_proc_mode_video_at_beginning": "Video at the beginning",
     "special_proc_video_count_label": "Number of videos:",
+    "special_proc_check_sequence_label": "Check image sequence:",
     "image_count_label": "Number of images:",
     "duration_per_image_label": "Time per image:",
     "performance_group": "Performance",

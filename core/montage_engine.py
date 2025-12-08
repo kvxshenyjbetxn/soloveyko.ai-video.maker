@@ -72,15 +72,22 @@ class MontageEngine:
 
         if special_mode == "Quick show" and num_images > 0:
             num_special_images = min(num_images, special_count)
-            
-            special_time_total = 0
-            for i in range(num_special_images):
-                img_idx = image_indices[i]
-                final_clip_durations[img_idx] = special_dur
-                special_time_total += special_dur
-
-            time_for_normal_images = time_for_all_images - special_time_total
             num_normal_images = num_images - num_special_images
+
+            if num_normal_images == 0:
+                # Всі зображення - "спеціальні", тому розтягуємо їх на весь доступний час
+                img_duration = time_for_all_images / num_images if num_images > 0 else 0
+                for i in range(num_images):
+                    final_clip_durations[image_indices[i]] = img_duration
+                time_for_normal_images = 0 # Весь час розподілено
+            else:
+                # Є і спеціальні, і звичайні зображення
+                special_time_total = 0
+                for i in range(num_special_images):
+                    img_idx = image_indices[i]
+                    final_clip_durations[img_idx] = special_dur
+                    special_time_total += special_dur
+                time_for_normal_images = time_for_all_images - special_time_total
         
         # For "Video at the beginning", no special time math is needed here.
         # The videos are already in visual_files and their durations are accounted for.

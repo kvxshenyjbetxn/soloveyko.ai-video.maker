@@ -1062,17 +1062,16 @@ class TaskProcessor(QObject):
             status = 'warning'
 
         self.task_states[task_id].image_paths = generated_paths
-        self._set_stage_status(task_id, 'stage_images', status, "Failed to generate all images." if status != 'success' else None)
-
-        # === NEW: Check if video generation is needed ===
+        # Don't set final status yet if we need to animate
+        
         montage_settings = self.settings.get("montage", {})
         special_mode = montage_settings.get("special_processing_mode", "Disabled")
         
-        logger.log(f"[{task_id}] Image generation finished. Checking special processing mode. Mode: '{special_mode}'", level=LogLevel.INFO)
-
         if special_mode == "Video at the beginning" and generated_paths:
+            self._set_stage_status(task_id, 'stage_images', 'processing_video')
             self._start_video_generation(task_id)
         else:
+            self._set_stage_status(task_id, 'stage_images', status, "Failed to generate all images." if status != 'success' else None)
             if self.subtitle_barrier_passed:
                 self._check_and_start_montages()
 
@@ -1088,14 +1087,46 @@ class TaskProcessor(QObject):
         googler_settings = self.settings.get("googler", {})
 
         video_count = montage_settings.get("special_processing_video_count", 1)
-        paths_to_animate = state.image_paths[:video_count]
+        check_sequence = montage_settings.get("special_processing_check_sequence", False)
+        
+        all_image_paths = state.image_paths
+        paths_to_animate = []
+
+        if not all_image_paths:
+            logger.log(f"[{task_id}] No images to animate, skipping video generation.", level=LogLevel.INFO)
+            if self.subtitle_barrier_passed: self._check_and_start_montages()
+            return
+
+        if not check_sequence:
+            paths_to_animate = all_image_paths[:video_count]
+        else:
+            # --- Sequence Check Logic ---
+            first_img_basename = os.path.splitext(os.path.basename(all_image_paths[0]))[0]
+            if first_img_basename != '1':
+                logger.log(f"[{task_id}] First image is '{first_img_basename}', not '1'. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
+                state.fallback_to_quick_show = True
+                if self.subtitle_barrier_passed: self._check_and_start_montages()
+                return
+
+            sequential_count = 0
+            for i in range(min(video_count, len(all_image_paths))):
+                expected_name = str(i + 1)
+                actual_name = os.path.splitext(os.path.basename(all_image_paths[i]))[0]
+                if actual_name == expected_name:
+                    sequential_count += 1
+                else:
+                    break
+
+            if sequential_count > 0:
+                logger.log(f"[{task_id}] Found a sequence of {sequential_count} images to animate.", level=LogLevel.INFO)
+                paths_to_animate = all_image_paths[:sequential_count]
 
         if not paths_to_animate:
-            logger.log(f"[{task_id}] No images to animate, skipping video generation.", level=LogLevel.INFO)
-            if self.subtitle_barrier_passed:
-                self._check_and_start_montages()
+            logger.log(f"[{task_id}] No sequential images found to animate, skipping video generation.", level=LogLevel.INFO)
+            if self.subtitle_barrier_passed: self._check_and_start_montages()
             return
             
+        state.video_animation_count = len(paths_to_animate)
         logger.log(f"[{task_id}] Starting video generation for {len(paths_to_animate)} images.", level=LogLevel.INFO)
 
         config = {
@@ -1104,8 +1135,6 @@ class TaskProcessor(QObject):
             'video_semaphore': self.video_semaphore,
             'max_threads': googler_settings.get("max_video_threads", 1)
         }
-        # Use a new stage key for clarity, or just log it
-        # self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing_video')
         self._start_worker(VideoGenerationWorker, task_id, 'stage_images', config, self._on_video_generation_finished, self._on_video_generation_error)
 
     @Slot(str, object)
@@ -1116,20 +1145,23 @@ class TaskProcessor(QObject):
         logger.log(f"[{task_id}] Video generation finished. Generated {len(generated_videos)} videos.", level=LogLevel.SUCCESS)
 
         if generated_videos:
-            montage_settings = self.settings.get("montage", {})
-            video_count = montage_settings.get("special_processing_video_count", 1)
-
-            # Create a new list: generated videos + the rest of the original images
-            remaining_images = state.image_paths[video_count:]
+            video_count_animated = getattr(state, 'video_animation_count', 0)
+            remaining_images = state.image_paths[video_count_animated:]
             state.image_paths = generated_videos + remaining_images
+        else:
+            if getattr(state, 'video_animation_count', 0) > 0:
+                logger.log(f"[{task_id}] Video animation produced 0 videos. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
+                state.fallback_to_quick_show = True
 
-        # Since this stage is complete, we can now check for montages
+        self._set_stage_status(task_id, 'stage_images', 'success')
+        
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
 
     @Slot(str, str)
     def _on_video_generation_error(self, task_id, error):
         logger.log(f"[{task_id}] Video generation failed: {error}", level=LogLevel.ERROR)
+        self._set_stage_status(task_id, 'stage_images', 'error', error)
         # We don't stop the whole process, just log the error and proceed with the images we have
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
@@ -1143,7 +1175,7 @@ class TaskProcessor(QObject):
             sub_status = state.status.get('stage_subtitles') if 'stage_subtitles' in state.stages else 'success'
             img_status = state.status.get('stage_images') if 'stage_images' in state.stages else 'success'
 
-            prerequisites_are_done = sub_status not in ['pending', 'processing'] and img_status not in ['pending', 'processing']
+            prerequisites_are_done = sub_status not in ['pending', 'processing'] and img_status not in ['pending', 'processing', 'processing_video']
 
             if prerequisites_are_done:
                 if sub_status == 'error' or img_status == 'error':
@@ -1218,10 +1250,15 @@ class TaskProcessor(QObject):
                     output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
                     output_path = os.path.join(state.dir_path, output_filename)
                     
+                    montage_settings = self.processor.settings.get("montage", {}).copy()
+                    if getattr(state, 'fallback_to_quick_show', False):
+                        logger.log(f"[{self.task_id}] Fallback to 'Quick Show' mode for montage.", level=LogLevel.WARNING)
+                        montage_settings['special_processing_mode'] = "Quick show"
+                        
                     config = {
                         'visual_files': final_image_paths, 'audio_path': state.audio_path,
                         'output_path': output_path, 'ass_path': state.subtitle_path,
-                        'settings': self.processor.settings.get("montage", {})
+                        'settings': montage_settings
                     }
                     worker = MontageWorker(self.task_id, config)
                     worker.signals.finished.connect(self.processor._on_montage_finished)
