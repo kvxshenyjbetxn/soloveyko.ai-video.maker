@@ -160,6 +160,10 @@ class MontageTab(QWidget):
         self.special_proc_video_count_spin.setRange(1, 100)
         self.special_proc_video_count_spin.valueChanged.connect(self.save_settings)
         special_proc_layout.addRow(self.special_proc_video_count_label, self.special_proc_video_count_spin)
+
+        self.special_proc_check_sequence_cb = QCheckBox()
+        self.special_proc_check_sequence_cb.toggled.connect(self.save_settings)
+        special_proc_layout.addRow(self.special_proc_check_sequence_cb)
         
         self.special_proc_group.setLayout(special_proc_layout)
         self.layout.addWidget(self.special_proc_group)
@@ -210,6 +214,7 @@ class MontageTab(QWidget):
         self.special_proc_img_count_spin.setValue(m_settings.get("special_processing_image_count", 5))
         self.special_proc_dur_spin.setValue(m_settings.get("special_processing_duration_per_image", 2.0))
         self.special_proc_video_count_spin.setValue(m_settings.get("special_processing_video_count", 1))
+        self.special_proc_check_sequence_cb.setChecked(m_settings.get("special_processing_check_sequence", False))
 
         self.max_concurrent_montages_spin.setValue(m_settings.get("max_concurrent_montages", 1))
 
@@ -237,6 +242,7 @@ class MontageTab(QWidget):
             "special_processing_image_count": self.special_proc_img_count_spin.value(),
             "special_processing_duration_per_image": self.special_proc_dur_spin.value(),
             "special_processing_video_count": self.special_proc_video_count_spin.value(),
+            "special_processing_check_sequence": self.special_proc_check_sequence_cb.isChecked(),
             "max_concurrent_montages": self.max_concurrent_montages_spin.value()
         }
         self.settings.set("montage", m_settings)
@@ -270,6 +276,7 @@ class MontageTab(QWidget):
         self.special_proc_img_count_label.setText(translator.translate("image_count_label"))
         self.special_proc_dur_label.setText(translator.translate("duration_per_image_label"))
         self.special_proc_video_count_label.setText(translator.translate("special_proc_video_count_label"))
+        self.special_proc_check_sequence_cb.setText(translator.translate("special_proc_check_sequence_label"))
 
         self.perf_group.setTitle(translator.translate("performance_group"))
         self.max_concurrent_montages_label.setText(translator.translate("max_concurrent_montages_label"))
@@ -287,3 +294,4 @@ class MontageTab(QWidget):
         
         self.special_proc_video_count_spin.setVisible(is_video)
         self.special_proc_video_count_label.setVisible(is_video)
+        self.special_proc_check_sequence_cb.setVisible(is_video)
