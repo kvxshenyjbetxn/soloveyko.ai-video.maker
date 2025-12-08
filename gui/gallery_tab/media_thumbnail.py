@@ -57,17 +57,12 @@ class MediaThumbnail(QWidget):
         self.video_widget.installEventFilter(self)
         self.player = QMediaPlayer()
         self.player.setVideoOutput(self.video_widget)
-        self._audio_output = QAudioOutput()
-        self.player.setAudioOutput(self._audio_output)
-        self._audio_output.setMuted(True)
+        self.player.setAudioOutput(None)
         self.player.mediaStatusChanged.connect(self._on_media_status_changed)
         self.player.setSource(QUrl.fromLocalFile(os.path.abspath(self.media_path)))
 
     def on_click(self):
         player_instance = self.player if self.is_video else None
-        if player_instance:
-            player_instance.stop()
-            self.media_stack.setCurrentIndex(self.media_stack.indexOf(self.thumbnail_label))
         self.media_clicked.emit(self.media_path, player_instance)
 
     def eventFilter(self, obj, event):
