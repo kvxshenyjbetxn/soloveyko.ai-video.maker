@@ -36,3 +36,5 @@ config/templates/my.json
 config/templates/povod.json
 config/settings.json
 config/templates/povod-ro.json
+demo/1.mp4
+demo/2.mp4

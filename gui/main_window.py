@@ -19,6 +19,7 @@ from gui.log_tab import LogTab
 from gui.queue_tab import QueueTab
 from gui.gallery_tab.gallery_tab import GalleryTab
 from gui.gallery_tab.image_viewer import ImageViewer
+from gui.gallery_tab.video_viewer import VideoViewer
 from core.queue_manager import QueueManager
 from core.task_processor import TaskProcessor
 from utils.logger import logger, LogLevel
@@ -173,12 +174,13 @@ class MainWindow(QMainWindow):
         self.task_processor.processing_finished.connect(self.update_gemini_tts_balance)
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
         self.task_processor.stage_metadata_updated.connect(self.queue_tab.update_stage_metadata)
-        self.task_processor.image_generated.connect(self.gallery_tab.add_image)
+        self.task_processor.image_generated.connect(self.gallery_tab.add_media)
+        self.task_processor.video_generated.connect(self.gallery_tab.update_thumbnail)
         self.task_processor.task_progress_log.connect(self.queue_tab.on_task_progress_log)
         self.task_processor.image_review_required.connect(self._on_image_review_required)
         self.gallery_tab.continue_montage_requested.connect(self.task_processor.resume_all_montages)
         self.gallery_tab.image_deleted.connect(self.task_processor._on_image_deleted)
-        self.gallery_tab.image_clicked.connect(self.show_image_viewer)
+        self.gallery_tab.media_clicked.connect(self.show_media_viewer)
         self.settings_tab.templates_tab.template_applied.connect(self.update_template_label)
 
         self.update_googler_usage()
@@ -212,8 +214,12 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentWidget(self.gallery_tab)
         self.gallery_tab.show_continue_button()
 
-    def show_image_viewer(self, image_path):
-        self.viewer = ImageViewer(image_path, self.central_widget)
+    def show_media_viewer(self, media_path):
+        if media_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm')):
+            self.viewer = VideoViewer(media_path, self.central_widget)
+        else:
+            self.viewer = ImageViewer(media_path, self.central_widget)
+        
         self.viewer.setGeometry(self.central_widget.rect())
         self.viewer.show()
         self.viewer.setFocus()

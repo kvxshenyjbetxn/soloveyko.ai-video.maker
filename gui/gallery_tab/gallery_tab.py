@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, Signal, QObject, QRunnable, QThreadPool
 from PySide6.QtGui import QPixmap
 from utils.translator import translator
 from gui.gallery_tab.collapsible_group import CollapsibleGroup
-from gui.gallery_tab.image_thumbnail import ImageThumbnail
+from gui.gallery_tab.media_thumbnail import MediaThumbnail
 from gui.gallery_tab.regenerate_config_dialog import RegenerateConfigDialog
 from utils.logger import logger, LogLevel
 from api.pollinations import PollinationsAPI
@@ -75,7 +75,7 @@ class RegenerateImageWorker(QRunnable):
 
 
 class GalleryTab(QWidget):
-    image_clicked = Signal(str)
+    media_clicked = Signal(str)
     image_deleted = Signal(str)
     image_regenerated = Signal(str, str) # old_path, new_path
     continue_montage_requested = Signal()
@@ -94,9 +94,9 @@ class GalleryTab(QWidget):
 
         top_bar_layout = QHBoxLayout()
         
-        # self.load_demo_button = QPushButton()
-        # self.load_demo_button.clicked.connect(self.load_demo_images)
-        # top_bar_layout.addWidget(self.load_demo_button)
+        self.load_demo_button = QPushButton()
+        self.load_demo_button.clicked.connect(self.load_demo_media)
+        top_bar_layout.addWidget(self.load_demo_button)
 
         top_bar_layout.addStretch()
 
@@ -121,7 +121,7 @@ class GalleryTab(QWidget):
         self.continue_button.hide()
         main_layout.addWidget(self.continue_button)
 
-        self.update_total_images_count()
+        self.update_total_media_count()
 
     def clear_gallery(self):
         """Removes all images and groups from the gallery view."""
@@ -134,32 +134,32 @@ class GalleryTab(QWidget):
             if child.widget():
                 child.widget().deleteLater()
         
-        self.update_total_images_count()
+        self.update_total_media_count()
         logger.log("Gallery has been cleared.", level=LogLevel.INFO)
 
-    def load_demo_images(self):
+    def load_demo_media(self):
         demo_dir = "demo"
         if not os.path.isdir(demo_dir):
             logger.log(f"Demo directory '{demo_dir}' not found.", level=LogLevel.WARNING)
             return
 
-        image_files = [f for f in os.listdir(demo_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-        image_files.sort(key=lambda s: [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)])
-        if not image_files:
-            logger.log(f"No images found in demo directory '{demo_dir}'.", level=LogLevel.INFO)
+        media_files = [f for f in os.listdir(demo_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.mp4', '.webm'))]
+        media_files.sort(key=lambda s: [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)])
+        if not media_files:
+            logger.log(f"No media found in demo directory '{demo_dir}'.", level=LogLevel.INFO)
             return
         
-        logger.log(f"Loading {len(image_files)} demo images.", level=LogLevel.INFO)
-        for i, filename in enumerate(image_files):
-            image_path = os.path.join(demo_dir, filename)
+        logger.log(f"Loading {len(media_files)} demo media files.", level=LogLevel.INFO)
+        for i, filename in enumerate(media_files):
+            media_path = os.path.join(demo_dir, filename)
             task_name = f"Demo Task {(i % 4) // 2 + 1}"
             language = f"Lang {(i % 2) + 1}"
-            prompt = f"This is a demo image: {filename}"
-            self.add_image(task_name, language, image_path, prompt)
+            prompt = f"This is a demo media file: {filename}"
+            self.add_media(task_name, language, media_path, prompt)
 
-    def add_image(self, task_name, language, image_path, prompt):
-        if not os.path.exists(image_path):
-            logger.log(f"Image path does not exist: {image_path}", level=LogLevel.WARNING)
+    def add_media(self, task_name, language, media_path, prompt):
+        if not os.path.exists(media_path):
+            logger.log(f"Media path does not exist: {media_path}", level=LogLevel.WARNING)
             return
 
         if task_name not in self.task_groups:
@@ -176,20 +176,22 @@ class GalleryTab(QWidget):
 
         lang_group = task_group.language_groups[language]
 
-        pixmap = QPixmap(image_path)
-        scaled_pixmap = pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        pixmap = MediaThumbnail.get_thumbnail_for_media(media_path)
+        if pixmap.isNull():
+            logger.log(f"Failed to load media or generate thumbnail for: {media_path}", level=LogLevel.WARNING)
+            return
         
-        thumbnail = ImageThumbnail(image_path, prompt, scaled_pixmap, lang_group)
+        thumbnail = MediaThumbnail(media_path, prompt, pixmap, lang_group)
         
-        thumbnail.image_clicked.connect(lambda: self._on_image_clicked(image_path))
+        thumbnail.media_clicked.connect(lambda: self._on_media_clicked(media_path))
         thumbnail.delete_requested.connect(lambda: self._on_delete_requested(thumbnail, lang_group))
         thumbnail.regenerate_requested.connect(self._on_regenerate_requested)
 
         lang_group.add_widget(thumbnail)
-        self.update_total_images_count()
+        self.update_total_media_count()
 
-    def _on_image_clicked(self, image_path):
-        self.image_clicked.emit(image_path)
+    def _on_media_clicked(self, media_path):
+        self.media_clicked.emit(media_path)
 
     def _on_regenerate_requested(self, image_data):
         dialog = RegenerateConfigDialog(image_data, self)
@@ -217,7 +219,8 @@ class GalleryTab(QWidget):
             thumbnail = group.find_thumbnail_by_path(old_path)
             if thumbnail:
                 thumbnail.set_regenerating_state(False)
-                thumbnail.update_image(new_path)
+                new_pixmap = MediaThumbnail.get_thumbnail_for_media(new_path)
+                thumbnail.update_media(new_path, new_pixmap)
                 logger.log(f"Updated thumbnail for {old_path} with new image {new_path}", level=LogLevel.INFO)
                 
                 if old_path != new_path:
@@ -241,29 +244,29 @@ class GalleryTab(QWidget):
 
     def _on_delete_requested(self, thumbnail_widget, lang_group):
         try:
-            image_path = thumbnail_widget.image_path
-            self.image_deleted.emit(image_path) # Повідомити про видалення
+            media_path = thumbnail_widget.media_path
+            self.image_deleted.emit(media_path) # Повідомити про видалення
 
-            is_demo_file = os.path.dirname(image_path).endswith('demo')
+            is_demo_file = os.path.dirname(media_path).endswith('demo')
             if not is_demo_file:
-                os.remove(image_path)
-                logger.log(f"Deleted image from disk: {image_path}", level=LogLevel.INFO)
+                os.remove(media_path)
+                logger.log(f"Deleted image from disk: {media_path}", level=LogLevel.INFO)
             else:
-                logger.log(f"Removed demo image from gallery: {image_path}", level=LogLevel.INFO)
+                logger.log(f"Removed demo image from gallery: {media_path}", level=LogLevel.INFO)
 
             lang_group.content_layout.removeWidget(thumbnail_widget)
             thumbnail_widget.deleteLater()
 
             lang_group.update_title()
-            self.update_total_images_count()
+            self.update_total_media_count()
 
             task_group = lang_group.parent_group
-            if lang_group.get_image_count() == 0:
+            if lang_group.get_media_count() == 0:
                 task_group.content_layout.removeWidget(lang_group)
                 lang_group.deleteLater()
                 del task_group.language_groups[lang_group.title]
 
-            if task_group.get_image_count() == 0:
+            if task_group.get_media_count() == 0:
                 self.content_layout.removeWidget(task_group)
                 task_group.deleteLater()
                 del self.task_groups[task_group.title]
@@ -272,13 +275,13 @@ class GalleryTab(QWidget):
             logger.log(f"Error deleting image file {thumbnail_widget.image_path}: {e}", level=LogLevel.ERROR)
             QMessageBox.critical(self, "Error", f"Could not delete image file:\n{e}")
 
-    def update_total_images_count(self):
-        total_count = sum(group.get_image_count() for group in self.task_groups.values())
-        self.total_images_label.setText(translator.translate("gallery_total_images_label").format(count=total_count))
+    def update_total_media_count(self):
+        total_count = sum(group.get_media_count() for group in self.task_groups.values())
+        self.total_images_label.setText(translator.translate("gallery_total_media_label").format(count=total_count))
 
     def retranslate_ui(self):
-        self.update_total_images_count()
-        # self.load_demo_button.setText(translator.translate("load_demo_button"))
+        self.update_total_media_count()
+        self.load_demo_button.setText(translator.translate("load_demo_button"))
         self.continue_button.setText(translator.translate("continue_montage_button"))
         for group in self.task_groups.values():
             group.translate_ui()
@@ -289,3 +292,16 @@ class GalleryTab(QWidget):
     def _on_continue_clicked(self):
         self.continue_montage_requested.emit()
         self.continue_button.hide()
+
+    def update_thumbnail(self, old_path, new_path):
+        """Finds a thumbnail by the old path and updates it to the new one."""
+        for task_group in self.task_groups.values():
+            thumbnail = task_group.find_thumbnail_by_path(old_path)
+            if thumbnail:
+                new_pixmap = MediaThumbnail.get_thumbnail_for_media(new_path)
+                if not new_pixmap.isNull():
+                    thumbnail.update_media(new_path, new_pixmap)
+                    logger.log(f"Updated thumbnail from image to video: {os.path.basename(new_path)}", level=LogLevel.INFO)
+                else:
+                    logger.log(f"Failed to create new pixmap for {new_path}", level=LogLevel.WARNING)
+                return # Found and processed, so exit
