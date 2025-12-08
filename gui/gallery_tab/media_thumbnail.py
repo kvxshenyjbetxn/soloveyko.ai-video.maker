@@ -295,11 +295,11 @@ class MediaThumbnail(QWidget):
                     bytes_per_line = 3 * width
                     q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_BGR888)
                     pixmap = QPixmap.fromImage(q_img)
-                    return pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    return pixmap.scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             except Exception:
                 pass
 
         pixmap = QPixmap(media_path)
         if pixmap.isNull():
              return QPixmap()
-        return pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        return pixmap.scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
