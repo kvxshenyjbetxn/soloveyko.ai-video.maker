@@ -172,7 +172,11 @@ class TemplatesTab(QWidget):
         
         # Update settings
         for key, value in template_data.items():
-            settings_manager.settings[key] = value
+            # Special handling for dictionaries like 'montage' and 'subtitles'
+            if isinstance(value, dict) and key in settings_manager.settings and isinstance(settings_manager.settings[key], dict):
+                settings_manager.settings[key].update(value)
+            else:
+                settings_manager.settings[key] = value
         
         settings_manager.set('last_used_template_name', name)
         settings_manager.save_settings()

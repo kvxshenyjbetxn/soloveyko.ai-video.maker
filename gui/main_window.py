@@ -196,7 +196,11 @@ class MainWindow(QMainWindow):
             template_data = template_manager.load_template(last_template)
             if template_data:
                 for key, value in template_data.items():
-                    self.settings_manager.settings[key] = value
+                    # Special handling for dictionaries to merge them instead of overwriting
+                    if isinstance(value, dict) and key in self.settings_manager.settings and isinstance(self.settings_manager.settings[key], dict):
+                        self.settings_manager.settings[key].update(value)
+                    else:
+                        self.settings_manager.settings[key] = value
                 self.settings_manager.save_settings()
                 
                 # Update UI
