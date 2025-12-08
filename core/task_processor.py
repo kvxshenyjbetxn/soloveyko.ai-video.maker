@@ -360,47 +360,52 @@ class VideoGenerationWorker(BaseWorker):
         generated_videos = [None] * len(image_paths_to_animate)
 
         def generate_single_video(index, image_path):
-            try:
-                video_semaphore.acquire()
-                logger.log(f"[{self.task_id}] [Googler Video] Animating image {index + 1}/{len(image_paths_to_animate)}: {os.path.basename(image_path)}", level=LogLevel.INFO)
-                
-                video_data = api.generate_video(image_path, video_prompt)
-                
-                if not video_data:
-                    logger.log(f"[{self.task_id}] [Googler Video] Failed to generate video for {os.path.basename(image_path)} (no data)", level=LogLevel.WARNING)
-                    return None
-                
-                # Replace extension
-                base_name = os.path.splitext(image_path)[0]
-                video_path = f"{base_name}.mp4"
-
-                # Decode and save
+            max_retries = 3
+            for attempt in range(max_retries):
                 try:
-                    data_to_write = base64.b64decode(video_data.split(",", 1)[1] if "," in video_data else video_data)
-                    with open(video_path, 'wb') as f:
-                        f.write(data_to_write)
-                    
-                    # Emit signal to notify UI of the replacement
-                    self.signals.video_generated.emit(image_path, video_path)
-                    
-                    # Delete original image
-                    try:
-                        os.remove(image_path)
-                    except OSError as e:
-                        logger.log(f"[{self.task_id}] [Googler Video] Could not delete original image {image_path}: {e}", level=LogLevel.WARNING)
+                    video_semaphore.acquire()
+                    logger_msg = f"[{self.task_id}] [Googler Video] Animating image {index + 1}/{len(image_paths_to_animate)}: {os.path.basename(image_path)}"
+                    if max_retries > 1:
+                        logger_msg += f" (Attempt {attempt + 1}/{max_retries})"
+                    logger.log(logger_msg, level=LogLevel.INFO)
 
-                    logger.log(f"[{self.task_id}] [Googler Video] Video {index + 1}/{len(image_paths_to_animate)} saved to {video_path}", level=LogLevel.SUCCESS)
-                    return (index, video_path)
+                    video_data = api.generate_video(image_path, video_prompt)
+                    
+                    if not video_data:
+                        raise Exception("API returned no data.")
+                    
+                    base_name = os.path.splitext(image_path)[0]
+                    video_path = f"{base_name}.mp4"
+
+                    try:
+                        data_to_write = base64.b64decode(video_data.split(",", 1)[1] if "," in video_data else video_data)
+                        with open(video_path, 'wb') as f:
+                            f.write(data_to_write)
+                        
+                        self.signals.video_generated.emit(image_path, video_path)
+                        
+                        try:
+                            os.remove(image_path)
+                        except OSError as e:
+                            logger.log(f"[{self.task_id}] [Googler Video] Could not delete original image {image_path}: {e}", level=LogLevel.WARNING)
+
+                        logger.log(f"[{self.task_id}] [Googler Video] Video {index + 1}/{len(image_paths_to_animate)} saved to {video_path}", level=LogLevel.SUCCESS)
+                        return (index, video_path)
+
+                    except Exception as e:
+                        raise Exception(f"Error saving video for {os.path.basename(image_path)}: {e}")
 
                 except Exception as e:
-                    logger.log(f"[{self.task_id}] [Googler Video] Error saving video for {os.path.basename(image_path)}: {e}", level=LogLevel.ERROR)
-                    return None
-
-            except Exception as e:
-                logger.log(f"[{self.task_id}] [Googler Video] Error generating video for {os.path.basename(image_path)}: {e}", level=LogLevel.ERROR)
-                return None
-            finally:
-                video_semaphore.release()
+                    logger.log(f"[{self.task_id}] [Googler Video] Attempt {attempt + 1} failed for {os.path.basename(image_path)}: {e}", level=LogLevel.WARNING)
+                    if attempt < max_retries - 1:
+                        logger.log(f"Retrying in 5 seconds...", level=LogLevel.INFO)
+                        time.sleep(5)
+                    else:
+                        logger.log(f"[{self.task_id}] [Googler Video] All retries failed for {os.path.basename(image_path)}.", level=LogLevel.ERROR)
+                        # Return None from inside the loop on final failure
+                finally:
+                    video_semaphore.release()
+            return None # This is reached if all retries fail
 
         with ThreadPoolExecutor(max_workers=self.config.get('max_threads', 1)) as executor:
             future_to_index = {executor.submit(generate_single_video, i, path): i for i, path in enumerate(image_paths_to_animate)}
