@@ -39,16 +39,12 @@ class TemplatesTab(QWidget):
 
         # Action buttons
         buttons_layout = QHBoxLayout()
-        self.new_button = QPushButton()
         self.save_button = QPushButton()
-        self.save_as_button = QPushButton()
         self.apply_button = QPushButton()
         self.delete_button = QPushButton()
         self.rename_button = QPushButton()
         
-        buttons_layout.addWidget(self.new_button)
         buttons_layout.addWidget(self.save_button)
-        buttons_layout.addWidget(self.save_as_button)
         buttons_layout.addWidget(self.apply_button)
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.rename_button)
@@ -58,9 +54,7 @@ class TemplatesTab(QWidget):
         main_layout.addStretch()
 
     def retranslate_ui(self):
-        self.new_button.setText(translator.translate("new_button"))
         self.save_button.setText(translator.translate("save_button"))
-        self.save_as_button.setText(translator.translate("save_as_button"))
         self.apply_button.setText(translator.translate("apply_button"))
         self.delete_button.setText(translator.translate("delete_button"))
         self.rename_button.setText(translator.translate("rename_button"))
@@ -69,9 +63,7 @@ class TemplatesTab(QWidget):
 
     def connect_signals(self):
         self.templates_combo.currentTextChanged.connect(self._on_template_select)
-        self.new_button.clicked.connect(self._on_new)
         self.save_button.clicked.connect(self._on_save)
-        self.save_as_button.clicked.connect(self._on_save_as)
         self.apply_button.clicked.connect(self._on_apply)
         self.delete_button.clicked.connect(self._on_delete)
         self.rename_button.clicked.connect(self._on_rename)
@@ -93,18 +85,11 @@ class TemplatesTab(QWidget):
     def _on_template_select(self, name):
         self.template_name_edit.setText(name)
 
-    def _on_new(self):
-        self.templates_combo.setCurrentIndex(-1)
-        self.template_name_edit.clear()
-        self.template_name_edit.setFocus()
-
     def _gather_current_settings(self):
         """Gathers settings from the global settings_manager to be saved in a template."""
         all_settings = copy.deepcopy(settings_manager.settings)
         template_keys = [
-            # General Tab
-            'language', 
-            'theme', 
+            # General Tab (WITHOUT language and theme - they are session-specific)
             'results_path', 
             'image_review_enabled', 
             'image_generation_provider',
@@ -122,14 +107,25 @@ class TemplatesTab(QWidget):
             # Full tabs saved as dictionaries
             'languages_config',
             'image_prompt_settings',
-            'montage',
-            'subtitles'
+            'montage',    # Will be filtered to exclude codec and preset
+            'subtitles'   # Will be filtered to exclude whisper_type
         ]
         
         template_data = {}
         for key in template_keys:
             if key in all_settings:
-                template_data[key] = all_settings[key]
+                value = all_settings[key]
+                
+                # Filter montage settings to exclude codec and preset (hardware-specific)
+                if key == 'montage' and isinstance(value, dict):
+                    value = {k: v for k, v in value.items() if k not in ['codec', 'preset']}
+                
+                # Filter subtitles settings to exclude whisper_type (hardware-specific)
+                elif key == 'subtitles' and isinstance(value, dict):
+                    value = {k: v for k, v in value.items() if k != 'whisper_type'}
+                
+                template_data[key] = value
+        
         return template_data
 
     def _on_save(self):
@@ -153,16 +149,6 @@ class TemplatesTab(QWidget):
         self.populate_templates_combo()
         self.templates_combo.setCurrentText(name)
         QMessageBox.information(self, translator.translate("success"), translator.translate("template_saved_success").format(name=name))
-
-    def _on_save_as(self):
-        name, ok = QInputDialog.getText(self, translator.translate("save_as_title"), translator.translate("enter_new_template_name"))
-        if ok and name:
-            data_to_save = self._gather_current_settings()
-            template_manager.save_template(name, data_to_save)
-            self.populate_templates_combo()
-            self.templates_combo.setCurrentText(name)
-            QMessageBox.information(self, translator.translate("success"), translator.translate("template_saved_success").format(name=name))
-
     def _on_apply(self):
         name = self.templates_combo.currentText()
         if not name:
