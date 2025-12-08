@@ -2,6 +2,7 @@ import subprocess
 import os
 import math
 import sys
+import tempfile
 from utils.logger import logger, LogLevel
 
 class MontageEngine:
@@ -218,58 +219,60 @@ class MontageEngine:
 
         full_graph = ";".join(filter_parts)
         inputs.append("-i"); inputs.append(audio_path.replace("\\", "/"))
-        
-        cmd = ["ffmpeg", "-y", "-hide_banner"]
-        cmd.extend(inputs)
-        cmd.extend(["-filter_complex", full_graph, "-map", output_v_stream, "-map", f"{num_files}:a", "-c:v", codec])
-        
-        bitrate_str = f"{bitrate}M"
-        if codec == "h264_amf":
-            if preset in ["ultrafast", "superfast", "veryfast", "faster", "fast"]: u="speed"
-            elif preset == "medium": u="balanced"
-            else: u="quality"
-            cmd.extend(["-quality", u, "-b:v", bitrate_str, "-pix_fmt", "yuv420p"])
-        elif codec == "h264_nvenc":
-            cmd.extend(["-preset", "p4", "-b:v", bitrate_str, "-pix_fmt", "yuv420p"])
-        else:
-            cmd.extend(["-preset", preset, "-b:v", bitrate_str, "-maxrate", bitrate_str, "-bufsize", f"{bitrate*2}M", "-pix_fmt", "yuv420p"])
-        
-        cmd.extend(["-shortest", output_path.replace("\\", "/")])
 
-        # # --- LOG COMMAND FOR DEBUGGING ---
-        # # Create a printable version of the command
-        # cmd_str = " ".join(f'"{c}"' if " " in c or ":" in c else c for c in cmd)
-        # logger.log(f"{prefix}[FFmpeg] Executing command: {cmd_str}", level=LogLevel.INFO)
-        # # --- END LOGGING ---
+        filter_script_path = None
+        try:
+            # Створюємо тимчасовий файл для filter_complex
+            with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".txt", encoding='utf-8') as filter_file:
+                filter_file.write(full_graph)
+                filter_script_path = filter_file.name
 
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        
-        process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
-            text=True, encoding='utf-8', errors='replace', startupinfo=startupinfo
-        )
+            cmd = ["ffmpeg", "-y", "-hide_banner"]
+            cmd.extend(inputs)
+            cmd.extend(["-filter_complex_script", filter_script_path.replace("\\", "/"), "-map", output_v_stream, "-map", f"{num_files}:a", "-c:v", codec])
 
-        full_log = []
-        while True:
-            line = process.stderr.readline()
-            if not line and process.poll() is not None: break
-            if line:
-                c = line.strip()
-                full_log.append(c)
-                
-                # Send FFmpeg progress to card only (not to main log)
-                if "frame=" in c or "time=" in c:
-                    log_progress(c)
-                # Log errors to both main log and card (but ignore mp3 decoder errors - they're non-fatal)
-                elif "Error" in c and "Error submitting packet to decoder" not in c:
-                    logger.log(f"{prefix}[FFmpeg] {c}", level=LogLevel.ERROR)
-                    log_progress(f"[FFmpeg] Error: {c}")
+            bitrate_str = f"{bitrate}M"
+            if codec == "h264_amf":
+                if preset in ["ultrafast", "superfast", "veryfast", "faster", "fast"]: u="speed"
+                elif preset == "medium": u="balanced"
+                else: u="quality"
+                cmd.extend(["-quality", u, "-b:v", bitrate_str, "-pix_fmt", "yuv420p"])
+            elif codec == "h264_nvenc":
+                cmd.extend(["-preset", "p4", "-b:v", bitrate_str, "-pix_fmt", "yuv420p"])
+            else:
+                cmd.extend(["-preset", preset, "-b:v", bitrate_str, "-maxrate", bitrate_str, "-bufsize", f"{bitrate*2}M", "-pix_fmt", "yuv420p"])
+            
+            cmd.extend(["-shortest", output_path.replace("\\", "/")])
 
-        if process.returncode != 0:
-            err = "\n".join(full_log[-20:])
-            logger.log(f"{prefix}[FFmpeg] Rendering failed:\n{err}", level=LogLevel.ERROR)
-            raise Exception("FFmpeg failed.")
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+            process = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                text=True, encoding='utf-8', errors='replace', startupinfo=startupinfo
+            )
+
+            full_log = []
+            while True:
+                line = process.stderr.readline()
+                if not line and process.poll() is not None: break
+                if line:
+                    c = line.strip()
+                    full_log.append(c)
+                    
+                    if "frame=" in c or "time=" in c:
+                        log_progress(c)
+                    elif "Error" in c and "Error submitting packet to decoder" not in c:
+                        logger.log(f"{prefix}[FFmpeg] {c}", level=LogLevel.ERROR)
+                        log_progress(f"[FFmpeg] Error: {c}")
+
+            if process.returncode != 0:
+                err = "\n".join(full_log[-20:])
+                logger.log(f"{prefix}[FFmpeg] Rendering failed:\n{err}", level=LogLevel.ERROR)
+                raise Exception("FFmpeg failed.")
+        finally:
+            if filter_script_path and os.path.exists(filter_script_path):
+                os.remove(filter_script_path)
         # Success log is handled by MontageWorker
 
     def _get_duration(self, path):
