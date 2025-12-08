@@ -214,10 +214,12 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentWidget(self.gallery_tab)
         self.gallery_tab.show_continue_button()
 
-    def show_media_viewer(self, media_path):
-        if media_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm')):
-            self.viewer = VideoViewer(media_path, self.central_widget)
-        else:
+    def show_media_viewer(self, media_path, player=None):
+        if player: # It's a video with a pre-loaded player
+            self.viewer = VideoViewer(media_path, player, self.central_widget)
+        elif media_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm')): # Fallback for video without pre-loaded player
+            self.viewer = VideoViewer(media_path, None, self.central_widget)
+        else: # It's an image
             self.viewer = ImageViewer(media_path, self.central_widget)
         
         self.viewer.setGeometry(self.central_widget.rect())
