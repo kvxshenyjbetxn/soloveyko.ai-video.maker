@@ -56,7 +56,7 @@ class CollapsibleGroup(QWidget):
         if self.use_flow_layout:
             self.sort_thumbnails()
 
-    def get_image_count(self):
+    def get_media_count(self):
         if self.use_flow_layout:
             return self.content_layout.count()
         
@@ -64,14 +64,14 @@ class CollapsibleGroup(QWidget):
         for i in range(self.content_layout.count()):
             item = self.content_layout.itemAt(i)
             if item and item.widget() and isinstance(item.widget(), CollapsibleGroup):
-                count += item.widget().get_image_count()
+                count += item.widget().get_media_count()
         return count
 
     def find_thumbnail_by_path(self, path):
         for i in range(self.content_layout.count()):
             widget = self.content_layout.itemAt(i).widget()
             if self.use_flow_layout:
-                if hasattr(widget, 'image_path') and widget.image_path == path:
+                if hasattr(widget, 'media_path') and widget.media_path == path:
                     return widget
             elif isinstance(widget, CollapsibleGroup):
                 found = widget.find_thumbnail_by_path(path)
@@ -94,7 +94,7 @@ class CollapsibleGroup(QWidget):
             return [int(text) if text.isdigit() else text.lower()
                     for text in re.split('([0-9]+)', s)]
 
-        thumbnails.sort(key=lambda x: natural_sort_key(x.image_path))
+        thumbnails.sort(key=lambda x: natural_sort_key(x.media_path))
 
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
@@ -105,7 +105,7 @@ class CollapsibleGroup(QWidget):
             self.content_layout.addWidget(thumb)
 
     def update_title(self):
-        self.set_title(self.title, self.get_image_count())
+        self.set_title(self.title, self.get_media_count())
         if self.parent_group:
             self.parent_group.update_title()
 

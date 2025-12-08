@@ -29,6 +29,7 @@ class WorkerSignals(QObject):
     error = Signal(str, str)        # task_id, error_message
     status_changed = Signal(str, str, str) # task_id, image_path, prompt
     progress_log = Signal(str, str)  # task_id, log_message (for card-only logs)
+    video_generated = Signal(str, str) # old_image_path, new_video_path
 
 class BaseWorker(QRunnable):
     def __init__(self, task_id, config):
@@ -379,6 +380,9 @@ class VideoGenerationWorker(BaseWorker):
                     with open(video_path, 'wb') as f:
                         f.write(data_to_write)
                     
+                    # Emit signal to notify UI of the replacement
+                    self.signals.video_generated.emit(image_path, video_path)
+                    
                     # Delete original image
                     try:
                         os.remove(image_path)
@@ -481,6 +485,7 @@ class TaskProcessor(QObject):
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
     image_generated = Signal(str, str, str, str) # job_name, lang_name, image_path, prompt
+    video_generated = Signal(str, str) # old_image_path, new_video_path
     task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
     image_review_required = Signal()
     stage_metadata_updated = Signal(str, str, str, str) # job_id, lang_id, stage_key, metadata_text
@@ -676,6 +681,7 @@ class TaskProcessor(QObject):
         worker.signals.finished.connect(on_finish_slot)
         worker.signals.error.connect(on_error_slot)
         worker.signals.status_changed.connect(self._on_worker_status_changed) # For gallery updates
+        worker.signals.video_generated.connect(self.video_generated) # For gallery updates
         self.threadpool.start(worker)
 
     @Slot(str, str, str)
