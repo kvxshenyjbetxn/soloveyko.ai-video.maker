@@ -219,7 +219,7 @@ class MontageEngine:
         full_graph = ";".join(filter_parts)
         inputs.append("-i"); inputs.append(audio_path.replace("\\", "/"))
         
-        cmd = ["ffmpeg", "-y"]
+        cmd = ["ffmpeg", "-y", "-hide_banner"]
         cmd.extend(inputs)
         cmd.extend(["-filter_complex", full_graph, "-map", output_v_stream, "-map", f"{num_files}:a", "-c:v", codec])
         
