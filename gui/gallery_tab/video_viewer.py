@@ -27,12 +27,9 @@ class VideoViewer(QWidget):
     def load_video(self):
         if self.shared_player:
             self.player = self.shared_player
-            # Unmute audio for fullscreen
-            self.player.audioOutput().setMuted(False)
         else:
             self.player = QMediaPlayer()
-            self._audio_output = QAudioOutput()
-            self.player.setAudioOutput(self._audio_output)
+            self.player.setAudioOutput(None)
             self.player.setSource(QUrl.fromLocalFile(os.path.abspath(self.video_path)))
         
         self.player.setVideoOutput(self.video_widget)
@@ -41,7 +38,6 @@ class VideoViewer(QWidget):
 
         if self.player.mediaStatus() == QMediaPlayer.MediaStatus.LoadedMedia:
             self.player.play()
-        # If not loaded, the status change will trigger play
 
     def on_player_error(self, error):
         print(f"VideoViewer Player Error ({error}): {self.player.errorString()}")
@@ -73,7 +69,4 @@ class VideoViewer(QWidget):
         if self.player:
             self.player.stop()
             self.player.setVideoOutput(None)
-            if self.shared_player:
-                # Mute the audio again for thumbnail preview
-                self.player.audioOutput().setMuted(True)
         super().closeEvent(event)
