@@ -13,7 +13,7 @@ from utils.translator import translator
 class MediaThumbnail(QWidget):
     delete_requested = Signal()
     regenerate_requested = Signal(dict)
-    media_clicked = Signal()
+    media_clicked = Signal(str, object)
 
     def __init__(self, media_path, prompt, pixmap, parent_group, parent=None):
         super().__init__(parent)
@@ -32,12 +32,15 @@ class MediaThumbnail(QWidget):
 
         self.thumbnail_label = ClickableLabel()
         self.thumbnail_label.setPixmap(pixmap)
-        self.thumbnail_label.clicked.connect(self.media_clicked.emit)
+        self.thumbnail_label.clicked.connect(self.on_click)
         self.media_stack.addWidget(self.thumbnail_label)
 
         self.player = None
+        self.video_widget = None
         if self.is_video:
-            self._setup_video_player(pixmap.size())
+            self.video_widget = QVideoWidget()
+            self.media_stack.addWidget(self.video_widget)
+            self._setup_video_player() # Eagerly create and load
 
         self.spinner = LoadingSpinner(self.media_stack)
         self.spinner.setFixedSize(pixmap.size())
@@ -50,24 +53,26 @@ class MediaThumbnail(QWidget):
         controls_container.setLayout(self.controls_layout)
         main_layout.addWidget(controls_container)
 
-
-    def _setup_video_player(self, size):
-        self.video_widget = QVideoWidget()
-        self.media_stack.addWidget(self.video_widget)
-        
+    def _setup_video_player(self):
         self.video_widget.installEventFilter(self)
-
         self.player = QMediaPlayer()
         self.player.setVideoOutput(self.video_widget)
         self._audio_output = QAudioOutput()
         self.player.setAudioOutput(self._audio_output)
         self._audio_output.setMuted(True)
-        self.player.setSource(QUrl.fromLocalFile(os.path.abspath(self.media_path)))
         self.player.mediaStatusChanged.connect(self._on_media_status_changed)
+        self.player.setSource(QUrl.fromLocalFile(os.path.abspath(self.media_path)))
+
+    def on_click(self):
+        player_instance = self.player if self.is_video else None
+        if player_instance:
+            player_instance.stop()
+            self.media_stack.setCurrentIndex(self.media_stack.indexOf(self.thumbnail_label))
+        self.media_clicked.emit(self.media_path, player_instance)
 
     def eventFilter(self, obj, event):
         if obj is self.video_widget and event.type() == QEvent.Type.MouseButtonPress:
-            self.media_clicked.emit()
+            self.on_click()
             return True
         return super().eventFilter(obj, event)
 
@@ -107,14 +112,18 @@ class MediaThumbnail(QWidget):
 
     def enterEvent(self, event):
         if self.is_video and self.player:
-            self.media_stack.setCurrentIndex(1)
+            if not self.player.videoOutput():
+                self.player.setVideoOutput(self.video_widget)
+            
+            self.media_stack.setCurrentIndex(self.media_stack.indexOf(self.video_widget))
             self.player.play()
+
         super().enterEvent(event)
 
     def leaveEvent(self, event):
         if self.is_video and self.player:
             self.player.stop()
-            self.media_stack.setCurrentIndex(0)
+            self.media_stack.setCurrentIndex(self.media_stack.indexOf(self.thumbnail_label))
         super().leaveEvent(event)
 
     def set_regenerating_state(self, is_regenerating):
@@ -132,21 +141,25 @@ class MediaThumbnail(QWidget):
         self.is_video = new_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm'))
         
         self.thumbnail_label.setPixmap(new_pixmap)
-        
+        self.media_stack.setFixedSize(new_pixmap.size())
+
         if self.is_video:
-            if not self.player:
-                self._setup_video_player(new_pixmap.size())
-            else:
-                 self.player.setSource(QUrl.fromLocalFile(os.path.abspath(self.media_path)))
+            if not self.video_widget:
+                self.video_widget = QVideoWidget()
+                self.media_stack.addWidget(self.video_widget)
+            if self.player:
+                self.player.setSource(QUrl.fromLocalFile(os.path.abspath(self.media_path)))
             self.regenerate_button.hide()
         else:
             if self.player:
-                video_widget = self.player.videoOutput()
-                if video_widget:
-                    self.media_stack.removeWidget(video_widget)
-                    video_widget.deleteLater()
+                self.player.stop()
+                self.player.setVideoOutput(None)
                 self.player.deleteLater()
                 self.player = None
+            if self.video_widget:
+                self.media_stack.removeWidget(self.video_widget)
+                self.video_widget.deleteLater()
+                self.video_widget = None
             self.regenerate_button.show()
         
         self.parent_group.sort_thumbnails()
