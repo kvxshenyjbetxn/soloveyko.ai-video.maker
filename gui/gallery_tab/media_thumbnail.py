@@ -11,106 +11,215 @@ from .loading_spinner import LoadingSpinner
 from utils.translator import translator
 
 class MediaThumbnail(QWidget):
+
     delete_requested = Signal()
+
     regenerate_requested = Signal(dict)
-    media_clicked = Signal(str, object)
+
+    media_clicked = Signal(str)
+
+
 
     def __init__(self, media_path, prompt, pixmap, parent_group, parent=None):
+
         super().__init__(parent)
+
         self.media_path = media_path
+
         self.prompt = prompt
+
         self.parent_group = parent_group
+
         self.is_video = media_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm'))
 
+
+
         main_layout = QVBoxLayout(self)
+
         main_layout.setContentsMargins(0, 0, 0, 0)
+
         main_layout.setSpacing(0)
 
+
+
         self.media_stack = QStackedWidget()
+
         self.media_stack.setFixedSize(pixmap.size())
+
         main_layout.addWidget(self.media_stack)
 
+
+
         self.thumbnail_label = ClickableLabel()
+
         self.thumbnail_label.setPixmap(pixmap)
+
         self.thumbnail_label.clicked.connect(self.on_click)
+
         self.media_stack.addWidget(self.thumbnail_label)
 
+
+
         self.player = None
+
         self.video_widget = None
+
         if self.is_video:
+
             self.video_widget = QVideoWidget()
+
             self.media_stack.addWidget(self.video_widget)
+
             self._setup_video_player() # Eagerly create and load
 
+
+
         self.spinner = LoadingSpinner(self.media_stack)
+
         self.spinner.setFixedSize(pixmap.size())
+
         self.spinner.stop()
 
+
+
         self._setup_controls(pixmap.width())
+
         
+
         controls_container = QWidget()
+
         controls_container.setFixedWidth(pixmap.width())
+
         controls_container.setLayout(self.controls_layout)
+
         main_layout.addWidget(controls_container)
 
+
+
     def _setup_video_player(self):
+
         self.video_widget.installEventFilter(self)
+
         self.player = QMediaPlayer()
+
         self.player.setVideoOutput(self.video_widget)
+
         self.player.setAudioOutput(None)
+
         self.player.mediaStatusChanged.connect(self._on_media_status_changed)
+
         self.player.setSource(QUrl.fromLocalFile(os.path.abspath(self.media_path)))
 
+
+
     def on_click(self):
-        player_instance = self.player if self.is_video else None
-        self.media_clicked.emit(self.media_path, player_instance)
+
+        if self.is_video and self.player:
+
+            self.player.stop()
+
+            self.player.setSource(QUrl()) # Release the file
+
+        self.media_clicked.emit(self.media_path)
+
+
 
     def eventFilter(self, obj, event):
+
         if obj is self.video_widget and event.type() == QEvent.Type.MouseButtonPress:
+
             self.on_click()
+
             return True
+
         return super().eventFilter(obj, event)
 
+
+
     def _on_media_status_changed(self, status):
-        if status == QMediaPlayer.MediaStatus.EndOfMedia:
+
+        if status == QMediaPlayer.MediaStatus.BufferedMedia:
+
+            if self.underMouse():
+
+                self.media_stack.setCurrentIndex(self.media_stack.indexOf(self.video_widget))
+
+        elif status == QMediaPlayer.MediaStatus.EndOfMedia:
+
             self.player.setPosition(0)
+
             self.player.play()
 
+
+
     def _setup_controls(self, image_width):
+
         self.controls_layout = QHBoxLayout()
+
         self.controls_layout.setContentsMargins(5, 5, 5, 5)
+
         self.controls_layout.setSpacing(5)
+
+
 
         icon_size = QSize(18, 18)
 
+
+
         self.regenerate_button = QToolButton()
+
         self.regenerate_button.setText(translator.translate("thumbnail_regen_button"))
+
         self.regenerate_button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+
         self.regenerate_button.setFixedHeight(icon_size.height() + 8)
+
         self.regenerate_button.setToolTip(translator.translate("thumbnail_regen_button"))
+
         self.regenerate_button.setStyleSheet("QToolButton { padding: 1px 5px; border: 1px solid #888; border-radius: 4px; }")
+
         self.regenerate_button.clicked.connect(lambda: self.regenerate_requested.emit({'image_path': self.media_path, 'prompt': self.prompt}))
+
         if self.is_video:
+
             self.regenerate_button.hide()
 
+
+
         self.delete_button = QToolButton()
+
         self.delete_button.setIcon(QIcon("gui/qt_material/resources/source/close.svg"))
+
         self.delete_button.setIconSize(icon_size)
+
         self.delete_button.setFixedSize(icon_size + QSize(8, 8))
+
         self.delete_button.setToolTip(translator.translate("thumbnail_delete_button"))
+
         self.delete_button.setStyleSheet("QToolButton { border: 1px solid #888; border-radius: 4px; } QToolButton:hover { background-color: #E53935; border-color: #D32F2F; }")
+
         self.delete_button.clicked.connect(self.delete_requested.emit)
 
+
+
         self.controls_layout.addWidget(self.regenerate_button)
+
         self.controls_layout.addStretch()
+
         self.controls_layout.addWidget(self.delete_button)
 
+
+
     def enterEvent(self, event):
+
         if self.is_video and self.player:
-            if not self.player.videoOutput():
-                self.player.setVideoOutput(self.video_widget)
-            
-            self.media_stack.setCurrentIndex(self.media_stack.indexOf(self.video_widget))
+
+            # If source is null (because we clicked it), reset it.
+
+            if self.player.source().isEmpty():
+
+                self.player.setSource(QUrl.fromLocalFile(os.path.abspath(self.media_path)))
+
             self.player.play()
 
         super().enterEvent(event)
@@ -142,8 +251,12 @@ class MediaThumbnail(QWidget):
             if not self.video_widget:
                 self.video_widget = QVideoWidget()
                 self.media_stack.addWidget(self.video_widget)
-            if self.player:
+            
+            if not self.player:
+                self._setup_video_player()
+            else:
                 self.player.setSource(QUrl.fromLocalFile(os.path.abspath(self.media_path)))
+            
             self.regenerate_button.hide()
         else:
             if self.player:

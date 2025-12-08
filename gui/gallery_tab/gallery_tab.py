@@ -75,7 +75,7 @@ class RegenerateImageWorker(QRunnable):
 
 
 class GalleryTab(QWidget):
-    media_clicked = Signal(str, object)
+    media_clicked = Signal(str)
     image_deleted = Signal(str)
     image_regenerated = Signal(str, str) # old_path, new_path
     continue_montage_requested = Signal()
@@ -190,8 +190,8 @@ class GalleryTab(QWidget):
         lang_group.add_widget(thumbnail)
         self.update_total_media_count()
 
-    def _on_media_clicked(self, media_path, player):
-        self.media_clicked.emit(media_path, player)
+    def _on_media_clicked(self, media_path):
+        self.media_clicked.emit(media_path)
 
     def _on_regenerate_requested(self, image_data):
         dialog = RegenerateConfigDialog(image_data, self)
