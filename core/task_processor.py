@@ -469,6 +469,7 @@ class TaskState:
         self.final_video_path = None
 
         self.status = {stage: 'pending' for stage in self.stages}
+        self.translation_review_dialog_shown = False
         
         # Metadata counters
         self.images_generated_count = 0
@@ -494,6 +495,7 @@ class TaskProcessor(QObject):
     task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
     image_review_required = Signal()
     translation_review_required = Signal(str, str) # task_id, translated_text
+    translation_regenerated = Signal(str, str) # task_id, new_text
     stage_metadata_updated = Signal(str, str, str, str) # job_id, lang_id, stage_key, metadata_text
 
 
@@ -739,24 +741,41 @@ class TaskProcessor(QObject):
         state = self.task_states[task_id]
         state.text_for_processing = translated_text
         if state.dir_path:
+            # Save the original translation before review
             with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
                 f.write(translated_text)
-        self._set_stage_status(task_id, 'stage_translation', 'success')
-        
+
         # Update metadata with character count
         char_count = len(translated_text)
         metadata_text = f"{char_count} {translator.translate('characters_count')}"
         self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_translation', metadata_text)
-        
-        if self.settings.get('translation_review_enabled', False):
-            self.translation_review_required.emit(task_id, translated_text)
+
+        is_review_enabled = self.settings.get('translation_review_enabled', False)
+
+        if is_review_enabled:
+            self._set_stage_status(task_id, 'stage_translation', 'success')
+            self.translation_regenerated.emit(task_id, translated_text) # Update dialog if open
+
+            if not state.translation_review_dialog_shown:
+                state.translation_review_dialog_shown = True
+                self.translation_review_required.emit(task_id, translated_text)
+            # If dialog was already shown, we just updated the text. We do nothing else.
+            # The execution flow is paused, waiting for the user to close the dialog.
         else:
+            # No review, proceed as normal
+            self._set_stage_status(task_id, 'stage_translation', 'success')
             self._on_text_ready(task_id)
 
 
     @Slot(str, str)
     def _on_translation_error(self, task_id, error):
         self._set_stage_status(task_id, 'stage_translation', 'error', error)
+
+    def regenerate_translation(self, task_id):
+        logger.log(f"[{task_id}] User requested translation regeneration.", level=LogLevel.INFO)
+        # We need the global languages config to restart the worker
+        all_languages_config = self.settings.get("languages_config", {})
+        self._start_translation(task_id, all_languages_config)
 
     def _on_text_ready(self, task_id):
         state = self.task_states[task_id]
