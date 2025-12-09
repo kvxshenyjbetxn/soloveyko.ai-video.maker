@@ -770,6 +770,19 @@ class TaskProcessor(QObject):
     @Slot(str, str)
     def _on_translation_error(self, task_id, error):
         self._set_stage_status(task_id, 'stage_translation', 'error', error)
+        # If translation fails, subsequent stages that depend on it must also fail.
+        state = self.task_states[task_id]
+        if 'stage_voiceover' in state.stages:
+            self._set_stage_status(task_id, 'stage_voiceover', 'error', "Dependency (Translation) failed")
+        if 'stage_subtitles' in state.stages:
+            self._set_stage_status(task_id, 'stage_subtitles', 'error', "Dependency (Translation) failed")
+            self._increment_subtitle_counter() # Still need to pass the barrier
+        if 'stage_img_prompts' in state.stages:
+            self._set_stage_status(task_id, 'stage_img_prompts', 'error', "Dependency (Translation) failed")
+
+        # Check if we can start montages for other tasks
+        if self.subtitle_barrier_passed:
+            self._check_and_start_montages()
 
     def regenerate_translation(self, task_id):
         logger.log(f"[{task_id}] User requested translation regeneration.", level=LogLevel.INFO)
@@ -973,9 +986,13 @@ class TaskProcessor(QObject):
         # Get audio duration and emit metadata
         try:
             duration_seconds = self._get_audio_duration(audio_path)
-            minutes = int(duration_seconds // 60)
+            hours = int(duration_seconds // 3600)
+            minutes = int((duration_seconds % 3600) // 60)
             seconds = int(duration_seconds % 60)
-            metadata_text = f"{minutes}:{seconds:02d}"
+            if hours > 0:
+                metadata_text = f"{hours}:{minutes:02d}:{seconds:02d}"
+            else:
+                metadata_text = f"{minutes}:{seconds:02d}"
             self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_voiceover', metadata_text)
         except Exception as e:
             logger.log(f"[{task_id}] Failed to get audio duration: {e}", level=LogLevel.WARNING)
