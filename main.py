@@ -3,7 +3,7 @@ import os
 
 # Suppress FFmpeg logs from Qt Multimedia by default
 # For debugging, you can comment this line out or set the variable to "qt.multimedia.*=true"
-os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false'
+os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false;qt.text.font.db.*=false'
 
 from PySide6.QtWidgets import QApplication
 from gui.main_window import MainWindow

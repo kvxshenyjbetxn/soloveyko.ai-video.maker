@@ -1,6 +1,29 @@
 import requests
+import time
+from functools import wraps
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
+
+def retry(tries=3, delay=5, backoff=2):
+    """
+    A decorator for retrying a function or method if it fails.
+    """
+    def deco_retry(f):
+        @wraps(f)
+        def f_retry(*args, **kwargs):
+            mtries, mdelay = tries, delay
+            while mtries > 1:
+                try:
+                    return f(*args, **kwargs)
+                except Exception as e:
+                    msg = f"'{f.__name__}' failed with exception: {e}. Retrying in {mdelay} seconds..."
+                    logger.log(msg, level=LogLevel.WARNING)
+                    time.sleep(mdelay)
+                    mtries -= 1
+                    mdelay *= backoff
+            return f(*args, **kwargs)
+        return f_retry
+    return deco_retry
 
 class OpenRouterAPI:
     def __init__(self, api_key=None):
@@ -48,6 +71,7 @@ class OpenRouterAPI:
 
 
 
+    @retry(tries=3, delay=5, backoff=2)
     def get_chat_completion(self, model, messages, max_tokens=4096, temperature=None):
         if not self.api_key:
             error_msg = "API key is not configured."
