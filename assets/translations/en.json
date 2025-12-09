@@ -232,5 +232,7 @@
     "confirm_apply_title": "Confirm Apply",
     "confirm_apply_template_text": "Are you sure you want to apply template '{name}'? This will overwrite your current settings.",
     "prompts_count": "prompts",
-    "characters_count": "characters"
+    "characters_count": "characters",
+    "review_group_title": "Review",
+    "translation_review_label": "Translation Review"
 }

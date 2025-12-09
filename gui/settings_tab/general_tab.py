@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea, QPushButton, QLineEdit, QFileDialog, QHBoxLayout, QCheckBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea, QPushButton, QLineEdit, QFileDialog, QHBoxLayout, QCheckBox, QGroupBox
 from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
@@ -61,11 +61,23 @@ class GeneralTab(QWidget):
         path_layout.addWidget(self.browse_button)
         form_layout.addRow(self.results_path_label, path_layout)
 
+        # --- Review Group ---
+        self.review_group = QGroupBox()
+        self.review_layout = QFormLayout(self.review_group)
+
+        # Translation review checkbox
+        self.translation_review_label = QLabel()
+        self.translation_review_checkbox = QCheckBox()
+        self.translation_review_checkbox.stateChanged.connect(self.translation_review_changed)
+        self.review_layout.addRow(self.translation_review_label, self.translation_review_checkbox)
+
         # Image review checkbox
         self.image_review_label = QLabel()
         self.image_review_checkbox = QCheckBox()
         self.image_review_checkbox.stateChanged.connect(self.image_review_changed)
-        form_layout.addRow(self.image_review_label, self.image_review_checkbox)
+        self.review_layout.addRow(self.image_review_label, self.image_review_checkbox)
+        
+        form_layout.addRow(self.review_group)
 
         content_layout.addLayout(form_layout)
         content_layout.addStretch()
@@ -76,6 +88,7 @@ class GeneralTab(QWidget):
         self.language_combo.blockSignals(True)
         self.theme_combo.blockSignals(True)
         self.image_provider_combo.blockSignals(True)
+        self.translation_review_checkbox.blockSignals(True)
         self.image_review_checkbox.blockSignals(True)
 
         lang_map = {"uk": 0, "en": 1, "ru": 2}
@@ -89,14 +102,19 @@ class GeneralTab(QWidget):
         self.image_provider_combo.setCurrentIndex(self.image_provider_combo.findData(current_provider))
 
         self.results_path_edit.setText(settings_manager.get('results_path'))
+        self.translation_review_checkbox.setChecked(settings_manager.get('translation_review_enabled', False))
         self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
 
         # Unblock signals
         self.language_combo.blockSignals(False)
         self.theme_combo.blockSignals(False)
         self.image_provider_combo.blockSignals(False)
+        self.translation_review_checkbox.blockSignals(False)
         self.image_review_checkbox.blockSignals(False)
 
+
+    def translation_review_changed(self, state):
+        settings_manager.set('translation_review_enabled', state == Qt.CheckState.Checked.value)
 
     def image_review_changed(self, state):
         settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
@@ -131,4 +149,6 @@ class GeneralTab(QWidget):
         self.image_provider_label.setText(translator.translate('image_generation_provider_label'))
         self.results_path_label.setText(translator.translate('results_path_label'))
         self.browse_button.setText(translator.translate('browse_button'))
+        self.review_group.setTitle(translator.translate('review_group_title'))
+        self.translation_review_label.setText(translator.translate('translation_review_label'))
         self.image_review_label.setText(translator.translate('image_review_label'))
