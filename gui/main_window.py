@@ -220,12 +220,22 @@ class MainWindow(QMainWindow):
         self.gallery_tab.show_continue_button()
 
     def _on_translation_review_required(self, task_id, translated_text):
-        dialog = TranslationReviewDialog(self, task_id, translated_text)
+        state = self.task_processor.task_states[task_id]
+        dialog = TranslationReviewDialog(self, state, translated_text)
+
+        def on_regenerate():
+            self.task_processor.regenerate_translation(task_id)
+
+        dialog.regenerate_requested.connect(on_regenerate)
+        
+        # We need a way to update the dialog with the new text
+        # Let's create a signal on the task processor for this
+        self.task_processor.translation_regenerated.connect(dialog.update_text)
+
         if dialog.exec():
             new_text = dialog.get_text()
             self.task_processor.task_states[task_id].text_for_processing = new_text
             # Manually save the reviewed text
-            state = self.task_processor.task_states[task_id]
             if state.dir_path:
                 with open(os.path.join(state.dir_path, "translation_reviewed.txt"), 'w', encoding='utf-8') as f:
                     f.write(new_text)
@@ -233,6 +243,9 @@ class MainWindow(QMainWindow):
         else:
             # Handle cancellation if needed, e.g., mark stage as failed
             self.task_processor._set_stage_status(task_id, 'stage_translation', 'error', 'User cancelled review.')
+        
+        # Disconnect to avoid issues with subsequent dialogs
+        self.task_processor.translation_regenerated.disconnect(dialog.update_text)
 
     def show_media_viewer(self, media_path):
         if media_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm')):
@@ -385,10 +398,14 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
 class TranslationReviewDialog(QDialog):
-    def __init__(self, parent, task_id, text):
+    regenerate_requested = Signal()
+
+    def __init__(self, parent, state, text):
         super().__init__(parent)
-        self.setWindowTitle(f"Перевірка перекладу для завдання: {task_id}")
-        self.setMinimumSize(600, 400)
+        job_name = state.job_name
+        lang_name = state.lang_name
+        self.setWindowTitle(f"Перевірка перекладу: {job_name} ({lang_name})")
+        self.setMinimumSize(700, 500)
 
         layout = QVBoxLayout(self)
 
@@ -396,11 +413,23 @@ class TranslationReviewDialog(QDialog):
         self.text_edit.setPlainText(text)
         layout.addWidget(self.text_edit)
 
-        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
+        self.button_box = QDialogButtonBox()
+        self.regenerate_button = self.button_box.addButton("Перегенерувати", QDialogButtonBox.ButtonRole.ActionRole)
+        self.ok_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Ok)
+        self.cancel_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
+        
+        self.regenerate_button.clicked.connect(self.regenerate_requested.emit)
+        self.ok_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.reject)
+        
         layout.addWidget(self.button_box)
 
     def get_text(self):
         return self.text_edit.toPlainText()
+
+    def update_text(self, task_id, new_text):
+        # We only update if the task_id matches
+        state = self.parent().task_processor.task_states.get(task_id)
+        if state and self.windowTitle() == f"Перевірка перекладу: {state.job_name} ({state.lang_name})":
+            self.text_edit.setPlainText(new_text)
 
