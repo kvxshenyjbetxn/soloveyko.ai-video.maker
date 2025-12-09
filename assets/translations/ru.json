@@ -232,5 +232,7 @@
     "confirm_apply_title": "Подтвердить применение",
     "confirm_apply_template_text": "Вы уверены, что хотите применить шаблон '{name}'? Это перезапишет ваши текущие настройки.",
     "prompts_count": "промптов",
-    "characters_count": "символов"
+    "characters_count": "символов",
+    "review_group_title": "Контроль",
+    "translation_review_label": "Контроль перевода"
 }

@@ -1,5 +1,5 @@
 import os
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool
 from PySide6.QtGui import QWheelEvent
 from gui.qt_material import apply_stylesheet
@@ -178,6 +178,7 @@ class MainWindow(QMainWindow):
         self.task_processor.video_generated.connect(self.gallery_tab.update_thumbnail)
         self.task_processor.task_progress_log.connect(self.queue_tab.on_task_progress_log)
         self.task_processor.image_review_required.connect(self._on_image_review_required)
+        self.task_processor.translation_review_required.connect(self._on_translation_review_required)
         self.gallery_tab.continue_montage_requested.connect(self.task_processor.resume_all_montages)
         self.gallery_tab.image_deleted.connect(self.task_processor._on_image_deleted)
         self.gallery_tab.media_clicked.connect(self.show_media_viewer)
@@ -217,6 +218,21 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, title, message)
         self.tabs.setCurrentWidget(self.gallery_tab)
         self.gallery_tab.show_continue_button()
+
+    def _on_translation_review_required(self, task_id, translated_text):
+        dialog = TranslationReviewDialog(self, task_id, translated_text)
+        if dialog.exec():
+            new_text = dialog.get_text()
+            self.task_processor.task_states[task_id].text_for_processing = new_text
+            # Manually save the reviewed text
+            state = self.task_processor.task_states[task_id]
+            if state.dir_path:
+                with open(os.path.join(state.dir_path, "translation_reviewed.txt"), 'w', encoding='utf-8') as f:
+                    f.write(new_text)
+            self.task_processor._on_text_ready(task_id)
+        else:
+            # Handle cancellation if needed, e.g., mark stage as failed
+            self.task_processor._set_stage_status(task_id, 'stage_translation', 'error', 'User cancelled review.')
 
     def show_media_viewer(self, media_path):
         if media_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm')):
@@ -367,4 +383,24 @@ class MainWindow(QMainWindow):
         self.settings_tab.api_tab.image_tab.googler_tab.save_settings()
         logger.log(translator.translate('app_closing'), level=LogLevel.INFO)
         super().closeEvent(event)
+
+class TranslationReviewDialog(QDialog):
+    def __init__(self, parent, task_id, text):
+        super().__init__(parent)
+        self.setWindowTitle(f"Перевірка перекладу для завдання: {task_id}")
+        self.setMinimumSize(600, 400)
+
+        layout = QVBoxLayout(self)
+
+        self.text_edit = QTextEdit()
+        self.text_edit.setPlainText(text)
+        layout.addWidget(self.text_edit)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+    def get_text(self):
+        return self.text_edit.toPlainText()
 

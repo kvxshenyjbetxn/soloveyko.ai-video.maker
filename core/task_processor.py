@@ -493,6 +493,7 @@ class TaskProcessor(QObject):
     video_generated = Signal(str, str) # old_image_path, new_video_path
     task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
     image_review_required = Signal()
+    translation_review_required = Signal(str, str) # task_id, translated_text
     stage_metadata_updated = Signal(str, str, str, str) # job_id, lang_id, stage_key, metadata_text
 
 
@@ -747,7 +748,10 @@ class TaskProcessor(QObject):
         metadata_text = f"{char_count} {translator.translate('characters_count')}"
         self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_translation', metadata_text)
         
-        self._on_text_ready(task_id)
+        if self.settings.get('translation_review_enabled', False):
+            self.translation_review_required.emit(task_id, translated_text)
+        else:
+            self._on_text_ready(task_id)
 
 
     @Slot(str, str)
