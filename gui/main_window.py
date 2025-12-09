@@ -1,5 +1,5 @@
 import os
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool
 from PySide6.QtGui import QWheelEvent
 from gui.qt_material import apply_stylesheet
@@ -245,7 +245,11 @@ class MainWindow(QMainWindow):
             self.task_processor._set_stage_status(task_id, 'stage_translation', 'error', 'User cancelled review.')
         
         # Disconnect to avoid issues with subsequent dialogs
-        self.task_processor.translation_regenerated.disconnect(dialog.update_text)
+        try:
+            self.task_processor.translation_regenerated.disconnect(dialog.update_text)
+        except RuntimeError:
+            # This can happen if the connection was already broken, safe to ignore
+            pass
 
     def show_media_viewer(self, media_path):
         if media_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm')):
@@ -402,34 +406,55 @@ class TranslationReviewDialog(QDialog):
 
     def __init__(self, parent, state, text):
         super().__init__(parent)
-        job_name = state.job_name
-        lang_name = state.lang_name
+        self.state = state
+        job_name = self.state.job_name
+        lang_name = self.state.lang_name
         self.setWindowTitle(f"Перевірка перекладу: {job_name} ({lang_name})")
         self.setMinimumSize(700, 500)
 
-        layout = QVBoxLayout(self)
+        main_layout = QVBoxLayout(self)
 
         self.text_edit = QTextEdit()
         self.text_edit.setPlainText(text)
-        layout.addWidget(self.text_edit)
+        main_layout.addWidget(self.text_edit)
+
+        # Bottom layout
+        bottom_layout = QHBoxLayout()
+
+        self.char_count_label = QLabel()
+        bottom_layout.addWidget(self.char_count_label)
+        bottom_layout.addStretch()
 
         self.button_box = QDialogButtonBox()
         self.regenerate_button = self.button_box.addButton("Перегенерувати", QDialogButtonBox.ButtonRole.ActionRole)
         self.ok_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Ok)
         self.cancel_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
+        bottom_layout.addWidget(self.button_box)
         
+        main_layout.addLayout(bottom_layout)
+
+        # Connections
         self.regenerate_button.clicked.connect(self.regenerate_requested.emit)
         self.ok_button.clicked.connect(self.accept)
         self.cancel_button.clicked.connect(self.reject)
-        
-        layout.addWidget(self.button_box)
+        self.text_edit.textChanged.connect(self.update_char_count)
+
+        self.update_char_count()
 
     def get_text(self):
         return self.text_edit.toPlainText()
 
+    def update_char_count(self):
+        from utils.translator import translator
+        original_len = len(self.state.original_text)
+        translated_len = len(self.get_text())
+        
+        original_str = translator.translate('original_chars').format(count=original_len)
+        translated_str = translator.translate('translated_chars').format(count=translated_len)
+        
+        self.char_count_label.setText(f"{original_str} | {translated_str}")
+
     def update_text(self, task_id, new_text):
-        # We only update if the task_id matches
-        state = self.parent().task_processor.task_states.get(task_id)
-        if state and self.windowTitle() == f"Перевірка перекладу: {state.job_name} ({state.lang_name})":
-            self.text_edit.setPlainText(new_text)
+        if self.state.task_id == task_id:
+             self.text_edit.setPlainText(new_text)
 

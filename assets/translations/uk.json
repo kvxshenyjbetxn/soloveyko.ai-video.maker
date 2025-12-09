@@ -234,5 +234,7 @@
     "prompts_count": "промптів",
     "characters_count": "символів",
     "review_group_title": "Контроль",
-    "translation_review_label": "Контроль перекладу"
+    "translation_review_label": "Контроль перекладу",
+    "original_chars": "Оригінал: {count} симв.",
+    "translated_chars": "Переклад: {count} симв."
 }

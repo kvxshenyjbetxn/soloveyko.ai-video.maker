@@ -234,5 +234,7 @@
     "prompts_count": "prompts",
     "characters_count": "characters",
     "review_group_title": "Review",
-    "translation_review_label": "Translation Review"
+    "translation_review_label": "Translation Review",
+    "original_chars": "Original: {count} chars",
+    "translated_chars": "Translated: {count} chars"
 }
