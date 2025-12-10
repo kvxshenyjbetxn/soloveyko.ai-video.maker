@@ -89,8 +89,9 @@ class StatisticsManager:
             )
         ''')
 
-    def record_event(self, event_type):
-        timestamp = datetime.now()
+    def record_event(self, event_type, timestamp=None):
+        if timestamp is None:
+            timestamp = datetime.now()
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
