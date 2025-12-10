@@ -244,5 +244,9 @@
     "current_month": "Current month",
     "current_year": "Current year",
     "statistics_stage_header": "Stage",
-    "statistics_count_header": "Count"
+    "statistics_count_header": "Count",
+    "daily_usage_chart_title": "Daily Usage",
+    "date_axis_label": "Date",
+    "count_axis_label": "Number of Stages",
+    "no_data_available": "No data available for the selected period."
 }
