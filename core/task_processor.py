@@ -546,29 +546,29 @@ class TaskProcessor(QObject):
         return "en-US"
     
     def _get_audio_duration(self, audio_path):
-        """Get audio duration in seconds"""
-        import wave
-        import struct
+        """Get audio duration in seconds using mutagen for accuracy."""
+        from mutagen.mp3 import MP3
+        from mutagen.wave import WAVE
         
-        ext = os.path.splitext(audio_path)[1].lower()
-        
-        if ext == '.wav':
-            with wave.open(audio_path, 'r') as audio_file:
-                frames = audio_file.getnframes()
-                rate = audio_file.getframerate()
-                duration = frames / float(rate)
+        try:
+            ext = os.path.splitext(audio_path)[1].lower()
+            if ext == '.mp3':
+                audio = MP3(audio_path)
+                return audio.info.length
+            elif ext == '.wav':
+                audio = WAVE(audio_path)
+                return audio.info.length
+            else:
+                logger.log(f"Unsupported audio format for duration check: {ext}. Falling back to estimation.", level=LogLevel.WARNING)
+                # Fallback for other types if any
+                file_size = os.path.getsize(audio_path)
+                duration = (file_size * 8) / (128 * 1000) # Assume 128 kbps
                 return duration
-        elif ext == '.mp3':
-            # For MP3, we'll use a simple estimation based on file size
-            # This is not accurate but avoids additional dependencies
-            # Average bitrate assumption: 128 kbps
+        except Exception as e:
+            logger.log(f"Could not get audio duration for {audio_path}: {e}. Falling back to estimation.", level=LogLevel.ERROR)
+            # Fallback on any error
             file_size = os.path.getsize(audio_path)
-            duration = (file_size * 8) / (128 * 1000)  # seconds
-            return duration
-        else:
-            # Fallback: estimate based on file size
-            file_size = os.path.getsize(audio_path)
-            duration = (file_size * 8) / (128 * 1000)  # assume 128 kbps
+            duration = (file_size * 8) / (128 * 1000) # Assume 128 kbps
             return duration
 
     def start_processing(self):
