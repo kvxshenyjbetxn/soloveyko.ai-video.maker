@@ -59,6 +59,7 @@
     "stage_translation": "Translation",
     "stage_img_prompts": "Image Prompts",
     "stage_images": "Images",
+    "stage_generated_images": "Generated images",
     "stage_voiceover": "Voiceover",
     "stage_subtitles": "Subtitles",
     "stage_montage": "Montage",
@@ -236,5 +237,12 @@
     "review_group_title": "Review",
     "translation_review_label": "Translation Review",
     "original_chars": "Original: {count} chars",
-    "translated_chars": "Translated: {count} chars"
+    "translated_chars": "Translated: {count} chars",
+    "statistics_tab": "Statistics",
+    "statistics_period_label": "Period:",
+    "all_time": "All time",
+    "current_month": "Current month",
+    "current_year": "Current year",
+    "statistics_stage_header": "Stage",
+    "statistics_count_header": "Count"
 }

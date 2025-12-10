@@ -59,6 +59,7 @@
     "stage_translation": "Перевод",
     "stage_img_prompts": "Промты для картинок",
     "stage_images": "Картинки",
+    "stage_generated_images": "Сгенерированные изображения",
     "stage_voiceover": "Озвучка",
     "stage_subtitles": "Субтитры",
     "stage_montage": "Монтаж",
@@ -236,5 +237,12 @@
     "review_group_title": "Контроль",
     "translation_review_label": "Контроль перевода",
     "original_chars": "Оригинал: {count} симв.",
-    "translated_chars": "Перевод: {count} симв."
+    "translated_chars": "Перевод: {count} симв.",
+    "statistics_tab": "Статистика",
+    "statistics_period_label": "Период:",
+    "all_time": "За все время",
+    "current_month": "За месяц",
+    "current_year": "За год",
+    "statistics_stage_header": "Этап",
+    "statistics_count_header": "Количество"
 }
