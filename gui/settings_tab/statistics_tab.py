@@ -195,6 +195,7 @@ class StatisticsTab(QWidget):
             ax.set_xlim(full_date_range[0] - timedelta(days=1), full_date_range[0] + timedelta(days=1))
 
 
+        self.figure.tight_layout()
         self.canvas.draw()
 
     def update_statistics(self):
