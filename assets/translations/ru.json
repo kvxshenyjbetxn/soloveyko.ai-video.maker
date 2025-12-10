@@ -244,5 +244,9 @@
     "current_month": "За месяц",
     "current_year": "За год",
     "statistics_stage_header": "Этап",
-    "statistics_count_header": "Количество"
+    "statistics_count_header": "Количество",
+    "daily_usage_chart_title": "Ежедневное использование",
+    "date_axis_label": "Дата",
+    "count_axis_label": "Количество этапов",
+    "no_data_available": "Нет данных за выбранный период."
 }

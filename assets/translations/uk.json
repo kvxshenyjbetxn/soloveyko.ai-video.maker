@@ -244,5 +244,9 @@
     "current_month": "За місяць",
     "current_year": "За рік",
     "statistics_stage_header": "Етап",
-    "statistics_count_header": "Кількість"
+    "statistics_count_header": "Кількість",
+    "daily_usage_chart_title": "Щоденне використання",
+    "date_axis_label": "Дата",
+    "count_axis_label": "Кількість етапів",
+    "no_data_available": "Немає даних за вибраний період."
 }

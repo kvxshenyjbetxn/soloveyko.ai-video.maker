@@ -378,6 +378,9 @@ class MainWindow(QMainWindow):
         elif theme_name == 'black':
             apply_stylesheet(self.app, theme='amoled_black.xml')
 
+        if hasattr(self, 'settings_tab') and hasattr(self.settings_tab, 'statistics_tab'):
+            self.settings_tab.statistics_tab.on_theme_changed()
+
     def change_language(self, lang_code):
         self.translator.set_language(lang_code)
         self.retranslate_ui()

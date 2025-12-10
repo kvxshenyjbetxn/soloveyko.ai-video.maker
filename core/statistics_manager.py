@@ -127,4 +127,34 @@ class StatisticsManager:
             cursor.execute(query)
             return dict(cursor.fetchall())
 
+    def get_daily_statistics_by_event(self, period='all_time'):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            query = """
+                SELECT et.name, date(e.timestamp), COUNT(e.id)
+                FROM events e
+                JOIN event_types et ON e.event_type_id = et.id
+            """
+
+            now = datetime.now()
+            if period == 'current_month':
+                start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                query += f" WHERE e.timestamp >= '{start_date}'"
+            elif period == 'current_year':
+                start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+                query += f" WHERE e.timestamp >= '{start_date}'"
+            
+            query += " GROUP BY et.name, date(e.timestamp) ORDER BY date(e.timestamp)"
+            
+            cursor.execute(query)
+            
+            stats_by_event = {}
+            for event_name, date_str, count in cursor.fetchall():
+                if event_name not in stats_by_event:
+                    stats_by_event[event_name] = []
+                stats_by_event[event_name].append((date_str, count))
+            
+            return stats_by_event
+
+
 statistics_manager = StatisticsManager()
