@@ -59,6 +59,7 @@
     "stage_translation": "Переклад",
     "stage_img_prompts": "Промти",
     "stage_images": "Картинки",
+    "stage_generated_images": "Згенеровані картинки",
     "stage_voiceover": "Озвучка",
     "stage_subtitles": "Субтитри",
     "stage_montage": "Монтаж",
@@ -236,5 +237,12 @@
     "review_group_title": "Контроль",
     "translation_review_label": "Контроль перекладу",
     "original_chars": "Оригінал: {count} симв.",
-    "translated_chars": "Переклад: {count} симв."
+    "translated_chars": "Переклад: {count} симв.",
+    "statistics_tab": "Статистика",
+    "statistics_period_label": "Період:",
+    "all_time": "За весь час",
+    "current_month": "За місяць",
+    "current_year": "За рік",
+    "statistics_stage_header": "Етап",
+    "statistics_count_header": "Кількість"
 }

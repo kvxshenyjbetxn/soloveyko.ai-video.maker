@@ -8,6 +8,7 @@ from .prompts_tab import PromptsTab
 from .montage_tab import MontageTab
 from .subtitles_tab import SubtitlesTab
 from .templates_tab import TemplatesTab
+from .statistics_tab import StatisticsTab
 
 class SettingsTab(QWidget):
     def __init__(self, main_window=None):
@@ -27,6 +28,7 @@ class SettingsTab(QWidget):
         self.montage_tab = MontageTab()
         self.subtitles_tab = SubtitlesTab()
         self.templates_tab = TemplatesTab()
+        self.statistics_tab = StatisticsTab()
 
         self.tabs.addTab(self.general_tab, translator.translate('general_tab'))
         self.tabs.addTab(self.api_tab, translator.translate('api_tab'))
@@ -35,6 +37,7 @@ class SettingsTab(QWidget):
         self.tabs.addTab(self.montage_tab, translator.translate('montage_tab'))
         self.tabs.addTab(self.subtitles_tab, translator.translate('subtitles_tab'))
         self.tabs.addTab(self.templates_tab, translator.translate('templates_tab'))
+        self.tabs.addTab(self.statistics_tab, translator.translate('statistics_tab'))
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
@@ -55,6 +58,7 @@ class SettingsTab(QWidget):
         self.tabs.setTabText(4, translator.translate('montage_tab'))
         self.tabs.setTabText(5, translator.translate('subtitles_tab'))
         self.tabs.setTabText(6, translator.translate('templates_tab'))
+        self.tabs.setTabText(7, translator.translate('statistics_tab'))
 
         # Retranslate all sub-tabs
         self.general_tab.retranslate_ui()
@@ -64,3 +68,4 @@ class SettingsTab(QWidget):
         self.montage_tab.retranslate_ui()
         self.subtitles_tab.retranslate_ui()
         self.templates_tab.retranslate_ui()
+        self.statistics_tab.retranslate_ui()

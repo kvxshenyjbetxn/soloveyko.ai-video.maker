@@ -11,6 +11,7 @@ from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTime
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager
 from utils.translator import translator
+from core.statistics_manager import statistics_manager
 from api.openrouter import OpenRouterAPI
 from api.pollinations import PollinationsAPI
 from api.googler import GooglerAPI
@@ -57,6 +58,7 @@ class BaseWorker(QRunnable):
 
 class TranslationWorker(BaseWorker):
     def do_work(self):
+        statistics_manager.record_event('translation')
         api = OpenRouterAPI()
         lang_config = self.config['lang_config']
         model = lang_config.get('model', 'unknown')
@@ -81,6 +83,7 @@ class TranslationWorker(BaseWorker):
 
 class ImagePromptWorker(BaseWorker):
     def do_work(self):
+        statistics_manager.record_event('image_prompts')
         api = OpenRouterAPI()
         img_prompt_settings = self.config['img_prompt_settings']
         model = img_prompt_settings.get('model', 'unknown')
@@ -108,6 +111,7 @@ class ImagePromptWorker(BaseWorker):
 
 class VoiceoverWorker(BaseWorker):
     def do_work(self):
+        statistics_manager.record_event('voiceover')
         text = self.config['text']
         dir_path = self.config['dir_path']
         lang_config = self.config['lang_config']
@@ -200,6 +204,7 @@ class VoiceoverWorker(BaseWorker):
 
 class SubtitleWorker(BaseWorker):
     def do_work(self):
+        statistics_manager.record_event('subtitles')
         whisper_type = self.config['sub_settings'].get('whisper_type', 'amd')
         whisper_label = 'amd-fork' if whisper_type == 'amd' else 'whisper'
         
@@ -213,9 +218,11 @@ class SubtitleWorker(BaseWorker):
 
 class CustomStageWorker(BaseWorker):
     def do_work(self):
+        stage_name = self.config['stage_name']
+        statistics_manager.record_event(f"custom_stage_{stage_name}")
+        
         api = OpenRouterAPI()
         
-        stage_name = self.config['stage_name']
         prompt = self.config['prompt']
         text = self.config['text']
         model = self.config.get('model', 'google/gemini-2.0-flash-exp:free') 
@@ -251,6 +258,7 @@ class CustomStageWorker(BaseWorker):
 
 class ImageGenerationWorker(BaseWorker):
     def do_work(self):
+        statistics_manager.record_event('image_generation_stage')
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
         prompts_text = self.config['prompts_text']
@@ -332,6 +340,7 @@ class ImageGenerationWorker(BaseWorker):
                         with open(image_path, 'wb') as f:
                             f.write(data_to_write)
                         
+                        statistics_manager.record_event('image_generated')
                         logger.log(f"[{self.task_id}] [{service_name}] Image {index + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
                         generated_paths[index] = image_path
                         # Emit signal for gallery update as soon as one image is ready
@@ -425,6 +434,7 @@ class VideoGenerationWorker(BaseWorker):
 
 class MontageWorker(BaseWorker):
     def do_work(self):
+        statistics_manager.record_event('montage')
         import time
         
         start_time = time.time()
