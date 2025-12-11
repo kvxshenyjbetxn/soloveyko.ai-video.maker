@@ -92,19 +92,22 @@ class StatisticsManager:
     def record_event(self, event_type, timestamp=None):
         if timestamp is None:
             timestamp = datetime.now()
-        with sqlite3.connect(self.db_path) as conn:
+        # The 'timeout' parameter is important for multi-threaded access.
+        # It will make the connection wait for the specified amount of time if the database is locked.
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             cursor = conn.cursor()
             
-            cursor.execute("SELECT id FROM event_types WHERE name = ?", (event_type,))
-            result = cursor.fetchone()
-            if result:
-                event_type_id = result[0]
-            else:
-                cursor.execute("INSERT INTO event_types (name) VALUES (?)", (event_type,))
-                event_type_id = cursor.lastrowid
+            # Use "INSERT OR IGNORE" to atomically create the event type if it doesn't exist.
+            # This is crucial to prevent race conditions in a multi-threaded environment.
+            cursor.execute("INSERT OR IGNORE INTO event_types (name) VALUES (?)", (event_type,))
             
+            # Now, we are guaranteed that the event type exists. Fetch its ID.
+            cursor.execute("SELECT id FROM event_types WHERE name = ?", (event_type,))
+            event_type_id = cursor.fetchone()[0]
+            
+            # Record the actual event.
             cursor.execute("INSERT INTO events (event_type_id, timestamp) VALUES (?, ?)", (event_type_id, timestamp))
-            conn.commit()
+            # The 'with' statement automatically handles committing the transaction.
 
     def get_statistics(self, period='all_time'):
         with sqlite3.connect(self.db_path) as conn:

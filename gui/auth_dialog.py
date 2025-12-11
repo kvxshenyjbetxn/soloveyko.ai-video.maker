@@ -1,8 +1,10 @@
 import requests
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox
+    QDialog, QVBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox, QCheckBox
 )
 from PySide6.QtCore import Qt
+
+from utils.settings import settings_manager
 
 class AuthDialog(QDialog):
     def __init__(self, server_url, parent=None):
@@ -19,6 +21,8 @@ class AuthDialog(QDialog):
         self.info_label = QLabel("Будь ласка, введіть ваш API ключ для доступу.")
         self.api_key_input = QLineEdit()
         self.api_key_input.setPlaceholderText("Ваш API ключ")
+
+        self.remember_me_checkbox = QCheckBox("Запам'ятати API ключ")
         
         self.login_button = QPushButton("Увійти")
         self.error_label = QLabel()
@@ -26,11 +30,18 @@ class AuthDialog(QDialog):
 
         self.layout.addWidget(self.info_label)
         self.layout.addWidget(self.api_key_input)
+        self.layout.addWidget(self.remember_me_checkbox)
         self.layout.addWidget(self.login_button)
         self.layout.addWidget(self.error_label)
 
         self.login_button.clicked.connect(self.handle_login)
         self.api_key_input.returnPressed.connect(self.handle_login)
+
+        # Pre-fill from settings
+        saved_key = settings_manager.get('api_key')
+        if saved_key:
+            self.api_key_input.setText(saved_key)
+            self.remember_me_checkbox.setChecked(True)
 
     def handle_login(self):
         self.error_label.setText("")
@@ -52,8 +63,18 @@ class AuthDialog(QDialog):
                 data = response.json()
                 if data.get("valid"):
                     self.expires_at = data.get("expires_at")
+                    
+                    if self.remember_me_checkbox.isChecked():
+                        settings_manager.set('api_key', api_key)
+                    else:
+                        settings_manager.set('api_key', None)
+                    settings_manager.save_settings()
+
                     self.accept()
                 else:
+                    # Clear saved key if it's invalid
+                    settings_manager.set('api_key', None)
+                    settings_manager.save_settings()
                     self.error_label.setText(f"Помилка: {data.get('reason', 'Невідома помилка')}")
             else:
                 self.error_label.setText(f"Помилка сервера: {response.status_code}")
@@ -63,6 +84,9 @@ class AuthDialog(QDialog):
         finally:
             self.login_button.setEnabled(True)
             self.login_button.setText("Увійти")
+
+    def get_api_key(self):
+        return self.api_key_input.text().strip()
 
     def get_subscription_info(self):
         return self.expires_at

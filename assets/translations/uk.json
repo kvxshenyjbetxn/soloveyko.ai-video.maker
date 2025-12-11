@@ -248,5 +248,7 @@
     "daily_usage_chart_title": "Щоденне використання",
     "date_axis_label": "Дата",
     "count_axis_label": "Кількість етапів",
-    "no_data_available": "Немає даних за вибраний період."
+    "no_data_available": "Немає даних за вибраний період.",
+    "subscription_expired_title": "Термін підписки закінчився",
+    "subscription_expired_message": "Термін дії вашої підписки закінчився. Будь ласка, поновіть підписку, щоб продовжити користуватися додатком."
 }

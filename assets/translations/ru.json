@@ -248,5 +248,7 @@
     "daily_usage_chart_title": "Ежедневное использование",
     "date_axis_label": "Дата",
     "count_axis_label": "Количество этапов",
-    "no_data_available": "Нет данных за выбранный период."
+    "no_data_available": "Нет данных за выбранный период.",
+    "subscription_expired_title": "Срок подписки истек",
+    "subscription_expired_message": "Срок действия вашей подписки истек. Пожалуйста, продлите подписку, чтобы продолжить использование приложения."
 }
