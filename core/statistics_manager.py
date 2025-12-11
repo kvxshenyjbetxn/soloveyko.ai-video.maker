@@ -4,20 +4,17 @@ from datetime import datetime
 import shutil
 
 class StatisticsManager:
-    def __init__(self, db_path='assets/statistics.db'):
-        self.db_path = db_path
+    def __init__(self, db_name='statistics.db'):
+        # Get the directory of the current script
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # Define the path to the database in the assets folder
+        self.db_path = os.path.join(base_dir, 'assets', db_name)
         
         # Ensure the assets directory exists
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         
-        # Move old database if it exists
-        old_db_path = 'statistics.db'
-        if os.path.exists(old_db_path) and not os.path.exists(self.db_path):
-            try:
-                shutil.move(old_db_path, self.db_path)
-                print(f"Moved database from '{old_db_path}' to '{self.db_path}'")
-            except Exception as e:
-                print(f"Error moving database: {e}")
+        # Note: The logic for moving an old database is removed as it's less
+        # relevant with an absolute path and can cause confusion.
 
         self._check_and_create_db()
         self._migrate_db()
@@ -159,6 +156,17 @@ class StatisticsManager:
                 stats_by_event[event_name].append((date_str, count))
             
             return stats_by_event
+
+    def clear_all_data(self):
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
+            cursor = conn.cursor()
+            # We must delete from events first due to the foreign key constraint
+            cursor.execute("DELETE FROM events")
+            cursor.execute("DELETE FROM event_types")
+            # Reset the autoincrement counter for clean slate
+            cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('events', 'event_types')")
+            conn.commit()
+            print("All statistics data has been cleared.")
 
 
 statistics_manager = StatisticsManager()

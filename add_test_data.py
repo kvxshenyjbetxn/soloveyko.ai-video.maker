@@ -1,5 +1,6 @@
 # add_test_data.py
 import os
+import random
 from datetime import datetime, timedelta
 import time # Import time for sleep
 # Assuming statistics_manager is initialized at the module level in core/statistics_manager.py
@@ -20,53 +21,39 @@ def add_sample_data():
         'custom_stage_review' # Example custom stage
     ]
 
-    # Simulate data for the last 5 days
-    for i in range(5, 0, -1): # From 5 days ago up to yesterday
-        current_date = datetime.now() - timedelta(days=i)
-        
-        for _ in range(5): # Record 5 events per day
-            for event_type in event_types:
-                statistics_manager.record_event(event_type, timestamp=current_date)
-
-    # Add some data for today as well
-    for _ in range(3):
+    # Simulate data for the last 60 days
+    now = datetime.now()
+    start_date = now - timedelta(days=60)
+    
+    for i in range(60):
+        current_date = start_date + timedelta(days=i)
+        if current_date > now:
+            break
+            
         for event_type in event_types:
-            statistics_manager.record_event(event_type, timestamp=datetime.now())
+            # Add a random number of events for each type, up to 10
+            for _ in range(random.randint(0, 10)):
+                statistics_manager.record_event(event_type, timestamp=current_date)
 
     print("Sample data added successfully.")
     print("You can now restart the main application and check the Statistics tab.")
 
 if __name__ == "__main__":
-    db_path = 'assets/statistics.db'
-    
-    # Try to delete existing DB
-    if os.path.exists(db_path):
-        print(f"Attempting to delete existing database '{db_path}'...")
-        try:
-            os.remove(db_path)
-            print("Existing database deleted.")
-        except PermissionError:
-            print(f"ERROR: Could not delete '{db_path}'. It might be in use. Trying to proceed without deletion.")
-            # If we can't delete, we might hit unique constraint errors later
-            # This is a fallback if the user couldn't manually delete it.
-
-    # Retry mechanism for DB creation and data addition
-    max_retries = 5
-    retry_delay = 1 # seconds
-    for attempt in range(max_retries):
-        try:
-            print(f"Attempt {attempt + 1}/{max_retries} to initialize DB and add data...")
-            # Ensure a fresh StatisticsManager instance
-            # This will create the DB file if it doesn't exist or connect to existing
-            statistics_manager.__init__() 
-            add_sample_data()
-            print("Script completed successfully.")
-            break # Exit retry loop on success
-        except Exception as e: # Catch broad exception to include PermissionError, etc.
-            print(f"Error during DB operation: {e}")
-            if attempt < max_retries - 1:
-                print(f"Retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-            else:
-                print("Max retries reached. Script failed.")
-                raise # Re-raise the last exception if all retries fail
+    # The goal is to ensure a clean slate and then add fresh sample data.
+    # Instead of deleting the file, which can fail due to locks,
+    # we will clear the data from the tables directly.
+    try:
+        print("Initializing StatisticsManager and clearing all existing data...")
+        # This will create the DB and tables if they don't exist, or connect if they do.
+        statistics_manager.init_db() 
+        # Now, clear all data from the tables.
+        statistics_manager.clear_all_data()
+        
+        print("Adding new sample data...")
+        add_sample_data()
+        
+        print("Script completed successfully.")
+    except Exception as e:
+        print(f"An error occurred during the data refresh process: {e}")
+        # Optionally, re-raise the exception if you want the script to exit with an error code
+        # raise
