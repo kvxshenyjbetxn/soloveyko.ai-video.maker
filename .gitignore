@@ -39,3 +39,13 @@ config/templates/povod-ro.json
 demo/1.mp4
 demo/2.mp4
 assets/statistics.db
+auth_server/.env
+auth_server/crud.py
+auth_server/database.py
+auth_server/main.py
+auth_server/models.py
+auth_server/requirements.txt
+auth_server/schemas.py
+telegram_bot/.env
+telegram_bot/bot.py
+telegram_bot/requirements.txt

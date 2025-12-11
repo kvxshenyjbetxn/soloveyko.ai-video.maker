@@ -5,10 +5,21 @@ import os
 # For debugging, you can comment this line out or set the variable to "qt.multimedia.*=true"
 os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false;qt.text.font.db.*=false'
 
-from PySide6.QtWidgets import QApplication
+import sys
+import os
+
+# Suppress FFmpeg logs from Qt Multimedia by default
+# For debugging, you can comment this line out or set the variable to "qt.multimedia.*=true"
+os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false;qt.text.font.db.*=false'
+
+from PySide6.QtWidgets import QApplication, QDialog
 from gui.main_window import MainWindow
+from gui.auth_dialog import AuthDialog
 from gui.qt_material import apply_stylesheet
 from utils.settings import settings_manager
+
+# URL for the authentication server
+AUTH_SERVER_URL = "https://new-project-combain-server-production.up.railway.app" 
 
 def main():
     app = QApplication(sys.argv)
@@ -28,9 +39,18 @@ def main():
         custom_style = "QTextEdit { background-color: #121212; }"
         app.setStyleSheet(app.styleSheet() + custom_style)
 
-    main_window = MainWindow(app) # Pass app instance
-    main_window.show()
-    sys.exit(app.exec())
+    # --- Authentication Flow ---
+    auth_dialog = AuthDialog(server_url=AUTH_SERVER_URL)
+    if auth_dialog.exec() == QDialog.Accepted:
+        # If authentication is successful, proceed to the main window
+        subscription_info = auth_dialog.get_subscription_info()
+        main_window = MainWindow(app, subscription_info=subscription_info) # Pass app instance and sub info
+        main_window.show()
+        sys.exit(app.exec())
+    else:
+        # If authentication fails or is cancelled, exit the application
+        sys.exit(0)
 
 if __name__ == '__main__':
     main()
+
