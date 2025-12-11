@@ -1,12 +1,6 @@
 import sys
 import os
-
-# Suppress FFmpeg logs from Qt Multimedia by default
-# For debugging, you can comment this line out or set the variable to "qt.multimedia.*=true"
-os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false;qt.text.font.db.*=false'
-
-import sys
-import os
+import requests
 
 # Suppress FFmpeg logs from Qt Multimedia by default
 # For debugging, you can comment this line out or set the variable to "qt.multimedia.*=true"
@@ -40,16 +34,42 @@ def main():
         app.setStyleSheet(app.styleSheet() + custom_style)
 
     # --- Authentication Flow ---
-    auth_dialog = AuthDialog(server_url=AUTH_SERVER_URL)
-    if auth_dialog.exec() == QDialog.Accepted:
-        # If authentication is successful, proceed to the main window
-        subscription_info = auth_dialog.get_subscription_info()
-        main_window = MainWindow(app, subscription_info=subscription_info) # Pass app instance and sub info
+    authenticated = False
+    subscription_info = None
+    api_key = None
+
+    saved_key = settings_manager.get('api_key')
+    if saved_key:
+        try:
+            response = requests.post(
+                f"{AUTH_SERVER_URL}/validate_key/",
+                json={"key": saved_key},
+                timeout=5 # seconds
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("valid"):
+                    subscription_info = data.get("expires_at")
+                    api_key = saved_key
+                    authenticated = True
+        except requests.RequestException:
+            # Fall through to the dialog if server is unreachable
+            pass
+
+    if not authenticated:
+        auth_dialog = AuthDialog(server_url=AUTH_SERVER_URL)
+        if auth_dialog.exec() == QDialog.Accepted:
+            subscription_info = auth_dialog.get_subscription_info()
+            api_key = auth_dialog.get_api_key()
+            authenticated = True
+        else:
+            # User cancelled authentication
+            sys.exit(0)
+    
+    if authenticated:
+        main_window = MainWindow(app, subscription_info=subscription_info, api_key=api_key, server_url=AUTH_SERVER_URL)
         main_window.show()
         sys.exit(app.exec())
-    else:
-        # If authentication fails or is cancelled, exit the application
-        sys.exit(0)
 
 if __name__ == '__main__':
     main()

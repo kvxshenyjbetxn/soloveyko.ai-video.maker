@@ -1,7 +1,8 @@
 import os
+import requests
 from datetime import datetime
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray, QTimer
 from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.qt_material import apply_stylesheet
 
@@ -39,6 +40,9 @@ class VoicemakerBalanceWorkerSignals(QObject):
 
 class GeminiTTSBalanceWorkerSignals(QObject):
     finished = Signal(float)
+
+class ValidationWorkerSignals(QObject):
+    finished = Signal(bool, str) # is_valid, expires_at
 
 class BalanceWorker(QRunnable):
     def __init__(self):
@@ -95,11 +99,42 @@ class GeminiTTSBalanceWorker(QRunnable):
         if balance is not None:
             self.signals.finished.emit(float(balance))
 
+class ValidationWorker(QRunnable):
+    def __init__(self, api_key, server_url):
+        super().__init__()
+        self.signals = ValidationWorkerSignals()
+        self.api_key = api_key
+        self.server_url = server_url
+
+    def run(self):
+        is_valid = False
+        expires_at = None
+        if not self.api_key or not self.server_url:
+            self.signals.finished.emit(is_valid, expires_at)
+            return
+        try:
+            response = requests.post(
+                f"{self.server_url}/validate_key/",
+                json={"key": self.api_key},
+                timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("valid"):
+                    is_valid = True
+                    expires_at = data.get("expires_at")
+        except requests.RequestException:
+            # Network error, etc.
+            pass
+        self.signals.finished.emit(is_valid, expires_at)
+
 class MainWindow(QMainWindow):
-    def __init__(self, app, subscription_info=None):
+    def __init__(self, app, subscription_info=None, api_key=None, server_url=None):
         super().__init__()
         self.app = app
         self.subscription_info = subscription_info
+        self.api_key = api_key
+        self.server_url = server_url
         self.settings_manager = settings_manager
         self.translator = translator
         self.queue_manager = QueueManager()
@@ -108,6 +143,30 @@ class MainWindow(QMainWindow):
         self.init_ui()
         logger.log(translator.translate('app_started'), level=LogLevel.INFO)
         self.app.installEventFilter(self)
+
+    def check_api_key_validity(self):
+        worker = ValidationWorker(api_key=self.api_key, server_url=self.server_url)
+        worker.signals.finished.connect(self.on_validation_finished)
+        self.threadpool.start(worker)
+
+    def on_validation_finished(self, is_valid, expires_at):
+        if not is_valid:
+            self.validation_timer.stop()
+            # Clear the saved key as it's no longer valid
+            settings_manager.set('api_key', None)
+            settings_manager.save_settings()
+            
+            title = self.translator.translate('subscription_expired_title')
+            message = self.translator.translate('subscription_expired_message')
+            QMessageBox.warning(self, title, message)
+            
+            # Visually indicate expiry
+            self.days_left_label.setText("!")
+            self.user_icon_button.setToolTip(self.translator.translate('subscription_expired_message'))
+        else:
+            # Update subscription info and UI
+            self.subscription_info = expires_at
+            self.update_subscription_status()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -119,7 +178,6 @@ class MainWindow(QMainWindow):
                 # This can happen if the C++ part of the viewer object is deleted
                 # before this event is processed. We can safely ignore it.
                 self.viewer = None
-
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.Wheel and isinstance(obj, (QComboBox, QAbstractSpinBox, QSlider)):
@@ -221,25 +279,28 @@ class MainWindow(QMainWindow):
         # Apply last used template on startup
         last_template = self.settings_manager.get('last_used_template_name')
         if last_template:
-            # We need to manually load it here because we can't trigger the button click easily/safely without UI effects
+            # ... (rest of the logic remains the same)
             from utils.settings import template_manager
             template_data = template_manager.load_template(last_template)
             if template_data:
                 for key, value in template_data.items():
-                    # Special handling for dictionaries to merge them instead of overwriting
                     if isinstance(value, dict) and key in self.settings_manager.settings and isinstance(self.settings_manager.settings[key], dict):
                         self.settings_manager.settings[key].update(value)
                     else:
                         self.settings_manager.settings[key] = value
                 self.settings_manager.save_settings()
                 
-                # Update UI
-                self.settings_tab.templates_tab.populate_templates_combo() # ensure combo is updated
+                self.settings_tab.templates_tab.populate_templates_combo()
                 self.settings_tab.templates_tab.templates_combo.setCurrentText(last_template)
                 self.text_tab.update_template_name(last_template)
                 self.settings_tab._update_all_tabs()
-                self.retranslate_ui() # Ensure translations applied if language changed
+                self.retranslate_ui()
                 logger.log(f"Applied last used template: {last_template}", level=LogLevel.INFO)
+
+        # Setup periodic API key validation
+        self.validation_timer = QTimer(self)
+        self.validation_timer.timeout.connect(self.check_api_key_validity)
+        self.validation_timer.start(10 * 60 * 1000) # 10 minutes
 
     def update_subscription_status(self):
         days_left_text = ""
@@ -250,11 +311,10 @@ class MainWindow(QMainWindow):
                 expires_at_str = self.subscription_info.split('.')[0]
                 expires_at = datetime.fromisoformat(expires_at_str)
                 
-                # Assuming subscription_info is UTC
                 days_left = (expires_at.date() - datetime.utcnow().date()).days
 
                 if days_left >= 0:
-                    days_left_text = f"{days_left} д" # "д" for "днів"
+                    days_left_text = f"{days_left} д"
                     tooltip_text = (
                         f"Підписка активна до: {expires_at.strftime('%Y-%m-%d')}\n"
                         f"Залишилось: {days_left} днів"
@@ -294,42 +354,37 @@ class MainWindow(QMainWindow):
         menu.exec(self.user_icon_button.mapToGlobal(self.user_icon_button.rect().bottomLeft()))
 
     def _on_image_review_required(self):
-        title = translator.translate('image_review_title')
-        message = translator.translate('image_review_message')
+        # ... (rest of the file is the same)
+        title = self.translator.translate('image_review_title')
+        message = self.translator.translate('image_review_message')
         QMessageBox.information(self, title, message)
         self.tabs.setCurrentWidget(self.gallery_tab)
         self.gallery_tab.show_continue_button()
 
     def _on_translation_review_required(self, task_id, translated_text):
         state = self.task_processor.task_states[task_id]
-        dialog = TranslationReviewDialog(self, state, translated_text)
+        dialog = TranslationReviewDialog(self, state, translated_text, self.translator)
 
         def on_regenerate():
             self.task_processor.regenerate_translation(task_id)
 
         dialog.regenerate_requested.connect(on_regenerate)
         
-        # We need a way to update the dialog with the new text
-        # Let's create a signal on the task processor for this
         self.task_processor.translation_regenerated.connect(dialog.update_text)
 
         if dialog.exec():
             new_text = dialog.get_text()
             self.task_processor.task_states[task_id].text_for_processing = new_text
-            # Manually save the reviewed text
             if state.dir_path:
                 with open(os.path.join(state.dir_path, "translation_reviewed.txt"), 'w', encoding='utf-8') as f:
                     f.write(new_text)
             self.task_processor._on_text_ready(task_id)
         else:
-            # Handle cancellation if needed, e.g., mark stage as failed
             self.task_processor._set_stage_status(task_id, 'stage_translation', 'error', 'User cancelled review.')
         
-        # Disconnect to avoid issues with subsequent dialogs
         try:
             self.task_processor.translation_regenerated.disconnect(dialog.update_text)
         except RuntimeError:
-            # This can happen if the connection was already broken, safe to ignore
             pass
 
     def show_media_viewer(self, media_path):
@@ -343,8 +398,8 @@ class MainWindow(QMainWindow):
         self.viewer.setFocus()
 
     def show_processing_finished_dialog(self, elapsed_time):
-        title = translator.translate('processing_complete_title')
-        message = translator.translate('processing_complete_message').format(elapsed_time)
+        title = self.translator.translate('processing_complete_title')
+        message = self.translator.translate('processing_complete_message').format(elapsed_time)
         QMessageBox.information(self, title, message)
 
     def update_title(self):
@@ -383,7 +438,7 @@ class MainWindow(QMainWindow):
     def _on_balance_updated(self, balance):
         api_key = self.settings_manager.get("openrouter_api_key")
         if api_key:
-            balance_text = f"{translator.translate('balance_label')} {balance:.4f}$"
+            balance_text = f"{self.translator.translate('balance_label')} {balance:.4f}$"
         else:
             balance_text = ""
 
@@ -452,7 +507,6 @@ class MainWindow(QMainWindow):
     def update_user_icon(self):
         theme_name = self.settings_manager.get('theme', 'light')
         
-        # Black icon for light themes, white icon for dark themes
         user_icon_base64_black = b"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAwIDI0IDI0IiB3aWR0aD0iMjRweCIgZmlsbD0iIzAwMDAwMCI+PHBhdGggZD0iTTAgMGgyNHYyNEgwVjB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg=="
         user_icon_base64_white = b"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAwIDI0IDI0IiB3aWR0aD0iMjRweCIgZmlsbD0iI0ZGRkZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgwVjB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg=="
 
@@ -506,11 +560,13 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
 class TranslationReviewDialog(QDialog):
+    # ... (rest of the file is the same)
     regenerate_requested = Signal()
 
-    def __init__(self, parent, state, text):
+    def __init__(self, parent, state, text, translator):
         super().__init__(parent)
         self.state = state
+        self.translator = translator
         job_name = self.state.job_name
         lang_name = self.state.lang_name
         self.setWindowTitle(f"Перевірка перекладу: {job_name} ({lang_name})")
@@ -522,7 +578,6 @@ class TranslationReviewDialog(QDialog):
         self.text_edit.setPlainText(text)
         main_layout.addWidget(self.text_edit)
 
-        # Bottom layout
         bottom_layout = QHBoxLayout()
 
         self.char_count_label = QLabel()
@@ -537,7 +592,6 @@ class TranslationReviewDialog(QDialog):
         
         main_layout.addLayout(bottom_layout)
 
-        # Connections
         self.regenerate_button.clicked.connect(self.regenerate_requested.emit)
         self.ok_button.clicked.connect(self.accept)
         self.cancel_button.clicked.connect(self.reject)
@@ -549,16 +603,14 @@ class TranslationReviewDialog(QDialog):
         return self.text_edit.toPlainText()
 
     def update_char_count(self):
-        from utils.translator import translator
         original_len = len(self.state.original_text)
         translated_len = len(self.get_text())
         
-        original_str = translator.translate('original_chars').format(count=original_len)
-        translated_str = translator.translate('translated_chars').format(count=translated_len)
+        original_str = self.translator.translate('original_chars').format(count=original_len)
+        translated_str = self.translator.translate('translated_chars').format(count=translated_len)
         
         self.char_count_label.setText(f"{original_str} | {translated_str}")
 
     def update_text(self, task_id, new_text):
         if self.state.task_id == task_id:
              self.text_edit.setPlainText(new_text)
-
