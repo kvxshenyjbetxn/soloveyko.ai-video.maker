@@ -1,7 +1,8 @@
 import os
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool
-from PySide6.QtGui import QWheelEvent
+from datetime import datetime
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray
+from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.qt_material import apply_stylesheet
 
 from utils.settings import settings_manager
@@ -95,9 +96,10 @@ class GeminiTTSBalanceWorker(QRunnable):
             self.signals.finished.emit(float(balance))
 
 class MainWindow(QMainWindow):
-    def __init__(self, app):
+    def __init__(self, app, subscription_info=None):
         super().__init__()
         self.app = app
+        self.subscription_info = subscription_info
         self.settings_manager = settings_manager
         self.translator = translator
         self.queue_manager = QueueManager()
@@ -146,8 +148,35 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.central_widget)
         
         layout = QVBoxLayout(self.central_widget)
+
         self.tabs = QTabWidget()
+
+        # --- Subscription Status Corner Widget ---
+        corner_widget = QWidget()
+        corner_layout = QHBoxLayout(corner_widget)
+        corner_layout.setContentsMargins(0, 0, 10, 0) # Add some margin to the right
+        corner_layout.setSpacing(10)
+
+        self.days_left_label = QLabel()
+        corner_layout.addWidget(self.days_left_label)
+
+        self.user_icon_button = QPushButton()
+        self.update_user_icon() # Set theme-aware icon
+        
+        icon_size = int(self.fontMetrics().height() * 1.5)
+        self.user_icon_button.setIconSize(QSize(icon_size, icon_size))
+        self.user_icon_button.setFlat(True)
+        self.user_icon_button.setFixedSize(QSize(icon_size, icon_size))
+        
+        self.user_icon_button.clicked.connect(self.show_subscription_menu)
+        corner_layout.addWidget(self.user_icon_button)
+
+        self.tabs.setCornerWidget(corner_widget, Qt.Corner.TopRightCorner)
+        # --- End of Corner Widget ---
+
         layout.addWidget(self.tabs)
+
+        self.update_subscription_status()
 
         self.text_tab = TextTab(main_window=self)
         self.settings_tab = SettingsTab(main_window=self)
@@ -211,6 +240,58 @@ class MainWindow(QMainWindow):
                 self.settings_tab._update_all_tabs()
                 self.retranslate_ui() # Ensure translations applied if language changed
                 logger.log(f"Applied last used template: {last_template}", level=LogLevel.INFO)
+
+    def update_subscription_status(self):
+        days_left_text = ""
+        tooltip_text = "Немає інформації про підписку."
+
+        if self.subscription_info:
+            try:
+                expires_at_str = self.subscription_info.split('.')[0]
+                expires_at = datetime.fromisoformat(expires_at_str)
+                
+                # Assuming subscription_info is UTC
+                days_left = (expires_at.date() - datetime.utcnow().date()).days
+
+                if days_left >= 0:
+                    days_left_text = f"{days_left} д" # "д" for "днів"
+                    tooltip_text = (
+                        f"Підписка активна до: {expires_at.strftime('%Y-%m-%d')}\n"
+                        f"Залишилось: {days_left} днів"
+                    )
+                else:
+                    days_left_text = "!"
+                    tooltip_text = "Термін дії вашої підписки закінчився."
+            except (ValueError, TypeError):
+                days_left_text = "?"
+                tooltip_text = "Не вдалося визначити термін дії підписки."
+        
+        self.days_left_label.setText(days_left_text)
+        self.user_icon_button.setToolTip(tooltip_text)
+
+    def show_subscription_menu(self):
+        menu = QMenu(self)
+        
+        if self.subscription_info:
+            try:
+                expires_at_str = self.subscription_info.split('.')[0]
+                expires_at = datetime.fromisoformat(expires_at_str)
+                expires_at_formatted = expires_at.strftime('%Y-%m-%d')
+                
+                days_left = (expires_at.date() - datetime.utcnow().date()).days
+
+                if days_left >= 0:
+                    menu.addAction(f"Підписка до: {expires_at_formatted}")
+                    menu.addAction(f"Залишилось: {days_left} днів")
+                else:
+                    menu.addAction("Термін дії підписки закінчився")
+
+            except (ValueError, TypeError):
+                menu.addAction("Помилка формату дати")
+        else:
+            menu.addAction("Немає інформації про підписку")
+            
+        menu.exec(self.user_icon_button.mapToGlobal(self.user_icon_button.rect().bottomLeft()))
 
     def _on_image_review_required(self):
         title = translator.translate('image_review_title')
@@ -368,6 +449,24 @@ class MainWindow(QMainWindow):
         self.queue_tab.update_gemini_tts_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.gemini_tts_tab.update_balance_label(balance_to_display_on_settings_tab)
 
+    def update_user_icon(self):
+        theme_name = self.settings_manager.get('theme', 'light')
+        
+        # Black icon for light themes, white icon for dark themes
+        user_icon_base64_black = b"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAwIDI0IDI0IiB3aWR0aD0iMjRweCIgZmlsbD0iIzAwMDAwMCI+PHBhdGggZD0iTTAgMGgyNHYyNEgwVjB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg=="
+        user_icon_base64_white = b"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjRweCIgdmlld0JveD0iMCAwIDI0IDI0IiB3aWR0aD0iMjRweCIgZmlsbD0iI0ZGRkZGRiI+PHBhdGggZD0iTTAgMGgyNHYyNEgwVjB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg=="
+
+        if theme_name in ['dark', 'black']:
+            icon_data = user_icon_base64_white
+        else:
+            icon_data = user_icon_base64_black
+        
+        pixmap = QPixmap()
+        pixmap.loadFromData(QByteArray.fromBase64(icon_data), "svg")
+        
+        icon = QIcon(pixmap)
+        self.user_icon_button.setIcon(icon)
+
     def change_theme(self, theme_name):
         self.settings_manager.set('theme', theme_name)
         
@@ -377,6 +476,8 @@ class MainWindow(QMainWindow):
             apply_stylesheet(self.app, theme='dark_teal.xml')
         elif theme_name == 'black':
             apply_stylesheet(self.app, theme='amoled_black.xml')
+
+        self.update_user_icon()
 
         if hasattr(self, 'settings_tab') and hasattr(self.settings_tab, 'statistics_tab'):
             self.settings_tab.statistics_tab.on_theme_changed()
