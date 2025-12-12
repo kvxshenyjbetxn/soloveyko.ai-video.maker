@@ -198,7 +198,6 @@ class MainWindow(QMainWindow):
         return super().eventFilter(obj, event)
 
     def init_ui(self):
-        self.update_balance()
         self.update_title()
         self.setGeometry(100, 100, 1280, 720)
 
@@ -271,10 +270,7 @@ class MainWindow(QMainWindow):
         self.gallery_tab.media_clicked.connect(self.show_media_viewer)
         self.settings_tab.templates_tab.template_applied.connect(self.update_template_label)
 
-        self.update_googler_usage()
-        self.update_elevenlabs_balance()
-        self.update_voicemaker_balance()
-        self.update_gemini_tts_balance()
+        QTimer.singleShot(0, self.start_background_updates)
         
         # Apply last used template on startup
         last_template = self.settings_manager.get('last_used_template_name')
@@ -409,6 +405,13 @@ class MainWindow(QMainWindow):
     def update_template_label(self):
         name = self.settings_manager.get('last_used_template_name')
         self.text_tab.update_template_name(name)
+
+    def start_background_updates(self):
+        self.update_balance()
+        self.update_googler_usage()
+        self.update_elevenlabs_balance()
+        self.update_voicemaker_balance()
+        self.update_gemini_tts_balance()
 
     def update_balance(self):
         worker = BalanceWorker()
