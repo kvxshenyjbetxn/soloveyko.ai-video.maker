@@ -41,8 +41,8 @@ class SubtitlesTab(QWidget):
         self.rb_amd.toggled.connect(self.on_engine_changed)
         # self.rb_standard.toggled.connect(self.on_engine_changed) # One connection is enough
         
-        engine_layout.addWidget(self.rb_amd)
         engine_layout.addWidget(self.rb_standard)
+        engine_layout.addWidget(self.rb_amd)
         self.engine_group.setLayout(engine_layout)
         layout.addWidget(self.engine_group)
 
@@ -130,14 +130,14 @@ class SubtitlesTab(QWidget):
         self.fade_out_spin.blockSignals(True)
         self.max_words_spin.blockSignals(True)
 
-        saved_type = self.settings.get('whisper_type', 'amd')
+        saved_type = self.settings.get('whisper_type', 'standard')
         if saved_type == 'standard':
             self.rb_standard.setChecked(True)
         else:
             self.rb_amd.setChecked(True)
         
         self.update_models_list()
-        saved_model = self.settings.get('whisper_model', 'base.bin')
+        saved_model = self.settings.get('whisper_model', 'base')
         index = self.model_combo.findText(saved_model)
         if index != -1:
             self.model_combo.setCurrentIndex(index)
