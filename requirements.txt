@@ -4,3 +4,4 @@ moviepy
 mutagen
 matplotlib
 pandas
+assemblyai==0.28.0

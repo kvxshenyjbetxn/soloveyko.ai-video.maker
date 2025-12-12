@@ -206,7 +206,13 @@ class SubtitleWorker(BaseWorker):
     def do_work(self):
         statistics_manager.record_event('subtitles')
         whisper_type = self.config['sub_settings'].get('whisper_type', 'amd')
-        whisper_label = 'amd-fork' if whisper_type == 'amd' else 'whisper'
+
+        if whisper_type == 'amd':
+            whisper_label = 'amd-fork'
+        elif whisper_type == 'standard':
+            whisper_label = 'whisper'
+        else:
+            whisper_label = 'assemblyai'
         
         logger.log(f"[{self.task_id}] [{whisper_label}] Starting subtitle generation", level=LogLevel.INFO)
         engine = SubtitleEngine(self.config['whisper_exe'], self.config['whisper_model_path'])
@@ -215,6 +221,7 @@ class SubtitleWorker(BaseWorker):
         engine.generate_ass(self.config['audio_path'], output_path, self.config['sub_settings'], language=self.config['lang_code'])
         logger.log(f"[{self.task_id}] [{whisper_label}] Subtitles saved", level=LogLevel.SUCCESS)
         return output_path
+
 
 class CustomStageWorker(BaseWorker):
     def do_work(self):
@@ -1032,8 +1039,8 @@ class TaskProcessor(QObject):
                 super().__init__()
                 self.processor = processor
                 self.task_id = task_id
-            def run(self):
-                self.processor.subtitle_semaphore.acquire()
+
+            def _start_the_work(self):
                 try:
                     state = self.processor.task_states[self.task_id]
                     sub_settings = self.processor.settings.get('subtitles', {})
@@ -1057,18 +1064,38 @@ class TaskProcessor(QObject):
                 except Exception as e:
                     self.processor._on_subtitles_error(self.task_id, f"Failed to start subtitle worker: {e}")
 
+            def run(self):
+                sub_settings = self.processor.settings.get('subtitles', {})
+                whisper_type = sub_settings.get('whisper_type', 'amd')
+                
+                if whisper_type == 'assemblyai':
+                    # No semaphore for AssemblyAI, run directly
+                    self._start_the_work()
+                else:
+                    # Use semaphore for local models
+                    self.processor.subtitle_semaphore.acquire()
+                    self._start_the_work()
+
         return SemaphoreRunnable(self, task_id)
         
     @Slot(str, object)
     def _on_subtitles_finished(self, task_id, subtitle_path):
-        self.subtitle_semaphore.release()
+        sub_settings = self.settings.get('subtitles', {})
+        whisper_type = sub_settings.get('whisper_type', 'amd')
+        if whisper_type != 'assemblyai':
+            self.subtitle_semaphore.release()
+            
         self.task_states[task_id].subtitle_path = subtitle_path
         self._set_stage_status(task_id, 'stage_subtitles', 'success')
         self._increment_subtitle_counter()
 
     @Slot(str, str)
     def _on_subtitles_error(self, task_id, error):
-        self.subtitle_semaphore.release()
+        sub_settings = self.settings.get('subtitles', {})
+        whisper_type = sub_settings.get('whisper_type', 'amd')
+        if whisper_type != 'assemblyai':
+            self.subtitle_semaphore.release()
+
         self._set_stage_status(task_id, 'stage_subtitles', 'error', error)
         self._increment_subtitle_counter()
 
