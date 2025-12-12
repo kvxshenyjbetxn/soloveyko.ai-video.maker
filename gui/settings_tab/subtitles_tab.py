@@ -36,13 +36,15 @@ class SubtitlesTab(QWidget):
         self.engine_group_btn = QButtonGroup(self)
         self.rb_amd = QRadioButton()
         self.rb_standard = QRadioButton()
+        self.rb_assemblyai = QRadioButton()
         self.engine_group_btn.addButton(self.rb_amd)
         self.engine_group_btn.addButton(self.rb_standard)
+        self.engine_group_btn.addButton(self.rb_assemblyai)
         self.rb_amd.toggled.connect(self.on_engine_changed)
-        # self.rb_standard.toggled.connect(self.on_engine_changed) # One connection is enough
         
         engine_layout.addWidget(self.rb_standard)
         engine_layout.addWidget(self.rb_amd)
+        engine_layout.addWidget(self.rb_assemblyai)
         self.engine_group.setLayout(engine_layout)
         layout.addWidget(self.engine_group)
 
@@ -119,24 +121,21 @@ class SubtitlesTab(QWidget):
     def update_fields(self):
         self.settings = settings_manager.get('subtitles', {})
         
-        # Block signals
-        self.rb_amd.blockSignals(True)
-        self.rb_standard.blockSignals(True)
-        self.model_combo.blockSignals(True)
-        self.font_combo.blockSignals(True)
-        self.fontsize_spin.blockSignals(True)
-        self.margin_v_spin.blockSignals(True)
-        self.fade_in_spin.blockSignals(True)
-        self.fade_out_spin.blockSignals(True)
-        self.max_words_spin.blockSignals(True)
+        # Block signals to prevent premature saving
+        for widget in self.findChildren(QWidget):
+            widget.blockSignals(True)
 
+        # --- Populate fields from settings ---
         saved_type = self.settings.get('whisper_type', 'standard')
         if saved_type == 'standard':
             self.rb_standard.setChecked(True)
-        else:
+        elif saved_type == 'amd':
             self.rb_amd.setChecked(True)
+        else: # assemblyai
+            self.rb_assemblyai.setChecked(True)
         
-        self.update_models_list()
+        self._update_engine_ui(update_model_list=True)
+
         saved_model = self.settings.get('whisper_model', 'base')
         index = self.model_combo.findText(saved_model)
         if index != -1:
@@ -154,21 +153,15 @@ class SubtitlesTab(QWidget):
         self.fade_out_spin.setValue(self.settings.get('fade_out', 0))
         self.max_words_spin.setValue(self.settings.get('max_words', 10))
 
-        # Unblock signals
-        self.rb_amd.blockSignals(False)
-        self.rb_standard.blockSignals(False)
-        self.model_combo.blockSignals(False)
-        self.font_combo.blockSignals(False)
-        self.fontsize_spin.blockSignals(False)
-        self.margin_v_spin.blockSignals(False)
-        self.fade_in_spin.blockSignals(False)
-        self.fade_out_spin.blockSignals(False)
-        self.max_words_spin.blockSignals(False)
+        # --- Unblock signals ---
+        for widget in self.findChildren(QWidget):
+            widget.blockSignals(False)
 
     def retranslate_ui(self):
         self.engine_group.setTitle(translator.translate("whisper_engine_group"))
         self.rb_amd.setText(translator.translate("amd_gpu_fork_radio"))
         self.rb_standard.setText(translator.translate("standard_python_radio"))
+        self.rb_assemblyai.setText(translator.translate("assemblyai_radio"))
         self.whisper_group.setTitle(translator.translate("model_selection_group"))
         self.model_label.setText(translator.translate("model_label"))
         self.style_group.setTitle(translator.translate("subtitle_style_group"))
@@ -187,24 +180,34 @@ class SubtitlesTab(QWidget):
 
         if self.rb_standard.isChecked():
             models = ["tiny", "base", "small", "medium", "large"]
-        else:
+        else: # amd
             models = ["base.bin", "small.bin", "medium.bin", "large.bin"]
 
         self.model_combo.addItems(models)
         self.model_combo.blockSignals(False)
 
-    def on_engine_changed(self, *args):
-        self.update_models_list()
-        current_text = self.model_combo.currentText()
-        if self.rb_standard.isChecked() and current_text.endswith(".bin"):
-             new_text = current_text.replace(".bin", "")
-             index = self.model_combo.findText(new_text)
-             if index != -1: self.model_combo.setCurrentIndex(index)
-        elif self.rb_amd.isChecked() and not current_text.endswith(".bin"):
-             new_text = current_text + ".bin"
-             index = self.model_combo.findText(new_text)
-             if index != -1: self.model_combo.setCurrentIndex(index)
+    def _update_engine_ui(self, update_model_list=False):
+        """Updates the UI based on the selected engine, without saving."""
+        is_whisper = self.rb_standard.isChecked() or self.rb_amd.isChecked()
+        self.whisper_group.setVisible(is_whisper)
 
+        if is_whisper:
+            if update_model_list:
+                self.update_models_list()
+            
+            current_text = self.model_combo.currentText()
+            if self.rb_standard.isChecked() and current_text.endswith(".bin"):
+                new_text = current_text.replace(".bin", "")
+                index = self.model_combo.findText(new_text)
+                if index != -1: self.model_combo.setCurrentIndex(index)
+            elif self.rb_amd.isChecked() and not current_text.endswith(".bin"):
+                new_text = current_text + ".bin"
+                index = self.model_combo.findText(new_text)
+                if index != -1: self.model_combo.setCurrentIndex(index)
+
+    def on_engine_changed(self, *args):
+        """Connected to the radio button toggle signals."""
+        self._update_engine_ui(update_model_list=True)
         self.save_settings()
 
     def update_color_btn_style(self):
@@ -220,11 +223,16 @@ class SubtitlesTab(QWidget):
             self.save_settings()
 
     def save_settings(self, *args):
-        whisper_type = 'standard' if self.rb_standard.isChecked() else 'amd'
+        if self.rb_standard.isChecked():
+            whisper_type = 'standard'
+        elif self.rb_amd.isChecked():
+            whisper_type = 'amd'
+        else:
+            whisper_type = 'assemblyai'
 
         new_settings = {
             'whisper_type': whisper_type,
-            'whisper_model': self.model_combo.currentText(),
+            'whisper_model': self.model_combo.currentText() if self.whisper_group.isVisible() else None,
             'font': self.font_combo.currentFont().family(),
             'fontsize': self.fontsize_spin.value(),
             'color': self.current_color,
