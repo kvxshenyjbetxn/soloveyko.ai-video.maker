@@ -250,5 +250,6 @@
     "count_axis_label": "Number of Stages",
     "no_data_available": "No data available for the selected period.",
     "subscription_expired_title": "Subscription Expired",
-    "subscription_expired_message": "Your subscription has expired. Please renew your subscription to continue using the application."
+    "subscription_expired_message": "Your subscription has expired. Please renew your subscription to continue using the application.",
+    "error_label": "Error"
 }

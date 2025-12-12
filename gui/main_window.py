@@ -27,19 +27,19 @@ from core.task_processor import TaskProcessor
 from utils.logger import logger, LogLevel
 
 class BalanceWorkerSignals(QObject):
-    finished = Signal(float)
+    finished = Signal(object, bool)
 
 class GooglerUsageWorkerSignals(QObject):
-    finished = Signal(dict)
+    finished = Signal(object, bool)
 
 class ElevenLabsBalanceWorkerSignals(QObject):
-    finished = Signal(int)
+    finished = Signal(object, bool)
 
 class VoicemakerBalanceWorkerSignals(QObject):
-    finished = Signal(int)
+    finished = Signal(object, bool)
 
 class GeminiTTSBalanceWorkerSignals(QObject):
-    finished = Signal(float)
+    finished = Signal(object, bool)
 
 class ValidationWorkerSignals(QObject):
     finished = Signal(bool, str) # is_valid, expires_at
@@ -52,8 +52,7 @@ class BalanceWorker(QRunnable):
     def run(self):
         api = OpenRouterAPI()
         balance = api.get_balance()
-        if balance is not None:
-            self.signals.finished.emit(balance)
+        self.signals.finished.emit(balance, balance is not None)
 
 class GooglerUsageWorker(QRunnable):
     def __init__(self):
@@ -63,8 +62,7 @@ class GooglerUsageWorker(QRunnable):
     def run(self):
         api = GooglerAPI()
         usage = api.get_usage()
-        if usage is not None:
-            self.signals.finished.emit(usage)
+        self.signals.finished.emit(usage, usage is not None)
 
 class ElevenLabsBalanceWorker(QRunnable):
     def __init__(self):
@@ -74,8 +72,7 @@ class ElevenLabsBalanceWorker(QRunnable):
     def run(self):
         api = ElevenLabsAPI()
         balance, status = api.get_balance()
-        if balance is not None:
-            self.signals.finished.emit(balance)
+        self.signals.finished.emit(balance, status == 'connected')
 
 class VoicemakerBalanceWorker(QRunnable):
     def __init__(self):
@@ -86,7 +83,9 @@ class VoicemakerBalanceWorker(QRunnable):
         api = VoicemakerAPI()
         balance, status = api.get_balance()
         if balance is not None:
-            self.signals.finished.emit(int(balance))
+             self.signals.finished.emit(int(balance), status == 'connected')
+        else:
+             self.signals.finished.emit(None, False)
 
 class GeminiTTSBalanceWorker(QRunnable):
     def __init__(self):
@@ -97,7 +96,9 @@ class GeminiTTSBalanceWorker(QRunnable):
         api = GeminiTTSAPI()
         balance, status = api.get_balance()
         if balance is not None:
-            self.signals.finished.emit(float(balance))
+            self.signals.finished.emit(float(balance), status == 'connected')
+        else:
+            self.signals.finished.emit(None, False)
 
 class ValidationWorker(QRunnable):
     def __init__(self, api_key, server_url):
@@ -438,10 +439,13 @@ class MainWindow(QMainWindow):
         worker.signals.finished.connect(self._on_gemini_tts_balance_updated)
         self.threadpool.start(worker)
 
-    def _on_balance_updated(self, balance):
+    def _on_balance_updated(self, balance, success):
         api_key = self.settings_manager.get("openrouter_api_key")
         if api_key:
-            balance_text = f"{self.translator.translate('balance_label')} {balance:.4f}$"
+            if success:
+                balance_text = f"{self.translator.translate('balance_label')} {balance:.4f}$"
+            else:
+                balance_text = f"{self.translator.translate('balance_label')} {self.translator.translate('error_label')}"
         else:
             balance_text = ""
 
@@ -449,59 +453,77 @@ class MainWindow(QMainWindow):
         self.queue_tab.update_balance(balance_text)
         self.settings_tab.api_tab.openrouter_tab.update_balance_label(balance_text)
 
-    def _on_googler_usage_updated(self, usage_data):
+    def _on_googler_usage_updated(self, usage_data, success):
         googler_settings = self.settings_manager.get("googler", {})
         api_key = googler_settings.get("api_key")
 
-        if api_key and usage_data:
-            img_usage = usage_data.get("current_usage", {}).get("hourly_usage", {}).get("image_generation", {})
-            current_usage = img_usage.get("current_usage", "N/A")
-            
-            img_limits = usage_data.get("account_limits", {})
-            limit = img_limits.get("img_gen_per_hour_limit", "N/A")
+        usage_text = ""
+        display_text = "N/A"
 
-            usage_text = f"Googler: {current_usage} / {limit}"
-        else:
-            usage_text = ""
+        if api_key:
+            if success and usage_data:
+                img_usage = usage_data.get("current_usage", {}).get("hourly_usage", {}).get("image_generation", {})
+                current_usage = img_usage.get("current_usage", "N/A")
+                
+                img_limits = usage_data.get("account_limits", {})
+                limit = img_limits.get("img_gen_per_hour_limit", "N/A")
 
+                usage_text = f"Googler: {current_usage} / {limit}"
+                display_text = f"{current_usage} / {limit}"
+            else:
+                usage_text = f"Googler: {self.translator.translate('error_label')}"
+                display_text = self.translator.translate('error_label')
+        
         self.text_tab.update_googler_usage(usage_text)
         self.queue_tab.update_googler_usage(usage_text)
-        self.settings_tab.api_tab.image_tab.googler_tab.usage_display_label.setText(f"{current_usage} / {limit}" if api_key and usage_data else "N/A")
+        self.settings_tab.api_tab.image_tab.googler_tab.usage_display_label.setText(display_text)
 
-    def _on_elevenlabs_balance_updated(self, balance):
+    def _on_elevenlabs_balance_updated(self, balance, success):
         api_key = self.settings_manager.get("elevenlabs_api_key")
+        balance_text = ""
+        balance_to_display_on_settings_tab = None
+
         if api_key:
-            balance_text = f"ElevenLabs: {balance}"
-            balance_to_display_on_settings_tab = balance
-        else:
-            balance_text = ""
-            balance_to_display_on_settings_tab = None
+            if success:
+                balance_text = f"ElevenLabs: {balance}"
+                balance_to_display_on_settings_tab = balance
+            else:
+                balance_text = f"ElevenLabs: {self.translator.translate('error_label')}"
+                balance_to_display_on_settings_tab = self.translator.translate('error_label')
 
         self.text_tab.update_elevenlabs_balance(balance_text)
         self.queue_tab.update_elevenlabs_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.elevenlabs_tab.update_balance_label(balance_to_display_on_settings_tab)
 
-    def _on_voicemaker_balance_updated(self, balance):
+    def _on_voicemaker_balance_updated(self, balance, success):
         api_key = self.settings_manager.get("voicemaker_api_key")
+        balance_text = ""
+        balance_to_display_on_settings_tab = None
+
         if api_key:
-            balance_text = f"Voicemaker: {balance}"
-            balance_to_display_on_settings_tab = balance
-        else:
-            balance_text = ""
-            balance_to_display_on_settings_tab = None
+            if success:
+                balance_text = f"Voicemaker: {balance}"
+                balance_to_display_on_settings_tab = balance
+            else:
+                balance_text = f"Voicemaker: {self.translator.translate('error_label')}"
+                balance_to_display_on_settings_tab = self.translator.translate('error_label')
 
         self.text_tab.update_voicemaker_balance(balance_text)
         self.queue_tab.update_voicemaker_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.voicemaker_tab.update_balance_label(balance_to_display_on_settings_tab)
 
-    def _on_gemini_tts_balance_updated(self, balance):
+    def _on_gemini_tts_balance_updated(self, balance, success):
         api_key = self.settings_manager.get("gemini_tts_api_key")
+        balance_text = ""
+        balance_to_display_on_settings_tab = None
+        
         if api_key:
-            balance_text = f"GeminiTTS: {balance}"
-            balance_to_display_on_settings_tab = balance
-        else:
-            balance_text = ""
-            balance_to_display_on_settings_tab = None
+            if success:
+                balance_text = f"GeminiTTS: {balance}"
+                balance_to_display_on_settings_tab = balance
+            else:
+                balance_text = f"GeminiTTS: {self.translator.translate('error_label')}"
+                balance_to_display_on_settings_tab = self.translator.translate('error_label')
 
         self.text_tab.update_gemini_tts_balance(balance_text)
         self.queue_tab.update_gemini_tts_balance(balance_text)
