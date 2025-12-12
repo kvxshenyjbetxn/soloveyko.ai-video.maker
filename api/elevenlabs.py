@@ -1,6 +1,29 @@
 import requests
+import time
+from functools import wraps
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
+
+def retry(tries=3, delay=5, backoff=2):
+    """
+    A decorator for retrying a function or method if it fails.
+    """
+    def deco_retry(f):
+        @wraps(f)
+        def f_retry(*args, **kwargs):
+            mtries, mdelay = tries, delay
+            while mtries > 1:
+                try:
+                    return f(*args, **kwargs)
+                except Exception as e:
+                    msg = f"'{f.__name__}' failed with exception: {e}. Retrying in {mdelay} seconds..."
+                    logger.log(msg, level=LogLevel.WARNING)
+                    time.sleep(mdelay)
+                    mtries -= 1
+                    mdelay *= backoff
+            return f(*args, **kwargs)
+        return f_retry
+    return deco_retry
 
 class ElevenLabsAPI:
     def __init__(self, api_key=None):
@@ -25,10 +48,10 @@ class ElevenLabsAPI:
             return response, "connected"
         except requests.exceptions.HTTPError as e:
             logger.log(f"API request to {endpoint} failed with status {e.response.status_code}: {e.response.text}", level=LogLevel.ERROR)
-            return e.response, "error"
+            raise e
         except requests.exceptions.RequestException as e:
             logger.log(f"API request to {endpoint} failed: {e}", level=LogLevel.ERROR)
-            return None, "error"
+            raise e
 
     def check_connection(self):
         logger.log("Checking ElevenLabs API connection...", level=LogLevel.INFO)
@@ -39,6 +62,7 @@ class ElevenLabsAPI:
             logger.log("ElevenLabs API connection failed.", level=LogLevel.ERROR)
         return status
 
+    @retry(tries=3, delay=5, backoff=2)
     def get_balance(self):
         logger.log("Requesting ElevenLabs account balance...", level=LogLevel.INFO)
         data, status = self._make_request("get", "balance")
