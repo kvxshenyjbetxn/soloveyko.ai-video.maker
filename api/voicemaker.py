@@ -105,7 +105,7 @@ class VoicemakerAPI:
         return chunks
 
     def _generate_chunk(self, text, voice_id, language_code):
-        """Internal method to generate audio for a single chunk."""
+        """Internal method to generate audio for a single chunk with retries."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -124,30 +124,47 @@ class VoicemakerAPI:
             "MasterPitch": "0"
         }
 
-        try:
-            response = requests.post(self.base_url, headers=headers, json=payload)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("success"):
-                    audio_url = data.get("path")
-                    if audio_url:
-                        audio_response = requests.get(audio_url)
-                        if audio_response.status_code == 200:
-                             return audio_response.content, None
-                        else:
-                             return None, f"Download failed: {audio_response.status_code}"
-                    else:
-                        return None, "No audio path in response"
-                else:
-                    return None, f"API error: {data.get('message')}"
-            elif response.status_code == 401:
-                return None, "Unauthorized"
-            else:
-                return None, f"HTTP error: {response.status_code}"
+        retries = 3
+        retry_delay = 5 # seconds
+        timeout = 300 # 5 minutes
 
-        except requests.exceptions.RequestException as e:
-            return None, str(e)
+        for attempt in range(retries):
+            try:
+                # First request to get the audio URL
+                response = requests.post(self.base_url, headers=headers, json=payload, timeout=timeout)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("success"):
+                        audio_url = data.get("path")
+                        if audio_url:
+                            # Second request to download the audio file
+                            audio_response = requests.get(audio_url, timeout=timeout)
+                            if audio_response.status_code == 200:
+                                return audio_response.content, None # Success
+                            else:
+                                error_message = f"Download failed with status {audio_response.status_code}"
+                                logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
+                        else:
+                            error_message = "No audio path in API response"
+                            logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
+                    else:
+                        error_message = f"API error: {data.get('message', 'Unknown error')}"
+                        logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
+                else:
+                    error_message = f"HTTP error: {response.status_code}"
+                    logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
+            
+            except requests.exceptions.RequestException as e:
+                error_message = str(e)
+                logger.log(f"Voicemaker chunk request failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
+
+            # If not the last attempt, wait before retrying
+            if attempt < retries - 1:
+                logger.log(f"Retrying in {retry_delay} seconds...", level=LogLevel.INFO)
+                time.sleep(retry_delay)
+
+        return None, f"Failed after {retries} attempts: {error_message}"
 
     def generate_audio(self, text, voice_id, language_code="en-US", temp_dir=None):
         if not self.api_key:
