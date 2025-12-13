@@ -71,6 +71,7 @@
     "browse_button": "Огляд...",
     "select_directory": "Виберіть папку",
     "image_review_label": "Контроль зображень:",
+    "detailed_logging_label": "Детальне логування:",
     "queue_tab": "Черга",
     "add_to_queue": "Додати до черги",
     "enter_task_name_title": "Введіть назву завдання",

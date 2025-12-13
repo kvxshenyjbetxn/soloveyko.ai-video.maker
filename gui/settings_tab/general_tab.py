@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLab
 from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
+from utils.logger import logger
 
 class GeneralTab(QWidget):
     def __init__(self, main_window=None):
@@ -61,6 +62,12 @@ class GeneralTab(QWidget):
         path_layout.addWidget(self.browse_button)
         form_layout.addRow(self.results_path_label, path_layout)
 
+        # Detailed logging checkbox
+        self.detailed_logging_label = QLabel()
+        self.detailed_logging_checkbox = QCheckBox()
+        self.detailed_logging_checkbox.stateChanged.connect(self.detailed_logging_changed)
+        form_layout.addRow(self.detailed_logging_label, self.detailed_logging_checkbox)
+
         # --- Review Group ---
         self.review_group = QGroupBox()
         self.review_layout = QFormLayout(self.review_group)
@@ -90,6 +97,7 @@ class GeneralTab(QWidget):
         self.image_provider_combo.blockSignals(True)
         self.translation_review_checkbox.blockSignals(True)
         self.image_review_checkbox.blockSignals(True)
+        self.detailed_logging_checkbox.blockSignals(True)
 
         lang_map = {"uk": 0, "en": 1, "ru": 2}
         current_lang = settings_manager.get('language')
@@ -104,6 +112,7 @@ class GeneralTab(QWidget):
         self.results_path_edit.setText(settings_manager.get('results_path'))
         self.translation_review_checkbox.setChecked(settings_manager.get('translation_review_enabled', False))
         self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
+        self.detailed_logging_checkbox.setChecked(settings_manager.get('detailed_logging_enabled', False))
 
         # Unblock signals
         self.language_combo.blockSignals(False)
@@ -111,6 +120,7 @@ class GeneralTab(QWidget):
         self.image_provider_combo.blockSignals(False)
         self.translation_review_checkbox.blockSignals(False)
         self.image_review_checkbox.blockSignals(False)
+        self.detailed_logging_checkbox.blockSignals(False)
 
 
     def translation_review_changed(self, state):
@@ -118,6 +128,10 @@ class GeneralTab(QWidget):
 
     def image_review_changed(self, state):
         settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
+
+    def detailed_logging_changed(self, state):
+        settings_manager.set('detailed_logging_enabled', state == Qt.CheckState.Checked.value)
+        logger.reconfigure()
 
     def language_changed(self, index):
         lang_map = {0: "uk", 1: "en", 2: "ru"}
@@ -152,3 +166,4 @@ class GeneralTab(QWidget):
         self.review_group.setTitle(translator.translate('review_group_title'))
         self.translation_review_label.setText(translator.translate('translation_review_label'))
         self.image_review_label.setText(translator.translate('image_review_label'))
+        self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
