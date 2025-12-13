@@ -71,6 +71,7 @@
     "browse_button": "Обзор...",
     "select_directory": "Выберите папку",
     "image_review_label": "Контроль изображений:",
+    "detailed_logging_label": "Детальное логирование:",
     "queue_tab": "Очередь",
     "add_to_queue": "Добавить в очередь",
     "enter_task_name_title": "Введите название задачи",

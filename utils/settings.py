@@ -9,6 +9,7 @@ class SettingsManager:
             'theme': 'dark',
             'results_path': '',
             'image_review_enabled': False,
+            'detailed_logging_enabled': False,
             'voicemaker_api_key': '',
             'gemini_tts_api_key': '',
             'gemini_tts_url': 'https://gemini-tts-server-beta-production.up.railway.app',
