@@ -9,6 +9,8 @@ class SettingsManager:
             'theme': 'dark',
             'results_path': '',
             'image_review_enabled': False,
+            'image_prompt_count_check_enabled': False,
+            'image_prompt_count': 50,
             'detailed_logging_enabled': False,
             'voicemaker_api_key': '',
             'gemini_tts_api_key': '',

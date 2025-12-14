@@ -58,6 +58,12 @@ class PromptsTab(QWidget):
         self.temperature_spinbox.valueChanged.connect(self.save_settings)
         settings_form_layout.addRow(self.temperature_label, self.temperature_spinbox)
 
+        self.image_prompt_count_label = QLabel()
+        self.image_prompt_count_spinbox = QSpinBox()
+        self.image_prompt_count_spinbox.setRange(1, 1000)
+        self.image_prompt_count_spinbox.valueChanged.connect(self.save_settings)
+        settings_form_layout.addRow(self.image_prompt_count_label, self.image_prompt_count_spinbox)
+
         self.img_group_layout.addWidget(self.prompt_content_label)
         self.img_group_layout.addWidget(self.prompt_edit)
         self.img_group_layout.addLayout(settings_form_layout)
@@ -69,7 +75,6 @@ class PromptsTab(QWidget):
         self.custom_stages_label = QLabel(translator.translate("custom_stages_label"))
         self.custom_stages_label.setStyleSheet("font-size: 16px; font-weight: bold; margin-top: 20px;")
         self.content_layout.addWidget(self.custom_stages_label)
-
         self.stages_container = QVBoxLayout()
         self.content_layout.addLayout(self.stages_container)
 
@@ -170,6 +175,7 @@ class PromptsTab(QWidget):
         self.model_combo.blockSignals(True)
         self.tokens_spinbox.blockSignals(True)
         self.temperature_spinbox.blockSignals(True)
+        self.image_prompt_count_spinbox.blockSignals(True)
 
         self.prompt_edit.setPlainText(config.get("prompt", ""))
         self.load_models()
@@ -178,11 +184,15 @@ class PromptsTab(QWidget):
         self.model_combo.setCurrentIndex(index if index >= 0 else 0)
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
         self.temperature_spinbox.setValue(config.get("temperature", 0.7))
+        self.image_prompt_count_spinbox.setValue(self.settings.get('image_prompt_count', 50))
+
 
         self.prompt_edit.blockSignals(False)
         self.model_combo.blockSignals(False)
         self.tokens_spinbox.blockSignals(False)
         self.temperature_spinbox.blockSignals(False)
+        self.image_prompt_count_spinbox.blockSignals(False)
+
 
         # Custom Stages
         # Clear existing
@@ -211,6 +221,8 @@ class PromptsTab(QWidget):
             "temperature": self.temperature_spinbox.value()
         }
         self.settings.set("image_prompt_settings", config)
+        self.settings.set('image_prompt_count', self.image_prompt_count_spinbox.value())
+
 
     def save_custom_stages(self):
         stages_data = []
@@ -236,5 +248,6 @@ class PromptsTab(QWidget):
         self.prompt_content_label.setText(translator.translate("prompt_content_label"))
         self.model_label.setText(translator.translate("image_model_label"))
         self.tokens_label.setText(translator.translate("tokens_label"))
+        self.image_prompt_count_label.setText(translator.translate("image_prompt_count_label"))
         self.custom_stages_label.setText(translator.translate("custom_stages_label") if translator.translate("custom_stages_label") != "custom_stages_label" else "Custom Stages")
         self.add_stage_btn.setText(translator.translate("add_stage_btn") if translator.translate("add_stage_btn") != "add_stage_btn" else "Add Custom Stage")
