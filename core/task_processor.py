@@ -7,7 +7,7 @@ import traceback
 import threading
 import shutil
 import collections
-from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt, Slot
+from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt, Slot, QMutex
 
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager
@@ -264,8 +264,13 @@ class CustomStageWorker(BaseWorker):
             raise Exception("Empty or invalid response from API.")
 
 
+# Global lock for image API throttling
+image_api_lock = QMutex()
+last_image_request_time = 0
+
 class ImageGenerationWorker(BaseWorker):
     def do_work(self):
+        global last_image_request_time
         statistics_manager.record_event('image_generation_stage')
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
@@ -302,6 +307,7 @@ class ImageGenerationWorker(BaseWorker):
         
         def generate_single_image(index, prompt):
             """Generate a single image and return its data"""
+            global last_image_request_time
             
             is_googler = provider == 'googler' and googler_semaphore is not None
             
@@ -309,8 +315,22 @@ class ImageGenerationWorker(BaseWorker):
                 if is_googler:
                     googler_semaphore.acquire()
 
+                # Global throttling to ensure requests are spaced out across ALL tasks
+                image_api_lock.lock()
+                try:
+                    current_time = time.time()
+                    elapsed = current_time - last_image_request_time
+                    delay_needed = 0.5 # 0.5s safety interval (adjustable) - User asked for ~0.1-1.0s, safe middle ground
+                    
+                    if elapsed < delay_needed:
+                        time.sleep(delay_needed - elapsed)
+                    
+                    last_image_request_time = time.time()
+                finally:
+                    image_api_lock.unlock()
+
                 logger.log(f"[{self.task_id}] [{service_name}] Generating image {index + 1}/{len(prompts)}", level=LogLevel.INFO)
-                
+
                 image_data = api.generate_image(prompt, **api_kwargs)
                 if not image_data:
                     logger.log(f"[{self.task_id}] [{service_name}] Failed to generate image {index + 1}/{len(prompts)} (no data)", level=LogLevel.WARNING)
@@ -353,6 +373,9 @@ class ImageGenerationWorker(BaseWorker):
                         generated_paths[index] = image_path
                         # Emit signal for gallery update as soon as one image is ready
                         self.signals.status_changed.emit(self.task_id, image_path, prompt)
+                        
+                        # Throttle slightly to prevent flooding the UI thread if many images finish instantly
+                        time.sleep(0.05)
                     except IOError as e:
                         logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index + 1} to {image_path}: {e}", level=LogLevel.ERROR)
 
