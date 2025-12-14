@@ -73,6 +73,7 @@ def main():
     sys.excepthook = handle_exception
 
     app = QApplication(sys.argv)
+    app.setStyle("fusion")
     
     # Define extra arguments for the stylesheet
     extra = {'font_family': 'RobotoCondensed'}
