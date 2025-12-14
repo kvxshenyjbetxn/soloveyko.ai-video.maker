@@ -94,9 +94,9 @@ class GalleryTab(QWidget):
 
         top_bar_layout = QHBoxLayout()
         
-        self.load_demo_button = QPushButton()
-        self.load_demo_button.clicked.connect(self.load_demo_media)
-        top_bar_layout.addWidget(self.load_demo_button)
+        #self.load_demo_button = QPushButton()
+        #self.load_demo_button.clicked.connect(self.load_demo_media)
+        #top_bar_layout.addWidget(self.load_demo_button)
 
         top_bar_layout.addStretch()
 
@@ -281,7 +281,7 @@ class GalleryTab(QWidget):
 
     def retranslate_ui(self):
         self.update_total_media_count()
-        self.load_demo_button.setText(translator.translate("load_demo_button"))
+        #self.load_demo_button.setText(translator.translate("load_demo_button"))
         self.continue_button.setText(translator.translate("continue_montage_button"))
         for group in self.task_groups.values():
             group.translate_ui()
