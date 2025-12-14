@@ -2,11 +2,11 @@
     AMOLED Black Theme (Custom)
 -->
 <resources>
-    <color name="primaryColor">#2979ff</color>
-    <color name="primaryLightColor">#484848</color>
+    <color name="primaryColor">#448aff</color>
+    <color name="primaryLightColor">#83b9ff</color>
     <color name="secondaryColor">#000000</color>
-    <color name="secondaryLightColor">#1c1c1c</color>
+    <color name="secondaryLightColor">#1a1a1a</color>
     <color name="secondaryDarkColor">#000000</color>
     <color name="primaryTextColor">#ffffff</color>
-    <color name="secondaryTextColor">#a0a0a0</color>
+    <color name="secondaryTextColor">#b0b0b0</color>
 </resources>

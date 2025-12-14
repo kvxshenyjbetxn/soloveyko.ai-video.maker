@@ -214,7 +214,7 @@ class StageSelectionWidget(QWidget):
             QToolButton#toggleAllButton {{
                 color: {primary_color};
                 border: 1px solid {primary_color};
-                border-radius: 12px;
+                border-radius: 8px;
                 padding: 0 8px;
                 background-color: transparent;
             }}

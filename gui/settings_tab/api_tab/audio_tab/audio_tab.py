@@ -13,6 +13,7 @@ class AudioTab(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.tab_widget = QTabWidget()
         
         self.elevenlabs_tab = ElevenLabsTab(self.main_window)
