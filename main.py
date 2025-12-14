@@ -71,6 +71,16 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 def main():
     # --- Set up global exception handler ---
     sys.excepthook = handle_exception
+    
+    # Try to enable faulthandler if available to catch segfaults
+    try:
+        import faulthandler
+        faulthandler.enable(file=open("crash_faulthandler.log", "w"), all_threads=True)
+    except:
+        pass
+
+    from utils.logger import logger, LogLevel
+    logger.log("Application starting...", level=LogLevel.INFO)
 
     app = QApplication(sys.argv)
     app.setStyle("fusion")

@@ -6,6 +6,7 @@ import json
 import traceback
 import threading
 import shutil
+import collections
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt, Slot
 
 from utils.logger import logger, LogLevel
@@ -521,6 +522,12 @@ class TaskProcessor(QObject):
         self.queue_manager = queue_manager
         self.settings = settings_manager
         self.threadpool = QThreadPool()
+        # Limit global threads to prevent resource exhaustion (e.g., sockets, file handles)
+        # 35 concurrent tasks might be too much for the system or API limits logic not handled elsewhere.
+        max_threads = min(os.cpu_count() * 2, 16) 
+        self.threadpool.setMaxThreadCount(max_threads)
+        logger.log(f"Thread Pool initialized with max count: {self.threadpool.maxThreadCount()}", level=LogLevel.INFO)
+        
         self.timer = QElapsedTimer()
         self.voicemaker_voices = self._load_voicemaker_voices()
         
@@ -546,6 +553,11 @@ class TaskProcessor(QObject):
         
         max_video = googler_settings.get("max_video_threads", 1)
         self.video_semaphore = QSemaphore(max_video)
+        
+        # Queues for preventing thread starvation
+        self.pending_subtitles = collections.deque()
+        self.pending_montages = collections.deque()
+        
         logger.log(f"Task Processor initialized. Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}, Video concurrency: {max_video}", level=LogLevel.INFO)
 
     def _load_voicemaker_voices(self):
@@ -1030,53 +1042,57 @@ class TaskProcessor(QObject):
             self._increment_subtitle_counter()
 
     def _start_subtitles(self, task_id):
-        worker = self._create_subtitle_runnable(task_id)
-        self.threadpool.start(worker)
+        self.pending_subtitles.append(task_id)
+        self._process_subtitle_queue()
 
-    def _create_subtitle_runnable(self, task_id):
-        class SemaphoreRunnable(QRunnable):
-            def __init__(self, processor, task_id):
-                super().__init__()
-                self.processor = processor
-                self.task_id = task_id
-
-            def _start_the_work(self):
-                try:
-                    state = self.processor.task_states[self.task_id]
-                    sub_settings = self.processor.settings.get('subtitles', {})
-                    whisper_type = sub_settings.get('whisper_type', 'amd')
-                    model_name = sub_settings.get('whisper_model', 'base.bin')
-                    
-                    whisper_exe = None; whisper_model_path = model_name
-                    if whisper_type == 'amd':
-                        current_dir = os.path.dirname(os.path.abspath(__file__))
-                        whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
-                        whisper_exe = os.path.join(whisper_base_path, "main.exe")
-                        whisper_model_path = os.path.join(whisper_base_path, model_name)
-                    
-                    config = {
-                        'audio_path': state.audio_path, 'dir_path': state.dir_path,
-                        'sub_settings': sub_settings, 'lang_code': state.lang_id.split('-')[0].lower(),
-                        'whisper_exe': whisper_exe, 'whisper_model_path': whisper_model_path
-                    }
-                    self.processor._start_worker(SubtitleWorker, self.task_id, 'stage_subtitles', config,
-                                                 self.processor._on_subtitles_finished, self.processor._on_subtitles_error)
-                except Exception as e:
-                    self.processor._on_subtitles_error(self.task_id, f"Failed to start subtitle worker: {e}")
-
-            def run(self):
-                sub_settings = self.processor.settings.get('subtitles', {})
-                whisper_type = sub_settings.get('whisper_type', 'amd')
-                
-                if whisper_type == 'assemblyai':
-                    # No semaphore for AssemblyAI, run directly
-                    self._start_the_work()
+    def _process_subtitle_queue(self):
+        sub_settings = self.settings.get('subtitles', {})
+        whisper_type = sub_settings.get('whisper_type', 'amd')
+        
+        # AssemblyAI doesn't need semaphore in this logic (handled by API limits potentially, but treated as unblocked here?)
+        # Current logic: "if whisper_type == 'assemblyai': ... run directly"
+        # We'll treat AssemblyAI as infinite concurrency or separate logic?
+        # The original code: "if whisper_type == 'assemblyai': self._start_the_work()" (no acquire)
+        
+        while self.pending_subtitles:
+            # check what the NEXT task needs
+            # But we can't easily peek and check config without popping or complex logic.
+            # Simplified: If queue has items, try to run them.
+            
+            # Since whisper_type is global setting (likely), we assume it applies to all.
+            if whisper_type == 'assemblyai':
+                task_id = self.pending_subtitles.popleft()
+                self._launch_subtitle_worker(task_id)
+            else:
+                if self.subtitle_semaphore.tryAcquire():
+                    task_id = self.pending_subtitles.popleft()
+                    self._launch_subtitle_worker(task_id)
                 else:
-                    # Use semaphore for local models
-                    self.processor.subtitle_semaphore.acquire()
-                    self._start_the_work()
+                    break
 
-        return SemaphoreRunnable(self, task_id)
+    def _launch_subtitle_worker(self, task_id):
+        try:
+            state = self.task_states[task_id]
+            sub_settings = self.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            model_name = sub_settings.get('whisper_model', 'base.bin')
+            
+            whisper_exe = None; whisper_model_path = model_name
+            if whisper_type == 'amd':
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+                whisper_exe = os.path.join(whisper_base_path, "main.exe")
+                whisper_model_path = os.path.join(whisper_base_path, model_name)
+            
+            config = {
+                'audio_path': state.audio_path, 'dir_path': state.dir_path,
+                'sub_settings': sub_settings, 'lang_code': state.lang_id.split('-')[0].lower(),
+                'whisper_exe': whisper_exe, 'whisper_model_path': whisper_model_path
+            }
+            self._start_worker(SubtitleWorker, task_id, 'stage_subtitles', config,
+                                         self._on_subtitles_finished, self._on_subtitles_error)
+        except Exception as e:
+            self._on_subtitles_error(task_id, f"Failed to start subtitle worker: {e}")
         
     @Slot(str, object)
     def _on_subtitles_finished(self, task_id, subtitle_path):
@@ -1084,6 +1100,7 @@ class TaskProcessor(QObject):
         whisper_type = sub_settings.get('whisper_type', 'amd')
         if whisper_type != 'assemblyai':
             self.subtitle_semaphore.release()
+            self._process_subtitle_queue()
             
         self.task_states[task_id].subtitle_path = subtitle_path
         self._set_stage_status(task_id, 'stage_subtitles', 'success')
@@ -1095,6 +1112,7 @@ class TaskProcessor(QObject):
         whisper_type = sub_settings.get('whisper_type', 'amd')
         if whisper_type != 'assemblyai':
             self.subtitle_semaphore.release()
+            self._process_subtitle_queue()
 
         self._set_stage_status(task_id, 'stage_subtitles', 'error', error)
         self._increment_subtitle_counter()
@@ -1312,56 +1330,59 @@ class TaskProcessor(QObject):
                 self._start_montage(task_id)
 
     def _start_montage(self, task_id):
-        class MontageRunnable(QRunnable):
-            def __init__(self, processor, task_id):
-                super().__init__()
-                self.processor = processor
-                self.task_id = task_id
-            def run(self):
-                self.processor.montage_semaphore.acquire()
-                try:
-                    state = self.processor.task_states[self.task_id]
-                    
-                    # Set status to 'processing' only after semaphore is acquired
-                    self.processor.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
-                    state.status['stage_montage'] = 'processing'
-                    
-                    # Use the authoritative list of paths from the state, which may include videos
-                    final_image_paths = state.image_paths
-                        
-                    if not final_image_paths:
-                        self.processor._on_montage_error(self.task_id, "No visual files found for montage.")
-                        return
-                    
-                    safe_task_name = "".join(c for c in state.job_name if c.isalnum() or c in (' ', '_')).strip()
-                    safe_lang_name = "".join(c for c in state.lang_name if c.isalnum() or c in (' ', '_')).strip()
-                    output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
-                    output_path = os.path.join(state.dir_path, output_filename)
-                    
-                    montage_settings = self.processor.settings.get("montage", {}).copy()
-                    if getattr(state, 'fallback_to_quick_show', False):
-                        logger.log(f"[{self.task_id}] Fallback to 'Quick Show' mode for montage.", level=LogLevel.WARNING)
-                        montage_settings['special_processing_mode'] = "Quick show"
-                        
-                    config = {
-                        'visual_files': final_image_paths, 'audio_path': state.audio_path,
-                        'output_path': output_path, 'ass_path': state.subtitle_path,
-                        'settings': montage_settings
-                    }
-                    worker = MontageWorker(self.task_id, config)
-                    worker.signals.finished.connect(self.processor._on_montage_finished)
-                    worker.signals.error.connect(self.processor._on_montage_error)
-                    worker.signals.progress_log.connect(self.processor._on_montage_progress)
-                    self.processor.threadpool.start(worker)
-                except Exception as e:
-                    self.processor._on_montage_error(self.task_id, f"Failed to start montage worker: {e}")
+        self.pending_montages.append(task_id)
+        self._process_montage_queue()
 
-        self.threadpool.start(MontageRunnable(self, task_id))
+    def _process_montage_queue(self):
+        while self.pending_montages:
+            if self.montage_semaphore.tryAcquire():
+                task_id = self.pending_montages.popleft()
+                self._launch_montage_worker(task_id)
+            else:
+                break
+    
+    def _launch_montage_worker(self, task_id):
+        try:
+            state = self.task_states[task_id]
+            
+            # Set status to 'processing'
+            self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
+            state.status['stage_montage'] = 'processing'
+            
+            final_image_paths = state.image_paths
+                
+            if not final_image_paths:
+                self._on_montage_error(task_id, "No visual files found for montage.")
+                return
+            
+            safe_task_name = "".join(c for c in state.job_name if c.isalnum() or c in (' ', '_')).strip()
+            safe_lang_name = "".join(c for c in state.lang_name if c.isalnum() or c in (' ', '_')).strip()
+            output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
+            output_path = os.path.join(state.dir_path, output_filename)
+            
+            montage_settings = self.settings.get("montage", {}).copy()
+            if getattr(state, 'fallback_to_quick_show', False):
+                logger.log(f"[{task_id}] Fallback to 'Quick Show' mode for montage.", level=LogLevel.WARNING)
+                montage_settings['special_processing_mode'] = "Quick show"
+                
+            config = {
+                'visual_files': final_image_paths, 'audio_path': state.audio_path,
+                'output_path': output_path, 'ass_path': state.subtitle_path,
+                'settings': montage_settings
+            }
+            worker = MontageWorker(task_id, config)
+            worker.signals.finished.connect(self._on_montage_finished)
+            worker.signals.error.connect(self._on_montage_error)
+            worker.signals.progress_log.connect(self._on_montage_progress)
+            self.threadpool.start(worker)
+        except Exception as e:
+            self._on_montage_error(task_id, f"Failed to start montage worker: {e}")
 
 
     @Slot(str, object)
     def _on_montage_finished(self, task_id, video_path):
         self.montage_semaphore.release()
+        self._process_montage_queue()
         self.task_states[task_id].final_video_path = video_path
         self._set_stage_status(task_id, 'stage_montage', 'success')
         
@@ -1378,6 +1399,7 @@ class TaskProcessor(QObject):
     @Slot(str, str)
     def _on_montage_error(self, task_id, error):
         self.montage_semaphore.release()
+        self._process_montage_queue()
         self._set_stage_status(task_id, 'stage_montage', 'error', error)
     
     @Slot(str, str)

@@ -249,6 +249,7 @@ class MontageEngine:
             
             process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                stdin=subprocess.DEVNULL, # fix for potential handle inheritance blocking or COM issues
                 text=True, encoding='utf-8', errors='replace', startupinfo=startupinfo
             )
 
