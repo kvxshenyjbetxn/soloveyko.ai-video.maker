@@ -3,8 +3,11 @@ import os
 from datetime import datetime
 import shutil
 
+import threading
+
 class StatisticsManager:
     def __init__(self, db_name='statistics.db'):
+        self.lock = threading.Lock()
         # Get the directory of the current script
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         # Define the path to the database in the assets folder
@@ -89,22 +92,25 @@ class StatisticsManager:
     def record_event(self, event_type, timestamp=None):
         if timestamp is None:
             timestamp = datetime.now()
-        # The 'timeout' parameter is important for multi-threaded access.
-        # It will make the connection wait for the specified amount of time if the database is locked.
-        with sqlite3.connect(self.db_path, timeout=10) as conn:
-            cursor = conn.cursor()
-            
-            # Use "INSERT OR IGNORE" to atomically create the event type if it doesn't exist.
-            # This is crucial to prevent race conditions in a multi-threaded environment.
-            cursor.execute("INSERT OR IGNORE INTO event_types (name) VALUES (?)", (event_type,))
-            
-            # Now, we are guaranteed that the event type exists. Fetch its ID.
-            cursor.execute("SELECT id FROM event_types WHERE name = ?", (event_type,))
-            event_type_id = cursor.fetchone()[0]
-            
-            # Record the actual event.
-            cursor.execute("INSERT INTO events (event_type_id, timestamp) VALUES (?, ?)", (event_type_id, timestamp))
-            # The 'with' statement automatically handles committing the transaction.
+        
+        # Use a thread lock to prevent race conditions at the Python level
+        with self.lock:
+            # The 'timeout' parameter is important for multi-threaded access.
+            # It will make the connection wait for the specified amount of time if the database is locked.
+            with sqlite3.connect(self.db_path, timeout=30) as conn:
+                cursor = conn.cursor()
+                
+                # Use "INSERT OR IGNORE" to atomically create the event type if it doesn't exist.
+                cursor.execute("INSERT OR IGNORE INTO event_types (name) VALUES (?)", (event_type,))
+                
+                # Now, we are guaranteed that the event type exists. Fetch its ID.
+                cursor.execute("SELECT id FROM event_types WHERE name = ?", (event_type,))
+                row = cursor.fetchone()
+                if row:
+                    event_type_id = row[0]
+                    # Record the actual event.
+                    cursor.execute("INSERT INTO events (event_type_id, timestamp) VALUES (?, ?)", (event_type_id, timestamp))
+                # The 'with' statement automatically handles committing the transaction.
 
     def get_statistics(self, period='all_time'):
         with sqlite3.connect(self.db_path) as conn:

@@ -51,3 +51,4 @@ telegram_bot/bot.py
 telegram_bot/requirements.txt
 logs/
 crash.log
+crash_faulthandler.log
