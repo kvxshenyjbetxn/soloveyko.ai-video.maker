@@ -265,7 +265,7 @@ class CustomStageWorker(BaseWorker):
 
 
 # Global lock for image API throttling
-image_api_lock = QMutex()
+image_api_lock = threading.Lock()
 last_image_request_time = 0
 
 class ImageGenerationWorker(BaseWorker):
@@ -316,18 +316,15 @@ class ImageGenerationWorker(BaseWorker):
                     googler_semaphore.acquire()
 
                 # Global throttling to ensure requests are spaced out across ALL tasks
-                image_api_lock.lock()
-                try:
+                with image_api_lock:
                     current_time = time.time()
                     elapsed = current_time - last_image_request_time
-                    delay_needed = 0.5 # 0.5s safety interval (adjustable) - User asked for ~0.1-1.0s, safe middle ground
+                    delay_needed = 0.5 
                     
                     if elapsed < delay_needed:
                         time.sleep(delay_needed - elapsed)
                     
                     last_image_request_time = time.time()
-                finally:
-                    image_api_lock.unlock()
 
                 logger.log(f"[{self.task_id}] [{service_name}] Generating image {index + 1}/{len(prompts)}", level=LogLevel.INFO)
 
