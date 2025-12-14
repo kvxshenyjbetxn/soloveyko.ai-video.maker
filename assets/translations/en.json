@@ -85,14 +85,14 @@
     "tokens_label": "Max tokens:",
     "start_processing": "Start Processing",
     "processing_complete_title": "Processing Complete",
-    "processing_complete_message": "Queue processing has finished.\n\nTotal time: {}",
+    "processing_complete_message": "Queue processing has finished.\n\nTotal time: {}\n",
     "delete_task": "Delete Task",
     "delete_language": "Delete Language",
     "delete_stage": "Delete Stage",
     "delete_language_formatted": "Delete language \"{}\"",
     "delete_stage_formatted": "Delete stage \"{}\"",
     "confirm_deletion_title": "Confirm Deletion",
-    "confirm_task_deletion_message": "Are you sure you want to delete task \"{}\"?",
+    "confirm_task_deletion_message": "Are you sure you want to delete task \"{}\"",
     "confirm_language_deletion_message": "Are you sure you want to delete language \"{}\" from task \"{}\"",
     "confirm_stage_deletion_message": "Are you sure you want to delete stage \"{}\" for language \"{}\" from task \"{}\"",
     "prompt_content_label": "Prompt for image generation:",
@@ -259,6 +259,8 @@
     "accent_color_label": "Accent Color:",
     "pick_accent_color": "Pick Accent Color",
     "controls_group_title": "Control",
-    "image_prompt_count_check_label": "Image Prompt Count Control",
-    "image_prompt_count_label": "Number of prompts:"
+    "prompt_count_control_label": "Prompt Count Control:",
+    "prompt_count_label": "Prompt Count:",
+    "prompt_editor_title": "Prompt Editor",
+    "open_editor_button": "Editor"
 }

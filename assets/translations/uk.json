@@ -259,6 +259,8 @@
     "accent_color_label": "Колір акценту:",
     "pick_accent_color": "Виберіть колір акценту",
     "controls_group_title": "Контроль",
-    "image_prompt_count_check_label": "Контроль кількості промтів",
-    "image_prompt_count_label": "Кількість промтів:"
+    "prompt_count_control_label": "Контроль кількості промтів:",
+    "prompt_count_label": "Кількість промтів:",
+    "prompt_editor_title": "Редактор промту",
+    "open_editor_button": "Редактор"
 }

@@ -25,7 +25,7 @@ class SettingsTab(QWidget):
         self.general_tab = GeneralTab(self.main_window)
         self.api_tab = ApiTab(main_window=self.main_window)
         self.languages_tab = LanguagesTab()
-        self.prompts_tab = PromptsTab()
+        self.prompts_tab = PromptsTab(main_window=self.main_window)
         self.montage_tab = MontageTab()
         self.subtitles_tab = SubtitlesTab()
         self.templates_tab = TemplatesTab()

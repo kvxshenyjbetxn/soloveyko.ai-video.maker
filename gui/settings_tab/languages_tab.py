@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
 from api.elevenlabs import ElevenLabsAPI
+from gui.widgets.prompt_editor_dialog import PromptEditorDialog
 
 class LanguagesTab(QWidget):
     def __init__(self):
@@ -86,8 +87,19 @@ class LanguagesTab(QWidget):
 
         self.prompt_label = QLabel()
         self.prompt_edit = QTextEdit()
+        self.prompt_edit.setMinimumHeight(150)
         self.prompt_edit.textChanged.connect(self.save_current_language_settings)
         
+        self.open_editor_button = QPushButton(translator.translate("open_editor_button", "Open Fullscreen Editor"))
+        self.open_editor_button.clicked.connect(self.open_prompt_editor)
+
+        prompt_layout = QHBoxLayout()
+        prompt_layout.addWidget(self.prompt_edit)
+        editor_button_layout = QVBoxLayout()
+        editor_button_layout.addWidget(self.open_editor_button)
+        editor_button_layout.addStretch()
+        prompt_layout.addLayout(editor_button_layout)
+
         settings_layout = QFormLayout()
         
         self.model_label = QLabel()
@@ -147,13 +159,18 @@ class LanguagesTab(QWidget):
 
 
         right_layout.addWidget(self.prompt_label)
-        right_layout.addWidget(self.prompt_edit)
+        right_layout.addLayout(prompt_layout)
         right_layout.addLayout(settings_layout)
         right_layout.addStretch()
 
         # Set initial state
         self.right_panel.setVisible(False)
         splitter.setSizes([200, 600])
+
+    def open_prompt_editor(self):
+        dialog = PromptEditorDialog(self, self.prompt_edit.toPlainText())
+        if dialog.exec():
+            self.prompt_edit.setPlainText(dialog.get_text())
 
     def load_languages(self):
         self.lang_list_widget.clear()

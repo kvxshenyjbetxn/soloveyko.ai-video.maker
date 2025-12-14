@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea, QPushButton, QLineEdit, QFileDialog, QHBoxLayout, QCheckBox, QGroupBox, QColorDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea, QPushButton, QLineEdit, QFileDialog, QHBoxLayout, QCheckBox, QGroupBox, QColorDialog, QSpinBox
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 from utils.translator import translator
@@ -95,11 +95,26 @@ class GeneralTab(QWidget):
         self.image_review_checkbox.stateChanged.connect(self.image_review_changed)
         self.controls_layout.addRow(self.image_review_label, self.image_review_checkbox)
         
-        # Image prompt count control checkbox
-        self.image_prompt_count_check_label = QLabel()
-        self.image_prompt_count_check_checkbox = QCheckBox()
-        self.image_prompt_count_check_checkbox.stateChanged.connect(self.image_prompt_count_check_changed)
-        self.controls_layout.addRow(self.image_prompt_count_check_label, self.image_prompt_count_check_checkbox)
+        # Prompt count control checkbox
+        self.prompt_count_control_label = QLabel()
+        self.prompt_count_control_checkbox = QCheckBox()
+        self.prompt_count_control_checkbox.stateChanged.connect(self.prompt_count_control_changed)
+        self.controls_layout.addRow(self.prompt_count_control_label, self.prompt_count_control_checkbox)
+        
+        # Prompt count spinbox
+        self.prompt_count_label = QLabel()
+        self.prompt_count_spinbox = QSpinBox()
+        self.prompt_count_spinbox.setRange(1, 100)
+        self.prompt_count_spinbox.valueChanged.connect(self.prompt_count_changed)
+        
+        self.prompt_count_widget = QWidget()
+        prompt_count_layout = QHBoxLayout(self.prompt_count_widget)
+        prompt_count_layout.setContentsMargins(0, 0, 0, 0)
+        prompt_count_layout.addWidget(self.prompt_count_label)
+        prompt_count_layout.addWidget(self.prompt_count_spinbox)
+        prompt_count_layout.addStretch()
+        
+        self.controls_layout.addRow(self.prompt_count_widget)
         
         form_layout.addRow(self.controls_group)
 
@@ -125,7 +140,8 @@ class GeneralTab(QWidget):
         self.translation_review_checkbox.blockSignals(True)
         self.image_review_checkbox.blockSignals(True)
         self.detailed_logging_checkbox.blockSignals(True)
-        self.image_prompt_count_check_checkbox.blockSignals(True)
+        self.prompt_count_control_checkbox.blockSignals(True)
+        self.prompt_count_spinbox.blockSignals(True)
 
         lang_map = {"uk": 0, "en": 1, "ru": 2}
         current_lang = settings_manager.get('language')
@@ -141,8 +157,11 @@ class GeneralTab(QWidget):
         self.translation_review_checkbox.setChecked(settings_manager.get('translation_review_enabled', False))
         self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
         self.detailed_logging_checkbox.setChecked(settings_manager.get('detailed_logging_enabled', False))
-        self.image_prompt_count_check_checkbox.setChecked(settings_manager.get('image_prompt_count_check_enabled', False))
-
+        
+        prompt_control_enabled = settings_manager.get('prompt_count_control_enabled', False)
+        self.prompt_count_control_checkbox.setChecked(prompt_control_enabled)
+        self.prompt_count_widget.setVisible(prompt_control_enabled)
+        self.prompt_count_spinbox.setValue(settings_manager.get('prompt_count', 10))
 
         self.update_style() # Set button color and border
 
@@ -153,7 +172,8 @@ class GeneralTab(QWidget):
         self.translation_review_checkbox.blockSignals(False)
         self.image_review_checkbox.blockSignals(False)
         self.detailed_logging_checkbox.blockSignals(False)
-        self.image_prompt_count_check_checkbox.blockSignals(False)
+        self.prompt_count_control_checkbox.blockSignals(False)
+        self.prompt_count_spinbox.blockSignals(False)
 
 
     def open_color_dialog(self):
@@ -173,8 +193,22 @@ class GeneralTab(QWidget):
     def image_review_changed(self, state):
         settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
 
-    def image_prompt_count_check_changed(self, state):
-        settings_manager.set('image_prompt_count_check_enabled', state == Qt.CheckState.Checked.value)
+    def prompt_count_control_changed(self, state):
+        is_checked = state == Qt.CheckState.Checked.value
+        settings_manager.set('prompt_count_control_enabled', is_checked)
+        self.prompt_count_widget.setVisible(is_checked)
+        # We might need to inform other tabs about this change.
+        # A signal from settings_manager or a direct call could work.
+        if self.main_window:
+            if hasattr(self.main_window, 'settings_tab') and hasattr(self.main_window.settings_tab, 'prompts_tab'):
+                self.main_window.settings_tab.prompts_tab.update_fields()
+
+
+    def prompt_count_changed(self, value):
+        settings_manager.set('prompt_count', value)
+        if self.main_window:
+            if hasattr(self.main_window, 'settings_tab') and hasattr(self.main_window.settings_tab, 'prompts_tab'):
+                self.main_window.settings_tab.prompts_tab.update_fields()
 
     def detailed_logging_changed(self, state):
         settings_manager.set('detailed_logging_enabled', state == Qt.CheckState.Checked.value)
@@ -215,4 +249,5 @@ class GeneralTab(QWidget):
         self.image_review_label.setText(translator.translate('image_review_label'))
         self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
         self.accent_color_label.setText(translator.translate('accent_color_label'))
-        self.image_prompt_count_check_label.setText(translator.translate('image_prompt_count_check_label'))
+        self.prompt_count_control_label.setText(translator.translate('prompt_count_control_label'))
+        self.prompt_count_label.setText(translator.translate('prompt_count_label'))
