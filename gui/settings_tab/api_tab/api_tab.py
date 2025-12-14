@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from PySide6.QtWidgets import QWidget, QVBoxLayout
+from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from utils.translator import translator
 
 from .openrouter_tab import OpenRouterTab
@@ -15,7 +16,7 @@ class ApiTab(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        self.tabs = QTabWidget()
+        self.tabs = AnimatedTabWidget()
         
         self.openrouter_tab = OpenRouterTab(main_window=self.main_window)
         self.audio_tab = AudioTab(main_window=self.main_window)

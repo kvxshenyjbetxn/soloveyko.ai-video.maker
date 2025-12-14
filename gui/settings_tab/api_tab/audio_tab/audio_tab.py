@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from PySide6.QtWidgets import QWidget, QVBoxLayout
+from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from utils.translator import translator
 from .elevenlabs_tab import ElevenLabsTab
 from .voicemaker_tab import VoicemakerTab
@@ -14,7 +15,7 @@ class AudioTab(QWidget):
     def init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self.tab_widget = QTabWidget()
+        self.tab_widget = AnimatedTabWidget()
         
         self.elevenlabs_tab = ElevenLabsTab(self.main_window)
         self.tab_widget.addTab(self.elevenlabs_tab, "ElevenLabs")

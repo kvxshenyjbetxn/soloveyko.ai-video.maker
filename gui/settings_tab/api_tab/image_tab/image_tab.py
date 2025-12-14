@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from PySide6.QtWidgets import QWidget, QVBoxLayout
+from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from utils.translator import translator
 from .pollinations_tab import PollinationsTab
 from .googler_tab import GooglerTab
@@ -23,7 +24,7 @@ class ImageTab(QWidget):
 
 
 
-        self.tabs = QTabWidget()
+        self.tabs = AnimatedTabWidget()
 
         main_layout.addWidget(self.tabs)
 

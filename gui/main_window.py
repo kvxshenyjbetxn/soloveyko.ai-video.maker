@@ -4,6 +4,7 @@ from datetime import datetime
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray, QTimer
 from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
+from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from gui.qt_material import apply_stylesheet
 
 from utils.settings import settings_manager
@@ -207,7 +208,7 @@ class MainWindow(QMainWindow):
         
         layout = QVBoxLayout(self.central_widget)
 
-        self.tabs = QTabWidget()
+        self.tabs = AnimatedTabWidget()
 
         # --- Subscription Status Corner Widget ---
         corner_widget = QWidget()

@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QTabWidget
+from PySide6.QtWidgets import QWidget, QVBoxLayout
+from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from utils.translator import translator
 
 from .general_tab import GeneralTab
@@ -19,7 +20,7 @@ class SettingsTab(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        self.tabs = QTabWidget()
+        self.tabs = AnimatedTabWidget()
 
         self.general_tab = GeneralTab(self.main_window)
         self.api_tab = ApiTab(main_window=self.main_window)
