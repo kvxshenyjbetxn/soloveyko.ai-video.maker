@@ -255,5 +255,7 @@
     "no_data_available": "Немає даних за вибраний період.",
     "subscription_expired_title": "Термін підписки закінчився",
     "subscription_expired_message": "Термін дії вашої підписки закінчився. Будь ласка, поновіть підписку, щоб продовжити користуватися додатком.",
-    "error_label": "Помилка"
+    "error_label": "Помилка",
+    "accent_color_label": "Колір акценту:",
+    "pick_accent_color": "Виберіть колір акценту"
 }

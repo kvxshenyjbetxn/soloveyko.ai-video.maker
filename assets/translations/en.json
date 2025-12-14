@@ -255,5 +255,7 @@
     "no_data_available": "No data available for the selected period.",
     "subscription_expired_title": "Subscription Expired",
     "subscription_expired_message": "Your subscription has expired. Please renew your subscription to continue using the application.",
-    "error_label": "Error"
+    "error_label": "Error",
+    "accent_color_label": "Accent Color:",
+    "pick_accent_color": "Pick Accent Color"
 }

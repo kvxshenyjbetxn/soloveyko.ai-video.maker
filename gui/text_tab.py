@@ -5,13 +5,23 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
     QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog, QGridLayout, QMessageBox, QStyle
 )
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QColor
 from PySide6.QtCore import Qt, QMimeData
 from utils.flow_layout import FlowLayout
 from functools import partial
 from utils.translator import translator
 from utils.settings import settings_manager
 from gui.file_dialog import FileDialog
+
+def get_text_color_for_background(bg_color_hex):
+    """Determines if black or white text is more readable on a given background color."""
+    try:
+        color = QColor(bg_color_hex)
+        # Using the perceived luminance formula
+        luminance = (0.299 * color.red() + 0.587 * color.green() + 0.114 * color.blue()) / 255
+        return "#000000" if luminance > 0.5 else "#ffffff"
+    except Exception:
+        return "#000000"
 
 class DroppableTextEdit(QTextEdit):
     def __init__(self, parent=None):
@@ -61,34 +71,10 @@ class StageSelectionWidget(QWidget):
         self.toggle_all_button.setObjectName("toggleAllButton")
         self.toggle_all_button.setCheckable(True)
         self.toggle_all_button.clicked.connect(self.toggle_all)
-
-        theme_colors = {
-            'light': {'primary': '#2979ff', 'text': '#3c3c3c'},
-            'dark':  {'primary': '#2979ff', 'text': '#000000'},
-            'black': {'primary': '#2979ff', 'text': '#ffffff'}
-        }
-        current_theme = self.parent_tab.settings.get('theme', 'dark')
-        primary_color = theme_colors.get(current_theme, {}).get('primary', '#2979ff')
-        text_color_on_primary = theme_colors.get(current_theme, {}).get('text', '#000000')
-
-
-        self.toggle_all_button.setStyleSheet(f"""
-            QToolButton#toggleAllButton {{
-                color: {primary_color};
-                border: 1px solid {primary_color};
-                border-radius: 12px;
-                padding: 0 8px;
-                background-color: transparent;
-            }}
-            QToolButton#toggleAllButton:hover {{
-                background-color: {primary_color}20; /* 20 is for alpha */
-            }}
-            QToolButton#toggleAllButton:checked, QToolButton#toggleAllButton:pressed {{
-                background-color: {primary_color};
-                color: {text_color_on_primary};
-            }}
-        """)
         self.toggle_all_button.setFixedHeight(25)
+
+        self.update_style()
+        
         layout.addWidget(self.toggle_all_button)
 
         line = QFrame()
@@ -219,6 +205,27 @@ class StageSelectionWidget(QWidget):
             self.toggle_all_button.setText(translator.translate("deselect_all"))
         else:
             self.toggle_all_button.setText(translator.translate("select_all"))
+
+    def update_style(self):
+        primary_color = self.parent_tab.settings.get('accent_color', '#3f51b5')
+        text_color_on_primary = get_text_color_for_background(primary_color)
+
+        self.toggle_all_button.setStyleSheet(f"""
+            QToolButton#toggleAllButton {{
+                color: {primary_color};
+                border: 1px solid {primary_color};
+                border-radius: 12px;
+                padding: 0 8px;
+                background-color: transparent;
+            }}
+            QToolButton#toggleAllButton:hover {{
+                background-color: {primary_color}20; /* 20 is for alpha */
+            }}
+            QToolButton#toggleAllButton:checked, QToolButton#toggleAllButton:pressed {{
+                background-color: {primary_color};
+                color: {text_color_on_primary};
+            }}
+        """)
 
     def get_selected_stages(self):
         return [key for key, checkbox in self.checkboxes.items() if checkbox.isChecked()]
@@ -524,13 +531,15 @@ class TextTab(QWidget):
 
     def retranslate_ui(self):
         self.update_char_count()
-        # self.update_balance() # This will be called from main_window
         self.load_languages_menu()
         self.add_to_queue_button.setText(translator.translate('add_to_queue'))
+        self.update_styles()
+        self.apply_text_color_to_text_edit()
 
+    def update_styles(self):
         for widget in self.stage_widgets.values():
-            widget.retranslate_ui()
-
+            if widget.isVisible():
+                widget.update_style()
         self.apply_text_color_to_text_edit()
 
 

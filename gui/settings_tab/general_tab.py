@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea, QPushButton, QLineEdit, QFileDialog, QHBoxLayout, QCheckBox, QGroupBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QComboBox, QLabel, QScrollArea, QPushButton, QLineEdit, QFileDialog, QHBoxLayout, QCheckBox, QGroupBox, QColorDialog
+from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
@@ -42,6 +43,15 @@ class GeneralTab(QWidget):
         self.theme_combo.addItem(translator.translate('black_theme'), 'black')
         self.theme_combo.currentIndexChanged.connect(self.theme_changed)
         form_layout.addRow(self.theme_label, self.theme_combo)
+
+        # Accent color selection
+        self.accent_color_label = QLabel()
+        self.accent_color_button = QPushButton()
+        self.accent_color_button.setFixedSize(100, 25)
+        self.accent_color_button.setFlat(True)
+        self.accent_color_button.setAutoFillBackground(True)
+        self.accent_color_button.clicked.connect(self.open_color_dialog)
+        form_layout.addRow(self.accent_color_label, self.accent_color_button)
 
         # Image generation provider selection
         self.image_provider_label = QLabel()
@@ -114,6 +124,11 @@ class GeneralTab(QWidget):
         self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
         self.detailed_logging_checkbox.setChecked(settings_manager.get('detailed_logging_enabled', False))
 
+        accent_color = settings_manager.get('accent_color', '#3f51b5') # Default to blue
+        palette = self.accent_color_button.palette()
+        palette.setColor(self.accent_color_button.backgroundRole(), QColor(accent_color))
+        self.accent_color_button.setPalette(palette)
+
         # Unblock signals
         self.language_combo.blockSignals(False)
         self.theme_combo.blockSignals(False)
@@ -122,6 +137,19 @@ class GeneralTab(QWidget):
         self.image_review_checkbox.blockSignals(False)
         self.detailed_logging_checkbox.blockSignals(False)
 
+    def open_color_dialog(self):
+        current_color = settings_manager.get('accent_color', '#3f51b5')
+        color = QColorDialog.getColor(QColor(current_color), self, translator.translate("pick_accent_color"))
+
+        if color.isValid():
+            color_hex = color.name()
+            if self.main_window:
+                self.main_window.change_accent_color(color_hex)
+            
+            # Update button preview
+            palette = self.accent_color_button.palette()
+            palette.setColor(self.accent_color_button.backgroundRole(), color)
+            self.accent_color_button.setPalette(palette)
 
     def translation_review_changed(self, state):
         settings_manager.set('translation_review_enabled', state == Qt.CheckState.Checked.value)
@@ -167,3 +195,4 @@ class GeneralTab(QWidget):
         self.translation_review_label.setText(translator.translate('translation_review_label'))
         self.image_review_label.setText(translator.translate('image_review_label'))
         self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
+        self.accent_color_label.setText(translator.translate('accent_color_label'))

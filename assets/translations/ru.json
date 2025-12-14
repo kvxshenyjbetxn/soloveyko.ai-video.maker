@@ -255,5 +255,7 @@
     "no_data_available": "Нет данных за выбранный период.",
     "subscription_expired_title": "Срок подписки истек",
     "subscription_expired_message": "Срок действия вашей подписки истек. Пожалуйста, продлите подписку, чтобы продолжить использование приложения.",
-    "error_label": "Ошибка"
+    "error_label": "Ошибка",
+    "accent_color_label": "Цвет акцента:",
+    "pick_accent_color": "Выберите цвет акцента"
 }
