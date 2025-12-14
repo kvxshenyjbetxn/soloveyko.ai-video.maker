@@ -257,5 +257,8 @@
     "subscription_expired_message": "Срок действия вашей подписки истек. Пожалуйста, продлите подписку, чтобы продолжить использование приложения.",
     "error_label": "Ошибка",
     "accent_color_label": "Цвет акцента:",
-    "pick_accent_color": "Выберите цвет акцента"
+    "pick_accent_color": "Выберите цвет акцента",
+    "controls_group_title": "Контроль",
+    "image_prompt_count_check_label": "Контроль количества промптов",
+    "image_prompt_count_label": "Количество промптов:"
 }

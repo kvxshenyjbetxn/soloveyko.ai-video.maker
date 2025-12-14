@@ -79,23 +79,29 @@ class GeneralTab(QWidget):
         self.detailed_logging_checkbox.stateChanged.connect(self.detailed_logging_changed)
         form_layout.addRow(self.detailed_logging_label, self.detailed_logging_checkbox)
 
-        # --- Review Group ---
-        self.review_group = QGroupBox()
-        self.review_layout = QFormLayout(self.review_group)
+        # --- Controls Group ---
+        self.controls_group = QGroupBox()
+        self.controls_layout = QFormLayout(self.controls_group)
 
         # Translation review checkbox
         self.translation_review_label = QLabel()
         self.translation_review_checkbox = QCheckBox()
         self.translation_review_checkbox.stateChanged.connect(self.translation_review_changed)
-        self.review_layout.addRow(self.translation_review_label, self.translation_review_checkbox)
+        self.controls_layout.addRow(self.translation_review_label, self.translation_review_checkbox)
 
         # Image review checkbox
         self.image_review_label = QLabel()
         self.image_review_checkbox = QCheckBox()
         self.image_review_checkbox.stateChanged.connect(self.image_review_changed)
-        self.review_layout.addRow(self.image_review_label, self.image_review_checkbox)
+        self.controls_layout.addRow(self.image_review_label, self.image_review_checkbox)
         
-        form_layout.addRow(self.review_group)
+        # Image prompt count control checkbox
+        self.image_prompt_count_check_label = QLabel()
+        self.image_prompt_count_check_checkbox = QCheckBox()
+        self.image_prompt_count_check_checkbox.stateChanged.connect(self.image_prompt_count_check_changed)
+        self.controls_layout.addRow(self.image_prompt_count_check_label, self.image_prompt_count_check_checkbox)
+        
+        form_layout.addRow(self.controls_group)
 
         content_layout.addLayout(form_layout)
         content_layout.addStretch()
@@ -119,6 +125,7 @@ class GeneralTab(QWidget):
         self.translation_review_checkbox.blockSignals(True)
         self.image_review_checkbox.blockSignals(True)
         self.detailed_logging_checkbox.blockSignals(True)
+        self.image_prompt_count_check_checkbox.blockSignals(True)
 
         lang_map = {"uk": 0, "en": 1, "ru": 2}
         current_lang = settings_manager.get('language')
@@ -134,6 +141,8 @@ class GeneralTab(QWidget):
         self.translation_review_checkbox.setChecked(settings_manager.get('translation_review_enabled', False))
         self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
         self.detailed_logging_checkbox.setChecked(settings_manager.get('detailed_logging_enabled', False))
+        self.image_prompt_count_check_checkbox.setChecked(settings_manager.get('image_prompt_count_check_enabled', False))
+
 
         self.update_style() # Set button color and border
 
@@ -144,6 +153,7 @@ class GeneralTab(QWidget):
         self.translation_review_checkbox.blockSignals(False)
         self.image_review_checkbox.blockSignals(False)
         self.detailed_logging_checkbox.blockSignals(False)
+        self.image_prompt_count_check_checkbox.blockSignals(False)
 
 
     def open_color_dialog(self):
@@ -162,6 +172,9 @@ class GeneralTab(QWidget):
 
     def image_review_changed(self, state):
         settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
+
+    def image_prompt_count_check_changed(self, state):
+        settings_manager.set('image_prompt_count_check_enabled', state == Qt.CheckState.Checked.value)
 
     def detailed_logging_changed(self, state):
         settings_manager.set('detailed_logging_enabled', state == Qt.CheckState.Checked.value)
@@ -197,8 +210,9 @@ class GeneralTab(QWidget):
         self.image_provider_label.setText(translator.translate('image_generation_provider_label'))
         self.results_path_label.setText(translator.translate('results_path_label'))
         self.browse_button.setText(translator.translate('browse_button'))
-        self.review_group.setTitle(translator.translate('review_group_title'))
+        self.controls_group.setTitle(translator.translate('controls_group_title'))
         self.translation_review_label.setText(translator.translate('translation_review_label'))
         self.image_review_label.setText(translator.translate('image_review_label'))
         self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
         self.accent_color_label.setText(translator.translate('accent_color_label'))
+        self.image_prompt_count_check_label.setText(translator.translate('image_prompt_count_check_label'))

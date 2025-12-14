@@ -508,6 +508,7 @@ class TaskState:
 
         self.status = {stage: 'pending' for stage in self.stages}
         self.translation_review_dialog_shown = False
+        self.prompt_regeneration_attempts = 0
         
         # Metadata counters
         self.images_generated_count = 0
@@ -992,15 +993,39 @@ class TaskProcessor(QObject):
     @Slot(str, object)
     def _on_img_prompts_finished(self, task_id, prompts_text):
         state = self.task_states[task_id]
+        
+        # Count prompts
+        prompts = re.findall(r"^\d+\.\s*(.*)", prompts_text, re.MULTILINE)
+        prompts_count = len(prompts)
+
+        # Check if prompt count control is enabled
+        is_check_enabled = self.settings.get('image_prompt_count_check_enabled', False)
+        desired_count = self.settings.get('image_prompt_count', 50)
+
+        if is_check_enabled and prompts_count != desired_count:
+            if state.prompt_regeneration_attempts < 3:
+                state.prompt_regeneration_attempts += 1
+                logger.log(
+                    f"[{task_id}] Image prompt count is {prompts_count}, but {desired_count} is required. "
+                    f"Regenerating, attempt {state.prompt_regeneration_attempts}/3.",
+                    level=LogLevel.WARNING
+                )
+                self._start_image_prompts(task_id)
+                return  # Stop processing this result and wait for the new one
+            else:
+                logger.log(
+                    f"[{task_id}] Failed to generate the required number of image prompts ({desired_count}) after 3 attempts. "
+                    f"Proceeding with {prompts_count} prompts.",
+                    level=LogLevel.ERROR
+                )
+
         state.image_prompts = prompts_text
         if state.dir_path:
             with open(os.path.join(state.dir_path, "image_prompts.txt"), 'w', encoding='utf-8') as f:
                 f.write(prompts_text)
         self._set_stage_status(task_id, 'stage_img_prompts', 'success')
         
-        # Count prompts and emit metadata
-        prompts = re.findall(r"^\d+\.\s*(.*)", prompts_text, re.MULTILINE)
-        prompts_count = len(prompts)
+        # Emit metadata
         metadata_text = f"{prompts_count} {translator.translate('prompts_count')}"
         self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_img_prompts', metadata_text)
         

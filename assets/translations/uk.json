@@ -257,5 +257,8 @@
     "subscription_expired_message": "Термін дії вашої підписки закінчився. Будь ласка, поновіть підписку, щоб продовжити користуватися додатком.",
     "error_label": "Помилка",
     "accent_color_label": "Колір акценту:",
-    "pick_accent_color": "Виберіть колір акценту"
+    "pick_accent_color": "Виберіть колір акценту",
+    "controls_group_title": "Контроль",
+    "image_prompt_count_check_label": "Контроль кількості промтів",
+    "image_prompt_count_label": "Кількість промтів:"
 }
