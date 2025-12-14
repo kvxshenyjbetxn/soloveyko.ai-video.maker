@@ -5,10 +5,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
+from gui.widgets.prompt_editor_dialog import PromptEditorDialog
 
 class PromptsTab(QWidget):
-    def __init__(self):
+    def __init__(self, main_window=None):
         super().__init__()
+        self.main_window = main_window
         self.settings = settings_manager
         self.stage_widgets = []
         self.init_ui()
@@ -36,6 +38,10 @@ class PromptsTab(QWidget):
         self.prompt_content_label = QLabel()
         self.prompt_edit = QTextEdit()
         self.prompt_edit.textChanged.connect(self.save_settings)
+        self.prompt_edit.setMinimumHeight(150)
+
+        self.open_editor_button = QPushButton(translator.translate("open_editor_button", "Open Editor"))
+        self.open_editor_button.clicked.connect(self.open_main_prompt_editor)
         
         settings_form_layout = QFormLayout()
         
@@ -58,14 +64,22 @@ class PromptsTab(QWidget):
         self.temperature_spinbox.valueChanged.connect(self.save_settings)
         settings_form_layout.addRow(self.temperature_label, self.temperature_spinbox)
 
-        self.image_prompt_count_label = QLabel()
-        self.image_prompt_count_spinbox = QSpinBox()
-        self.image_prompt_count_spinbox.setRange(1, 1000)
-        self.image_prompt_count_spinbox.valueChanged.connect(self.save_settings)
-        settings_form_layout.addRow(self.image_prompt_count_label, self.image_prompt_count_spinbox)
+        self.prompt_count_label = QLabel()
+        self.prompt_count_spinbox = QSpinBox()
+        self.prompt_count_spinbox.setRange(1, 1000)
+        self.prompt_count_spinbox.valueChanged.connect(self.save_settings)
+        settings_form_layout.addRow(self.prompt_count_label, self.prompt_count_spinbox)
+        
+        main_prompt_layout = QHBoxLayout()
+        main_prompt_layout.addWidget(self.prompt_edit)
+        
+        editor_button_layout = QVBoxLayout()
+        editor_button_layout.addWidget(self.open_editor_button)
+        editor_button_layout.addStretch()
+        main_prompt_layout.addLayout(editor_button_layout)
 
         self.img_group_layout.addWidget(self.prompt_content_label)
-        self.img_group_layout.addWidget(self.prompt_edit)
+        self.img_group_layout.addLayout(main_prompt_layout)
         self.img_group_layout.addLayout(settings_form_layout)
         
         self.content_layout.addWidget(img_group)
@@ -83,6 +97,18 @@ class PromptsTab(QWidget):
         self.content_layout.addWidget(self.add_stage_btn)
 
         self.content_layout.addStretch()
+
+    def open_main_prompt_editor(self):
+        dialog = PromptEditorDialog(self, self.prompt_edit.toPlainText())
+        if dialog.exec():
+            self.prompt_edit.setPlainText(dialog.get_text())
+            # self.save_settings() is triggered by textChanged
+
+    def open_custom_stage_prompt_editor(self, prompt_edit_widget):
+        dialog = PromptEditorDialog(self, prompt_edit_widget.toPlainText())
+        if dialog.exec():
+            prompt_edit_widget.setPlainText(dialog.get_text())
+            # self.save_custom_stages() is triggered by textChanged
 
     def add_new_stage(self, stage_data=None):
         stage_group = QGroupBox()
@@ -109,12 +135,24 @@ class PromptsTab(QWidget):
         prompt_label = QLabel(translator.translate("prompt_label"))
         prompt_edit = QTextEdit()
         prompt_edit.setPlaceholderText(translator.translate("enter_prompt_placeholder"))
-        prompt_edit.setMinimumHeight(80) 
+        prompt_edit.setMinimumHeight(120) 
         if stage_data:
             prompt_edit.setPlainText(stage_data.get("prompt", ""))
         prompt_edit.textChanged.connect(self.save_custom_stages)
+
+        open_editor_btn = QPushButton(translator.translate("open_editor_button", "Open Editor"))
+        open_editor_btn.clicked.connect(lambda _, p=prompt_edit: self.open_custom_stage_prompt_editor(p))
+
+        custom_prompt_layout = QHBoxLayout()
+        custom_prompt_layout.addWidget(prompt_edit)
+        
+        custom_editor_button_layout = QVBoxLayout()
+        custom_editor_button_layout.addWidget(open_editor_btn)
+        custom_editor_button_layout.addStretch()
+        custom_prompt_layout.addLayout(custom_editor_button_layout)
+
         stage_layout.addWidget(prompt_label)
-        stage_layout.addWidget(prompt_edit)
+        stage_layout.addLayout(custom_prompt_layout)
 
         # Settings Form (Model + Tokens) - below prompt
         settings_form_layout = QFormLayout()
@@ -175,7 +213,7 @@ class PromptsTab(QWidget):
         self.model_combo.blockSignals(True)
         self.tokens_spinbox.blockSignals(True)
         self.temperature_spinbox.blockSignals(True)
-        self.image_prompt_count_spinbox.blockSignals(True)
+        self.prompt_count_spinbox.blockSignals(True)
 
         self.prompt_edit.setPlainText(config.get("prompt", ""))
         self.load_models()
@@ -184,14 +222,17 @@ class PromptsTab(QWidget):
         self.model_combo.setCurrentIndex(index if index >= 0 else 0)
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
         self.temperature_spinbox.setValue(config.get("temperature", 0.7))
-        self.image_prompt_count_spinbox.setValue(self.settings.get('image_prompt_count', 50))
-
+        
+        prompt_control_enabled = self.settings.get('prompt_count_control_enabled', False)
+        self.prompt_count_label.setVisible(prompt_control_enabled)
+        self.prompt_count_spinbox.setVisible(prompt_control_enabled)
+        self.prompt_count_spinbox.setValue(self.settings.get('prompt_count', 10))
 
         self.prompt_edit.blockSignals(False)
         self.model_combo.blockSignals(False)
         self.tokens_spinbox.blockSignals(False)
         self.temperature_spinbox.blockSignals(False)
-        self.image_prompt_count_spinbox.blockSignals(False)
+        self.prompt_count_spinbox.blockSignals(False)
 
 
         # Custom Stages
@@ -221,8 +262,11 @@ class PromptsTab(QWidget):
             "temperature": self.temperature_spinbox.value()
         }
         self.settings.set("image_prompt_settings", config)
-        self.settings.set('image_prompt_count', self.image_prompt_count_spinbox.value())
+        self.settings.set('prompt_count', self.prompt_count_spinbox.value())
 
+        if self.main_window:
+            if hasattr(self.main_window, 'settings_tab') and hasattr(self.main_window.settings_tab, 'general_tab'):
+                self.main_window.settings_tab.general_tab.update_fields()
 
     def save_custom_stages(self):
         stages_data = []
@@ -248,6 +292,6 @@ class PromptsTab(QWidget):
         self.prompt_content_label.setText(translator.translate("prompt_content_label"))
         self.model_label.setText(translator.translate("image_model_label"))
         self.tokens_label.setText(translator.translate("tokens_label"))
-        self.image_prompt_count_label.setText(translator.translate("image_prompt_count_label"))
+        self.prompt_count_label.setText(translator.translate("prompt_count_label"))
         self.custom_stages_label.setText(translator.translate("custom_stages_label") if translator.translate("custom_stages_label") != "custom_stages_label" else "Custom Stages")
         self.add_stage_btn.setText(translator.translate("add_stage_btn") if translator.translate("add_stage_btn") != "add_stage_btn" else "Add Custom Stage")
