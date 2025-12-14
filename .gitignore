@@ -50,3 +50,4 @@ telegram_bot/.env
 telegram_bot/bot.py
 telegram_bot/requirements.txt
 logs/
+crash.log

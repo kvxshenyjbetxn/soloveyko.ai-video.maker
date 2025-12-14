@@ -546,20 +546,39 @@ class MainWindow(QMainWindow):
         icon = QIcon(pixmap)
         self.user_icon_button.setIcon(icon)
 
-    def change_theme(self, theme_name):
-        self.settings_manager.set('theme', theme_name)
-        
+    def apply_current_theme(self):
+        theme_name = self.settings_manager.get('theme', 'light')
+        accent_color = self.settings_manager.get('accent_color', '#3f51b5')
+
+        extra = {
+            'primaryColor': accent_color,
+            'font_family': 'RobotoCondensed'
+            }
+
         if theme_name == 'light':
-            apply_stylesheet(self.app, theme='light_blue.xml')
+            apply_stylesheet(self.app, theme='light_blue.xml', extra=extra)
         elif theme_name == 'dark':
-            apply_stylesheet(self.app, theme='dark_teal.xml')
+            apply_stylesheet(self.app, theme='dark_teal.xml', extra=extra)
         elif theme_name == 'black':
-            apply_stylesheet(self.app, theme='amoled_black.xml')
+            apply_stylesheet(self.app, theme='amoled_black.xml', extra=extra)
+            custom_style = "QTextEdit { background-color: #121212; }"
+            self.app.setStyleSheet(self.app.styleSheet() + custom_style)
 
         self.update_user_icon()
 
         if hasattr(self, 'settings_tab') and hasattr(self.settings_tab, 'statistics_tab'):
             self.settings_tab.statistics_tab.on_theme_changed()
+
+        if hasattr(self, 'text_tab'):
+            self.text_tab.update_styles()
+
+    def change_accent_color(self, color_hex):
+        self.settings_manager.set('accent_color', color_hex)
+        self.apply_current_theme()
+
+    def change_theme(self, theme_name):
+        self.settings_manager.set('theme', theme_name)
+        self.apply_current_theme()
 
     def change_language(self, lang_code):
         self.translator.set_language(lang_code)

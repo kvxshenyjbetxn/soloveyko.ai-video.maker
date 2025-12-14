@@ -73,7 +73,7 @@ def export_theme(
     output='theme',
     prefix='icon:/',
 ):
-    """"""
+    ''''''
     if not os.path.isabs(output) and not output.startswith('.'):
         output = f'.{output}'
 
@@ -122,7 +122,7 @@ def build_stylesheet(
     template=TEMPLATE_FILE,
     export=False,
 ):
-    """"""
+    ''''''
 
     if not export:
         try:
@@ -134,21 +134,23 @@ def build_stylesheet(
     if theme is None:
         return None
 
+    theme.update(extra)
+
     set_icons_theme(theme, parent=parent)
 
     # Render custom template
     if os.path.exists(template):
-        parent, template = os.path.split(template)
-        loader = jinja2.FileSystemLoader(parent)
+        parent_dir, template_name = os.path.split(template)
+        loader = jinja2.FileSystemLoader(parent_dir)
         env = jinja2.Environment(autoescape=False, loader=loader)
         env.filters['opacity'] = opacity
         env.filters['density'] = density
-        stylesheet = env.get_template(template)
+        stylesheet_template = env.get_template(template_name)
     else:
         env = jinja2.Environment(autoescape=False, loader=jinja2.BaseLoader)
         env.filters['opacity'] = opacity
         env.filters['density'] = density
-        stylesheet.from_string(template)
+        stylesheet_template = env.from_string(template)
 
     theme.setdefault('icon', None)
     theme.setdefault('font_family', 'Roboto')
@@ -157,8 +159,6 @@ def build_stylesheet(
     theme.setdefault('success', '#17a2b8')
     theme.setdefault('density_scale', '0')
     theme.setdefault('button_shape', 'default')
-
-    theme.update(extra)
 
     if GUI:
         default_palette = QGuiApplication.palette()
@@ -194,7 +194,7 @@ def build_stylesheet(
     }
 
     environ.update(theme)
-    return stylesheet.render(environ)
+    return stylesheet_template.render(environ)
 
 
 # ----------------------------------------------------------------------
@@ -271,7 +271,7 @@ def get_theme(theme_name, invert_secondary=False):
 
 # ----------------------------------------------------------------------
 def add_fonts():
-    """"""
+    ''''''
     fonts_path = os.path.join(os.path.dirname(__file__), 'fonts')
 
     for font_dir in ['roboto']:
@@ -300,7 +300,7 @@ def apply_stylesheet(
     parent='theme',
     css_file=None,
 ):
-    """"""
+    ''''''
     if style:
         try:
             try:
@@ -336,7 +336,7 @@ def apply_stylesheet(
 
 # ----------------------------------------------------------------------
 def opacity(theme, value=0.5):
-    """"""
+    ''''''
     r, g, b = theme[1:][0:2], theme[1:][2:4], theme[1:][4:]
     r, g, b = int(r, 16), int(g, 16), int(b, 16)
 
@@ -347,7 +347,7 @@ def opacity(theme, value=0.5):
 def density(
     value, density_scale, border=0, scale=1, density_interval=4, min_=4
 ):
-    """"""
+    ''''''
     # https://material.io/develop/web/supporting/density
     if isinstance(value, str) and value.startswith('@'):
         return value[1:] * scale
@@ -369,7 +369,7 @@ def density(
 
 # ----------------------------------------------------------------------
 def set_icons_theme(theme, parent='theme'):
-    """"""
+    ''''''
     source = os.path.join(os.path.dirname(__file__), 'resources', 'source')
     resources = ResourseGenerator(
         primary=theme['primaryColor'],
@@ -397,7 +397,7 @@ def set_icons_theme(theme, parent='theme'):
 
 # ----------------------------------------------------------------------
 def list_themes():
-    """"""
+    ''''''
     themes = os.listdir(
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'themes')
     )
@@ -407,7 +407,7 @@ def list_themes():
 
 # ----------------------------------------------------------------------
 def deprecated(replace):
-    """"""
+    ''''''
     # ----------------------------------------------------------------------
     def wrap1(fn):
         # ----------------------------------------------------------------------
@@ -424,24 +424,24 @@ def deprecated(replace):
 
 ########################################################################
 class QtStyleTools:
-    """"""
+    ''''''
 
     extra_values = {}
 
     # ----------------------------------------------------------------------
     @deprecated('set_extra')
     def set_extra_colors(self, extra):
-        """"""
+        ''''''
         self.extra_values = extra
 
     # ----------------------------------------------------------------------
     def set_extra(self, extra):
-        """"""
+        ''''''
         self.extra_values = extra
 
     # ----------------------------------------------------------------------
     def add_menu_theme(self, parent, menu):
-        """"""
+        ''''''
         self.menu_theme_ = menu
         action_group = QActionGroup(menu)
         try:
@@ -470,7 +470,7 @@ class QtStyleTools:
 
     # ----------------------------------------------------------------------
     def add_menu_density(self, parent, menu):
-        """"""
+        ''''''
         self.menu_density_ = menu
         action_group = QActionGroup(menu)
 
@@ -502,14 +502,14 @@ class QtStyleTools:
 
     # # ----------------------------------------------------------------------
     # def _wrapper(self, parent, theme, extra, callable_):
-    # """"""
+    # ''''''
     # def iner():
     # self._apply_theme(parent, theme, extra, callable_)
     # return iner
 
     # # ----------------------------------------------------------------------
     # def _apply_theme(self, parent, theme, extra={}, callable_=None):
-    # """"""
+    # ''''''
     # self.apply_stylesheet(parent, theme=theme, invert_secondary=theme.startswith(
     # 'light'), extra=extra, callable_=callable_)
 
@@ -517,7 +517,7 @@ class QtStyleTools:
     def apply_stylesheet(
         self, parent, theme, invert_secondary=False, extra={}, callable_=None
     ):
-        """"""
+        ''''''
         if theme == 'default':
             try:
                 parent.setStyleSheet('')
@@ -537,7 +537,7 @@ class QtStyleTools:
 
     # ----------------------------------------------------------------------
     def update_theme_event(self, parent):
-        """"""
+        ''''''
         try:
             density = [
                 action.text()
@@ -573,7 +573,7 @@ class QtStyleTools:
 
     # ----------------------------------------------------------------------
     def update_buttons(self):
-        """"""
+        ''''''
         if not hasattr(self, 'colors'):
             return
 
@@ -639,12 +639,12 @@ class QtStyleTools:
 
     # ----------------------------------------------------------------------
     def get_color(self, color):
-        """"""
+        ''''''
         return QColor(*[int(color[s : s + 2], 16) for s in range(1, 6, 2)])
 
     # ----------------------------------------------------------------------
     def update_theme(self, parent):
-        """"""
+        ''''''
         with open('my_theme.xml', 'w') as file:
             file.write(
                 """
@@ -657,7 +657,8 @@ class QtStyleTools:
                 <color name="primaryTextColor">{primaryTextColor}</color>
                 <color name="secondaryTextColor">{secondaryTextColor}</color>
               </resources>
-            """.format(
+            """
+                .format(
                     **self.custom_colors
                 )
             )
@@ -676,7 +677,7 @@ class QtStyleTools:
 
     # ----------------------------------------------------------------------
     def set_color(self, parent, button_):
-        """"""
+        ''''''
 
         def iner():
             initial = self.get_color(self.custom_colors[button_])
@@ -713,7 +714,7 @@ class QtStyleTools:
 
     # ----------------------------------------------------------------------
     def show_dock_theme(self, parent):
-        """"""
+        ''''''
         self.colors = [
             'primaryColor',
             'primaryLightColor',
