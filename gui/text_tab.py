@@ -12,6 +12,7 @@ from functools import partial
 from utils.translator import translator
 from utils.settings import settings_manager
 from gui.file_dialog import FileDialog
+from utils.animator import Animator
 
 def get_text_color_for_background(bg_color_hex):
     """Determines if black or white text is more readable on a given background color."""
@@ -348,10 +349,16 @@ class TextTab(QWidget):
                 stage_widget = StageSelectionWidget(lang_name, self)
                 self.stages_container_layout.addWidget(stage_widget)
                 self.stage_widgets[lang_id] = stage_widget
-            self.stage_widgets[lang_id].setVisible(True)
+            
+            # Animate appearance
+            if not self.stage_widgets[lang_id].isVisible():
+                Animator.slide_in_down(self.stage_widgets[lang_id])
+            else:
+                self.stage_widgets[lang_id].setVisible(True)
         else:
             if lang_id in self.stage_widgets:
-                self.stage_widgets[lang_id].setVisible(False)
+                # Animate disappearance
+                Animator.slide_out_up(self.stage_widgets[lang_id])
         
         self.update_stage_label_widths()
         self.check_queue_button_visibility()
