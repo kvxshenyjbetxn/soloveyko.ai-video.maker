@@ -84,14 +84,14 @@ QGroupBox,
 QFrame {
   background-color: {{secondaryDarkColor}};
   border: 2px solid {{secondaryLightColor}};
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 QGroupBox.fill_background,
 QFrame.fill_background {
   background-color: {{secondaryColor}};
   border: 2px solid {{secondaryColor}};
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 QSplitter {
@@ -120,17 +120,24 @@ QTabWidget::pane {
 /*  ------------------------------------------------------------------------  */
 /*  Inputs  */
 
+QPushButton {
+  color: {{primaryColor}};
+  background-color: {{secondaryDarkColor}};
+  border: 2px solid {{primaryColor}};
+  border-radius: 8px;
+  height: {{36|density(density_scale, border=2)}}px;
+}
+
 QDateEdit,
 QDateTimeEdit,
 QSpinBox,
 QDoubleSpinBox,
 QTextEdit,
-QLineEdit,
-QPushButton {
-  color: {{primaryColor}};
+QLineEdit {
+  color: {{primaryTextColor}};
   background-color: {{secondaryDarkColor}};
   border: 2px solid {{primaryColor}};
-  border-radius: 4px;
+  border-radius: 8px;
   height: {{36|density(density_scale, border=2)}}px;
 }
 
@@ -146,8 +153,8 @@ QComboBox {
   padding-left: {{16|density(density_scale)}}px;
   border-radius: 0px;
   border-radius: 0px;
-  border-top-left-radius: 4px;
-  border-top-right-radius: 4px;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
   height: {{36|density(density_scale, border=2)}}px;
   background-color: {{secondaryColor|opacity(0.75)}};
   border: 2px solid {{secondaryTextColor|opacity(0.2)}};
@@ -155,7 +162,7 @@ QComboBox {
 }
 
 QPlainTextEdit {
-  border-radius: 4px;
+  border-radius: 8px;
   padding: {{8|density(density_scale)}}px {{16|density(density_scale)}}px;
   background-color: {{secondaryDarkColor}};
   border: 2px solid {{secondaryLightColor}};
@@ -163,7 +170,7 @@ QPlainTextEdit {
 
 QTextEdit {
   padding: {{8|density(density_scale)}}px {{16|density(density_scale)}}px;
-  border-radius: 4px;
+  border-radius: 8px;
   background-color: {{secondaryColor}};
 }
 
@@ -237,7 +244,7 @@ QDateEdit QAbstractItemView,
 QComboBox QAbstractItemView {
   background-color: {{secondaryColor}};
   border: 2px solid {{secondaryLightColor}};
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 QDateEdit[frame='false'],
@@ -378,43 +385,28 @@ QTabBar{
 QTabBar::tab {
   color: {{secondaryTextColor}};
   border: 0px;
+  background-color: transparent;
+  padding: {{8|density(density_scale)}}px {{16|density(density_scale)}}px;
+  margin-right: 4px;
+  border-radius: 8px;
 }
 
-QTabBar::tab:bottom,
-QTabBar::tab:top{
-  padding: 0 {{16|density(density_scale)}}px;
-  height: {{28|density(density_scale)}}px;
-}
-
-QTabBar::tab:left,
-QTabBar::tab:right{
-  padding: {{16|density(density_scale)}}px 0;
-  width: {{28|density(density_scale)}}px;
+QTabBar::tab:selected,
+QTabBar::tab:hover {
+  color: {{primaryTextColor}};
+  background-color: {{primaryColor}};
 }
 
 QTabBar::tab:top:selected,
 QTabBar::tab:top:hover {
-  color: {{primaryColor}};
-  border-bottom: 2px solid {{primaryColor}};
+  border-bottom: 0px;
 }
 
 QTabBar::tab:bottom:selected,
 QTabBar::tab:bottom:hover {
-  color: {{primaryColor}};
-  border-top: 2px solid {{primaryColor}};
+  border-top: 0px;
 }
 
-QTabBar::tab:right:selected,
-QTabBar::tab:right:hover {
-  color: {{primaryColor}};
-  border-left: 2px solid {{primaryColor}};
-}
-
-QTabBar::tab:left:selected,
-QTabBar::tab:left:hover {
-  color: {{primaryColor}};
-  border-right: 2px solid {{primaryColor}};
-}
 
 QTabBar QToolButton:hover,
 QTabBar QToolButton {
@@ -653,7 +645,7 @@ QDockWidget {
   border: 2px solid {{secondaryColor}};
   titlebar-close-icon: url(icon:/primary/close.svg);
   titlebar-normal-icon: url(icon:/primary/float.svg);
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 QDockWidget::title {
@@ -710,7 +702,7 @@ QCalendarWidget QMenu::item:selected,
 QMenu::item:selected {
   color: {{primaryTextColor}};
   background-color: {{primaryLightColor}};
-  border-radius: 0px;
+  border-radius: 8px;
 }
 
 QComboBox::item:disabled,
@@ -726,7 +718,7 @@ QCalendarWidget QMenu,
 QMenu {
   background-color: {{secondaryColor}};
   border: 2px solid {{secondaryLightColor}};
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
 QMenu::separator {
@@ -806,7 +798,7 @@ QToolBox::tab {
   background-color: {{secondaryColor}};
   color: {{secondaryTextColor}};
   text-transform: uppercase;
-  border-radius: 4px;
+  border-radius: 8px;
   padding-left: 15px;
 }
 
@@ -834,18 +826,21 @@ QProgressBar::chunk {
 
 QScrollBar:horizontal {
   border: 0;
-  background: {{secondaryColor}};
-  height: {{8|density(density_scale)}}px;
+  background: transparent;
+  height: {{6|density(density_scale)}}px;
+  margin: 0px;
 }
 
 QScrollBar:vertical {
   border: 0;
-  background: {{secondaryColor}};
-  width: {{8|density(density_scale)}}px;
+  background: transparent;
+  width: {{6|density(density_scale)}}px;
+  margin: 0px;
 }
 
 QScrollBar::handle {
-  background: {{primaryColor|opacity(0.1)}};
+  background: {{secondaryLightColor|opacity(0.5)}};
+  border-radius: 3px;
 }
 
 QScrollBar::handle:horizontal {
@@ -1101,6 +1096,7 @@ QListView::item:selected {
   selection-background-color: {{primaryColor|opacity(0.2)}};
   color: {{secondaryTextColor}};
   selection-color: {{secondaryTextColor}}; /* For Windows */
+  border-radius: 8px;
 }
 
 QTableView::item:selected:focus,
@@ -1110,6 +1106,7 @@ QListView::item:selected:focus {
   selection-background-color: {{primaryColor}};
   color: {{primaryTextColor}};
   selection-color: {{primaryTextColor}}; /* For Windows */
+  border-radius: 8px;
 }
 
 QTableView {
@@ -1316,7 +1313,7 @@ QListView QLineEdit {
 QToolTip {
   padding: 4px;
   border: 1px solid {{secondaryDarkColor}};
-  border-radius: 4px;
+  border-radius: 8px;
   color: {{secondaryTextColor}};
   background-color: {{secondaryLightColor}};
 }
