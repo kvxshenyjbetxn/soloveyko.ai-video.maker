@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
 from utils.logger import logger
+import os
 
 class GeneralTab(QWidget):
     def __init__(self, main_window=None):
@@ -12,6 +13,7 @@ class GeneralTab(QWidget):
         self.main_window = main_window 
         self.init_ui()
         self.update_fields()
+        self.update_style()
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -48,7 +50,6 @@ class GeneralTab(QWidget):
         self.accent_color_label = QLabel()
         self.accent_color_button = QPushButton()
         self.accent_color_button.setFixedSize(100, 25)
-        self.accent_color_button.setFlat(True)
         self.accent_color_button.setAutoFillBackground(True)
         self.accent_color_button.clicked.connect(self.open_color_dialog)
         form_layout.addRow(self.accent_color_label, self.accent_color_button)
@@ -100,6 +101,16 @@ class GeneralTab(QWidget):
         content_layout.addStretch()
         self.retranslate_ui()
 
+    def update_style(self):
+        border_color = os.environ.get('QTMATERIAL_SECONDARYLIGHTCOLOR', '#e0e0e0')
+        accent_color = settings_manager.get('accent_color', '#3f51b5')
+        self.accent_color_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {accent_color};
+                border: 1px solid {border_color};
+            }}
+        """)
+
     def update_fields(self):
         # Block signals to prevent triggering save on programmatic changes
         self.language_combo.blockSignals(True)
@@ -124,10 +135,7 @@ class GeneralTab(QWidget):
         self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
         self.detailed_logging_checkbox.setChecked(settings_manager.get('detailed_logging_enabled', False))
 
-        accent_color = settings_manager.get('accent_color', '#3f51b5') # Default to blue
-        palette = self.accent_color_button.palette()
-        palette.setColor(self.accent_color_button.backgroundRole(), QColor(accent_color))
-        self.accent_color_button.setPalette(palette)
+        self.update_style() # Set button color and border
 
         # Unblock signals
         self.language_combo.blockSignals(False)
@@ -137,19 +145,17 @@ class GeneralTab(QWidget):
         self.image_review_checkbox.blockSignals(False)
         self.detailed_logging_checkbox.blockSignals(False)
 
+
     def open_color_dialog(self):
         current_color = settings_manager.get('accent_color', '#3f51b5')
         color = QColorDialog.getColor(QColor(current_color), self, translator.translate("pick_accent_color"))
 
         if color.isValid():
             color_hex = color.name()
+            settings_manager.set('accent_color', color_hex)
+            self.update_style()
             if self.main_window:
                 self.main_window.change_accent_color(color_hex)
-            
-            # Update button preview
-            palette = self.accent_color_button.palette()
-            palette.setColor(self.accent_color_button.backgroundRole(), color)
-            self.accent_color_button.setPalette(palette)
 
     def translation_review_changed(self, state):
         settings_manager.set('translation_review_enabled', state == Qt.CheckState.Checked.value)
