@@ -568,6 +568,7 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, 'settings_tab') and hasattr(self.settings_tab, 'statistics_tab'):
             self.settings_tab.statistics_tab.on_theme_changed()
+            self.settings_tab.general_tab.update_style()
 
         if hasattr(self, 'text_tab'):
             self.text_tab.update_styles()
