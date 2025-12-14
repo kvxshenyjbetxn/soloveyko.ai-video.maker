@@ -49,5 +49,4 @@ auth_server/schemas.py
 telegram_bot/.env
 telegram_bot/bot.py
 telegram_bot/requirements.txt
-logs/app_2025-12-13_23-24-41.log
-logs/app_2025-12-13_23-25-56.log
+logs/
