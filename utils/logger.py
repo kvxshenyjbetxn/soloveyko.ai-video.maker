@@ -40,10 +40,11 @@ class _Logger:
         self.lock = threading.Lock()
         
         # Always create a debug trace file
-        try:
-            self.debug_file = open("debug_trace.log", "a", encoding="utf-8")
-        except:
-            self.debug_file = None
+        # try:
+        #     self.debug_file = open("debug_trace.log", "a", encoding="utf-8")
+        # except:
+        #     self.debug_file = None
+        self.debug_file = None
             
         self.reconfigure()
 
@@ -74,13 +75,13 @@ class _Logger:
 
         with self.lock:
             # 1. Write to debug trace (Primary debugging tool)
-            if self.debug_file:
-                try:
-                    self.debug_file.write(f"[{timestamp}] [{level.name}] {message}\n")
-                    self.debug_file.flush()
-                    os.fsync(self.debug_file.fileno())
-                except:
-                    pass
+            # if self.debug_file:
+            #     try:
+            #         self.debug_file.write(f"[{timestamp}] [{level.name}] {message}\n")
+            #         self.debug_file.flush()
+            #         os.fsync(self.debug_file.fileno())
+            #     except:
+            #         pass
 
             # 2. Write to conditional log file
             if self.log_file:

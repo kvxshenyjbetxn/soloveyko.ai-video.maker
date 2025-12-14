@@ -3,6 +3,7 @@ import os
 import math
 import sys
 import tempfile
+import re
 from utils.logger import logger, LogLevel
 
 class MontageEngine:
@@ -262,7 +263,32 @@ class MontageEngine:
                     full_log.append(c)
                     
                     if "frame=" in c or "time=" in c:
-                        log_progress(c)
+                        parts = dict(re.findall(r'(\w+)=\s*([^ ]+)', c))
+                        time_str = parts.get('time', '00:00:00.00')
+                        
+                        try:
+                            # Конвертація часу в секунди
+                            time_parts = time_str.split(':')
+                            h = int(time_parts[0])
+                            m = int(time_parts[1])
+                            s = float(time_parts[2])
+                            time_sec = h * 3600 + m * 60 + s
+                        except (ValueError, IndexError):
+                            time_sec = 0.0
+
+                        progress = (time_sec / audio_dur) * 100 if audio_dur > 0 else 0
+                        
+                        fps = parts.get('fps', '0')
+                        bitrate = parts.get('bitrate', 'N/A')
+                        
+                        log_line = (
+                            f"time={time_str} | "
+                            f"fps={fps} | "
+                            f"bitrate={bitrate} | "
+                            f"progress={progress:.2f}%"
+                        )
+                        log_progress(log_line)
+                        
                     elif "Error" in c and "Error submitting packet to decoder" not in c:
                         logger.log(f"{prefix}[FFmpeg] {c}", level=LogLevel.ERROR)
                         log_progress(f"[FFmpeg] Error: {c}")
