@@ -20,7 +20,7 @@ class ImageTab(QWidget):
 
         main_layout = QVBoxLayout(self)
 
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setContentsMargins(0, 10, 0, 0)
 
 
 
