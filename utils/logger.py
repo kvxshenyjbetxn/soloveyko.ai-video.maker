@@ -1,33 +1,6 @@
 import datetime
 from enum import Enum
 import os
-
-class LogLevel(Enum):
-    INFO = "INFO"
-    SUCCESS = "SUCCESS"
-    WARNING = "WARNING"
-    ERROR = "ERROR"
-
-    def to_color(self):
-        return {
-            LogLevel.INFO: "#ffffff",  # White
-            LogLevel.SUCCESS: "#28a745", # Green
-            LogLevel.WARNING: "#ffa500", # Orange
-            LogLevel.ERROR: "#dc3545",   # Red
-        }.get(self, "#ffffff") # Default to white
-
-    def to_icon(self):
-        return {
-            LogLevel.INFO: "ℹ️",
-            LogLevel.SUCCESS: "✅",
-            LogLevel.WARNING: "⚠️",
-            LogLevel.ERROR: "❌",
-        }.get(self, "➡️")
-
-
-import datetime
-from enum import Enum
-import os
 from utils.settings import settings_manager
 
 class LogLevel(Enum):
@@ -37,12 +10,18 @@ class LogLevel(Enum):
     ERROR = "ERROR"
 
     def to_color(self):
+        theme = settings_manager.get('theme', 'light')
+        if theme == 'light':
+            info_color = "#000000"  # Black for light theme
+        else:
+            info_color = "#ffffff"  # White for dark themes
+
         return {
-            LogLevel.INFO: "#ffffff",  # White
-            LogLevel.SUCCESS: "#28a745", # Green
-            LogLevel.WARNING: "#ffa500", # Orange
-            LogLevel.ERROR: "#dc3545",   # Red
-        }.get(self, "#ffffff") # Default to white
+            LogLevel.INFO: info_color,
+            LogLevel.SUCCESS: "#28a745",  # Green
+            LogLevel.WARNING: "#ffa500",  # Orange
+            LogLevel.ERROR: "#dc3545",    # Red
+        }.get(self, info_color)
 
     def to_icon(self):
         return {
@@ -51,7 +30,6 @@ class LogLevel(Enum):
             LogLevel.WARNING: "⚠️",
             LogLevel.ERROR: "❌",
         }.get(self, "➡️")
-
 
 class _Logger:
     def __init__(self):
