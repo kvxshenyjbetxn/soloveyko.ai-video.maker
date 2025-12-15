@@ -270,5 +270,5 @@
     "audio_files_filter": "Аудиофайлы (*.mp3 *.wav)",
     "add_background_music": "Добавить музыку",
     "add_background_music_title": "Добавить фоновую музыку",
-    "add_background_music_desc": "Выберите аудиофайл для использования в качестве фоновой музыки."
+    "add_background_music_desc": "Выберите аудиофайл для использования в качестве фоновой музыки или перетащите файл сюда."
 }
