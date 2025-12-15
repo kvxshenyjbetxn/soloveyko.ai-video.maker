@@ -157,7 +157,6 @@ class MainWindow(QMainWindow):
 
     def on_validation_finished(self, is_valid, expires_at):
         if not is_valid:
-            self.validation_timer.stop()
             # Clear the saved key as it's no longer valid
             settings_manager.set('api_key', None)
             settings_manager.save_settings()
@@ -204,6 +203,14 @@ class MainWindow(QMainWindow):
         return super().eventFilter(obj, event)
 
     def init_ui(self):
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        
+        icon_path = os.path.join(base_path, "assets", "icon.png")
+        self.setWindowIcon(QIcon(icon_path))
+
         self.update_title()
         self.setGeometry(100, 100, 1366, 768)
 
@@ -306,11 +313,6 @@ class MainWindow(QMainWindow):
 
         if not template_applied:
             self.settings_tab.languages_tab.load_elevenlabs_templates()
-
-        # Setup periodic API key validation
-        self.validation_timer = QTimer(self)
-        self.validation_timer.timeout.connect(self.check_api_key_validity)
-        self.validation_timer.start(10 * 60 * 1000) # 10 minutes
 
     def _start_processing_checked(self):
         worker = ValidationWorker(api_key=self.api_key, server_url=self.server_url)
@@ -471,7 +473,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, title, message)
 
     def update_title(self):
-        app_name = self.translator.translate('app_title')
+        app_name = "CombainAI"
         self.setWindowTitle(f"{app_name} v{__version__}")
 
     def update_template_label(self):
