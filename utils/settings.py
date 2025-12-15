@@ -1,9 +1,12 @@
 import json
 import os
 
+import sys
+
 class SettingsManager:
     def __init__(self, settings_file='config/settings.json'):
-        self.settings_file = settings_file
+        self.base_path = self._get_base_path()
+        self.settings_file = os.path.join(self.base_path, settings_file)
         self.defaults = {
             'language': 'uk',
             'theme': 'dark',
@@ -30,6 +33,14 @@ class SettingsManager:
         }
         self.settings = self.load_settings()
 
+    def _get_base_path(self):
+        if getattr(sys, 'frozen', False):
+            # Поруч з EXE
+            return os.path.dirname(sys.executable)
+        else:
+            # Корень проекту (батьківська папка utils)
+            return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
     def load_settings(self):
         if os.path.exists(self.settings_file):
             try:
@@ -44,11 +55,6 @@ class SettingsManager:
                 return self.defaults
         return self.defaults
 
-    def save_settings(self):
-        os.makedirs(os.path.dirname(self.settings_file), exist_ok=True)
-        with open(self.settings_file, 'w', encoding='utf-8') as f:
-            json.dump(self.settings, f, indent=4, ensure_ascii=False)
-
     def get(self, key, default=None):
         if default is None:
             default = self.defaults.get(key)
@@ -58,10 +64,22 @@ class SettingsManager:
         self.settings[key] = value
         self.save_settings()
 
+    def save_settings(self):
+        os.makedirs(os.path.dirname(self.settings_file), exist_ok=True)
+        with open(self.settings_file, 'w', encoding='utf-8') as f:
+            json.dump(self.settings, f, indent=4, ensure_ascii=False)
+
 class TemplateManager:
     def __init__(self, template_dir='config/templates'):
-        self.template_dir = template_dir
+        self.base_path = self._get_base_path()
+        self.template_dir = os.path.join(self.base_path, template_dir)
         os.makedirs(self.template_dir, exist_ok=True)
+
+    def _get_base_path(self):
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
+        else:
+            return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     def get_templates(self):
         templates = [f.split('.')[0] for f in os.listdir(self.template_dir) if f.endswith('.json')]

@@ -282,6 +282,9 @@ class MainWindow(QMainWindow):
             from utils.settings import template_manager
             template_data = template_manager.load_template(last_template)
             if template_data:
+                # Ignore subtitle settings from templates, as they are user/environment-specific
+                template_data.pop('subtitles', None)
+
                 for key, value in template_data.items():
                     if isinstance(value, dict) and key in self.settings_manager.settings and isinstance(self.settings_manager.settings[key], dict):
                         self.settings_manager.settings[key].update(value)

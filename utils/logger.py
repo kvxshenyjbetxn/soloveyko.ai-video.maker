@@ -10,6 +10,7 @@ class LogLevel(Enum):
     SUCCESS = "SUCCESS"
     WARNING = "WARNING"
     ERROR = "ERROR"
+    DEBUG = "DEBUG"
 
     def to_color(self):
         theme = settings_manager.get('theme', 'light')

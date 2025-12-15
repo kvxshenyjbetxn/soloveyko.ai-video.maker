@@ -11,9 +11,12 @@ from utils.translator import translator
 class SubtitlesTab(QWidget):
     def __init__(self):
         super().__init__()
+        self.is_loading = True
+        self.current_color = [255, 255, 255] # Default to prevent AttributeError
         self.init_ui()
         self.update_fields()
         self.retranslate_ui()
+        self.is_loading = False
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -41,6 +44,8 @@ class SubtitlesTab(QWidget):
         self.engine_group_btn.addButton(self.rb_standard)
         self.engine_group_btn.addButton(self.rb_assemblyai)
         self.rb_amd.toggled.connect(self.on_engine_changed)
+        self.rb_standard.toggled.connect(self.on_engine_changed)
+        self.rb_assemblyai.toggled.connect(self.on_engine_changed)
         
         engine_layout.addWidget(self.rb_standard)
         engine_layout.addWidget(self.rb_amd)
@@ -119,11 +124,12 @@ class SubtitlesTab(QWidget):
         layout.addStretch()
         
     def update_fields(self):
+        self.is_loading = True
         self.settings = settings_manager.get('subtitles', {})
         
         # Block signals to prevent premature saving
-        for widget in self.findChildren(QWidget):
-            widget.blockSignals(True)
+        # for widget in self.findChildren(QWidget):
+            # widget.blockSignals(True)
 
         # --- Populate fields from settings ---
         saved_type = self.settings.get('whisper_type', 'standard')
@@ -140,6 +146,14 @@ class SubtitlesTab(QWidget):
         index = self.model_combo.findText(saved_model)
         if index != -1:
             self.model_combo.setCurrentIndex(index)
+        else:
+            # Saved model not found, set a sensible default for the current engine
+            default_model = "base"
+            if self.rb_amd.isChecked():
+                default_model = "base.bin"
+            index = self.model_combo.findText(default_model)
+            if index != -1:
+                self.model_combo.setCurrentIndex(index)
 
         current_font = self.settings.get('font', 'Arial')
         self.font_combo.setCurrentFont(current_font)
@@ -152,10 +166,12 @@ class SubtitlesTab(QWidget):
         self.fade_in_spin.setValue(self.settings.get('fade_in', 0))
         self.fade_out_spin.setValue(self.settings.get('fade_out', 0))
         self.max_words_spin.setValue(self.settings.get('max_words', 10))
+        
+        self.is_loading = False
 
         # --- Unblock signals ---
-        for widget in self.findChildren(QWidget):
-            widget.blockSignals(False)
+        # for widget in self.findChildren(QWidget):
+            # widget.blockSignals(False)
 
     def retranslate_ui(self):
         self.engine_group.setTitle(translator.translate("whisper_engine_group"))
@@ -192,21 +208,25 @@ class SubtitlesTab(QWidget):
         self.whisper_group.setVisible(is_whisper)
 
         if is_whisper:
+            current_text = self.model_combo.currentText()
+
             if update_model_list:
                 self.update_models_list()
             
-            current_text = self.model_combo.currentText()
             if self.rb_standard.isChecked() and current_text.endswith(".bin"):
                 new_text = current_text.replace(".bin", "")
                 index = self.model_combo.findText(new_text)
                 if index != -1: self.model_combo.setCurrentIndex(index)
-            elif self.rb_amd.isChecked() and not current_text.endswith(".bin"):
+            elif self.rb_amd.isChecked() and not current_text.endswith(".bin") and current_text:
                 new_text = current_text + ".bin"
                 index = self.model_combo.findText(new_text)
                 if index != -1: self.model_combo.setCurrentIndex(index)
 
-    def on_engine_changed(self, *args):
+    def on_engine_changed(self, checked=False):
         """Connected to the radio button toggle signals."""
+        if getattr(self, 'is_loading', False) or not checked:
+            return
+
         self._update_engine_ui(update_model_list=True)
         self.save_settings()
 
@@ -223,22 +243,29 @@ class SubtitlesTab(QWidget):
             self.save_settings()
 
     def save_settings(self, *args):
-        if self.rb_standard.isChecked():
-            whisper_type = 'standard'
-        elif self.rb_amd.isChecked():
-            whisper_type = 'amd'
-        else:
-            whisper_type = 'assemblyai'
+        if getattr(self, 'is_loading', False):
+            return
 
-        new_settings = {
-            'whisper_type': whisper_type,
-            'whisper_model': self.model_combo.currentText() if self.whisper_group.isVisible() else None,
-            'font': self.font_combo.currentFont().family(),
-            'fontsize': self.fontsize_spin.value(),
-            'color': self.current_color,
-            'margin_v': self.margin_v_spin.value(),
-            'fade_in': self.fade_in_spin.value(),
-            'fade_out': self.fade_out_spin.value(),
-            'max_words': self.max_words_spin.value()
-        }
+        # Start with the existing settings to avoid overwriting keys
+        # for invisible fields or having defaults from UI overwrite good settings.
+        new_settings = settings_manager.get('subtitles', {})
+
+        if self.rb_standard.isChecked():
+            new_settings['whisper_type'] = 'standard'
+        elif self.rb_amd.isChecked():
+            new_settings['whisper_type'] = 'amd'
+        else:
+            new_settings['whisper_type'] = 'assemblyai'
+
+        if self.whisper_group.isVisible():
+            new_settings['whisper_model'] = self.model_combo.currentText()
+        
+        new_settings['font'] = self.font_combo.currentFont().family()
+        new_settings['fontsize'] = self.fontsize_spin.value()
+        new_settings['color'] = self.current_color
+        new_settings['margin_v'] = self.margin_v_spin.value()
+        new_settings['fade_in'] = self.fade_in_spin.value()
+        new_settings['fade_out'] = self.fade_out_spin.value()
+        new_settings['max_words'] = self.max_words_spin.value()
+        
         settings_manager.set('subtitles', new_settings)

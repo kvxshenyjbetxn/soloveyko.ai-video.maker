@@ -120,9 +120,9 @@ class TemplatesTab(QWidget):
                 if key == 'montage' and isinstance(value, dict):
                     value = {k: v for k, v in value.items() if k not in ['codec', 'preset']}
                 
-                # Filter subtitles settings to exclude whisper_type (hardware-specific)
+                # Filter subtitles settings to exclude hardware-specific keys
                 elif key == 'subtitles' and isinstance(value, dict):
-                    value = {k: v for k, v in value.items() if k != 'whisper_type'}
+                    value = {k: v for k, v in value.items() if k not in ['whisper_type', 'whisper_model']}
                 
                 template_data[key] = value
         
@@ -164,11 +164,13 @@ class TemplatesTab(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        template_manager.load_template(name)
         template_data = template_manager.load_template(name)
         if not template_data:
             QMessageBox.critical(self, translator.translate("error"), translator.translate("template_load_error").format(name=name))
             return
+        
+        # Ignore subtitle settings from templates, as they are user/environment-specific
+        template_data.pop('subtitles', None)
         
         # Update settings
         for key, value in template_data.items():

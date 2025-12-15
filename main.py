@@ -14,6 +14,33 @@ from gui.auth_dialog import AuthDialog
 from gui.qt_material import apply_stylesheet
 from utils.settings import settings_manager
 
+# --- НОВА ФУНКЦІЯ: ДОДАЄ ASSETS У PATH ---
+def setup_dependency_paths():
+    """
+    Додає папку assets у системний PATH процесу.
+    Це дозволяє запускати 'ffmpeg' та 'ffprobe' без вказання повного шляху,
+    навіть якщо вони не встановлені в Windows.
+    """
+    if getattr(sys, 'frozen', False):
+        # Якщо запущено як скомпільований EXE, ресурси лежать у тимчасовій папці
+        base_dir = sys._MEIPASS
+    else:
+        # Якщо запущено через Python скрипт
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Шлях до папки assets
+    assets_dir = os.path.join(base_dir, "assets")
+    
+    # Перевіряємо, чи є там ffmpeg
+    ffmpeg_exe = os.path.join(assets_dir, "ffmpeg.exe")
+    
+    if os.path.exists(ffmpeg_exe):
+        # Додаємо assets на початок PATH, щоб програма спочатку шукала там
+        os.environ["PATH"] = assets_dir + os.pathsep + os.environ["PATH"]
+        # print(f"Dependencies: Added {assets_dir} to PATH. FFmpeg found.")
+    else:
+        print(f"Dependencies: WARNING. FFmpeg not found in {assets_dir}")
+
 # URL for the authentication server
 AUTH_SERVER_URL = "https://new-project-combain-server-production.up.railway.app"
 
@@ -126,4 +153,5 @@ def main():
         sys.exit(app.exec())
 
 if __name__ == '__main__':
+    main()
 
