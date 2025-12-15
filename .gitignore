@@ -7026,3 +7026,12 @@ dist/whisper-cli-amd/main.exe
 dist/whisper-cli-amd/medium.bin
 dist/whisper-cli-amd/small.bin
 dist/whisper-cli-amd/Whisper.dll
+whisper-cli-amd/base.bin
+whisper-cli-amd/doc.txt
+whisper-cli-amd/lz4.txt
+whisper-cli-amd/main.exe
+whisper-cli-amd/medium.bin
+whisper-cli-amd/small.bin
+whisper-cli-amd/Whisper.dll
+dist/README.txt
+statistics.json
