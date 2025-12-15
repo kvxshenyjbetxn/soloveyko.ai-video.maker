@@ -1,4 +1,5 @@
 import os
+import sys
 import requests
 from datetime import datetime
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu
@@ -253,7 +254,7 @@ class MainWindow(QMainWindow):
 
         # Connect signals
         self.queue_manager.task_added.connect(self.queue_tab.add_task)
-        self.queue_tab.start_processing_button.clicked.connect(self.task_processor.start_processing)
+        self.queue_tab.start_processing_button.clicked.connect(self._start_processing_checked)
         self.task_processor.processing_finished.connect(self.show_processing_finished_dialog)
         self.task_processor.processing_finished.connect(self.update_balance)
         self.task_processor.processing_finished.connect(self.update_googler_usage)
@@ -272,7 +273,7 @@ class MainWindow(QMainWindow):
         self.gallery_tab.media_clicked.connect(self.show_media_viewer)
         self.settings_tab.templates_tab.template_applied.connect(self.update_template_label)
 
-        QTimer.singleShot(0, self.start_background_updates)
+        QTimer.singleShot(100, self.check_api_key_validity) # Initial check
         
         # Apply last used template on startup
         last_template = self.settings_manager.get('last_used_template_name')
@@ -308,29 +309,52 @@ class MainWindow(QMainWindow):
         self.validation_timer.timeout.connect(self.check_api_key_validity)
         self.validation_timer.start(10 * 60 * 1000) # 10 minutes
 
+    def _start_processing_checked(self):
+        worker = ValidationWorker(api_key=self.api_key, server_url=self.server_url)
+        # We connect to a lambda to pass a flag indicating this is a pre-processing check
+        worker.signals.finished.connect(
+            lambda is_valid, expires_at: self.on_pre_processing_validation_finished(is_valid)
+        )
+        self.threadpool.start(worker)
+
+    def on_pre_processing_validation_finished(self, is_valid):
+        if is_valid:
+            self.task_processor.start_processing()
+        else:
+            # The periodic validation will have already shown a dialog.
+            # We show a specific one here for the action of starting processing.
+            title = self.translator.translate('subscription_expired_title')
+            message = self.translator.translate('subscription_expired_message_start_processing')
+            QMessageBox.warning(self, title, message)
+
     def update_subscription_status(self):
         days_left_text = ""
-        tooltip_text = "Немає інформації про підписку."
+        tooltip_text = self.translator.translate('no_subscription_info')
 
         if self.subscription_info:
             try:
-                expires_at_str = self.subscription_info.split('.')[0]
+                # Handle ISO format string, potentially with 'Z' at the end
+                expires_at_str = self.subscription_info.replace('Z', '+00:00')
                 expires_at = datetime.fromisoformat(expires_at_str)
                 
-                days_left = (expires_at.date() - datetime.utcnow().date()).days
+                # Make sure the datetime is timezone-aware for correct comparison
+                now = datetime.now(expires_at.tzinfo)
+                
+                days_left = (expires_at - now).days
 
                 if days_left >= 0:
                     days_left_text = f"{days_left} д"
                     tooltip_text = (
-                        f"Підписка активна до: {expires_at.strftime('%Y-%m-%d')}\n"
-                        f"Залишилось: {days_left} днів"
+                        f"{self.translator.translate('subscription_active_until')}: {expires_at.strftime('%Y-%m-%d %H:%M')}\n"
+                        f"{self.translator.translate('days_left')}: {days_left}"
                     )
                 else:
                     days_left_text = "!"
-                    tooltip_text = "Термін дії вашої підписки закінчився."
-            except (ValueError, TypeError):
+                    tooltip_text = self.translator.translate('subscription_expired')
+            except (ValueError, TypeError) as e:
+                logger.log(f"Error parsing subscription date: {e}", level=LogLevel.ERROR)
                 days_left_text = "?"
-                tooltip_text = "Не вдалося визначити термін дії підписки."
+                tooltip_text = self.translator.translate('subscription_date_format_error')
         
         self.days_left_label.setText(days_left_text)
         self.user_icon_button.setToolTip(tooltip_text)
@@ -338,26 +362,47 @@ class MainWindow(QMainWindow):
     def show_subscription_menu(self):
         menu = QMenu(self)
         
+        # Logout Action
+        logout_action = QAction(self.translator.translate('logout'), self)
+        logout_action.triggered.connect(self.logout)
+        
         if self.subscription_info:
             try:
-                expires_at_str = self.subscription_info.split('.')[0]
+                expires_at_str = self.subscription_info.replace('Z', '+00:00')
                 expires_at = datetime.fromisoformat(expires_at_str)
-                expires_at_formatted = expires_at.strftime('%Y-%m-%d')
+                expires_at_formatted = expires_at.strftime('%Y-%m-%d %H:%M')
                 
-                days_left = (expires_at.date() - datetime.utcnow().date()).days
+                now = datetime.now(expires_at.tzinfo)
+                days_left = (expires_at - now).days
 
                 if days_left >= 0:
-                    menu.addAction(f"Підписка до: {expires_at_formatted}")
-                    menu.addAction(f"Залишилось: {days_left} днів")
+                    menu.addAction(f"{self.translator.translate('subscription_active_until')}: {expires_at_formatted}")
+                    menu.addAction(f"{self.translator.translate('days_left')}: {days_left}")
                 else:
-                    menu.addAction("Термін дії підписки закінчився")
+                    menu.addAction(self.translator.translate('subscription_expired'))
 
             except (ValueError, TypeError):
-                menu.addAction("Помилка формату дати")
+                menu.addAction(self.translator.translate('subscription_date_format_error'))
         else:
-            menu.addAction("Немає інформації про підписку")
+            menu.addAction(self.translator.translate('no_subscription_info'))
+            
+        menu.addSeparator()
+        menu.addAction(logout_action)
             
         menu.exec(self.user_icon_button.mapToGlobal(self.user_icon_button.rect().bottomLeft()))
+
+    def logout(self):
+        # Clear saved API key
+        self.settings_manager.set('api_key', None)
+        self.settings_manager.save_settings()
+        
+        # Inform the user and restart the application
+        QMessageBox.information(self, self.translator.translate('logout_success_title'), self.translator.translate('logout_success_message'))
+        
+        # Restart the application
+        QCoreApplication.quit()
+        # The os.execl call is a robust way to restart the app
+        os.execl(sys.executable, sys.executable, *sys.argv)
 
     def _on_image_review_required(self):
         # ... (rest of the file is the same)
