@@ -1415,6 +1415,40 @@ class TaskProcessor(QObject):
                 'output_path': output_path, 'ass_path': state.subtitle_path,
                 'settings': montage_settings
             }
+
+            # --- Add Background Music Config ---
+            background_music_path = None
+            background_music_volume = 100
+            
+            all_languages_config = self.settings.get("languages_config", {})
+            lang_config = all_languages_config.get(state.lang_id, {})
+            
+            user_files = state.lang_data.get('user_provided_files', {})
+
+            if 'background_music' in user_files:
+                # User override from TextTab
+                override_path = user_files['background_music']
+                if os.path.exists(override_path):
+                    background_music_path = override_path
+                    # Use default volume from settings for the override
+                    background_music_volume = lang_config.get("background_music_volume", 100)
+                    logger.log(f"[{task_id}] Using user-provided background music: {os.path.basename(background_music_path)}", level=LogLevel.INFO)
+                else:
+                    logger.log(f"[{task_id}] User-provided background music not found at {override_path}. Skipping.", level=LogLevel.WARNING)
+
+            if not background_music_path:
+                # Fallback to default from language settings
+                default_path = lang_config.get("background_music_path")
+                if default_path and os.path.exists(default_path):
+                    background_music_path = default_path
+                    background_music_volume = lang_config.get("background_music_volume", 100)
+                    logger.log(f"[{task_id}] Using default background music: {os.path.basename(background_music_path)}", level=LogLevel.INFO)
+            
+            if background_music_path:
+                config['background_music_path'] = background_music_path
+                config['background_music_volume'] = background_music_volume
+            # --- End Background Music Config ---
+
             worker = MontageWorker(task_id, config)
             worker.signals.finished.connect(self._on_montage_finished)
             worker.signals.error.connect(self._on_montage_error)
