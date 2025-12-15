@@ -276,6 +276,7 @@ class MainWindow(QMainWindow):
         
         # Apply last used template on startup
         last_template = self.settings_manager.get('last_used_template_name')
+        template_applied = False
         if last_template:
             # ... (rest of the logic remains the same)
             from utils.settings import template_manager
@@ -294,6 +295,10 @@ class MainWindow(QMainWindow):
                 self.settings_tab._update_all_tabs()
                 self.retranslate_ui()
                 logger.log(f"Applied last used template: {last_template}", level=LogLevel.INFO)
+                template_applied = True
+
+        if not template_applied:
+            self.settings_tab.languages_tab.load_elevenlabs_templates()
 
         # Setup periodic API key validation
         self.validation_timer = QTimer(self)
