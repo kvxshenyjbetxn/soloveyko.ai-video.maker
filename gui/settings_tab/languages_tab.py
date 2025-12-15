@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLineEdit,
     QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox,
@@ -10,6 +11,12 @@ from utils.translator import translator
 from utils.settings import settings_manager
 from api.elevenlabs import ElevenLabsAPI
 from gui.widgets.prompt_editor_dialog import PromptEditorDialog
+
+# Determine the base path for resources, accommodating PyInstaller
+if getattr(sys, 'frozen', False):
+    BASE_PATH = sys._MEIPASS
+else:
+    BASE_PATH = os.path.abspath(".")
 
 class LanguagesTab(QWidget):
     def __init__(self):
@@ -30,7 +37,8 @@ class LanguagesTab(QWidget):
 
     def load_voicemaker_voices(self):
         try:
-            with open("assets/voicemaker_voices.json", "r", encoding="utf-8") as f:
+            voicemaker_path = os.path.join(BASE_PATH, "assets", "voicemaker_voices.json")
+            with open(voicemaker_path, "r", encoding="utf-8") as f:
                 self.voicemaker_voices = json.load(f)
         except Exception as e:
             print(f"Error loading voicemaker voices: {e}")
@@ -38,7 +46,8 @@ class LanguagesTab(QWidget):
             
     def load_gemini_voices(self):
         try:
-            with open("assets/gemini_tts_voices.json", "r", encoding="utf-8") as f:
+            gemini_path = os.path.join(BASE_PATH, "assets", "gemini_tts_voices.json")
+            with open(gemini_path, "r", encoding="utf-8") as f:
                 self.gemini_voices = json.load(f)
         except Exception as e:
             print(f"Error loading gemini voices: {e}")

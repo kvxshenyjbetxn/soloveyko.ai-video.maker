@@ -285,13 +285,11 @@ class ImageGenerationWorker(BaseWorker):
         googler_semaphore = self.config.get('googler_semaphore')
 
         if provider == 'googler':
-            api = GooglerAPI()
             file_extension = 'jpg'
             api_kwargs = self.config['api_kwargs']
             # This is now the pool size for this specific task, not the global limit
             max_threads = self.config.get('max_threads', 1)
         else: # pollinations
-            api = PollinationsAPI()
             file_extension = 'png'
             api_kwargs = {}
             max_threads = 1  # Pollinations doesn't support parallel generation
@@ -304,6 +302,15 @@ class ImageGenerationWorker(BaseWorker):
             """Generate a single image and return its data"""
             global last_image_request_time
             
+            # --- THREAD-SAFE API INSTANTIATION ---
+            # Create a new API instance for each thread to prevent race conditions
+            # and potential heap corruption from shared non-thread-safe objects (like requests sessions).
+            if provider == 'googler':
+                thread_local_api = GooglerAPI()
+            else:
+                thread_local_api = PollinationsAPI()
+            # --- END THREAD-SAFE ---
+
             is_googler = provider == 'googler' and googler_semaphore is not None
             
             try:
@@ -323,7 +330,7 @@ class ImageGenerationWorker(BaseWorker):
 
                 logger.log(f"[{self.task_id}] [{service_name}] Generating image {index + 1}/{len(prompts)}", level=LogLevel.INFO)
 
-                image_data = api.generate_image(prompt, **api_kwargs)
+                image_data = thread_local_api.generate_image(prompt, **api_kwargs)
                 if not image_data:
                     logger.log(f"[{self.task_id}] [{service_name}] Failed to generate image {index + 1}/{len(prompts)} (no data)", level=LogLevel.WARNING)
                     return None
@@ -520,6 +527,12 @@ class TaskState:
             logger.log(f"[{self.task_id}] Failed to create save directory {dir_path}. Error: {e}", level=LogLevel.ERROR)
             return None
 
+# Determine the base path for resources, accommodating PyInstaller
+if getattr(sys, 'frozen', False):
+    BASE_PATH = sys._MEIPASS
+else:
+    BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
@@ -577,7 +590,8 @@ class TaskProcessor(QObject):
 
     def _load_voicemaker_voices(self):
         try:
-            with open("assets/voicemaker_voices.json", "r", encoding="utf-8") as f:
+            path = os.path.join(BASE_PATH, "assets", "voicemaker_voices.json")
+            with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.log(f"Error loading voicemaker voices: {e}", level=LogLevel.ERROR)

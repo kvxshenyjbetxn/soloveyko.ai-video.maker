@@ -4,6 +4,11 @@ import subprocess
 import shutil
 
 def compile_project():
+    # --- Set CWD to script's directory ---
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(script_dir)
+    # ------------------------------------
+
     # Назва вихідного файлу
     app_name = "CombainAI"
     
@@ -54,6 +59,8 @@ def compile_project():
         "--windowed",
         "--icon=assets/icon.ico",
         "--add-data", "assets;assets",
+        "--add-data", "assets/gemini_tts_voices.json;assets",
+        "--add-data", "assets/voicemaker_voices.json;assets",
         "--add-data", "gui/qt_material;gui/qt_material",
         "--add-data", f"{whisper_assets};whisper/assets",
         "--hidden-import", "whisper",
