@@ -518,7 +518,7 @@ class TaskState:
     def _get_save_path(self, base_path, job_name, lang_name):
         if not base_path: return None
         try:
-            safe_job_name = "".join(c for c in job_name if c.isalnum() or c in (' ', '_')).rstrip()
+            safe_job_name = ("".join(c for c in job_name if c.isalnum() or c in (' ', '_')).rstrip())[:100]
             safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
             dir_path = os.path.join(base_path, safe_job_name, safe_lang_name)
             os.makedirs(dir_path, exist_ok=True)
@@ -1412,7 +1412,7 @@ class TaskProcessor(QObject):
                 self._on_montage_error(task_id, "No visual files found for montage.")
                 return
             
-            safe_task_name = "".join(c for c in state.job_name if c.isalnum() or c in (' ', '_')).strip()
+            safe_task_name = ("".join(c for c in state.job_name if c.isalnum() or c in (' ', '_')).strip())[:100]
             safe_lang_name = "".join(c for c in state.lang_name if c.isalnum() or c in (' ', '_')).strip()
             output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
             output_path = os.path.join(state.dir_path, output_filename)
