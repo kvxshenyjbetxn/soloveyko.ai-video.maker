@@ -2,7 +2,8 @@ import json
 import os
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLineEdit,
-    QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox
+    QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox,
+    QFileDialog, QSlider
 )
 from PySide6.QtCore import Qt
 from utils.translator import translator
@@ -156,7 +157,40 @@ class LanguagesTab(QWidget):
         self.gemini_tone_input.textChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.gemini_tone_label, self.gemini_tone_input)
 
+        # Background Music Settings
+        self.bg_music_label = QLabel()
+        
+        bg_music_layout = QHBoxLayout()
+        self.bg_music_path_input = QLineEdit()
+        self.bg_music_path_input.setReadOnly(True)
+        self.bg_music_path_input.textChanged.connect(self.save_current_language_settings)
+        
+        self.browse_bg_music_button = QPushButton()
+        self.browse_bg_music_button.clicked.connect(self.browse_for_music_file)
+        
+        self.clear_bg_music_button = QPushButton()
+        self.clear_bg_music_button.clicked.connect(self.clear_background_music)
+        
+        bg_music_layout.addWidget(self.bg_music_path_input)
+        bg_music_layout.addWidget(self.browse_bg_music_button)
+        bg_music_layout.addWidget(self.clear_bg_music_button)
 
+        settings_layout.addRow(self.bg_music_label, bg_music_layout)
+
+        self.bg_music_volume_label = QLabel()
+        
+        volume_layout = QHBoxLayout()
+        self.bg_music_volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.bg_music_volume_slider.setRange(0, 100)
+        self.bg_music_volume_slider.valueChanged.connect(self.on_volume_slider_changed)
+        
+        self.bg_music_volume_value_label = QLabel("100")
+        self.bg_music_volume_slider.setValue(100)
+
+        volume_layout.addWidget(self.bg_music_volume_slider)
+        volume_layout.addWidget(self.bg_music_volume_value_label)
+        
+        settings_layout.addRow(self.bg_music_volume_label, volume_layout)
 
         right_layout.addWidget(self.prompt_label)
         right_layout.addLayout(prompt_layout)
@@ -171,6 +205,24 @@ class LanguagesTab(QWidget):
         dialog = PromptEditorDialog(self, self.prompt_edit.toPlainText())
         if dialog.exec():
             self.prompt_edit.setPlainText(dialog.get_text())
+            
+    def browse_for_music_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            translator.translate("select_background_music_file", "Select Background Music File"),
+            "",
+            translator.translate("audio_files_filter", "Audio Files (*.mp3 *.wav)")
+        )
+        if file_path:
+            self.bg_music_path_input.setText(file_path)
+            self.save_current_language_settings()
+            
+    def clear_background_music(self):
+        self.bg_music_path_input.clear()
+
+    def on_volume_slider_changed(self, value):
+        self.bg_music_volume_value_label.setText(str(value))
+        self.save_current_language_settings()
 
     def load_languages(self):
         self.lang_list_widget.clear()
@@ -293,6 +345,8 @@ class LanguagesTab(QWidget):
         self.voicemaker_voice_combo.blockSignals(True)
         self.gemini_voice_combo.blockSignals(True)
         self.gemini_tone_input.blockSignals(True)
+        self.bg_music_path_input.blockSignals(True)
+        self.bg_music_volume_slider.blockSignals(True)
 
         self.prompt_edit.setPlainText(config.get("prompt", ""))
         
@@ -322,6 +376,11 @@ class LanguagesTab(QWidget):
         self.gemini_voice_combo.setCurrentIndex(gemini_index if gemini_index >= 0 else 0)
         self.gemini_tone_input.setText(config.get("gemini_tone", ""))
 
+        self.bg_music_path_input.setText(config.get("background_music_path", ""))
+        volume = config.get("background_music_volume", 100)
+        self.bg_music_volume_slider.setValue(volume)
+        self.bg_music_volume_value_label.setText(str(volume))
+
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
         self.temperature_spinbox.setValue(config.get("temperature", 0.7))
 
@@ -336,6 +395,8 @@ class LanguagesTab(QWidget):
         self.voicemaker_voice_combo.blockSignals(False)
         self.gemini_voice_combo.blockSignals(False)
         self.gemini_tone_input.blockSignals(False)
+        self.bg_music_path_input.blockSignals(False)
+        self.bg_music_volume_slider.blockSignals(False)
         
         self.right_panel.setVisible(True)
 
@@ -360,7 +421,9 @@ class LanguagesTab(QWidget):
             "elevenlabs_template_uuid": "",
             "voicemaker_voice_id": "",
             "gemini_voice": "Puck",
-            "gemini_tone": ""
+            "gemini_tone": "",
+            "background_music_path": "",
+            "background_music_volume": 100
         }
         self.settings.set("languages_config", languages)
         
@@ -415,6 +478,9 @@ class LanguagesTab(QWidget):
                 languages[self.current_lang_id]["gemini_voice"] = gemini_voice
 
             languages[self.current_lang_id]["gemini_tone"] = self.gemini_tone_input.text()
+            
+            languages[self.current_lang_id]["background_music_path"] = self.bg_music_path_input.text()
+            languages[self.current_lang_id]["background_music_volume"] = self.bg_music_volume_slider.value()
 
             self.settings.set("languages_config", languages)
 
@@ -460,4 +526,8 @@ class LanguagesTab(QWidget):
         self.voicemaker_voice_label.setText(translator.translate("voicemaker_voice_label"))
         self.gemini_voice_label.setText(translator.translate("gemini_voice_label"))
         self.temperature_label.setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
+        self.bg_music_label.setText(translator.translate("background_music_label", "Background Music:"))
+        self.browse_bg_music_button.setText(translator.translate("browse_button", "Browse..."))
+        self.clear_bg_music_button.setText(translator.translate("clear_button", "Clear"))
+        self.bg_music_volume_label.setText(translator.translate("music_volume_label", "Music Volume:"))
 

@@ -7,7 +7,7 @@ import re
 from utils.logger import logger, LogLevel
 
 class MontageEngine:
-    def create_video(self, visual_files, audio_path, output_path, ass_path, settings, task_id=None, progress_callback=None, start_time=None):
+    def create_video(self, visual_files, audio_path, output_path, ass_path, settings, task_id=None, progress_callback=None, start_time=None, background_music_path=None, background_music_volume=None, **kwargs):
         prefix = f"[{task_id}] " if task_id else ""
         
         def log_progress(msg):
@@ -219,7 +219,45 @@ class MontageEngine:
             output_v_stream = "[v_out]"
 
         full_graph = ";".join(filter_parts)
+        
+        # --- AUDIO INPUTS AND FILTERS ---
         inputs.append("-i"); inputs.append(audio_path.replace("\\", "/"))
+        voiceover_input_index = num_files
+
+        audio_filter_chains = []
+        final_audio_map = f"[{voiceover_input_index}:a]"
+
+        if background_music_path and os.path.exists(background_music_path):
+            logger.log(f"{prefix}[FFmpeg] Adding background music.", level=LogLevel.INFO)
+            # Use -stream_loop on the input
+            inputs.extend(["-stream_loop", "-1", "-i", background_music_path.replace("\\", "/")])
+            
+            bg_music_input_index = voiceover_input_index + 1
+            
+            vol_multiplier = (background_music_volume or 100) / 100.0
+            
+            fade_duration = 5
+            # Ensure fade out doesn't start before the audio begins
+            fade_start_time = max(0, audio_dur - fade_duration)
+
+            # Filter chain for background music: set volume, trim to voiceover length, fade out
+            bg_music_filter = (
+                f"[{bg_music_input_index}:a]volume={vol_multiplier:.2f},"
+                f"atrim=duration={audio_dur:.3f},"
+                f"afade=t=out:st={fade_start_time:.3f}:d={fade_duration}[bg_audio]"
+            )
+            audio_filter_chains.append(bg_music_filter)
+            
+            # Filter chain for mixing voiceover and background music
+            mix_filter = f"[{voiceover_input_index}:a][bg_audio]amix=inputs=2:duration=first:dropout_transition=2[a_out]"
+            audio_filter_chains.append(mix_filter)
+
+            final_audio_map = "[a_out]"
+        
+        if audio_filter_chains:
+            full_graph += ";" + ";".join(audio_filter_chains)
+        
+        # --- END AUDIO ---
 
         filter_script_path = None
         try:
@@ -230,7 +268,7 @@ class MontageEngine:
 
             cmd = ["ffmpeg", "-y", "-hide_banner"]
             cmd.extend(inputs)
-            cmd.extend(["-filter_complex_script", filter_script_path.replace("\\", "/"), "-map", output_v_stream, "-map", f"{num_files}:a", "-c:v", codec])
+            cmd.extend(["-filter_complex_script", filter_script_path.replace("\\", "/"), "-map", output_v_stream, "-map", final_audio_map, "-c:v", codec])
 
             bitrate_str = f"{bitrate}M"
             if codec == "h264_amf":

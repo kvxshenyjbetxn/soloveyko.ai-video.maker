@@ -60,6 +60,7 @@ class StageSelectionWidget(QWidget):
         self.parent_tab = parent_tab
         self.user_images = []
         self.user_audio = None
+        self.user_background_music = None
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
@@ -77,6 +78,13 @@ class StageSelectionWidget(QWidget):
         self.update_style()
         
         layout.addWidget(self.toggle_all_button)
+
+        self.add_bg_music_button = QPushButton(translator.translate("add_background_music", "Add Music"))
+        self.add_bg_music_button.setObjectName("addBgMusicButton")
+        self.add_bg_music_button.setCheckable(True)
+        self.add_bg_music_button.clicked.connect(self.open_background_music_dialog)
+        self.add_bg_music_button.setFixedHeight(25)
+        layout.addWidget(self.add_bg_music_button)
 
         line = QFrame()
         line.setFrameShape(QFrame.Shape.VLine)
@@ -149,6 +157,33 @@ class StageSelectionWidget(QWidget):
         dialog.files_selected.connect(self.set_user_audio)
         dialog.exec()
 
+    def open_background_music_dialog(self, checked):
+        if not checked:
+            self.set_user_background_music([])
+            return
+
+        dialog = FileDialog(
+            self,
+            title=translator.translate("add_background_music_title", "Add Background Music"),
+            description=translator.translate("add_background_music_desc", "Select an audio file to use as background music."),
+            extensions=[".mp3", ".wav"],
+            multi_file=False
+        )
+        dialog.finished.connect(lambda: self.add_bg_music_button.setChecked(self.user_background_music is not None))
+        dialog.files_selected.connect(self.set_user_background_music)
+        dialog.exec()
+
+    def set_user_background_music(self, files):
+        self.user_background_music = files[0] if files else None
+        if self.user_background_music:
+            self.add_bg_music_button.setText(os.path.basename(self.user_background_music))
+            self.add_bg_music_button.setToolTip(self.user_background_music)
+            self.add_bg_music_button.setChecked(True)
+        else:
+            self.add_bg_music_button.setText(translator.translate("add_background_music", "Add Music"))
+            self.add_bg_music_button.setToolTip("")
+            self.add_bg_music_button.setChecked(False)
+
     def set_user_images(self, files):
         self.user_images = sorted(files)
         button = self.add_buttons.get("stage_images")
@@ -183,12 +218,20 @@ class StageSelectionWidget(QWidget):
             files["stage_images"] = self.user_images
         if self.user_audio:
             files["stage_voiceover"] = self.user_audio
+        if self.user_background_music:
+            files["background_music"] = self.user_background_music
         return files
         
     def retranslate_ui(self):
         for key, checkbox in self.checkboxes.items():
-            checkbox.setText(translator.translate(key))
+            if not key.startswith("custom_"):
+                checkbox.setText(translator.translate(key))
         self.update_toggle_button_text()
+        self.add_bg_music_button.setText(translator.translate("add_background_music", "Add Music"))
+        self.add_bg_music_button.setToolTip("")
+        if self.user_background_music:
+             self.add_bg_music_button.setText(os.path.basename(self.user_background_music))
+             self.add_bg_music_button.setToolTip(self.user_background_music)
 
     def are_all_selected(self):
         return all(checkbox.isChecked() for checkbox in self.checkboxes.values())

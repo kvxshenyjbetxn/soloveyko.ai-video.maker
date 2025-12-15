@@ -262,5 +262,13 @@
     "prompt_count_control_label": "Контроль количества промтов:",
     "prompt_count_label": "Количество промтов:",
     "prompt_editor_title": "Редактор промпта",
-    "open_editor_button": "Редактор"
+    "open_editor_button": "Редактор",
+    "background_music_label": "Фоновая музыка:",
+    "clear_button": "Очистить",
+    "music_volume_label": "Громкость музыки:",
+    "select_background_music_file": "Выберите файл фоновой музыки",
+    "audio_files_filter": "Аудиофайлы (*.mp3 *.wav)",
+    "add_background_music": "Добавить музыку",
+    "add_background_music_title": "Добавить фоновую музыку",
+    "add_background_music_desc": "Выберите аудиофайл для использования в качестве фоновой музыки."
 }

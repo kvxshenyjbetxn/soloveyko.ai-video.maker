@@ -262,5 +262,13 @@
     "prompt_count_control_label": "Prompt Count Control:",
     "prompt_count_label": "Prompt Count:",
     "prompt_editor_title": "Prompt Editor",
-    "open_editor_button": "Editor"
+    "open_editor_button": "Editor",
+    "background_music_label": "Background Music:",
+    "clear_button": "Clear",
+    "music_volume_label": "Music Volume:",
+    "select_background_music_file": "Select Background Music File",
+    "audio_files_filter": "Audio Files (*.mp3 *.wav)",
+    "add_background_music": "Add Music",
+    "add_background_music_title": "Add Background Music",
+    "add_background_music_desc": "Select an audio file to use as background music."
 }

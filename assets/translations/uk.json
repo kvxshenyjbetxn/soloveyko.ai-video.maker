@@ -262,5 +262,13 @@
     "prompt_count_control_label": "Контроль кількості промтів:",
     "prompt_count_label": "Кількість промтів:",
     "prompt_editor_title": "Редактор промту",
-    "open_editor_button": "Редактор"
+    "open_editor_button": "Редактор",
+    "background_music_label": "Фонова музика:",
+    "clear_button": "Очистити",
+    "music_volume_label": "Гучність музики:",
+    "select_background_music_file": "Виберіть файл фонової музики",
+    "audio_files_filter": "Аудіофайли (*.mp3 *.wav)",
+    "add_background_music": "Додати музику",
+    "add_background_music_title": "Додати фонову музику",
+    "add_background_music_desc": "Виберіть аудіофайл для використання в якості фонової музики."
 }
