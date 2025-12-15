@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QListWidget, QPushButton, QDialogButtonBox
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QListWidget, QPushButton, QDialogButtonBox, QFileDialog, QHBoxLayout
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from utils.translator import translator
 
 class FileDialog(QDialog):
     files_selected = Signal(list)
@@ -25,10 +26,33 @@ class FileDialog(QDialog):
         self.file_list_widget = QListWidget()
         layout.addWidget(self.file_list_widget)
 
+        # --- Button Layout ---
+        button_layout = QHBoxLayout()
+
+        self.browse_button = QPushButton(translator.translate("browse_button", "Browse..."))
+        self.browse_button.clicked.connect(self.open_file_browser)
+        button_layout.addWidget(self.browse_button)
+
+        button_layout.addStretch()
+
         self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
-        layout.addWidget(self.button_box)
+        button_layout.addWidget(self.button_box)
+        
+        layout.addLayout(button_layout)
+
+    def open_file_browser(self):
+        file_filter = f"Files ({' '.join(['*' + ext for ext in self.extensions])})" if self.extensions else "All Files (*)"
+        
+        if self.multi_file:
+            files, _ = QFileDialog.getOpenFileNames(self, "Select Files", "", file_filter)
+            if files:
+                self.add_files(files)
+        else:
+            file, _ = QFileDialog.getOpenFileName(self, "Select File", "", file_filter)
+            if file:
+                self.add_files([file])
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -43,30 +67,31 @@ class FileDialog(QDialog):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
             urls = event.mimeData().urls()
+            paths = [url.toLocalFile() for url in urls]
+            self.add_files(paths)
             
-            if not self.multi_file:
-                self.file_paths.clear()
-                self.file_list_widget.clear()
+    def add_files(self, new_paths):
+        if not self.multi_file:
+            self.file_paths.clear()
 
-            for url in urls:
-                file_path = url.toLocalFile()
-                if self.extensions:
-                    if any(file_path.lower().endswith(ext) for ext in self.extensions):
-                        if self.multi_file:
-                            if file_path not in self.file_paths:
-                                self.file_paths.append(file_path)
-                        else:
-                            self.file_paths = [file_path]
-                            break
-                else:
+        for file_path in new_paths:
+            if self.extensions:
+                if any(file_path.lower().endswith(ext) for ext in self.extensions):
                     if self.multi_file:
                         if file_path not in self.file_paths:
                             self.file_paths.append(file_path)
                     else:
                         self.file_paths = [file_path]
-                        break
-            
-            self.update_list_widget()
+                        break 
+            else:
+                if self.multi_file:
+                    if file_path not in self.file_paths:
+                        self.file_paths.append(file_path)
+                else:
+                    self.file_paths = [file_path]
+                    break
+        
+        self.update_list_widget()
 
     def update_list_widget(self):
         self.file_list_widget.clear()

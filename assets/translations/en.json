@@ -270,5 +270,5 @@
     "audio_files_filter": "Audio Files (*.mp3 *.wav)",
     "add_background_music": "Add Music",
     "add_background_music_title": "Add Background Music",
-    "add_background_music_desc": "Select an audio file to use as background music."
+    "add_background_music_desc": "Select an audio file to use as background music, or drag and drop a file here."
 }
