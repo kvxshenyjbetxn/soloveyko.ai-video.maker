@@ -24,7 +24,6 @@ class LanguagesTab(QWidget):
         self.load_gemini_voices()
         self.init_ui()
         self.load_languages()
-        self.load_elevenlabs_templates()
         self.retranslate_ui()
         if self.lang_list_widget.count() > 0:
             self.lang_list_widget.setCurrentRow(0)

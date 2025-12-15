@@ -119,11 +119,11 @@ def main():
             sys.exit(0)
     
     if authenticated:
+        setup_dependency_paths() # Call the new function here
         main_window = MainWindow(app, subscription_info=subscription_info, api_key=api_key, server_url=AUTH_SERVER_URL)
         main_window.apply_current_theme()
         main_window.show()
         sys.exit(app.exec())
 
 if __name__ == '__main__':
-    main()
 
