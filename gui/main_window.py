@@ -1,6 +1,7 @@
 import os
 import sys
 import requests
+import collections
 from datetime import datetime
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray, QTimer
@@ -143,6 +144,8 @@ class MainWindow(QMainWindow):
         self.queue_manager = QueueManager()
         self.task_processor = TaskProcessor(self.queue_manager)
         self.threadpool = QThreadPool()
+        self.translation_review_queue = collections.deque()
+        self.is_review_dialog_active = False
         self.init_ui()
         logger.log(translator.translate('app_started'), level=LogLevel.INFO)
         self.app.installEventFilter(self)
@@ -413,30 +416,44 @@ class MainWindow(QMainWindow):
         self.gallery_tab.show_continue_button()
 
     def _on_translation_review_required(self, task_id, translated_text):
-        state = self.task_processor.task_states[task_id]
-        dialog = TranslationReviewDialog(self, state, translated_text, self.translator)
+        self.translation_review_queue.append((task_id, translated_text))
+        self._show_next_review_dialog()
 
-        def on_regenerate():
-            self.task_processor.regenerate_translation(task_id)
+    def _show_next_review_dialog(self):
+        if self.is_review_dialog_active or not self.translation_review_queue:
+            return
 
-        dialog.regenerate_requested.connect(on_regenerate)
-        
-        self.task_processor.translation_regenerated.connect(dialog.update_text)
-
-        if dialog.exec():
-            new_text = dialog.get_text()
-            self.task_processor.task_states[task_id].text_for_processing = new_text
-            if state.dir_path:
-                with open(os.path.join(state.dir_path, "translation_reviewed.txt"), 'w', encoding='utf-8') as f:
-                    f.write(new_text)
-            self.task_processor._on_text_ready(task_id)
-        else:
-            self.task_processor._set_stage_status(task_id, 'stage_translation', 'error', 'User cancelled review.')
+        self.is_review_dialog_active = True
+        task_id, translated_text = self.translation_review_queue.popleft()
         
         try:
-            self.task_processor.translation_regenerated.disconnect(dialog.update_text)
-        except RuntimeError:
-            pass
+            state = self.task_processor.task_states[task_id]
+            dialog = TranslationReviewDialog(self, state, translated_text, self.translator)
+
+            def on_regenerate():
+                self.task_processor.regenerate_translation(task_id)
+
+            dialog.regenerate_requested.connect(on_regenerate)
+            self.task_processor.translation_regenerated.connect(dialog.update_text)
+
+            if dialog.exec():
+                new_text = dialog.get_text()
+                self.task_processor.task_states[task_id].text_for_processing = new_text
+                if state.dir_path:
+                    with open(os.path.join(state.dir_path, "translation_reviewed.txt"), 'w', encoding='utf-8') as f:
+                        f.write(new_text)
+                self.task_processor._on_text_ready(task_id)
+            else:
+                self.task_processor._set_stage_status(task_id, 'stage_translation', 'error', 'User cancelled review.')
+            
+            try:
+                self.task_processor.translation_regenerated.disconnect(dialog.update_text)
+            except RuntimeError:
+                pass
+        finally:
+            self.is_review_dialog_active = False
+            # Process the next item in the queue
+            QTimer.singleShot(0, self._show_next_review_dialog)
 
     def show_media_viewer(self, media_path):
         if media_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm')):
