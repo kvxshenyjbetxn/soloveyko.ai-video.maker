@@ -5,7 +5,7 @@ import shutil
 
 def compile_project():
     # Назва вихідного файлу
-    app_name = "new-project-combain"
+    app_name = "CombainAI"
     
     # Перевірка наявності PyInstaller та залежностей
     try:
@@ -25,8 +25,14 @@ def compile_project():
     # Очистка попередніх збірок
     if os.path.exists("build"):
         shutil.rmtree("build")
-    if os.path.exists("dist"):
-        shutil.rmtree("dist")
+    # Очистка попереднього EXE (але не всієї папки dist, щоб зберегти моделі/конфіги)
+    target_exe = os.path.join("dist", f"{app_name}.exe")
+    if os.path.exists(target_exe):
+        try:
+            os.remove(target_exe)
+        except OSError:
+            print(f"Warning: Could not remove {target_exe}. It might be in use.")
+
     if os.path.exists(f"{app_name}.spec"):
         os.remove(f"{app_name}.spec")
 
@@ -54,6 +60,8 @@ def compile_project():
         "--exclude-module", "PyQt6",
         "--exclude-module", "PyQt5",
         "--exclude-module", "tkinter",
+        "--distpath", "dist",
+        "--workpath", "build",
         "--name", app_name,
         "main.py"
     ]
@@ -61,24 +69,14 @@ def compile_project():
     print(f"Running compilation: {' '.join(cmd)}")
     subprocess.check_call(cmd)
 
-    # Move to a clean distribution folder
-    dist_final = "dist_final"
-    if os.path.exists(dist_final):
-        shutil.rmtree(dist_final)
-    os.makedirs(dist_final)
-
-    # Copy EXE
-    exe_src = os.path.join("dist", f"{app_name}.exe")
-    exe_dst = os.path.join(dist_final, f"{app_name}.exe")
-    if os.path.exists(exe_src):
-        shutil.copy(exe_src, exe_dst)
-        print(f"Compilation success! Executable is in: {dist_final}")
+    if os.path.exists(target_exe):
+        print(f"Compilation success! Executable is in: dist/{app_name}.exe")
     else:
         print("Compilation failed: EXE not found.")
         return
 
     # Create README regarding whisper-cli-amd
-    readme_path = os.path.join(dist_final, "README.txt")
+    readme_path = os.path.join("dist", "README.txt")
     with open(readme_path, "w", encoding="utf-8") as f:
         f.write("Сборка завершена.\n\n")
         f.write("ВАЖЛИВО:\n")
