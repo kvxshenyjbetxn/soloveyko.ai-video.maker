@@ -273,5 +273,16 @@
     "statistics_cleared_message": "All statistics have been successfully cleared.",
     "statistics_title": "Statistics",
     "clear_statistics_button": "Clear Statistics",
-    "total_videos_created": "Total Videos Created"
+    "total_videos_created": "Total Videos Created",
+    "change_music_action": "Change Music...",
+    "remove_music_action": "Remove Music",
+    "subscription_expired_message_start_processing": "Cannot start processing. Your subscription has expired. Please renew it via the Telegram bot.",
+    "no_subscription_info": "No subscription information",
+    "subscription_active_until": "Subscription active until",
+    "days_left": "Days left",
+    "subscription_expired": "Your subscription has expired.",
+    "subscription_date_format_error": "Subscription date format error",
+    "logout": "Logout",
+    "logout_success_title": "Logout",
+    "logout_success_message": "You have been successfully logged out. The application will now restart."
 }

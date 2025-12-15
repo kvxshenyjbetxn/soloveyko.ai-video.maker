@@ -275,5 +275,14 @@
     "clear_statistics_button": "Очистити статистику",
     "total_videos_created": "Всього створено відео",
     "change_music_action": "Змінити музику...",
-    "remove_music_action": "Видалити музику"
+    "remove_music_action": "Видалити музику",
+    "subscription_expired_message_start_processing": "Не вдається почати обробку. Термін дії вашої підписки закінчився. Будь ласка, поновіть її через Telegram-бота.",
+    "no_subscription_info": "Немає інформації про підписку",
+    "subscription_active_until": "Підписка активна до",
+    "days_left": "Залишилось днів",
+    "subscription_expired": "Термін дії вашої підписки закінчився.",
+    "subscription_date_format_error": "Помилка формату дати підписки",
+    "logout": "Вийти",
+    "logout_success_title": "Вихід",
+    "logout_success_message": "Ви успішно вийшли з системи. Програма буде перезапущена."
 }

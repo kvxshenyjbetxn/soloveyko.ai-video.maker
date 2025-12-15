@@ -273,5 +273,16 @@
     "statistics_cleared_message": "Вся статистика была успешно очищена.",
     "statistics_title": "Статистика",
     "clear_statistics_button": "Очистить статистику",
-    "total_videos_created": "Всего создано видео"
+    "total_videos_created": "Всего создано видео",
+    "change_music_action": "Сменить музыку...",
+    "remove_music_action": "Удалить музыку",
+    "subscription_expired_message_start_processing": "Не удается начать обработку. Срок действия вашей подписки истек. Пожалуйста, обновите ее через Telegram-бота.",
+    "no_subscription_info": "Нет информации о подписке",
+    "subscription_active_until": "Подписка активна до",
+    "days_left": "Осталось дней",
+    "subscription_expired": "Срок действия вашей подписки истек.",
+    "subscription_date_format_error": "Ошибка формата даты подписки",
+    "logout": "Выйти",
+    "logout_success_title": "Выход",
+    "logout_success_message": "Вы успешно вышли из системы. Приложение будет перезапущено."
 }
