@@ -58,8 +58,18 @@ else:
 
 import jinja2
 
+
+# ADDED FOR FROZEN APP SUPPORT
+def _get_base_dir():
+    if getattr(sys, 'frozen', False):
+        # In frozen mode, resources are at sys._MEIPASS/gui/qt_material
+        return os.path.join(sys._MEIPASS, 'gui', 'qt_material')
+    else:
+        # Normal mode
+        return os.path.dirname(os.path.abspath(__file__))
+
 TEMPLATE_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), 'material.css.template'
+    _get_base_dir(), 'material.css.template'
 )
 
 
@@ -206,7 +216,7 @@ def get_theme(theme_name, invert_secondary=False):
         'default_dark',
     ]:
         theme = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
+            _get_base_dir(),
             'themes',
             'dark_teal.xml',
             # 'light_cyan_500.xml',
@@ -219,20 +229,25 @@ def get_theme(theme_name, invert_secondary=False):
     ]:
         invert_secondary = True
         theme = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
+            _get_base_dir(),
             'themes',
             'light_cyan_500.xml',
         )
     elif not os.path.exists(theme_name):
         theme = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), 'themes', theme_name
+            _get_base_dir(), 'themes', theme_name
         )
     else:
         theme = theme_name
 
     if not os.path.exists(theme):
-        logging.warning(f"{theme} not exist!")
-        return None
+        # Try full path if simple join failed (fallback)
+        if getattr(sys, 'frozen', False):
+             theme = os.path.join(sys._MEIPASS, 'gui', 'qt_material', 'themes', os.path.basename(theme_name))
+        
+        if not os.path.exists(theme):
+            logging.warning(f"{theme} not exist!")
+            return None
 
     document = parse(theme)
     theme = {
@@ -272,7 +287,7 @@ def get_theme(theme_name, invert_secondary=False):
 # ----------------------------------------------------------------------
 def add_fonts():
     ''''''
-    fonts_path = os.path.join(os.path.dirname(__file__), 'fonts')
+    fonts_path = os.path.join(_get_base_dir(), 'fonts')
 
     for font_dir in ['roboto']:
         for font in filter(
@@ -370,7 +385,7 @@ def density(
 # ----------------------------------------------------------------------
 def set_icons_theme(theme, parent='theme'):
     ''''''
-    source = os.path.join(os.path.dirname(__file__), 'resources', 'source')
+    source = os.path.join(_get_base_dir(), 'resources', 'source')
     resources = ResourseGenerator(
         primary=theme['primaryColor'],
         secondary=theme['secondaryColor'],
@@ -385,13 +400,13 @@ def set_icons_theme(theme, parent='theme'):
             QDir.addSearchPath('icon', resources.index)
             QDir.addSearchPath(
                 'qt_material',
-                os.path.join(os.path.dirname(__file__), 'resources'),
+                os.path.join(_get_base_dir(), 'resources'),
             )
         except:  # snake_case, true_property
             QDir.add_search_path('icon', resources.index)
             QDir.add_search_path(
                 'qt_material',
-                os.path.join(os.path.dirname(__file__), 'resources'),
+                os.path.join(_get_base_dir(), 'resources'),
             )
 
 
@@ -399,10 +414,11 @@ def set_icons_theme(theme, parent='theme'):
 def list_themes():
     ''''''
     themes = os.listdir(
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'themes')
+        os.path.join(_get_base_dir(), 'themes')
     )
     themes = filter(lambda a: a.endswith('xml'), themes)
     return sorted(list(themes))
+
 
 
 # ----------------------------------------------------------------------
@@ -732,11 +748,11 @@ class QtStyleTools:
 
         if 'PySide2' in sys.modules or 'PySide6' in sys.modules:
             self.dock_theme = QUiLoader().load(
-                os.path.join(os.path.dirname(__file__), 'dock_theme.ui')
+                os.path.join(_get_base_dir(), 'dock_theme.ui')
             )
         elif 'PyQt5' in sys.modules or 'PyQt6' in sys.modules:
             self.dock_theme = uic.loadUi(
-                os.path.join(os.path.dirname(__file__), 'dock_theme.ui')
+                os.path.join(_get_base_dir(), 'dock_theme.ui')
             )
 
         try:

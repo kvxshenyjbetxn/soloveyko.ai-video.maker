@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import time
 import base64
@@ -1124,8 +1125,12 @@ class TaskProcessor(QObject):
             
             whisper_exe = None; whisper_model_path = model_name
             if whisper_type == 'amd':
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+                if getattr(sys, 'frozen', False):
+                    whisper_base_path = os.path.join(os.path.dirname(sys.executable), "whisper-cli-amd")
+                else:
+                    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+                
                 whisper_exe = os.path.join(whisper_base_path, "main.exe")
                 whisper_model_path = os.path.join(whisper_base_path, model_name)
             

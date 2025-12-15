@@ -1,7 +1,10 @@
 PySide6
+requests
 opencv-python
 moviepy
 mutagen
 matplotlib
 pandas
 assemblyai==0.28.0
+openai-whisper
+pyinstaller

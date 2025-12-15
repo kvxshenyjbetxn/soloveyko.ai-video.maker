@@ -253,6 +253,10 @@ class MontageEngine:
             audio_filter_chains.append(mix_filter)
 
             final_audio_map = "[a_out]"
+        else:
+             # Direct input mapping (no brackets for raw stream map in some contexts, 
+             # but standard notation like "0:a" works reliably)
+             final_audio_map = f"{voiceover_input_index}:a"
         
         if audio_filter_chains:
             full_graph += ";" + ";".join(audio_filter_chains)

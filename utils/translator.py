@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from utils.settings import settings_manager
 
 class Translator:
@@ -7,12 +8,20 @@ class Translator:
         self.language = settings_manager.get('language')
         self.translations = self.load_translations()
 
+    def _get_assets_path(self):
+        if getattr(sys, 'frozen', False):
+            return sys._MEIPASS
+        else:
+            return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
     def load_translations(self):
-        lang_file = f"assets/translations/{self.language}.json"
+        base_path = self._get_assets_path()
+        lang_file = os.path.join(base_path, "assets", "translations", f"{self.language}.json")
+        
         if not os.path.exists(lang_file):
             # Fallback to a default language if the selected one doesn't exist
             self.language = 'en'
-            lang_file = f"assets/translations/{self.language}.json"
+            lang_file = os.path.join(base_path, "assets", "translations", f"{self.language}.json")
             settings_manager.set('language', self.language)
 
         if os.path.exists(lang_file):
