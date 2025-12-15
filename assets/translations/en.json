@@ -65,6 +65,7 @@
     "stage_voiceover": "Voiceover",
     "stage_subtitles": "Subtitles",
     "stage_video": "Video",
+    "stage_montage": "Montage",
     "select_all": "Select All",
     "deselect_all": "Deselect All ",
     "results_path_label": "Path to save results:",

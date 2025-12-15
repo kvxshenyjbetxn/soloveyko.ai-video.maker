@@ -64,6 +64,7 @@
     "stage_generated_images": "Згенеровані картинки",
     "stage_voiceover": "Озвучка",
     "stage_subtitles": "Субтитри",
+    "stage_montage": "Монтаж",
     "stage_video": "Відео",
     "select_all": "Вибрати все",
     "deselect_all": "Зняти вибір ",
@@ -272,5 +273,7 @@
     "statistics_cleared_message": "Вся статистика була успішно очищена.",
     "statistics_title": "Статистика",
     "clear_statistics_button": "Очистити статистику",
-    "total_videos_created": "Всього створено відео"
+    "total_videos_created": "Всього створено відео",
+    "change_music_action": "Змінити музику...",
+    "remove_music_action": "Видалити музику"
 }

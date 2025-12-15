@@ -1428,9 +1428,9 @@ class TaskProcessor(QObject):
                 override_path = user_files['background_music']
                 if os.path.exists(override_path):
                     background_music_path = override_path
-                    # Use default volume from settings for the override
-                    background_music_volume = lang_config.get("background_music_volume", 100)
-                    logger.log(f"[{task_id}] Using user-provided background music: {os.path.basename(background_music_path)}", level=LogLevel.INFO)
+                    # Use volume from user_files if available, otherwise default to 100
+                    background_music_volume = user_files.get("background_music_volume", 100)
+                    logger.log(f"[{task_id}] Using user-provided background music: {os.path.basename(background_music_path)} with volume {background_music_volume}%", level=LogLevel.INFO)
                 else:
                     logger.log(f"[{task_id}] User-provided background music not found at {override_path}. Skipping.", level=LogLevel.WARNING)
 
