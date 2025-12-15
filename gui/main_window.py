@@ -253,7 +253,7 @@ class MainWindow(QMainWindow):
         self.log_tab = LogTab()
         self.queue_tab = QueueTab(parent=self.tabs, main_window=self, log_tab=self.log_tab)
         self.gallery_tab = GalleryTab()
-        logger.set_log_widget(self.log_tab)
+        logger.log_message_signal.connect(self.log_tab.add_log_message)
         self.review_notification_shown = False
 
         self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
@@ -419,7 +419,8 @@ class MainWindow(QMainWindow):
 
     def _on_translation_review_required(self, task_id, translated_text):
         self.translation_review_queue.append((task_id, translated_text))
-        self._show_next_review_dialog()
+        if not self.is_review_dialog_active:
+            QTimer.singleShot(0, self._show_next_review_dialog)
 
     def _show_next_review_dialog(self):
         if self.is_review_dialog_active or not self.translation_review_queue:
