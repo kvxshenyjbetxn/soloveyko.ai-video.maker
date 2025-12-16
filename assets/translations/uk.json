@@ -284,5 +284,13 @@
     "subscription_date_format_error": "Помилка формату дати підписки",
     "logout": "Вийти",
     "logout_success_title": "Вихід",
-    "logout_success_message": "Ви успішно вийшли з системи. Програма буде перезапущена."
+    "logout_success_message": "Ви успішно вийшли з системи. Програма буде перезапущена.",
+    "active_template_label": "Шаблон",
+    "active_template_tooltip": "Цей шаблон застосовано до глобальних налаштувань.",
+    "template_applied_title": "Шаблон застосовано",
+    "template_applied_message": "Налаштування шаблону було застосовано та збережено.",
+    "apply_template_button": "Застосувати",
+    "view_template_button": "Перегляд",
+    "template_details_title": "Деталі шаблону",
+    "close_button": "Закрити"
 }

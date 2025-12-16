@@ -141,6 +141,9 @@ class MainWindow(QMainWindow):
         self.server_url = server_url
         self.settings_manager = settings_manager
         self.translator = translator
+        
+        self._apply_startup_template()
+
         self.queue_manager = QueueManager()
         self.task_processor = TaskProcessor(self.queue_manager)
         self.threadpool = QThreadPool()
@@ -149,6 +152,30 @@ class MainWindow(QMainWindow):
         self.init_ui()
         logger.log(translator.translate('app_started'), level=LogLevel.INFO)
         self.app.installEventFilter(self)
+
+    def _apply_startup_template(self):
+        template_name = self.settings_manager.get("last_applied_template")
+        if not template_name:
+            return
+
+        from utils.settings import template_manager # Local import to avoid circular dependency if moved
+        logger.log(f"Applying startup template: {template_name}", level=LogLevel.INFO)
+        template_data = template_manager.load_template(template_name)
+        if not template_data:
+            logger.log(f"Startup template '{template_name}' not found.", level=LogLevel.WARNING)
+            return
+
+        # Merge settings
+        for key, value in template_data.items():
+            if isinstance(value, dict) and isinstance(self.settings_manager.settings.get(key), dict):
+                current_dict = self.settings_manager.settings.get(key)
+                current_dict.update(value)
+                self.settings_manager.settings[key] = current_dict
+            else:
+                self.settings_manager.settings[key] = value
+        
+        # Save the merged settings so they are the new "defaults" for this session
+        self.settings_manager.save_settings()
 
     def check_api_key_validity(self):
         worker = ValidationWorker(api_key=self.api_key, server_url=self.server_url)
@@ -227,6 +254,9 @@ class MainWindow(QMainWindow):
         corner_layout.setContentsMargins(0, 0, 10, 0) # Add some margin to the right
         corner_layout.setSpacing(10)
 
+        self.active_template_label = QLabel()
+        corner_layout.addWidget(self.active_template_label)
+
         self.days_left_label = QLabel()
         corner_layout.addWidget(self.days_left_label)
 
@@ -281,38 +311,31 @@ class MainWindow(QMainWindow):
         self.gallery_tab.continue_montage_requested.connect(self.task_processor.resume_all_montages)
         self.gallery_tab.image_deleted.connect(self.task_processor._on_image_deleted)
         self.gallery_tab.media_clicked.connect(self.show_media_viewer)
-        self.settings_tab.templates_tab.template_applied.connect(self.update_template_label)
+        self.settings_tab.templates_tab.template_applied.connect(self.on_template_applied)
 
         QTimer.singleShot(100, self.check_api_key_validity) # Initial check
+        QTimer.singleShot(500, self.start_background_updates) # Initial balance check
         
-        # Apply last used template on startup
-        last_template = self.settings_manager.get('last_used_template_name')
-        template_applied = False
-        if last_template:
-            # ... (rest of the logic remains the same)
-            from utils.settings import template_manager
-            template_data = template_manager.load_template(last_template)
-            if template_data:
-                # Ignore subtitle settings from templates, as they are user/environment-specific
-                template_data.pop('subtitles', None)
+        self.settings_tab.languages_tab.load_elevenlabs_templates()
+        self.update_active_template_display()
 
-                for key, value in template_data.items():
-                    if isinstance(value, dict) and key in self.settings_manager.settings and isinstance(self.settings_manager.settings[key], dict):
-                        self.settings_manager.settings[key].update(value)
-                    else:
-                        self.settings_manager.settings[key] = value
-                self.settings_manager.save_settings()
-                
-                self.settings_tab.templates_tab.populate_templates_combo()
-                self.settings_tab.templates_tab.templates_combo.setCurrentText(last_template)
-                self.text_tab.update_template_name(last_template)
-                self.settings_tab._update_all_tabs()
-                self.retranslate_ui()
-                logger.log(f"Applied last used template: {last_template}", level=LogLevel.INFO)
-                template_applied = True
+    def on_template_applied(self):
+        QMessageBox.information(self, translator.translate('template_applied_title', "Template Applied"), translator.translate('template_applied_message', "Template settings have been applied and saved."))
+        self.refresh_ui_from_settings()
 
-        if not template_applied:
-            self.settings_tab.languages_tab.load_elevenlabs_templates()
+    def refresh_ui_from_settings(self):
+        logger.log("Refreshing UI from new settings...", level=LogLevel.INFO)
+        
+        # Update all settings tabs
+        if hasattr(self.settings_tab, '_update_all_tabs'):
+            self.settings_tab._update_all_tabs()
+
+        # Update other parts of the UI
+        self.text_tab.retranslate_ui()
+        self.apply_current_theme()
+        
+        # Update the template label in the corner
+        self.update_active_template_display()
 
     def _start_processing_checked(self):
         worker = ValidationWorker(api_key=self.api_key, server_url=self.server_url)
@@ -477,9 +500,14 @@ class MainWindow(QMainWindow):
         app_name = "CombainAI"
         self.setWindowTitle(f"{app_name} v{__version__}")
 
-    def update_template_label(self):
-        name = self.settings_manager.get('last_used_template_name')
-        self.text_tab.update_template_name(name)
+    def update_active_template_display(self):
+        template_name = self.settings_manager.get("last_applied_template")
+        if template_name:
+            self.active_template_label.setText(f"{translator.translate('active_template_label', 'Template')}: {template_name}")
+            self.active_template_label.setToolTip(translator.translate('active_template_tooltip', 'This template is applied to the global settings.'))
+        else:
+            self.active_template_label.setText("")
+            self.active_template_label.setToolTip("")
 
     def start_background_updates(self):
         self.update_balance()
@@ -488,27 +516,27 @@ class MainWindow(QMainWindow):
         self.update_voicemaker_balance()
         self.update_gemini_tts_balance()
 
-    def update_balance(self):
+    def update_balance(self, *args):
         worker = BalanceWorker()
         worker.signals.finished.connect(self._on_balance_updated)
         self.threadpool.start(worker)
 
-    def update_googler_usage(self):
+    def update_googler_usage(self, *args):
         worker = GooglerUsageWorker()
         worker.signals.finished.connect(self._on_googler_usage_updated)
         self.threadpool.start(worker)
 
-    def update_elevenlabs_balance(self):
+    def update_elevenlabs_balance(self, *args):
         worker = ElevenLabsBalanceWorker()
         worker.signals.finished.connect(self._on_elevenlabs_balance_updated)
         self.threadpool.start(worker)
 
-    def update_voicemaker_balance(self):
+    def update_voicemaker_balance(self, *args):
         worker = VoicemakerBalanceWorker()
         worker.signals.finished.connect(self._on_voicemaker_balance_updated)
         self.threadpool.start(worker)
 
-    def update_gemini_tts_balance(self):
+    def update_gemini_tts_balance(self, *args):
         worker = GeminiTTSBalanceWorker()
         worker.signals.finished.connect(self._on_gemini_tts_balance_updated)
         self.threadpool.start(worker)
@@ -673,8 +701,15 @@ class MainWindow(QMainWindow):
         self.gallery_tab.retranslate_ui()
 
     def closeEvent(self, event):
-        self.settings_tab.api_tab.image_tab.pollinations_tab.save_settings()
-        self.settings_tab.api_tab.image_tab.googler_tab.save_settings()
+        # Save all settings globally
+        self.settings_manager.save_settings()
+        
+        # Trigger save on sub-tabs if they have specific logic not covered by the global manager
+        if hasattr(self.settings_tab.api_tab.image_tab.pollinations_tab, 'save_settings'):
+            self.settings_tab.api_tab.image_tab.pollinations_tab.save_settings()
+        if hasattr(self.settings_tab.api_tab.image_tab.googler_tab, 'save_settings'):
+            self.settings_tab.api_tab.image_tab.googler_tab.save_settings()
+            
         logger.log(translator.translate('app_closing'), level=LogLevel.INFO)
         super().closeEvent(event)
 

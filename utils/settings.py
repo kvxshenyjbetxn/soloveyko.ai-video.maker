@@ -65,9 +65,14 @@ class SettingsManager:
         self.save_settings()
 
     def save_settings(self):
-        os.makedirs(os.path.dirname(self.settings_file), exist_ok=True)
-        with open(self.settings_file, 'w', encoding='utf-8') as f:
-            json.dump(self.settings, f, indent=4, ensure_ascii=False)
+        try:
+            os.makedirs(os.path.dirname(self.settings_file), exist_ok=True)
+            with open(self.settings_file, 'w', encoding='utf-8') as f:
+                json.dump(self.settings, f, indent=4, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception as e:
+            print(f"Error saving settings: {e}")
 
 class TemplateManager:
     def __init__(self, template_dir='config/templates'):
