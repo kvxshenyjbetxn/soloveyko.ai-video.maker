@@ -8,7 +8,10 @@ from utils.logger import logger, LogLevel
 
 class VoicemakerAPI:
     def __init__(self, api_key=None):
-        self.api_key = api_key or settings_manager.get("voicemaker_api_key")
+        if api_key is not None:
+            self.api_key = api_key
+        else:
+            self.api_key = settings_manager.get("voicemaker_api_key")
         self.base_url = "https://developer.voicemaker.in/voice/api"
 
     def check_connection(self):

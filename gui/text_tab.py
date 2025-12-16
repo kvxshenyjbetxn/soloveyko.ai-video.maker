@@ -11,19 +11,33 @@ from PySide6.QtCore import Qt, QMimeData
 from utils.flow_layout import FlowLayout
 from functools import partial
 from utils.translator import translator
-from utils.settings import settings_manager
+from utils.settings import settings_manager, template_manager
 from gui.file_dialog import FileDialog
 from utils.animator import Animator
 
 def get_text_color_for_background(bg_color_hex):
-    """Determines if black or white text is more readable on a given background color."""
+    """
+    Calculates the appropriate text color (black or white) for a given background color
+    to ensure good contrast.
+    """
+    if not bg_color_hex or not bg_color_hex.startswith('#'):
+        return "#FFFFFF"  # Default to white if invalid
+
+    # Convert hex to RGB
+    hex_color = bg_color_hex.lstrip('#')
     try:
-        color = QColor(bg_color_hex)
-        # Using the perceived luminance formula
-        luminance = (0.299 * color.red() + 0.587 * color.green() + 0.114 * color.blue()) / 255
-        return "#000000" if luminance > 0.5 else "#ffffff"
-    except Exception:
-        return "#000000"
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return "#FFFFFF"
+
+    # Calculate luminance (standard formula)
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+
+    if luminance > 0.5:
+        return "#000000"  # Bright background -> Black text
+    else:
+        return "#FFFFFF"  # Dark background -> White text
+
 
 class DroppableTextEdit(QTextEdit):
     def __init__(self, parent=None):
@@ -32,37 +46,40 @@ class DroppableTextEdit(QTextEdit):
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
-            urls = event.mimeData().urls()
-            if any(url.toLocalFile().endswith('.txt') for url in urls):
-                event.acceptProposedAction()
+            event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
 
     def dropEvent(self, event: QDropEvent):
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-            for url in event.mimeData().urls():
-                file_path = url.toLocalFile()
-                if file_path.endswith('.txt'):
+            urls = event.mimeData().urls()
+            if urls:
+                file_path = urls[0].toLocalFile()
+                if os.path.isfile(file_path) and file_path.endswith('.txt'):
                     try:
                         with open(file_path, 'r', encoding='utf-8') as f:
-                            self.insertPlainText(f.read())
+                            text = f.read()
+                            self.setText(text)
                     except Exception as e:
-                        print(f"Error reading file {file_path}: {e}")
+                         QMessageBox.warning(self, "Error", f"Failed to read file: {e}")
+                else:
+                     # If generic drop, maybe append path or ignore
+                     pass
+            event.acceptProposedAction()
         else:
             super().dropEvent(event)
 
-from gui.file_dialog import FileDialog
-
 class StageSelectionWidget(QWidget):
     """A compact widget representing the processing stages for a single language."""
-    def __init__(self, language_name, parent_tab):
+    def __init__(self, language_name, lang_code, parent_tab):
         super().__init__()
         self.parent_tab = parent_tab
+        self.lang_code = lang_code
         self.user_images = []
         self.user_audio = None
         self.user_background_music = None
         self.user_background_music_volume = 100
+        self.selected_template = None  # New: Store selected template name
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
@@ -70,6 +87,16 @@ class StageSelectionWidget(QWidget):
 
         self.lang_label = QLabel(f"{language_name}:")
         layout.addWidget(self.lang_label)
+
+        # --- Template Selection Button ---
+        self.template_button = QToolButton()
+        self.template_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView)) # Placeholder icon, ideally custom gear/template icon
+        self.template_button.setToolTip(translator.translate("select_template", "Select Template"))
+        self.template_button.clicked.connect(self.show_template_menu)
+        self.template_button.setFixedSize(25, 25)
+        # Style to look clickable but unobtrusive
+        self.template_button.setStyleSheet("QToolButton { border: none; background-color: transparent; } QToolButton:hover { background-color: rgba(255,255,255,0.1); border-radius: 4px; }")
+        layout.addWidget(self.template_button)
 
         self.toggle_all_button = QToolButton()
         self.toggle_all_button.setObjectName("toggleAllButton")
@@ -82,6 +109,7 @@ class StageSelectionWidget(QWidget):
         layout.addWidget(self.toggle_all_button)
 
         self.add_bg_music_button = QPushButton(translator.translate("add_background_music", "Add Music"))
+        # ... (rest of __init__ logic)
         self.add_bg_music_button.setObjectName("addBgMusicButton")
         self.add_bg_music_button.clicked.connect(self.handle_music_button_click)
         self.add_bg_music_button.setFixedHeight(25)
@@ -113,11 +141,23 @@ class StageSelectionWidget(QWidget):
                     if stage_name:
                         key_custom = f"custom_{stage_name}"
                         checkbox_custom = QCheckBox(stage_name)
-                        checkbox_custom.setChecked(True)
+                        
+                        # Load initial state
+                        lang_config = self.parent_tab.get_lang_config(self.lang_code)
+                        is_checked = lang_config.get(key_custom, True)
+                        checkbox_custom.setChecked(is_checked)
+                        
                         checkbox_custom.stateChanged.connect(self.update_toggle_button_text)
                         checkbox_custom.stateChanged.connect(self.parent_tab.check_queue_button_visibility)
+                        checkbox_custom.stateChanged.connect(self._save_state) # Save on change
                         layout.addWidget(checkbox_custom)
                         self.checkboxes[key_custom] = checkbox_custom
+
+            # Load initial state for standard checkboxes
+            lang_config = self.parent_tab.get_lang_config(self.lang_code)
+            is_checked = lang_config.get(key, True)
+            checkbox.setChecked(is_checked)
+            checkbox.stateChanged.connect(self._save_state) # Save on change
 
             if key in ["stage_images", "stage_voiceover"]:
                 add_button = QToolButton()
@@ -135,6 +175,44 @@ class StageSelectionWidget(QWidget):
 
         layout.addStretch()
         self.update_toggle_button_text()
+
+    def show_template_menu(self):
+        menu = QMenu(self)
+        
+        # Default (Global Settings) action
+        default_action = QAction(translator.translate("default_settings", "Global Settings"), self)
+        if self.selected_template is None:
+             default_action.setCheckable(True)
+             default_action.setChecked(True)
+        default_action.triggered.connect(lambda: self.set_template(None))
+        menu.addAction(default_action)
+        menu.addSeparator()
+
+        templates = template_manager.get_templates()
+        if templates:
+            for tmpl in templates:
+                action = QAction(tmpl, self)
+                if self.selected_template == tmpl:
+                    action.setCheckable(True)
+                    action.setChecked(True)
+                action.triggered.connect(partial(self.set_template, tmpl))
+                menu.addAction(action)
+        else:
+            no_tmpl_action = QAction(translator.translate("no_templates_found", "No templates found"), self)
+            no_tmpl_action.setEnabled(False)
+            menu.addAction(no_tmpl_action)
+
+        menu.exec(self.template_button.mapToGlobal(self.template_button.rect().bottomLeft()))
+
+    def set_template(self, template_name):
+        self.selected_template = template_name
+        if template_name:
+            self.template_button.setToolTip(f"{translator.translate('template', 'Template')}: {template_name}")
+            # Change icon or style to indicate active selection
+            self.template_button.setStyleSheet("QToolButton { border: 1px solid #4CAF50; background-color: #4CAF50; border-radius: 4px; }") 
+        else:
+            self.template_button.setToolTip(translator.translate("select_template", "Select Template"))
+            self.template_button.setStyleSheet("QToolButton { border: none; background-color: transparent; } QToolButton:hover { background-color: rgba(255,255,255,0.1); border-radius: 4px; }")
 
     def handle_music_button_click(self):
         if self.user_background_music:
@@ -327,6 +405,17 @@ class StageSelectionWidget(QWidget):
         return [key for key, checkbox in self.checkboxes.items() if checkbox.isChecked()]
 
 
+    def _save_state(self):
+        """Saves current checkbox state to global settings."""
+        if not self.lang_code or not self.parent_tab:
+            return
+
+        updates = {}
+        for key, checkbox in self.checkboxes.items():
+            updates[key] = checkbox.isChecked()
+
+        self.parent_tab.update_lang_config(self.lang_code, updates)
+
 class TextTab(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
@@ -351,10 +440,6 @@ class TextTab(QWidget):
         self.char_count_layout.addWidget(self.clean_chars_label)
         self.char_count_layout.addStretch()
         self.char_count_layout.addWidget(self.paragraphs_label)
-        
-        self.char_count_layout.addSpacing(20)
-        self.template_name_label = QLabel()
-        self.char_count_layout.addWidget(self.template_name_label)
         
         layout.addLayout(self.char_count_layout)
 
@@ -418,7 +503,19 @@ class TextTab(QWidget):
         layout.addLayout(self.status_bar_layout)
 
         self.update_char_count()
+        self.update_char_count()
         self.retranslate_ui()
+
+    def get_lang_config(self, lang_code):
+        return self.settings.get("languages_config", {}).get(lang_code, {})
+
+    def update_lang_config(self, lang_code, updates):
+        languages = self.settings.get("languages_config", {})
+        if lang_code not in languages:
+            languages[lang_code] = {}
+        
+        languages[lang_code].update(updates)
+        self.settings.set("languages_config", languages)
 
     def load_languages_menu(self):
         # Clear all previous widgets (language buttons)
@@ -442,7 +539,7 @@ class TextTab(QWidget):
     def on_language_toggled(self, lang_id, lang_name, checked):
         if checked:
             if lang_id not in self.stage_widgets:
-                stage_widget = StageSelectionWidget(lang_name, self)
+                stage_widget = StageSelectionWidget(lang_name, lang_id, self)
                 self.stages_container_layout.addWidget(stage_widget)
                 self.stage_widgets[lang_id] = stage_widget
             
@@ -610,6 +707,10 @@ class TextTab(QWidget):
                             if user_files:
                                 lang_data["user_provided_files"] = user_files
 
+                            # --- Add selected template ---
+                            if stage_widget.selected_template:
+                                lang_data['template_name'] = stage_widget.selected_template
+
                             languages_data[lang_id] = lang_data
             
             if languages_data:
@@ -660,12 +761,6 @@ class TextTab(QWidget):
 
     def update_gemini_tts_balance(self, balance_text):
         self.gemini_tts_balance_label.setText(balance_text)
-
-    def update_template_name(self, name):
-        if name:
-            self.template_name_label.setText(f"{translator.translate('current_template_label', 'Template')}: {name}")
-        else:
-            self.template_name_label.setText("")
 
     def apply_text_color_to_text_edit(self):
         current_theme = self.settings.get('theme', 'dark')

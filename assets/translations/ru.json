@@ -284,5 +284,13 @@
     "subscription_date_format_error": "Ошибка формата даты подписки",
     "logout": "Выйти",
     "logout_success_title": "Выход",
-    "logout_success_message": "Вы успешно вышли из системы. Приложение будет перезапущено."
+    "logout_success_message": "Вы успешно вышли из системы. Приложение будет перезапущено.",
+    "active_template_label": "Шаблон",
+    "active_template_tooltip": "Этот шаблон применен к глобальным настройкам.",
+    "template_applied_title": "Шаблон применен",
+    "template_applied_message": "Настройки шаблона были применены и сохранены.",
+    "apply_template_button": "Применить",
+    "view_template_button": "Просмотр",
+    "template_details_title": "Детали шаблона",
+    "close_button": "Закрыть"
 }

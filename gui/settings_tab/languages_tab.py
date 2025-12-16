@@ -241,11 +241,14 @@ class LanguagesTab(QWidget):
         self.load_models()
 
     def load_models(self):
+        self.model_combo.blockSignals(True)
         self.model_combo.clear()
         models = self.settings.get("openrouter_models", [])
         self.model_combo.addItems(models)
+        self.model_combo.blockSignals(False)
 
     def load_elevenlabs_templates(self):
+        self.elevenlabs_template_combo.blockSignals(True)
         self.elevenlabs_template_combo.clear()
         self.elevenlabs_templates, status = self.elevenlabs_api.get_templates()
         if status == "connected" and self.elevenlabs_templates:
@@ -253,8 +256,14 @@ class LanguagesTab(QWidget):
                 self.elevenlabs_template_combo.addItem(template["name"], template["uuid"])
         else:
             self.elevenlabs_template_combo.addItem(translator.translate("no_templates_found"), "")
+        self.elevenlabs_template_combo.blockSignals(False)
+        
+        # Restore selection for current language if applicable
+        if self.lang_list_widget.currentItem():
+            self.on_language_selected(self.lang_list_widget.currentItem(), None)
 
     def populate_voicemaker_voices(self, lang_id):
+        self.voicemaker_voice_combo.blockSignals(True)
         self.voicemaker_voice_combo.clear()
         
         # Try to find voices matching the lang_id (e.g. "en-US", "uk-UA")
@@ -292,6 +301,7 @@ class LanguagesTab(QWidget):
         # Add other voices
         for text, data in other_voices:
             self.voicemaker_voice_combo.addItem(text, data)
+        self.voicemaker_voice_combo.blockSignals(False)
 
     def on_tts_provider_changed(self, index):
         provider = self.tts_provider_combo.currentText()
