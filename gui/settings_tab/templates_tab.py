@@ -2,35 +2,69 @@ import copy
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, QComboBox, 
                                QLineEdit, QPushButton, QMessageBox, QInputDialog,
-                               QSpacerItem, QSizePolicy, QDialog, QScrollArea)
+                               QSpacerItem, QSizePolicy, QDialog, QTreeView)
+from PySide6.QtGui import QStandardItemModel, QStandardItem
 from PySide6.QtCore import Qt, Signal
 
 from utils.translator import translator
 from utils.settings import settings_manager, template_manager
 
 class TemplateViewerDialog(QDialog):
-    def __init__(self, title, content, parent=None):
+    def __init__(self, title, data, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.setMinimumSize(600, 400)
+        self.setMinimumSize(600, 500)
 
         layout = QVBoxLayout(self)
-        
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        
-        content_label = QLabel(content)
-        content_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        content_label.setWordWrap(True)
-        
-        scroll_area.setWidget(content_label)
-        
-        layout.addWidget(scroll_area)
-        
-        # Add a close button
+
+        self.tree_view = QTreeView()
+        self.tree_view.setEditTriggers(QTreeView.NoEditTriggers)
+        layout.addWidget(self.tree_view)
+
+        model = QStandardItemModel()
+        model.setHorizontalHeaderLabels([translator.translate("setting_header", "Setting"), translator.translate("value_header", "Value")])
+        self.tree_view.setModel(model)
+
+        self.populate_tree(data, model.invisibleRootItem())
+
+        self.tree_view.expandAll()
+        self.tree_view.resizeColumnToContents(0)
+
         close_button = QPushButton(translator.translate("close_button", "Close"))
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button)
+
+    def populate_tree(self, data, parent_item, parent_key=""):
+        for key, value in sorted(data.items()):
+            if key.endswith('_api_key') and not value:
+                continue
+            
+            if parent_key == 'languages_config':
+                key_name = key 
+            else:
+                key_name = translator.translate(f"{key}_label", key.replace('_', ' ').title())
+
+            if isinstance(value, dict):
+                row_item = QStandardItem(key_name)
+                parent_item.appendRow([row_item, QStandardItem("")])
+                self.populate_tree(value, row_item, parent_key=key)
+            elif isinstance(value, list):
+                row_item = QStandardItem(key_name)
+                parent_item.appendRow([row_item, QStandardItem("")])
+                if not value:
+                    row_item.appendRow([QStandardItem("(empty)"), QStandardItem("")])
+                else:
+                    for i, item in enumerate(value):
+                        if isinstance(item, dict):
+                            item_node = QStandardItem(f"Item {i+1}")
+                            row_item.appendRow([item_node, QStandardItem("")])
+                            self.populate_tree(item, item_node, parent_key=key)
+                        else:
+                            row_item.appendRow([QStandardItem(str(item)), QStandardItem("")])
+            else:
+                display_v = str(value)
+                parent_item.appendRow([QStandardItem(key_name), QStandardItem(display_v)])
+
 
 class TemplatesTab(QWidget):
     template_applied = Signal()
@@ -270,49 +304,9 @@ class TemplatesTab(QWidget):
             QMessageBox.warning(self, translator.translate("error"), translator.translate("template_not_found_error"))
             return
 
-        formatted_text = self._format_template_data(name, template_data)
-        
         dialog = TemplateViewerDialog(
             translator.translate("template_details_title", "Template Details") + f" - {name}",
-            formatted_text,
+            template_data,
             self
         )
         dialog.exec()
-
-    def _format_template_data(self, name, data):
-        text = f"<b>{translator.translate('template_label')}: {name}</b><br><br>"
-
-        def format_dict_to_html(d, indent_level=0):
-            indent = "&nbsp;&nbsp;&nbsp;&nbsp;" * indent_level
-            res = ""
-            for k, v in sorted(d.items()):
-                # Skip empty api keys for cleaner view
-                if k.endswith('_api_key') and not v:
-                    continue
-                
-                key_name = k.replace('_', ' ').title()
-                
-                if isinstance(v, dict):
-                    res += f"{indent}<b>{key_name}:</b><br>"
-                    res += format_dict_to_html(v, indent_level + 1)
-                elif isinstance(v, list):
-                    res += f"{indent}<b>{key_name}:</b><br>"
-                    if not v:
-                        res += f"{indent}&nbsp;&nbsp;- (empty)<br>"
-                    else:
-                        for i, item in enumerate(v):
-                            if isinstance(item, dict):
-                                res += f"{indent}&nbsp;&nbsp;- Item {i+1}:<br>"
-                                res += format_dict_to_html(item, indent_level + 2)
-                            else:
-                                res += f"{indent}&nbsp;&nbsp;- {item}<br>"
-                else:
-                    # Truncate long text values
-                    display_v = str(v)
-                    if len(display_v) > 200:
-                        display_v = display_v[:200] + "..."
-                    res += f"{indent}<b>{key_name}:</b> {display_v}<br>"
-            return res
-
-        text += format_dict_to_html(data)
-        return text

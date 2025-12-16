@@ -294,5 +294,7 @@
     "template_details_title": "Деталі шаблону",
     "close_button": "Закрити",
     "default_template_label": "Шаблон за замовчуванням:",
-    "none_template": "Немає"
+    "none_template": "Немає",
+    "setting_header": "Налаштування",
+    "value_header": "Значення"
 }
