@@ -16,6 +16,7 @@
     "image_tab": "Image",
     "dataimpulse_tab": "DataImpulse",
     "assemblyai_api_key": "AssemblyAI API Key:",
+    "assemblyai_max_threads": "Max Threads:",
     "language_label": "Interface language:",
     "theme_label": "Theme:",
     "light_theme": "Light",

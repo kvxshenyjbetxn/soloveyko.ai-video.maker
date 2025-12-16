@@ -16,6 +16,7 @@
     "image_tab": "Изображения",
     "dataimpulse_tab": "DataImpulse",
     "assemblyai_api_key": "Ключ API AssemblyAI:",
+    "assemblyai_max_threads": "Макс. потоков:",
     "language_label": "Язык интерфейса:",
     "theme_label": "Тема оформления:",
     "light_theme": "Светлая",
