@@ -150,7 +150,7 @@ class MainWindow(QMainWindow):
         self.translation_review_queue = collections.deque()
         self.is_review_dialog_active = False
         self.init_ui()
-        logger.log(translator.translate('app_started'), level=LogLevel.INFO)
+        logger.log('Application started.', level=LogLevel.INFO)
         self.app.installEventFilter(self)
 
     def _apply_startup_template(self):
@@ -710,7 +710,7 @@ class MainWindow(QMainWindow):
         if hasattr(self.settings_tab.api_tab.image_tab.googler_tab, 'save_settings'):
             self.settings_tab.api_tab.image_tab.googler_tab.save_settings()
             
-        logger.log(translator.translate('app_closing'), level=LogLevel.INFO)
+        logger.log('Application closing.', level=LogLevel.INFO)
         super().closeEvent(event)
 
 class TranslationReviewDialog(QDialog):

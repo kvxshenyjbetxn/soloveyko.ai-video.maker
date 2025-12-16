@@ -295,6 +295,6 @@
     "close_button": "Close",
     "default_template_label": "Default Template:",
     "none_template": "None",
-    "setting_header": "Setting",
-    "value_header": "Value"
+    "default_settings": "Global Settings",
+    "template": "Template"
 }

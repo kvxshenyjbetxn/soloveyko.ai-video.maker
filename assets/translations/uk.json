@@ -295,6 +295,6 @@
     "close_button": "Закрити",
     "default_template_label": "Шаблон за замовчуванням:",
     "none_template": "Немає",
-    "setting_header": "Налаштування",
-    "value_header": "Значення"
+    "default_settings": "Глобальні налаштування",
+    "template": "Шаблон"
 }
