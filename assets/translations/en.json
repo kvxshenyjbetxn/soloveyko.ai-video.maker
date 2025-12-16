@@ -296,5 +296,6 @@
     "default_template_label": "Default Template:",
     "none_template": "None",
     "default_settings": "Global Settings",
-    "template": "Template"
+    "template": "Template",
+    "whisper_model_download_info": "Whisper model '{model_name}' not found. Starting one-time download. This may take some time..."
 }

@@ -16,8 +16,26 @@ class SettingsManager:
             'image_prompt_count': 50,
             'detailed_logging_enabled': False,
             'voicemaker_api_key': '',
+            'voicemaker_char_limit': 2900,
             'gemini_tts_api_key': '',
             'gemini_tts_url': 'https://gemini-tts-server-beta-production.up.railway.app',
+            'googler': {
+                'api_key': '',
+                'aspect_ratio': 'IMAGE_ASPECT_RATIO_LANDSCAPE',
+                'max_threads': 25,
+                'max_video_threads': 10,
+                'video_prompt': 'Animate this scene, cinematic movement, 4k',
+                'seed': '',
+                'negative_prompt': 'blood'
+            },
+            'pollinations': {
+                'model': 'flux',
+                'token': '',
+                'width': 1280,
+                'height': 720,
+                'nologo': True,
+                'enhance': False
+            },
             'subtitles': {
                 'whisper_model': 'base.bin', # Замість whisper_exe тепер зберігаємо тільки модель
                 'font': 'Arial',

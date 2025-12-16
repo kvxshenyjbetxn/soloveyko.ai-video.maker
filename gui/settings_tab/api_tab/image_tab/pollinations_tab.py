@@ -74,9 +74,9 @@ class PollinationsTab(QWidget):
         pollinations_settings = settings_manager.get("pollinations", {})
         self.model_combo.setCurrentText(pollinations_settings.get("model", "flux"))
         self.token_input.setText(pollinations_settings.get("token", ""))
-        self.width_spinbox.setValue(pollinations_settings.get("width", 1024))
-        self.height_spinbox.setValue(pollinations_settings.get("height", 1024))
-        self.nologo_checkbox.setChecked(pollinations_settings.get("nologo", False))
+        self.width_spinbox.setValue(pollinations_settings.get("width", 1280))
+        self.height_spinbox.setValue(pollinations_settings.get("height", 720))
+        self.nologo_checkbox.setChecked(pollinations_settings.get("nologo", True))
         self.enhance_checkbox.setChecked(pollinations_settings.get("enhance", False))
 
         self.model_combo.blockSignals(False)
