@@ -16,6 +16,7 @@
     "image_tab": "Зображення",
     "dataimpulse_tab": "DataImpulse",
     "assemblyai_api_key": "Ключ API AssemblyAI:",
+    "assemblyai_max_threads": "Макс. потоків:",
     "language_label": "Мова інтерфейсу:",
     "theme_label": "Тема оформлення:",
     "light_theme": "Світла",
