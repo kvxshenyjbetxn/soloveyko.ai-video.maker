@@ -160,6 +160,14 @@ class TemplatesTab(QWidget):
                 elif key == 'googler' and isinstance(value, dict):
                     value = {k: v for k, v in value.items() if k not in ['max_threads', 'max_video_threads']}
                 
+                elif key == 'languages_config' and isinstance(value, dict):
+                    # Create a deep copy to modify, ensuring the original settings object is not changed
+                    new_lang_config = copy.deepcopy(value)
+                    for lang_id, lang_settings in new_lang_config.items():
+                        if 'default_template' in lang_settings:
+                            del lang_settings['default_template']
+                    value = new_lang_config
+
                 template_data[key] = value
         
         return template_data
@@ -206,16 +214,19 @@ class TemplatesTab(QWidget):
             QMessageBox.warning(self, translator.translate("error"), translator.translate("template_not_found_error"))
             return
 
-        # Merge settings
-        for key, value in template_data.items():
-            if isinstance(value, dict) and isinstance(settings_manager.settings.get(key), dict):
-                current_dict = settings_manager.settings.get(key)
-                current_dict.update(value)
-                settings_manager.settings[key] = current_dict
-            else:
-                settings_manager.settings[key] = value
+        def deep_merge(source, destination):
+            for key, value in source.items():
+                if isinstance(value, dict) and key in destination and isinstance(destination[key], dict):
+                    deep_merge(value, destination[key])
+                else:
+                    destination[key] = value
+            return destination
 
-        settings_manager.set("last_applied_template", name) # This also saves all settings
+        # Perform a deep merge
+        deep_merge(template_data, settings_manager.settings)
+        
+        # Set last applied template and save all settings
+        settings_manager.set("last_applied_template", name)
         self.template_applied.emit()
 
     def _on_delete(self):

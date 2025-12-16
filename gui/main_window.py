@@ -158,23 +158,23 @@ class MainWindow(QMainWindow):
         if not template_name:
             return
 
-        from utils.settings import template_manager # Local import to avoid circular dependency if moved
+        from utils.settings import template_manager
         logger.log(f"Applying startup template: {template_name}", level=LogLevel.INFO)
         template_data = template_manager.load_template(template_name)
         if not template_data:
             logger.log(f"Startup template '{template_name}' not found.", level=LogLevel.WARNING)
             return
 
-        # Merge settings
-        for key, value in template_data.items():
-            if isinstance(value, dict) and isinstance(self.settings_manager.settings.get(key), dict):
-                current_dict = self.settings_manager.settings.get(key)
-                current_dict.update(value)
-                self.settings_manager.settings[key] = current_dict
-            else:
-                self.settings_manager.settings[key] = value
-        
-        # Save the merged settings so they are the new "defaults" for this session
+        def deep_merge(source, destination):
+            for key, value in source.items():
+                if isinstance(value, dict) and key in destination and isinstance(destination[key], dict):
+                    deep_merge(value, destination[key])
+                else:
+                    destination[key] = value
+            return destination
+
+        # Perform a deep merge and save
+        deep_merge(template_data, self.settings_manager.settings)
         self.settings_manager.save_settings()
 
     def check_api_key_validity(self):

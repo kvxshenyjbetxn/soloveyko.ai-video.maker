@@ -176,6 +176,12 @@ class StageSelectionWidget(QWidget):
         layout.addStretch()
         self.update_toggle_button_text()
 
+        # Apply default template if set
+        lang_config = self.parent_tab.get_lang_config(self.lang_code)
+        default_template = lang_config.get("default_template")
+        if default_template:
+            self.set_template(default_template)
+
     def show_template_menu(self):
         menu = QMenu(self)
         
