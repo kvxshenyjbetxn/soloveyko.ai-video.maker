@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import copy
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLineEdit,
     QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox,
@@ -8,7 +9,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from utils.translator import translator
-from utils.settings import settings_manager
+from utils.settings import settings_manager, template_manager
 from api.elevenlabs import ElevenLabsAPI
 from gui.widgets.prompt_editor_dialog import PromptEditorDialog
 
@@ -27,9 +28,11 @@ class LanguagesTab(QWidget):
         self.voicemaker_voices = []
         self.gemini_voices = []
         self.current_lang_id = None
+        self._is_loading_lang_settings = False
         self.load_voicemaker_voices()
         self.load_gemini_voices()
         self.init_ui()
+        self.load_templates_combo() # Load templates for the new combobox
         self.load_languages()
         self.retranslate_ui()
         if self.lang_list_widget.count() > 0:
@@ -130,6 +133,12 @@ class LanguagesTab(QWidget):
         self.temperature_spinbox.setValue(0.7)
         self.temperature_spinbox.valueChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.temperature_label, self.temperature_spinbox)
+
+        # Default Template
+        self.default_template_label = QLabel()
+        self.default_template_combo = QComboBox()
+        self.default_template_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.default_template_label, self.default_template_combo)
 
         # TTS Provider
         self.tts_provider_label = QLabel("TTS Provider:")
@@ -247,6 +256,15 @@ class LanguagesTab(QWidget):
         self.model_combo.addItems(models)
         self.model_combo.blockSignals(False)
 
+    def load_templates_combo(self):
+        self.default_template_combo.blockSignals(True)
+        self.default_template_combo.clear()
+        self.default_template_combo.addItem(translator.translate("none_template", "None"), None)
+        templates = template_manager.get_templates()
+        for template_name in templates:
+            self.default_template_combo.addItem(template_name, template_name)
+        self.default_template_combo.blockSignals(False)
+
     def load_elevenlabs_templates(self):
         self.elevenlabs_template_combo.blockSignals(True)
         self.elevenlabs_template_combo.clear()
@@ -334,89 +352,103 @@ class LanguagesTab(QWidget):
             self.gemini_tone_input.setVisible(True)
 
     def on_language_selected(self, current, previous):
-        if not current:
-            self.right_panel.setVisible(False)
-            self.current_lang_id = None
-            return
-
-        lang_text = current.text()
+        self._is_loading_lang_settings = True
         try:
-            self.current_lang_id = lang_text.split('[')[-1][:-1]
-        except IndexError:
-            self.current_lang_id = None
-            self.right_panel.setVisible(False)
-            return
+            if not current:
+                self.right_panel.setVisible(False)
+                self.current_lang_id = None
+                return
 
-        languages = self.settings.get("languages_config", {})
-        config = languages.get(self.current_lang_id)
+            lang_text = current.text()
+            try:
+                self.current_lang_id = lang_text.split('[')[-1][:-1]
+            except IndexError:
+                self.current_lang_id = None
+                self.right_panel.setVisible(False)
+                return
 
-        if not config:
-            self.right_panel.setVisible(False)
-            return
+            languages = self.settings.get("languages_config", {})
+            config = languages.get(self.current_lang_id)
 
-        self.prompt_edit.blockSignals(True)
-        self.model_combo.blockSignals(True)
-        self.tokens_spinbox.blockSignals(True)
-        self.temperature_spinbox.blockSignals(True)
-        self.elevenlabs_template_combo.blockSignals(True)
-        self.tts_provider_combo.blockSignals(True)
-        self.voicemaker_voice_combo.blockSignals(True)
-        self.gemini_voice_combo.blockSignals(True)
-        self.gemini_tone_input.blockSignals(True)
-        self.bg_music_path_input.blockSignals(True)
-        self.bg_music_volume_slider.blockSignals(True)
+            if not config:
+                self.right_panel.setVisible(False)
+                return
 
-        self.prompt_edit.setPlainText(config.get("prompt", ""))
-        
-        current_model = config.get("model", "")
-        index = self.model_combo.findText(current_model)
-        self.model_combo.setCurrentIndex(index if index >= 0 else 0)
+            self.prompt_edit.blockSignals(True)
+            self.model_combo.blockSignals(True)
+            self.tokens_spinbox.blockSignals(True)
+            self.temperature_spinbox.blockSignals(True)
+            self.elevenlabs_template_combo.blockSignals(True)
+            self.tts_provider_combo.blockSignals(True)
+            self.voicemaker_voice_combo.blockSignals(True)
+            self.gemini_voice_combo.blockSignals(True)
+            self.gemini_tone_input.blockSignals(True)
+            self.bg_music_path_input.blockSignals(True)
+            self.bg_music_volume_slider.blockSignals(True)
+            self.default_template_combo.blockSignals(True)
 
-        # TTS Provider
-        tts_provider = config.get("tts_provider", "ElevenLabs")
-        provider_index = self.tts_provider_combo.findText(tts_provider)
-        self.tts_provider_combo.setCurrentIndex(provider_index if provider_index >= 0 else 0)
+            self.prompt_edit.setPlainText(config.get("prompt", ""))
+            
+            current_model = config.get("model", "")
+            index = self.model_combo.findText(current_model)
+            self.model_combo.setCurrentIndex(index if index >= 0 else 0)
 
-        # ElevenLabs Template
-        current_template_uuid = config.get("elevenlabs_template_uuid", "")
-        template_index = self.elevenlabs_template_combo.findData(current_template_uuid)
-        self.elevenlabs_template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
+            # TTS Provider
+            tts_provider = config.get("tts_provider", "ElevenLabs")
+            provider_index = self.tts_provider_combo.findText(tts_provider)
+            self.tts_provider_combo.setCurrentIndex(provider_index if provider_index >= 0 else 0)
 
-        # VoiceMaker Voice
-        self.populate_voicemaker_voices(self.current_lang_id)
-        current_voicemaker_voice = config.get("voicemaker_voice_id", "")
-        voice_index = self.voicemaker_voice_combo.findData(current_voicemaker_voice)
-        self.voicemaker_voice_combo.setCurrentIndex(voice_index if voice_index >= 0 else 0)
+            # ElevenLabs Template
+            current_template_uuid = config.get("elevenlabs_template_uuid", "")
+            template_index = self.elevenlabs_template_combo.findData(current_template_uuid)
+            self.elevenlabs_template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
 
-        # GeminiTTS Settings
-        current_gemini_voice = config.get("gemini_voice", "Puck")
-        gemini_index = self.gemini_voice_combo.findData(current_gemini_voice)
-        self.gemini_voice_combo.setCurrentIndex(gemini_index if gemini_index >= 0 else 0)
-        self.gemini_tone_input.setText(config.get("gemini_tone", ""))
+            # VoiceMaker Voice
+            self.populate_voicemaker_voices(self.current_lang_id)
+            current_voicemaker_voice = config.get("voicemaker_voice_id", "")
+            voice_index = self.voicemaker_voice_combo.findData(current_voicemaker_voice)
+            self.voicemaker_voice_combo.setCurrentIndex(voice_index if voice_index >= 0 else 0)
 
-        self.bg_music_path_input.setText(config.get("background_music_path", ""))
-        volume = config.get("background_music_volume", 100)
-        self.bg_music_volume_slider.setValue(volume)
-        self.bg_music_volume_value_label.setText(str(volume))
+            # GeminiTTS Settings
+            current_gemini_voice = config.get("gemini_voice", "Puck")
+            gemini_index = self.gemini_voice_combo.findData(current_gemini_voice)
+            self.gemini_voice_combo.setCurrentIndex(gemini_index if gemini_index >= 0 else 0)
+            self.gemini_tone_input.setText(config.get("gemini_tone", ""))
 
-        self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
-        self.temperature_spinbox.setValue(config.get("temperature", 0.7))
+            self.bg_music_path_input.setText(config.get("background_music_path", ""))
+            volume = config.get("background_music_volume", 100)
+            self.bg_music_volume_slider.setValue(volume)
+            self.bg_music_volume_value_label.setText(str(volume))
 
-        self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
+            self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
+            self.temperature_spinbox.setValue(config.get("temperature", 0.7))
 
-        self.prompt_edit.blockSignals(False)
-        self.model_combo.blockSignals(False)
-        self.tokens_spinbox.blockSignals(False)
-        self.temperature_spinbox.blockSignals(False)
-        self.elevenlabs_template_combo.blockSignals(False)
-        self.tts_provider_combo.blockSignals(False)
-        self.voicemaker_voice_combo.blockSignals(False)
-        self.gemini_voice_combo.blockSignals(False)
-        self.gemini_tone_input.blockSignals(False)
-        self.bg_music_path_input.blockSignals(False)
-        self.bg_music_volume_slider.blockSignals(False)
-        
-        self.right_panel.setVisible(True)
+            # Default Template
+            current_default_template = config.get("default_template")
+            if current_default_template is None:
+                self.default_template_combo.setCurrentIndex(0)
+            else:
+                index = self.default_template_combo.findData(current_default_template)
+                self.default_template_combo.setCurrentIndex(index if index >= 0 else 0)
+
+            self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
+
+            self.prompt_edit.blockSignals(False)
+            self.model_combo.blockSignals(False)
+            self.tokens_spinbox.blockSignals(False)
+            self.temperature_spinbox.blockSignals(False)
+            self.elevenlabs_template_combo.blockSignals(False)
+            self.tts_provider_combo.blockSignals(False)
+            self.voicemaker_voice_combo.blockSignals(False)
+            self.gemini_voice_combo.blockSignals(False)
+            self.gemini_tone_input.blockSignals(False)
+            self.bg_music_path_input.blockSignals(False)
+            self.bg_music_volume_slider.blockSignals(False)
+            self.default_template_combo.blockSignals(False)
+            
+            self.right_panel.setVisible(True)
+        finally:
+            self._is_loading_lang_settings = False
 
     def add_language(self):
         display_name = self.lang_name_input.text().strip()
@@ -441,7 +473,8 @@ class LanguagesTab(QWidget):
             "gemini_voice": "Puck",
             "gemini_tone": "",
             "background_music_path": "",
-            "background_music_volume": 100
+            "background_music_volume": 100,
+            "default_template": ""
         }
         self.settings.set("languages_config", languages)
         
@@ -468,39 +501,34 @@ class LanguagesTab(QWidget):
             self.right_panel.setVisible(False)
 
     def save_current_language_settings(self):
+        if self._is_loading_lang_settings:
+            return
+            
         if not self.current_lang_id:
             return
 
-        languages = self.settings.get("languages_config", {})
-        if self.current_lang_id in languages:
-            languages[self.current_lang_id]["prompt"] = self.prompt_edit.toPlainText()
-            languages[self.current_lang_id]["model"] = self.model_combo.currentText()
-            languages[self.current_lang_id]["max_tokens"] = self.tokens_spinbox.value()
-            languages[self.current_lang_id]["temperature"] = self.temperature_spinbox.value()
-            
-            languages[self.current_lang_id]["tts_provider"] = self.tts_provider_combo.currentText()
-            
-            selected_template_index = self.elevenlabs_template_combo.currentIndex()
-            if selected_template_index >= 0:
-                template_uuid = self.elevenlabs_template_combo.itemData(selected_template_index)
-                languages[self.current_lang_id]["elevenlabs_template_uuid"] = template_uuid
-            
-            selected_voice_index = self.voicemaker_voice_combo.currentIndex()
-            if selected_voice_index >= 0:
-                voice_id = self.voicemaker_voice_combo.itemData(selected_voice_index)
-                languages[self.current_lang_id]["voicemaker_voice_id"] = voice_id
+        languages_config = self.settings.get("languages_config", {})
+        lang_settings = languages_config.get(self.current_lang_id)
 
-            selected_gemini_index = self.gemini_voice_combo.currentIndex()
-            if selected_gemini_index >= 0:
-                gemini_voice = self.gemini_voice_combo.itemData(selected_gemini_index)
-                languages[self.current_lang_id]["gemini_voice"] = gemini_voice
+        if not lang_settings:
+            return
 
-            languages[self.current_lang_id]["gemini_tone"] = self.gemini_tone_input.text()
-            
-            languages[self.current_lang_id]["background_music_path"] = self.bg_music_path_input.text()
-            languages[self.current_lang_id]["background_music_volume"] = self.bg_music_volume_slider.value()
+        # Update the dictionary in-place
+        lang_settings["prompt"] = self.prompt_edit.toPlainText()
+        lang_settings["model"] = self.model_combo.currentText()
+        lang_settings["max_tokens"] = self.tokens_spinbox.value()
+        lang_settings["temperature"] = self.temperature_spinbox.value()
+        lang_settings["tts_provider"] = self.tts_provider_combo.currentText()
+        lang_settings["elevenlabs_template_uuid"] = self.elevenlabs_template_combo.currentData()
+        lang_settings["voicemaker_voice_id"] = self.voicemaker_voice_combo.currentData()
+        lang_settings["gemini_voice"] = self.gemini_voice_combo.currentData()
+        lang_settings["gemini_tone"] = self.gemini_tone_input.text()
+        lang_settings["background_music_path"] = self.bg_music_path_input.text()
+        lang_settings["background_music_volume"] = self.bg_music_volume_slider.value()
+        lang_settings["default_template"] = self.default_template_combo.currentData()
 
-            self.settings.set("languages_config", languages)
+        # Explicitly save the entire settings file
+        self.settings.save_settings()
 
     def update_fields(self):
         # Store current selection
@@ -511,6 +539,7 @@ class LanguagesTab(QWidget):
         self.load_languages()
         self.load_models()
         self.load_elevenlabs_templates()
+        self.load_templates_combo()
 
         # Try to restore selection
         if current_lang_text:
@@ -543,6 +572,7 @@ class LanguagesTab(QWidget):
         self.tts_provider_label.setText(translator.translate("tts_provider_label"))
         self.voicemaker_voice_label.setText(translator.translate("voicemaker_voice_label"))
         self.gemini_voice_label.setText(translator.translate("gemini_voice_label"))
+        self.default_template_label.setText(translator.translate("default_template_label", "Default Template:"))
         self.temperature_label.setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
         self.bg_music_label.setText(translator.translate("background_music_label", "Background Music:"))
         self.browse_bg_music_button.setText(translator.translate("browse_button", "Browse..."))

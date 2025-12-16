@@ -8,6 +8,7 @@ import traceback
 import threading
 import shutil
 import collections
+from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt, Slot, QMutex
 
 from utils.logger import logger, LogLevel
@@ -153,7 +154,8 @@ class VoiceoverWorker(BaseWorker):
             raise Exception("Timeout waiting for GeminiTTS result.")
 
         else: # ElevenLabs
-            api = ElevenLabsAPI()
+            api_key = self.config.get('elevenlabs_api_key')
+            api = ElevenLabsAPI(api_key=api_key)
             
             # Retry logic for task creation
             task_id = None
@@ -263,19 +265,18 @@ class CustomStageWorker(BaseWorker):
             raise Exception("Empty or invalid response from API.")
 
 
-# Global lock for image API throttling
-image_api_lock = threading.Lock()
-last_image_request_time = 0
-
 class ImageGenerationWorker(BaseWorker):
     def do_work(self):
-        global last_image_request_time
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import as_completed
         
+        executor = self.config.get('executor')
+        if not executor:
+            raise Exception("Executor not provided to ImageGenerationWorker")
+
         prompts_text = self.config['prompts_text']
         prompts = re.findall(r"^\d+\.\s*(.*)", prompts_text, re.MULTILINE)
         if not prompts:
-            logger.log(f"[{self.task_id}] Не знайдено нумерованих промптів. Спроба розбору по рядках.", level=LogLevel.INFO)
+            logger.log(f"[{self.task_id}] No numbered prompts found. Parsing by lines.", level=LogLevel.INFO)
             prompts = [line.strip() for line in prompts_text.split('\n') if line.strip()]
 
         if not prompts:
@@ -285,49 +286,23 @@ class ImageGenerationWorker(BaseWorker):
         images_dir = os.path.join(self.config['dir_path'], "images")
         os.makedirs(images_dir, exist_ok=True)
         
-        googler_semaphore = self.config.get('googler_semaphore')
-
-        # --- THREAD-SAFE REFACTOR ---
-        # Create a single shared API instance before starting threads
         if provider == 'googler':
             file_extension = 'jpg'
             shared_api = GooglerAPI()
             api_kwargs = self.config['api_kwargs']
-            max_threads = self.config.get('max_threads', 1)
         else: # pollinations
             file_extension = 'png'
             shared_api = PollinationsAPI()
             api_kwargs = {}
-            max_threads = 1
-        # --- END REFACTOR ---
         
         service_name = provider.capitalize()
         generated_paths = [None] * len(prompts)
         
         def generate_single_image(index, prompt):
             """Generate a single image and return its data"""
-            global last_image_request_time
-            
-            is_googler = provider == 'googler' and googler_semaphore is not None
-            
             try:
-                if is_googler:
-                    googler_semaphore.acquire()
-
-                image_data = None
-                with image_api_lock:
-                    current_time = time.time()
-                    elapsed = current_time - last_image_request_time
-                    delay_needed = 0.5 
-                    
-                    if elapsed < delay_needed:
-                        time.sleep(delay_needed - elapsed)
-                    
-                    last_image_request_time = time.time()
-
-                    logger.log(f"[{self.task_id}] [{service_name}] Generating image {index + 1}/{len(prompts)}", level=LogLevel.INFO)
-                    # Call the shared API instance inside the lock
-                    image_data = shared_api.generate_image(prompt, **api_kwargs)
+                logger.log(f"[{self.task_id}] [{service_name}] Generating image {index + 1}/{len(prompts)}", level=LogLevel.INFO)
+                image_data = shared_api.generate_image(prompt, **api_kwargs)
 
                 if not image_data:
                     logger.log(f"[{self.task_id}] [{service_name}] Failed to generate image {index + 1}/{len(prompts)} (no data)", level=LogLevel.WARNING)
@@ -337,39 +312,40 @@ class ImageGenerationWorker(BaseWorker):
             except Exception as e:
                 logger.log(f"[{self.task_id}] [{service_name}] Error generating image {index + 1}: {e}", level=LogLevel.ERROR)
                 return None
-            finally:
-                if is_googler:
-                    googler_semaphore.release()
         
-        # Generate and save images in parallel
-        with ThreadPoolExecutor(max_workers=max_threads) as executor:
-            future_to_index = {executor.submit(generate_single_image, i, prompt): i for i, prompt in enumerate(prompts)}
-            
-            for future in as_completed(future_to_index):
-                result = future.result()
-                if result:
-                    index, image_data, prompt = result
-                    
-                    image_path = os.path.join(images_dir, f"{index + 1}.{file_extension}")
-                    data_to_write = image_data
+        future_to_index = {}
+        for i, prompt in enumerate(prompts):
+            future = executor.submit(generate_single_image, i, prompt)
+            future_to_index[future] = i
+            time.sleep(0.5)
 
-                    if provider == 'googler' and isinstance(image_data, str):
-                        try:
-                            data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
-                        except Exception as e:
-                            logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index + 1}: {e}", level=LogLevel.ERROR)
-                            continue
-                    
+        for future in as_completed(future_to_index):
+            result = future.result()
+            if result:
+                index, image_data, prompt = result
+                
+                image_path = os.path.join(images_dir, f"{index + 1}.{file_extension}")
+                data_to_write = image_data
+
+                if provider == 'googler' and isinstance(image_data, str):
                     try:
-                        with open(image_path, 'wb') as f:
-                            f.write(data_to_write)
-                        
-                        logger.log(f"[{self.task_id}] [{service_name}] Image {index + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
-                        generated_paths[index] = image_path
-                        self.signals.status_changed.emit(self.task_id, image_path, prompt)
-                        time.sleep(0.05)
-                    except IOError as e:
-                        logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index + 1} to {image_path}: {e}", level=LogLevel.ERROR)
+                        data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
+                    except Exception as e:
+                        logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index + 1}: {e}", level=LogLevel.ERROR)
+                        continue
+                
+                try:
+                    time.sleep(0.2)
+                    with open(image_path, 'wb') as f:
+                        f.write(data_to_write)
+                    
+                    logger.log(f"[{self.task_id}] [{service_name}] Image {index + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
+                    generated_paths[index] = image_path
+                    
+                    time.sleep(0.2)
+                    self.signals.status_changed.emit(self.task_id, image_path, prompt)
+                except IOError as e:
+                    logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index + 1} to {image_path}: {e}", level=LogLevel.ERROR)
 
         final_paths = [path for path in generated_paths if path is not None]
 
@@ -572,6 +548,7 @@ class TaskProcessor(QObject):
         googler_settings = self.settings.get("googler", {})
         max_googler = googler_settings.get("max_threads", 1)
         self.googler_semaphore = QSemaphore(max_googler)
+        self.image_gen_executor = ThreadPoolExecutor(max_workers=max_googler)
         
         max_video = googler_settings.get("max_video_threads", 1)
         self.video_semaphore = QSemaphore(max_video)
@@ -1076,13 +1053,12 @@ class TaskProcessor(QObject):
             'prompts_text': state.image_prompts,
             'dir_path': state.dir_path,
             'provider': state.settings.get('image_generation_provider', 'pollinations'),
-            'max_threads': googler_settings.get('max_threads', 1),
             'api_kwargs': {
                 'aspect_ratio': googler_settings.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE'),
                 'seed': googler_settings.get('seed'),
                 'negative_prompt': googler_settings.get('negative_prompt')
             },
-            'googler_semaphore': self.googler_semaphore
+            'executor': self.image_gen_executor
         }
         self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
 
@@ -1275,6 +1251,7 @@ class TaskProcessor(QObject):
             'dir_path': state.dir_path,
             'lang_config': lang_config,
             'voicemaker_api_key': task_settings.get('voicemaker_api_key'),
+            'elevenlabs_api_key': task_settings.get('elevenlabs_api_key'),
             'voicemaker_lang_code': self._get_voicemaker_language_code(lang_config.get('voicemaker_voice_id')),
             'job_name': state.job_name,
             'lang_name': state.lang_name
@@ -1424,14 +1401,13 @@ class TaskProcessor(QObject):
         config = {
             'prompts_text': state.image_prompts,
             'dir_path': state.dir_path,
-            'provider': self.settings.get('image_generation_provider', 'pollinations'),
-            'max_threads': googler_settings.get('max_threads', 1),
+            'provider': state.settings.get('image_generation_provider', 'pollinations'),
             'api_kwargs': {
                 'aspect_ratio': googler_settings.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE'),
                 'seed': googler_settings.get('seed'),
                 'negative_prompt': googler_settings.get('negative_prompt')
             },
-            'googler_semaphore': self.googler_semaphore
+            'executor': self.image_gen_executor
         }
         self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
 
@@ -1446,10 +1422,10 @@ class TaskProcessor(QObject):
         elif len(generated_paths) > 0:
             status = 'warning'
 
-        self.task_states[task_id].image_paths = generated_paths
-        # Don't set final status yet if we need to animate
+        state = self.task_states[task_id]
+        state.image_paths = generated_paths
         
-        montage_settings = self.settings.get("montage", {})
+        montage_settings = state.settings.get("montage", {})
         special_mode = montage_settings.get("special_processing_mode", "Disabled")
         
         if special_mode == "Video at the beginning" and generated_paths:

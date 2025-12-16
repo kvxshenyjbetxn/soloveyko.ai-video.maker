@@ -292,5 +292,7 @@
     "apply_template_button": "Застосувати",
     "view_template_button": "Перегляд",
     "template_details_title": "Деталі шаблону",
-    "close_button": "Закрити"
+    "close_button": "Закрити",
+    "default_template_label": "Шаблон за замовчуванням:",
+    "none_template": "Немає"
 }
