@@ -9,7 +9,8 @@ import threading
 import shutil
 import collections
 from concurrent.futures import ThreadPoolExecutor
-from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt, Slot, QMutex
+from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Slot, QMutex, Qt
+from PySide6.QtGui import QPixmap
 
 from utils.logger import logger, LogLevel
 from utils.logger import logger, LogLevel
@@ -33,7 +34,7 @@ from core.montage_engine import MontageEngine
 class WorkerSignals(QObject):
     finished = Signal(str, object)  # task_id, result
     error = Signal(str, str)        # task_id, error_message
-    status_changed = Signal(str, str, str) # task_id, image_path, prompt
+    status_changed = Signal(str, str, str, str) # task_id, image_path, prompt, thumbnail_path
     progress_log = Signal(str, str)  # task_id, log_message (for card-only logs)
     video_generated = Signal(str, str) # old_image_path, new_video_path
 
@@ -313,39 +314,81 @@ class ImageGenerationWorker(BaseWorker):
                 logger.log(f"[{self.task_id}] [{service_name}] Error generating image {index + 1}: {e}", level=LogLevel.ERROR)
                 return None
         
-        future_to_index = {}
-        for i, prompt in enumerate(prompts):
-            future = executor.submit(generate_single_image, i, prompt)
-            future_to_index[future] = i
-            time.sleep(0.5)
+        max_workers = self.config.get('max_threads', 8)
+        prompts_iterator = iter(enumerate(prompts))
+        futures = {}
 
-        for future in as_completed(future_to_index):
-            result = future.result()
+        # Start with an initial batch of workers
+        for _ in range(max_workers):
+            try:
+                i, prompt = next(prompts_iterator)
+                future = executor.submit(generate_single_image, i, prompt)
+                futures[future] = i
+                time.sleep(0.5)  # Respect the initial submission delay
+            except StopIteration:
+                break  # No more prompts to start with
+
+        while futures:
+            # Wait for the next future to complete
+            done_future = next(as_completed(futures))
+            time.sleep(0.1) # Add delay to space out result processing
+            
+            index = futures.pop(done_future)
+            result = done_future.result()
+
             if result:
-                index, image_data, prompt = result
+                index_from_result, image_data, prompt_from_result = result
                 
-                image_path = os.path.join(images_dir, f"{index + 1}.{file_extension}")
+                image_path = os.path.join(images_dir, f"{index_from_result + 1}.{file_extension}")
                 data_to_write = image_data
 
                 if provider == 'googler' and isinstance(image_data, str):
                     try:
                         data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
                     except Exception as e:
-                        logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index + 1}: {e}", level=LogLevel.ERROR)
-                        continue
-                
-                try:
-                    time.sleep(0.2)
-                    with open(image_path, 'wb') as f:
-                        f.write(data_to_write)
-                    
-                    logger.log(f"[{self.task_id}] [{service_name}] Image {index + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
-                    generated_paths[index] = image_path
-                    
-                    time.sleep(0.2)
-                    self.signals.status_changed.emit(self.task_id, image_path, prompt)
-                except IOError as e:
-                    logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index + 1} to {image_path}: {e}", level=LogLevel.ERROR)
+                        logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index_from_result + 1}: {e}", level=LogLevel.ERROR)
+                        # Continue to the submission part to keep the worker count stable
+                    else:
+                        try:
+                            time.sleep(0.2)
+                            with open(image_path, 'wb') as f:
+                                f.write(data_to_write)
+                            
+                            logger.log(f"[{self.task_id}] [{service_name}] Image {index_from_result + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
+                            generated_paths[index_from_result] = image_path
+                            
+                            # --- Thumbnail Generation ---
+                            thumbnail_path = ""
+                            try:
+                                base, ext = os.path.splitext(image_path)
+                                thumbnail_path = f"{base}_thumb.jpg"
+                                pixmap = QPixmap(image_path)
+                                if not pixmap.isNull():
+                                    scaled_pixmap = pixmap.scaled(290, 290, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                                    scaled_pixmap.save(thumbnail_path, "JPG", 85)
+                                    logger.log(f"[{self.task_id}] Thumbnail created for image {index_from_result + 1}", level=LogLevel.INFO)
+                                else:
+                                    thumbnail_path = ""
+                                    logger.log(f"[{self.task_id}] Failed to create QPixmap for thumbnail for image {index_from_result + 1}", level=LogLevel.WARNING)
+                            except Exception as thumb_e:
+                                thumbnail_path = ""
+                                logger.log(f"[{self.task_id}] Error generating thumbnail for image {index_from_result + 1}: {thumb_e}", level=LogLevel.ERROR)
+                            # --- End Thumbnail Generation ---
+                            
+                            time.sleep(0.1)
+                            self.signals.status_changed.emit(self.task_id, image_path, prompt_from_result, thumbnail_path)
+                        except IOError as e:
+                            logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index_from_result + 1} to {image_path}: {e}", level=LogLevel.ERROR)
+            
+            # After processing a completed task, try to submit a new one
+            try:
+                i, prompt = next(prompts_iterator)
+                future = executor.submit(generate_single_image, i, prompt)
+                futures[future] = i
+                time.sleep(0.5) # Delay for the new submission
+            except StopIteration:
+                # No more prompts to submit, the while loop will continue until all in-flight futures are done
+                pass
 
         final_paths = [path for path in generated_paths if path is not None]
 
@@ -506,7 +549,7 @@ else:
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
-    image_generated = Signal(str, str, str, str) # job_name, lang_name, image_path, prompt
+    image_generated = Signal(str, str, str, str, str) # job_name, lang_name, image_path, prompt, thumbnail_path
     video_generated = Signal(str, str) # old_image_path, new_video_path
     task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
     image_review_required = Signal()
@@ -740,12 +783,12 @@ class TaskProcessor(QObject):
         worker.signals.video_generated.connect(self.video_generated) # For gallery updates
         self.threadpool.start(worker)
 
-    @Slot(str, str, str)
-    def _on_worker_status_changed(self, task_id, image_path, prompt):
+    @Slot(str, str, str, str)
+    def _on_worker_status_changed(self, task_id, image_path, prompt, thumbnail_path):
         """Used for intermediate status updates, like an image being generated."""
         state = self.task_states.get(task_id)
         if state:
-            self.image_generated.emit(state.job_name, state.lang_name, image_path, prompt)
+            self.image_generated.emit(state.job_name, state.lang_name, image_path, prompt, thumbnail_path)
             
             # Update image counter and emit metadata
             state.images_generated_count += 1
@@ -1058,7 +1101,8 @@ class TaskProcessor(QObject):
                 'seed': googler_settings.get('seed'),
                 'negative_prompt': googler_settings.get('negative_prompt')
             },
-            'executor': self.image_gen_executor
+            'executor': self.image_gen_executor,
+            'max_threads': googler_settings.get("max_threads", 8)
         }
         self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
 
@@ -1407,7 +1451,8 @@ class TaskProcessor(QObject):
                 'seed': googler_settings.get('seed'),
                 'negative_prompt': googler_settings.get('negative_prompt')
             },
-            'executor': self.image_gen_executor
+            'executor': self.image_gen_executor,
+            'max_threads': googler_settings.get("max_threads", 8)
         }
         self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
 
