@@ -300,5 +300,6 @@
     "template_notes_group_title": "Заметки к шаблону",
     "template_notes_placeholder": "Введите заметки к выбранному шаблону здесь...",
     "default_settings": "Глобальные настройки",
-    "template": "Шаблон"
+    "template": "Шаблон",
+    "whisper_model_download_info": "Модель Whisper '{model_name}' не найдена в кеше. Начинается одноразовая загрузка. Это может занять некоторое время..."
 }

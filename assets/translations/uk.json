@@ -296,5 +296,6 @@
     "default_template_label": "Шаблон за замовчуванням:",
     "none_template": "Немає",
     "default_settings": "Глобальні налаштування",
-    "template": "Шаблон"
+    "template": "Шаблон",
+    "whisper_model_download_info": "Модель Whisper '{model_name}' не знайдено в кеші. Починається одноразове завантаження. Це може зайняти деякий час..."
 }
