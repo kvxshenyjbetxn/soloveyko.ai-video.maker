@@ -213,7 +213,14 @@ class StageSelectionWidget(QWidget):
     def set_template(self, template_name):
         self.selected_template = template_name
         if template_name:
-            self.template_button.setToolTip(f"{translator.translate('template', 'Template')}: {template_name}")
+            template_data = template_manager.load_template(template_name)
+            note = template_data.get("__note__", "")
+            
+            tooltip_text = f"{translator.translate('template', 'Template')}: {template_name}"
+            if note:
+                tooltip_text += f"\n\n{note}"
+            
+            self.template_button.setToolTip(tooltip_text)
             # Change icon or style to indicate active selection
             self.template_button.setStyleSheet("QToolButton { border: 1px solid #4CAF50; background-color: #4CAF50; border-radius: 4px; }") 
         else:

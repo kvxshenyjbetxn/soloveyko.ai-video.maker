@@ -294,5 +294,11 @@
     "template_details_title": "Детали шаблона",
     "close_button": "Закрыть",
     "default_template_label": "Шаблон по умолчанию:",
-    "none_template": "Нет"
+    "none_template": "Нет",
+    "setting_header": "Настройка",
+    "value_header": "Значение",
+    "template_notes_group_title": "Заметки к шаблону",
+    "template_notes_placeholder": "Введите заметки к выбранному шаблону здесь...",
+    "default_settings": "Глобальные настройки",
+    "template": "Шаблон"
 }

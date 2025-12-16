@@ -2,9 +2,9 @@ import copy
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, QComboBox, 
                                QLineEdit, QPushButton, QMessageBox, QInputDialog,
-                               QSpacerItem, QSizePolicy, QDialog, QTreeView)
+                               QSpacerItem, QSizePolicy, QDialog, QTreeView, QGroupBox, QTextEdit)
 from PySide6.QtGui import QStandardItemModel, QStandardItem
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 
 from utils.translator import translator
 from utils.settings import settings_manager, template_manager
@@ -16,6 +16,15 @@ class TemplateViewerDialog(QDialog):
         self.setMinimumSize(600, 500)
 
         layout = QVBoxLayout(self)
+
+        # Display note if it exists
+        note = data.pop("__note__", None)
+        if note:
+            note_label = QLabel(note)
+            note_label.setWordWrap(True)
+            note_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            note_label.setStyleSheet("background-color: #f0f0f0; border: 1px solid #ccc; padding: 5px; border-radius: 3px;")
+            layout.addWidget(note_label)
 
         self.tree_view = QTreeView()
         self.tree_view.setEditTriggers(QTreeView.NoEditTriggers)
@@ -73,6 +82,11 @@ class TemplatesTab(QWidget):
         super().__init__()
         self.init_ui()
         self.retranslate_ui()
+        
+        self.note_save_timer = QTimer(self)
+        self.note_save_timer.setSingleShot(True)
+        self.note_save_timer.setInterval(1000) # 1 second delay
+        
         self.connect_signals()
         self.populate_templates_combo()
 
@@ -110,6 +124,14 @@ class TemplatesTab(QWidget):
         buttons_layout.addWidget(self.view_button)
         buttons_layout.addWidget(self.delete_button)
         main_layout.addLayout(buttons_layout)
+
+        # Notes section
+        self.notes_group = QGroupBox()
+        notes_layout = QVBoxLayout(self.notes_group)
+        self.notes_edit = QTextEdit()
+        self.notes_edit.setPlaceholderText(translator.translate("template_notes_placeholder", "Enter notes for the selected template here..."))
+        notes_layout.addWidget(self.notes_edit)
+        main_layout.addWidget(self.notes_group)
         
         main_layout.addStretch()
 
@@ -121,6 +143,7 @@ class TemplatesTab(QWidget):
         self.view_button.setText(translator.translate("view_template_button", "View"))
         self.template_label.setText(translator.translate("template_label"))
         self.template_name_label.setText(translator.translate("template_name_label"))
+        self.notes_group.setTitle(translator.translate("template_notes_group_title", "Notes"))
 
     def connect_signals(self):
         self.templates_combo.currentTextChanged.connect(self._on_template_select)
@@ -129,6 +152,10 @@ class TemplatesTab(QWidget):
         self.view_button.clicked.connect(self._on_view)
         self.delete_button.clicked.connect(self._on_delete)
         self.rename_button.clicked.connect(self._on_rename)
+        
+        # Auto-save for notes
+        self.notes_edit.textChanged.connect(self._on_note_changed)
+        self.note_save_timer.timeout.connect(self._save_current_note)
 
     def populate_templates_combo(self):
         self.templates_combo.blockSignals(True)
@@ -145,7 +172,44 @@ class TemplatesTab(QWidget):
         self._on_template_select(self.templates_combo.currentText())
 
     def _on_template_select(self, name):
+        # Stop any pending save operation from the previous selection
+        if self.note_save_timer.isActive():
+            self.note_save_timer.stop()
+            self._save_current_note()
+
         self.template_name_edit.setText(name)
+        if name:
+            template_data = template_manager.load_template(name)
+            note = template_data.get("__note__", "")
+            # Block signals to prevent triggering save on programmatic change
+            self.notes_edit.blockSignals(True)
+            self.notes_edit.setText(note)
+            self.notes_edit.blockSignals(False)
+        else:
+            self.notes_edit.clear()
+
+    def _on_note_changed(self):
+        """Starts the auto-save timer when the user types in the notes editor."""
+        self.note_save_timer.start()
+
+    def _save_current_note(self):
+        """Saves the current content of the notes editor to the selected template file."""
+        name = self.templates_combo.currentText()
+        if not name:
+            return
+
+        template_data = template_manager.load_template(name)
+        # If template was deleted or is empty, do nothing
+        if not template_data:
+            return
+            
+        current_note = self.notes_edit.toPlainText()
+        
+        # Only save if the note has actually changed
+        if template_data.get("__note__") != current_note:
+            template_data["__note__"] = current_note
+            template_manager.save_template(name, template_data)
+
 
     def _gather_current_settings(self):
         """Gathers settings from the global settings_manager to be saved in a template."""
@@ -213,6 +277,7 @@ class TemplatesTab(QWidget):
             return
 
         data_to_save = self._gather_current_settings()
+        data_to_save["__note__"] = self.notes_edit.toPlainText()
 
         # Confirmation for saving
         reply = QMessageBox.question(self, translator.translate("confirm_save_title"), 
