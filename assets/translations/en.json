@@ -294,5 +294,7 @@
     "template_details_title": "Template Details",
     "close_button": "Close",
     "default_template_label": "Default Template:",
-    "none_template": "None"
+    "none_template": "None",
+    "setting_header": "Setting",
+    "value_header": "Value"
 }
