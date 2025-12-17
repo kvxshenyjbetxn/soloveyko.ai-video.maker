@@ -604,74 +604,83 @@ class TextTab(QWidget):
 
             text = self.text_edit.toPlainText()
             
-            base_save_path = self.settings.get('results_path')
-            
             found_files_per_lang = {}
             found_files_details = {}
 
             # --- Check for existing files ---
-            if base_save_path:
-                safe_job_name = "".join(c for c in task_name if c.isalnum() or c in (' ', '_')).rstrip()
-                for lang_id, btn in self.language_buttons.items():
-                    if btn.isChecked():
-                        lang_name = btn.text()
-                        safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
-                        dir_path = os.path.join(base_save_path, safe_job_name, safe_lang_name)
+            safe_job_name = "".join(c for c in task_name if c.isalnum() or c in (' ', '_')).rstrip()
+            for lang_id, btn in self.language_buttons.items():
+                if btn.isChecked():
+                    stage_widget = self.stage_widgets.get(lang_id)
+                    
+                    # Determine the correct base_save_path
+                    base_save_path = self.settings.get('results_path') # Default global path
+                    if stage_widget and stage_widget.selected_template:
+                        template_data = template_manager.load_template(stage_widget.selected_template)
+                        if template_data and template_data.get('results_path'):
+                            base_save_path = template_data['results_path']
+                            
+                    if not base_save_path:
+                        continue
+
+                    lang_name = btn.text()
+                    safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
+                    dir_path = os.path.join(base_save_path, safe_job_name, safe_lang_name)
+                    
+                    if os.path.isdir(dir_path):
+                        found_files_for_lang = {}
+                        details_for_lang = {}
                         
-                        if os.path.isdir(dir_path):
-                            found_files_for_lang = {}
-                            details_for_lang = {}
-                            
-                            def add_found(stage_key, path, display_name=None):
-                                if display_name is None:
-                                    display_name = translator.translate(stage_key)
-                                found_files_for_lang[stage_key] = display_name
-                                details_for_lang[stage_key] = path
+                        def add_found(stage_key, path, display_name=None):
+                            if display_name is None:
+                                display_name = translator.translate(stage_key)
+                            found_files_for_lang[stage_key] = display_name
+                            details_for_lang[stage_key] = path
 
-                            # Check for files
-                            translation_path = os.path.join(dir_path, "translation.txt")
-                            if os.path.isfile(translation_path):
-                                add_found("stage_translation", translation_path)
+                        # Check for files
+                        translation_path = os.path.join(dir_path, "translation.txt")
+                        if os.path.isfile(translation_path):
+                            add_found("stage_translation", translation_path)
 
-                            prompts_path = os.path.join(dir_path, "image_prompts.txt")
-                            if os.path.isfile(prompts_path):
-                                add_found("stage_img_prompts", prompts_path)
+                        prompts_path = os.path.join(dir_path, "image_prompts.txt")
+                        if os.path.isfile(prompts_path):
+                            add_found("stage_img_prompts", prompts_path)
 
-                            images_dir = os.path.join(dir_path, "images")
-                            if os.path.isdir(images_dir):
-                                files = os.listdir(images_dir)
-                                if files:
-                                    image_ext = ('.png', '.jpg', '.jpeg')
-                                    video_ext = ('.mp4',)
-                                    image_count = len([f for f in files if f.lower().endswith(image_ext)])
-                                    video_count = len([f for f in files if f.lower().endswith(video_ext)])
-                                    
-                                    display_name = translator.translate("stage_images")
-                                    counts = []
-                                    if image_count > 0:
-                                        counts.append(f"{image_count} {translator.translate('images_label')}")
-                                    if video_count > 0:
-                                        counts.append(f"{video_count} {translator.translate('videos_label')}")
-                                    
-                                    if counts:
-                                        display_name += f" ({', '.join(counts)})"
+                        images_dir = os.path.join(dir_path, "images")
+                        if os.path.isdir(images_dir):
+                            files = os.listdir(images_dir)
+                            if files:
+                                image_ext = ('.png', '.jpg', '.jpeg')
+                                video_ext = ('.mp4',)
+                                image_count = len([f for f in files if f.lower().endswith(image_ext)])
+                                video_count = len([f for f in files if f.lower().endswith(video_ext)])
+                                
+                                display_name = translator.translate("stage_images")
+                                counts = []
+                                if image_count > 0:
+                                    counts.append(f"{image_count} {translator.translate('images_label')}")
+                                if video_count > 0:
+                                    counts.append(f"{video_count} {translator.translate('videos_label')}")
+                                
+                                if counts:
+                                    display_name += f" ({', '.join(counts)})"
 
-                                    add_found("stage_images", images_dir, display_name=display_name)
+                                add_found("stage_images", images_dir, display_name=display_name)
 
-                            voice_mp3_path = os.path.join(dir_path, "voice.mp3")
-                            voice_wav_path = os.path.join(dir_path, "voice.wav")
-                            if os.path.isfile(voice_mp3_path):
-                                add_found("stage_voiceover", voice_mp3_path)
-                            elif os.path.isfile(voice_wav_path):
-                                add_found("stage_voiceover", voice_wav_path)
+                        voice_mp3_path = os.path.join(dir_path, "voice.mp3")
+                        voice_wav_path = os.path.join(dir_path, "voice.wav")
+                        if os.path.isfile(voice_mp3_path):
+                            add_found("stage_voiceover", voice_mp3_path)
+                        elif os.path.isfile(voice_wav_path):
+                            add_found("stage_voiceover", voice_wav_path)
 
-                            subtitles_path = os.path.join(dir_path, "voice.ass")
-                            if os.path.isfile(subtitles_path):
-                                add_found("stage_subtitles", subtitles_path)
-                            
-                            if found_files_for_lang:
-                                found_files_per_lang[lang_name] = found_files_for_lang
-                                found_files_details[lang_name] = details_for_lang
+                        subtitles_path = os.path.join(dir_path, "voice.ass")
+                        if os.path.isfile(subtitles_path):
+                            add_found("stage_subtitles", subtitles_path)
+                        
+                        if found_files_for_lang:
+                            found_files_per_lang[lang_name] = found_files_for_lang
+                            found_files_details[lang_name] = details_for_lang
 
             use_existing = False
             if found_files_per_lang:
