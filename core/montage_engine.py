@@ -326,7 +326,7 @@ class MontageEngine:
                         log_line = (
                             f"time={time_str} | "
                             f"fps={fps} | "
-                            f"bitrate={bitrate} | "
+                            f"bit={bitrate} | "
                             f"progress={progress:.2f}%"
                         )
                         log_progress(log_line)

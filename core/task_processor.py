@@ -37,6 +37,7 @@ class WorkerSignals(QObject):
     status_changed = Signal(str, str, str, str) # task_id, image_path, prompt, thumbnail_path
     progress_log = Signal(str, str)  # task_id, log_message (for card-only logs)
     video_generated = Signal(str, str) # old_image_path, new_video_path
+    video_progress = Signal(str) # task_id
 
 class BaseWorker(QRunnable):
     def __init__(self, task_id, config):
@@ -419,6 +420,7 @@ class VideoGenerationWorker(BaseWorker):
                             f.write(data_to_write)
                         
                         self.signals.video_generated.emit(image_path, video_path)
+                        self.signals.video_progress.emit(self.task_id)
                         
                         try:
                             os.remove(image_path)
@@ -509,10 +511,13 @@ class TaskState:
         self.status = {stage: 'pending' for stage in self.stages}
         self.translation_review_dialog_shown = False
         self.prompt_regeneration_attempts = 0
+        self.image_gen_status = 'pending'
         
         # Metadata counters
         self.images_generated_count = 0
         self.images_total_count = 0
+        self.videos_generated_count = 0
+        self.videos_total_count = 0
 
     def _get_save_path(self, base_path, job_name, lang_name):
         if not base_path: return None
@@ -767,6 +772,7 @@ class TaskProcessor(QObject):
         worker.signals.error.connect(on_error_slot)
         worker.signals.status_changed.connect(self._on_worker_status_changed) # For gallery updates
         worker.signals.video_generated.connect(self.video_generated) # For gallery updates
+        worker.signals.video_progress.connect(self._on_video_progress)
         self.threadpool.start(worker)
 
     @Slot(str, str, str, str)
@@ -779,6 +785,18 @@ class TaskProcessor(QObject):
             # Update image counter and emit metadata
             state.images_generated_count += 1
             metadata_text = f"{state.images_generated_count}/{state.images_total_count}"
+            self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
+
+    @Slot(str)
+    def _on_video_progress(self, task_id):
+        state = self.task_states.get(task_id)
+        if state:
+            state.videos_generated_count += 1
+            
+            img_meta = f"{state.images_generated_count}/{state.images_total_count}"
+            vid_meta = f"{state.videos_generated_count}/{state.videos_total_count}"
+            metadata_text = f"img: {img_meta}, vid: {vid_meta}"
+            
             self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
 
     def _set_stage_status(self, task_id, stage_key, status, error_message=None):
@@ -1466,6 +1484,7 @@ class TaskProcessor(QObject):
 
         state = self.task_states[task_id]
         state.image_paths = generated_paths
+        state.image_gen_status = status # Store the status
         
         montage_settings = state.settings.get("montage", {})
         special_mode = montage_settings.get("special_processing_mode", "Disabled")
@@ -1530,7 +1549,15 @@ class TaskProcessor(QObject):
             return
             
         state.video_animation_count = len(paths_to_animate)
+        state.videos_total_count = len(paths_to_animate)
+        state.videos_generated_count = 0
         logger.log(f"[{task_id}] Starting video generation for {len(paths_to_animate)} images.", level=LogLevel.INFO)
+
+        # Update metadata to show video progress
+        img_meta = f"{state.images_generated_count}/{state.images_total_count}"
+        vid_meta = f"0/{state.videos_total_count}"
+        metadata_text = f"IMG: {img_meta}, VID: {vid_meta}"
+        self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
 
         config = {
             'image_paths': paths_to_animate,
@@ -1547,16 +1574,35 @@ class TaskProcessor(QObject):
         
         logger.log(f"[{task_id}] Video generation finished. Generated {len(generated_videos)} videos.", level=LogLevel.SUCCESS)
 
+        video_count_animated = getattr(state, 'video_animation_count', 0)
+        
+        # Determine video generation status
+        video_gen_status = 'success'
+        if len(generated_videos) < video_count_animated:
+            video_gen_status = 'warning'
+        if len(generated_videos) == 0 and video_count_animated > 0:
+            video_gen_status = 'error'
+
         if generated_videos:
-            video_count_animated = getattr(state, 'video_animation_count', 0)
             remaining_images = state.image_paths[video_count_animated:]
             state.image_paths = generated_videos + remaining_images
-        else:
-            if getattr(state, 'video_animation_count', 0) > 0:
-                logger.log(f"[{task_id}] Video animation produced 0 videos. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
-                state.fallback_to_quick_show = True
+        elif video_count_animated > 0: # This means video gen failed for all
+            logger.log(f"[{task_id}] Video animation produced 0 videos. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
+            state.fallback_to_quick_show = True
 
-        self._set_stage_status(task_id, 'stage_images', 'success')
+        # Combine statuses: warning is the "lowest" priority besides success
+        final_status = state.image_gen_status
+        if final_status == 'success' and video_gen_status != 'success':
+            final_status = video_gen_status # 'warning' or 'error'
+        elif final_status == 'warning' and video_gen_status == 'error':
+            final_status = 'error'
+        # If image_gen_status was 'error', it remains 'error'
+
+        error_message = None
+        if final_status != 'success':
+            error_message = "Failed to generate all images and/or videos."
+            
+        self._set_stage_status(task_id, 'stage_images', final_status, error_message)
         
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
