@@ -194,15 +194,9 @@ class GalleryTab(QWidget):
 
         lang_group = task_group.language_groups[language]
 
-        # --- Optimized Thumbnail Loading ---
-        pixmap = QPixmap()
-        if thumbnail_path and os.path.exists(thumbnail_path):
-            pixmap = QPixmap(thumbnail_path)
-        else:
-            # Fallback to the old, slow method if thumbnail is missing
-            logger.log(f"Thumbnail not found at '{thumbnail_path}', falling back to on-the-fly generation for {media_path}", level=LogLevel.WARNING)
-            pixmap = MediaThumbnail.get_thumbnail_for_media(media_path)
-        # --- End Optimized Thumbnail Loading ---
+        # --- Thumbnail Loading ---
+        pixmap = MediaThumbnail.get_thumbnail_for_media(media_path)
+        # --- End Thumbnail Loading ---
 
         if pixmap.isNull():
             logger.log(f"Failed to load media or generate thumbnail for: {media_path}", level=LogLevel.WARNING)
@@ -247,12 +241,7 @@ class GalleryTab(QWidget):
             if thumbnail:
                 thumbnail.set_regenerating_state(False)
                 
-                new_pixmap = QPixmap()
-                if thumbnail_path and os.path.exists(thumbnail_path):
-                    new_pixmap = QPixmap(thumbnail_path)
-                else:
-                    # Fallback to the old, slow method if thumbnail is missing
-                    new_pixmap = MediaThumbnail.get_thumbnail_for_media(new_path)
+                new_pixmap = MediaThumbnail.get_thumbnail_for_media(new_path)
 
                 thumbnail.update_media(new_path, new_pixmap)
                 logger.log(f"Updated thumbnail for {old_path} with new image {new_path}", level=LogLevel.INFO)

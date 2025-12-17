@@ -652,9 +652,8 @@ class TextTab(QWidget):
                             if files:
                                 image_ext = ('.png', '.jpg', '.jpeg')
                                 video_ext = ('.mp4',)
-                                image_count = len([f for f in files if f.lower().endswith(image_ext)])
+                                image_count = len([f for f in files if f.lower().endswith(image_ext) and not f.lower().endswith('_thumb.jpg')])
                                 video_count = len([f for f in files if f.lower().endswith(video_ext)])
-                                
                                 display_name = translator.translate("stage_images")
                                 counts = []
                                 if image_count > 0:

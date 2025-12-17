@@ -357,22 +357,8 @@ class ImageGenerationWorker(BaseWorker):
                             logger.log(f"[{self.task_id}] [{service_name}] Image {index_from_result + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
                             generated_paths[index_from_result] = image_path
                             
-                            # --- Thumbnail Generation ---
-                            thumbnail_path = ""
-                            try:
-                                base, ext = os.path.splitext(image_path)
-                                thumbnail_path = f"{base}_thumb.jpg"
-                                pixmap = QPixmap(image_path)
-                                if not pixmap.isNull():
-                                    scaled_pixmap = pixmap.scaled(290, 290, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                                    scaled_pixmap.save(thumbnail_path, "JPG", 85)
-                                    logger.log(f"[{self.task_id}] Thumbnail created for image {index_from_result + 1}", level=LogLevel.INFO)
-                                else:
-                                    thumbnail_path = ""
-                                    logger.log(f"[{self.task_id}] Failed to create QPixmap for thumbnail for image {index_from_result + 1}", level=LogLevel.WARNING)
-                            except Exception as thumb_e:
-                                thumbnail_path = ""
-                                logger.log(f"[{self.task_id}] Error generating thumbnail for image {index_from_result + 1}: {thumb_e}", level=LogLevel.ERROR)
+                            # --- Thumbnail Generation (Disabled by user request to avoid duplicates) ---
+                            thumbnail_path = image_path
                             # --- End Thumbnail Generation ---
                             
                             time.sleep(0.1)
