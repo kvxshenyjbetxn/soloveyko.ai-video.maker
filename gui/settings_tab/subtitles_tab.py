@@ -1,3 +1,4 @@
+import ast
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QFormLayout,
     QPushButton, QSpinBox, QFontComboBox, QColorDialog,
@@ -127,10 +128,6 @@ class SubtitlesTab(QWidget):
         self.is_loading = True
         self.settings = settings_manager.get('subtitles', {})
         
-        # Block signals to prevent premature saving
-        # for widget in self.findChildren(QWidget):
-            # widget.blockSignals(True)
-
         # --- Populate fields from settings ---
         saved_type = self.settings.get('whisper_type', 'standard')
         if saved_type == 'standard':
@@ -147,7 +144,6 @@ class SubtitlesTab(QWidget):
         if index != -1:
             self.model_combo.setCurrentIndex(index)
         else:
-            # Saved model not found, set a sensible default for the current engine
             default_model = "base"
             if self.rb_amd.isChecked():
                 default_model = "base.bin"
@@ -159,7 +155,22 @@ class SubtitlesTab(QWidget):
         self.font_combo.setCurrentFont(current_font)
         self.fontsize_spin.setValue(self.settings.get('fontsize', 60))
         
-        self.current_color = self.settings.get('color', [255, 255, 255])
+        # Get color, with defensive parsing for corrupted settings
+        color_val = self.settings.get('color', [255, 255, 255])
+        if isinstance(color_val, str):
+            try:
+                parsed_val = ast.literal_eval(color_val)
+                if isinstance(parsed_val, list) and len(parsed_val) == 3:
+                    self.current_color = [int(c) for c in parsed_val] # Ensure all are integers
+                else:
+                    self.current_color = [255, 255, 255]
+            except (ValueError, SyntaxError, TypeError):
+                self.current_color = [255, 255, 255] # Fallback on parsing error
+        elif isinstance(color_val, list):
+             self.current_color = [int(c) for c in color_val] # Ensure all are integers
+        else:
+            self.current_color = [255, 255, 255]
+
         self.update_color_btn_style()
 
         self.margin_v_spin.setValue(self.settings.get('margin_v', 50))
@@ -169,9 +180,6 @@ class SubtitlesTab(QWidget):
         
         self.is_loading = False
 
-        # --- Unblock signals ---
-        # for widget in self.findChildren(QWidget):
-            # widget.blockSignals(False)
 
     def retranslate_ui(self):
         self.engine_group.setTitle(translator.translate("whisper_engine_group"))

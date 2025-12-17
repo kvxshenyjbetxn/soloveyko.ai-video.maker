@@ -608,7 +608,9 @@ class TextTab(QWidget):
             found_files_details = {}
 
             # --- Check for existing files ---
-            safe_job_name = "".join(c for c in task_name if c.isalnum() or c in (' ', '_')).rstrip()
+            safe_job_name = task_name.replace('…', '').replace('...', '')
+            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', safe_job_name).strip()
+            safe_job_name = safe_job_name[:100]
             for lang_id, btn in self.language_buttons.items():
                 if btn.isChecked():
                     stage_widget = self.stage_widgets.get(lang_id)

@@ -522,7 +522,9 @@ class TaskState:
     def _get_save_path(self, base_path, job_name, lang_name):
         if not base_path: return None
         try:
-            safe_job_name = ("".join(c for c in job_name if c.isalnum() or c in (' ', '_')).rstrip())[:100]
+            safe_job_name = job_name.replace('…', '').replace('...', '')
+            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', safe_job_name).strip()
+            safe_job_name = safe_job_name[:100]
             safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
             dir_path = os.path.join(base_path, safe_job_name, safe_lang_name)
             os.makedirs(dir_path, exist_ok=True)
@@ -674,6 +676,12 @@ class TaskProcessor(QObject):
                 base_save_path = current_settings.get('results_path')
 
                 state = TaskState(job, lang_id, lang_data, base_save_path, current_settings)
+
+                if not state.dir_path:
+                    logger.log(f"[{state.task_id}] CRITICAL: Directory path could not be created. Aborting this task.", level=LogLevel.ERROR)
+                    for stage_key in state.stages:
+                        self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'error')
+                    continue # Skip to the next language or job
                 
                 # --- NEW LOGIC: Pre-process user-provided files ---
                 user_files = state.lang_data.get('user_provided_files', {})
@@ -1251,8 +1259,8 @@ class TaskProcessor(QObject):
         prompts_count = len(prompts)
 
         # Check if prompt count control is enabled
-        is_check_enabled = self.settings.get('image_prompt_count_check_enabled', False)
-        desired_count = self.settings.get('image_prompt_count', 50)
+        is_check_enabled = state.settings.get('prompt_count_control_enabled', False)
+        desired_count = state.settings.get('prompt_count', 50)
 
         if is_check_enabled and prompts_count != desired_count:
             if state.prompt_regeneration_attempts < 3:

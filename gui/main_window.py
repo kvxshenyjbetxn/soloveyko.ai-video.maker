@@ -235,7 +235,7 @@ class MainWindow(QMainWindow):
         else:
             base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         
-        icon_path = os.path.join(base_path, "assets", "icon.png")
+        icon_path = os.path.join(base_path, "assets", "icon.ico")
         self.setWindowIcon(QIcon(icon_path))
 
         self.update_title()
