@@ -1415,6 +1415,17 @@ class TaskProcessor(QObject):
 
     def _start_image_generation(self, task_id):
         state = self.task_states[task_id]
+
+        # If user has provided their own images, the worker will see this and skip generation.
+        if 'stage_images' in state.lang_data.get('pre_found_files', {}):
+            config = {} # Dummy config, not used by skipping logic in worker
+            self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
+            return
+
+        if not state.image_prompts:
+            self._on_img_generation_error(task_id, "Cannot generate images because image prompts text is missing.")
+            return
+            
         googler_settings = self.settings.get('googler', {})
         
         # Calculate total prompts count for metadata
