@@ -52,6 +52,10 @@ def compile_project():
     whisper_path = os.path.dirname(whisper.__file__)
     whisper_assets = os.path.join(whisper_path, 'assets')
     
+    import whisper
+    whisper_path = os.path.dirname(whisper.__file__)
+    whisper_assets = os.path.join(whisper_path, 'assets')
+    
     cmd = [
         "pyinstaller",
         "--noconfirm",
@@ -64,7 +68,6 @@ def compile_project():
         "--add-data", "gui/qt_material;gui/qt_material",
         "--add-data", f"{whisper_assets};whisper/assets",
         "--hidden-import", "whisper",
-        "--hidden-import", "regex",
         "--exclude-module", "PyQt6",
         "--exclude-module", "PyQt5",
         "--exclude-module", "tkinter",

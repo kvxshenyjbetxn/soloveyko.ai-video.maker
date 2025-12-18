@@ -425,13 +425,11 @@ class MainWindow(QMainWindow):
         self.settings_manager.set('api_key', None)
         self.settings_manager.save_settings()
         
-        # Inform the user and restart the application
-        QMessageBox.information(self, self.translator.translate('logout_success_title'), self.translator.translate('logout_success_message'))
+        # Inform the user and close the application
+        QMessageBox.information(self, self.translator.translate('logout_success_title'), self.translator.translate('logout_success_message_manual_restart', "You have successfully logged out. Please manually restart the application to sign in with a different account."))
         
-        # Restart the application
+        # Close the application
         QCoreApplication.quit()
-        # The os.execl call is a robust way to restart the app
-        os.execl(sys.executable, sys.executable, *sys.argv)
 
     def _on_image_review_required(self):
         # ... (rest of the file is the same)
