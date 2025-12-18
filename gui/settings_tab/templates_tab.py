@@ -5,21 +5,44 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, QCombo
                                QLineEdit, QPushButton, QMessageBox, QInputDialog,
                                QSpacerItem, QSizePolicy, QDialog, QTreeView, QGroupBox, QTextEdit,
                                QStyledItemDelegate, QCheckBox, QSpinBox, QDoubleSpinBox, QStyleOptionViewItem,
-                               QApplication, QStyle, QColorDialog)
+                               QApplication, QStyle, QColorDialog, QFontComboBox, QFileDialog)
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor, QBrush
 from PySide6.QtCore import Qt, Signal, QTimer, QModelIndex, QEvent
 
 from utils.translator import translator
 from utils.settings import settings_manager, template_manager
+from gui.widgets.prompt_editor_dialog import PromptEditorDialog
+import json
+import os
+import sys
+
+# Determine the base path for resources, accommodating PyInstaller
+if getattr(sys, 'frozen', False):
+    BASE_PATH = sys._MEIPASS
+else:
+    BASE_PATH = os.path.abspath(".")
+
+def load_json_assets(filename):
+    try:
+        path = os.path.join(BASE_PATH, "assets", filename)
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading {filename}: {e}")
+        return []
+
+VOICEMAKER_VOICES = load_json_assets("voicemaker_voices.json")
+GEMINI_VOICES = load_json_assets("gemini_tts_voices.json")
 
 # --- Settings Metadata ---
 # This dictionary will define the editor type and data for each setting.
 # 'type' can be 'bool', 'int', 'float', 'choice', 'str'
 # 'options' is for 'choice' type
 SETTINGS_METADATA = {
-    'openrouter_models': {'type': 'string_list'},
-    'image_generation_provider': {'type': 'choice', 'options': ["pollinations", "googler"]},
-    'image_review_enabled': {'type': 'bool'},
+    'openrouter_models': {'type': 'string_list', 'label': 'openrouter_models'},
+    'image_generation_provider': {'type': 'choice', 'options': ["pollinations", "googler"], 'label': 'image_generation_provider'},
+    'image_review_enabled': {'type': 'bool', 'label': 'image_review_enabled'},
+    'results_path': {'type': 'folder_path', 'label': 'results_path'},
     'montage': {
         # Render
         'codec': {'type': 'choice', 'options': ["libx264", "h264_nvenc", "h264_amf"]},
@@ -42,17 +65,53 @@ SETTINGS_METADATA = {
         'special_processing_duration_per_image': {'type': 'float', 'min': 0.1, 'max': 10.0, 'step': 0.1, 'suffix': ' s'},
         'special_processing_video_count': {'type': 'int', 'min': 1, 'max': 100},
         'special_processing_check_sequence': {'type': 'bool'},
+        'max_concurrent_montages': {'type': 'int', 'min': 1, 'max': 10}
     },
     'subtitles': {
         'whisper_type': {'type': 'choice', 'options': ['standard', 'amd', 'assemblyai']},
         'whisper_model': {'type': 'choice', 'options': ["tiny", "base", "small", "medium", "large", "base.bin", "small.bin", "medium.bin", "large.bin"]},
+        'font': {'type': 'font'},
         'fontsize': {'type': 'int', 'min': 10, 'max': 200},
         'margin_v': {'type': 'int', 'min': 0, 'max': 500},
         'fade_in': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms'},
         'fade_out': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms'},
-        'fade_out': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms'},
         'max_words': {'type': 'int', 'min': 1, 'max': 50},
         'color': {'type': 'color'},
+    },
+    'googler': {
+        'api_key': {'type': 'str'}, # Assuming basic string
+        'aspect_ratio': {'type': 'choice', 'options': ["IMAGE_ASPECT_RATIO_LANDSCAPE", "IMAGE_ASPECT_RATIO_PORTRAIT", "IMAGE_ASPECT_RATIO_SQUARE"]},
+        'video_prompt': {'type': 'text_edit_button'},
+        'negative_prompt': {'type': 'str'},
+        'seed': {'type': 'str'},
+    },
+    'pollinations': {
+        'model': {'type': 'choice', 'options': ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"]},
+        'token': {'type': 'str'},
+        'width': {'type': 'int', 'min': 64, 'max': 4096},
+        'height': {'type': 'int', 'min': 64, 'max': 4096},
+        'nologo': {'type': 'bool'},
+        'enhance': {'type': 'bool'},
+    },
+     'image_prompt_settings': {
+        'prompt': {'type': 'text_edit_button'},
+        'model': {'type': 'model_selection'},
+        'max_tokens': {'type': 'int', 'min': 1, 'max': 128000},
+        'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
+    },
+    'languages_config': {
+        'prompt': {'type': 'text_edit_button'},
+        'model': {'type': 'model_selection'},
+        'max_tokens': {'type': 'int', 'min': 1, 'max': 128000},
+        'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
+        'background_music_path': {'type': 'file_path'},
+        'background_music_volume': {'type': 'int', 'min': 0, 'max': 100},
+        'tts_provider': {'type': 'choice', 'options': ["ElevenLabs", "VoiceMaker", "GeminiTTS"]},
+        'voicemaker_voice_id': {'type': 'voicemaker_voice'},
+        'gemini_voice': {'type': 'gemini_voice'},
+        'gemini_tone': {'type': 'str'},
+        'elevenlabs_template_uuid': {'type': 'str'},
+        'default_template': {'type': 'str'}, 
     }
 }
 
@@ -60,6 +119,7 @@ class SettingsDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
         super().__init__(parent)
 
+    
     def get_metadata_for_index(self, index):
         key_path = index.model().data(index, Qt.UserRole + 1)
         if not key_path:
@@ -67,11 +127,27 @@ class SettingsDelegate(QStyledItemDelegate):
 
         # Traverse metadata using the key path
         metadata = SETTINGS_METADATA
+        # Special handling for languages_config which has dynamic keys (language IDs)
+        # Structure: languages_config -> [lang_id] -> [setting_key]
+        if len(key_path) >= 3 and key_path[0] == 'languages_config':
+             # key_path[0] is 'languages_config'
+             # key_path[1] is 'uk', 'en', etc (the lang_id)
+             # key_path[2] is the actual setting, e.g., 'prompt'
+             
+             # We want to look up 'prompt' inside 'languages_config' in our METADATA
+             # So we skip the lang_id level in metadata lookup
+             setting_key = key_path[-1]
+             
+             # Check if defined directly under languages_config
+             if setting_key in SETTINGS_METADATA['languages_config']:
+                 return SETTINGS_METADATA['languages_config'][setting_key]
+
+        
         for key in key_path:
             if isinstance(metadata, dict):
-                metadata = metadata.get(key)
+                metadata = metadata.get(key, {})
             else:
-                return {} # Path is longer than metadata structure
+                return {} 
         return metadata or {}
 
 
@@ -87,6 +163,9 @@ class SettingsDelegate(QStyledItemDelegate):
         if editor_type == 'bool' or editor_type == 'color':
             # For checkboxes and color pickers, we handle interaction in editorEvent
             return None
+        elif editor_type in ['text_edit', 'text_edit_button']:
+            # For text edit, we handle it via double-click in editorEvent to open dialog
+            return None
         elif editor_type == 'choice':
             editor = QComboBox(parent)
             editor.addItems(metadata.get('options', []))
@@ -99,6 +178,28 @@ class SettingsDelegate(QStyledItemDelegate):
             editor.setRange(metadata.get('min', -1e9), metadata.get('max', 1e9))
             editor.setSingleStep(metadata.get('step', 0.1))
             if 'suffix' in metadata: editor.setSuffix(metadata.get('suffix'))
+        elif editor_type == 'font':
+            editor = QFontComboBox(parent)
+        elif editor_type == 'folder_path':
+            editor = PathEditor(parent, mode='directory')
+        elif editor_type == 'file_path':
+            editor = PathEditor(parent, mode='file')
+        elif editor_type == 'model_selection':
+            editor = QComboBox(parent)
+            models = settings_manager.get("openrouter_models", [])
+            editor.addItems(models)
+            editor.setEditable(True) # Allow typing custom models
+        elif editor_type == 'voicemaker_voice':
+            editor = QComboBox(parent)
+            # Populate with all voices
+            for lang_data in VOICEMAKER_VOICES:
+                 lang_code = lang_data.get("LanguageCode", "Unknown")
+                 for voice_id in lang_data.get("Voices", []):
+                     editor.addItem(f"{lang_code}: {voice_id}", voice_id)
+        elif editor_type == 'gemini_voice':
+            editor = QComboBox(parent)
+            for voice in GEMINI_VOICES:
+                editor.addItem(f"{voice['name']} ({voice['description']})", voice['value'])
         
         if editor:
             editor.setAutoFillBackground(True)
@@ -109,18 +210,35 @@ class SettingsDelegate(QStyledItemDelegate):
     def setEditorData(self, editor, index):
         value = index.model().data(index, Qt.EditRole)
         
-        if isinstance(editor, QComboBox):
-            editor.setCurrentText(str(value))
+        if isinstance(editor, QComboBox) and not isinstance(editor, QFontComboBox):
+            index = editor.findText(str(value))
+            if index >= 0:
+                editor.setCurrentIndex(index)
+            else:
+                 # If editable, set text
+                 if editor.isEditable():
+                     editor.setCurrentText(str(value))
+        elif isinstance(editor, QFontComboBox):
+            editor.setCurrentFont(str(value))
         elif isinstance(editor, (QSpinBox, QDoubleSpinBox)):
-            editor.setValue(float(value))
+            try:
+                editor.setValue(float(value))
+            except (ValueError, TypeError):
+                pass
+        elif isinstance(editor, PathEditor):
+            editor.setText(str(value))
         else:
             super().setEditorData(editor, index)
 
     def setModelData(self, editor, model, index):
-        if isinstance(editor, QComboBox):
+        if isinstance(editor, QComboBox) and not isinstance(editor, QFontComboBox):
             model.setData(index, editor.currentText(), Qt.EditRole)
+        elif isinstance(editor, QFontComboBox):
+            model.setData(index, editor.currentFont().family(), Qt.EditRole)
         elif isinstance(editor, (QSpinBox, QDoubleSpinBox)):
             model.setData(index, editor.value(), Qt.EditRole)
+        elif isinstance(editor, PathEditor):
+            model.setData(index, editor.text(), Qt.EditRole)
         else:
             super().setModelData(editor, model, index)
 
@@ -166,7 +284,9 @@ class SettingsDelegate(QStyledItemDelegate):
     def editorEvent(self, event, model, option, index):
         if index.column() == 1:
             metadata = self.get_metadata_for_index(index)
-            if metadata.get('type') == 'color':
+            editor_type = metadata.get('type')
+            
+            if editor_type == 'color':
                 if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton:
                     current_value = model.data(index, Qt.EditRole)
                     initial_color = Qt.white
@@ -178,15 +298,86 @@ class SettingsDelegate(QStyledItemDelegate):
                         model.setData(index, [color.red(), color.green(), color.blue()], Qt.EditRole)
                     return True
 
-            if metadata.get('type') == 'bool':
+            if editor_type == 'bool':
                 if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton:
                     current_value = model.data(index, Qt.DisplayRole)
                     model.setData(index, not current_value)
                     return True
+            
+            if editor_type in ['text_edit', 'text_edit_button']:
+                 if event.type() == QEvent.MouseButtonDblClick and event.button() == Qt.LeftButton:
+                     current_value = model.data(index, Qt.EditRole)
+                     # Find parent widget to use as parent for dialog
+                     parent_widget = option.widget
+                     dialog = PromptEditorDialog(parent_widget, str(current_value))
+                     if dialog.exec():
+                         model.setData(index, dialog.get_text(), Qt.EditRole)
+                     return True
+
         return super().editorEvent(event, model, option, index)
 
     def updateEditorGeometry(self, editor, option, index):
         editor.setGeometry(option.rect)
+
+class TextEditorButton(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.line_edit = QLineEdit()
+        self.line_edit.setReadOnly(True)
+        self.edit_btn = QPushButton(translator.translate("edit_button", "Edit"))
+        self.edit_btn.setMaximumWidth(50)
+        self.edit_btn.clicked.connect(self.open_editor)
+        layout.addWidget(self.line_edit)
+        layout.addWidget(self.edit_btn)
+        self.setFocusProxy(self.edit_btn)
+        self._text = ""
+
+    def setText(self, text):
+        self._text = text
+        # Show only first line or snippet in line edit
+        snippet = text.split('\n')[0]
+        if len(text) > len(snippet):
+            snippet += "..."
+        self.line_edit.setText(snippet)
+        
+    def text(self):
+        return self._text
+        
+    def open_editor(self):
+        dialog = PromptEditorDialog(self, self._text)
+        if dialog.exec():
+            self.setText(dialog.get_text())
+
+class PathEditor(QWidget):
+    def __init__(self, parent=None, mode='directory'):
+        super().__init__(parent)
+        self.mode = mode
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.line_edit = QLineEdit()
+        self.browse_btn = QPushButton("...")
+        self.browse_btn.setMaximumWidth(30)
+        self.browse_btn.clicked.connect(self.browse)
+        layout.addWidget(self.line_edit)
+        layout.addWidget(self.browse_btn)
+        self.setFocusProxy(self.line_edit)
+        
+    def setText(self, text):
+        self.line_edit.setText(text)
+        
+    def text(self):
+        return self.line_edit.text()
+        
+    def browse(self):
+        if self.mode == 'directory':
+            path = QFileDialog.getExistingDirectory(self, translator.translate("select_directory", "Select Directory"))
+        else:
+            path, _ = QFileDialog.getOpenFileName(self, translator.translate("select_file", "Select File"))
+            
+        if path:
+            self.line_edit.setText(path)
 
 class TemplateEditorDialog(QDialog):
     def __init__(self, title, data, parent=None, template_name=None):
@@ -241,6 +432,13 @@ class TemplateEditorDialog(QDialog):
 
     def _get_metadata_for_path(self, key_path):
         metadata = SETTINGS_METADATA
+        
+        # Similar logic to Delegate for languages_config wildcard
+        if len(key_path) >= 3 and key_path[0] == 'languages_config':
+             setting_key = key_path[-1]
+             if setting_key in SETTINGS_METADATA['languages_config']:
+                 return SETTINGS_METADATA['languages_config'][setting_key]
+
         for key in key_path:
             if isinstance(metadata, dict):
                 metadata = metadata.get(key)
