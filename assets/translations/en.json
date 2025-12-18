@@ -291,6 +291,7 @@
     "template_applied_title": "Template Applied",
     "template_applied_message": "Template settings have been applied and saved.",
     "apply_template_button": "Apply",
+    "edit_template_button": "Edit",
     "view_template_button": "View",
     "template_details_title": "Template Details",
     "close_button": "Close",
