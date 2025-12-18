@@ -65,7 +65,8 @@ class BaseWorker(QRunnable):
 
 class TranslationWorker(BaseWorker):
     def do_work(self):
-        api = OpenRouterAPI()
+        api_key = self.config.get('openrouter_api_key')
+        api = OpenRouterAPI(api_key=api_key)
         lang_config = self.config['lang_config']
         model = lang_config.get('model', 'unknown')
         temp = lang_config.get('temperature', 0.7)
@@ -89,7 +90,8 @@ class TranslationWorker(BaseWorker):
 
 class ImagePromptWorker(BaseWorker):
     def do_work(self):
-        api = OpenRouterAPI()
+        api_key = self.config.get('openrouter_api_key')
+        api = OpenRouterAPI(api_key=api_key)
         img_prompt_settings = self.config['img_prompt_settings']
         model = img_prompt_settings.get('model', 'unknown')
         temp = img_prompt_settings.get('temperature', 0.7)
@@ -135,7 +137,8 @@ class VoiceoverWorker(BaseWorker):
                 raise Exception(f"VoiceMaker generation failed: {status}")
 
         elif tts_provider == 'GeminiTTS':
-            api = GeminiTTSAPI()
+            api_key = self.config.get('gemini_tts_api_key')
+            api = GeminiTTSAPI(api_key=api_key)
             task_id, status = api.create_task(text, lang_config.get('gemini_voice', 'Puck'), lang_config.get('gemini_tone', ''))
             if status != 'connected' or not task_id:
                 raise Exception("Failed to create GeminiTTS task.")
@@ -232,7 +235,8 @@ class CustomStageWorker(BaseWorker):
     def do_work(self):
         stage_name = self.config['stage_name']
         
-        api = OpenRouterAPI()
+        api_key = self.config.get('openrouter_api_key')
+        api = OpenRouterAPI(api_key=api_key)
         
         prompt = self.config['prompt']
         text = self.config['text']
@@ -290,12 +294,13 @@ class ImageGenerationWorker(BaseWorker):
         
         if provider == 'googler':
             file_extension = 'jpg'
-            shared_api = GooglerAPI()
+            api_key = self.config.get('api_key')
+            shared_api = GooglerAPI(api_key=api_key)
             api_kwargs = self.config['api_kwargs']
         else: # pollinations
             file_extension = 'png'
             shared_api = PollinationsAPI()
-            api_kwargs = {}
+            api_kwargs = self.config['api_kwargs'] # Pass settings to generate_image
         
         service_name = provider.capitalize()
         generated_paths = [None] * len(prompts)
@@ -836,7 +841,8 @@ class TaskProcessor(QObject):
         lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
         config = {
             'text': state.original_text,
-            'lang_config': lang_config
+            'lang_config': lang_config,
+            'openrouter_api_key': state.settings.get('openrouter_api_key')
         }
         self._start_worker(TranslationWorker, task_id, 'stage_translation', config, self._on_translation_finished, self._on_translation_error)
 
@@ -946,7 +952,8 @@ class TaskProcessor(QObject):
             'prompt': prompt,
             'model': model,
             'max_tokens': int(max_tokens),
-            'temperature': float(temperature)
+            'temperature': float(temperature),
+            'openrouter_api_key': state.settings.get('openrouter_api_key')
         }
         
         # We use a unique stage key for each custom stage to track status if we wanted to block, 
@@ -1038,7 +1045,8 @@ class TaskProcessor(QObject):
         state = self.task_states[task_id]
         config = {
             'text': state.text_for_processing,
-            'img_prompt_settings': state.settings.get("image_prompt_settings", {})
+            'img_prompt_settings': state.settings.get("image_prompt_settings", {}),
+            'openrouter_api_key': state.settings.get('openrouter_api_key')
         }
         self._start_worker(ImagePromptWorker, task_id, 'stage_img_prompts', config, self._on_img_prompts_finished, self._on_img_prompts_error)
 
@@ -1199,8 +1207,10 @@ class TaskProcessor(QObject):
             'text': state.text_for_processing,
             'dir_path': state.dir_path,
             'lang_config': lang_config,
+            'lang_config': lang_config,
             'voicemaker_api_key': task_settings.get('voicemaker_api_key'),
             'elevenlabs_api_key': task_settings.get('elevenlabs_api_key'),
+            'gemini_tts_api_key': task_settings.get('gemini_tts_api_key'),
             'voicemaker_lang_code': self._get_voicemaker_language_code(lang_config.get('voicemaker_voice_id')),
             'job_name': state.job_name,
             'lang_name': state.lang_name
@@ -1358,15 +1368,26 @@ class TaskProcessor(QObject):
         metadata_text = f"0/{state.images_total_count}"
         self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
         
-        config = {
-            'prompts_text': state.image_prompts,
-            'dir_path': state.dir_path,
-            'provider': state.settings.get('image_generation_provider', 'pollinations'),
-            'api_kwargs': {
+
+        provider = state.settings.get('image_generation_provider', 'pollinations')
+        
+        api_kwargs = {}
+        if provider == 'googler':
+             api_kwargs = {
                 'aspect_ratio': googler_settings.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE'),
                 'seed': googler_settings.get('seed'),
                 'negative_prompt': googler_settings.get('negative_prompt')
-            },
+            }
+        elif provider == 'pollinations':
+            pollinations_settings = state.settings.get('pollinations', {})
+            api_kwargs = pollinations_settings
+
+        config = {
+            'prompts_text': state.image_prompts,
+            'dir_path': state.dir_path,
+            'provider': provider,
+            'api_kwargs': api_kwargs,
+            'api_key': googler_settings.get('api_key'), # Only used for Googler
             'executor': self.image_gen_executor,
             'max_threads': googler_settings.get("max_threads", 8)
         }
