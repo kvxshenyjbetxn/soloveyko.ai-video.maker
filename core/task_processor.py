@@ -1059,122 +1059,15 @@ class TaskProcessor(QObject):
         
 # ... (lines omitted)
 
-    def _launch_subtitle_worker(self, task_id):
-        try:
-            state = self.task_states[task_id]
-            sub_settings = state.settings.get('subtitles', {})
-            whisper_type = sub_settings.get('whisper_type', 'amd')
-            model_name = sub_settings.get('whisper_model', 'base.bin')
-            
-            whisper_exe = None; whisper_model_path = model_name
-            if whisper_type == 'amd':
-                if getattr(sys, 'frozen', False):
-                    whisper_base_path = os.path.join(os.path.dirname(sys.executable), "whisper-cli-amd")
-                else:
-                    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
-                
-                whisper_exe = os.path.join(whisper_base_path, "main.exe")
-                whisper_model_path = os.path.join(whisper_base_path, model_name)
-            
-            config = {
-                'audio_path': state.audio_path, 'dir_path': state.dir_path,
-                'sub_settings': sub_settings, 'lang_code': state.lang_id.split('-')[0].lower(),
-                'whisper_exe': whisper_exe, 'whisper_model_path': whisper_model_path
-            }
-            self._start_worker(SubtitleWorker, task_id, 'stage_subtitles', config,
-                                         self._on_subtitles_finished, self._on_subtitles_error)
-        except Exception as e:
-            self._on_subtitles_error(task_id, f"Failed to start subtitle worker: {e}")
+
 
 # ... (lines omitted)
 
-    def _start_image_generation(self, task_id):
-        state = self.task_states[task_id]
-        googler_settings = state.settings.get('googler', {})
-        
-        # Calculate total prompts count for metadata
-        prompts = re.findall(r"^\d+\.\s*(.*)", state.image_prompts, re.MULTILINE)
-        if not prompts:
-            prompts = [line.strip() for line in state.image_prompts.split('\n') if line.strip()]
-        state.images_total_count = len(prompts)
-        state.images_generated_count = 0  # Reset counter
-        
-        # Emit initial metadata (0/total)
-        metadata_text = f"0/{state.images_total_count}"
-        self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
-        
-        config = {
-            'prompts_text': state.image_prompts,
-            'dir_path': state.dir_path,
-            'provider': state.settings.get('image_generation_provider', 'pollinations'),
-            'api_kwargs': {
-                'aspect_ratio': googler_settings.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE'),
-                'seed': googler_settings.get('seed'),
-                'negative_prompt': googler_settings.get('negative_prompt')
-            },
-            'executor': self.image_gen_executor,
-            'max_threads': googler_settings.get("max_threads", 8)
-        }
-        self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
+
 
 # ... (lines omitted)
 
-    def _start_video_generation(self, task_id):
-        state = self.task_states[task_id]
-        montage_settings = state.settings.get("montage", {})
-        googler_settings = state.settings.get("googler", {})
 
-        video_count = montage_settings.get("special_processing_video_count", 1)
-        check_sequence = montage_settings.get("special_processing_check_sequence", False)
-        
-        all_image_paths = state.image_paths
-        paths_to_animate = []
-
-        if not all_image_paths:
-            logger.log(f"[{task_id}] No images to animate, skipping video generation.", level=LogLevel.INFO)
-            if self.subtitle_barrier_passed: self._check_and_start_montages()
-            return
-
-        if not check_sequence:
-            paths_to_animate = all_image_paths[:video_count]
-        else:
-            # --- Sequence Check Logic ---
-            first_img_basename = os.path.splitext(os.path.basename(all_image_paths[0]))[0]
-            if first_img_basename != '1':
-                logger.log(f"[{task_id}] First image is '{first_img_basename}', not '1'. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
-                state.fallback_to_quick_show = True
-                if self.subtitle_barrier_passed: self._check_and_start_montages()
-                return
-
-            sequential_count = 0
-            for i in range(min(video_count, len(all_image_paths))):
-                expected_name = str(i + 1)
-                actual_name = os.path.splitext(os.path.basename(all_image_paths[i]))[0]
-                if actual_name == expected_name:
-                    sequential_count += 1
-                else:
-                    break
-
-            if sequential_count > 0:
-                logger.log(f"[{task_id}] Found a sequence of {sequential_count} images to animate.", level=LogLevel.INFO)
-                paths_to_animate = all_image_paths[:sequential_count]
-
-        if not paths_to_animate:
-            logger.log(f"[{task_id}] No sequential images found to animate, skipping video generation.", level=LogLevel.INFO)
-            if self.subtitle_barrier_passed: self._check_and_start_montages()
-            return
-            
-        state.video_animation_count = len(paths_to_animate)
-        logger.log(f"[{task_id}] Starting video generation for {len(paths_to_animate)} images.", level=LogLevel.INFO)
-
-        config = {
-            'image_paths': paths_to_animate,
-            'prompt': googler_settings.get("video_prompt", "Animate this scene, cinematic movement, 4k"),
-            'video_semaphore': self.video_semaphore,
-            'max_threads': googler_settings.get("max_video_threads", 1)
-        }
-        self._start_worker(VideoGenerationWorker, task_id, 'stage_images', config, self._on_video_generation_finished, self._on_video_generation_error)
 
 # ... (lines omitted)
 
@@ -1381,7 +1274,7 @@ class TaskProcessor(QObject):
     def _launch_subtitle_worker(self, task_id):
         try:
             state = self.task_states[task_id]
-            sub_settings = self.settings.get('subtitles', {})
+            sub_settings = state.settings.get('subtitles', {})
             whisper_type = sub_settings.get('whisper_type', 'amd')
             model_name = sub_settings.get('whisper_model', 'base.bin')
             
@@ -1452,7 +1345,7 @@ class TaskProcessor(QObject):
             self._on_img_generation_error(task_id, "Cannot generate images because image prompts text is missing.")
             return
             
-        googler_settings = self.settings.get('googler', {})
+        googler_settings = state.settings.get('googler', {})
         
         # Calculate total prompts count for metadata
         prompts = re.findall(r"^\d+\.\s*(.*)", state.image_prompts, re.MULTILINE)
@@ -1513,8 +1406,8 @@ class TaskProcessor(QObject):
 
     def _start_video_generation(self, task_id):
         state = self.task_states[task_id]
-        montage_settings = self.settings.get("montage", {})
-        googler_settings = self.settings.get("googler", {})
+        montage_settings = state.settings.get("montage", {})
+        googler_settings = state.settings.get("googler", {})
 
         video_count = montage_settings.get("special_processing_video_count", 1)
         check_sequence = montage_settings.get("special_processing_check_sequence", False)
