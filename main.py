@@ -4,6 +4,18 @@ import requests
 import traceback
 from datetime import datetime
 
+# Це виправить помилку 'NoneType object has no attribute write'
+class NullWriter:
+    def write(self, text):
+        pass
+    def flush(self):
+        pass
+
+if sys.stdout is None:
+    sys.stdout = NullWriter()
+if sys.stderr is None:
+    sys.stderr = NullWriter()
+
 # Suppress FFmpeg logs from Qt Multimedia by default
 # For debugging, you can comment this line out or set the variable to "qt.multimedia.*=true"
 os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false;qt.text.font.db.*=false'
