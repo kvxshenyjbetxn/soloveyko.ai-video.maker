@@ -44,6 +44,13 @@ class DroppableTextEdit(QTextEdit):
         super().__init__(parent)
         self.setAcceptDrops(True)
 
+    def insertFromMimeData(self, source: QMimeData):
+        """Override to force plain text on paste."""
+        if source.hasText():
+            self.insertPlainText(source.text())
+        else:
+            super().insertFromMimeData(source)
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
