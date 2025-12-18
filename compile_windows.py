@@ -64,6 +64,7 @@ def compile_project():
         "--add-data", "gui/qt_material;gui/qt_material",
         "--add-data", f"{whisper_assets};whisper/assets",
         "--hidden-import", "whisper",
+        "--hidden-import", "regex",
         "--exclude-module", "PyQt6",
         "--exclude-module", "PyQt5",
         "--exclude-module", "tkinter",

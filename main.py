@@ -125,6 +125,9 @@ def main():
 
     from utils.logger import logger, LogLevel
     logger.log("Application starting...", level=LogLevel.INFO)
+    
+    # Clean up old logs on startup
+    logger.cleanup_old_logs(max_days=7)
 
     app = QApplication(sys.argv)
     app.setStyle("fusion")

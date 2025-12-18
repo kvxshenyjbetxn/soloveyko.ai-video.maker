@@ -142,7 +142,8 @@ class MainWindow(QMainWindow):
         self.settings_manager = settings_manager
         self.translator = translator
         
-        self._apply_startup_template()
+        # self._apply_startup_template()  # Disabled to prevent overwriting global settings on startup
+        self.settings_manager.set("last_applied_template", None) # Reset to ensure we start in "Global Settings" mode UI-wise
 
         self.queue_manager = QueueManager()
         self.task_processor = TaskProcessor(self.queue_manager)
@@ -506,8 +507,8 @@ class MainWindow(QMainWindow):
             self.active_template_label.setText(f"{translator.translate('active_template_label', 'Template')}: {template_name}")
             self.active_template_label.setToolTip(translator.translate('active_template_tooltip', 'This template is applied to the global settings.'))
         else:
-            self.active_template_label.setText("")
-            self.active_template_label.setToolTip("")
+            self.active_template_label.setText(translator.translate('global_settings_label', 'Global Settings'))
+            self.active_template_label.setToolTip(translator.translate('global_settings_tooltip', 'Using standard global settings.'))
 
     def start_background_updates(self):
         self.update_balance()
