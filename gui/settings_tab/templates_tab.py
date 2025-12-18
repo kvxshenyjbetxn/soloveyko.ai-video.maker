@@ -3,19 +3,10 @@ import copy
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, QComboBox, 
                                QLineEdit, QPushButton, QMessageBox, QInputDialog,
-                               QSpacerItem, QSizePolicy, QDialog, QTreeView, QGroupBox, QTextEdit)
-from PySide6.QtGui import QStandardItemModel, QStandardItem
-from PySide6.QtCore import Qt, Signal, QTimer
-
-from utils.translator import translator
-from utils.settings import settings_manager, template_manager
-
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, QComboBox, 
-                               QLineEdit, QPushButton, QMessageBox, QInputDialog,
                                QSpacerItem, QSizePolicy, QDialog, QTreeView, QGroupBox, QTextEdit,
                                QStyledItemDelegate, QCheckBox, QSpinBox, QDoubleSpinBox, QStyleOptionViewItem,
-                               QApplication, QStyle)
-from PySide6.QtGui import QStandardItemModel, QStandardItem
+                               QApplication, QStyle, QColorDialog)
+from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor, QBrush
 from PySide6.QtCore import Qt, Signal, QTimer, QModelIndex, QEvent
 
 from utils.translator import translator
@@ -59,7 +50,9 @@ SETTINGS_METADATA = {
         'margin_v': {'type': 'int', 'min': 0, 'max': 500},
         'fade_in': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms'},
         'fade_out': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms'},
+        'fade_out': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms'},
         'max_words': {'type': 'int', 'min': 1, 'max': 50},
+        'color': {'type': 'color'},
     }
 }
 
@@ -91,8 +84,8 @@ class SettingsDelegate(QStyledItemDelegate):
         editor_type = metadata.get('type')
         
         editor = None
-        if editor_type == 'bool':
-            # For checkboxes, we can edit them directly without a persistent editor
+        if editor_type == 'bool' or editor_type == 'color':
+            # For checkboxes and color pickers, we handle interaction in editorEvent
             return None
         elif editor_type == 'choice':
             editor = QComboBox(parent)
@@ -134,6 +127,24 @@ class SettingsDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         if index.column() == 1:
             metadata = self.get_metadata_for_index(index)
+            if metadata.get('type') == 'color':
+                value = index.model().data(index, Qt.EditRole)
+                if isinstance(value, list) and len(value) >= 3:
+                     try:
+                        color = QColor(int(value[0]), int(value[1]), int(value[2]))
+                        painter.save()
+                        
+                        # Draw color swatch
+                        rect = option.rect.adjusted(4, 4, -4, -4)
+                        painter.setBrush(QBrush(color))
+                        painter.setPen(Qt.NoPen)
+                        painter.drawRoundedRect(rect, 2, 2)
+                        
+                        painter.restore()
+                     except (ValueError, TypeError):
+                         pass
+                return
+
             if metadata.get('type') == 'bool':
                 # Manually paint a checkbox
                 check_box_option = QStyleOptionViewItem(option)
@@ -155,6 +166,18 @@ class SettingsDelegate(QStyledItemDelegate):
     def editorEvent(self, event, model, option, index):
         if index.column() == 1:
             metadata = self.get_metadata_for_index(index)
+            if metadata.get('type') == 'color':
+                if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton:
+                    current_value = model.data(index, Qt.EditRole)
+                    initial_color = Qt.white
+                    if isinstance(current_value, list) and len(current_value) >= 3:
+                        initial_color = QColor(current_value[0], current_value[1], current_value[2])
+                    
+                    color = QColorDialog.getColor(initial_color, None, translator.translate("pick_color_title", "Select Color"))
+                    if color.isValid():
+                        model.setData(index, [color.red(), color.green(), color.blue()], Qt.EditRole)
+                    return True
+
             if metadata.get('type') == 'bool':
                 if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton:
                     current_value = model.data(index, Qt.DisplayRole)
@@ -309,6 +332,12 @@ class TemplateEditorDialog(QDialog):
                 self.populate_tree(value, key_item, current_path)
             elif metadata.get('type') == 'string_list':
                 value_item.setText(", ".join(value) if isinstance(value, list) else "")
+                value_item.setEditable(True)
+                value_item.setData(current_path, Qt.UserRole + 1)
+                parent_item.appendRow([key_item, value_item])
+            elif metadata.get('type') == 'color':
+                # Handle color
+                value_item.setData(value, Qt.EditRole)
                 value_item.setEditable(True)
                 value_item.setData(current_path, Qt.UserRole + 1)
                 parent_item.appendRow([key_item, value_item])

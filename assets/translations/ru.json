@@ -291,6 +291,7 @@
     "template_applied_title": "Шаблон применен",
     "template_applied_message": "Настройки шаблона были применены и сохранены.",
     "apply_template_button": "Применить",
+    "edit_template_button": "Редактировать",
     "view_template_button": "Просмотр",
     "template_details_title": "Детали шаблона",
     "close_button": "Закрыть",
