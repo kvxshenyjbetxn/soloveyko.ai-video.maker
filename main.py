@@ -102,7 +102,12 @@ def main():
     # Try to enable faulthandler if available to catch segfaults
     try:
         import faulthandler
-        faulthandler.enable(file=open("crash_faulthandler.log", "w"), all_threads=True)
+        log_dir = "logs"
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_file = os.path.join(log_dir, f"crash_faulthandler_{timestamp}.log")
+        faulthandler.enable(file=open(log_file, "w"), all_threads=True)
     except:
         pass
 
