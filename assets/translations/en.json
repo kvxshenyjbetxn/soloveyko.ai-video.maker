@@ -309,5 +309,16 @@
     "effect_selection_title": "Select Overlay Effect",
     "custom_effect_filter": "Video Files (*.mov *.mp4 *.webm)",
     "watermark_filter": "Image Files (*.png)",
-    "no_effect_selected": "No effect selected"
+    "no_effect_selected": "No effect selected",
+    "watermark_size_label": "Watermark Size:",
+    "watermark_position_label": "Watermark Position:",
+    "position_top_left": "Top Left",
+    "position_top_center": "Top Center",
+    "position_top_right": "Top Right",
+    "position_center_left": "Center Left",
+    "position_center": "Center",
+    "position_center_right": "Center Right",
+    "position_bottom_left": "Bottom Left",
+    "position_bottom_center": "Bottom Center",
+    "position_bottom_right": "Bottom Right"
 }

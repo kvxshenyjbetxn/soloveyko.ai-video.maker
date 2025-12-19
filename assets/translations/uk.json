@@ -309,5 +309,16 @@
     "effect_selection_title": "Оберіть ефект накладання",
     "custom_effect_filter": "Відео файли (*.mov *.mp4 *.webm)",
     "watermark_filter": "Зображення (*.png)",
-    "no_effect_selected": "Ефект не обрано"
+    "no_effect_selected": "Ефект не обрано",
+    "watermark_size_label": "Розмір водяного знаку:",
+    "watermark_position_label": "Позиція водяного знаку:",
+    "position_top_left": "Зверху зліва",
+    "position_top_center": "Зверху по центру",
+    "position_top_right": "Зверху справа",
+    "position_center_left": "По центру зліва",
+    "position_center": "По центру",
+    "position_center_right": "По центру справа",
+    "position_bottom_left": "Знизу зліва",
+    "position_bottom_center": "Знизу по центру",
+    "position_bottom_right": "Знизу справа"
 }

@@ -46,6 +46,8 @@ class MontageEngine:
         # Effects & Watermark Settings
         overlay_effect_path = settings.get('overlay_effect_path')
         watermark_path = settings.get('watermark_path')
+        watermark_size = settings.get('watermark_size', 20)  # % від ширини
+        watermark_position = settings.get('watermark_position', 8)  # індекс позиції
 
 
         # 2. МАТЕМАТИКА ЧАСУ (Аудіо - головне)
@@ -240,13 +242,10 @@ class MontageEngine:
             effect_index = current_input_count
             current_input_count += 1
             
-            # Overlay filter
-            # Assuming effect creates its own alpha or we use blend. 
-            # User said "effects with transparent alpha channel", so it's likely a MOV/WebM with alpha.
-            # We scale it to 1920x1080 to match target.
             
             eff_v = f"[v_eff_scaled]"
             # Force yuva420p to ensure alpha channel is preserved/respected if present
+            # Застосовуємо effect_speed для зміни швидкості відтворення ефекту
             scale_eff = f"[{effect_index}:v]format=yuva420p,scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080{eff_v}"
             filter_parts.append(scale_eff)
             
@@ -263,22 +262,35 @@ class MontageEngine:
             wm_index = current_input_count
             current_input_count += 1
             
-            # Scale watermark if needed (optional, but good for safety). 
-            # Giving it a fixed width/height or relative? 
-            # "Small watermark" requested. Let's scale it to say 15% of width?
-            # Or just use original? User said "user must choose their own". 
-            # Often users pick hi-res images. Let's safe-scale it to max 300px width? Or 20% width.
             
             wm_v = f"[v_wm]"
-            # Scale to width 380 (approx 20% of 1920), keep aspect.
-            scale_wm = f"[{wm_index}:v]scale=380:-1{wm_v}"
+            # Обчислюємо розмір вотермарки: watermark_size відсотків від 1920px
+            wm_width = int(1920 * (float(watermark_size) / 100.0))
+            logger.log(f"{prefix}[FFmpeg] Watermark size: {watermark_size}% = {wm_width}px", level=LogLevel.INFO)
+            scale_wm = f"[{wm_index}:v]scale={wm_width}:-1{wm_v}"
             filter_parts.append(scale_wm)
             
             v_wm_out = f"[v_wm_out]"
-            # Place at bottom right with 20px padding? Or top right? 
-            # Usually top-right or bottom-right. Let's go Top-Right for now, or maybe make it configurable later.
-            # Let's go Bottom-Right: W-w-20 : H-h-20
-            overlay_wm = f"{final_v}{wm_v}overlay=main_w-overlay_w-30:main_h-overlay_h-30{v_wm_out}"
+            
+            # Position mapping:
+            # 0: top-left, 1: top-center, 2: top-right
+            # 3: center-left, 4: center, 5: center-right
+            # 6: bottom-left, 7: bottom-center, 8: bottom-right
+            padding = 30
+            position_map = {
+                0: f"{padding}:{padding}",  # top-left
+                1: f"(main_w-overlay_w)/2:{padding}",  # top-center
+                2: f"main_w-overlay_w-{padding}:{padding}",  # top-right
+                3: f"{padding}:(main_h-overlay_h)/2",  # center-left
+                4: f"(main_w-overlay_w)/2:(main_h-overlay_h)/2",  # center
+                5: f"main_w-overlay_w-{padding}:(main_h-overlay_h)/2",  # center-right
+                6: f"{padding}:main_h-overlay_h-{padding}",  # bottom-left
+                7: f"(main_w-overlay_w)/2:main_h-overlay_h-{padding}",  # bottom-center
+                8: f"main_w-overlay_w-{padding}:main_h-overlay_h-{padding}"  # bottom-right
+            }
+            
+            overlay_position = position_map.get(watermark_position, position_map[8])
+            overlay_wm = f"{final_v}{wm_v}overlay={overlay_position}{v_wm_out}"
             filter_parts.append(overlay_wm)
             final_v = v_wm_out
 

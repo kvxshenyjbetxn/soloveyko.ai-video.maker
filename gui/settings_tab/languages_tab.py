@@ -248,6 +248,35 @@ class LanguagesTab(QWidget):
         
         effects_layout.addRow(self.watermark_label, watermark_buttons_layout)
         
+        # Watermark Size
+        self.watermark_size_label = QLabel()
+        watermark_size_layout = QHBoxLayout()
+        self.watermark_size_slider = QSlider(Qt.Orientation.Horizontal)
+        self.watermark_size_slider.setRange(5, 50)  # 5% до 50% від ширини
+        self.watermark_size_slider.setValue(20)  # Дефолт 20%
+        self.watermark_size_slider.valueChanged.connect(self.on_watermark_size_changed)
+        self.watermark_size_value_label = QLabel("20%")
+        watermark_size_layout.addWidget(self.watermark_size_slider)
+        watermark_size_layout.addWidget(self.watermark_size_value_label)
+        effects_layout.addRow(self.watermark_size_label, watermark_size_layout)
+        
+        # Watermark Position
+        self.watermark_position_label = QLabel()
+        self.watermark_position_combo = QComboBox()
+        # Додати 9 позицій
+        self.watermark_position_combo.addItem(translator.translate("position_top_left", "Top Left"), 0)
+        self.watermark_position_combo.addItem(translator.translate("position_top_center", "Top Center"), 1)
+        self.watermark_position_combo.addItem(translator.translate("position_top_right", "Top Right"), 2)
+        self.watermark_position_combo.addItem(translator.translate("position_center_left", "Center Left"), 3)
+        self.watermark_position_combo.addItem(translator.translate("position_center", "Center"), 4)
+        self.watermark_position_combo.addItem(translator.translate("position_center_right", "Center Right"), 5)
+        self.watermark_position_combo.addItem(translator.translate("position_bottom_left", "Bottom Left"), 6)
+        self.watermark_position_combo.addItem(translator.translate("position_bottom_center", "Bottom Center"), 7)
+        self.watermark_position_combo.addItem(translator.translate("position_bottom_right", "Bottom Right"), 8)
+        self.watermark_position_combo.setCurrentIndex(8)  # Дефолт: Bottom Right
+        self.watermark_position_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        effects_layout.addRow(self.watermark_position_label, self.watermark_position_combo)
+        
         settings_layout.addRow(effects_group)
 
 
@@ -282,6 +311,11 @@ class LanguagesTab(QWidget):
     def on_volume_slider_changed(self, value):
         self.bg_music_volume_value_label.setText(str(value))
         self.save_current_language_settings()
+
+    def on_watermark_size_changed(self, value):
+        self.watermark_size_value_label.setText(f"{value}%")
+        self.save_current_language_settings()
+    
 
     def open_effect_dialog(self):
         from gui.widgets.effect_selection_dialog import EffectSelectionDialog
@@ -460,7 +494,10 @@ class LanguagesTab(QWidget):
             self.gemini_voice_combo.blockSignals(True)
             self.gemini_tone_input.blockSignals(True)
             self.bg_music_path_input.blockSignals(True)
+            self.bg_music_path_input.blockSignals(True)
             self.bg_music_volume_slider.blockSignals(True)
+            self.watermark_size_slider.blockSignals(True)
+            self.watermark_position_combo.blockSignals(True)
             self.default_template_combo.blockSignals(True)
             # No block signals needed for inputs that are read-only and updated by buttons,
             # but usually good practice if we were using textChanged on them.
@@ -513,6 +550,20 @@ class LanguagesTab(QWidget):
             # Effects & Watermark
             self.overlay_effect_path_input.setText(config.get("overlay_effect_path", ""))
             self.watermark_path_input.setText(config.get("watermark_path", ""))
+            
+            # Watermark Size
+            watermark_size = config.get("watermark_size", 20)
+            self.watermark_size_slider.setValue(watermark_size)
+            self.watermark_size_value_label.setText(f"{watermark_size}%")
+            
+            # Watermark Position
+            watermark_position = config.get("watermark_position", 8)
+            # Знайти індекс за data
+            pos_index = self.watermark_position_combo.findData(watermark_position)
+            if pos_index >= 0:
+                self.watermark_position_combo.setCurrentIndex(pos_index)
+            else:
+                self.watermark_position_combo.setCurrentIndex(8)  # Дефолт
 
 
             self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
@@ -529,6 +580,8 @@ class LanguagesTab(QWidget):
             self.bg_music_path_input.blockSignals(False)
             self.bg_music_volume_slider.blockSignals(False)
             self.default_template_combo.blockSignals(False)
+            self.watermark_size_slider.blockSignals(False)
+            self.watermark_position_combo.blockSignals(False)
 
             
             self.right_panel.setVisible(True)
@@ -563,7 +616,9 @@ class LanguagesTab(QWidget):
             "background_music_volume": 100,
             "default_template": "",
             "overlay_effect_path": "",
-            "watermark_path": ""
+            "watermark_path": "",
+            "watermark_size": 20,
+            "watermark_position": 8
         }
 
         self.settings.set("languages_config", languages)
@@ -619,6 +674,8 @@ class LanguagesTab(QWidget):
         lang_settings["default_template"] = self.default_template_combo.currentData()
         lang_settings["overlay_effect_path"] = self.overlay_effect_path_input.text()
         lang_settings["watermark_path"] = self.watermark_path_input.text()
+        lang_settings["watermark_size"] = self.watermark_size_slider.value()
+        lang_settings["watermark_position"] = self.watermark_position_combo.currentData()
 
 
         # Explicitly save the entire settings file
@@ -679,4 +736,6 @@ class LanguagesTab(QWidget):
         self.watermark_label.setText(translator.translate("watermark_group", "Watermark:"))
         self.select_watermark_button.setText(translator.translate("select_watermark_button", "Select Watermark"))
         self.clear_watermark_button.setText(translator.translate("clear_watermark_button", "Clear"))
-
+        
+        self.watermark_size_label.setText(translator.translate("watermark_size_label", "Watermark Size:"))
+        self.watermark_position_label.setText(translator.translate("watermark_position_label", "Watermark Position:"))
