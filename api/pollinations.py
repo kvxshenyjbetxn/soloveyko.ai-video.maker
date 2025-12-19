@@ -1,7 +1,10 @@
-
 import requests
+import threading
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
+
+# Use thread-local storage at module level to persist sessions across API instances
+thread_local_storage = threading.local()
 
 class PollinationsAPI:
     def __init__(self):
@@ -17,6 +20,11 @@ class PollinationsAPI:
         self.height = self.settings.get("height", 1024)
         self.nologo = self.settings.get("nologo", False)
         self.enhance = self.settings.get("enhance", False)
+
+    def _get_session(self):
+        if not hasattr(thread_local_storage, "session"):
+            thread_local_storage.session = requests.Session()
+        return thread_local_storage.session
 
     def generate_image(self, prompt, model=None, width=None, height=None, nologo=None, enhance=None):
         self.load_credentials() 
@@ -45,7 +53,8 @@ class PollinationsAPI:
             # Using the custom logger here
             logger.log(f"      - Generating image (Model: {current_model}, Size: {current_width}x{current_height}) for prompt: '{prompt}'", LogLevel.INFO)
             
-            response = requests.get(request_url, params=params)
+            session = self._get_session()
+            response = session.get(request_url, params=params)
             response.raise_for_status()
             return response.content
         except requests.exceptions.RequestException as e:

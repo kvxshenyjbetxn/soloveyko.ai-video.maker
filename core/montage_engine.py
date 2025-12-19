@@ -43,6 +43,11 @@ class MontageEngine:
         base_w, base_h = 1920, 1080
         up_w, up_h = int(base_w * up_factor), int(base_h * up_factor)
 
+        # Effects & Watermark Settings
+        overlay_effect_path = settings.get('overlay_effect_path')
+        watermark_path = settings.get('watermark_path')
+
+
         # 2. МАТЕМАТИКА ЧАСУ (Аудіо - головне)
         VIDEO_EXTS = ['.mp4', '.mkv', '.mov', '.avi', '.webm']
         total_video_time = 0.0
@@ -217,12 +222,78 @@ class MontageEngine:
             subs = f"{final_v}subtitles='{ass_clean}'[v_out]"
             filter_parts.append(subs)
             output_v_stream = "[v_out]"
+            final_v = output_v_stream # Update final_v for next steps
+
+        # 6. OVERLAY EFFECT
+        # To avoid index confusion, let's restructure input additions.
+        # Current inputs: [img/video 0] ... [img/video N-1]
+        
+        # We need to add effect and watermark inputs *before* we finalize the command generation, 
+        # but the logic above already constructs the command heavily relying on indices.
+        
+        # Let's add extra inputs here and track their indices relative to what we have so far.
+        current_input_count = len(visual_files)
+        
+        if overlay_effect_path and os.path.exists(overlay_effect_path):
+            logger.log(f"{prefix}[FFmpeg] Adding overlay effect: {os.path.basename(overlay_effect_path)}", level=LogLevel.INFO)
+            inputs.extend(["-stream_loop", "-1", "-i", overlay_effect_path.replace("\\", "/")])
+            effect_index = current_input_count
+            current_input_count += 1
+            
+            # Overlay filter
+            # Assuming effect creates its own alpha or we use blend. 
+            # User said "effects with transparent alpha channel", so it's likely a MOV/WebM with alpha.
+            # We scale it to 1920x1080 to match target.
+            
+            eff_v = f"[v_eff_scaled]"
+            # Force yuva420p to ensure alpha channel is preserved/respected if present
+            scale_eff = f"[{effect_index}:v]format=yuva420p,scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080{eff_v}"
+            filter_parts.append(scale_eff)
+            
+            v_overlaid = f"[v_overlaid]"
+            # Use 'overlay' filter. shortest=1 ensures it stops when the main video stops (though we use -shortest on output too)
+            overlay_cmd = f"{final_v}{eff_v}overlay=0:0:shortest=1{v_overlaid}"
+            filter_parts.append(overlay_cmd)
+            final_v = v_overlaid
+
+        # 7. WATERMARK
+        if watermark_path and os.path.exists(watermark_path):
+            logger.log(f"{prefix}[FFmpeg] Adding watermark: {os.path.basename(watermark_path)}", level=LogLevel.INFO)
+            inputs.extend(["-i", watermark_path.replace("\\", "/")])
+            wm_index = current_input_count
+            current_input_count += 1
+            
+            # Scale watermark if needed (optional, but good for safety). 
+            # Giving it a fixed width/height or relative? 
+            # "Small watermark" requested. Let's scale it to say 15% of width?
+            # Or just use original? User said "user must choose their own". 
+            # Often users pick hi-res images. Let's safe-scale it to max 300px width? Or 20% width.
+            
+            wm_v = f"[v_wm]"
+            # Scale to width 380 (approx 20% of 1920), keep aspect.
+            scale_wm = f"[{wm_index}:v]scale=380:-1{wm_v}"
+            filter_parts.append(scale_wm)
+            
+            v_wm_out = f"[v_wm_out]"
+            # Place at bottom right with 20px padding? Or top right? 
+            # Usually top-right or bottom-right. Let's go Top-Right for now, or maybe make it configurable later.
+            # Let's go Bottom-Right: W-w-20 : H-h-20
+            overlay_wm = f"{final_v}{wm_v}overlay=main_w-overlay_w-30:main_h-overlay_h-30{v_wm_out}"
+            filter_parts.append(overlay_wm)
+            final_v = v_wm_out
+
+        output_v_stream = final_v
+        
+        # Audio is next input
+        audio_input_index = current_input_count
+
 
         full_graph = ";".join(filter_parts)
         
         # --- AUDIO INPUTS AND FILTERS ---
         inputs.append("-i"); inputs.append(audio_path.replace("\\", "/"))
-        voiceover_input_index = num_files
+        voiceover_input_index = audio_input_index # Use the tracked index
+
 
         audio_filter_chains = []
         final_audio_map = f"[{voiceover_input_index}:a]"
@@ -233,6 +304,7 @@ class MontageEngine:
             inputs.extend(["-stream_loop", "-1", "-i", background_music_path.replace("\\", "/")])
             
             bg_music_input_index = voiceover_input_index + 1
+
             
             vol_multiplier = (background_music_volume or 100) / 100.0
             

@@ -2,8 +2,8 @@ import os
 from PySide6.QtWidgets import QWidget, QVBoxLayout
 from PySide6.QtGui import QColor, QPainter, QKeyEvent
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PySide6.QtMultimediaWidgets import QVideoWidget
+# from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+# from PySide6.QtMultimediaWidgets import QVideoWidget
 
 class VideoViewer(QWidget):
     def __init__(self, video_path, parent=None):
@@ -17,6 +17,7 @@ class VideoViewer(QWidget):
         self.load_video()
 
     def init_ui(self):
+        from PySide6.QtMultimediaWidgets import QVideoWidget
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(20, 20, 20, 20)
 
@@ -24,6 +25,7 @@ class VideoViewer(QWidget):
         self.main_layout.addWidget(self.video_widget)
 
     def load_video(self):
+        from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
         self.player = QMediaPlayer()
         self.player.setAudioOutput(None)
         self.player.setVideoOutput(self.video_widget)
@@ -36,6 +38,7 @@ class VideoViewer(QWidget):
         pass
 
     def _on_media_status_changed(self, status):
+        from PySide6.QtMultimedia import QMediaPlayer
         if status == QMediaPlayer.MediaStatus.LoadedMedia:
             self.player.play()
         elif status == QMediaPlayer.MediaStatus.EndOfMedia:

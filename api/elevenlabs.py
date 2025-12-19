@@ -1,5 +1,6 @@
 import requests
 import time
+import threading
 from functools import wraps
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
@@ -25,10 +26,19 @@ def retry(tries=3, delay=5, backoff=2):
         return f_retry
     return deco_retry
 
+
+# Use thread-local storage at module level to persist sessions across API instances
+thread_local_storage = threading.local()
+
 class ElevenLabsAPI:
     def __init__(self, api_key=None):
         self.api_key = api_key or settings_manager.get("elevenlabs_api_key")
         self.base_url = "https://voiceapi.csv666.ru"
+
+    def _get_session(self):
+        if not hasattr(thread_local_storage, "session"):
+            thread_local_storage.session = requests.Session()
+        return thread_local_storage.session
 
     def _make_request(self, method, endpoint, json=None, **kwargs):
         if not self.api_key:
@@ -39,7 +49,8 @@ class ElevenLabsAPI:
             headers["Content-Type"] = "application/json"
         
         try:
-            response = requests.request(method, f"{self.base_url}/{endpoint}", headers=headers, json=json, **kwargs)
+            session = self._get_session()
+            response = session.request(method, f"{self.base_url}/{endpoint}", headers=headers, json=json, **kwargs)
             response.raise_for_status() 
             if response.status_code == 200:
                 if "audio/mpeg" in response.headers.get("Content-Type", ""):
@@ -113,7 +124,8 @@ class ElevenLabsAPI:
         url = f"{self.base_url}/tasks/{task_id}/result"
         
         try:
-            response = requests.get(url, headers=headers)
+            session = self._get_session()
+            response = session.get(url, headers=headers)
             if response.status_code == 200:
                 logger.log(f"Successfully downloaded audio for task {task_id}", level=LogLevel.SUCCESS)
                 return response.content, "connected"

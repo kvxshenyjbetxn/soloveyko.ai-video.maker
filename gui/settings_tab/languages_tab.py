@@ -208,6 +208,48 @@ class LanguagesTab(QWidget):
         volume_layout.addWidget(self.bg_music_volume_value_label)
         
         settings_layout.addRow(self.bg_music_volume_label, volume_layout)
+        
+        # --- Effects & Watermark Settings (New) ---
+        effects_group = QGroupBox(translator.translate("overlay_effects_group", "Overlay Effects"))
+        effects_layout = QFormLayout(effects_group)
+        
+        # Effect Selection
+        self.overlay_effect_label = QLabel(translator.translate("effect_selection_title", "Overlay Effect:"))
+        self.overlay_effect_path_input = QLineEdit()
+        self.overlay_effect_path_input.setReadOnly(True)
+        # self.overlay_effect_path_input.textChanged.connect(self.save_current_language_settings) # ReadOnly, so no direct text change
+        
+        effect_buttons_layout = QHBoxLayout()
+        self.select_effect_button = QPushButton(translator.translate("select_effect_button", "Select Effect"))
+        self.select_effect_button.clicked.connect(self.open_effect_dialog)
+        self.clear_effect_button = QPushButton(translator.translate("clear_button", "Clear"))
+        self.clear_effect_button.clicked.connect(self.clear_overlay_effect)
+        
+        effect_buttons_layout.addWidget(self.overlay_effect_path_input)
+        effect_buttons_layout.addWidget(self.select_effect_button)
+        effect_buttons_layout.addWidget(self.clear_effect_button)
+        
+        effects_layout.addRow(self.overlay_effect_label, effect_buttons_layout)
+
+        # Watermark Selection
+        self.watermark_label = QLabel(translator.translate("watermark_group", "Watermark:"))
+        self.watermark_path_input = QLineEdit()
+        self.watermark_path_input.setReadOnly(True)
+        
+        watermark_buttons_layout = QHBoxLayout()
+        self.select_watermark_button = QPushButton(translator.translate("select_watermark_button", "Select Watermark"))
+        self.select_watermark_button.clicked.connect(self.select_watermark)
+        self.clear_watermark_button = QPushButton(translator.translate("clear_watermark_button", "Clear"))
+        self.clear_watermark_button.clicked.connect(self.clear_watermark)
+        
+        watermark_buttons_layout.addWidget(self.watermark_path_input)
+        watermark_buttons_layout.addWidget(self.select_watermark_button)
+        watermark_buttons_layout.addWidget(self.clear_watermark_button)
+        
+        effects_layout.addRow(self.watermark_label, watermark_buttons_layout)
+        
+        settings_layout.addRow(effects_group)
+
 
         right_layout.addWidget(self.prompt_label)
         right_layout.addLayout(prompt_layout)
@@ -240,6 +282,36 @@ class LanguagesTab(QWidget):
     def on_volume_slider_changed(self, value):
         self.bg_music_volume_value_label.setText(str(value))
         self.save_current_language_settings()
+
+    def open_effect_dialog(self):
+        from gui.widgets.effect_selection_dialog import EffectSelectionDialog
+        current_path = self.overlay_effect_path_input.text()
+        dialog = EffectSelectionDialog(self, initial_selection=current_path)
+        if dialog.exec():
+            selected = dialog.get_selected_effect()
+            if selected:
+                self.overlay_effect_path_input.setText(selected)
+                self.save_current_language_settings()
+
+    def clear_overlay_effect(self):
+        self.overlay_effect_path_input.clear()
+        self.save_current_language_settings()
+
+    def select_watermark(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            translator.translate("select_watermark_button", "Select Watermark"),
+            "",
+            translator.translate("watermark_filter", "Image Files (*.png)")
+        )
+        if file_path:
+            self.watermark_path_input.setText(file_path)
+            self.save_current_language_settings()
+
+    def clear_watermark(self):
+        self.watermark_path_input.clear()
+        self.save_current_language_settings()
+
 
     def load_languages(self):
         self.lang_list_widget.clear()
@@ -385,7 +457,14 @@ class LanguagesTab(QWidget):
             self.gemini_tone_input.blockSignals(True)
             self.bg_music_path_input.blockSignals(True)
             self.bg_music_volume_slider.blockSignals(True)
+            self.gemini_voice_combo.blockSignals(True)
+            self.gemini_tone_input.blockSignals(True)
+            self.bg_music_path_input.blockSignals(True)
+            self.bg_music_volume_slider.blockSignals(True)
             self.default_template_combo.blockSignals(True)
+            # No block signals needed for inputs that are read-only and updated by buttons,
+            # but usually good practice if we were using textChanged on them.
+
 
             self.prompt_edit.setPlainText(config.get("prompt", ""))
             
@@ -431,6 +510,11 @@ class LanguagesTab(QWidget):
                 index = self.default_template_combo.findData(current_default_template)
                 self.default_template_combo.setCurrentIndex(index if index >= 0 else 0)
 
+            # Effects & Watermark
+            self.overlay_effect_path_input.setText(config.get("overlay_effect_path", ""))
+            self.watermark_path_input.setText(config.get("watermark_path", ""))
+
+
             self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
 
             self.prompt_edit.blockSignals(False)
@@ -445,6 +529,7 @@ class LanguagesTab(QWidget):
             self.bg_music_path_input.blockSignals(False)
             self.bg_music_volume_slider.blockSignals(False)
             self.default_template_combo.blockSignals(False)
+
             
             self.right_panel.setVisible(True)
         finally:
@@ -474,8 +559,13 @@ class LanguagesTab(QWidget):
             "gemini_tone": "",
             "background_music_path": "",
             "background_music_volume": 100,
-            "default_template": ""
+            "background_music_path": "",
+            "background_music_volume": 100,
+            "default_template": "",
+            "overlay_effect_path": "",
+            "watermark_path": ""
         }
+
         self.settings.set("languages_config", languages)
         
         self.lang_name_input.clear()
@@ -525,7 +615,11 @@ class LanguagesTab(QWidget):
         lang_settings["gemini_tone"] = self.gemini_tone_input.text()
         lang_settings["background_music_path"] = self.bg_music_path_input.text()
         lang_settings["background_music_volume"] = self.bg_music_volume_slider.value()
+        lang_settings["background_music_volume"] = self.bg_music_volume_slider.value()
         lang_settings["default_template"] = self.default_template_combo.currentData()
+        lang_settings["overlay_effect_path"] = self.overlay_effect_path_input.text()
+        lang_settings["watermark_path"] = self.watermark_path_input.text()
+
 
         # Explicitly save the entire settings file
         self.settings.save_settings()
@@ -578,4 +672,11 @@ class LanguagesTab(QWidget):
         self.browse_bg_music_button.setText(translator.translate("browse_button", "Browse..."))
         self.clear_bg_music_button.setText(translator.translate("clear_button", "Clear"))
         self.bg_music_volume_label.setText(translator.translate("music_volume_label", "Music Volume:"))
+        
+        self.overlay_effect_label.setText(translator.translate("effect_selection_title", "Overlay Effect:"))
+        self.select_effect_button.setText(translator.translate("select_effect_button", "Select Effect"))
+        self.clear_effect_button.setText(translator.translate("clear_button", "Clear"))
+        self.watermark_label.setText(translator.translate("watermark_group", "Watermark:"))
+        self.select_watermark_button.setText(translator.translate("select_watermark_button", "Select Watermark"))
+        self.clear_watermark_button.setText(translator.translate("clear_watermark_button", "Clear"))
 

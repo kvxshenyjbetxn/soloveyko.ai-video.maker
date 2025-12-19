@@ -680,6 +680,26 @@ class TaskProcessor(QObject):
                 # Get the save path FROM THE MERGED SETTINGS for this specific task
                 base_save_path = current_settings.get('results_path')
 
+                # Ensure overlay and watermark settings are passed to the task state's settings
+                lang_config = current_settings.get("languages_config", {}).get(lang_id, {})
+                # Note: 'lang_data' passed to TaskState comes from the job definition, which might not have the full updated config 
+                # if the job was created before settings/templates were saved. 
+                # However, we have 'current_settings' which DOES have the merged template data.
+                # The 'lang_data' variable in this scope comes from 'job['languages']', which depends on how the queue was populated.
+                # To be safe, let's inject the paths into the 'current_settings' that will be stored in TaskState.
+                
+                # Check directly in the merged settings if they exist at the top level (from template merge)
+                # Or extracting them from the specific language config if that's how they are stored.
+                # Based on LanguagesTab, they are stored in 'languages_config[lang_id]'.
+                # But when applying a template, 'languages_config' might be updated? 
+                # Actually, templates usually store the whole 'languages_config' or specific keys.
+                # Let's trust that 'current_settings' has the correct 'languages_config' after the template merge.
+                
+                merged_lang_config = current_settings.get("languages_config", {}).get(lang_id, {})
+                if merged_lang_config:
+                     current_settings['montage']['overlay_effect_path'] = merged_lang_config.get('overlay_effect_path')
+                     current_settings['montage']['watermark_path'] = merged_lang_config.get('watermark_path')
+
                 state = TaskState(job, lang_id, lang_data, base_save_path, current_settings)
 
                 if not state.dir_path:
@@ -1645,7 +1665,8 @@ class TaskProcessor(QObject):
             output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
             output_path = os.path.join(state.dir_path, output_filename)
             
-            montage_settings = self.settings.get("montage", {}).copy()
+            # Use state.settings (which includes template overrides) instead of global self.settings
+            montage_settings = state.settings.get("montage", {}).copy()
             if getattr(state, 'fallback_to_quick_show', False):
                 logger.log(f"[{task_id}] Fallback to 'Quick Show' mode for montage.", level=LogLevel.WARNING)
                 montage_settings['special_processing_mode'] = "Quick show"
@@ -1660,7 +1681,7 @@ class TaskProcessor(QObject):
             background_music_path = None
             background_music_volume = 100
             
-            all_languages_config = self.settings.get("languages_config", {})
+            all_languages_config = state.settings.get("languages_config", {})
             lang_config = all_languages_config.get(state.lang_id, {})
             
             user_files = state.lang_data.get('user_provided_files', {})
