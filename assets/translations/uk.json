@@ -299,5 +299,15 @@
     "none_template": "Немає",
     "default_settings": "Глобальні налаштування",
     "template": "Шаблон",
-    "whisper_model_download_info": "Модель Whisper '{model_name}' не знайдено в кеші. Починається одноразове завантаження. Це може зайняти деякий час..."
+    "whisper_model_download_info": "Модель Whisper '{model_name}' не знайдено в кеші. Починається одноразове завантаження. Це може зайняти деякий час...",
+    "overlay_effects_group": "Ефекти накладання",
+    "select_effect_button": "Обрати ефект",
+    "add_custom_effect_button": "Додати свій ефект",
+    "watermark_group": "Водяний знак",
+    "select_watermark_button": "Обрати водяний знак",
+    "clear_watermark_button": "Очистити",
+    "effect_selection_title": "Оберіть ефект накладання",
+    "custom_effect_filter": "Відео файли (*.mov *.mp4 *.webm)",
+    "watermark_filter": "Зображення (*.png)",
+    "no_effect_selected": "Ефект не обрано"
 }

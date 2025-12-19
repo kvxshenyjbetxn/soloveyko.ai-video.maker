@@ -299,5 +299,15 @@
     "none_template": "None",
     "default_settings": "Global Settings",
     "template": "Template",
-    "whisper_model_download_info": "Whisper model '{model_name}' not found. Starting one-time download. This may take some time..."
+    "whisper_model_download_info": "Whisper model '{model_name}' not found. Starting one-time download. This may take some time...",
+    "overlay_effects_group": "Overlay Effects",
+    "select_effect_button": "Select Effect",
+    "add_custom_effect_button": "Add Custom Effect",
+    "watermark_group": "Watermark",
+    "select_watermark_button": "Select Watermark",
+    "clear_watermark_button": "Clear Watermark",
+    "effect_selection_title": "Select Overlay Effect",
+    "custom_effect_filter": "Video Files (*.mov *.mp4 *.webm)",
+    "watermark_filter": "Image Files (*.png)",
+    "no_effect_selected": "No effect selected"
 }

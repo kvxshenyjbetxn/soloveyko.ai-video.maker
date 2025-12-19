@@ -451,33 +451,45 @@ class MainWindow(QMainWindow):
         self.is_review_dialog_active = True
         task_id, translated_text = self.translation_review_queue.popleft()
         
+        state = self.task_processor.task_states[task_id]
+        dialog = TranslationReviewDialog(self, state, translated_text, self.translator)
+
+        # Use open() instead of exec() to avoid blocking the main loop and causing 0x8001010d errors
+        # Connect signals for result handling
+        dialog.finished.connect(lambda result: self._on_review_dialog_finished(result, dialog, task_id, state))
+        
+        def on_regenerate():
+            self.task_processor.regenerate_translation(task_id)
+
+        dialog.regenerate_requested.connect(on_regenerate)
+        self.task_processor.translation_regenerated.connect(dialog.update_text)
+
+        dialog.open() 
+
+    def _on_review_dialog_finished(self, result, dialog, task_id, state):
         try:
-            state = self.task_processor.task_states[task_id]
-            dialog = TranslationReviewDialog(self, state, translated_text, self.translator)
-
-            def on_regenerate():
-                self.task_processor.regenerate_translation(task_id)
-
-            dialog.regenerate_requested.connect(on_regenerate)
-            self.task_processor.translation_regenerated.connect(dialog.update_text)
-
-            if dialog.exec():
+            if result == QDialog.DialogCode.Accepted:
                 new_text = dialog.get_text()
                 self.task_processor.task_states[task_id].text_for_processing = new_text
                 if state.dir_path:
-                    with open(os.path.join(state.dir_path, "translation_reviewed.txt"), 'w', encoding='utf-8') as f:
-                        f.write(new_text)
+                    try:
+                        with open(os.path.join(state.dir_path, "translation_reviewed.txt"), 'w', encoding='utf-8') as f:
+                            f.write(new_text)
+                    except Exception as e:
+                        logger.log(f"Failed to save reviewed translation: {e}", level=LogLevel.ERROR)
                 self.task_processor._on_text_ready(task_id)
             else:
                 self.task_processor._set_stage_status(task_id, 'stage_translation', 'error', 'User cancelled review.')
             
+            # Clean up connections
             try:
                 self.task_processor.translation_regenerated.disconnect(dialog.update_text)
-            except RuntimeError:
+            except (RuntimeError, TypeError):
                 pass
+                
         finally:
             self.is_review_dialog_active = False
-            # Process the next item in the queue
+            # Process the next item in the queue asynchronously
             QTimer.singleShot(0, self._show_next_review_dialog)
 
     def show_media_viewer(self, media_path):

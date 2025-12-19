@@ -2,8 +2,8 @@ import os
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton, QStackedWidget
 from PySide6.QtCore import Signal, QSize, Qt, QUrl, QEvent
 from PySide6.QtGui import QIcon, QPixmap, QImage
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PySide6.QtMultimediaWidgets import QVideoWidget
+# from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+# from PySide6.QtMultimediaWidgets import QVideoWidget
 import cv2
 
 from .clickable_label import ClickableLabel
@@ -65,6 +65,7 @@ class MediaThumbnail(QWidget):
         self.video_widget = None
 
         if self.is_video:
+            from PySide6.QtMultimediaWidgets import QVideoWidget
 
             self.video_widget = QVideoWidget()
 
@@ -97,6 +98,8 @@ class MediaThumbnail(QWidget):
 
 
     def _setup_video_player(self):
+        from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+        from PySide6.QtMultimediaWidgets import QVideoWidget
 
         self.video_widget.installEventFilter(self)
 
@@ -249,6 +252,7 @@ class MediaThumbnail(QWidget):
 
         if self.is_video:
             if not self.video_widget:
+                from PySide6.QtMultimediaWidgets import QVideoWidget
                 self.video_widget = QVideoWidget()
                 self.media_stack.addWidget(self.video_widget)
             

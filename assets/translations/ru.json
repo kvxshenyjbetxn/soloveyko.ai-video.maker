@@ -303,5 +303,15 @@
     "template_notes_placeholder": "Введите заметки к выбранному шаблону здесь...",
     "default_settings": "Глобальные настройки",
     "template": "Шаблон",
-    "whisper_model_download_info": "Модель Whisper '{model_name}' не найдена в кеше. Начинается одноразовая загрузка. Это может занять некоторое время..."
+    "whisper_model_download_info": "Модель Whisper '{model_name}' не найдена в кеше. Начинается одноразовая загрузка. Это может занять некоторое время...",
+    "overlay_effects_group": "Эффекты наложения",
+    "select_effect_button": "Выбрать эффект",
+    "add_custom_effect_button": "Добавить свой эффект",
+    "watermark_group": "Водяной знак",
+    "select_watermark_button": "Выбрать водяной знак",
+    "clear_watermark_button": "Очистить",
+    "effect_selection_title": "Выберите эффект наложения",
+    "custom_effect_filter": "Видео файлы (*.mov *.mp4 *.webm)",
+    "watermark_filter": "Изображения (*.png)",
+    "no_effect_selected": "Эффект не выбран"
 }
