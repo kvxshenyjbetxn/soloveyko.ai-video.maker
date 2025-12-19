@@ -24,8 +24,15 @@ class EffectSelectionDialog(QDialog):
         self.initial_selection = initial_selection
         self.selected_effect_path = None
         
-        # Ensure assets/efects directory exists (user typo "efects" preserved as requested)
-        self.assets_dir = os.path.join(BASE_PATH, "assets", "efects")
+        # Визначаємо шлях до папки efects
+        if getattr(sys, 'frozen', False):
+            # Коли скомпільовано: efects поруч з exe файлом
+            exe_dir = os.path.dirname(sys.executable)
+            self.assets_dir = os.path.join(exe_dir, "efects")
+        else:
+            # В розробці: assets/efects
+            self.assets_dir = os.path.join(BASE_PATH, "assets", "efects")
+        
         if not os.path.exists(self.assets_dir):
             try:
                 os.makedirs(self.assets_dir)
