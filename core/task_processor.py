@@ -699,6 +699,8 @@ class TaskProcessor(QObject):
                 if merged_lang_config:
                      current_settings['montage']['overlay_effect_path'] = merged_lang_config.get('overlay_effect_path')
                      current_settings['montage']['watermark_path'] = merged_lang_config.get('watermark_path')
+                     current_settings['montage']['watermark_size'] = merged_lang_config.get('watermark_size', 20)
+                     current_settings['montage']['watermark_position'] = merged_lang_config.get('watermark_position', 8)
 
                 state = TaskState(job, lang_id, lang_data, base_save_path, current_settings)
 
