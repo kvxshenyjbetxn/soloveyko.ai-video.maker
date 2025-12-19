@@ -612,8 +612,6 @@ class LanguagesTab(QWidget):
             "gemini_tone": "",
             "background_music_path": "",
             "background_music_volume": 100,
-            "background_music_path": "",
-            "background_music_volume": 100,
             "default_template": "",
             "overlay_effect_path": "",
             "watermark_path": "",
@@ -669,7 +667,6 @@ class LanguagesTab(QWidget):
         lang_settings["gemini_voice"] = self.gemini_voice_combo.currentData()
         lang_settings["gemini_tone"] = self.gemini_tone_input.text()
         lang_settings["background_music_path"] = self.bg_music_path_input.text()
-        lang_settings["background_music_volume"] = self.bg_music_volume_slider.value()
         lang_settings["background_music_volume"] = self.bg_music_volume_slider.value()
         lang_settings["default_template"] = self.default_template_combo.currentData()
         lang_settings["overlay_effect_path"] = self.overlay_effect_path_input.text()

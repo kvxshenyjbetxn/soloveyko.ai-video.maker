@@ -323,64 +323,67 @@ class ImageGenerationWorker(BaseWorker):
         max_workers = self.config.get('max_threads', 8)
         prompts_iterator = iter(enumerate(prompts))
         futures = {}
+        
+        # Track if there are more prompts to submit
+        prompts_exhausted = False
 
-        # Start with an initial batch of workers
-        for _ in range(max_workers):
-            try:
-                i, prompt = next(prompts_iterator)
-                future = executor.submit(generate_single_image, i, prompt)
-                futures[future] = i
-                time.sleep(0.5)  # Respect the initial submission delay
-            except StopIteration:
-                break  # No more prompts to start with
-
-        while futures:
-            # Wait for the next future to complete
-            done_future = next(as_completed(futures))
-            time.sleep(0.1) # Add delay to space out result processing
-            
-            index = futures.pop(done_future)
-            result = done_future.result()
-
-            if result:
-                index_from_result, image_data, prompt_from_result = result
+        # Maintain ~max_workers active tasks at all times
+        # Submit and process in a continuous loop
+        while True:
+            # Check if any tasks completed (non-blocking check)
+            if futures:
+                from concurrent.futures import wait, FIRST_COMPLETED
+                done_set, _ = wait(futures.keys(), timeout=0, return_when=FIRST_COMPLETED)
                 
-                image_path = os.path.join(images_dir, f"{index_from_result + 1}.{file_extension}")
-                data_to_write = image_data
+                # Process any completed futures immediately
+                for done_future in done_set:
+                    index = futures.pop(done_future)
+                    result = done_future.result()
 
-                if provider == 'googler' and isinstance(image_data, str):
-                    try:
-                        data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
-                    except Exception as e:
-                        logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index_from_result + 1}: {e}", level=LogLevel.ERROR)
-                        # Continue to the submission part to keep the worker count stable
-                    else:
-                        try:
-                            time.sleep(0.2)
-                            with open(image_path, 'wb') as f:
-                                f.write(data_to_write)
-                            
-                            logger.log(f"[{self.task_id}] [{service_name}] Image {index_from_result + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
-                            generated_paths[index_from_result] = image_path
-                            
-                            # --- Thumbnail Generation (Disabled by user request to avoid duplicates) ---
-                            thumbnail_path = image_path
-                            # --- End Thumbnail Generation ---
-                            
-                            time.sleep(0.1)
-                            self.signals.status_changed.emit(self.task_id, image_path, prompt_from_result, thumbnail_path)
-                        except IOError as e:
-                            logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index_from_result + 1} to {image_path}: {e}", level=LogLevel.ERROR)
+                    if result:
+                        index_from_result, image_data, prompt_from_result = result
+                        
+                        image_path = os.path.join(images_dir, f"{index_from_result + 1}.{file_extension}")
+                        data_to_write = image_data
+
+                        if provider == 'googler' and isinstance(image_data, str):
+                            try:
+                                data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
+                            except Exception as e:
+                                logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index_from_result + 1}: {e}", level=LogLevel.ERROR)
+                            else:
+                                try:
+                                    time.sleep(0.2)
+                                    with open(image_path, 'wb') as f:
+                                        f.write(data_to_write)
+                                    
+                                    logger.log(f"[{self.task_id}] [{service_name}] Image {index_from_result + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
+                                    generated_paths[index_from_result] = image_path
+                                    
+                                    thumbnail_path = image_path
+                                    time.sleep(0.1)
+                                    self.signals.status_changed.emit(self.task_id, image_path, prompt_from_result, thumbnail_path)
+                                except IOError as e:
+                                    logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index_from_result + 1} to {image_path}: {e}", level=LogLevel.ERROR)
             
-            # After processing a completed task, try to submit a new one
-            try:
-                i, prompt = next(prompts_iterator)
-                future = executor.submit(generate_single_image, i, prompt)
-                futures[future] = i
-                time.sleep(0.5) # Delay for the new submission
-            except StopIteration:
-                # No more prompts to submit, the while loop will continue until all in-flight futures are done
-                pass
+            # Submit new tasks if we have slots available and prompts remaining
+            if len(futures) < max_workers and not prompts_exhausted:
+                try:
+                    i, prompt = next(prompts_iterator)
+                    future = executor.submit(generate_single_image, i, prompt)
+                    futures[future] = i
+                    time.sleep(0.5)  # Keep the delay for API and CPU safety
+                except StopIteration:
+                    prompts_exhausted = True  # No more prompts to submit
+            
+            # Exit condition: all prompts submitted and all futures completed
+            if prompts_exhausted and not futures:
+                break
+            
+            # Small delay to avoid busy-waiting if no work to do
+            if len(futures) >= max_workers or (prompts_exhausted and futures):
+                time.sleep(0.1)
+
 
         final_paths = [path for path in generated_paths if path is not None]
 
@@ -1525,7 +1528,9 @@ class TaskProcessor(QObject):
         if len(generated_videos) < video_count_animated:
             video_gen_status = 'warning'
         if len(generated_videos) == 0 and video_count_animated > 0:
-            video_gen_status = 'error'
+            # Instead of marking as error, we'll fallback to Quick Show
+            # So we use 'warning' status to allow montage to proceed
+            video_gen_status = 'warning'
 
         if generated_videos:
             remaining_images = state.image_paths[video_count_animated:]
@@ -1537,14 +1542,17 @@ class TaskProcessor(QObject):
         # Combine statuses: warning is the "lowest" priority besides success
         final_status = state.image_gen_status
         if final_status == 'success' and video_gen_status != 'success':
-            final_status = video_gen_status # 'warning' or 'error'
-        elif final_status == 'warning' and video_gen_status == 'error':
-            final_status = 'error'
-        # If image_gen_status was 'error', it remains 'error'
+            final_status = video_gen_status # 'warning' only now (not 'error')
+        elif final_status == 'warning' and video_gen_status == 'warning':
+            final_status = 'warning'
+        # If image_gen_status was 'error', it remains 'error' (real failure in image generation)
 
         error_message = None
         if final_status != 'success':
-            error_message = "Failed to generate all images and/or videos."
+            if state.fallback_to_quick_show:
+                error_message = "Video animation failed, using Quick Show mode."
+            else:
+                error_message = "Failed to generate all images and/or videos."
             
         self._set_stage_status(task_id, 'stage_images', final_status, error_message)
         
@@ -1554,8 +1562,20 @@ class TaskProcessor(QObject):
     @Slot(str, str)
     def _on_video_generation_error(self, task_id, error):
         logger.log(f"[{task_id}] Video generation failed: {error}", level=LogLevel.ERROR)
-        self._set_stage_status(task_id, 'stage_images', 'error', error)
-        # We don't stop the whole process, just log the error and proceed with the images we have
+        
+        # Instead of blocking montage, fallback to Quick Show
+        state = self.task_states[task_id]
+        state.fallback_to_quick_show = True
+        logger.log(f"[{task_id}] Video generation error. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
+        
+        # Use warning status instead of error to allow montage to proceed
+        # Only set to error if image generation also failed
+        final_status = state.image_gen_status if state.image_gen_status == 'error' else 'warning'
+        error_message = "Video animation failed, using Quick Show mode."
+        
+        self._set_stage_status(task_id, 'stage_images', final_status, error_message)
+        
+        # Continue to montage
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
 

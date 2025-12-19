@@ -315,7 +315,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.templates_tab.template_applied.connect(self.on_template_applied)
 
         QTimer.singleShot(100, self.check_api_key_validity) # Initial check
-        QTimer.singleShot(500, self.start_background_updates) # Initial balance check
+        QTimer.singleShot(100, self.start_background_updates) # Initial balance check - run in background, non-blocking
         
         self.settings_tab.languages_tab.load_elevenlabs_templates()
         self.update_active_template_display()
