@@ -1805,5 +1805,30 @@ class TaskProcessor(QObject):
             elapsed_str = time.strftime('%H:%M:%S', time.gmtime(elapsed_ms / 1000))
             logger.log(f"Queue processing finished in {elapsed_str}.", level=LogLevel.SUCCESS)
             self.processing_finished.emit(elapsed_str)
+    
+    def cleanup(self):
+        """
+        Правильно завершує всі потоки та ресурси при закритті програми.
+        Це виправляє помилку Windows fatal exception: code 0x8001010d
+        """
+        logger.log("Cleaning up TaskProcessor resources...", level=LogLevel.INFO)
+        
+        # Завершуємо ThreadPoolExecutor для генерації зображень
+        if hasattr(self, 'image_gen_executor'):
+            try:
+                # shutdown(wait=False) дозволяє завершити потоки без очікування їх виконання
+                # cancel_futures=True скасовує всі pending завдання
+                self.image_gen_executor.shutdown(wait=False, cancel_futures=True)
+                logger.log("Image generation executor shut down successfully.", level=LogLevel.INFO)
+            except Exception as e:
+                logger.log(f"Error shutting down image_gen_executor: {e}", level=LogLevel.WARNING)
+        
+        # Завершуємо QThreadPool
+        if hasattr(self, 'threadpool'):
+            try:
+                self.threadpool.clear()
+                logger.log("Thread pool cleared successfully.", level=LogLevel.INFO)
+            except Exception as e:
+                logger.log(f"Error clearing thread pool: {e}", level=LogLevel.WARNING)
 
 # endregion

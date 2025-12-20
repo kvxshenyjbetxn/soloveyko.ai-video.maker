@@ -720,6 +720,10 @@ class MainWindow(QMainWindow):
             self.settings_tab.api_tab.image_tab.pollinations_tab.save_settings()
         if hasattr(self.settings_tab.api_tab.image_tab.googler_tab, 'save_settings'):
             self.settings_tab.api_tab.image_tab.googler_tab.save_settings()
+        
+        # Cleanup task processor resources to prevent 0x8001010d error
+        if hasattr(self, 'task_processor'):
+            self.task_processor.cleanup()
             
         logger.log('Application closing.', level=LogLevel.INFO)
         super().closeEvent(event)
