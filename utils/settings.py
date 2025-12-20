@@ -2,6 +2,7 @@ import json
 import os
 import platform
 import sys
+from PySide6.QtCore import QStandardPaths
 
 class SettingsManager:
     def __init__(self, settings_file='config/settings.json'):
@@ -53,9 +54,14 @@ class SettingsManager:
 
     def _get_base_path(self):
         if platform.system() == "Darwin":
-            # На macOS використовуємо стандартну папку користувача, щоб уникнути Read-only errors
-            base = os.path.expanduser("~/Library/Application Support/CombainAI")
+            # На macOS використовуємо стандартний шлях Qt для даних додатку
+            base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
+            # Якщо назва додатку не додалась автоматично (буває на деяких версіях)
+            if not base.endswith("CombainAI"):
+                base = os.path.join(base, "CombainAI")
+            
             os.makedirs(base, exist_ok=True)
+            print(f"DEBUG: macOS Data Path is: {base}")
             return base
             
         if getattr(sys, 'frozen', False):
@@ -106,9 +112,9 @@ class TemplateManager:
 
     def _get_base_path(self):
         if platform.system() == "Darwin":
-            # На macOS використовуємо ту ж папку в Application Support
-            base = os.path.expanduser("~/Library/Application Support/CombainAI")
-            os.makedirs(base, exist_ok=True)
+            base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
+            if not base.endswith("CombainAI"):
+                base = os.path.join(base, "CombainAI")
             return base
 
         if getattr(sys, 'frozen', False):
