@@ -1,6 +1,6 @@
 import json
 import os
-
+import platform
 import sys
 
 class SettingsManager:
@@ -52,8 +52,14 @@ class SettingsManager:
         self.settings = self.load_settings()
 
     def _get_base_path(self):
+        if platform.system() == "Darwin":
+            # На macOS використовуємо стандартну папку користувача, щоб уникнути Read-only errors
+            base = os.path.expanduser("~/Library/Application Support/CombainAI")
+            os.makedirs(base, exist_ok=True)
+            return base
+            
         if getattr(sys, 'frozen', False):
-            # Поруч з EXE
+            # Поруч з EXE (Windows)
             return os.path.dirname(sys.executable)
         else:
             # Корень проекту (батьківська папка utils)
@@ -99,6 +105,12 @@ class TemplateManager:
         os.makedirs(self.template_dir, exist_ok=True)
 
     def _get_base_path(self):
+        if platform.system() == "Darwin":
+            # На macOS використовуємо ту ж папку в Application Support
+            base = os.path.expanduser("~/Library/Application Support/CombainAI")
+            os.makedirs(base, exist_ok=True)
+            return base
+
         if getattr(sys, 'frozen', False):
             return os.path.dirname(sys.executable)
         else:
