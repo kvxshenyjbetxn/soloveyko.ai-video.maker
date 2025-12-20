@@ -2,6 +2,7 @@ import sys
 import os
 import requests
 import traceback
+import platform
 from datetime import datetime
 
 # Це виправить помилку 'NoneType object has no attribute write'
@@ -108,6 +109,17 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 
 def main():
+    # --- Initialize Windows COM for Qt dialogs ---
+    com_initialized = False
+    if platform.system() == "Windows":
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+            com_initialized = True
+        except ImportError:
+            # pythoncom not available, continue anyway
+            pass
+    
     # --- Set up global exception handler ---
     sys.excepthook = handle_exception
     
@@ -170,7 +182,17 @@ def main():
         main_window = MainWindow(app, subscription_info=subscription_info, api_key=api_key, server_url=AUTH_SERVER_URL)
         main_window.apply_current_theme()
         main_window.show()
-        sys.exit(app.exec())
+        exit_code = app.exec()
+        
+        # --- Uninitialize Windows COM after Qt event loop ends ---
+        if com_initialized:
+            try:
+                import pythoncom
+                pythoncom.CoUninitialize()
+            except:
+                pass
+        
+        sys.exit(exit_code)
 
 if __name__ == '__main__':
     main()
