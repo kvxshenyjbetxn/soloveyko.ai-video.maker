@@ -320,69 +320,80 @@ class ImageGenerationWorker(BaseWorker):
                 logger.log(f"[{self.task_id}] [{service_name}] Error generating image {index + 1}: {e}", level=LogLevel.ERROR)
                 return None
         
-        max_workers = self.config.get('max_threads', 8)
-        prompts_iterator = iter(enumerate(prompts))
-        futures = {}
-        
-        # Track if there are more prompts to submit
-        prompts_exhausted = False
-
-        # Maintain ~max_workers active tasks at all times
-        # Submit and process in a continuous loop
-        while True:
-            # Check if any tasks completed (non-blocking check)
-            if futures:
-                from concurrent.futures import wait, FIRST_COMPLETED
-                done_set, _ = wait(futures.keys(), timeout=0, return_when=FIRST_COMPLETED)
-                
-                # Process any completed futures immediately
-                for done_future in done_set:
-                    index = futures.pop(done_future)
-                    result = done_future.result()
-
-                    if result:
-                        index_from_result, image_data, prompt_from_result = result
+        if provider == 'pollinations':
+            # Sequential processing for Pollinations to avoid rate limits and 429 errors
+            for i, prompt in enumerate(prompts):
+                result = generate_single_image(i, prompt)
+                if result:
+                    index_from_result, image_data, prompt_from_result = result
+                    image_path = os.path.join(images_dir, f"{index_from_result + 1}.{file_extension}")
+                    
+                    try:
+                        with open(image_path, 'wb') as f:
+                            f.write(image_data)
                         
-                        image_path = os.path.join(images_dir, f"{index_from_result + 1}.{file_extension}")
-                        data_to_write = image_data
+                        logger.log(f"[{self.task_id}] [{service_name}] Image {index_from_result + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
+                        generated_paths[index_from_result] = image_path
+                        
+                        self.signals.status_changed.emit(self.task_id, image_path, prompt_from_result, image_path)
+                    except IOError as e:
+                        logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index_from_result + 1}: {e}", level=LogLevel.ERROR)
+                
+                # Small delay between sequential requests for safety
+                time.sleep(0.5)
+        else:
+            # Parallel processing for Googler
+            max_workers = self.config.get('max_threads', 8)
+            prompts_iterator = iter(enumerate(prompts))
+            futures = {}
+            prompts_exhausted = False
 
-                        if provider == 'googler' and isinstance(image_data, str):
+            while True:
+                # Check if any tasks completed
+                if futures:
+                    from concurrent.futures import wait, FIRST_COMPLETED
+                    done_set, _ = wait(futures.keys(), timeout=0, return_when=FIRST_COMPLETED)
+                    
+                    for done_future in done_set:
+                        index = futures.pop(done_future)
+                        result = done_future.result()
+
+                        if result:
+                            index_from_result, image_data, prompt_from_result = result
+                            image_path = os.path.join(images_dir, f"{index_from_result + 1}.{file_extension}")
+                            
                             try:
-                                data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
+                                # Googler provides base64 as string, we need to decode it
+                                if isinstance(image_data, str):
+                                    data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
+                                else:
+                                    data_to_write = image_data
+
+                                with open(image_path, 'wb') as f:
+                                    f.write(data_to_write)
+                                
+                                logger.log(f"[{self.task_id}] [{service_name}] Image {index_from_result + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
+                                generated_paths[index_from_result] = image_path
+                                
+                                self.signals.status_changed.emit(self.task_id, image_path, prompt_from_result, image_path)
                             except Exception as e:
-                                logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index_from_result + 1}: {e}", level=LogLevel.ERROR)
-                            else:
-                                try:
-                                    time.sleep(0.2)
-                                    with open(image_path, 'wb') as f:
-                                        f.write(data_to_write)
-                                    
-                                    logger.log(f"[{self.task_id}] [{service_name}] Image {index_from_result + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
-                                    generated_paths[index_from_result] = image_path
-                                    
-                                    thumbnail_path = image_path
-                                    time.sleep(0.1)
-                                    self.signals.status_changed.emit(self.task_id, image_path, prompt_from_result, thumbnail_path)
-                                except IOError as e:
-                                    logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index_from_result + 1} to {image_path}: {e}", level=LogLevel.ERROR)
-            
-            # Submit new tasks if we have slots available and prompts remaining
-            if len(futures) < max_workers and not prompts_exhausted:
-                try:
-                    i, prompt = next(prompts_iterator)
-                    future = executor.submit(generate_single_image, i, prompt)
-                    futures[future] = i
-                    time.sleep(0.5)  # Keep the delay for API and CPU safety
-                except StopIteration:
-                    prompts_exhausted = True  # No more prompts to submit
-            
-            # Exit condition: all prompts submitted and all futures completed
-            if prompts_exhausted and not futures:
-                break
-            
-            # Small delay to avoid busy-waiting if no work to do
-            if len(futures) >= max_workers or (prompts_exhausted and futures):
-                time.sleep(0.1)
+                                logger.log(f"[{self.task_id}] [{service_name}] Error processing/saving image {index_from_result + 1}: {e}", level=LogLevel.ERROR)
+                
+                # Submit new tasks if slots available
+                if len(futures) < max_workers and not prompts_exhausted:
+                    try:
+                        i, prompt = next(prompts_iterator)
+                        future = executor.submit(generate_single_image, i, prompt)
+                        futures[future] = i
+                        time.sleep(0.5)
+                    except StopIteration:
+                        prompts_exhausted = True
+                
+                if prompts_exhausted and not futures:
+                    break
+                
+                if len(futures) >= max_workers or (prompts_exhausted and futures):
+                    time.sleep(0.1)
 
 
         final_paths = [path for path in generated_paths if path is not None]
@@ -488,7 +499,6 @@ class MontageWorker(BaseWorker):
         
         return self.config['output_path']
 
-# endregion
 # =================================================================================================================
 # region TASK PROCESSOR
 # =================================================================================================================
@@ -685,19 +695,6 @@ class TaskProcessor(QObject):
 
                 # Ensure overlay and watermark settings are passed to the task state's settings
                 lang_config = current_settings.get("languages_config", {}).get(lang_id, {})
-                # Note: 'lang_data' passed to TaskState comes from the job definition, which might not have the full updated config 
-                # if the job was created before settings/templates were saved. 
-                # However, we have 'current_settings' which DOES have the merged template data.
-                # The 'lang_data' variable in this scope comes from 'job['languages']', which depends on how the queue was populated.
-                # To be safe, let's inject the paths into the 'current_settings' that will be stored in TaskState.
-                
-                # Check directly in the merged settings if they exist at the top level (from template merge)
-                # Or extracting them from the specific language config if that's how they are stored.
-                # Based on LanguagesTab, they are stored in 'languages_config[lang_id]'.
-                # But when applying a template, 'languages_config' might be updated? 
-                # Actually, templates usually store the whole 'languages_config' or specific keys.
-                # Let's trust that 'current_settings' has the correct 'languages_config' after the template merge.
-                
                 merged_lang_config = current_settings.get("languages_config", {}).get(lang_id, {})
                 if merged_lang_config:
                      current_settings['montage']['overlay_effect_path'] = merged_lang_config.get('overlay_effect_path')
@@ -981,20 +978,6 @@ class TaskProcessor(QObject):
             'openrouter_api_key': state.settings.get('openrouter_api_key')
         }
         
-        # We use a unique stage key for each custom stage to track status if we wanted to block, 
-        # but the requirement is "parallel and shouldn't block anything".
-        # However, it's good to track them in logs.
-        # We won't add them to state.stages so they don't prevent "Job Finished" status if they are slow,
-        # UNLESS we want them to be part of the job completion.
-        # The user said: "result simply saved... process shouldn't disturb anything absolutely"
-        # So we might treat them as fire-and-forget from the main pipeline's perspective,
-        # BUT usually users want to know when EVERYTHING is done.
-        # Let's run them as workers but not add them to the critical path for "voiceover finished" signals etc.
-        # But for "Job Finished" dialog, maybe we should wait? 
-        # The user said "parallel... result simply saved".
-        # Let's just fire them. If the user closes the app, they might be killed.
-        # Ideally we should verify.
-        
         # Define callbacks with closures to capture stage_name safely
         self._start_worker(CustomStageWorker, task_id, f"custom_{stage_name}", config, 
                            self._on_custom_stage_finished, self._on_custom_stage_error_slot)
@@ -1012,48 +995,6 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_custom_stage_error_slot(self, task_id, error):
-         # We need to find which stage failed. 
-         # Since error signal is generic (task_id, error_msg), we might not know the stage name easily 
-         # if multiple custom stages run for the same task_id (which they do).
-         # BUT, BaseWorker emits error with task_id. 
-         # Wait, CustomStageWorker is started with task_id.
-         # If multiple custom stages run for the same language task, they share task_id!
-         # This is a problem in the original design too?
-         # No, the original design used a closure `on_custom_error` which captured `stage_name`.
-         # To fix this properly without closures, we need to pass stage_name in the error too, 
-         # OR rely on the fact that we might parse it from the worker config if we had access, but we don't here.
-         # Actually, the simplest way to keep error handling working with stage names 
-         # without closures is to arguably keep the closure for error or create a partial.
-         # BUT, using partial matches the Slot requirement better than a raw closure?
-         # Qt Slots can't easily take extra args unless signal provides them.
-         # 
-         # Let's look at how I replaced _start_custom_stage. 
-         # I need to handle the error case too.
-         
-         # Re-reading the plan: "Modify CustomStageWorker.do_work ... Modify TaskProcessor._on_custom_stage_finished ... Modify TaskProcessor._start_custom_stage"
-         # I didn't explicitly detail error handling in the plan, but I need to make sure I don't break it.
-         # 
-         # Issue: BaseWorker.error signal is Signal(str, str) -> (task_id, error_message).
-         # It doesn't include stage_name. 
-         # If I use a single slot `_on_custom_stage_error_slot(self, task_id, error)`, I don't know which stage failed if there are multiple.
-         # 
-         # However, the user request specifically complained about SUCCESS status not updating (green circle).
-         # The closure for success `on_custom_finished` was `lambda tid, res: self._on_custom_stage_finished(tid, res, stage_name)`.
-         # This closure was being called from a worker thread (likely), via the signal connection? 
-         # Qt signals related across threads are queued. 
-         # If `finish` signal is connected to a lambda, the lambda runs. 
-         # BUT lambdas are not Slots. If the sender is in a different thread, Qt queues the call. 
-         # When the slot is a lambda, does it execute in the receiver's thread? 
-         # Standard PySide/PyQt behavior: if receiver is QObject (self), auto-connection tries to run in receiver thread.
-         # But a lambda isn't a QObject method so it might default to direct connection or be problematic.
-         # 
-         # Converting to a proper Slot on TaskProcessor (which is in the main thread) guarantees execution in the main thread.
-         # 
-         # FOR ERROR HANDLING:
-         # I will define a specific wrapper/adaptor or use `sender()`?
-         # `sender()` in `_on_custom_stage_error` would give the Worker object.
-         # The Worker object has `self.config` which has `stage_name`.
-         # PERFECT.
          
         worker = self.sender()
         stage_name = "unknown"
@@ -1075,8 +1016,6 @@ class TaskProcessor(QObject):
         }
         self._start_worker(ImagePromptWorker, task_id, 'stage_img_prompts', config, self._on_img_prompts_finished, self._on_img_prompts_error)
 
-# ... (lines omitted)
-
     def _start_voiceover(self, task_id):
         state = self.task_states[task_id]
         lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
@@ -1089,20 +1028,6 @@ class TaskProcessor(QObject):
             'lang_name': state.lang_name
         }
         self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
-        
-# ... (lines omitted)
-
-
-
-# ... (lines omitted)
-
-
-
-# ... (lines omitted)
-
-
-
-# ... (lines omitted)
 
     def _launch_montage_worker(self, task_id):
         try:
@@ -1284,17 +1209,8 @@ class TaskProcessor(QObject):
     def _process_subtitle_queue(self):
         sub_settings = self.settings.get('subtitles', {})
         whisper_type = sub_settings.get('whisper_type', 'amd')
-        
-        # AssemblyAI doesn't need semaphore in this logic (handled by API limits potentially, but treated as unblocked here?)
-        # Current logic: "if whisper_type == 'assemblyai': ... run directly"
-        # We'll treat AssemblyAI as infinite concurrency or separate logic?
-        # The original code: "if whisper_type == 'assemblyai': self._start_the_work()" (no acquire)
-        
+
         while self.pending_subtitles:
-            # check what the NEXT task needs
-            # But we can't easily peek and check config without popping or complex logic.
-            # Simplified: If queue has items, try to run them.
-            
             # Since whisper_type is global setting (likely), we assume it applies to all.
             if whisper_type == 'assemblyai':
                 task_id = self.pending_subtitles.popleft()
@@ -1405,7 +1321,10 @@ class TaskProcessor(QObject):
             }
         elif provider == 'pollinations':
             pollinations_settings = state.settings.get('pollinations', {})
-            api_kwargs = pollinations_settings
+            # Filter kwargs to only include valid arguments for the generate_image method
+            # The 'token' is handled internally by the PollinationsAPI class.
+            valid_keys = ['model', 'width', 'height', 'nologo', 'enhance']
+            api_kwargs = {k: v for k, v in pollinations_settings.items() if k in valid_keys}
 
         config = {
             'prompts_text': state.image_prompts,
@@ -1615,12 +1534,6 @@ class TaskProcessor(QObject):
         self._check_if_all_are_ready_or_failed()
 
     def _check_if_all_are_ready_or_failed(self):
-        # Determine if we should trigger the review dialog.
-        # Logic: All tasks scheduled for montage must be either:
-        # 1. Waiting for review
-        # 2. Failed
-        # 3. Already started/processed (meaning they skipped review due to settings)
-        
         total_montage_tasks = len(self.montage_tasks_ids)
         if total_montage_tasks == 0:
             return
@@ -1807,10 +1720,6 @@ class TaskProcessor(QObject):
             self.processing_finished.emit(elapsed_str)
     
     def cleanup(self):
-        """
-        Правильно завершує всі потоки та ресурси при закритті програми.
-        Це виправляє помилку Windows fatal exception: code 0x8001010d
-        """
         logger.log("Cleaning up TaskProcessor resources...", level=LogLevel.INFO)
         
         # Завершуємо ThreadPoolExecutor для генерації зображень
@@ -1830,5 +1739,3 @@ class TaskProcessor(QObject):
                 logger.log("Thread pool cleared successfully.", level=LogLevel.INFO)
             except Exception as e:
                 logger.log(f"Error clearing thread pool: {e}", level=LogLevel.WARNING)
-
-# endregion
