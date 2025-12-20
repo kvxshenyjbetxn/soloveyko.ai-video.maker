@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from utils.settings import settings_manager
+from utils.hardware_id import get_hardware_id
 
 class AuthDialog(QDialog):
     def __init__(self, server_url, parent=None):
@@ -54,9 +55,12 @@ class AuthDialog(QDialog):
         self.login_button.setText("Перевірка...")
 
         try:
+            # Отримуємо hardware ID пристрою
+            hardware_id = get_hardware_id()
+            
             response = requests.post(
                 f"{self.server_url}/validate_key/",
-                json={"key": api_key}
+                json={"key": api_key, "hardware_id": hardware_id}
             )
             
             if response.status_code == 200:
@@ -76,6 +80,22 @@ class AuthDialog(QDialog):
                     settings_manager.set('api_key', None)
                     settings_manager.save_settings()
                     self.error_label.setText(f"Помилка: {data.get('reason', 'Невідома помилка')}")
+            elif response.status_code == 403:
+                # Handle hardware mismatch or invalid key
+                data = response.json()
+                detail = data.get("detail", "")
+                
+                if "hardware" in detail.lower() or "пристрій" in detail.lower():
+                    self.error_label.setText(
+                        "Цей ключ прив'язаний до іншого пристрою.\n"
+                        "Зверніться до техпідтримки для скидання прив'язки."
+                    )
+                else:
+                    self.error_label.setText(f"Помилка: {detail}")
+                    
+                # Clear saved key
+                settings_manager.set('api_key', None)
+                settings_manager.save_settings()
             else:
                 self.error_label.setText(f"Помилка сервера: {response.status_code}")
 

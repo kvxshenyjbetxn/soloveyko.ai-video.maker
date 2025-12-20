@@ -117,9 +117,12 @@ class ValidationWorker(QRunnable):
             self.signals.finished.emit(is_valid, expires_at)
             return
         try:
+            from utils.hardware_id import get_hardware_id
+            hardware_id = get_hardware_id()
+            
             response = requests.post(
                 f"{self.server_url}/validate_key/",
-                json={"key": self.api_key},
+                json={"key": self.api_key, "hardware_id": hardware_id},
                 timeout=5
             )
             if response.status_code == 200:
