@@ -152,9 +152,12 @@ def main():
     saved_key = settings_manager.get('api_key')
     if saved_key:
         try:
+            from utils.hardware_id import get_hardware_id
+            hardware_id = get_hardware_id()
+            
             response = requests.post(
                 f"{AUTH_SERVER_URL}/validate_key/",
-                json={"key": saved_key},
+                json={"key": saved_key, "hardware_id": hardware_id},
                 timeout=5 # seconds
             )
             if response.status_code == 200:
