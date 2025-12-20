@@ -1,12 +1,21 @@
 import requests
 import time
+import threading
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
 
+# Use thread-local storage at module level to persist sessions across API instances
+thread_local_storage = threading.local()
+
 class GeminiTTSAPI:
-    def __init__(self):
-        self.api_key = settings_manager.get("gemini_tts_api_key")
+    def __init__(self, api_key=None):
+        self.api_key = api_key or settings_manager.get("gemini_tts_api_key")
         self.base_url = "https://gemini-tts-server-beta-production.up.railway.app"
+
+    def _get_session(self):
+        if not hasattr(thread_local_storage, "session"):
+            thread_local_storage.session = requests.Session()
+        return thread_local_storage.session
 
     def _make_request(self, method, endpoint, json=None, **kwargs):
         if not self.api_key:
@@ -19,7 +28,8 @@ class GeminiTTSAPI:
         url = f"{self.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         
         try:
-            response = requests.request(method, url, headers=headers, json=json, **kwargs)
+            session = self._get_session()
+            response = session.request(method, url, headers=headers, json=json, **kwargs)
             response.raise_for_status()
             if response.status_code == 200:
                 # Check content type for binary data (audio)

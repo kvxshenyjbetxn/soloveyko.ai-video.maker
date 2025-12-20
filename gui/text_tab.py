@@ -11,58 +11,80 @@ from PySide6.QtCore import Qt, QMimeData
 from utils.flow_layout import FlowLayout
 from functools import partial
 from utils.translator import translator
-from utils.settings import settings_manager
+from utils.settings import settings_manager, template_manager
 from gui.file_dialog import FileDialog
 from utils.animator import Animator
 
 def get_text_color_for_background(bg_color_hex):
-    """Determines if black or white text is more readable on a given background color."""
+    """
+    Calculates the appropriate text color (black or white) for a given background color
+    to ensure good contrast.
+    """
+    if not bg_color_hex or not bg_color_hex.startswith('#'):
+        return "#FFFFFF"  # Default to white if invalid
+
+    # Convert hex to RGB
+    hex_color = bg_color_hex.lstrip('#')
     try:
-        color = QColor(bg_color_hex)
-        # Using the perceived luminance formula
-        luminance = (0.299 * color.red() + 0.587 * color.green() + 0.114 * color.blue()) / 255
-        return "#000000" if luminance > 0.5 else "#ffffff"
-    except Exception:
-        return "#000000"
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return "#FFFFFF"
+
+    # Calculate luminance (standard formula)
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+
+    if luminance > 0.5:
+        return "#000000"  # Bright background -> Black text
+    else:
+        return "#FFFFFF"  # Dark background -> White text
+
 
 class DroppableTextEdit(QTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
 
+    def insertFromMimeData(self, source: QMimeData):
+        """Override to force plain text on paste."""
+        if source.hasText():
+            self.insertPlainText(source.text())
+        else:
+            super().insertFromMimeData(source)
+
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
-            urls = event.mimeData().urls()
-            if any(url.toLocalFile().endswith('.txt') for url in urls):
-                event.acceptProposedAction()
+            event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
 
     def dropEvent(self, event: QDropEvent):
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-            for url in event.mimeData().urls():
-                file_path = url.toLocalFile()
-                if file_path.endswith('.txt'):
+            urls = event.mimeData().urls()
+            if urls:
+                file_path = urls[0].toLocalFile()
+                if os.path.isfile(file_path) and file_path.endswith('.txt'):
                     try:
                         with open(file_path, 'r', encoding='utf-8') as f:
-                            self.insertPlainText(f.read())
+                            text = f.read()
+                            self.setText(text)
                     except Exception as e:
-                        print(f"Error reading file {file_path}: {e}")
+                         QMessageBox.warning(self, "Error", f"Failed to read file: {e}")
+                else:
+                     # If generic drop, maybe append path or ignore
+                     pass
+            event.acceptProposedAction()
         else:
             super().dropEvent(event)
 
-from gui.file_dialog import FileDialog
-
 class StageSelectionWidget(QWidget):
     """A compact widget representing the processing stages for a single language."""
-    def __init__(self, language_name, parent_tab):
+    def __init__(self, language_name, lang_code, parent_tab):
         super().__init__()
         self.parent_tab = parent_tab
+        self.lang_code = lang_code
         self.user_images = []
         self.user_audio = None
-        self.user_background_music = None
-        self.user_background_music_volume = 100
+        self.selected_template = None  # New: Store selected template name
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
@@ -70,6 +92,16 @@ class StageSelectionWidget(QWidget):
 
         self.lang_label = QLabel(f"{language_name}:")
         layout.addWidget(self.lang_label)
+
+        # --- Template Selection Button ---
+        self.template_button = QToolButton()
+        self.template_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView)) # Placeholder icon, ideally custom gear/template icon
+        self.template_button.setToolTip(translator.translate("select_template", "Select Template"))
+        self.template_button.clicked.connect(self.show_template_menu)
+        self.template_button.setFixedSize(25, 25)
+        # Style to look clickable but unobtrusive
+        self.template_button.setStyleSheet("QToolButton { border: none; background-color: transparent; } QToolButton:hover { background-color: rgba(255,255,255,0.1); border-radius: 4px; }")
+        layout.addWidget(self.template_button)
 
         self.toggle_all_button = QToolButton()
         self.toggle_all_button.setObjectName("toggleAllButton")
@@ -80,17 +112,6 @@ class StageSelectionWidget(QWidget):
         self.update_style()
         
         layout.addWidget(self.toggle_all_button)
-
-        self.add_bg_music_button = QPushButton(translator.translate("add_background_music", "Add Music"))
-        self.add_bg_music_button.setObjectName("addBgMusicButton")
-        self.add_bg_music_button.clicked.connect(self.handle_music_button_click)
-        self.add_bg_music_button.setFixedHeight(25)
-        layout.addWidget(self.add_bg_music_button)
-
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.VLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
-        layout.addWidget(line)
         
         self.checkboxes = {}
         self.add_buttons = {}
@@ -113,11 +134,23 @@ class StageSelectionWidget(QWidget):
                     if stage_name:
                         key_custom = f"custom_{stage_name}"
                         checkbox_custom = QCheckBox(stage_name)
-                        checkbox_custom.setChecked(True)
+                        
+                        # Load initial state
+                        lang_config = self.parent_tab.get_lang_config(self.lang_code)
+                        is_checked = lang_config.get(key_custom, True)
+                        checkbox_custom.setChecked(is_checked)
+                        
                         checkbox_custom.stateChanged.connect(self.update_toggle_button_text)
                         checkbox_custom.stateChanged.connect(self.parent_tab.check_queue_button_visibility)
+                        checkbox_custom.stateChanged.connect(self._save_state) # Save on change
                         layout.addWidget(checkbox_custom)
                         self.checkboxes[key_custom] = checkbox_custom
+
+            # Load initial state for standard checkboxes
+            lang_config = self.parent_tab.get_lang_config(self.lang_code)
+            is_checked = lang_config.get(key, True)
+            checkbox.setChecked(is_checked)
+            checkbox.stateChanged.connect(self._save_state) # Save on change
 
             if key in ["stage_images", "stage_voiceover"]:
                 add_button = QToolButton()
@@ -136,56 +169,58 @@ class StageSelectionWidget(QWidget):
         layout.addStretch()
         self.update_toggle_button_text()
 
-    def handle_music_button_click(self):
-        if self.user_background_music:
-            self.show_music_menu()
-        else:
-            self.open_music_file_dialog()
+        # Apply default template if set
+        lang_config = self.parent_tab.get_lang_config(self.lang_code)
+        default_template = lang_config.get("default_template")
+        if default_template:
+            self.set_template(default_template)
 
-    def show_music_menu(self):
+    def show_template_menu(self):
         menu = QMenu(self)
-
-        # Volume Slider
-        volume_widget = QWidget()
-        volume_layout = QHBoxLayout(volume_widget)
         
-        volume_label = QLabel(f"{translator.translate('music_volume_label', 'Music Volume:')}")
-        
-        slider = QSlider(Qt.Orientation.Horizontal)
-        slider.setRange(0, 100)
-        slider.setValue(self.user_background_music_volume)
-        slider.setFixedWidth(100)
-        
-        value_label = QLabel(f"{self.user_background_music_volume}%")
-        value_label.setFixedWidth(40)
-
-        slider.valueChanged.connect(lambda value: self.on_volume_slider_changed(value, value_label))
-
-        volume_layout.addWidget(volume_label)
-        volume_layout.addWidget(slider)
-        volume_layout.addWidget(value_label)
-        volume_layout.setContentsMargins(8, 4, 8, 4)
-        
-        widget_action = QWidgetAction(menu)
-        widget_action.setDefaultWidget(volume_widget)
-        menu.addAction(widget_action)
-
+        # Default (Global Settings) action
+        default_action = QAction(translator.translate("default_settings", "Global Settings"), self)
+        if self.selected_template is None:
+             default_action.setCheckable(True)
+             default_action.setChecked(True)
+        default_action.triggered.connect(lambda: self.set_template(None))
+        menu.addAction(default_action)
         menu.addSeparator()
 
-        # Change and Remove actions
-        change_action = QAction(translator.translate("change_music_action", "Change music..."), self)
-        change_action.triggered.connect(self.open_music_file_dialog)
-        menu.addAction(change_action)
+        templates = template_manager.get_templates()
+        if templates:
+            for tmpl in templates:
+                action = QAction(tmpl, self)
+                if self.selected_template == tmpl:
+                    action.setCheckable(True)
+                    action.setChecked(True)
+                action.triggered.connect(partial(self.set_template, tmpl))
+                menu.addAction(action)
+        else:
+            no_tmpl_action = QAction(translator.translate("no_templates_found", "No templates found"), self)
+            no_tmpl_action.setEnabled(False)
+            menu.addAction(no_tmpl_action)
 
-        remove_action = QAction(translator.translate("remove_music_action", "Remove music"), self)
-        remove_action.triggered.connect(lambda: self.set_user_background_music(None))
-        menu.addAction(remove_action)
+        menu.exec(self.template_button.mapToGlobal(self.template_button.rect().bottomLeft()))
 
-        menu.exec(self.add_bg_music_button.mapToGlobal(self.add_bg_music_button.rect().bottomLeft()))
+    def set_template(self, template_name):
+        self.selected_template = template_name
+        if template_name:
+            template_data = template_manager.load_template(template_name)
+            note = template_data.get("__note__", "")
+            
+            tooltip_text = f"{translator.translate('template', 'Template')}: {template_name}"
+            if note:
+                tooltip_text += f"\n\n{note}"
+            
+            self.template_button.setToolTip(tooltip_text)
+            # Change icon or style to indicate active selection
+            self.template_button.setStyleSheet("QToolButton { border: 1px solid #4CAF50; background-color: #4CAF50; border-radius: 4px; }") 
+        else:
+            self.template_button.setToolTip(translator.translate("select_template", "Select Template"))
+            self.template_button.setStyleSheet("QToolButton { border: none; background-color: transparent; } QToolButton:hover { background-color: rgba(255,255,255,0.1); border-radius: 4px; }")
 
-    def on_volume_slider_changed(self, value, label_to_update):
-        self.user_background_music_volume = value
-        label_to_update.setText(f"{value}%")
+
 
     def open_image_dialog(self):
         dialog = FileDialog(
@@ -209,28 +244,7 @@ class StageSelectionWidget(QWidget):
         dialog.files_selected.connect(self.set_user_audio)
         dialog.exec()
 
-    def open_music_file_dialog(self):
-        dialog = FileDialog(
-            self,
-            title=translator.translate("add_background_music_title", "Add Background Music"),
-            description=translator.translate("add_background_music_desc", "Select an audio file to use as background music."),
-            extensions=[".mp3", ".wav"],
-            multi_file=False
-        )
-        dialog.files_selected.connect(self.set_user_background_music)
-        dialog.exec()
 
-    def set_user_background_music(self, files):
-        file_path = files[0] if files else None
-        self.user_background_music = file_path
-        
-        if self.user_background_music:
-            self.add_bg_music_button.setText(os.path.basename(self.user_background_music))
-            self.add_bg_music_button.setToolTip(self.user_background_music)
-        else:
-            self.add_bg_music_button.setText(translator.translate("add_background_music", "Add Music"))
-            self.add_bg_music_button.setToolTip("")
-            self.user_background_music_volume = 100 # Reset volume
 
     def set_user_images(self, files):
         self.user_images = sorted(files)
@@ -266,9 +280,6 @@ class StageSelectionWidget(QWidget):
             files["stage_images"] = self.user_images
         if self.user_audio:
             files["stage_voiceover"] = self.user_audio
-        if self.user_background_music:
-            files["background_music"] = self.user_background_music
-            files["background_music_volume"] = self.user_background_music_volume
         return files
         
     def retranslate_ui(self):
@@ -276,14 +287,6 @@ class StageSelectionWidget(QWidget):
             if not key.startswith("custom_"):
                 checkbox.setText(translator.translate(key))
         self.update_toggle_button_text()
-        
-        # Update music button text
-        if self.user_background_music:
-             self.add_bg_music_button.setText(os.path.basename(self.user_background_music))
-             self.add_bg_music_button.setToolTip(self.user_background_music)
-        else:
-            self.add_bg_music_button.setText(translator.translate("add_background_music", "Add Music"))
-            self.add_bg_music_button.setToolTip("")
 
     def are_all_selected(self):
         return all(checkbox.isChecked() for checkbox in self.checkboxes.values())
@@ -327,6 +330,17 @@ class StageSelectionWidget(QWidget):
         return [key for key, checkbox in self.checkboxes.items() if checkbox.isChecked()]
 
 
+    def _save_state(self):
+        """Saves current checkbox state to global settings."""
+        if not self.lang_code or not self.parent_tab:
+            return
+
+        updates = {}
+        for key, checkbox in self.checkboxes.items():
+            updates[key] = checkbox.isChecked()
+
+        self.parent_tab.update_lang_config(self.lang_code, updates)
+
 class TextTab(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
@@ -351,10 +365,6 @@ class TextTab(QWidget):
         self.char_count_layout.addWidget(self.clean_chars_label)
         self.char_count_layout.addStretch()
         self.char_count_layout.addWidget(self.paragraphs_label)
-        
-        self.char_count_layout.addSpacing(20)
-        self.template_name_label = QLabel()
-        self.char_count_layout.addWidget(self.template_name_label)
         
         layout.addLayout(self.char_count_layout)
 
@@ -418,7 +428,19 @@ class TextTab(QWidget):
         layout.addLayout(self.status_bar_layout)
 
         self.update_char_count()
+        self.update_char_count()
         self.retranslate_ui()
+
+    def get_lang_config(self, lang_code):
+        return self.settings.get("languages_config", {}).get(lang_code, {})
+
+    def update_lang_config(self, lang_code, updates):
+        languages = self.settings.get("languages_config", {})
+        if lang_code not in languages:
+            languages[lang_code] = {}
+        
+        languages[lang_code].update(updates)
+        self.settings.set("languages_config", languages)
 
     def load_languages_menu(self):
         # Clear all previous widgets (language buttons)
@@ -442,7 +464,7 @@ class TextTab(QWidget):
     def on_language_toggled(self, lang_id, lang_name, checked):
         if checked:
             if lang_id not in self.stage_widgets:
-                stage_widget = StageSelectionWidget(lang_name, self)
+                stage_widget = StageSelectionWidget(lang_name, lang_id, self)
                 self.stages_container_layout.addWidget(stage_widget)
                 self.stage_widgets[lang_id] = stage_widget
             
@@ -494,74 +516,84 @@ class TextTab(QWidget):
 
             text = self.text_edit.toPlainText()
             
-            base_save_path = self.settings.get('results_path')
-            
             found_files_per_lang = {}
             found_files_details = {}
 
             # --- Check for existing files ---
-            if base_save_path:
-                safe_job_name = "".join(c for c in task_name if c.isalnum() or c in (' ', '_')).rstrip()
-                for lang_id, btn in self.language_buttons.items():
-                    if btn.isChecked():
-                        lang_name = btn.text()
-                        safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
-                        dir_path = os.path.join(base_save_path, safe_job_name, safe_lang_name)
+            safe_job_name = task_name.replace('…', '').replace('...', '')
+            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', safe_job_name).strip()
+            safe_job_name = safe_job_name[:100]
+            for lang_id, btn in self.language_buttons.items():
+                if btn.isChecked():
+                    stage_widget = self.stage_widgets.get(lang_id)
+                    
+                    # Determine the correct base_save_path
+                    base_save_path = self.settings.get('results_path') # Default global path
+                    if stage_widget and stage_widget.selected_template:
+                        template_data = template_manager.load_template(stage_widget.selected_template)
+                        if template_data and template_data.get('results_path'):
+                            base_save_path = template_data['results_path']
+                            
+                    if not base_save_path:
+                        continue
+
+                    lang_name = btn.text()
+                    safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
+                    dir_path = os.path.join(base_save_path, safe_job_name, safe_lang_name)
+                    
+                    if os.path.isdir(dir_path):
+                        found_files_for_lang = {}
+                        details_for_lang = {}
                         
-                        if os.path.isdir(dir_path):
-                            found_files_for_lang = {}
-                            details_for_lang = {}
-                            
-                            def add_found(stage_key, path, display_name=None):
-                                if display_name is None:
-                                    display_name = translator.translate(stage_key)
-                                found_files_for_lang[stage_key] = display_name
-                                details_for_lang[stage_key] = path
+                        def add_found(stage_key, path, display_name=None):
+                            if display_name is None:
+                                display_name = translator.translate(stage_key)
+                            found_files_for_lang[stage_key] = display_name
+                            details_for_lang[stage_key] = path
 
-                            # Check for files
-                            translation_path = os.path.join(dir_path, "translation.txt")
-                            if os.path.isfile(translation_path):
-                                add_found("stage_translation", translation_path)
+                        # Check for files
+                        translation_path = os.path.join(dir_path, "translation.txt")
+                        if os.path.isfile(translation_path):
+                            add_found("stage_translation", translation_path)
 
-                            prompts_path = os.path.join(dir_path, "image_prompts.txt")
-                            if os.path.isfile(prompts_path):
-                                add_found("stage_img_prompts", prompts_path)
+                        prompts_path = os.path.join(dir_path, "image_prompts.txt")
+                        if os.path.isfile(prompts_path):
+                            add_found("stage_img_prompts", prompts_path)
 
-                            images_dir = os.path.join(dir_path, "images")
-                            if os.path.isdir(images_dir):
-                                files = os.listdir(images_dir)
-                                if files:
-                                    image_ext = ('.png', '.jpg', '.jpeg')
-                                    video_ext = ('.mp4',)
-                                    image_count = len([f for f in files if f.lower().endswith(image_ext)])
-                                    video_count = len([f for f in files if f.lower().endswith(video_ext)])
-                                    
-                                    display_name = translator.translate("stage_images")
-                                    counts = []
-                                    if image_count > 0:
-                                        counts.append(f"{image_count} {translator.translate('images_label')}")
-                                    if video_count > 0:
-                                        counts.append(f"{video_count} {translator.translate('videos_label')}")
-                                    
-                                    if counts:
-                                        display_name += f" ({', '.join(counts)})"
+                        images_dir = os.path.join(dir_path, "images")
+                        if os.path.isdir(images_dir):
+                            files = os.listdir(images_dir)
+                            if files:
+                                image_ext = ('.png', '.jpg', '.jpeg')
+                                video_ext = ('.mp4',)
+                                image_count = len([f for f in files if f.lower().endswith(image_ext) and not f.lower().endswith('_thumb.jpg')])
+                                video_count = len([f for f in files if f.lower().endswith(video_ext)])
+                                display_name = translator.translate("stage_images")
+                                counts = []
+                                if image_count > 0:
+                                    counts.append(f"{image_count} {translator.translate('images_label')}")
+                                if video_count > 0:
+                                    counts.append(f"{video_count} {translator.translate('videos_label')}")
+                                
+                                if counts:
+                                    display_name += f" ({', '.join(counts)})"
 
-                                    add_found("stage_images", images_dir, display_name=display_name)
+                                add_found("stage_images", images_dir, display_name=display_name)
 
-                            voice_mp3_path = os.path.join(dir_path, "voice.mp3")
-                            voice_wav_path = os.path.join(dir_path, "voice.wav")
-                            if os.path.isfile(voice_mp3_path):
-                                add_found("stage_voiceover", voice_mp3_path)
-                            elif os.path.isfile(voice_wav_path):
-                                add_found("stage_voiceover", voice_wav_path)
+                        voice_mp3_path = os.path.join(dir_path, "voice.mp3")
+                        voice_wav_path = os.path.join(dir_path, "voice.wav")
+                        if os.path.isfile(voice_mp3_path):
+                            add_found("stage_voiceover", voice_mp3_path)
+                        elif os.path.isfile(voice_wav_path):
+                            add_found("stage_voiceover", voice_wav_path)
 
-                            subtitles_path = os.path.join(dir_path, "voice.ass")
-                            if os.path.isfile(subtitles_path):
-                                add_found("stage_subtitles", subtitles_path)
-                            
-                            if found_files_for_lang:
-                                found_files_per_lang[lang_name] = found_files_for_lang
-                                found_files_details[lang_name] = details_for_lang
+                        subtitles_path = os.path.join(dir_path, "voice.ass")
+                        if os.path.isfile(subtitles_path):
+                            add_found("stage_subtitles", subtitles_path)
+                        
+                        if found_files_for_lang:
+                            found_files_per_lang[lang_name] = found_files_for_lang
+                            found_files_details[lang_name] = details_for_lang
 
             use_existing = False
             if found_files_per_lang:
@@ -609,6 +641,10 @@ class TextTab(QWidget):
                             user_files = stage_widget.get_user_files()
                             if user_files:
                                 lang_data["user_provided_files"] = user_files
+
+                            # --- Add selected template ---
+                            if stage_widget.selected_template:
+                                lang_data['template_name'] = stage_widget.selected_template
 
                             languages_data[lang_id] = lang_data
             
@@ -660,12 +696,6 @@ class TextTab(QWidget):
 
     def update_gemini_tts_balance(self, balance_text):
         self.gemini_tts_balance_label.setText(balance_text)
-
-    def update_template_name(self, name):
-        if name:
-            self.template_name_label.setText(f"{translator.translate('current_template_label', 'Template')}: {name}")
-        else:
-            self.template_name_label.setText("")
 
     def apply_text_color_to_text_edit(self):
         current_theme = self.settings.get('theme', 'dark')

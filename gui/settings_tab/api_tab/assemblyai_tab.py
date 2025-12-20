@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QComboBox
 from utils.translator import translator
 from utils.settings import settings_manager
+from api.assemblyai import assembly_ai_api
 
 class AssemblyAITab(QWidget):
     def __init__(self, main_window=None):
@@ -24,10 +25,21 @@ class AssemblyAITab(QWidget):
         api_key_layout.addWidget(self.api_key_input)
         layout.addLayout(api_key_layout)
 
+        # Max Threads
+        max_threads_layout = QHBoxLayout()
+        self.max_threads_label = QLabel()
+        self.max_threads_input = QComboBox()
+        self.max_threads_input.addItems(["5", "100"])
+        self.max_threads_input.currentIndexChanged.connect(self.save_max_threads)
+        max_threads_layout.addWidget(self.max_threads_label)
+        max_threads_layout.addWidget(self.max_threads_input)
+        layout.addLayout(max_threads_layout)
+
         layout.addStretch()
 
     def retranslate_ui(self):
         self.api_key_label.setText(translator.translate("assemblyai_api_key"))
+        self.max_threads_label.setText(translator.translate("assemblyai_max_threads"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
 
     def update_fields(self):
@@ -35,6 +47,16 @@ class AssemblyAITab(QWidget):
         api_key = self.settings.get("assemblyai_api_key", "")
         self.api_key_input.setText(api_key)
         self.api_key_input.blockSignals(False)
+
+        self.max_threads_input.blockSignals(True)
+        max_threads = self.settings.get("assemblyai_max_threads", "5")
+        self.max_threads_input.setCurrentText(max_threads)
+        self.max_threads_input.blockSignals(False)
         
     def save_api_key(self, key):
         self.settings.set("assemblyai_api_key", key)
+
+    def save_max_threads(self, index):
+        max_threads = self.max_threads_input.itemText(index)
+        self.settings.set("assemblyai_max_threads", max_threads)
+        assembly_ai_api.update_max_threads()

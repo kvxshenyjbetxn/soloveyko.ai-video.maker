@@ -3,12 +3,24 @@ import re
 import os
 import time
 import concurrent.futures
+import threading
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
 
+# Use thread-local storage at module level to persist sessions across API instances
+thread_local_storage = threading.local()
+
 class VoicemakerAPI:
+    def _get_session(self):
+        if not hasattr(thread_local_storage, "session"):
+            thread_local_storage.session = requests.Session()
+        return thread_local_storage.session
+
     def __init__(self, api_key=None):
-        self.api_key = api_key or settings_manager.get("voicemaker_api_key")
+        if api_key is not None:
+            self.api_key = api_key
+        else:
+            self.api_key = settings_manager.get("voicemaker_api_key")
         self.base_url = "https://developer.voicemaker.in/voice/api"
 
     def check_connection(self):
@@ -38,7 +50,9 @@ class VoicemakerAPI:
         }
 
         try:
-            response = requests.post(self.base_url, headers=headers, json=payload)
+            # Use session
+            session = self._get_session()
+            response = session.post(self.base_url, headers=headers, json=payload)
             
             if response.status_code == 200:
                 data = response.json()
@@ -128,10 +142,12 @@ class VoicemakerAPI:
         retry_delay = 5 # seconds
         timeout = 300 # 5 minutes
 
+        session = self._get_session()
+
         for attempt in range(retries):
             try:
                 # First request to get the audio URL
-                response = requests.post(self.base_url, headers=headers, json=payload, timeout=timeout)
+                response = session.post(self.base_url, headers=headers, json=payload, timeout=timeout)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -139,7 +155,7 @@ class VoicemakerAPI:
                         audio_url = data.get("path")
                         if audio_url:
                             # Second request to download the audio file
-                            audio_response = requests.get(audio_url, timeout=timeout)
+                            audio_response = session.get(audio_url, timeout=timeout)
                             if audio_response.status_code == 200:
                                 return audio_response.content, None # Success
                             else:
@@ -194,14 +210,16 @@ class VoicemakerAPI:
 
         results = [None] * len(chunks)
         
-        # Increased max_workers to allow more parallel processing while throttling submission
+        # Reduced max_workers to prevent SSL socket exhaustion
+        # Previous value of 10 was causing Access Violation on Windows with many concurrent requests
+        # With Session reuse, we can safely increase this back up. User requested higher concurrency.
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             future_to_index = {}
             for i, chunk in enumerate(chunks):
                 future = executor.submit(self._generate_chunk, chunk, voice_id, language_code)
                 future_to_index[future] = i
-                # Small delay to avoid burst rate limits
-                time.sleep(0.5)
+                # Increased delay slightly to play nice with rate limits and socket opening
+                time.sleep(1.0) 
             
             for future in concurrent.futures.as_completed(future_to_index):
                 index = future_to_index[future]

@@ -14,7 +14,7 @@ from api.pollinations import PollinationsAPI
 from api.googler import GooglerAPI
 
 class RegenerateImageWorkerSignals(QObject):
-    finished = Signal(str, str) # old_path, new_path
+    finished = Signal(str, str, str) # old_path, new_path, thumbnail_path
     error = Signal(str, str)    # old_path, error_message
 
 class RegenerateImageWorker(QRunnable):
@@ -67,7 +67,25 @@ class RegenerateImageWorker(QRunnable):
                 f.write(data_to_write)
             
             logger.log(f"Successfully saved regenerated image to {new_image_path}", level=LogLevel.SUCCESS)
-            self.signals.finished.emit(self.old_image_path, new_image_path)
+            
+            # --- Thumbnail Generation ---
+            thumbnail_path = ""
+            try:
+                base, ext = os.path.splitext(new_image_path)
+                thumbnail_path = f"{base}_thumb.jpg"
+                
+                pixmap = QPixmap(new_image_path)
+                if not pixmap.isNull():
+                    scaled_pixmap = pixmap.scaled(290, 290, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    scaled_pixmap.save(thumbnail_path, "JPG", 85)
+                else:
+                    thumbnail_path = ""
+            except Exception as thumb_e:
+                thumbnail_path = ""
+                logger.log(f"Error generating thumbnail for regenerated image {new_image_path}: {thumb_e}", level=LogLevel.ERROR)
+            # --- End Thumbnail Generation ---
+
+            self.signals.finished.emit(self.old_image_path, new_image_path, thumbnail_path)
 
         except Exception as e:
             logger.log(f"Failed to regenerate image. Error: {e}", level=LogLevel.ERROR)
@@ -157,7 +175,7 @@ class GalleryTab(QWidget):
             prompt = f"This is a demo media file: {filename}"
             self.add_media(task_name, language, media_path, prompt)
 
-    def add_media(self, task_name, language, media_path, prompt):
+    def add_media(self, task_name, language, media_path, prompt, thumbnail_path=None):
         if not os.path.exists(media_path):
             logger.log(f"Media path does not exist: {media_path}", level=LogLevel.WARNING)
             return
@@ -176,7 +194,10 @@ class GalleryTab(QWidget):
 
         lang_group = task_group.language_groups[language]
 
+        # --- Thumbnail Loading ---
         pixmap = MediaThumbnail.get_thumbnail_for_media(media_path)
+        # --- End Thumbnail Loading ---
+
         if pixmap.isNull():
             logger.log(f"Failed to load media or generate thumbnail for: {media_path}", level=LogLevel.WARNING)
             return
@@ -213,18 +234,26 @@ class GalleryTab(QWidget):
             worker.signals.error.connect(self._on_regeneration_error)
             self.threadpool.start(worker)
 
-    def _on_regeneration_finished(self, old_path, new_path):
+    def _on_regeneration_finished(self, old_path, new_path, thumbnail_path):
         self.image_regenerated.emit(old_path, new_path)
         for group in self.task_groups.values():
             thumbnail = group.find_thumbnail_by_path(old_path)
             if thumbnail:
                 thumbnail.set_regenerating_state(False)
+                
                 new_pixmap = MediaThumbnail.get_thumbnail_for_media(new_path)
+
                 thumbnail.update_media(new_path, new_pixmap)
                 logger.log(f"Updated thumbnail for {old_path} with new image {new_path}", level=LogLevel.INFO)
                 
                 if old_path != new_path:
                     try:
+                        # Also remove the old thumbnail if it exists
+                        old_thumb_base, _ = os.path.splitext(old_path)
+                        old_thumb_path = f"{old_thumb_base}_thumb.jpg"
+                        if os.path.exists(old_thumb_path):
+                            os.remove(old_thumb_path)
+
                         if os.path.exists(old_path):
                             os.remove(old_path)
                             logger.log(f"Deleted old image file: {old_path}", level=LogLevel.INFO)

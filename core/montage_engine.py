@@ -43,6 +43,13 @@ class MontageEngine:
         base_w, base_h = 1920, 1080
         up_w, up_h = int(base_w * up_factor), int(base_h * up_factor)
 
+        # Effects & Watermark Settings
+        overlay_effect_path = settings.get('overlay_effect_path')
+        watermark_path = settings.get('watermark_path')
+        watermark_size = settings.get('watermark_size', 20)  # % від ширини
+        watermark_position = settings.get('watermark_position', 8)  # індекс позиції
+
+
         # 2. МАТЕМАТИКА ЧАСУ (Аудіо - головне)
         VIDEO_EXTS = ['.mp4', '.mkv', '.mov', '.avi', '.webm']
         total_video_time = 0.0
@@ -217,12 +224,88 @@ class MontageEngine:
             subs = f"{final_v}subtitles='{ass_clean}'[v_out]"
             filter_parts.append(subs)
             output_v_stream = "[v_out]"
+            final_v = output_v_stream # Update final_v for next steps
+
+        # 6. OVERLAY EFFECT
+        # To avoid index confusion, let's restructure input additions.
+        # Current inputs: [img/video 0] ... [img/video N-1]
+        
+        # We need to add effect and watermark inputs *before* we finalize the command generation, 
+        # but the logic above already constructs the command heavily relying on indices.
+        
+        # Let's add extra inputs here and track their indices relative to what we have so far.
+        current_input_count = len(visual_files)
+        
+        if overlay_effect_path and os.path.exists(overlay_effect_path):
+            logger.log(f"{prefix}[FFmpeg] Adding overlay effect: {os.path.basename(overlay_effect_path)}", level=LogLevel.INFO)
+            inputs.extend(["-stream_loop", "-1", "-i", overlay_effect_path.replace("\\", "/")])
+            effect_index = current_input_count
+            current_input_count += 1
+            
+            
+            eff_v = f"[v_eff_scaled]"
+            # Force yuva420p to ensure alpha channel is preserved/respected if present
+            # Застосовуємо effect_speed для зміни швидкості відтворення ефекту
+            scale_eff = f"[{effect_index}:v]format=yuva420p,scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080{eff_v}"
+            filter_parts.append(scale_eff)
+            
+            v_overlaid = f"[v_overlaid]"
+            # Use 'overlay' filter. shortest=1 ensures it stops when the main video stops (though we use -shortest on output too)
+            overlay_cmd = f"{final_v}{eff_v}overlay=0:0:shortest=1{v_overlaid}"
+            filter_parts.append(overlay_cmd)
+            final_v = v_overlaid
+
+        # 7. WATERMARK
+        if watermark_path and os.path.exists(watermark_path):
+            logger.log(f"{prefix}[FFmpeg] Adding watermark: {os.path.basename(watermark_path)}", level=LogLevel.INFO)
+            inputs.extend(["-i", watermark_path.replace("\\", "/")])
+            wm_index = current_input_count
+            current_input_count += 1
+            
+            
+            wm_v = f"[v_wm]"
+            # Обчислюємо розмір вотермарки: watermark_size відсотків від 1920px
+            wm_width = int(1920 * (float(watermark_size) / 100.0))
+            logger.log(f"{prefix}[FFmpeg] Watermark size: {watermark_size}% = {wm_width}px", level=LogLevel.INFO)
+            scale_wm = f"[{wm_index}:v]scale={wm_width}:-1{wm_v}"
+            filter_parts.append(scale_wm)
+            
+            v_wm_out = f"[v_wm_out]"
+            
+            # Position mapping:
+            # 0: top-left, 1: top-center, 2: top-right
+            # 3: center-left, 4: center, 5: center-right
+            # 6: bottom-left, 7: bottom-center, 8: bottom-right
+            padding = 30
+            position_map = {
+                0: f"{padding}:{padding}",  # top-left
+                1: f"(main_w-overlay_w)/2:{padding}",  # top-center
+                2: f"main_w-overlay_w-{padding}:{padding}",  # top-right
+                3: f"{padding}:(main_h-overlay_h)/2",  # center-left
+                4: f"(main_w-overlay_w)/2:(main_h-overlay_h)/2",  # center
+                5: f"main_w-overlay_w-{padding}:(main_h-overlay_h)/2",  # center-right
+                6: f"{padding}:main_h-overlay_h-{padding}",  # bottom-left
+                7: f"(main_w-overlay_w)/2:main_h-overlay_h-{padding}",  # bottom-center
+                8: f"main_w-overlay_w-{padding}:main_h-overlay_h-{padding}"  # bottom-right
+            }
+            
+            overlay_position = position_map.get(watermark_position, position_map[8])
+            overlay_wm = f"{final_v}{wm_v}overlay={overlay_position}{v_wm_out}"
+            filter_parts.append(overlay_wm)
+            final_v = v_wm_out
+
+        output_v_stream = final_v
+        
+        # Audio is next input
+        audio_input_index = current_input_count
+
 
         full_graph = ";".join(filter_parts)
         
         # --- AUDIO INPUTS AND FILTERS ---
         inputs.append("-i"); inputs.append(audio_path.replace("\\", "/"))
-        voiceover_input_index = num_files
+        voiceover_input_index = audio_input_index # Use the tracked index
+
 
         audio_filter_chains = []
         final_audio_map = f"[{voiceover_input_index}:a]"
@@ -233,6 +316,7 @@ class MontageEngine:
             inputs.extend(["-stream_loop", "-1", "-i", background_music_path.replace("\\", "/")])
             
             bg_music_input_index = voiceover_input_index + 1
+
             
             vol_multiplier = (background_music_volume or 100) / 100.0
             
@@ -326,7 +410,7 @@ class MontageEngine:
                         log_line = (
                             f"time={time_str} | "
                             f"fps={fps} | "
-                            f"bitrate={bitrate} | "
+                            f"bit={bitrate} | "
                             f"progress={progress:.2f}%"
                         )
                         log_progress(log_line)

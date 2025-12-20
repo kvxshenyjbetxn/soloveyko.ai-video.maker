@@ -2,7 +2,20 @@ import sys
 import os
 import requests
 import traceback
+import platform
 from datetime import datetime
+
+# Це виправить помилку 'NoneType object has no attribute write'
+class NullWriter:
+    def write(self, text):
+        pass
+    def flush(self):
+        pass
+
+if sys.stdout is None:
+    sys.stdout = NullWriter()
+if sys.stderr is None:
+    sys.stderr = NullWriter()
 
 # Suppress FFmpeg logs from Qt Multimedia by default
 # For debugging, you can comment this line out or set the variable to "qt.multimedia.*=true"
@@ -96,18 +109,37 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 
 def main():
+    # --- Initialize Windows COM for Qt dialogs ---
+    com_initialized = False
+    if platform.system() == "Windows":
+        try:
+            import pythoncom
+            pythoncom.CoInitialize()
+            com_initialized = True
+        except ImportError:
+            # pythoncom not available, continue anyway
+            pass
+    
     # --- Set up global exception handler ---
     sys.excepthook = handle_exception
     
     # Try to enable faulthandler if available to catch segfaults
     try:
         import faulthandler
-        faulthandler.enable(file=open("crash_faulthandler.log", "w"), all_threads=True)
+        log_dir = "logs"
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_file = os.path.join(log_dir, f"crash_faulthandler_{timestamp}.log")
+        faulthandler.enable(file=open(log_file, "w"), all_threads=True)
     except:
         pass
 
     from utils.logger import logger, LogLevel
     logger.log("Application starting...", level=LogLevel.INFO)
+    
+    # Clean up old logs on startup
+    logger.cleanup_old_logs(max_days=7)
 
     app = QApplication(sys.argv)
     app.setStyle("fusion")
@@ -150,7 +182,17 @@ def main():
         main_window = MainWindow(app, subscription_info=subscription_info, api_key=api_key, server_url=AUTH_SERVER_URL)
         main_window.apply_current_theme()
         main_window.show()
-        sys.exit(app.exec())
+        exit_code = app.exec()
+        
+        # --- Uninitialize Windows COM after Qt event loop ends ---
+        if com_initialized:
+            try:
+                import pythoncom
+                pythoncom.CoUninitialize()
+            except:
+                pass
+        
+        sys.exit(exit_code)
 
 if __name__ == '__main__':
     main()

@@ -8,11 +8,15 @@ import traceback
 import threading
 import shutil
 import collections
-from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Qt, Slot, QMutex
+from concurrent.futures import ThreadPoolExecutor
+from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Slot, QMutex, Qt
+from PySide6.QtGui import QPixmap
 
 from utils.logger import logger, LogLevel
-from utils.settings import settings_manager
+from utils.logger import logger, LogLevel
+from utils.settings import settings_manager, template_manager
 from utils.translator import translator
+import copy
 from core.statistics_manager import statistics_manager
 from api.openrouter import OpenRouterAPI
 from api.pollinations import PollinationsAPI
@@ -30,9 +34,10 @@ from core.montage_engine import MontageEngine
 class WorkerSignals(QObject):
     finished = Signal(str, object)  # task_id, result
     error = Signal(str, str)        # task_id, error_message
-    status_changed = Signal(str, str, str) # task_id, image_path, prompt
+    status_changed = Signal(str, str, str, str) # task_id, image_path, prompt, thumbnail_path
     progress_log = Signal(str, str)  # task_id, log_message (for card-only logs)
     video_generated = Signal(str, str) # old_image_path, new_video_path
+    video_progress = Signal(str) # task_id
 
 class BaseWorker(QRunnable):
     def __init__(self, task_id, config):
@@ -60,7 +65,8 @@ class BaseWorker(QRunnable):
 
 class TranslationWorker(BaseWorker):
     def do_work(self):
-        api = OpenRouterAPI()
+        api_key = self.config.get('openrouter_api_key')
+        api = OpenRouterAPI(api_key=api_key)
         lang_config = self.config['lang_config']
         model = lang_config.get('model', 'unknown')
         temp = lang_config.get('temperature', 0.7)
@@ -84,7 +90,8 @@ class TranslationWorker(BaseWorker):
 
 class ImagePromptWorker(BaseWorker):
     def do_work(self):
-        api = OpenRouterAPI()
+        api_key = self.config.get('openrouter_api_key')
+        api = OpenRouterAPI(api_key=api_key)
         img_prompt_settings = self.config['img_prompt_settings']
         model = img_prompt_settings.get('model', 'unknown')
         temp = img_prompt_settings.get('temperature', 0.7)
@@ -119,7 +126,8 @@ class VoiceoverWorker(BaseWorker):
         logger.log(f"[{self.task_id}] [{tts_provider}] Starting voiceover generation", level=LogLevel.INFO)
 
         if tts_provider == 'VoiceMaker':
-            api = VoicemakerAPI()
+            api_key = self.config.get('voicemaker_api_key')
+            api = VoicemakerAPI(api_key=api_key)
             voice_id = lang_config.get('voicemaker_voice_id')
             language_code = self.config['voicemaker_lang_code']
             audio_content, status = api.generate_audio(text, voice_id, language_code, temp_dir=dir_path)
@@ -129,7 +137,8 @@ class VoiceoverWorker(BaseWorker):
                 raise Exception(f"VoiceMaker generation failed: {status}")
 
         elif tts_provider == 'GeminiTTS':
-            api = GeminiTTSAPI()
+            api_key = self.config.get('gemini_tts_api_key')
+            api = GeminiTTSAPI(api_key=api_key)
             task_id, status = api.create_task(text, lang_config.get('gemini_voice', 'Puck'), lang_config.get('gemini_tone', ''))
             if status != 'connected' or not task_id:
                 raise Exception("Failed to create GeminiTTS task.")
@@ -150,7 +159,8 @@ class VoiceoverWorker(BaseWorker):
             raise Exception("Timeout waiting for GeminiTTS result.")
 
         else: # ElevenLabs
-            api = ElevenLabsAPI()
+            api_key = self.config.get('elevenlabs_api_key')
+            api = ElevenLabsAPI(api_key=api_key)
             
             # Retry logic for task creation
             task_id = None
@@ -225,7 +235,8 @@ class CustomStageWorker(BaseWorker):
     def do_work(self):
         stage_name = self.config['stage_name']
         
-        api = OpenRouterAPI()
+        api_key = self.config.get('openrouter_api_key')
+        api = OpenRouterAPI(api_key=api_key)
         
         prompt = self.config['prompt']
         text = self.config['text']
@@ -260,19 +271,18 @@ class CustomStageWorker(BaseWorker):
             raise Exception("Empty or invalid response from API.")
 
 
-# Global lock for image API throttling
-image_api_lock = threading.Lock()
-last_image_request_time = 0
-
 class ImageGenerationWorker(BaseWorker):
     def do_work(self):
-        global last_image_request_time
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import as_completed
         
+        executor = self.config.get('executor')
+        if not executor:
+            raise Exception("Executor not provided to ImageGenerationWorker")
+
         prompts_text = self.config['prompts_text']
         prompts = re.findall(r"^\d+\.\s*(.*)", prompts_text, re.MULTILINE)
         if not prompts:
-            logger.log(f"[{self.task_id}] Не знайдено нумерованих промптів. Спроба розбору по рядках.", level=LogLevel.INFO)
+            logger.log(f"[{self.task_id}] No numbered prompts found. Parsing by lines.", level=LogLevel.INFO)
             prompts = [line.strip() for line in prompts_text.split('\n') if line.strip()]
 
         if not prompts:
@@ -282,55 +292,25 @@ class ImageGenerationWorker(BaseWorker):
         images_dir = os.path.join(self.config['dir_path'], "images")
         os.makedirs(images_dir, exist_ok=True)
         
-        googler_semaphore = self.config.get('googler_semaphore')
-
         if provider == 'googler':
             file_extension = 'jpg'
+            api_key = self.config.get('api_key')
+            shared_api = GooglerAPI(api_key=api_key)
             api_kwargs = self.config['api_kwargs']
-            # This is now the pool size for this specific task, not the global limit
-            max_threads = self.config.get('max_threads', 1)
         else: # pollinations
             file_extension = 'png'
-            api_kwargs = {}
-            max_threads = 1  # Pollinations doesn't support parallel generation
+            shared_api = PollinationsAPI()
+            api_kwargs = self.config['api_kwargs'] # Pass settings to generate_image
         
         service_name = provider.capitalize()
-        # Initialize results list to maintain order
         generated_paths = [None] * len(prompts)
         
         def generate_single_image(index, prompt):
             """Generate a single image and return its data"""
-            global last_image_request_time
-            
-            # --- THREAD-SAFE API INSTANTIATION ---
-            # Create a new API instance for each thread to prevent race conditions
-            # and potential heap corruption from shared non-thread-safe objects (like requests sessions).
-            if provider == 'googler':
-                thread_local_api = GooglerAPI()
-            else:
-                thread_local_api = PollinationsAPI()
-            # --- END THREAD-SAFE ---
-
-            is_googler = provider == 'googler' and googler_semaphore is not None
-            
             try:
-                if is_googler:
-                    googler_semaphore.acquire()
-
-                # Global throttling to ensure requests are spaced out across ALL tasks
-                with image_api_lock:
-                    current_time = time.time()
-                    elapsed = current_time - last_image_request_time
-                    delay_needed = 0.5 
-                    
-                    if elapsed < delay_needed:
-                        time.sleep(delay_needed - elapsed)
-                    
-                    last_image_request_time = time.time()
-
                 logger.log(f"[{self.task_id}] [{service_name}] Generating image {index + 1}/{len(prompts)}", level=LogLevel.INFO)
+                image_data = shared_api.generate_image(prompt, **api_kwargs)
 
-                image_data = thread_local_api.generate_image(prompt, **api_kwargs)
                 if not image_data:
                     logger.log(f"[{self.task_id}] [{service_name}] Failed to generate image {index + 1}/{len(prompts)} (no data)", level=LogLevel.WARNING)
                     return None
@@ -339,45 +319,72 @@ class ImageGenerationWorker(BaseWorker):
             except Exception as e:
                 logger.log(f"[{self.task_id}] [{service_name}] Error generating image {index + 1}: {e}", level=LogLevel.ERROR)
                 return None
-            finally:
-                if is_googler:
-                    googler_semaphore.release()
         
-        # Generate and save images in parallel
-        with ThreadPoolExecutor(max_workers=max_threads) as executor:
-            future_to_index = {executor.submit(generate_single_image, i, prompt): i for i, prompt in enumerate(prompts)}
+        max_workers = self.config.get('max_threads', 8)
+        prompts_iterator = iter(enumerate(prompts))
+        futures = {}
+        
+        # Track if there are more prompts to submit
+        prompts_exhausted = False
+
+        # Maintain ~max_workers active tasks at all times
+        # Submit and process in a continuous loop
+        while True:
+            # Check if any tasks completed (non-blocking check)
+            if futures:
+                from concurrent.futures import wait, FIRST_COMPLETED
+                done_set, _ = wait(futures.keys(), timeout=0, return_when=FIRST_COMPLETED)
+                
+                # Process any completed futures immediately
+                for done_future in done_set:
+                    index = futures.pop(done_future)
+                    result = done_future.result()
+
+                    if result:
+                        index_from_result, image_data, prompt_from_result = result
+                        
+                        image_path = os.path.join(images_dir, f"{index_from_result + 1}.{file_extension}")
+                        data_to_write = image_data
+
+                        if provider == 'googler' and isinstance(image_data, str):
+                            try:
+                                data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
+                            except Exception as e:
+                                logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index_from_result + 1}: {e}", level=LogLevel.ERROR)
+                            else:
+                                try:
+                                    time.sleep(0.2)
+                                    with open(image_path, 'wb') as f:
+                                        f.write(data_to_write)
+                                    
+                                    logger.log(f"[{self.task_id}] [{service_name}] Image {index_from_result + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
+                                    generated_paths[index_from_result] = image_path
+                                    
+                                    thumbnail_path = image_path
+                                    time.sleep(0.1)
+                                    self.signals.status_changed.emit(self.task_id, image_path, prompt_from_result, thumbnail_path)
+                                except IOError as e:
+                                    logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index_from_result + 1} to {image_path}: {e}", level=LogLevel.ERROR)
             
-            for future in as_completed(future_to_index):
-                result = future.result()
-                if result:
-                    index, image_data, prompt = result
-                    
-                    # Save the image as soon as it's downloaded
-                    image_path = os.path.join(images_dir, f"{index + 1}.{file_extension}")
-                    data_to_write = image_data
+            # Submit new tasks if we have slots available and prompts remaining
+            if len(futures) < max_workers and not prompts_exhausted:
+                try:
+                    i, prompt = next(prompts_iterator)
+                    future = executor.submit(generate_single_image, i, prompt)
+                    futures[future] = i
+                    time.sleep(0.5)  # Keep the delay for API and CPU safety
+                except StopIteration:
+                    prompts_exhausted = True  # No more prompts to submit
+            
+            # Exit condition: all prompts submitted and all futures completed
+            if prompts_exhausted and not futures:
+                break
+            
+            # Small delay to avoid busy-waiting if no work to do
+            if len(futures) >= max_workers or (prompts_exhausted and futures):
+                time.sleep(0.1)
 
-                    if provider == 'googler' and isinstance(image_data, str):
-                        try:
-                            data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
-                        except Exception as e:
-                            logger.log(f"[{self.task_id}] [{service_name}] Error decoding base64 for image {index + 1}: {e}", level=LogLevel.ERROR)
-                            continue # Skip saving this image
-                    
-                    try:
-                        with open(image_path, 'wb') as f:
-                            f.write(data_to_write)
-                        
-                        logger.log(f"[{self.task_id}] [{service_name}] Image {index + 1}/{len(prompts)} saved", level=LogLevel.SUCCESS)
-                        generated_paths[index] = image_path
-                        # Emit signal for gallery update as soon as one image is ready
-                        self.signals.status_changed.emit(self.task_id, image_path, prompt)
-                        
-                        # Throttle slightly to prevent flooding the UI thread if many images finish instantly
-                        time.sleep(0.05)
-                    except IOError as e:
-                        logger.log(f"[{self.task_id}] [{service_name}] Error saving image {index + 1} to {image_path}: {e}", level=LogLevel.ERROR)
 
-        # Filter out any None values from failed downloads
         final_paths = [path for path in generated_paths if path is not None]
 
         if len(final_paths) == 0 and len(prompts) > 0:
@@ -421,6 +428,7 @@ class VideoGenerationWorker(BaseWorker):
                             f.write(data_to_write)
                         
                         self.signals.video_generated.emit(image_path, video_path)
+                        self.signals.video_progress.emit(self.task_id)
                         
                         try:
                             os.remove(image_path)
@@ -487,7 +495,7 @@ class MontageWorker(BaseWorker):
 
 class TaskState:
     """Holds the state and data for a single language within a single job."""
-    def __init__(self, job, lang_id, lang_data, base_save_path):
+    def __init__(self, job, lang_id, lang_data, base_save_path, settings):
         self.job_id = job['id']
         self.lang_id = lang_id
         self.task_id = f"{self.job_id}_{self.lang_id}"
@@ -497,6 +505,7 @@ class TaskState:
         self.stages = lang_data['stages']
         self.original_text = job['text']
         self.lang_data = lang_data
+        self.settings = settings
 
         self.dir_path = self._get_save_path(base_save_path, self.job_name, self.lang_name)
 
@@ -510,15 +519,20 @@ class TaskState:
         self.status = {stage: 'pending' for stage in self.stages}
         self.translation_review_dialog_shown = False
         self.prompt_regeneration_attempts = 0
+        self.image_gen_status = 'pending'
         
         # Metadata counters
         self.images_generated_count = 0
         self.images_total_count = 0
+        self.videos_generated_count = 0
+        self.videos_total_count = 0
 
     def _get_save_path(self, base_path, job_name, lang_name):
         if not base_path: return None
         try:
-            safe_job_name = ("".join(c for c in job_name if c.isalnum() or c in (' ', '_')).rstrip())[:100]
+            safe_job_name = job_name.replace('…', '').replace('...', '')
+            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', safe_job_name).strip()
+            safe_job_name = safe_job_name[:100]
             safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
             dir_path = os.path.join(base_path, safe_job_name, safe_lang_name)
             os.makedirs(dir_path, exist_ok=True)
@@ -536,7 +550,7 @@ else:
 class TaskProcessor(QObject):
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
-    image_generated = Signal(str, str, str, str) # job_name, lang_name, image_path, prompt
+    image_generated = Signal(str, str, str, str, str) # job_name, lang_name, image_path, prompt, thumbnail_path
     video_generated = Signal(str, str) # old_image_path, new_video_path
     task_progress_log = Signal(str, str) # job_id, log_message (for card-only logs)
     image_review_required = Signal()
@@ -578,6 +592,7 @@ class TaskProcessor(QObject):
         googler_settings = self.settings.get("googler", {})
         max_googler = googler_settings.get("max_threads", 1)
         self.googler_semaphore = QSemaphore(max_googler)
+        self.image_gen_executor = ThreadPoolExecutor(max_workers=max_googler)
         
         max_video = googler_settings.get("max_video_threads", 1)
         self.video_semaphore = QSemaphore(max_video)
@@ -645,13 +660,58 @@ class TaskProcessor(QObject):
         self.montage_tasks_ids = set()
         self.failed_montage_tasks_ids = set()
         
-        base_save_path = self.settings.get('results_path')
-        all_languages_config = self.settings.get("languages_config", {})
-
         # 1. Initialize all task states
         for job in jobs:
             for lang_id, lang_data in job['languages'].items():
-                state = TaskState(job, lang_id, lang_data, base_save_path)
+                
+                # --- Prepare Settings for this Task (Global + Template) ---
+                current_settings = copy.deepcopy(self.settings.settings)
+                template_name = lang_data.get('template_name')
+                
+                if template_name:
+                    template_data = template_manager.load_template(template_name)
+                    if template_data:
+                        for key, value in template_data.items():
+                            if isinstance(value, dict) and key in current_settings and isinstance(current_settings[key], dict):
+                                current_settings[key].update(value)
+                            else:
+                                current_settings[key] = value
+                        logger.log(f"[{job['name']}_{lang_id}] Applied template: {template_name}", level=LogLevel.INFO)
+                    else:
+                        logger.log(f"[{job['name']}_{lang_id}] Template '{template_name}' not found. Using global settings.", level=LogLevel.WARNING)
+
+                # Get the save path FROM THE MERGED SETTINGS for this specific task
+                base_save_path = current_settings.get('results_path')
+
+                # Ensure overlay and watermark settings are passed to the task state's settings
+                lang_config = current_settings.get("languages_config", {}).get(lang_id, {})
+                # Note: 'lang_data' passed to TaskState comes from the job definition, which might not have the full updated config 
+                # if the job was created before settings/templates were saved. 
+                # However, we have 'current_settings' which DOES have the merged template data.
+                # The 'lang_data' variable in this scope comes from 'job['languages']', which depends on how the queue was populated.
+                # To be safe, let's inject the paths into the 'current_settings' that will be stored in TaskState.
+                
+                # Check directly in the merged settings if they exist at the top level (from template merge)
+                # Or extracting them from the specific language config if that's how they are stored.
+                # Based on LanguagesTab, they are stored in 'languages_config[lang_id]'.
+                # But when applying a template, 'languages_config' might be updated? 
+                # Actually, templates usually store the whole 'languages_config' or specific keys.
+                # Let's trust that 'current_settings' has the correct 'languages_config' after the template merge.
+                
+                merged_lang_config = current_settings.get("languages_config", {}).get(lang_id, {})
+                if merged_lang_config:
+                     current_settings['montage']['overlay_effect_path'] = merged_lang_config.get('overlay_effect_path')
+                     current_settings['montage']['watermark_path'] = merged_lang_config.get('watermark_path')
+                     current_settings['montage']['watermark_size'] = merged_lang_config.get('watermark_size', 20)
+                     current_settings['montage']['watermark_position'] = merged_lang_config.get('watermark_position', 8)
+
+                state = TaskState(job, lang_id, lang_data, base_save_path, current_settings)
+
+                if not state.dir_path:
+                    logger.log(f"[{state.task_id}] CRITICAL: Directory path could not be created. Aborting this task.", level=LogLevel.ERROR)
+                    for stage_key in state.stages:
+                        self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'error')
+                    continue # Skip to the next language or job
                 
                 # --- NEW LOGIC: Pre-process user-provided files ---
                 user_files = state.lang_data.get('user_provided_files', {})
@@ -692,7 +752,6 @@ class TaskProcessor(QObject):
 
                     except Exception as e:
                         logger.log(f"[{state.task_id}] Error processing user-provided files: {e}", level=LogLevel.ERROR)
-                        # Continue processing, the stages will just fail if the files weren't copied
                 
                 self.task_states[state.task_id] = state
                 if 'stage_subtitles' in state.stages:
@@ -706,9 +765,12 @@ class TaskProcessor(QObject):
             self.subtitle_barrier_passed = True
             logger.log("No subtitle tasks in queue. Barrier passed immediately.", level=LogLevel.INFO)
 
+        # Get the global language config once, as it's not part of templates
+        all_languages_config = self.settings.get("languages_config", {})
+
         for task_id, state in self.task_states.items():
             if 'stage_translation' in state.stages:
-                self._start_translation(task_id, all_languages_config)
+                self._start_translation(task_id)
                 time.sleep(0.5)
             else:
                 state.text_for_processing = state.original_text
@@ -748,18 +810,31 @@ class TaskProcessor(QObject):
         worker.signals.error.connect(on_error_slot)
         worker.signals.status_changed.connect(self._on_worker_status_changed) # For gallery updates
         worker.signals.video_generated.connect(self.video_generated) # For gallery updates
+        worker.signals.video_progress.connect(self._on_video_progress)
         self.threadpool.start(worker)
 
-    @Slot(str, str, str)
-    def _on_worker_status_changed(self, task_id, image_path, prompt):
+    @Slot(str, str, str, str)
+    def _on_worker_status_changed(self, task_id, image_path, prompt, thumbnail_path):
         """Used for intermediate status updates, like an image being generated."""
         state = self.task_states.get(task_id)
         if state:
-            self.image_generated.emit(state.job_name, state.lang_name, image_path, prompt)
+            self.image_generated.emit(state.job_name, state.lang_name, image_path, prompt, thumbnail_path)
             
             # Update image counter and emit metadata
             state.images_generated_count += 1
             metadata_text = f"{state.images_generated_count}/{state.images_total_count}"
+            self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
+
+    @Slot(str)
+    def _on_video_progress(self, task_id):
+        state = self.task_states.get(task_id)
+        if state:
+            state.videos_generated_count += 1
+            
+            img_meta = f"{state.images_generated_count}/{state.images_total_count}"
+            vid_meta = f"{state.videos_generated_count}/{state.videos_total_count}"
+            metadata_text = f"img: {img_meta}, vid: {vid_meta}"
+            
             self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
 
     def _set_stage_status(self, task_id, stage_key, status, error_message=None):
@@ -786,11 +861,13 @@ class TaskProcessor(QObject):
 
     # --- Pipeline Logic ---
 
-    def _start_translation(self, task_id, all_languages_config):
+    def _start_translation(self, task_id):
         state = self.task_states[task_id]
+        lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
         config = {
             'text': state.original_text,
-            'lang_config': all_languages_config.get(state.lang_id, {})
+            'lang_config': lang_config,
+            'openrouter_api_key': state.settings.get('openrouter_api_key')
         }
         self._start_worker(TranslationWorker, task_id, 'stage_translation', config, self._on_translation_finished, self._on_translation_error)
 
@@ -808,7 +885,7 @@ class TaskProcessor(QObject):
         metadata_text = f"{char_count} {translator.translate('characters_count')}"
         self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_translation', metadata_text)
 
-        is_review_enabled = self.settings.get('translation_review_enabled', False)
+        is_review_enabled = state.settings.get('translation_review_enabled', False)
 
         if is_review_enabled:
             self._set_stage_status(task_id, 'stage_translation', 'success')
@@ -844,9 +921,7 @@ class TaskProcessor(QObject):
 
     def regenerate_translation(self, task_id):
         logger.log(f"[{task_id}] User requested translation regeneration.", level=LogLevel.INFO)
-        # We need the global languages config to restart the worker
-        all_languages_config = self.settings.get("languages_config", {})
-        self._start_translation(task_id, all_languages_config)
+        self._start_translation(task_id)
 
     def _on_text_ready(self, task_id):
         state = self.task_states[task_id]
@@ -889,7 +964,7 @@ class TaskProcessor(QObject):
         # Fallback to defaults if not specified or empty
         # If model is not in custom stage settings, use the image prompt model or default
         if not model:
-            model = self.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
+            model = state.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
         if not max_tokens:
              max_tokens = 4096
         if temperature is None:
@@ -902,7 +977,8 @@ class TaskProcessor(QObject):
             'prompt': prompt,
             'model': model,
             'max_tokens': int(max_tokens),
-            'temperature': float(temperature)
+            'temperature': float(temperature),
+            'openrouter_api_key': state.settings.get('openrouter_api_key')
         }
         
         # We use a unique stage key for each custom stage to track status if we wanted to block, 
@@ -994,9 +1070,111 @@ class TaskProcessor(QObject):
         state = self.task_states[task_id]
         config = {
             'text': state.text_for_processing,
-            'img_prompt_settings': self.settings.get("image_prompt_settings", {})
+            'img_prompt_settings': state.settings.get("image_prompt_settings", {}),
+            'openrouter_api_key': state.settings.get('openrouter_api_key')
         }
         self._start_worker(ImagePromptWorker, task_id, 'stage_img_prompts', config, self._on_img_prompts_finished, self._on_img_prompts_error)
+
+# ... (lines omitted)
+
+    def _start_voiceover(self, task_id):
+        state = self.task_states[task_id]
+        lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
+        config = {
+            'text': state.text_for_processing,
+            'dir_path': state.dir_path,
+            'lang_config': lang_config,
+            'voicemaker_lang_code': self._get_voicemaker_language_code(lang_config.get('voicemaker_voice_id')),
+            'job_name': state.job_name,
+            'lang_name': state.lang_name
+        }
+        self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
+        
+# ... (lines omitted)
+
+
+
+# ... (lines omitted)
+
+
+
+# ... (lines omitted)
+
+
+
+# ... (lines omitted)
+
+    def _launch_montage_worker(self, task_id):
+        try:
+            state = self.task_states[task_id]
+            
+            # Set status to 'processing'
+            self.stage_status_changed.emit(state.job_id, state.lang_id, 'stage_montage', 'processing')
+            state.status['stage_montage'] = 'processing'
+            
+            final_image_paths = state.image_paths
+                
+            if not final_image_paths:
+                self._on_montage_error(task_id, "No visual files found for montage.")
+                return
+            
+            safe_task_name = ("".join(c for c in state.job_name if c.isalnum() or c in (' ', '_')).strip())[:100]
+            safe_lang_name = "".join(c for c in state.lang_name if c.isalnum() or c in (' ', '_')).strip()
+            output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
+            output_path = os.path.join(state.dir_path, output_filename)
+            
+            montage_settings = state.settings.get("montage", {}).copy()
+            if getattr(state, 'fallback_to_quick_show', False):
+                logger.log(f"[{task_id}] Fallback to 'Quick Show' mode for montage.", level=LogLevel.WARNING)
+                montage_settings['special_processing_mode'] = "Quick show"
+                
+            config = {
+                'visual_files': final_image_paths, 'audio_path': state.audio_path,
+                'output_path': output_path, 'ass_path': state.subtitle_path,
+                'settings': montage_settings
+            }
+
+            # --- Add Background Music Config ---
+            background_music_path = None
+            background_music_volume = 100
+            
+            # Use state.settings for languages config too
+            all_languages_config = state.settings.get("languages_config", {})
+            lang_config = all_languages_config.get(state.lang_id, {})
+            
+            user_files = state.lang_data.get('user_provided_files', {})
+
+            if 'background_music' in user_files:
+                # User override from TextTab
+                override_path = user_files['background_music']
+                if os.path.exists(override_path):
+                    background_music_path = override_path
+                    # Use volume from user_files if available, otherwise default to 100
+                    background_music_volume = user_files.get("background_music_volume", 100)
+                    logger.log(f"[{task_id}] Using user-provided background music: {os.path.basename(background_music_path)} with volume {background_music_volume}%", level=LogLevel.INFO)
+                else:
+                    logger.log(f"[{task_id}] User-provided background music not found at {override_path}. Skipping.", level=LogLevel.WARNING)
+
+            if not background_music_path:
+                # Fallback to default from language settings
+                default_path = lang_config.get("background_music_path")
+                if default_path and os.path.exists(default_path):
+                    background_music_path = default_path
+                    background_music_volume = lang_config.get("background_music_volume", 100)
+                    logger.log(f"[{task_id}] Using default background music: {os.path.basename(background_music_path)}", level=LogLevel.INFO)
+            
+            if background_music_path:
+                config['background_music_path'] = background_music_path
+                config['background_music_volume'] = background_music_volume
+            # --- End Background Music Config ---
+
+            worker = MontageWorker(task_id, config)
+            worker.signals.finished.connect(self._on_montage_finished)
+            worker.signals.error.connect(self._on_montage_error)
+            worker.signals.progress_log.connect(self._on_montage_progress)
+            self.threadpool.start(worker)
+        except Exception as e:
+            self._on_montage_error(task_id, f"Failed to start montage worker: {e}")
 
     @Slot(str, object)
     def _on_img_prompts_finished(self, task_id, prompts_text):
@@ -1007,8 +1185,8 @@ class TaskProcessor(QObject):
         prompts_count = len(prompts)
 
         # Check if prompt count control is enabled
-        is_check_enabled = self.settings.get('image_prompt_count_check_enabled', False)
-        desired_count = self.settings.get('image_prompt_count', 50)
+        is_check_enabled = state.settings.get('prompt_count_control_enabled', False)
+        desired_count = state.settings.get('prompt_count', 50)
 
         if is_check_enabled and prompts_count != desired_count:
             if state.prompt_regeneration_attempts < 3:
@@ -1048,11 +1226,16 @@ class TaskProcessor(QObject):
 
     def _start_voiceover(self, task_id):
         state = self.task_states[task_id]
-        lang_config = self.settings.get("languages_config", {}).get(state.lang_id, {})
+        task_settings = state.settings
+        lang_config = task_settings.get("languages_config", {}).get(state.lang_id, {})
         config = {
             'text': state.text_for_processing,
             'dir_path': state.dir_path,
             'lang_config': lang_config,
+            'lang_config': lang_config,
+            'voicemaker_api_key': task_settings.get('voicemaker_api_key'),
+            'elevenlabs_api_key': task_settings.get('elevenlabs_api_key'),
+            'gemini_tts_api_key': task_settings.get('gemini_tts_api_key'),
             'voicemaker_lang_code': self._get_voicemaker_language_code(lang_config.get('voicemaker_voice_id')),
             'job_name': state.job_name,
             'lang_name': state.lang_name
@@ -1126,7 +1309,7 @@ class TaskProcessor(QObject):
     def _launch_subtitle_worker(self, task_id):
         try:
             state = self.task_states[task_id]
-            sub_settings = self.settings.get('subtitles', {})
+            sub_settings = state.settings.get('subtitles', {})
             whisper_type = sub_settings.get('whisper_type', 'amd')
             model_name = sub_settings.get('whisper_model', 'base.bin')
             
@@ -1186,7 +1369,18 @@ class TaskProcessor(QObject):
 
     def _start_image_generation(self, task_id):
         state = self.task_states[task_id]
-        googler_settings = self.settings.get('googler', {})
+
+        # If user has provided their own images, the worker will see this and skip generation.
+        if 'stage_images' in state.lang_data.get('pre_found_files', {}):
+            config = {} # Dummy config, not used by skipping logic in worker
+            self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
+            return
+
+        if not state.image_prompts:
+            self._on_img_generation_error(task_id, "Cannot generate images because image prompts text is missing.")
+            return
+            
+        googler_settings = state.settings.get('googler', {})
         
         # Calculate total prompts count for metadata
         prompts = re.findall(r"^\d+\.\s*(.*)", state.image_prompts, re.MULTILINE)
@@ -1199,17 +1393,28 @@ class TaskProcessor(QObject):
         metadata_text = f"0/{state.images_total_count}"
         self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
         
-        config = {
-            'prompts_text': state.image_prompts,
-            'dir_path': state.dir_path,
-            'provider': self.settings.get('image_generation_provider', 'pollinations'),
-            'max_threads': googler_settings.get('max_threads', 1),
-            'api_kwargs': {
+
+        provider = state.settings.get('image_generation_provider', 'pollinations')
+        
+        api_kwargs = {}
+        if provider == 'googler':
+             api_kwargs = {
                 'aspect_ratio': googler_settings.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE'),
                 'seed': googler_settings.get('seed'),
                 'negative_prompt': googler_settings.get('negative_prompt')
-            },
-            'googler_semaphore': self.googler_semaphore
+            }
+        elif provider == 'pollinations':
+            pollinations_settings = state.settings.get('pollinations', {})
+            api_kwargs = pollinations_settings
+
+        config = {
+            'prompts_text': state.image_prompts,
+            'dir_path': state.dir_path,
+            'provider': provider,
+            'api_kwargs': api_kwargs,
+            'api_key': googler_settings.get('api_key'), # Only used for Googler
+            'executor': self.image_gen_executor,
+            'max_threads': googler_settings.get("max_threads", 8)
         }
         self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
 
@@ -1224,10 +1429,11 @@ class TaskProcessor(QObject):
         elif len(generated_paths) > 0:
             status = 'warning'
 
-        self.task_states[task_id].image_paths = generated_paths
-        # Don't set final status yet if we need to animate
+        state = self.task_states[task_id]
+        state.image_paths = generated_paths
+        state.image_gen_status = status # Store the status
         
-        montage_settings = self.settings.get("montage", {})
+        montage_settings = state.settings.get("montage", {})
         special_mode = montage_settings.get("special_processing_mode", "Disabled")
         
         if special_mode == "Video at the beginning" and generated_paths:
@@ -1246,8 +1452,8 @@ class TaskProcessor(QObject):
 
     def _start_video_generation(self, task_id):
         state = self.task_states[task_id]
-        montage_settings = self.settings.get("montage", {})
-        googler_settings = self.settings.get("googler", {})
+        montage_settings = state.settings.get("montage", {})
+        googler_settings = state.settings.get("googler", {})
 
         video_count = montage_settings.get("special_processing_video_count", 1)
         check_sequence = montage_settings.get("special_processing_check_sequence", False)
@@ -1290,7 +1496,15 @@ class TaskProcessor(QObject):
             return
             
         state.video_animation_count = len(paths_to_animate)
+        state.videos_total_count = len(paths_to_animate)
+        state.videos_generated_count = 0
         logger.log(f"[{task_id}] Starting video generation for {len(paths_to_animate)} images.", level=LogLevel.INFO)
+
+        # Update metadata to show video progress
+        img_meta = f"{state.images_generated_count}/{state.images_total_count}"
+        vid_meta = f"0/{state.videos_total_count}"
+        metadata_text = f"IMG: {img_meta}, VID: {vid_meta}"
+        self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
 
         config = {
             'image_paths': paths_to_animate,
@@ -1307,16 +1521,40 @@ class TaskProcessor(QObject):
         
         logger.log(f"[{task_id}] Video generation finished. Generated {len(generated_videos)} videos.", level=LogLevel.SUCCESS)
 
+        video_count_animated = getattr(state, 'video_animation_count', 0)
+        
+        # Determine video generation status
+        video_gen_status = 'success'
+        if len(generated_videos) < video_count_animated:
+            video_gen_status = 'warning'
+        if len(generated_videos) == 0 and video_count_animated > 0:
+            # Instead of marking as error, we'll fallback to Quick Show
+            # So we use 'warning' status to allow montage to proceed
+            video_gen_status = 'warning'
+
         if generated_videos:
-            video_count_animated = getattr(state, 'video_animation_count', 0)
             remaining_images = state.image_paths[video_count_animated:]
             state.image_paths = generated_videos + remaining_images
-        else:
-            if getattr(state, 'video_animation_count', 0) > 0:
-                logger.log(f"[{task_id}] Video animation produced 0 videos. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
-                state.fallback_to_quick_show = True
+        elif video_count_animated > 0: # This means video gen failed for all
+            logger.log(f"[{task_id}] Video animation produced 0 videos. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
+            state.fallback_to_quick_show = True
 
-        self._set_stage_status(task_id, 'stage_images', 'success')
+        # Combine statuses: warning is the "lowest" priority besides success
+        final_status = state.image_gen_status
+        if final_status == 'success' and video_gen_status != 'success':
+            final_status = video_gen_status # 'warning' only now (not 'error')
+        elif final_status == 'warning' and video_gen_status == 'warning':
+            final_status = 'warning'
+        # If image_gen_status was 'error', it remains 'error' (real failure in image generation)
+
+        error_message = None
+        if final_status != 'success':
+            if state.fallback_to_quick_show:
+                error_message = "Video animation failed, using Quick Show mode."
+            else:
+                error_message = "Failed to generate all images and/or videos."
+            
+        self._set_stage_status(task_id, 'stage_images', final_status, error_message)
         
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
@@ -1324,8 +1562,20 @@ class TaskProcessor(QObject):
     @Slot(str, str)
     def _on_video_generation_error(self, task_id, error):
         logger.log(f"[{task_id}] Video generation failed: {error}", level=LogLevel.ERROR)
-        self._set_stage_status(task_id, 'stage_images', 'error', error)
-        # We don't stop the whole process, just log the error and proceed with the images we have
+        
+        # Instead of blocking montage, fallback to Quick Show
+        state = self.task_states[task_id]
+        state.fallback_to_quick_show = True
+        logger.log(f"[{task_id}] Video generation error. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
+        
+        # Use warning status instead of error to allow montage to proceed
+        # Only set to error if image generation also failed
+        final_status = state.image_gen_status if state.image_gen_status == 'error' else 'warning'
+        error_message = "Video animation failed, using Quick Show mode."
+        
+        self._set_stage_status(task_id, 'stage_images', final_status, error_message)
+        
+        # Continue to montage
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
 
@@ -1354,7 +1604,8 @@ class TaskProcessor(QObject):
                     self._set_stage_status(task_id, 'stage_montage', 'error', "No images available")
                     continue
                 
-                if self.settings.get('image_review_enabled'):
+                # Use per-task settings for review
+                if state.settings.get('image_review_enabled'):
                     if task_id not in self.tasks_awaiting_review:
                         logger.log(f"[{task_id}] Ready for image review.", level=LogLevel.INFO)
                         self.tasks_awaiting_review.append(task_id)
@@ -1364,16 +1615,35 @@ class TaskProcessor(QObject):
         self._check_if_all_are_ready_or_failed()
 
     def _check_if_all_are_ready_or_failed(self):
-        if not self.settings.get('image_review_enabled'):
+        # Determine if we should trigger the review dialog.
+        # Logic: All tasks scheduled for montage must be either:
+        # 1. Waiting for review
+        # 2. Failed
+        # 3. Already started/processed (meaning they skipped review due to settings)
+        
+        total_montage_tasks = len(self.montage_tasks_ids)
+        if total_montage_tasks == 0:
             return
 
-        ready_count = len(self.tasks_awaiting_review)
-        failed_count = len(self.failed_montage_tasks_ids)
-        total_montage_tasks = len(self.montage_tasks_ids)
+        ready_or_processed_count = 0
+        
+        for task_id in self.montage_tasks_ids:
+            state = self.task_states.get(task_id)
+            if not state: continue # Should not happen
 
-        if ready_count > 0 and (ready_count + failed_count >= total_montage_tasks):
-            logger.log(f"All {total_montage_tasks} tasks accounted for. Requesting review for {ready_count} tasks.", level=LogLevel.SUCCESS)
-            self.image_review_required.emit()
+            is_waiting = task_id in self.tasks_awaiting_review
+            is_failed = task_id in self.failed_montage_tasks_ids
+            # If stage_montage is NOT pending, it means it started processing (skipped review)
+            is_processed = state.status.get('stage_montage') != 'pending'
+            
+            if is_waiting or is_failed or is_processed:
+                ready_or_processed_count += 1
+
+        if ready_or_processed_count >= total_montage_tasks:
+            # Only trigger if there are actually tasks waiting for review
+            if len(self.tasks_awaiting_review) > 0:
+                logger.log(f"All {total_montage_tasks} tasks accounted for. Requesting review for {len(self.tasks_awaiting_review)} tasks.", level=LogLevel.SUCCESS)
+                self.image_review_required.emit()
 
     @Slot()
     def resume_all_montages(self):
@@ -1417,7 +1687,8 @@ class TaskProcessor(QObject):
             output_filename = f"{safe_task_name}_{safe_lang_name}.mp4"
             output_path = os.path.join(state.dir_path, output_filename)
             
-            montage_settings = self.settings.get("montage", {}).copy()
+            # Use state.settings (which includes template overrides) instead of global self.settings
+            montage_settings = state.settings.get("montage", {}).copy()
             if getattr(state, 'fallback_to_quick_show', False):
                 logger.log(f"[{task_id}] Fallback to 'Quick Show' mode for montage.", level=LogLevel.WARNING)
                 montage_settings['special_processing_mode'] = "Quick show"
@@ -1432,7 +1703,7 @@ class TaskProcessor(QObject):
             background_music_path = None
             background_music_volume = 100
             
-            all_languages_config = self.settings.get("languages_config", {})
+            all_languages_config = state.settings.get("languages_config", {})
             lang_config = all_languages_config.get(state.lang_id, {})
             
             user_files = state.lang_data.get('user_provided_files', {})
@@ -1534,5 +1805,30 @@ class TaskProcessor(QObject):
             elapsed_str = time.strftime('%H:%M:%S', time.gmtime(elapsed_ms / 1000))
             logger.log(f"Queue processing finished in {elapsed_str}.", level=LogLevel.SUCCESS)
             self.processing_finished.emit(elapsed_str)
+    
+    def cleanup(self):
+        """
+        Правильно завершує всі потоки та ресурси при закритті програми.
+        Це виправляє помилку Windows fatal exception: code 0x8001010d
+        """
+        logger.log("Cleaning up TaskProcessor resources...", level=LogLevel.INFO)
+        
+        # Завершуємо ThreadPoolExecutor для генерації зображень
+        if hasattr(self, 'image_gen_executor'):
+            try:
+                # shutdown(wait=False) дозволяє завершити потоки без очікування їх виконання
+                # cancel_futures=True скасовує всі pending завдання
+                self.image_gen_executor.shutdown(wait=False, cancel_futures=True)
+                logger.log("Image generation executor shut down successfully.", level=LogLevel.INFO)
+            except Exception as e:
+                logger.log(f"Error shutting down image_gen_executor: {e}", level=LogLevel.WARNING)
+        
+        # Завершуємо QThreadPool
+        if hasattr(self, 'threadpool'):
+            try:
+                self.threadpool.clear()
+                logger.log("Thread pool cleared successfully.", level=LogLevel.INFO)
+            except Exception as e:
+                logger.log(f"Error clearing thread pool: {e}", level=LogLevel.WARNING)
 
 # endregion

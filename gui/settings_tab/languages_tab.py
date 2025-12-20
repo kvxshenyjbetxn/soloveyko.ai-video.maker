@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import copy
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLineEdit,
     QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox,
@@ -8,7 +9,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from utils.translator import translator
-from utils.settings import settings_manager
+from utils.settings import settings_manager, template_manager
 from api.elevenlabs import ElevenLabsAPI
 from gui.widgets.prompt_editor_dialog import PromptEditorDialog
 
@@ -27,9 +28,11 @@ class LanguagesTab(QWidget):
         self.voicemaker_voices = []
         self.gemini_voices = []
         self.current_lang_id = None
+        self._is_loading_lang_settings = False
         self.load_voicemaker_voices()
         self.load_gemini_voices()
         self.init_ui()
+        self.load_templates_combo() # Load templates for the new combobox
         self.load_languages()
         self.retranslate_ui()
         if self.lang_list_widget.count() > 0:
@@ -131,6 +134,12 @@ class LanguagesTab(QWidget):
         self.temperature_spinbox.valueChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.temperature_label, self.temperature_spinbox)
 
+        # Default Template
+        self.default_template_label = QLabel()
+        self.default_template_combo = QComboBox()
+        self.default_template_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.default_template_label, self.default_template_combo)
+
         # TTS Provider
         self.tts_provider_label = QLabel("TTS Provider:")
         self.tts_provider_combo = QComboBox()
@@ -199,6 +208,77 @@ class LanguagesTab(QWidget):
         volume_layout.addWidget(self.bg_music_volume_value_label)
         
         settings_layout.addRow(self.bg_music_volume_label, volume_layout)
+        
+        # --- Effects & Watermark Settings (New) ---
+        effects_group = QGroupBox(translator.translate("overlay_effects_group", "Overlay Effects"))
+        effects_layout = QFormLayout(effects_group)
+        
+        # Effect Selection
+        self.overlay_effect_label = QLabel(translator.translate("effect_selection_title", "Overlay Effect:"))
+        self.overlay_effect_path_input = QLineEdit()
+        self.overlay_effect_path_input.setReadOnly(True)
+        # self.overlay_effect_path_input.textChanged.connect(self.save_current_language_settings) # ReadOnly, so no direct text change
+        
+        effect_buttons_layout = QHBoxLayout()
+        self.select_effect_button = QPushButton(translator.translate("select_effect_button", "Select Effect"))
+        self.select_effect_button.clicked.connect(self.open_effect_dialog)
+        self.clear_effect_button = QPushButton(translator.translate("clear_button", "Clear"))
+        self.clear_effect_button.clicked.connect(self.clear_overlay_effect)
+        
+        effect_buttons_layout.addWidget(self.overlay_effect_path_input)
+        effect_buttons_layout.addWidget(self.select_effect_button)
+        effect_buttons_layout.addWidget(self.clear_effect_button)
+        
+        effects_layout.addRow(self.overlay_effect_label, effect_buttons_layout)
+
+        # Watermark Selection
+        self.watermark_label = QLabel(translator.translate("watermark_group", "Watermark:"))
+        self.watermark_path_input = QLineEdit()
+        self.watermark_path_input.setReadOnly(True)
+        
+        watermark_buttons_layout = QHBoxLayout()
+        self.select_watermark_button = QPushButton(translator.translate("select_watermark_button", "Select Watermark"))
+        self.select_watermark_button.clicked.connect(self.select_watermark)
+        self.clear_watermark_button = QPushButton(translator.translate("clear_watermark_button", "Clear"))
+        self.clear_watermark_button.clicked.connect(self.clear_watermark)
+        
+        watermark_buttons_layout.addWidget(self.watermark_path_input)
+        watermark_buttons_layout.addWidget(self.select_watermark_button)
+        watermark_buttons_layout.addWidget(self.clear_watermark_button)
+        
+        effects_layout.addRow(self.watermark_label, watermark_buttons_layout)
+        
+        # Watermark Size
+        self.watermark_size_label = QLabel()
+        watermark_size_layout = QHBoxLayout()
+        self.watermark_size_slider = QSlider(Qt.Orientation.Horizontal)
+        self.watermark_size_slider.setRange(5, 50)  # 5% до 50% від ширини
+        self.watermark_size_slider.setValue(20)  # Дефолт 20%
+        self.watermark_size_slider.valueChanged.connect(self.on_watermark_size_changed)
+        self.watermark_size_value_label = QLabel("20%")
+        watermark_size_layout.addWidget(self.watermark_size_slider)
+        watermark_size_layout.addWidget(self.watermark_size_value_label)
+        effects_layout.addRow(self.watermark_size_label, watermark_size_layout)
+        
+        # Watermark Position
+        self.watermark_position_label = QLabel()
+        self.watermark_position_combo = QComboBox()
+        # Додати 9 позицій
+        self.watermark_position_combo.addItem(translator.translate("position_top_left", "Top Left"), 0)
+        self.watermark_position_combo.addItem(translator.translate("position_top_center", "Top Center"), 1)
+        self.watermark_position_combo.addItem(translator.translate("position_top_right", "Top Right"), 2)
+        self.watermark_position_combo.addItem(translator.translate("position_center_left", "Center Left"), 3)
+        self.watermark_position_combo.addItem(translator.translate("position_center", "Center"), 4)
+        self.watermark_position_combo.addItem(translator.translate("position_center_right", "Center Right"), 5)
+        self.watermark_position_combo.addItem(translator.translate("position_bottom_left", "Bottom Left"), 6)
+        self.watermark_position_combo.addItem(translator.translate("position_bottom_center", "Bottom Center"), 7)
+        self.watermark_position_combo.addItem(translator.translate("position_bottom_right", "Bottom Right"), 8)
+        self.watermark_position_combo.setCurrentIndex(8)  # Дефолт: Bottom Right
+        self.watermark_position_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        effects_layout.addRow(self.watermark_position_label, self.watermark_position_combo)
+        
+        settings_layout.addRow(effects_group)
+
 
         right_layout.addWidget(self.prompt_label)
         right_layout.addLayout(prompt_layout)
@@ -232,6 +312,41 @@ class LanguagesTab(QWidget):
         self.bg_music_volume_value_label.setText(str(value))
         self.save_current_language_settings()
 
+    def on_watermark_size_changed(self, value):
+        self.watermark_size_value_label.setText(f"{value}%")
+        self.save_current_language_settings()
+    
+
+    def open_effect_dialog(self):
+        from gui.widgets.effect_selection_dialog import EffectSelectionDialog
+        current_path = self.overlay_effect_path_input.text()
+        dialog = EffectSelectionDialog(self, initial_selection=current_path)
+        if dialog.exec():
+            selected = dialog.get_selected_effect()
+            if selected:
+                self.overlay_effect_path_input.setText(selected)
+                self.save_current_language_settings()
+
+    def clear_overlay_effect(self):
+        self.overlay_effect_path_input.clear()
+        self.save_current_language_settings()
+
+    def select_watermark(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            translator.translate("select_watermark_button", "Select Watermark"),
+            "",
+            translator.translate("watermark_filter", "Image Files (*.png)")
+        )
+        if file_path:
+            self.watermark_path_input.setText(file_path)
+            self.save_current_language_settings()
+
+    def clear_watermark(self):
+        self.watermark_path_input.clear()
+        self.save_current_language_settings()
+
+
     def load_languages(self):
         self.lang_list_widget.clear()
         languages = self.settings.get("languages_config", {})
@@ -241,11 +356,23 @@ class LanguagesTab(QWidget):
         self.load_models()
 
     def load_models(self):
+        self.model_combo.blockSignals(True)
         self.model_combo.clear()
         models = self.settings.get("openrouter_models", [])
         self.model_combo.addItems(models)
+        self.model_combo.blockSignals(False)
+
+    def load_templates_combo(self):
+        self.default_template_combo.blockSignals(True)
+        self.default_template_combo.clear()
+        self.default_template_combo.addItem(translator.translate("none_template", "None"), None)
+        templates = template_manager.get_templates()
+        for template_name in templates:
+            self.default_template_combo.addItem(template_name, template_name)
+        self.default_template_combo.blockSignals(False)
 
     def load_elevenlabs_templates(self):
+        self.elevenlabs_template_combo.blockSignals(True)
         self.elevenlabs_template_combo.clear()
         self.elevenlabs_templates, status = self.elevenlabs_api.get_templates()
         if status == "connected" and self.elevenlabs_templates:
@@ -253,8 +380,14 @@ class LanguagesTab(QWidget):
                 self.elevenlabs_template_combo.addItem(template["name"], template["uuid"])
         else:
             self.elevenlabs_template_combo.addItem(translator.translate("no_templates_found"), "")
+        self.elevenlabs_template_combo.blockSignals(False)
+        
+        # Restore selection for current language if applicable
+        if self.lang_list_widget.currentItem():
+            self.on_language_selected(self.lang_list_widget.currentItem(), None)
 
     def populate_voicemaker_voices(self, lang_id):
+        self.voicemaker_voice_combo.blockSignals(True)
         self.voicemaker_voice_combo.clear()
         
         # Try to find voices matching the lang_id (e.g. "en-US", "uk-UA")
@@ -292,6 +425,7 @@ class LanguagesTab(QWidget):
         # Add other voices
         for text, data in other_voices:
             self.voicemaker_voice_combo.addItem(text, data)
+        self.voicemaker_voice_combo.blockSignals(False)
 
     def on_tts_provider_changed(self, index):
         provider = self.tts_provider_combo.currentText()
@@ -324,89 +458,135 @@ class LanguagesTab(QWidget):
             self.gemini_tone_input.setVisible(True)
 
     def on_language_selected(self, current, previous):
-        if not current:
-            self.right_panel.setVisible(False)
-            self.current_lang_id = None
-            return
-
-        lang_text = current.text()
+        self._is_loading_lang_settings = True
         try:
-            self.current_lang_id = lang_text.split('[')[-1][:-1]
-        except IndexError:
-            self.current_lang_id = None
-            self.right_panel.setVisible(False)
-            return
+            if not current:
+                self.right_panel.setVisible(False)
+                self.current_lang_id = None
+                return
 
-        languages = self.settings.get("languages_config", {})
-        config = languages.get(self.current_lang_id)
+            lang_text = current.text()
+            try:
+                self.current_lang_id = lang_text.split('[')[-1][:-1]
+            except IndexError:
+                self.current_lang_id = None
+                self.right_panel.setVisible(False)
+                return
 
-        if not config:
-            self.right_panel.setVisible(False)
-            return
+            languages = self.settings.get("languages_config", {})
+            config = languages.get(self.current_lang_id)
 
-        self.prompt_edit.blockSignals(True)
-        self.model_combo.blockSignals(True)
-        self.tokens_spinbox.blockSignals(True)
-        self.temperature_spinbox.blockSignals(True)
-        self.elevenlabs_template_combo.blockSignals(True)
-        self.tts_provider_combo.blockSignals(True)
-        self.voicemaker_voice_combo.blockSignals(True)
-        self.gemini_voice_combo.blockSignals(True)
-        self.gemini_tone_input.blockSignals(True)
-        self.bg_music_path_input.blockSignals(True)
-        self.bg_music_volume_slider.blockSignals(True)
+            if not config:
+                self.right_panel.setVisible(False)
+                return
 
-        self.prompt_edit.setPlainText(config.get("prompt", ""))
-        
-        current_model = config.get("model", "")
-        index = self.model_combo.findText(current_model)
-        self.model_combo.setCurrentIndex(index if index >= 0 else 0)
+            self.prompt_edit.blockSignals(True)
+            self.model_combo.blockSignals(True)
+            self.tokens_spinbox.blockSignals(True)
+            self.temperature_spinbox.blockSignals(True)
+            self.elevenlabs_template_combo.blockSignals(True)
+            self.tts_provider_combo.blockSignals(True)
+            self.voicemaker_voice_combo.blockSignals(True)
+            self.gemini_voice_combo.blockSignals(True)
+            self.gemini_tone_input.blockSignals(True)
+            self.bg_music_path_input.blockSignals(True)
+            self.bg_music_volume_slider.blockSignals(True)
+            self.gemini_voice_combo.blockSignals(True)
+            self.gemini_tone_input.blockSignals(True)
+            self.bg_music_path_input.blockSignals(True)
+            self.bg_music_path_input.blockSignals(True)
+            self.bg_music_volume_slider.blockSignals(True)
+            self.watermark_size_slider.blockSignals(True)
+            self.watermark_position_combo.blockSignals(True)
+            self.default_template_combo.blockSignals(True)
+            # No block signals needed for inputs that are read-only and updated by buttons,
+            # but usually good practice if we were using textChanged on them.
 
-        # TTS Provider
-        tts_provider = config.get("tts_provider", "ElevenLabs")
-        provider_index = self.tts_provider_combo.findText(tts_provider)
-        self.tts_provider_combo.setCurrentIndex(provider_index if provider_index >= 0 else 0)
 
-        # ElevenLabs Template
-        current_template_uuid = config.get("elevenlabs_template_uuid", "")
-        template_index = self.elevenlabs_template_combo.findData(current_template_uuid)
-        self.elevenlabs_template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
+            self.prompt_edit.setPlainText(config.get("prompt", ""))
+            
+            current_model = config.get("model", "")
+            index = self.model_combo.findText(current_model)
+            self.model_combo.setCurrentIndex(index if index >= 0 else 0)
 
-        # VoiceMaker Voice
-        self.populate_voicemaker_voices(self.current_lang_id)
-        current_voicemaker_voice = config.get("voicemaker_voice_id", "")
-        voice_index = self.voicemaker_voice_combo.findData(current_voicemaker_voice)
-        self.voicemaker_voice_combo.setCurrentIndex(voice_index if voice_index >= 0 else 0)
+            # TTS Provider
+            tts_provider = config.get("tts_provider", "ElevenLabs")
+            provider_index = self.tts_provider_combo.findText(tts_provider)
+            self.tts_provider_combo.setCurrentIndex(provider_index if provider_index >= 0 else 0)
 
-        # GeminiTTS Settings
-        current_gemini_voice = config.get("gemini_voice", "Puck")
-        gemini_index = self.gemini_voice_combo.findData(current_gemini_voice)
-        self.gemini_voice_combo.setCurrentIndex(gemini_index if gemini_index >= 0 else 0)
-        self.gemini_tone_input.setText(config.get("gemini_tone", ""))
+            # ElevenLabs Template
+            current_template_uuid = config.get("elevenlabs_template_uuid", "")
+            template_index = self.elevenlabs_template_combo.findData(current_template_uuid)
+            self.elevenlabs_template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
 
-        self.bg_music_path_input.setText(config.get("background_music_path", ""))
-        volume = config.get("background_music_volume", 100)
-        self.bg_music_volume_slider.setValue(volume)
-        self.bg_music_volume_value_label.setText(str(volume))
+            # VoiceMaker Voice
+            self.populate_voicemaker_voices(self.current_lang_id)
+            current_voicemaker_voice = config.get("voicemaker_voice_id", "")
+            voice_index = self.voicemaker_voice_combo.findData(current_voicemaker_voice)
+            self.voicemaker_voice_combo.setCurrentIndex(voice_index if voice_index >= 0 else 0)
 
-        self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
-        self.temperature_spinbox.setValue(config.get("temperature", 0.7))
+            # GeminiTTS Settings
+            current_gemini_voice = config.get("gemini_voice", "Puck")
+            gemini_index = self.gemini_voice_combo.findData(current_gemini_voice)
+            self.gemini_voice_combo.setCurrentIndex(gemini_index if gemini_index >= 0 else 0)
+            self.gemini_tone_input.setText(config.get("gemini_tone", ""))
 
-        self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
+            self.bg_music_path_input.setText(config.get("background_music_path", ""))
+            volume = config.get("background_music_volume", 100)
+            self.bg_music_volume_slider.setValue(volume)
+            self.bg_music_volume_value_label.setText(str(volume))
 
-        self.prompt_edit.blockSignals(False)
-        self.model_combo.blockSignals(False)
-        self.tokens_spinbox.blockSignals(False)
-        self.temperature_spinbox.blockSignals(False)
-        self.elevenlabs_template_combo.blockSignals(False)
-        self.tts_provider_combo.blockSignals(False)
-        self.voicemaker_voice_combo.blockSignals(False)
-        self.gemini_voice_combo.blockSignals(False)
-        self.gemini_tone_input.blockSignals(False)
-        self.bg_music_path_input.blockSignals(False)
-        self.bg_music_volume_slider.blockSignals(False)
-        
-        self.right_panel.setVisible(True)
+            self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
+            self.temperature_spinbox.setValue(config.get("temperature", 0.7))
+
+            # Default Template
+            current_default_template = config.get("default_template")
+            if current_default_template is None:
+                self.default_template_combo.setCurrentIndex(0)
+            else:
+                index = self.default_template_combo.findData(current_default_template)
+                self.default_template_combo.setCurrentIndex(index if index >= 0 else 0)
+
+            # Effects & Watermark
+            self.overlay_effect_path_input.setText(config.get("overlay_effect_path", ""))
+            self.watermark_path_input.setText(config.get("watermark_path", ""))
+            
+            # Watermark Size
+            watermark_size = config.get("watermark_size", 20)
+            self.watermark_size_slider.setValue(watermark_size)
+            self.watermark_size_value_label.setText(f"{watermark_size}%")
+            
+            # Watermark Position
+            watermark_position = config.get("watermark_position", 8)
+            # Знайти індекс за data
+            pos_index = self.watermark_position_combo.findData(watermark_position)
+            if pos_index >= 0:
+                self.watermark_position_combo.setCurrentIndex(pos_index)
+            else:
+                self.watermark_position_combo.setCurrentIndex(8)  # Дефолт
+
+
+            self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
+
+            self.prompt_edit.blockSignals(False)
+            self.model_combo.blockSignals(False)
+            self.tokens_spinbox.blockSignals(False)
+            self.temperature_spinbox.blockSignals(False)
+            self.elevenlabs_template_combo.blockSignals(False)
+            self.tts_provider_combo.blockSignals(False)
+            self.voicemaker_voice_combo.blockSignals(False)
+            self.gemini_voice_combo.blockSignals(False)
+            self.gemini_tone_input.blockSignals(False)
+            self.bg_music_path_input.blockSignals(False)
+            self.bg_music_volume_slider.blockSignals(False)
+            self.default_template_combo.blockSignals(False)
+            self.watermark_size_slider.blockSignals(False)
+            self.watermark_position_combo.blockSignals(False)
+
+            
+            self.right_panel.setVisible(True)
+        finally:
+            self._is_loading_lang_settings = False
 
     def add_language(self):
         display_name = self.lang_name_input.text().strip()
@@ -431,8 +611,14 @@ class LanguagesTab(QWidget):
             "gemini_voice": "Puck",
             "gemini_tone": "",
             "background_music_path": "",
-            "background_music_volume": 100
+            "background_music_volume": 100,
+            "default_template": "",
+            "overlay_effect_path": "",
+            "watermark_path": "",
+            "watermark_size": 20,
+            "watermark_position": 8
         }
+
         self.settings.set("languages_config", languages)
         
         self.lang_name_input.clear()
@@ -458,39 +644,39 @@ class LanguagesTab(QWidget):
             self.right_panel.setVisible(False)
 
     def save_current_language_settings(self):
+        if self._is_loading_lang_settings:
+            return
+            
         if not self.current_lang_id:
             return
 
-        languages = self.settings.get("languages_config", {})
-        if self.current_lang_id in languages:
-            languages[self.current_lang_id]["prompt"] = self.prompt_edit.toPlainText()
-            languages[self.current_lang_id]["model"] = self.model_combo.currentText()
-            languages[self.current_lang_id]["max_tokens"] = self.tokens_spinbox.value()
-            languages[self.current_lang_id]["temperature"] = self.temperature_spinbox.value()
-            
-            languages[self.current_lang_id]["tts_provider"] = self.tts_provider_combo.currentText()
-            
-            selected_template_index = self.elevenlabs_template_combo.currentIndex()
-            if selected_template_index >= 0:
-                template_uuid = self.elevenlabs_template_combo.itemData(selected_template_index)
-                languages[self.current_lang_id]["elevenlabs_template_uuid"] = template_uuid
-            
-            selected_voice_index = self.voicemaker_voice_combo.currentIndex()
-            if selected_voice_index >= 0:
-                voice_id = self.voicemaker_voice_combo.itemData(selected_voice_index)
-                languages[self.current_lang_id]["voicemaker_voice_id"] = voice_id
+        languages_config = self.settings.get("languages_config", {})
+        lang_settings = languages_config.get(self.current_lang_id)
 
-            selected_gemini_index = self.gemini_voice_combo.currentIndex()
-            if selected_gemini_index >= 0:
-                gemini_voice = self.gemini_voice_combo.itemData(selected_gemini_index)
-                languages[self.current_lang_id]["gemini_voice"] = gemini_voice
+        if not lang_settings:
+            return
 
-            languages[self.current_lang_id]["gemini_tone"] = self.gemini_tone_input.text()
-            
-            languages[self.current_lang_id]["background_music_path"] = self.bg_music_path_input.text()
-            languages[self.current_lang_id]["background_music_volume"] = self.bg_music_volume_slider.value()
+        # Update the dictionary in-place
+        lang_settings["prompt"] = self.prompt_edit.toPlainText()
+        lang_settings["model"] = self.model_combo.currentText()
+        lang_settings["max_tokens"] = self.tokens_spinbox.value()
+        lang_settings["temperature"] = self.temperature_spinbox.value()
+        lang_settings["tts_provider"] = self.tts_provider_combo.currentText()
+        lang_settings["elevenlabs_template_uuid"] = self.elevenlabs_template_combo.currentData()
+        lang_settings["voicemaker_voice_id"] = self.voicemaker_voice_combo.currentData()
+        lang_settings["gemini_voice"] = self.gemini_voice_combo.currentData()
+        lang_settings["gemini_tone"] = self.gemini_tone_input.text()
+        lang_settings["background_music_path"] = self.bg_music_path_input.text()
+        lang_settings["background_music_volume"] = self.bg_music_volume_slider.value()
+        lang_settings["default_template"] = self.default_template_combo.currentData()
+        lang_settings["overlay_effect_path"] = self.overlay_effect_path_input.text()
+        lang_settings["watermark_path"] = self.watermark_path_input.text()
+        lang_settings["watermark_size"] = self.watermark_size_slider.value()
+        lang_settings["watermark_position"] = self.watermark_position_combo.currentData()
 
-            self.settings.set("languages_config", languages)
+
+        # Explicitly save the entire settings file
+        self.settings.save_settings()
 
     def update_fields(self):
         # Store current selection
@@ -501,6 +687,7 @@ class LanguagesTab(QWidget):
         self.load_languages()
         self.load_models()
         self.load_elevenlabs_templates()
+        self.load_templates_combo()
 
         # Try to restore selection
         if current_lang_text:
@@ -533,9 +720,19 @@ class LanguagesTab(QWidget):
         self.tts_provider_label.setText(translator.translate("tts_provider_label"))
         self.voicemaker_voice_label.setText(translator.translate("voicemaker_voice_label"))
         self.gemini_voice_label.setText(translator.translate("gemini_voice_label"))
+        self.default_template_label.setText(translator.translate("default_template_label", "Default Template:"))
         self.temperature_label.setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
         self.bg_music_label.setText(translator.translate("background_music_label", "Background Music:"))
         self.browse_bg_music_button.setText(translator.translate("browse_button", "Browse..."))
         self.clear_bg_music_button.setText(translator.translate("clear_button", "Clear"))
         self.bg_music_volume_label.setText(translator.translate("music_volume_label", "Music Volume:"))
-
+        
+        self.overlay_effect_label.setText(translator.translate("effect_selection_title", "Overlay Effect:"))
+        self.select_effect_button.setText(translator.translate("select_effect_button", "Select Effect"))
+        self.clear_effect_button.setText(translator.translate("clear_button", "Clear"))
+        self.watermark_label.setText(translator.translate("watermark_group", "Watermark:"))
+        self.select_watermark_button.setText(translator.translate("select_watermark_button", "Select Watermark"))
+        self.clear_watermark_button.setText(translator.translate("clear_watermark_button", "Clear"))
+        
+        self.watermark_size_label.setText(translator.translate("watermark_size_label", "Watermark Size:"))
+        self.watermark_position_label.setText(translator.translate("watermark_position_label", "Watermark Position:"))

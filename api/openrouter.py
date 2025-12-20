@@ -4,6 +4,17 @@ from functools import wraps
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
 
+
+import threading
+
+# Use thread-local storage to keep sessions isolated per thread
+thread_local = threading.local()
+
+def get_session():
+    if not hasattr(thread_local, "session"):
+        thread_local.session = requests.Session()
+    return thread_local.session
+
 def retry(tries=3, delay=5, backoff=2):
     """
     A decorator for retrying a function or method if it fails.
@@ -38,7 +49,9 @@ class OpenRouterAPI:
         kwargs["headers"] = headers
         
         try:
-            response = requests.request(method, f"{self.base_url}/{endpoint}", **kwargs)
+            # Use thread-local session
+            session = get_session()
+            response = session.request(method, f"{self.base_url}/{endpoint}", **kwargs)
             if response.status_code == 200:
                 return response.json(), "connected"
             else:
@@ -107,7 +120,9 @@ class OpenRouterAPI:
         logger.log(f"Requesting chat completion from model: {model}", level=LogLevel.INFO)
         
         try:
-            response = requests.post(f"{self.base_url}/chat/completions", headers=headers, json=data)
+            # Use thread-local session
+            session = get_session()
+            response = session.post(f"{self.base_url}/chat/completions", headers=headers, json=data)
             response.raise_for_status() # Raises an HTTPError for bad responses (4xx or 5xx)
             logger.log(f"Chat completion from {model} successful.", level=LogLevel.SUCCESS)
             return response.json()
