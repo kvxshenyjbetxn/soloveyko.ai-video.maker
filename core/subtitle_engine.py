@@ -46,6 +46,13 @@ class SubtitleEngine:
             except ImportError:
                 raise ImportError("Library 'openai-whisper' not installed. Run: pip install openai-whisper")
 
+            # Check if model exists and log if it needs to be downloaded
+            cache_path = os.path.join(os.path.expanduser("~"), ".cache", "whisper")
+            model_file = os.path.join(cache_path, f"{self.model_path}.pt")
+            if not os.path.exists(model_file):
+                from utils.translator import translator
+                logger.log(translator.translate("whisper_model_download_info", "Whisper model '{model_name}' not found. Starting one-time download. This may take some time...").format(model_name=self.model_path), LogLevel.INFO)
+
             # Завантажуємо модель (тут self.model_path - це просто назва, наприклад 'base')
             model = whisper.load_model(self.model_path)
             

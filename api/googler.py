@@ -5,11 +5,22 @@ import os
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
 
+import threading
+
+
+# Use thread-local storage at module level to persist sessions across API instances
+thread_local_storage = threading.local()
+
 class GooglerAPI:
     def __init__(self, api_key=None):
         self.settings = settings_manager.get("googler", {})
         self.api_key = api_key or self.settings.get("api_key")
         self.base_url = "https://app.recrafter.fun/api/v2"
+
+    def _get_session(self):
+        if not hasattr(thread_local_storage, "session"):
+            thread_local_storage.session = requests.Session()
+        return thread_local_storage.session
 
     def _make_request(self, method, endpoint, **kwargs):
         if not self.api_key:
@@ -27,7 +38,8 @@ class GooglerAPI:
         
         try:
             url = f"{self.base_url}/{endpoint}"
-            response = requests.request(method, url, **kwargs)
+            session = self._get_session()
+            response = session.request(method, url, **kwargs)
             # No special 429 handling for now, just log it.
             if response.status_code not in [200, 201]:
                  logger.log(f"API request to {endpoint} failed with status {response.status_code}: {response.text}", level=LogLevel.ERROR)

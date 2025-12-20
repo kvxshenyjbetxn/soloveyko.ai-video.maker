@@ -31,7 +31,7 @@ class VoicemakerTab(QWidget):
         self.limit_input = QSpinBox()
         self.limit_input.setRange(100, 100000)
         self.limit_input.setSingleStep(100)
-        self.limit_input.setValue(3000) # Default
+        self.limit_input.setValue(2900) # Default
         self.limit_input.valueChanged.connect(self.save_char_limit)
         limit_layout.addWidget(self.limit_label)
         limit_layout.addWidget(self.limit_input)
@@ -79,7 +79,7 @@ class VoicemakerTab(QWidget):
         self.api_key_input.setText(api_key)
         self.api.api_key = api_key
         
-        limit = self.settings.get("voicemaker_char_limit", 3000)
+        limit = self.settings.get("voicemaker_char_limit", 2900)
         self.limit_input.setValue(int(limit))
 
         self.api_key_input.blockSignals(False)

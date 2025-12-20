@@ -35,8 +35,13 @@ class MontageTab(QWidget):
 
         self.codec_label = QLabel()
         self.codec_combo = QComboBox()
-        self.codec_combo.addItems(["libx264", "h264_nvenc", "h264_amf"])
-        self.codec_combo.currentTextChanged.connect(self.save_settings)
+        # Add codecs with (Label, Value) pairs
+        self.codec_combo.addItem("libx264 (CPU)", "libx264")
+        self.codec_combo.addItem("h264_nvenc (NVIDIA)", "h264_nvenc")
+        self.codec_combo.addItem("h264_amf (AMD)", "h264_amf")
+        self.codec_combo.addItem("h264_videotoolbox (Mac)", "h264_videotoolbox")
+        
+        self.codec_combo.currentIndexChanged.connect(self.save_settings)
         render_layout.addRow(self.codec_label, self.codec_combo)
 
         self.preset_label = QLabel()
@@ -191,7 +196,14 @@ class MontageTab(QWidget):
             if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox)):
                 widget.blockSignals(True)
 
-        self.codec_combo.setCurrentText(m_settings.get("codec", "libx264"))
+        codec = m_settings.get("codec", "libx264")
+        index = self.codec_combo.findData(codec)
+        if index != -1:
+            self.codec_combo.setCurrentIndex(index)
+        else:
+             # Fallback if the saved codec isn't in our list (e.g., config file manual edit)
+             self.codec_combo.setCurrentIndex(0)
+
         self.preset_combo.setCurrentText(m_settings.get("preset", "medium"))
         self.bitrate_spin.setValue(m_settings.get("bitrate_mbps", 15))
         self.upscale_spin.setValue(m_settings.get("upscale_factor", 3.0))
@@ -227,7 +239,7 @@ class MontageTab(QWidget):
 
     def save_settings(self, *args):
         m_settings = {
-            "codec": self.codec_combo.currentText(),
+            "codec": self.codec_combo.currentData(),
             "preset": self.preset_combo.currentText(),
             "bitrate_mbps": self.bitrate_spin.value(),
             "upscale_factor": self.upscale_spin.value(),

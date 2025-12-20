@@ -1,7 +1,10 @@
-
 import requests
+import threading
 from utils.settings import settings_manager
 from utils.logger import logger, LogLevel
+
+# Use thread-local storage at module level to persist sessions across API instances
+thread_local_storage = threading.local()
 
 class PollinationsAPI:
     def __init__(self):
@@ -18,15 +21,27 @@ class PollinationsAPI:
         self.nologo = self.settings.get("nologo", False)
         self.enhance = self.settings.get("enhance", False)
 
-    def generate_image(self, prompt):
+    def _get_session(self):
+        if not hasattr(thread_local_storage, "session"):
+            thread_local_storage.session = requests.Session()
+        return thread_local_storage.session
+
+    def generate_image(self, prompt, model=None, width=None, height=None, nologo=None, enhance=None):
         self.load_credentials() 
         
+        # Override with provided arguments if they exist
+        current_model = model if model is not None else self.model
+        current_width = width if width is not None else self.width
+        current_height = height if height is not None else self.height
+        current_nologo = nologo if nologo is not None else self.nologo
+        current_enhance = enhance if enhance is not None else self.enhance
+
         params = {
-            "model": self.model,
-            "width": self.width,
-            "height": self.height,
-            "nologo": self.nologo,
-            "enhance": self.enhance,
+            "model": current_model,
+            "width": current_width,
+            "height": current_height,
+            "nologo": current_nologo,
+            "enhance": current_enhance,
         }
         if self.token:
             params["token"] = self.token
@@ -36,9 +51,10 @@ class PollinationsAPI:
             request_url = f"{self.base_url}/prompt/{url_prompt}"
             
             # Using the custom logger here
-            logger.log(f"      - Generating image (Model: {self.model}, Size: {self.width}x{self.height}) for prompt: '{prompt}'", LogLevel.INFO)
+            logger.log(f"      - Generating image (Model: {current_model}, Size: {current_width}x{current_height}) for prompt: '{prompt}'", LogLevel.INFO)
             
-            response = requests.get(request_url, params=params)
+            session = self._get_session()
+            response = session.get(request_url, params=params)
             response.raise_for_status()
             return response.content
         except requests.exceptions.RequestException as e:

@@ -52,15 +52,27 @@ def compile_project():
     whisper_path = os.path.dirname(whisper.__file__)
     whisper_assets = os.path.join(whisper_path, 'assets')
     
+    import whisper
+    whisper_path = os.path.dirname(whisper.__file__)
+    whisper_assets = os.path.join(whisper_path, 'assets')
+    
     cmd = [
         "pyinstaller",
         "--noconfirm",
         "--onefile",
         "--windowed",
         "--icon=assets/icon.ico",
-        "--add-data", "assets;assets",
+        # Assets files manually listed (без efects папки)
+        "--add-data", "assets/ffmpeg.exe;assets",
+        "--add-data", "assets/ffprobe.exe;assets",
+        "--add-data", "assets/icon.ico;assets",
+        "--add-data", "assets/icon.png;assets",
+        "--add-data", "assets/icon.icns;assets",
         "--add-data", "assets/gemini_tts_voices.json;assets",
         "--add-data", "assets/voicemaker_voices.json;assets",
+        "--add-data", "assets/translations;assets/translations",
+        "--add-data", "assets/styles;assets/styles",
+        # efects папка НЕ додається!
         "--add-data", "gui/qt_material;gui/qt_material",
         "--add-data", f"{whisper_assets};whisper/assets",
         "--hidden-import", "whisper",

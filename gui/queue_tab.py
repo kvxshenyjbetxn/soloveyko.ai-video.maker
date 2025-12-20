@@ -77,16 +77,23 @@ class DeletableLanguageHeader(QWidget):
     """A widget for the language header, allowing deletion via context menu."""
     delete_requested = Signal()
 
-    def __init__(self, display_name, parent=None):
+    def __init__(self, display_name, template_name=None, parent=None):
         super().__init__(parent)
         self.display_name = display_name
 
         layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
         self.setLayout(layout)
 
         self.label = QLabel(f"<b>{self.display_name}</b>", self)
         layout.addWidget(self.label)
+
+        if template_name:
+            template_label = QLabel(f"<i>({template_name})</i>")
+            template_label.setStyleSheet("color: #999; font-size: 11px;")
+            layout.addWidget(template_label)
+
         layout.addStretch()
 
     def contextMenuEvent(self, event):
@@ -153,7 +160,8 @@ class TaskCard(QGroupBox):
         layout.addLayout(header_layout)
 
         for lang_id, lang_data in job['languages'].items():
-            lang_header = DeletableLanguageHeader(lang_data['display_name'], self)
+            template_name = lang_data.get("template_name")
+            lang_header = DeletableLanguageHeader(lang_data['display_name'], template_name, self)
             self.language_widgets[lang_id] = lang_header
             layout.addWidget(lang_header)
             
