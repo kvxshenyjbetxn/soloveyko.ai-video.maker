@@ -72,7 +72,8 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
     # Log to a file
     try:
-        with open("crash.log", "a") as f:
+        crash_log_path = os.path.join(settings_manager.base_path, "crash.log")
+        with open(crash_log_path, "a", encoding="utf-8") as f:
             f.write(log_message)
     except IOError as e:
         print(f"Could not write to crash.log: {e}")
@@ -126,12 +127,12 @@ def main():
     # Try to enable faulthandler if available to catch segfaults
     try:
         import faulthandler
-        log_dir = "logs"
+        log_dir = os.path.join(settings_manager.base_path, "logs")
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         log_file = os.path.join(log_dir, f"crash_faulthandler_{timestamp}.log")
-        faulthandler.enable(file=open(log_file, "w"), all_threads=True)
+        faulthandler.enable(file=open(log_file, "w", encoding="utf-8"), all_threads=True)
     except:
         pass
 

@@ -1,6 +1,7 @@
 import os
 import sys
 import shutil
+import platform
 from PySide6.QtWidgets import (
     QDialog, QHBoxLayout, QVBoxLayout, QListWidget, QPushButton, 
     QFileDialog, QLabel, QListWidgetItem, QMessageBox
@@ -9,6 +10,7 @@ from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtCore import QUrl, Qt
 from utils.translator import translator
+from utils.settings import settings_manager
 
 if getattr(sys, 'frozen', False):
     BASE_PATH = sys._MEIPASS
@@ -25,8 +27,12 @@ class EffectSelectionDialog(QDialog):
         self.selected_effect_path = None
         
         # Визначаємо шлях до папки efects
-        if getattr(sys, 'frozen', False):
-            # Коли скомпільовано: efects поруч з exe файлом
+        if platform.system() == "Darwin":
+            # На macOS використовуємо єдину папку в Application Support
+            base = settings_manager.base_path
+            self.assets_dir = os.path.join(base, "efects")
+        elif getattr(sys, 'frozen', False):
+            # Коли скомпільовано на Windows: efects поруч з exe файлом
             exe_dir = os.path.dirname(sys.executable)
             self.assets_dir = os.path.join(exe_dir, "efects")
         else:

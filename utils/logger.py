@@ -48,7 +48,7 @@ class _Logger(QObject):
     def reconfigure(self):
         with self.lock:
             if settings_manager.get('detailed_logging_enabled', False):
-                log_dir = "logs"
+                log_dir = os.path.join(settings_manager.base_path, "logs")
                 os.makedirs(log_dir, exist_ok=True)
                 timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                 self.log_file = os.path.join(log_dir, f"app_{timestamp}.log")
@@ -88,7 +88,7 @@ class _Logger(QObject):
         Deletes log files in the 'logs' directory that are older than max_days.
         Also rotates 'crash.log' if it's too old.
         """
-        log_dir = "logs"
+        log_dir = os.path.join(settings_manager.base_path, "logs")
         if not os.path.exists(log_dir):
             return
 
@@ -124,7 +124,7 @@ class _Logger(QObject):
         # or maybe we just leave it as the user asked for "folder logs". 
         # The prompt said "there are 2 types of logs", likely referring to `logs/` and `crash.log`.
         # I will check crash.log's mtime too.
-        crash_log_path = "crash.log"
+        crash_log_path = os.path.join(settings_manager.base_path, "crash.log")
         if os.path.exists(crash_log_path):
              try:
                 mod_time = datetime.datetime.fromtimestamp(os.path.getmtime(crash_log_path))
