@@ -2,8 +2,8 @@ import os
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton, QStackedWidget
 from PySide6.QtCore import Signal, QSize, Qt, QUrl, QEvent
 from PySide6.QtGui import QIcon, QPixmap, QImage
-# from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-# from PySide6.QtMultimediaWidgets import QVideoWidget
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtMultimediaWidgets import QVideoWidget
 import cv2
 
 from .clickable_label import ClickableLabel

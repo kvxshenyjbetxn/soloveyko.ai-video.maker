@@ -536,6 +536,8 @@ class TaskState:
         self.images_total_count = 0
         self.videos_generated_count = 0
         self.videos_total_count = 0
+        
+        self.fallback_to_quick_show = False
 
     def _get_save_path(self, base_path, job_name, lang_name):
         if not base_path: return None
