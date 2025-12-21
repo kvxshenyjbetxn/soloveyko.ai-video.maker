@@ -1,5 +1,7 @@
 {
     "app_title": "Комбайн",
+    "subscription_unlimited": "Срок действия: Навсегда ♾️",
+    "subscription_days_left": "Осталось дней: ",
     "text_processing_tab": "Перевод",
     "rewrite_tab": "Рерайт",
     "settings_tab": "Настройки",

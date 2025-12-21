@@ -45,8 +45,8 @@ class VoicemakerBalanceWorkerSignals(QObject):
 class GeminiTTSBalanceWorkerSignals(QObject):
     finished = Signal(object, bool)
 
-class ValidationWorkerSignals(QObject):
-    finished = Signal(bool, str) # is_valid, expires_at
+class ApiKeyCheckSignals(QObject):
+    finished = Signal(bool, str, int) # is_valid, expires_at, subscription_level
 
 class BalanceWorker(QRunnable):
     def __init__(self):
@@ -104,18 +104,19 @@ class GeminiTTSBalanceWorker(QRunnable):
         else:
             self.signals.finished.emit(None, False)
 
-class ValidationWorker(QRunnable):
+class ApiKeyCheckWorker(QRunnable):
     def __init__(self, api_key, server_url):
         super().__init__()
-        self.signals = ValidationWorkerSignals()
+        self.signals = ApiKeyCheckSignals()
         self.api_key = api_key
         self.server_url = server_url
 
     def run(self):
         is_valid = False
         expires_at = None
+        subscription_level = 1 # Default to base level
         if not self.api_key or not self.server_url:
-            self.signals.finished.emit(is_valid, expires_at)
+            self.signals.finished.emit(is_valid, expires_at, subscription_level)
             return
         try:
             from utils.hardware_id import get_hardware_id
@@ -128,16 +129,20 @@ class ValidationWorker(QRunnable):
             )
             if response.status_code == 200:
                 data = response.json()
-                if data.get("valid"):
-                    is_valid = True
-                    expires_at = data.get("expires_at")
+                is_valid = data.get("valid", False)
+                expires_at = data.get("expires_at")
+                subscription_level = data.get("subscription_level", 1)
+            else:
+                is_valid = False
+                expires_at = None
+                subscription_level = 1
         except requests.RequestException:
             # Network error, etc.
             pass
-        self.signals.finished.emit(is_valid, expires_at)
+        self.signals.finished.emit(is_valid, expires_at, subscription_level)
 
 class MainWindow(QMainWindow):
-    SHOW_REWRITE_TAB = True
+    SHOW_REWRITE_TAB = False # Default to False, enabled only if level >= 2
     
     def __init__(self, app, subscription_info=None, api_key=None, server_url=None):
         super().__init__()
@@ -185,12 +190,62 @@ class MainWindow(QMainWindow):
         self.settings_manager.save_settings()
 
     def check_api_key_validity(self):
-        worker = ValidationWorker(api_key=self.api_key, server_url=self.server_url)
-        worker.signals.finished.connect(self.on_validation_finished)
+        worker = ApiKeyCheckWorker(self.api_key, self.server_url)
+        worker.signals.finished.connect(self.on_api_key_checked)
         self.threadpool.start(worker)
 
-    def on_validation_finished(self, is_valid, expires_at):
-        if not is_valid:
+    def on_api_key_checked(self, is_valid, expires_at, subscription_level):
+        if is_valid:
+            # Update subscription info logic
+            days_left = 0
+            if expires_at:
+                try:
+                     # Parse ISO format
+                    dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                    now = datetime.now(dt.tzinfo) # Use tzinfo from dt for comparison
+                    if dt > now:
+                        days_left = (dt - now).days
+                        
+                        # --- Level 2 (Unlimited) Check ---
+                        if subscription_level >= 2:
+                            self.days_left_label.setText(self.translator.translate('subscription_unlimited'))
+                            self.days_left_label.setStyleSheet("color: gold; font-weight: bold;")
+                        else:
+                             # Basic Plan logic
+                            if days_left > 3650: # Fallback check
+                                days_left_str = self.translator.translate('subscription_unlimited')
+                                self.days_left_label.setText(days_left_str)
+                            else:
+                                days_left_str = str(days_left)
+                                prefix = self.translator.translate('subscription_days_left')
+                                self.days_left_label.setText(f"{prefix}{days_left_str}")
+                                
+                            self.days_left_label.setStyleSheet("") # Reset style
+                except Exception as e:
+                    logger.log(f"Error parsing date: {e}", level=LogLevel.ERROR)
+            
+            # --- Update Rewrite Tab Visibility ---
+            # Level 2 = Plus (With Rewrite)
+            should_show_rewrite = (subscription_level >= 2)
+            
+            if should_show_rewrite != self.SHOW_REWRITE_TAB:
+                self.SHOW_REWRITE_TAB = should_show_rewrite
+                if self.SHOW_REWRITE_TAB:
+                    # Add tab
+                    if not hasattr(self, 'rewrite_tab'):
+                         self.rewrite_tab = RewriteTab(main_window=self)
+                    
+                    # Insert after Text Translation tab (index 1)
+                    self.tabs.insertTab(1, self.rewrite_tab, self.translator.translate('rewrite_tab'))
+                else:
+                    # Remove tab
+                    # Check if rewrite_tab exists and is in tabs
+                    if hasattr(self, 'rewrite_tab'):
+                        idx = self.tabs.indexOf(self.rewrite_tab)
+                        if idx != -1:
+                            self.tabs.removeTab(idx)
+        else:
+            # Invalid key logic...
             # Clear the saved key as it's no longer valid
             settings_manager.set('api_key', None)
             settings_manager.save_settings()
@@ -202,10 +257,11 @@ class MainWindow(QMainWindow):
             # Visually indicate expiry
             self.days_left_label.setText("!")
             self.user_icon_button.setToolTip(self.translator.translate('subscription_expired_message'))
-        else:
-            # Update subscription info and UI
-            self.subscription_info = expires_at
-            self.update_subscription_status()
+            self.SHOW_REWRITE_TAB = False # Ensure rewrite tab is hidden if key is invalid
+            if hasattr(self, 'rewrite_tab'):
+                idx = self.tabs.indexOf(self.rewrite_tab)
+                if idx != -1:
+                    self.tabs.removeTab(idx)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
