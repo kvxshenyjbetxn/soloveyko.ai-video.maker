@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle
+    QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle, QInputDialog
 )
 from PySide6.QtCore import Qt
 from gui.text_tab import DroppableTextEdit, StageSelectionWidget
@@ -201,15 +201,29 @@ class RewriteTab(QWidget):
         if not links:
             return
 
+        task_name_input, ok = QInputDialog.getText(self, translator.translate('enter_task_name_title', 'Task Name'), translator.translate('enter_task_name_label', 'Enter task name:'))
+        if not ok:
+            return
+
         added_count = 0
         languages_config = self.settings.get('languages_config', {})
         
-        for link in links:
+        initial_task_count = self.main_window.queue_manager.get_task_count()
+
+        for i, link in enumerate(links):
+            # Determine job name
+            if not task_name_input or not task_name_input.strip():
+                # Default: "Task N"
+                count = initial_task_count + 1 + i
+                job_name = f"{translator.translate('default_task_name', 'Task')} {count}"
+            else:
+                if len(links) > 1:
+                    job_name = f"{task_name_input.strip()} {i+1}"
+                else:
+                    job_name = task_name_input.strip()
+
             # Create a job for this link
             job_id = str(uuid.uuid4())
-            job_name = link 
-            if len(job_name) > 50:
-                job_name = job_name[:47] + "..."
             
             job = {
                 'id': job_id,
@@ -243,10 +257,10 @@ class RewriteTab(QWidget):
                             job_lang_settings['template_name'] = stage_widget.selected_template
 
                         job['languages'][lang_id] = job_lang_settings
-                        job['languages'][lang_id]['display_name'] = settings_manager.get_language_name(lang_id)
+                        job['languages'][lang_id]['display_name'] = lang_config.get('display_name', lang_id)
 
             if job['languages']:
-                self.main_window.queue_manager.add_job(job)
+                self.main_window.queue_manager.add_task(job)
                 added_count += 1
 
         if added_count > 0:
