@@ -38,6 +38,7 @@ class WorkerSignals(QObject):
     progress_log = Signal(str, str)  # task_id, log_message (for card-only logs)
     video_generated = Signal(str, str) # old_image_path, new_video_path
     video_progress = Signal(str) # task_id
+    metadata_updated = Signal(str, str, str) # task_id, stage_key, metadata_text
 
 class BaseWorker(QRunnable):
     def __init__(self, task_id, config):
@@ -512,7 +513,10 @@ class DownloadWorker(BaseWorker):
             download_semaphore.acquire()
             logger.log(f"[{self.task_id}] Starting download...", level=LogLevel.INFO)
             
-            return YouTubeDownloader.download_audio(url, dir_path, yt_dlp_path)
+            def report_progress(percent_str):
+                 self.signals.metadata_updated.emit(self.task_id, 'stage_download', percent_str)
+
+            return YouTubeDownloader.download_audio(url, dir_path, yt_dlp_path, progress_callback=report_progress)
 
         finally:
             download_semaphore.release()
@@ -901,6 +905,7 @@ class TaskProcessor(QObject):
         worker.signals.status_changed.connect(self._on_worker_status_changed) # For gallery updates
         worker.signals.video_generated.connect(self.video_generated) # For gallery updates
         worker.signals.video_progress.connect(self._on_video_progress)
+        worker.signals.metadata_updated.connect(self._on_metadata_updated)
         self.threadpool.start(worker)
 
     @Slot(str, str, str, str)
@@ -926,6 +931,13 @@ class TaskProcessor(QObject):
             metadata_text = f"img: {img_meta}, vid: {vid_meta}"
             
             self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
+
+    @Slot(str, str, str)
+    def _on_metadata_updated(self, task_id, stage_key, text):
+        """Generic handler for metadata updates from workers."""
+        state = self.task_states.get(task_id)
+        if state:
+            self.stage_metadata_updated.emit(state.job_id, state.lang_id, stage_key, text)
 
     def _set_stage_status(self, task_id, stage_key, status, error_message=None):
         state = self.task_states.get(task_id)
