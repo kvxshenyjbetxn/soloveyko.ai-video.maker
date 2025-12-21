@@ -152,8 +152,8 @@ class LanguagesTab(QWidget):
 
 
         # --- Rewrite Settings Group ---
-        rewrite_group = QGroupBox(translator.translate("stage_rewrite"))
-        rewrite_layout = QVBoxLayout(rewrite_group)
+        self.rewrite_group = QGroupBox(translator.translate("stage_rewrite"))
+        rewrite_layout = QVBoxLayout(self.rewrite_group)
 
         # Rewrite Prompt Section
         self.rewrite_prompt_label = QLabel(translator.translate("rewrite_prompt_label"))
@@ -200,7 +200,7 @@ class LanguagesTab(QWidget):
         
         rewrite_layout.addLayout(rewrite_params)
 
-        settings_layout.addRow(rewrite_group)
+        settings_layout.addRow(self.rewrite_group)
 
         # Default Template
         self.default_template_label = QLabel()
@@ -361,9 +361,14 @@ class LanguagesTab(QWidget):
             self.prompt_edit.setPlainText(dialog.get_text())
 
     def open_rewrite_prompt_editor(self):
-        dialog = PromptEditorDialog(self, self.rewrite_prompt_edit.toPlainText())
+        current_text = self.rewrite_prompt_edit.toPlainText()
+        dialog = PromptEditorDialog(current_text, self)
         if dialog.exec():
             self.rewrite_prompt_edit.setPlainText(dialog.get_text())
+
+    def set_rewrite_visible(self, visible: bool):
+        if hasattr(self, 'rewrite_group'):
+            self.rewrite_group.setVisible(visible)
             
     def browse_for_music_file(self):
         file_path, _ = QFileDialog.getOpenFileName(

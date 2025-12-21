@@ -228,6 +228,9 @@ class MainWindow(QMainWindow):
             # Level 2 = Plus (With Rewrite)
             should_show_rewrite = (subscription_level >= 2)
             
+            if hasattr(self.settings_tab, 'languages_tab'):
+                self.settings_tab.languages_tab.set_rewrite_visible(should_show_rewrite)
+
             if should_show_rewrite != self.SHOW_REWRITE_TAB:
                 self.SHOW_REWRITE_TAB = should_show_rewrite
                 if self.SHOW_REWRITE_TAB:
@@ -238,8 +241,6 @@ class MainWindow(QMainWindow):
                     # Insert after Text Translation tab (index 1)
                     self.tabs.insertTab(1, self.rewrite_tab, self.translator.translate('rewrite_tab'))
                     
-                    # Refresh balances to ensure the new tab is populated
-                    self.start_background_updates()
                 else:
                     # Remove tab
                     # Check if rewrite_tab exists and is in tabs
@@ -247,6 +248,9 @@ class MainWindow(QMainWindow):
                         idx = self.tabs.indexOf(self.rewrite_tab)
                         if idx != -1:
                             self.tabs.removeTab(idx)
+            
+            # Refresh balances for all valid users to ensure UI is up to date
+            self.start_background_updates()
         else:
             # Invalid key logic...
             # Clear the saved key as it's no longer valid
