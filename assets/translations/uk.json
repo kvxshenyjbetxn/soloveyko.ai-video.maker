@@ -1,6 +1,7 @@
 {
     "app_title": "Комбайн",
-    "text_processing_tab": "Обробка тексту",
+    "text_processing_tab": "Переклад",
+    "rewrite_tab": "Рерайт",
     "settings_tab": "Налаштування",
     "general_tab": "Загальні",
     "api_tab": "API",
