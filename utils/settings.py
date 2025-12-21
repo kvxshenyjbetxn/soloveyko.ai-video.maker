@@ -2,6 +2,7 @@ import json
 import os
 import platform
 import sys
+import copy
 from PySide6.QtCore import QStandardPaths
 
 class SettingsManager:
@@ -122,13 +123,11 @@ class SettingsManager:
         """
         for key, value in source.items():
             if isinstance(value, dict):
-                # Отримуємо під-директорію, якщо вона є
-                node = destination.setdefault(key, {})
-                if not isinstance(node, dict):
-                    # Якщо там був не словник (наприклад, стара версія налаштувань), замінюємо на словник
-                    destination[key] = value.copy()
+                # Якщо ключа немає або він має Не-словниковий тип (стара версія конфігу)
+                if key not in destination or not isinstance(destination[key], dict):
+                    destination[key] = copy.deepcopy(value)
                 else:
-                    self._deep_merge(value, node)
+                    self._deep_merge(value, destination[key])
             else:
                 if key not in destination:
                     destination[key] = value
