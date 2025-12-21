@@ -10,8 +10,8 @@ def compile_project():
     # ------------------------------------
 
     # Назва вихідного файлу
-    app_name = "CombainAI v0.37.8"
-    
+    app_name = "CombainAI v0.37.9"
+
     # Перевірка наявності PyInstaller та залежностей
     try:
         subprocess.run(["pyinstaller", "--version"], check=True, stdout=subprocess.DEVNULL)

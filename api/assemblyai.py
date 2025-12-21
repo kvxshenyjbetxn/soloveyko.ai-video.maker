@@ -7,7 +7,10 @@ class AssemblyAIAPI:
     def __init__(self):
         self.api_key = settings_manager.get('assemblyai_api_key')
         if self.api_key:
-            aai.settings.api_key = self.api_key
+            try:
+                aai.settings.api_key = self.api_key
+            except Exception as e:
+                print(f"DEBUG: Failed to set AssemblyAI API key (likely Python 3.14 incompatibility): {e}")
         self.update_max_threads()
 
     def update_max_threads(self):
