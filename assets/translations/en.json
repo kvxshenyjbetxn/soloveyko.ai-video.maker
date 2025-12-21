@@ -1,5 +1,7 @@
 {
     "app_title": "Combine",
+    "subscription_unlimited": "Active: Forever ♾️",
+    "subscription_days_left": "Days left: ",
     "text_processing_tab": "Translation",
     "rewrite_tab": "Rewrite",
     "settings_tab": "Settings",
