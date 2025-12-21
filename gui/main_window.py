@@ -23,6 +23,7 @@ from gui.settings_tab.settings_tab import SettingsTab
 from gui.log_tab import LogTab
 from gui.queue_tab import QueueTab
 from gui.gallery_tab.gallery_tab import GalleryTab
+from gui.rewrite_tab import RewriteTab
 from gui.gallery_tab.image_viewer import ImageViewer
 from gui.gallery_tab.video_viewer import VideoViewer
 from core.queue_manager import QueueManager
@@ -136,6 +137,8 @@ class ValidationWorker(QRunnable):
         self.signals.finished.emit(is_valid, expires_at)
 
 class MainWindow(QMainWindow):
+    SHOW_REWRITE_TAB = True
+    
     def __init__(self, app, subscription_info=None, api_key=None, server_url=None):
         super().__init__()
         self.app = app
@@ -283,6 +286,9 @@ class MainWindow(QMainWindow):
         self.update_subscription_status()
 
         self.text_tab = TextTab(main_window=self)
+        if self.SHOW_REWRITE_TAB:
+            self.rewrite_tab = RewriteTab(main_window=self)
+
         self.settings_tab = SettingsTab(main_window=self)
         self.log_tab = LogTab()
         self.queue_tab = QueueTab(parent=self.tabs, main_window=self, log_tab=self.log_tab)
@@ -291,6 +297,8 @@ class MainWindow(QMainWindow):
         self.review_notification_shown = False
 
         self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
+        if self.SHOW_REWRITE_TAB:
+            self.tabs.addTab(self.rewrite_tab, self.translator.translate('rewrite_tab'))
         self.tabs.addTab(self.queue_tab, self.translator.translate('queue_tab'))
         self.tabs.addTab(self.gallery_tab, self.translator.translate('gallery_tab_title'))
         self.tabs.addTab(self.settings_tab, self.translator.translate('settings_tab'))
@@ -704,6 +712,9 @@ class MainWindow(QMainWindow):
     def retranslate_ui(self):
         self.update_title()
         self.tabs.setTabText(self.tabs.indexOf(self.text_tab), self.translator.translate('text_processing_tab'))
+        if self.SHOW_REWRITE_TAB:
+            self.tabs.setTabText(self.tabs.indexOf(self.rewrite_tab), self.translator.translate('rewrite_tab'))
+            self.rewrite_tab.retranslate_ui()
         self.tabs.setTabText(self.tabs.indexOf(self.queue_tab), self.translator.translate('queue_tab'))
         self.tabs.setTabText(self.tabs.indexOf(self.gallery_tab), self.translator.translate('gallery_tab_title'))
         self.tabs.setTabText(self.tabs.indexOf(self.settings_tab), self.translator.translate('settings_tab'))

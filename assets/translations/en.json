@@ -1,6 +1,7 @@
 {
     "app_title": "Combine",
-    "text_processing_tab": "Text Processing",
+    "text_processing_tab": "Translation",
+    "rewrite_tab": "Rewrite",
     "settings_tab": "Settings",
     "general_tab": "General",
     "api_tab": "API",
