@@ -412,7 +412,7 @@ class MainWindow(QMainWindow):
         self.update_active_template_display()
 
     def _start_processing_checked(self):
-        worker = ValidationWorker(api_key=self.api_key, server_url=self.server_url)
+        worker = ApiKeyCheckWorker(api_key=self.api_key, server_url=self.server_url)
         # We connect to a lambda to pass a flag indicating this is a pre-processing check
         worker.signals.finished.connect(
             lambda is_valid, expires_at: self.on_pre_processing_validation_finished(is_valid)

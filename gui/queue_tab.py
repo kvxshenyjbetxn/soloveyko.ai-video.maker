@@ -168,7 +168,7 @@ class TaskCard(QGroupBox):
             self.stage_widgets[lang_id] = []
 
             # If translation is not a selected stage, show 'Original'
-            if 'stage_translation' not in lang_data['stages']:
+            if 'stage_translation' not in lang_data['stages'] and job.get('type') != 'rewrite':
                 original_widget = QWidget()
                 original_layout = QHBoxLayout(original_widget)
                 original_layout.setContentsMargins(4, 0, 4, 0)

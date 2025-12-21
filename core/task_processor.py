@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Slot, QMutex, Qt
 from PySide6.QtGui import QPixmap
 
-from utils.logger import logger, LogLevel
+import subprocess
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager, template_manager
 from utils.translator import translator
@@ -607,7 +607,8 @@ class TaskState:
         self.job_name = job['name']
         self.lang_name = lang_data['display_name']
         self.stages = lang_data['stages']
-        self.original_text = job['text']
+        self.original_text = job.get('text', '')
+        self.input_source = job.get('input_source', '')
         self.lang_data = lang_data
         self.settings = settings
 
@@ -985,7 +986,7 @@ class TaskProcessor(QObject):
     def _start_download(self, task_id):
         state = self.task_states[task_id]
         config = {
-            'url': state.original_text, # For rewrite tasks, text is the URL
+            'url': state.input_source, # For rewrite tasks, input_source is the URL
             'dir_path': state.dir_path,
             'yt_dlp_path': self.yt_dlp_path,
             'download_semaphore': self.download_semaphore
