@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Slot, QMutex, Qt
 from PySide6.QtGui import QPixmap
 
-import subprocess
+from utils.youtube_downloader import YouTubeDownloader
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager, template_manager
 from utils.translator import translator
@@ -512,37 +512,7 @@ class DownloadWorker(BaseWorker):
             download_semaphore.acquire()
             logger.log(f"[{self.task_id}] Starting download...", level=LogLevel.INFO)
             
-            # Output template: always 'downloaded_audio' to avoid path issues
-            # We let yt-dlp determine extension
-            output_template = os.path.join(dir_path, "downloaded_audio.%(ext)s")
-            
-            cmd = [
-                yt_dlp_path,
-                "-x", # Extract audio
-                "--audio-format", "mp3",
-                "--audio-quality", "0", # Best quality
-                "-o", output_template,
-                "--no-playlist",
-                url
-            ]
-            
-            # On Windows, prevent console window popping up
-            startupinfo = None
-            if os.name == 'nt':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            
-            process = subprocess.run(cmd, startupinfo=startupinfo, capture_output=True, text=True)
-            
-            if process.returncode != 0:
-                raise Exception(f"yt-dlp failed: {process.stderr}")
-            
-            # Find the file
-            for file in os.listdir(dir_path):
-                if file.startswith("downloaded_audio."):
-                    return os.path.join(dir_path, file)
-            
-            raise Exception("Download finished but file not found.")
+            return YouTubeDownloader.download_audio(url, dir_path, yt_dlp_path)
 
         finally:
             download_semaphore.release()
