@@ -499,6 +499,100 @@ class MontageWorker(BaseWorker):
         
         return self.config['output_path']
 
+class DownloadWorker(BaseWorker):
+    def do_work(self):
+        url = self.config['url']
+        dir_path = self.config['dir_path']
+        yt_dlp_path = self.config['yt_dlp_path']
+        download_semaphore = self.config['download_semaphore']
+        
+        logger.log(f"[{self.task_id}] Queuing download for {url}", level=LogLevel.INFO)
+        
+        try:
+            download_semaphore.acquire()
+            logger.log(f"[{self.task_id}] Starting download...", level=LogLevel.INFO)
+            
+            # Output template: always 'downloaded_audio' to avoid path issues
+            # We let yt-dlp determine extension
+            output_template = os.path.join(dir_path, "downloaded_audio.%(ext)s")
+            
+            cmd = [
+                yt_dlp_path,
+                "-x", # Extract audio
+                "--audio-format", "mp3",
+                "--audio-quality", "0", # Best quality
+                "-o", output_template,
+                "--no-playlist",
+                url
+            ]
+            
+            # On Windows, prevent console window popping up
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+            process = subprocess.run(cmd, startupinfo=startupinfo, capture_output=True, text=True)
+            
+            if process.returncode != 0:
+                raise Exception(f"yt-dlp failed: {process.stderr}")
+            
+            # Find the file
+            for file in os.listdir(dir_path):
+                if file.startswith("downloaded_audio."):
+                    return os.path.join(dir_path, file)
+            
+            raise Exception("Download finished but file not found.")
+
+        finally:
+            download_semaphore.release()
+
+class TranscriptionWorker(BaseWorker):
+    def do_work(self):
+        audio_path = self.config['audio_path']
+        sub_settings = self.config['sub_settings']
+        lang_code = self.config['lang_code']
+        whisper_exe = self.config['whisper_exe']
+        whisper_model_path = self.config['whisper_model_path']
+
+        logger.log(f"[{self.task_id}] Starting transcription for rewrite...", level=LogLevel.INFO)
+        
+        engine = SubtitleEngine(whisper_exe, whisper_model_path)
+        text = engine.transcribe_text(audio_path, sub_settings, language=lang_code)
+        
+        if not text:
+            raise Exception("Transcription yielded empty text.")
+            
+        return text
+
+class RewriteWorker(BaseWorker):
+    def do_work(self):
+        api_key = self.config.get('openrouter_api_key')
+        api = OpenRouterAPI(api_key=api_key)
+        
+        prompt = self.config['prompt']
+        text = self.config['text']
+        model = self.config.get('model', 'unknown')
+        max_tokens = self.config.get('max_tokens', 4096)
+        temperature = self.config.get('temperature', 0.7)
+        
+        logger.log(f"[{self.task_id}] [{model}] Starting rewrite (temp: {temperature}, tokens: {max_tokens})", level=LogLevel.INFO)
+        
+        full_prompt = f"{prompt}\n\n{text}"
+        response = api.get_chat_completion(
+            model=model,
+            messages=[{"role": "user", "content": full_prompt}],
+            max_tokens=max_tokens,
+            temperature=temperature
+        )
+        
+        if response and response['choices'][0]['message']['content']:
+            result = response['choices'][0]['message']['content']
+            logger.log(f"[{self.task_id}] [{model}] Rewrite completed", level=LogLevel.SUCCESS)
+            return result
+        else:
+            raise Exception(f"Empty or invalid response from API for model '{model}'.")
+
 # =================================================================================================================
 # region TASK PROCESSOR
 # =================================================================================================================
@@ -613,7 +707,31 @@ class TaskProcessor(QObject):
         self.pending_subtitles = collections.deque()
         self.pending_montages = collections.deque()
         
-        logger.log(f"Task Processor initialized. Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}, Video concurrency: {max_video}", level=LogLevel.INFO)
+        max_video = googler_settings.get("max_video_threads", 1)
+        self.video_semaphore = QSemaphore(max_video)
+        
+        # Download concurrency
+        max_downloads = self.settings.get("max_download_threads", 5)
+        self.download_semaphore = QSemaphore(max_downloads)
+
+        # Determine yt-dlp path
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+            self.yt_dlp_path = os.path.join(base_dir, "yt-dlp.exe")
+            # If not found check in assets (user folder maybe?) or assets inside meipass
+            if not os.path.exists(self.yt_dlp_path):
+                 self.yt_dlp_path = os.path.join(sys._MEIPASS, "assets", "yt-dlp.exe")
+        else:
+             self.yt_dlp_path = os.path.join(BASE_PATH, "assets", "yt-dlp.exe")
+
+        if not os.path.exists(self.yt_dlp_path):
+            logger.log(f"Warning: yt-dlp.exe not found at {self.yt_dlp_path}", level=LogLevel.WARNING)
+
+        # Queues for preventing thread starvation
+        self.pending_subtitles = collections.deque()
+        self.pending_montages = collections.deque()
+        
+        logger.log(f"Task Processor initialized. Download concurrency: {max_downloads}, Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}, Video concurrency: {max_video}", level=LogLevel.INFO)
 
     def _load_voicemaker_voices(self):
         try:
@@ -768,7 +886,9 @@ class TaskProcessor(QObject):
         all_languages_config = self.settings.get("languages_config", {})
 
         for task_id, state in self.task_states.items():
-            if 'stage_translation' in state.stages:
+            if 'stage_download' in state.stages:
+                self._start_download(task_id)
+            elif 'stage_translation' in state.stages:
                 self._start_translation(task_id)
                 time.sleep(0.5)
             else:
@@ -851,7 +971,9 @@ class TaskProcessor(QObject):
             stage_names = {
                 'stage_translation': 'Translation', 'stage_img_prompts': 'Image prompts generation',
                 'stage_voiceover': 'Voiceover generation', 'stage_subtitles': 'Subtitle generation',
-                'stage_images': 'Image generation', 'stage_montage': 'Video montage'
+                'stage_images': 'Image generation', 'stage_montage': 'Video montage',
+                'stage_download': 'Download', 'stage_transcription': 'Transcription',
+                'stage_rewrite': 'Rewrite'
             }
             stage_name = stage_names.get(stage_key, stage_key)
             logger.log(f"[{task_id}] {stage_name} failed: {error_message}", level=LogLevel.ERROR)
@@ -859,6 +981,130 @@ class TaskProcessor(QObject):
         self.check_if_all_finished()
 
     # --- Pipeline Logic ---
+
+    def _start_download(self, task_id):
+        state = self.task_states[task_id]
+        config = {
+            'url': state.original_text, # For rewrite tasks, text is the URL
+            'dir_path': state.dir_path,
+            'yt_dlp_path': self.yt_dlp_path,
+            'download_semaphore': self.download_semaphore
+        }
+        self._start_worker(DownloadWorker, task_id, 'stage_download', config, self._on_download_finished, self._on_download_error)
+
+    @Slot(str, object)
+    def _on_download_finished(self, task_id, audio_path):
+        state = self.task_states[task_id]
+        state.audio_path = audio_path # Temporary path for transcription
+        self._set_stage_status(task_id, 'stage_download', 'success')
+        
+        # Check dependency for next stage (Transcription)
+        if 'stage_transcription' in state.stages:
+            self._start_transcription(task_id)
+        else:
+            # Should not happen in normal flow, but just in case
+            logger.log(f"[{task_id}] Download finished but no transcription stage found.", level=LogLevel.WARNING)
+
+    @Slot(str, str)
+    def _on_download_error(self, task_id, error):
+        self._set_stage_status(task_id, 'stage_download', 'error', error)
+        # Fail dependencies
+        for stage in ['stage_transcription', 'stage_rewrite', 'stage_img_prompts', 'stage_images', 'stage_voiceover', 'stage_subtitles', 'stage_montage']:
+            if stage in self.task_states[task_id].stages:
+                self._set_stage_status(task_id, stage, 'error', "Dependency (Download) failed")
+
+    def _start_transcription(self, task_id):
+        state = self.task_states[task_id]
+        
+        # Prepare helper for whisper path (reused from subtitles)
+        sub_settings = state.settings.get('subtitles', {})
+        whisper_type = sub_settings.get('whisper_type', 'amd')
+        model_name = sub_settings.get('whisper_model', 'base.bin')
+        
+        whisper_exe = None; whisper_model_path = model_name
+        if whisper_type == 'amd':
+            if getattr(sys, 'frozen', False):
+                whisper_base_path = os.path.join(os.path.dirname(sys.executable), "whisper-cli-amd")
+            else:
+                current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+            
+            whisper_exe = os.path.join(whisper_base_path, "main.exe")
+            whisper_model_path = os.path.join(whisper_base_path, model_name)
+
+        config = {
+            'audio_path': state.audio_path, # From download
+            'sub_settings': sub_settings,
+            'lang_code': state.lang_id.split('-')[0].lower(), # or from video meta? usually source lang.
+            # Ideally we should autodetect or let user specify SOURCE language of video.
+            # For now assuming target language code of the task, which might be wrong if we are rewriting from English video to Ukrainian.
+            # But usually transcription is done on source. 
+            # If the user gives a Ukrainian video and wants Ukrainian output, it's fine.
+            # If English video -> Ukrainian output: we transcribe English? 
+            # Whisper handles detection often if lang not specified, but we pass it.
+            # TODO: Add "Source Language" to RewriteTab? For now use task language.
+            'whisper_exe': whisper_exe,
+            'whisper_model_path': whisper_model_path
+        }
+        self._start_worker(TranscriptionWorker, task_id, 'stage_transcription', config, self._on_transcription_finished, self._on_transcription_error)
+
+    @Slot(str, object)
+    def _on_transcription_finished(self, task_id, text):
+        state = self.task_states[task_id]
+        # Store intermediate text if needed, or pass to rewrite
+        # Maybe save to file
+        with open(os.path.join(state.dir_path, "transcription.txt"), 'w', encoding='utf-8') as f:
+            f.write(text)
+            
+        self._set_stage_status(task_id, 'stage_transcription', 'success')
+        
+        if 'stage_rewrite' in state.stages:
+            self._start_rewrite(task_id, text)
+        else:
+            state.text_for_processing = text
+            self._on_text_ready(task_id)
+
+    @Slot(str, str)
+    def _on_transcription_error(self, task_id, error):
+        self._set_stage_status(task_id, 'stage_transcription', 'error', error)
+        # Fail dependencies
+        for stage in ['stage_rewrite', 'stage_img_prompts', 'stage_images', 'stage_voiceover', 'stage_subtitles', 'stage_montage']:
+            if stage in self.task_states[task_id].stages:
+                self._set_stage_status(task_id, stage, 'error', "Dependency (Transcription) failed")
+
+    def _start_rewrite(self, task_id, text):
+        state = self.task_states[task_id]
+        lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
+        
+        config = {
+            'text': text,
+            'prompt': lang_config.get('rewrite_prompt', 'Rewrite this text:'),
+            'model': lang_config.get('rewrite_model', 'google/gemini-2.0-flash-exp:free'),
+            'max_tokens': lang_config.get('rewrite_max_tokens', 4096),
+            'temperature': lang_config.get('rewrite_temperature', 0.7),
+            'openrouter_api_key': state.settings.get('openrouter_api_key')
+        }
+        self._start_worker(RewriteWorker, task_id, 'stage_rewrite', config, self._on_rewrite_finished, self._on_rewrite_error)
+
+    @Slot(str, object)
+    def _on_rewrite_finished(self, task_id, rewritten_text):
+        state = self.task_states[task_id]
+        state.text_for_processing = rewritten_text
+        with open(os.path.join(state.dir_path, "rewritten.txt"), 'w', encoding='utf-8') as f:
+            f.write(rewritten_text)
+            
+        self._set_stage_status(task_id, 'stage_rewrite', 'success')
+        
+        # Proceed to next stages (Standard)
+        self._on_text_ready(task_id)
+
+    @Slot(str, str)
+    def _on_rewrite_error(self, task_id, error):
+        self._set_stage_status(task_id, 'stage_rewrite', 'error', error)
+        # Fail dependencies
+        for stage in ['stage_img_prompts', 'stage_images', 'stage_voiceover', 'stage_subtitles', 'stage_montage']:
+            if stage in self.task_states[task_id].stages:
+                self._set_stage_status(task_id, stage, 'error', "Dependency (Rewrite) failed")
 
     def _start_translation(self, task_id):
         state = self.task_states[task_id]
@@ -926,7 +1172,7 @@ class TaskProcessor(QObject):
         state = self.task_states[task_id]
         
         # If translation was not used, emit metadata for original text
-        if 'stage_translation' not in state.stages and state.text_for_processing:
+        if 'stage_translation' not in state.stages and 'stage_rewrite' not in state.stages and state.text_for_processing:
             char_count = len(state.text_for_processing)
             metadata_text = f"{char_count} {translator.translate('characters_count')}"
             # For original text, we use a special key 'original_text'

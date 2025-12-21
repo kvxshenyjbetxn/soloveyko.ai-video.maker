@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QMenu, QWidgetAction
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QColor, QAction
-from PySide6.QtCore import Qt, QMimeData
+from PySide6.QtCore import Qt, QMimeData, Signal
 from utils.flow_layout import FlowLayout
 from functools import partial
 from utils.translator import translator
@@ -78,7 +78,9 @@ class DroppableTextEdit(QTextEdit):
 
 class StageSelectionWidget(QWidget):
     """A compact widget representing the processing stages for a single language."""
-    def __init__(self, language_name, lang_code, parent_tab):
+    selection_changed = Signal()
+
+    def __init__(self, language_name, lang_code, parent_tab, available_stages=None):
         super().__init__()
         self.parent_tab = parent_tab
         self.lang_code = lang_code
@@ -115,7 +117,7 @@ class StageSelectionWidget(QWidget):
         
         self.checkboxes = {}
         self.add_buttons = {}
-        stage_keys = ["stage_translation", "stage_img_prompts", "stage_images", 
+        stage_keys = available_stages if available_stages else ["stage_translation", "stage_img_prompts", "stage_images", 
                       "stage_voiceover", "stage_subtitles", "stage_montage"]
         
         for key in stage_keys:
@@ -123,16 +125,22 @@ class StageSelectionWidget(QWidget):
             checkbox.setChecked(True)
             checkbox.stateChanged.connect(self.update_toggle_button_text)
             checkbox.stateChanged.connect(self.parent_tab.check_queue_button_visibility)
+            checkbox.stateChanged.connect(lambda: self.selection_changed.emit())
             layout.addWidget(checkbox)
             self.checkboxes[key] = checkbox
 
-            # --- Custom Stages (Insert after Translation) ---
-            if key == "stage_translation":
+            # --- Custom Stages (Insert after Translation or Rewrite) ---
+            if key == "stage_translation" or key == "stage_rewrite":
                 custom_stages = self.parent_tab.settings.get("custom_stages", [])
                 for stage in custom_stages:
                     stage_name = stage.get("name")
                     if stage_name:
                         key_custom = f"custom_{stage_name}"
+                        # If triggered by rewrite, ensure unique key if needed, OR share the same key?
+                        # Using same key might conflict if both translation and rewrite are present in same widget (unlikely).
+                        # But wait, StageSelectionWidget is instantiated with EITHER text stages OR rewrite stages.
+                        # So they won't clash within one widget.
+                        
                         checkbox_custom = QCheckBox(stage_name)
                         
                         # Load initial state
@@ -143,6 +151,7 @@ class StageSelectionWidget(QWidget):
                         checkbox_custom.stateChanged.connect(self.update_toggle_button_text)
                         checkbox_custom.stateChanged.connect(self.parent_tab.check_queue_button_visibility)
                         checkbox_custom.stateChanged.connect(self._save_state) # Save on change
+                        checkbox_custom.stateChanged.connect(lambda: self.selection_changed.emit())
                         layout.addWidget(checkbox_custom)
                         self.checkboxes[key_custom] = checkbox_custom
 
