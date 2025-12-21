@@ -237,6 +237,9 @@ class MainWindow(QMainWindow):
                     
                     # Insert after Text Translation tab (index 1)
                     self.tabs.insertTab(1, self.rewrite_tab, self.translator.translate('rewrite_tab'))
+                    
+                    # Refresh balances to ensure the new tab is populated
+                    self.start_background_updates()
                 else:
                     # Remove tab
                     # Check if rewrite_tab exists and is in tabs
@@ -382,7 +385,6 @@ class MainWindow(QMainWindow):
         self.settings_tab.templates_tab.template_applied.connect(self.on_template_applied)
 
         QTimer.singleShot(100, self.check_api_key_validity) # Initial check
-        QTimer.singleShot(100, self.start_background_updates) # Initial balance check - run in background, non-blocking
         QTimer.singleShot(200, lambda: self.settings_tab.languages_tab.load_elevenlabs_templates()) # Load templates in background to avoid blocking startup
         
         self.update_active_template_display()
@@ -630,6 +632,8 @@ class MainWindow(QMainWindow):
             balance_text = ""
 
         self.text_tab.update_balance(balance_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_balance(balance_text)
         self.queue_tab.update_balance(balance_text)
         self.settings_tab.api_tab.openrouter_tab.update_balance_label(balance_text)
 
@@ -655,6 +659,8 @@ class MainWindow(QMainWindow):
                 display_text = self.translator.translate('error_label')
         
         self.text_tab.update_googler_usage(usage_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_googler_usage(usage_text)
         self.queue_tab.update_googler_usage(usage_text)
         self.settings_tab.api_tab.image_tab.googler_tab.usage_display_label.setText(display_text)
 
@@ -672,6 +678,8 @@ class MainWindow(QMainWindow):
                 balance_to_display_on_settings_tab = self.translator.translate('error_label')
 
         self.text_tab.update_elevenlabs_balance(balance_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_elevenlabs_balance(balance_text)
         self.queue_tab.update_elevenlabs_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.elevenlabs_tab.update_balance_label(balance_to_display_on_settings_tab)
 
@@ -689,6 +697,8 @@ class MainWindow(QMainWindow):
                 balance_to_display_on_settings_tab = self.translator.translate('error_label')
 
         self.text_tab.update_voicemaker_balance(balance_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_voicemaker_balance(balance_text)
         self.queue_tab.update_voicemaker_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.voicemaker_tab.update_balance_label(balance_to_display_on_settings_tab)
 
@@ -706,6 +716,8 @@ class MainWindow(QMainWindow):
                 balance_to_display_on_settings_tab = self.translator.translate('error_label')
 
         self.text_tab.update_gemini_tts_balance(balance_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_gemini_tts_balance(balance_text)
         self.queue_tab.update_gemini_tts_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.gemini_tts_tab.update_balance_label(balance_to_display_on_settings_tab)
 
