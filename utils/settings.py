@@ -54,13 +54,28 @@ class SettingsManager:
 
     def _get_base_path(self):
         if platform.system() == "Darwin":
-            # На macOS використовуємо стандартний шлях Qt для даних додатку
-            base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
-            # Якщо назва додатку не додалась автоматично (буває на деяких версіях)
+            # На macOS використовуємо стандартний шлях для даних додатку
+            # Намагаємось отримати через Qt, але з перевіркою
+            try:
+                from PySide6.QtCore import QCoreApplication
+                if QCoreApplication.instance():
+                    base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
+                else:
+                    # Фоллбек якщо QApplication ще не створено
+                    base = os.path.expanduser("~/Library/Application Support/CombainAI")
+            except Exception as e:
+                print(f"DEBUG: Error getting macOS path via Qt: {e}")
+                base = os.path.expanduser("~/Library/Application Support/CombainAI")
+
+            # Якщо назва додатку не додалась автоматично
             if not base.endswith("CombainAI"):
                 base = os.path.join(base, "CombainAI")
             
-            os.makedirs(base, exist_ok=True)
+            try:
+                os.makedirs(base, exist_ok=True)
+            except Exception as e:
+                print(f"DEBUG: Error creating directory {base}: {e}")
+            
             print(f"DEBUG: macOS Data Path is: {base}")
             return base
             
@@ -73,16 +88,24 @@ class SettingsManager:
 
     def load_settings(self):
         if os.path.exists(self.settings_file):
-            try:
-                with open(self.settings_file, 'r', encoding='utf-8') as f:
-                    settings = json.load(f)
-                    # Ensure all keys are present
-                    for key, value in self.defaults.items():
-                        if key not in settings:
-                            settings[key] = value
-                    return settings
-            except (json.JSONDecodeError, TypeError):
-                return self.defaults
+            # Список кодувань для спроби (utf-8-sig ігнорує BOM, що часто є у Windows)
+            encodings = ['utf-8-sig', 'utf-8', 'utf-16', 'cp1251']
+            
+            for enc in encodings:
+                try:
+                    with open(self.settings_file, 'r', encoding=enc) as f:
+                        settings = json.load(f)
+                        # Ensure all keys are present
+                        for key, value in self.defaults.items():
+                            if key not in settings:
+                                settings[key] = value
+                        return settings
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue # Спробувати наступне кодування
+                except Exception as e:
+                    print(f"Error loading settings with {enc}: {e}")
+                    break
+        
         return self.defaults
 
     def get(self, key, default=None):
@@ -112,7 +135,15 @@ class TemplateManager:
 
     def _get_base_path(self):
         if platform.system() == "Darwin":
-            base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
+            try:
+                from PySide6.QtCore import QCoreApplication
+                if QCoreApplication.instance():
+                    base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
+                else:
+                    base = os.path.expanduser("~/Library/Application Support/CombainAI")
+            except:
+                base = os.path.expanduser("~/Library/Application Support/CombainAI")
+                
             if not base.endswith("CombainAI"):
                 base = os.path.join(base, "CombainAI")
             return base

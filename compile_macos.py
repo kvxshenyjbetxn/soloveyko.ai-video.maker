@@ -13,7 +13,7 @@ def compile_project():
     # ------------------------------------
 
     # Назва вихідного файлу (синхронізовано з Windows)
-    app_name = "CombainAI v0.37.5"
+    app_name = "CombainAI v0.37.6"
     
     # Перевірка наявності PyInstaller та залежностей
     try:
