@@ -137,10 +137,12 @@ def main():
         pass
 
     from utils.logger import logger, LogLevel
-    logger.log("Application starting...", level=LogLevel.INFO)
-    
-    # Clean up old logs on startup
-    logger.cleanup_old_logs(max_days=7)
+    try:
+        logger.log("Application starting...", level=LogLevel.INFO)
+        # Clean up old logs on startup
+        logger.cleanup_old_logs(max_days=7)
+    except Exception as e:
+        print(f"DEBUG: Early logging error: {e}")
 
     app = QApplication(sys.argv)
     app.setStyle("fusion")
@@ -184,7 +186,17 @@ def main():
     if authenticated:
         setup_dependency_paths() # Call the new function here
         main_window = MainWindow(app, subscription_info=subscription_info, api_key=api_key, server_url=AUTH_SERVER_URL)
-        main_window.apply_current_theme()
+        
+        try:
+            main_window.apply_current_theme()
+        except Exception as e:
+            print(f"DEBUG: Failed to apply theme: {e}")
+            # Fallback to standard theme if possible
+            try:
+                main_window.app.setStyleSheet("")
+            except:
+                pass
+                
         main_window.show()
         exit_code = app.exec()
         

@@ -87,26 +87,52 @@ class SettingsManager:
             return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     def load_settings(self):
+        print(f"DEBUG: Loading settings from {self.settings_file}")
+        
+        current_settings = {}
         if os.path.exists(self.settings_file):
-            # Список кодувань для спроби (utf-8-sig ігнорує BOM, що часто є у Windows)
+            # Список кодувань для спроби
             encodings = ['utf-8-sig', 'utf-8', 'utf-16', 'cp1251']
             
             for enc in encodings:
                 try:
                     with open(self.settings_file, 'r', encoding=enc) as f:
-                        settings = json.load(f)
-                        # Ensure all keys are present
-                        for key, value in self.defaults.items():
-                            if key not in settings:
-                                settings[key] = value
-                        return settings
+                        loaded = json.load(f)
+                        if isinstance(loaded, dict):
+                            current_settings = loaded
+                            print(f"DEBUG: Successfully loaded settings with {enc}")
+                            break
+                        else:
+                            print(f"DEBUG: Loaded settings is not a dictionary ({type(loaded)})")
                 except (json.JSONDecodeError, UnicodeDecodeError):
-                    continue # Спробувати наступне кодування
+                    continue 
                 except Exception as e:
-                    print(f"Error loading settings with {enc}: {e}")
+                    print(f"DEBUG: Error loading settings with {enc}: {e}")
                     break
-        
-        return self.defaults
+        else:
+            print("DEBUG: Settings file does not exist, using defaults.")
+
+        # РЕКУРСИВНО заповнюємо відсутні ключі з дефолтів
+        self._deep_merge(self.defaults, current_settings)
+        return current_settings
+
+    def _deep_merge(self, source, destination):
+        """
+        Рекурсивно копіює ключі з source в destination, якщо їх там немає.
+        """
+        for key, value in source.items():
+            if isinstance(value, dict):
+                # Отримуємо під-директорію, якщо вона є
+                node = destination.setdefault(key, {})
+                if not isinstance(node, dict):
+                    # Якщо там був не словник (наприклад, стара версія налаштувань), замінюємо на словник
+                    destination[key] = value.copy()
+                else:
+                    self._deep_merge(value, node)
+            else:
+                if key not in destination:
+                    destination[key] = value
+        return destination
 
     def get(self, key, default=None):
         if default is None:
