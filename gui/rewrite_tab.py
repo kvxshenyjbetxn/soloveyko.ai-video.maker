@@ -26,14 +26,20 @@ class RewriteTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        # Input Label
+        # Input Header
+        input_header_layout = QHBoxLayout()
         self.input_label = QLabel(translator.translate("enter_links_label", "Enter YouTube Links (one per line):"))
-        layout.addWidget(self.input_label)
+        self.link_count_label = QLabel("")
+        input_header_layout.addWidget(self.input_label)
+        input_header_layout.addStretch()
+        input_header_layout.addWidget(self.link_count_label)
+        layout.addLayout(input_header_layout)
 
         # Input Edit
         self.input_edit = DroppableTextEdit()
         self.input_edit.setPlaceholderText("https://www.youtube.com/watch?v=...\nhttps://youtu.be/...")
         self.input_edit.textChanged.connect(self.check_queue_button_visibility)
+        self.input_edit.textChanged.connect(self.update_link_count)
         layout.addWidget(self.input_edit, 1)
 
         # --- Stages Container ---
@@ -66,6 +72,26 @@ class RewriteTab(QWidget):
         self.languages_menu_grid_layout.setColumnStretch(1, 0)
 
         layout.addWidget(self.languages_menu_container)
+        
+
+        # Status bar
+        self.status_bar_layout = QHBoxLayout()
+        self.openrouter_balance_label = QLabel("OpenRouter: -")
+        self.googler_usage_label = QLabel("Googler: -")
+        self.elevenlabs_balance_label = QLabel("ElevenLabs: -")
+        self.voicemaker_balance_label = QLabel("Voicemaker: -")
+        self.gemini_tts_balance_label = QLabel("GeminiTTS: -")
+        self.status_bar_layout.addWidget(self.openrouter_balance_label)
+        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.googler_usage_label)
+        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
+        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.voicemaker_balance_label)
+        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.gemini_tts_balance_label)
+        self.status_bar_layout.addStretch()
+        layout.addLayout(self.status_bar_layout)
         
         self.load_languages_menu()
 
@@ -228,6 +254,8 @@ class RewriteTab(QWidget):
             self.input_edit.clear()
             self.check_queue_button_visibility()
 
+
+
     def retranslate_ui(self):
         self.input_label.setText(translator.translate("enter_links_label", "Enter YouTube Links (one per line):"))
         self.add_to_queue_button.setText(translator.translate("add_to_queue"))
@@ -238,3 +266,28 @@ class RewriteTab(QWidget):
         # Reload stages translation
         for widget in self.stage_widgets.values():
             widget.retranslate_ui()
+
+        self.update_link_count() 
+
+    def update_balance(self, balance_text):
+        self.openrouter_balance_label.setText(balance_text)
+
+    def update_googler_usage(self, usage_text):
+        self.googler_usage_label.setText(usage_text)
+
+    def update_elevenlabs_balance(self, balance_text):
+        self.elevenlabs_balance_label.setText(balance_text)
+
+    def update_voicemaker_balance(self, balance_text):
+        self.voicemaker_balance_label.setText(balance_text)
+
+    def update_gemini_tts_balance(self, balance_text):
+        self.gemini_tts_balance_label.setText(balance_text)
+
+    def update_link_count(self):
+        text = self.input_edit.toPlainText().strip()
+        if not text:
+            count = 0
+        else:
+            count = len([line for line in text.split('\n') if line.strip()])
+        self.link_count_label.setText(f"{translator.translate('links_count_label', 'Links count')}: {count}")
