@@ -97,34 +97,46 @@ class LanguagesTab(QWidget):
         right_layout = QVBoxLayout(self.right_panel)
         splitter.addWidget(self.right_panel)
 
-        self.prompt_label = QLabel()
-        self.prompt_edit = QTextEdit()
-        self.prompt_edit.setMinimumHeight(150)
-        self.prompt_edit.textChanged.connect(self.save_current_language_settings)
-        
-        self.open_editor_button = QPushButton(translator.translate("open_editor_button", "Open Fullscreen Editor"))
-        self.open_editor_button.clicked.connect(self.open_prompt_editor)
-
-        prompt_layout = QHBoxLayout()
-        prompt_layout.addWidget(self.prompt_edit)
-        editor_button_layout = QVBoxLayout()
-        editor_button_layout.addWidget(self.open_editor_button)
-        editor_button_layout.addStretch()
-        prompt_layout.addLayout(editor_button_layout)
-
         settings_layout = QFormLayout()
+
+        # --- Translation Settings Group ---
+        trans_group = QGroupBox(translator.translate("stage_translation"))
+        trans_layout = QVBoxLayout(trans_group)
+
+        # Translation Prompt Section
+        self.prompt_label = QLabel(translator.translate("language_prompt_label"))
+        trans_layout.addWidget(self.prompt_label)
+
+        trans_prompt_area = QHBoxLayout()
+        self.prompt_edit = QTextEdit()
+        self.prompt_edit.setMinimumHeight(100)
+        self.prompt_edit.textChanged.connect(self.save_current_language_settings)
+        trans_prompt_area.addWidget(self.prompt_edit)
+
+        trans_edit_btn_layout = QVBoxLayout()
+        self.open_editor_button = QPushButton(translator.translate("open_editor_button", "Editor"))
+        self.open_editor_button.clicked.connect(self.open_prompt_editor)
+        self.open_editor_button.setFixedWidth(60)
+        trans_edit_btn_layout.addWidget(self.open_editor_button)
+        trans_edit_btn_layout.addStretch()
+        trans_prompt_area.addLayout(trans_edit_btn_layout)
         
-        self.model_label = QLabel()
+        trans_layout.addLayout(trans_prompt_area)
+
+        # Translation Parameters (Form Layout)
+        trans_params = QFormLayout()
+        
+        self.model_label = QLabel(translator.translate("translation_model_label"))
         self.model_combo = QComboBox()
         self.model_combo.currentIndexChanged.connect(self.save_current_language_settings)
-        settings_layout.addRow(self.model_label, self.model_combo)
+        trans_params.addRow(self.model_label, self.model_combo)
 
-        self.tokens_label = QLabel()
+        self.tokens_label = QLabel(translator.translate("tokens_label"))
         self.tokens_spinbox = QSpinBox()
         self.tokens_spinbox.setRange(0, 128000)
         self.tokens_spinbox.setValue(4096)
         self.tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
-        settings_layout.addRow(self.tokens_label, self.tokens_spinbox)
+        trans_params.addRow(self.tokens_label, self.tokens_spinbox)
 
         self.temperature_label = QLabel(translator.translate("temperature_label"))
         self.temperature_spinbox = QDoubleSpinBox()
@@ -132,7 +144,63 @@ class LanguagesTab(QWidget):
         self.temperature_spinbox.setSingleStep(0.1)
         self.temperature_spinbox.setValue(0.7)
         self.temperature_spinbox.valueChanged.connect(self.save_current_language_settings)
-        settings_layout.addRow(self.temperature_label, self.temperature_spinbox)
+        trans_params.addRow(self.temperature_label, self.temperature_spinbox)
+
+        trans_layout.addLayout(trans_params)
+        
+        settings_layout.addRow(trans_group)
+
+
+        # --- Rewrite Settings Group ---
+        rewrite_group = QGroupBox(translator.translate("stage_rewrite"))
+        rewrite_layout = QVBoxLayout(rewrite_group)
+
+        # Rewrite Prompt Section
+        self.rewrite_prompt_label = QLabel(translator.translate("rewrite_prompt_label"))
+        rewrite_layout.addWidget(self.rewrite_prompt_label)
+
+        rewrite_prompt_area = QHBoxLayout()
+        self.rewrite_prompt_edit = QTextEdit()
+        self.rewrite_prompt_edit.setMinimumHeight(100)
+        self.rewrite_prompt_edit.textChanged.connect(self.save_current_language_settings)
+        rewrite_prompt_area.addWidget(self.rewrite_prompt_edit)
+
+        rewrite_edit_btn_layout = QVBoxLayout()
+        self.open_rewrite_editor_button = QPushButton(translator.translate("open_editor_button", "Editor"))
+        self.open_rewrite_editor_button.clicked.connect(self.open_rewrite_prompt_editor)
+        self.open_rewrite_editor_button.setFixedWidth(60)
+        rewrite_edit_btn_layout.addWidget(self.open_rewrite_editor_button)
+        rewrite_edit_btn_layout.addStretch()
+        rewrite_prompt_area.addLayout(rewrite_edit_btn_layout)
+
+        rewrite_layout.addLayout(rewrite_prompt_area)
+
+        # Rewrite Parameters (Form Layout)
+        rewrite_params = QFormLayout()
+        
+        self.rewrite_model_label = QLabel(translator.translate("rewrite_model_label"))
+        self.rewrite_model_combo = QComboBox()
+        self.rewrite_model_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        rewrite_params.addRow(self.rewrite_model_label, self.rewrite_model_combo)
+
+        self.rewrite_tokens_label = QLabel(translator.translate("tokens_label"))
+        self.rewrite_tokens_spinbox = QSpinBox()
+        self.rewrite_tokens_spinbox.setRange(0, 128000)
+        self.rewrite_tokens_spinbox.setValue(4096)
+        self.rewrite_tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
+        rewrite_params.addRow(self.rewrite_tokens_label, self.rewrite_tokens_spinbox)
+
+        self.rewrite_temperature_label = QLabel(translator.translate("temperature_label"))
+        self.rewrite_temperature_spinbox = QDoubleSpinBox()
+        self.rewrite_temperature_spinbox.setRange(0.0, 2.0)
+        self.rewrite_temperature_spinbox.setSingleStep(0.1)
+        self.rewrite_temperature_spinbox.setValue(0.7)
+        self.rewrite_temperature_spinbox.valueChanged.connect(self.save_current_language_settings)
+        rewrite_params.addRow(self.rewrite_temperature_label, self.rewrite_temperature_spinbox)
+        
+        rewrite_layout.addLayout(rewrite_params)
+
+        settings_layout.addRow(rewrite_group)
 
         # Default Template
         self.default_template_label = QLabel()
@@ -280,8 +348,6 @@ class LanguagesTab(QWidget):
         settings_layout.addRow(effects_group)
 
 
-        right_layout.addWidget(self.prompt_label)
-        right_layout.addLayout(prompt_layout)
         right_layout.addLayout(settings_layout)
         right_layout.addStretch()
 
@@ -293,6 +359,11 @@ class LanguagesTab(QWidget):
         dialog = PromptEditorDialog(self, self.prompt_edit.toPlainText())
         if dialog.exec():
             self.prompt_edit.setPlainText(dialog.get_text())
+
+    def open_rewrite_prompt_editor(self):
+        dialog = PromptEditorDialog(self, self.rewrite_prompt_edit.toPlainText())
+        if dialog.exec():
+            self.rewrite_prompt_edit.setPlainText(dialog.get_text())
             
     def browse_for_music_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -360,6 +431,7 @@ class LanguagesTab(QWidget):
         self.model_combo.clear()
         models = self.settings.get("openrouter_models", [])
         self.model_combo.addItems(models)
+        self.rewrite_model_combo.addItems(models)
         self.model_combo.blockSignals(False)
 
     def load_templates_combo(self):
@@ -484,6 +556,10 @@ class LanguagesTab(QWidget):
             self.model_combo.blockSignals(True)
             self.tokens_spinbox.blockSignals(True)
             self.temperature_spinbox.blockSignals(True)
+            self.rewrite_prompt_edit.blockSignals(True)
+            self.rewrite_model_combo.blockSignals(True)
+            self.rewrite_tokens_spinbox.blockSignals(True)
+            self.rewrite_temperature_spinbox.blockSignals(True)
             self.elevenlabs_template_combo.blockSignals(True)
             self.tts_provider_combo.blockSignals(True)
             self.voicemaker_voice_combo.blockSignals(True)
@@ -539,6 +615,16 @@ class LanguagesTab(QWidget):
             self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
             self.temperature_spinbox.setValue(config.get("temperature", 0.7))
 
+            # Rewrite Settings
+            self.rewrite_prompt_edit.setPlainText(config.get("rewrite_prompt", ""))
+            
+            current_rewrite_model = config.get("rewrite_model", "")
+            idx = self.rewrite_model_combo.findText(current_rewrite_model)
+            self.rewrite_model_combo.setCurrentIndex(idx if idx >= 0 else 0)
+
+            self.rewrite_tokens_spinbox.setValue(config.get("rewrite_max_tokens", 4096))
+            self.rewrite_temperature_spinbox.setValue(config.get("rewrite_temperature", 0.7))
+
             # Default Template
             current_default_template = config.get("default_template")
             if current_default_template is None:
@@ -582,6 +668,10 @@ class LanguagesTab(QWidget):
             self.default_template_combo.blockSignals(False)
             self.watermark_size_slider.blockSignals(False)
             self.watermark_position_combo.blockSignals(False)
+            self.rewrite_prompt_edit.blockSignals(False)
+            self.rewrite_model_combo.blockSignals(False)
+            self.rewrite_tokens_spinbox.blockSignals(False)
+            self.rewrite_temperature_spinbox.blockSignals(False)
 
             
             self.right_panel.setVisible(True)
@@ -605,6 +695,10 @@ class LanguagesTab(QWidget):
             "model": "",
             "max_tokens": 4096,
             "temperature": 0.7,
+            "rewrite_prompt": "",
+            "rewrite_model": "",
+            "rewrite_max_tokens": 4096,
+            "rewrite_temperature": 0.7,
             "tts_provider": "ElevenLabs",
             "elevenlabs_template_uuid": "",
             "voicemaker_voice_id": "",
@@ -661,6 +755,12 @@ class LanguagesTab(QWidget):
         lang_settings["model"] = self.model_combo.currentText()
         lang_settings["max_tokens"] = self.tokens_spinbox.value()
         lang_settings["temperature"] = self.temperature_spinbox.value()
+        
+        lang_settings["rewrite_prompt"] = self.rewrite_prompt_edit.toPlainText()
+        lang_settings["rewrite_model"] = self.rewrite_model_combo.currentText()
+        lang_settings["rewrite_max_tokens"] = self.rewrite_tokens_spinbox.value()
+        lang_settings["rewrite_temperature"] = self.rewrite_temperature_spinbox.value()
+
         lang_settings["tts_provider"] = self.tts_provider_combo.currentText()
         lang_settings["elevenlabs_template_uuid"] = self.elevenlabs_template_combo.currentData()
         lang_settings["voicemaker_voice_id"] = self.voicemaker_voice_combo.currentData()
@@ -722,6 +822,10 @@ class LanguagesTab(QWidget):
         self.gemini_voice_label.setText(translator.translate("gemini_voice_label"))
         self.default_template_label.setText(translator.translate("default_template_label", "Default Template:"))
         self.temperature_label.setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
+        self.rewrite_prompt_label.setText(translator.translate("rewrite_prompt_label"))
+        self.rewrite_model_label.setText(translator.translate("rewrite_model_label"))
+        self.rewrite_tokens_label.setText(translator.translate("tokens_label"))
+        self.rewrite_temperature_label.setText(translator.translate("temperature_label"))
         self.bg_music_label.setText(translator.translate("background_music_label", "Background Music:"))
         self.browse_bg_music_button.setText(translator.translate("browse_button", "Browse..."))
         self.clear_bg_music_button.setText(translator.translate("clear_button", "Clear"))

@@ -115,6 +115,13 @@ class GeneralTab(QWidget):
         prompt_count_layout.addStretch()
         
         self.controls_layout.addRow(self.prompt_count_widget)
+
+        # Max download threads
+        self.max_download_threads_label = QLabel()
+        self.max_download_threads_spinbox = QSpinBox()
+        self.max_download_threads_spinbox.setRange(1, 100)
+        self.max_download_threads_spinbox.valueChanged.connect(self.max_download_threads_changed)
+        self.controls_layout.addRow(self.max_download_threads_label, self.max_download_threads_spinbox)
         
         form_layout.addRow(self.controls_group)
 
@@ -142,6 +149,7 @@ class GeneralTab(QWidget):
         self.detailed_logging_checkbox.blockSignals(True)
         self.prompt_count_control_checkbox.blockSignals(True)
         self.prompt_count_spinbox.blockSignals(True)
+        self.max_download_threads_spinbox.blockSignals(True)
 
         lang_map = {"uk": 0, "en": 1, "ru": 2}
         current_lang = settings_manager.get('language')
@@ -162,6 +170,7 @@ class GeneralTab(QWidget):
         self.prompt_count_control_checkbox.setChecked(prompt_control_enabled)
         self.prompt_count_widget.setVisible(prompt_control_enabled)
         self.prompt_count_spinbox.setValue(settings_manager.get('prompt_count', 10))
+        self.max_download_threads_spinbox.setValue(settings_manager.get('max_download_threads', 5))
 
         self.update_style() # Set button color and border
 
@@ -174,6 +183,7 @@ class GeneralTab(QWidget):
         self.detailed_logging_checkbox.blockSignals(False)
         self.prompt_count_control_checkbox.blockSignals(False)
         self.prompt_count_spinbox.blockSignals(False)
+        self.max_download_threads_spinbox.blockSignals(False)
 
 
     def open_color_dialog(self):
@@ -214,6 +224,9 @@ class GeneralTab(QWidget):
         settings_manager.set('detailed_logging_enabled', state == Qt.CheckState.Checked.value)
         logger.reconfigure()
 
+    def max_download_threads_changed(self, value):
+        settings_manager.set('max_download_threads', value)
+
     def language_changed(self, index):
         lang_map = {0: "uk", 1: "en", 2: "ru"}
         lang_code = lang_map.get(index, "uk")
@@ -251,3 +264,4 @@ class GeneralTab(QWidget):
         self.accent_color_label.setText(translator.translate('accent_color_label'))
         self.prompt_count_control_label.setText(translator.translate('prompt_count_control_label'))
         self.prompt_count_label.setText(translator.translate('prompt_count_label'))
+        self.max_download_threads_label.setText(translator.translate('max_download_threads_label'))
