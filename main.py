@@ -26,6 +26,8 @@ from gui.main_window import MainWindow
 from gui.auth_dialog import AuthDialog
 from gui.qt_material import apply_stylesheet
 from utils.settings import settings_manager
+from utils.yt_dlp_updater import YtDlpUpdater
+
 
 # --- НОВА ФУНКЦІЯ: ДОДАЄ ASSETS У PATH ---
 def setup_dependency_paths():
@@ -198,6 +200,16 @@ def main():
                 pass
                 
         main_window.show()
+
+        # --- Start yt-dlp Auto-Updater in background ---
+        try:
+            updater = YtDlpUpdater(main_window)
+            # We keep a reference to prevent garbage collection
+            main_window._yt_dlp_updater = updater
+            updater.start()
+        except Exception as e:
+            print(f"DEBUG: Failed to start yt-dlp updater: {e}")
+
         exit_code = app.exec()
         
         # --- Uninitialize Windows COM after Qt event loop ends ---
