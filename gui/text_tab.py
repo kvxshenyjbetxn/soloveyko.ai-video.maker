@@ -608,14 +608,14 @@ class TextTab(QWidget):
             if found_files_per_lang:
                 display_order = ["stage_translation", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
                 
-                message = translator.translate("found_existing_files_prompt") + f" '{task_name}':\n\n"
+                message = translator.translate("found_existing_files_prompt") + f" '{task_name}':<br><br>"
                 for lang_name, found_stages in found_files_per_lang.items():
-                    message += f"<b>{lang_name}:</b>\n"
+                    message += f"<b>{lang_name}:</b><ul>"
                     # Iterate in the specified order
                     for stage_key in display_order:
                         if stage_key in found_stages:
-                            message += f"- {found_stages[stage_key]}\n"
-                    message += "\n"
+                            message += f"<li>{found_stages[stage_key]}</li>"
+                    message += "</ul>"
                 message += translator.translate("use_existing_files_question")
 
                 msg_box = QMessageBox(self)
