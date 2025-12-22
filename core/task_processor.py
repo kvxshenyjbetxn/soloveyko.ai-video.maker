@@ -1608,11 +1608,13 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_subtitles_error(self, task_id, error):
-        sub_settings = self.settings.get('subtitles', {})
-        whisper_type = sub_settings.get('whisper_type', 'amd')
-        if whisper_type != 'assemblyai':
-            self.subtitle_semaphore.release()
-            self._process_subtitle_queue()
+        state = self.task_states.get(task_id)
+        if state:
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            if whisper_type != 'assemblyai':
+                self.subtitle_semaphore.release()
+                self._process_whisper_queue()
 
         self._set_stage_status(task_id, 'stage_subtitles', 'error', error)
         self._increment_subtitle_counter()
