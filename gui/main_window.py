@@ -150,6 +150,7 @@ class MainWindow(QMainWindow):
         self.subscription_info = subscription_info
         self.api_key = api_key
         self.server_url = server_url
+        self.subscription_level = 1 # Default level
         self.settings_manager = settings_manager
         self.translator = translator
         
@@ -195,6 +196,7 @@ class MainWindow(QMainWindow):
         self.threadpool.start(worker)
 
     def on_api_key_checked(self, is_valid, expires_at, subscription_level):
+        self.subscription_level = subscription_level
         if is_valid:
             # Update subscription info logic
             days_left = 0
@@ -434,6 +436,12 @@ class MainWindow(QMainWindow):
         days_left_text = ""
         tooltip_text = self.translator.translate('no_subscription_info')
 
+        if hasattr(self, 'subscription_level') and self.subscription_level >= 2:
+            self.days_left_label.setText(self.translator.translate('subscription_unlimited'))
+            self.days_left_label.setStyleSheet("color: gold; font-weight: bold;")
+            self.user_icon_button.setToolTip(self.translator.translate('subscription_unlimited'))
+            return
+
         if self.subscription_info:
             try:
                 # Handle ISO format string, potentially with 'Z' at the end
@@ -478,7 +486,10 @@ class MainWindow(QMainWindow):
                 now = datetime.now(expires_at.tzinfo)
                 days_left = (expires_at - now).days
 
-                if days_left >= 0:
+                # Hide expiration info for Level 2 (Unlimited)
+                if hasattr(self, 'subscription_level') and self.subscription_level >= 2:
+                    menu.addAction(self.translator.translate('subscription_unlimited'))
+                elif days_left >= 0:
                     menu.addAction(f"{self.translator.translate('subscription_active_until')}: {expires_at_formatted}")
                     menu.addAction(f"{self.translator.translate('days_left')}: {days_left}")
                 else:
