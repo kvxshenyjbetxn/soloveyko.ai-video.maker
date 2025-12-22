@@ -1843,6 +1843,8 @@ class TaskProcessor(QObject):
             if first_img_basename != '1':
                 logger.log(f"[{task_id}] First image is '{first_img_basename}', not '1'. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
                 state.fallback_to_quick_show = True
+                # Fix: Update status to success (or warning) so the flow continues, instead of stalling in 'processing_video'
+                self._set_stage_status(task_id, 'stage_images', state.image_gen_status) 
                 if self.subtitle_barrier_passed: self._check_and_start_montages()
                 return
 

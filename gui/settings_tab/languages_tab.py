@@ -5,7 +5,7 @@ import copy
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLineEdit,
     QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox,
-    QFileDialog, QSlider
+    QFileDialog, QSlider, QScrollArea
 )
 from PySide6.QtCore import Qt
 from utils.translator import translator
@@ -95,9 +95,17 @@ class LanguagesTab(QWidget):
         # --- Right Panel ---
         self.right_panel = QWidget()
         right_layout = QVBoxLayout(self.right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0) # Zero margins for the panel itself
         splitter.addWidget(self.right_panel)
 
-        settings_layout = QFormLayout()
+        # Create Scroll Area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        
+        # Container for settings
+        settings_container = QWidget()
+        settings_layout = QFormLayout(settings_container)
 
         # --- Translation Settings Group ---
         trans_group = QGroupBox(translator.translate("stage_translation"))
@@ -348,8 +356,8 @@ class LanguagesTab(QWidget):
         settings_layout.addRow(effects_group)
 
 
-        right_layout.addLayout(settings_layout)
-        right_layout.addStretch()
+        scroll_area.setWidget(settings_container)
+        right_layout.addWidget(scroll_area)
 
         # Set initial state
         self.right_panel.setVisible(False)
