@@ -4,6 +4,7 @@ import math
 import sys
 import tempfile
 import re
+import platform
 from utils.logger import logger, LogLevel
 
 class MontageEngine:
@@ -371,12 +372,14 @@ class MontageEngine:
             
             cmd.extend(["-shortest", output_path.replace("\\", "/")])
 
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo = None
+            if platform.system() == "Windows":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             
             process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
-                stdin=subprocess.DEVNULL, # fix for potential handle inheritance blocking or COM issues
+                stdin=subprocess.DEVNULL,
                 text=True, encoding='utf-8', errors='replace', startupinfo=startupinfo
             )
 
@@ -433,10 +436,15 @@ class MontageEngine:
         cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", 
                "-of", "default=noprint_wrappers=1:nokey=1", normalized_path]
         try:
-            si = subprocess.STARTUPINFO()
-            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            res = subprocess.run(cmd, capture_output=True, text=True, startupinfo=si)
+            startupinfo = None
+            if platform.system() == "Windows":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+            res = subprocess.run(cmd, capture_output=True, text=True, startupinfo=startupinfo)
             val = res.stdout.strip()
             return float(val) if val else 0
+        except Exception:
+            return 0
         except:
             return 0

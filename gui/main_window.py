@@ -416,9 +416,9 @@ class MainWindow(QMainWindow):
 
     def _start_processing_checked(self):
         worker = ApiKeyCheckWorker(api_key=self.api_key, server_url=self.server_url)
-        # We connect to a lambda to pass a flag indicating this is a pre-processing check
+        # Fix: the signal emits 3 arguments (bool, str, int)
         worker.signals.finished.connect(
-            lambda is_valid, expires_at: self.on_pre_processing_validation_finished(is_valid)
+            lambda is_valid, expires_at, sub_level: self.on_pre_processing_validation_finished(is_valid)
         )
         self.threadpool.start(worker)
 

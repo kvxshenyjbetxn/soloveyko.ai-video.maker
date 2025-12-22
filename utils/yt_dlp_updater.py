@@ -33,20 +33,19 @@ class YtDlpUpdater(QThread):
         else:
             exe_name = "yt-dlp"
 
-        # 1. Check in new Documents base path (macOS only)
-        if platform.system() == "Darwin":
-            from utils.settings import settings_manager
-            path_in_documents = os.path.join(settings_manager.base_path, exe_name)
-            if os.path.exists(path_in_documents):
-                return path_in_documents
+        # 1. Check in Common Data path (where user will manually put it)
+        from utils.settings import settings_manager
+        path_in_base = os.path.join(settings_manager.base_path, exe_name)
+        if os.path.exists(path_in_base):
+            return path_in_base
 
-        # 2. Check in assets
+        # 2. Check in assets (internal bundle)
         path_in_assets = os.path.join(assets_dir, exe_name)
         if os.path.exists(path_in_assets):
             return path_in_assets
 
         # 3. Fallback to system path
-        return "yt-dlp"
+        return exe_name
 
     def run(self):
         """
@@ -59,6 +58,24 @@ class YtDlpUpdater(QThread):
             # --update-to stable ensures we stay on stable versions
             # --update-to is preferred over -U in newer versions, but -U is more compatible
             cmd = [self.yt_dlp_path, "-U"]
+            
+            # Check if file exists and is executable
+            if not os.path.exists(self.yt_dlp_path):
+                # If path is just the name, it might be in PATH
+                if "/" not in self.yt_dlp_path and "\\" not in self.yt_dlp_path:
+                    pass # Trust result from shutil.which or similar (handled by system)
+                else:
+                    logger.log(f"yt-dlp not found at {self.yt_dlp_path}. Skipping update.", level=LogLevel.WARNING)
+                    return
+
+            # On macOS, ensure execution permissions if we have a direct path
+            if platform.system() == "Darwin" and os.path.exists(self.yt_dlp_path):
+                try:
+                    import stat
+                    st = os.stat(self.yt_dlp_path)
+                    os.chmod(self.yt_dlp_path, st.st_mode | stat.S_IEXEC)
+                except:
+                    pass
             
             # On Windows, prevent console window popping up
             startupinfo = None
