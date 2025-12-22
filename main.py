@@ -8,8 +8,8 @@ from datetime import datetime
 # Avoid potential crashes on macOS with faulthandler + GUI
 # and use devnull instead of custom NullWriter for early logs
 if platform.system() == "Darwin":
-    os.environ['PYTHONMALLOC'] = 'malloc' # Debugging hint for macOS allocator
-    # os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false'
+    # Suppress FFmpeg logs from Qt Multimedia on macOS to prevent some driver/lib conflicts
+    os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false;qt.text.font.db.*=false'
 
 if sys.stdout is None:
     try:
@@ -62,17 +62,27 @@ def setup_dependency_paths():
                 for tool in ["ffmpeg", "ffprobe", "yt-dlp"]:
                     tool_p = os.path.join(assets_dir, tool)
                     if os.path.exists(tool_p):
+                        # Remove quarantine and set exec bit
+                        try:
+                            # 'xattr -d com.apple.quarantine' removes the "downloaded from internet" block
+                            subprocess.run(["xattr", "-d", "com.apple.quarantine", tool_p], stderr=subprocess.DEVNULL)
+                        except: pass
+                        
                         st = os.stat(tool_p)
                         os.chmod(tool_p, st.st_mode | stat.S_IEXEC)
                 
-                # Також перевіряємо yt-dlp у папці налаштувань (куди користувач кладе його вручну)
+                # Також для yt-dlp у папці налаштувань (куди користувач кладе його вручну)
                 from utils.settings import settings_manager
                 yt_dlp_ext = "yt-dlp.exe" if platform.system() == "Windows" else "yt-dlp"
                 yt_dlp_data_p = os.path.join(settings_manager.base_path, yt_dlp_ext)
                 if os.path.exists(yt_dlp_data_p):
+                    try:
+                        subprocess.run(["xattr", "-d", "com.apple.quarantine", yt_dlp_data_p], stderr=subprocess.DEVNULL)
+                    except: pass
                     st = os.stat(yt_dlp_data_p)
                     os.chmod(yt_dlp_data_p, st.st_mode | stat.S_IEXEC)
-            except:
+            except Exception as e:
+                # print(f"DEBUG: Failed to setup macOS permissions: {e}")
                 pass
     else:
         # Fallback: навіть якщо не знайшли файл у assets, додамо шлях про всяк випадок

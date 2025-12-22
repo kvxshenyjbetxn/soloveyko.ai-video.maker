@@ -72,6 +72,8 @@ class YtDlpUpdater(QThread):
             if platform.system() == "Darwin" and os.path.exists(self.yt_dlp_path):
                 try:
                     import stat
+                    # Remove the "downloaded from internet" quarantine attribute
+                    subprocess.run(["xattr", "-d", "com.apple.quarantine", self.yt_dlp_path], stderr=subprocess.DEVNULL)
                     st = os.stat(self.yt_dlp_path)
                     os.chmod(self.yt_dlp_path, st.st_mode | stat.S_IEXEC)
                 except:
