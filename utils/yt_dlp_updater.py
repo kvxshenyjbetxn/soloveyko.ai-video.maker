@@ -33,12 +33,19 @@ class YtDlpUpdater(QThread):
         else:
             exe_name = "yt-dlp"
 
-        # 1. Check in assets
+        # 1. Check in new Documents base path (macOS only)
+        if platform.system() == "Darwin":
+            from utils.settings import settings_manager
+            path_in_documents = os.path.join(settings_manager.base_path, exe_name)
+            if os.path.exists(path_in_documents):
+                return path_in_documents
+
+        # 2. Check in assets
         path_in_assets = os.path.join(assets_dir, exe_name)
         if os.path.exists(path_in_assets):
             return path_in_assets
 
-        # 2. Fallback to system path
+        # 3. Fallback to system path
         return "yt-dlp"
 
     def run(self):
