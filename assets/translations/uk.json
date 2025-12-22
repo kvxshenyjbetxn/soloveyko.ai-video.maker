@@ -29,6 +29,7 @@
     "clean_chars_label": "Чистих символів",
     "paragraphs_label": "Абзаців",
     "openrouter_api_key": "Ключ API OpenRouter:",
+    "max_concurrent_requests": "Макс. потоків AI (OpenRouter):",
     "enter_api_key": "Введіть ваш API ключ",
     "check_connection": "Перевірити з'єднання",
     "connection_status_not_checked": "Статус: Не перевірено",

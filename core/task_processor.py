@@ -687,6 +687,10 @@ class TaskProcessor(QObject):
         max_downloads = self.settings.get("max_download_threads", 5)
         self.download_semaphore = QSemaphore(max_downloads)
 
+        # OpenRouter concurrency
+        self.openrouter_active_count = 0
+        self.openrouter_queue = collections.deque()
+
         # Determine yt-dlp path
         if getattr(sys, 'frozen', False):
             base_dir = os.path.dirname(sys.executable)
@@ -1069,21 +1073,31 @@ class TaskProcessor(QObject):
                 self._set_stage_status(task_id, stage, 'error', "Dependency (Transcription) failed")
 
     def _start_rewrite(self, task_id, text):
-        state = self.task_states[task_id]
-        lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
-        
-        config = {
-            'text': text,
-            'prompt': lang_config.get('rewrite_prompt', 'Rewrite this text:'),
-            'model': lang_config.get('rewrite_model', 'google/gemini-2.0-flash-exp:free'),
-            'max_tokens': lang_config.get('rewrite_max_tokens', 4096),
-            'temperature': lang_config.get('rewrite_temperature', 0.7),
-            'openrouter_api_key': state.settings.get('openrouter_api_key')
-        }
-        self._start_worker(RewriteWorker, task_id, 'stage_rewrite', config, self._on_rewrite_finished, self._on_rewrite_error)
+        self.openrouter_queue.append((task_id, 'rewrite', text))
+        self._process_openrouter_queue()
+
+    def _launch_rewrite_worker(self, task_id, text):
+        try:
+            state = self.task_states[task_id]
+            lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
+            
+            config = {
+                'text': text,
+                'prompt': lang_config.get('rewrite_prompt', 'Rewrite this text:'),
+                'model': lang_config.get('rewrite_model', 'google/gemini-2.0-flash-exp:free'),
+                'max_tokens': lang_config.get('rewrite_max_tokens', 4096),
+                'temperature': lang_config.get('rewrite_temperature', 0.7),
+                'openrouter_api_key': state.settings.get('openrouter_api_key')
+            }
+            self._start_worker(RewriteWorker, task_id, 'stage_rewrite', config, self._on_rewrite_finished, self._on_rewrite_error)
+        except Exception as e:
+            self._on_rewrite_error(task_id, f"Failed to start rewrite: {e}")
 
     @Slot(str, object)
     def _on_rewrite_finished(self, task_id, rewritten_text):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         state = self.task_states[task_id]
         state.text_for_processing = rewritten_text
         with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
@@ -1096,6 +1110,9 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_rewrite_error(self, task_id, error):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         self._set_stage_status(task_id, 'stage_rewrite', 'error', error)
         # Fail dependencies
         for stage in ['stage_img_prompts', 'stage_images', 'stage_voiceover', 'stage_subtitles', 'stage_montage']:
@@ -1103,17 +1120,26 @@ class TaskProcessor(QObject):
                 self._set_stage_status(task_id, stage, 'error', "Dependency (Rewrite) failed")
 
     def _start_translation(self, task_id):
-        state = self.task_states[task_id]
-        lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
-        config = {
-            'text': state.original_text,
-            'lang_config': lang_config,
-            'openrouter_api_key': state.settings.get('openrouter_api_key')
-        }
-        self._start_worker(TranslationWorker, task_id, 'stage_translation', config, self._on_translation_finished, self._on_translation_error)
+        self.openrouter_queue.append((task_id, 'translation', None))
+        self._process_openrouter_queue()
+
+    def _launch_translation_worker(self, task_id):
+        try:
+            state = self.task_states[task_id]
+            lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
+            config = {
+                'text': state.original_text,
+                'lang_config': lang_config,
+                'openrouter_api_key': state.settings.get('openrouter_api_key')
+            }
+            self._start_worker(TranslationWorker, task_id, 'stage_translation', config, self._on_translation_finished, self._on_translation_error)
+        except Exception as e:
+            self._on_translation_error(task_id, f"Failed to start translation: {e}")
 
     @Slot(str, object)
     def _on_translation_finished(self, task_id, translated_text):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
         state = self.task_states[task_id]
         state.text_for_processing = translated_text
         if state.dir_path:
@@ -1145,6 +1171,9 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_translation_error(self, task_id, error):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         self._set_stage_status(task_id, 'stage_translation', 'error', error)
         # If translation fails, subsequent stages that depend on it must also fail.
         state = self.task_states[task_id]
@@ -1199,35 +1228,60 @@ class TaskProcessor(QObject):
                     if stage_name and prompt:
                         self._start_custom_stage(task_id, stage_name, prompt, model, max_tokens, temperature)
 
+    def _process_openrouter_queue(self):
+        max_openrouter = self.settings.get("openrouter_max_threads", 5)
+        while self.openrouter_queue and self.openrouter_active_count < max_openrouter:
+            task_id, worker_type, extra_data = self.openrouter_queue.popleft()
+            self.openrouter_active_count += 1
+            
+            if worker_type == 'rewrite':
+                self._launch_rewrite_worker(task_id, extra_data)
+            elif worker_type == 'translation':
+                self._launch_translation_worker(task_id)
+            elif worker_type == 'image_prompts':
+                self._launch_image_prompts_worker(task_id)
+            elif worker_type == 'custom_stage':
+                self._launch_custom_stage_worker(task_id, *extra_data)
     def _start_custom_stage(self, task_id, stage_name, prompt, model=None, max_tokens=None, temperature=None):
-        state = self.task_states[task_id]
-        
-        # Fallback to defaults if not specified or empty
-        # If model is not in custom stage settings, use the image prompt model or default
-        if not model:
-            model = state.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
-        if not max_tokens:
-             max_tokens = 4096
-        if temperature is None:
-            temperature = 0.7
+        extra_data = (stage_name, prompt, model, max_tokens, temperature)
+        self.openrouter_queue.append((task_id, 'custom_stage', extra_data))
+        self._process_openrouter_queue()
 
-        config = {
-            'text': state.text_for_processing,
-            'dir_path': state.dir_path,
-            'stage_name': stage_name,
-            'prompt': prompt,
-            'model': model,
-            'max_tokens': int(max_tokens),
-            'temperature': float(temperature),
-            'openrouter_api_key': state.settings.get('openrouter_api_key')
-        }
-        
-        # Define callbacks with closures to capture stage_name safely
-        self._start_worker(CustomStageWorker, task_id, f"custom_{stage_name}", config, 
-                           self._on_custom_stage_finished, self._on_custom_stage_error_slot)
+    def _launch_custom_stage_worker(self, task_id, stage_name, prompt, model=None, max_tokens=None, temperature=None):
+        try:
+            state = self.task_states[task_id]
+            
+            # Fallback to defaults if not specified or empty
+            # If model is not in custom stage settings, use the image prompt model or default
+            if not model:
+                model = state.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
+            if not max_tokens:
+                 max_tokens = 4096
+            if temperature is None:
+                temperature = 0.7
+
+            config = {
+                'text': state.text_for_processing,
+                'dir_path': state.dir_path,
+                'stage_name': stage_name,
+                'prompt': prompt,
+                'model': model,
+                'max_tokens': int(max_tokens),
+                'temperature': float(temperature),
+                'openrouter_api_key': state.settings.get('openrouter_api_key')
+            }
+            
+            # Define callbacks with closures to capture stage_name safely
+            self._start_worker(CustomStageWorker, task_id, f"custom_{stage_name}", config, 
+                               self._on_custom_stage_finished, self._on_custom_stage_error_slot)
+        except Exception as e:
+            self._on_custom_stage_error_slot(task_id, f"Failed to start custom stage '{stage_name}': {e}")
 
     @Slot(str, object)
     def _on_custom_stage_finished(self, task_id, result_data):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         stage_name = result_data.get('stage_name')
         # output_path = result_data.get('path') 
         
@@ -1239,7 +1293,9 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_custom_stage_error_slot(self, task_id, error):
-         
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         worker = self.sender()
         stage_name = "unknown"
         if worker and hasattr(worker, 'config') and 'stage_name' in worker.config:
@@ -1252,13 +1308,20 @@ class TaskProcessor(QObject):
 
 
     def _start_image_prompts(self, task_id):
-        state = self.task_states[task_id]
-        config = {
-            'text': state.text_for_processing,
-            'img_prompt_settings': state.settings.get("image_prompt_settings", {}),
-            'openrouter_api_key': state.settings.get('openrouter_api_key')
-        }
-        self._start_worker(ImagePromptWorker, task_id, 'stage_img_prompts', config, self._on_img_prompts_finished, self._on_img_prompts_error)
+        self.openrouter_queue.append((task_id, 'image_prompts', None))
+        self._process_openrouter_queue()
+
+    def _launch_image_prompts_worker(self, task_id):
+        try:
+            state = self.task_states[task_id]
+            config = {
+                'text': state.text_for_processing,
+                'img_prompt_settings': state.settings.get("image_prompt_settings", {}),
+                'openrouter_api_key': state.settings.get('openrouter_api_key')
+            }
+            self._start_worker(ImagePromptWorker, task_id, 'stage_img_prompts', config, self._on_img_prompts_finished, self._on_img_prompts_error)
+        except Exception as e:
+            self._on_img_prompts_error(task_id, f"Failed to start image prompt worker: {e}")
 
     def _start_voiceover(self, task_id):
         state = self.task_states[task_id]
@@ -1347,6 +1410,9 @@ class TaskProcessor(QObject):
 
     @Slot(str, object)
     def _on_img_prompts_finished(self, task_id, prompts_text):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         state = self.task_states[task_id]
         
         # Count prompts
@@ -1391,6 +1457,9 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_img_prompts_error(self, task_id, error):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         self._set_stage_status(task_id, 'stage_img_prompts', 'error', error)
 
     def _start_voiceover(self, task_id):

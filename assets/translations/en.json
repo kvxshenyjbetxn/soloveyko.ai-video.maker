@@ -29,6 +29,7 @@
     "clean_chars_label": "Clean characters",
     "paragraphs_label": "Paragraphs",
     "openrouter_api_key": "OpenRouter API Key:",
+    "max_concurrent_requests": "Max Concurrent Requests:",
     "enter_api_key": "Enter your API key",
     "check_connection": "Check Connection",
     "connection_status_not_checked": "Status: Not checked",
