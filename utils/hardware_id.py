@@ -2,35 +2,54 @@
 Модуль для отримання унікального ідентифікатора заліза (hardware ID).
 Використовується для прив'язки API ключа до конкретного пристрою.
 """
-import uuid
+import subprocess
 import platform
+import re
+import hashlib
 
 
 def get_hardware_id() -> str:
     """
-    Отримує унікальний ідентифікатор заліза пристрою.
+    Отримує унікальний ідентифікатор заліза пристрою (Platform UUID).
     
-    Використовує MAC адресу мережевого адаптера як hardware ID.
-    Працює на Windows та macOS.
+    На Windows: MachineGuid з реєстру.
+    На macOS: IOPlatformUUID.
     
     Returns:
-        str: Hardware ID у форматі "XX:XX:XX:XX:XX:XX"
+        str: Хешований Hardware ID для анонімізації та одностайності формату.
     """
+    system = platform.system()
+    hw_id = ""
+
     try:
-        # Отримуємо MAC адресу через uuid.getnode()
-        # Це працює на Windows і macOS
-        mac = uuid.getnode()
-        
-        # Конвертуємо в читабельний формат
-        mac_hex = hex(mac)[2:].upper().zfill(12)
-        hardware_id = ':'.join([mac_hex[i:i+2] for i in range(0, 12, 2)])
-        
-        return hardware_id
-    except Exception as e:
-        # У випадку помилки використовуємо UUID як fallback
-        # Це рідкісний випадок, але краще мати fallback
-        fallback_id = str(uuid.uuid4())
-        return fallback_id
+        if system == "Windows":
+            # Отримуємо MachineGuid через reg query
+            cmd = 'reg query "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid'
+            result = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode()
+            # Шукаємо UUID у форматі 8-4-4-4-12
+            match = re.search(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', result)
+            if match:
+                hw_id = match.group(0)
+
+        elif system == "Darwin":  # macOS
+            # Отримуємо IOPlatformUUID через ioreg
+            cmd = 'ioreg -rd1 -c IOPlatformExpertDevice'
+            result = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode()
+            # Шукаємо IOPlatformUUID
+            match = re.search(r'"IOPlatformUUID" = "([^"]+)"', result)
+            if match:
+                hw_id = match.group(1)
+
+        if not hw_id:
+            # Fallback на назву вузла та процесора, якщо специфічні методи не спрацювали
+            hw_id = f"{platform.node()}-{platform.processor()}-{platform.machine()}"
+
+        # Хешуємо ID, щоб він мав однаковий формат (наприклад, SHA-256) і був анонімним
+        return hashlib.sha256(hw_id.encode()).hexdigest()
+
+    except Exception:
+        # Абсолютний fallback
+        return hashlib.sha256(f"{platform.node()}-fallback".encode()).hexdigest()
 
 
 def get_platform_info() -> dict:
@@ -51,7 +70,7 @@ def get_platform_info() -> dict:
 if __name__ == "__main__":
     # Тестування модуля
     hw_id = get_hardware_id()
-    print(f"Hardware ID: {hw_id}")
+    print(f"Stable Hardware ID: {hw_id}")
     
     platform_info = get_platform_info()
     print(f"\nPlatform Info:")
