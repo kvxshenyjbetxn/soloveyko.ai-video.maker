@@ -163,6 +163,7 @@ class MainWindow(QMainWindow):
         self.threadpool = QThreadPool()
         self.text_review_queue = collections.deque()
         self.is_review_dialog_active = False
+        self.active_workers = set() # Track workers to prevent garbage collection and Segfaults
         self.init_ui()
         logger.log('Application started.', level=LogLevel.INFO)
         self.app.installEventFilter(self)
@@ -417,9 +418,13 @@ class MainWindow(QMainWindow):
 
     def _start_processing_checked(self):
         worker = ApiKeyCheckWorker(api_key=self.api_key, server_url=self.server_url)
+        self.active_workers.add(worker)
         # Fix: the signal emits 3 arguments (bool, str, int)
         worker.signals.finished.connect(
-            lambda is_valid, expires_at, sub_level: self.on_pre_processing_validation_finished(is_valid)
+            lambda is_valid, expires_at, sub_level: (
+                self.on_pre_processing_validation_finished(is_valid),
+                self.active_workers.discard(worker)
+            )
         )
         self.threadpool.start(worker)
 
@@ -636,27 +641,32 @@ class MainWindow(QMainWindow):
 
     def update_balance(self, *args):
         worker = BalanceWorker()
-        worker.signals.finished.connect(self._on_balance_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda b, s: (self._on_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def update_googler_usage(self, *args):
         worker = GooglerUsageWorker()
-        worker.signals.finished.connect(self._on_googler_usage_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda u, s: (self._on_googler_usage_updated(u, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def update_elevenlabs_balance(self, *args):
         worker = ElevenLabsBalanceWorker()
-        worker.signals.finished.connect(self._on_elevenlabs_balance_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda b, s: (self._on_elevenlabs_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def update_voicemaker_balance(self, *args):
         worker = VoicemakerBalanceWorker()
-        worker.signals.finished.connect(self._on_voicemaker_balance_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda b, s: (self._on_voicemaker_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def update_gemini_tts_balance(self, *args):
         worker = GeminiTTSBalanceWorker()
-        worker.signals.finished.connect(self._on_gemini_tts_balance_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda b, s: (self._on_gemini_tts_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def _on_balance_updated(self, balance, success):

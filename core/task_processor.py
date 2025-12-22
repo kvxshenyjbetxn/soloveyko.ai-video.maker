@@ -716,6 +716,7 @@ class TaskProcessor(QObject):
         # Queues for preventing thread starvation
         self.pending_subtitles = collections.deque()
         self.pending_montages = collections.deque()
+        self.active_workers = set() # Track for Segfault prevention
         
         logger.log(f"Task Processor initialized. Download concurrency: {max_downloads}, Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}, Video concurrency: {max_video}", level=LogLevel.INFO)
 
@@ -911,10 +912,21 @@ class TaskProcessor(QObject):
 
         self.stage_status_changed.emit(self.task_states[task_id].job_id, self.task_states[task_id].lang_id, stage_key, 'processing')
         worker = worker_class(task_id, config)
-        worker.signals.finished.connect(on_finish_slot)
-        worker.signals.error.connect(on_error_slot)
-        worker.signals.status_changed.connect(self._on_worker_status_changed) # For gallery updates
-        worker.signals.video_generated.connect(self.video_generated) # For gallery updates
+        self.active_workers.add(worker)
+        
+        # Wrapped slots to ensure reference cleanup
+        def wrapped_finish(*args):
+             self.active_workers.discard(worker)
+             on_finish_slot(*args)
+        
+        def wrapped_error(*args):
+             self.active_workers.discard(worker)
+             on_error_slot(*args)
+
+        worker.signals.finished.connect(wrapped_finish)
+        worker.signals.error.connect(wrapped_error)
+        worker.signals.status_changed.connect(self._on_worker_status_changed)
+        worker.signals.video_generated.connect(self.video_generated)
         worker.signals.video_progress.connect(self._on_video_progress)
         worker.signals.metadata_updated.connect(self._on_metadata_updated)
         self.threadpool.start(worker)
