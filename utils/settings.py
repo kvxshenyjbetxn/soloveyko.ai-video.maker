@@ -55,22 +55,8 @@ class SettingsManager:
 
     def _get_base_path(self):
         if platform.system() == "Darwin":
-            # На macOS використовуємо стандартний шлях для даних додатку
-            # Намагаємось отримати через Qt, але з перевіркою
-            try:
-                from PySide6.QtCore import QCoreApplication
-                if QCoreApplication.instance():
-                    base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
-                else:
-                    # Фоллбек якщо QApplication ще не створено
-                    base = os.path.expanduser("~/Library/Application Support/CombainAI")
-            except Exception as e:
-                print(f"DEBUG: Error getting macOS path via Qt: {e}")
-                base = os.path.expanduser("~/Library/Application Support/CombainAI")
-
-            # Якщо назва додатку не додалась автоматично
-            if not base.endswith("CombainAI"):
-                base = os.path.join(base, "CombainAI")
+            # На macOS використовуємо папку в Документах для кращої видимості
+            base = os.path.expanduser("~/Documents/Soloveyko.AI-Video.Maker")
             
             try:
                 os.makedirs(base, exist_ok=True)
@@ -160,18 +146,7 @@ class TemplateManager:
 
     def _get_base_path(self):
         if platform.system() == "Darwin":
-            try:
-                from PySide6.QtCore import QCoreApplication
-                if QCoreApplication.instance():
-                    base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
-                else:
-                    base = os.path.expanduser("~/Library/Application Support/CombainAI")
-            except:
-                base = os.path.expanduser("~/Library/Application Support/CombainAI")
-                
-            if not base.endswith("CombainAI"):
-                base = os.path.join(base, "CombainAI")
-            return base
+            return os.path.expanduser("~/Documents/Soloveyko.AI-Video.Maker")
 
         if getattr(sys, 'frozen', False):
             return os.path.dirname(sys.executable)
