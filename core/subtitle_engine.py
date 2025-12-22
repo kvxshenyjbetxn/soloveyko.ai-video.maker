@@ -3,6 +3,7 @@ import subprocess
 import re
 import datetime
 import time
+import platform
 from api.assemblyai import assembly_ai_api
 from utils.logger import logger, LogLevel
 
@@ -131,8 +132,10 @@ class SubtitleEngine:
             # Add language flag, use the detected language
             cmd.extend(["-l", language])
 
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo = None
+            if platform.system() == "Windows":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
             logger.log(f"Running Whisper CLI (AMD): {' '.join(cmd)}", LogLevel.INFO)
             process = subprocess.run(cmd, startupinfo=startupinfo, capture_output=True, text=True)

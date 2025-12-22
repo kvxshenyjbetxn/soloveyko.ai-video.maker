@@ -695,14 +695,19 @@ class TaskProcessor(QObject):
         self.openrouter_queue = collections.deque()
 
         # Determine yt-dlp path
+        yt_dlp_name = "yt-dlp.exe" if platform.system() == "Windows" else "yt-dlp"
+        
         if getattr(sys, 'frozen', False):
-            base_dir = os.path.dirname(sys.executable)
-            self.yt_dlp_path = os.path.join(base_dir, "yt-dlp.exe")
-            # If not found check in assets (user folder maybe?) or assets inside meipass
-            if not os.path.exists(self.yt_dlp_path):
-                 self.yt_dlp_path = os.path.join(sys._MEIPASS, "assets", "yt-dlp.exe")
+            # 1. Search in app results/data directory (where updater might have downloaded it)
+            path_in_data = os.path.join(self.settings.base_path, yt_dlp_name)
+            if os.path.exists(path_in_data):
+                self.yt_dlp_path = path_in_data
+            else:
+                # 2. Search in frozen bundle assets
+                self.yt_dlp_path = os.path.join(sys._MEIPASS, "assets", yt_dlp_name)
         else:
-             self.yt_dlp_path = os.path.join(BASE_PATH, "assets", "yt-dlp.exe")
+            # Running as script
+            self.yt_dlp_path = os.path.join(BASE_PATH, "assets", yt_dlp_name)
 
         if not os.path.exists(self.yt_dlp_path):
             logger.log(f"Warning: yt-dlp.exe not found at {self.yt_dlp_path}", level=LogLevel.WARNING)
