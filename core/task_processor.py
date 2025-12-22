@@ -242,7 +242,7 @@ class CustomStageWorker(BaseWorker):
         
         prompt = self.config['prompt']
         text = self.config['text']
-        model = self.config.get('model', 'google/gemini-2.0-flash-exp:free') 
+        model = self.config.get('model', 'unknown') 
         max_tokens = self.config.get('max_tokens', 4096)
         temperature = self.config.get('temperature', 0.7)
         
@@ -1100,14 +1100,24 @@ class TaskProcessor(QObject):
     def _launch_rewrite_worker(self, task_id, text):
         try:
             state = self.task_states[task_id]
-            lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
+            lang_config = state.lang_data # Use data from the task itself
+            
+            # Fallback hierarchy for model: 
+            # 1. rewrite_model from lang_config
+            # 2. model (translation) from lang_config
+            # 3. a sensible default
+            model = lang_config.get('rewrite_model')
+            if not model:
+                model = lang_config.get('model')
+            if not model:
+                model = 'google/gemini-2.0-flash-exp:free' # Last resort
             
             config = {
                 'text': text,
-                'prompt': lang_config.get('rewrite_prompt', 'Rewrite this text:'),
-                'model': lang_config.get('rewrite_model', 'google/gemini-2.0-flash-exp:free'),
-                'max_tokens': lang_config.get('rewrite_max_tokens', 4096),
-                'temperature': lang_config.get('rewrite_temperature', 0.7),
+                'prompt': lang_config.get('rewrite_prompt') or 'Rewrite this text:',
+                'model': model,
+                'max_tokens': lang_config.get('rewrite_max_tokens') or 4096,
+                'temperature': lang_config.get('rewrite_temperature') if lang_config.get('rewrite_temperature') is not None else 0.7,
                 'openrouter_api_key': state.settings.get('openrouter_api_key')
             }
             self._start_worker(RewriteWorker, task_id, 'stage_rewrite', config, self._on_rewrite_finished, self._on_rewrite_error)
@@ -1162,7 +1172,12 @@ class TaskProcessor(QObject):
     def _launch_translation_worker(self, task_id):
         try:
             state = self.task_states[task_id]
-            lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
+            lang_config = state.lang_data # Use data from the task itself
+            
+            # Ensure model is present, otherwise fallback to a generic one
+            if not lang_config.get('model'):
+                lang_config['model'] = 'google/gemini-2.0-flash-exp:free'
+                
             config = {
                 'text': state.original_text,
                 'lang_config': lang_config,
@@ -1295,11 +1310,14 @@ class TaskProcessor(QObject):
             # Fallback to defaults if not specified or empty
             # If model is not in custom stage settings, use the image prompt model or default
             if not model:
-                model = state.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
+                # Try translation model from lang_data first
+                model = state.lang_data.get('model')
+                if not model:
+                    model = state.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
             if not max_tokens:
                  max_tokens = 4096
             if temperature is None:
-                temperature = 0.7
+                 temperature = 0.7
 
             config = {
                 'text': state.text_for_processing,
@@ -1366,7 +1384,7 @@ class TaskProcessor(QObject):
 
     def _start_voiceover(self, task_id):
         state = self.task_states[task_id]
-        lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
+        lang_config = state.lang_data # Use data from the task
         config = {
             'text': state.text_for_processing,
             'dir_path': state.dir_path,
@@ -1411,9 +1429,8 @@ class TaskProcessor(QObject):
             background_music_path = None
             background_music_volume = 100
             
-            # Use state.settings for languages config too
-            all_languages_config = state.settings.get("languages_config", {})
-            lang_config = all_languages_config.get(state.lang_id, {})
+            # Use state.lang_data (settings associated with this task)
+            lang_config = state.lang_data
             
             user_files = state.lang_data.get('user_provided_files', {})
 
