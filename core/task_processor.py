@@ -616,7 +616,7 @@ class TaskState:
         try:
             safe_job_name = job_name.replace('…', '').replace('...', '')
             safe_job_name = re.sub(r'[<>:"/\\|?*]', '', safe_job_name).strip()
-            safe_job_name = safe_job_name[:100]
+            safe_job_name = safe_job_name[:100].strip()
             safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
             dir_path = os.path.join(base_path, safe_job_name, safe_lang_name)
             os.makedirs(dir_path, exist_ok=True)
