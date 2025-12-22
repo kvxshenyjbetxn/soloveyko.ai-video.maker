@@ -598,6 +598,7 @@ class TaskState:
 
         self.status = {stage: 'pending' for stage in self.stages}
         self.translation_review_dialog_shown = False
+        self.rewrite_review_dialog_shown = False
         self.prompt_regeneration_attempts = 0
         self.image_gen_status = 'pending'
         
@@ -638,6 +639,8 @@ class TaskProcessor(QObject):
     image_review_required = Signal()
     translation_review_required = Signal(str, str) # task_id, translated_text
     translation_regenerated = Signal(str, str) # task_id, new_text
+    rewrite_review_required = Signal(str, str) # task_id, rewritten_text
+    rewrite_regenerated = Signal(str, str) # task_id, new_text
     stage_metadata_updated = Signal(str, str, str, str) # job_id, lang_id, stage_key, metadata_text
 
 
@@ -882,7 +885,7 @@ class TaskProcessor(QObject):
             
             result = None
             try:
-                if stage_key in ['stage_translation', 'stage_rewrite', 'stage_img_prompts']:
+                if stage_key in ['stage_translation', 'stage_rewrite', 'stage_img_prompts', 'stage_transcription']:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         result = f.read()
                 elif stage_key == 'stage_images':
@@ -1100,13 +1103,28 @@ class TaskProcessor(QObject):
         
         state = self.task_states[task_id]
         state.text_for_processing = rewritten_text
-        with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
-            f.write(rewritten_text)
+        if state.dir_path:
+            with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
+                f.write(rewritten_text)
             
-        self._set_stage_status(task_id, 'stage_rewrite', 'success')
-        
-        # Proceed to next stages (Standard)
-        self._on_text_ready(task_id)
+        # Update metadata with character count
+        char_count = len(rewritten_text)
+        metadata_text = f"{char_count} {translator.translate('characters_count')}"
+        self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_rewrite', metadata_text)
+
+        is_review_enabled = state.settings.get('rewrite_review_enabled', False)
+
+        if is_review_enabled:
+            self._set_stage_status(task_id, 'stage_rewrite', 'success')
+            self.rewrite_regenerated.emit(task_id, rewritten_text) # Update dialog if open
+
+            if not state.rewrite_review_dialog_shown:
+                state.rewrite_review_dialog_shown = True
+                self.rewrite_review_required.emit(task_id, rewritten_text)
+        else:
+            # No review, proceed as normal
+            self._set_stage_status(task_id, 'stage_rewrite', 'success')
+            self._on_text_ready(task_id)
 
     @Slot(str, str)
     def _on_rewrite_error(self, task_id, error):
@@ -1192,6 +1210,11 @@ class TaskProcessor(QObject):
     def regenerate_translation(self, task_id):
         logger.log(f"[{task_id}] User requested translation regeneration.", level=LogLevel.INFO)
         self._start_translation(task_id)
+
+    def regenerate_rewrite(self, task_id):
+        logger.log(f"[{task_id}] User requested rewrite regeneration.", level=LogLevel.INFO)
+        state = self.task_states[task_id]
+        self._start_rewrite(task_id, state.original_text)
 
     def _on_text_ready(self, task_id):
         state = self.task_states[task_id]

@@ -50,7 +50,7 @@ class ElevenLabsAPI:
         
         try:
             session = self._get_session()
-            response = session.request(method, f"{self.base_url}/{endpoint}", headers=headers, json=json, **kwargs)
+            response = session.request(method, f"{self.base_url}/{endpoint}", headers=headers, json=json, timeout=10, **kwargs)
             response.raise_for_status() 
             if response.status_code == 200:
                 if "audio/mpeg" in response.headers.get("Content-Type", ""):
@@ -59,10 +59,10 @@ class ElevenLabsAPI:
             return response, "connected"
         except requests.exceptions.HTTPError as e:
             logger.log(f"API request to {endpoint} failed with status {e.response.status_code}: {e.response.text}", level=LogLevel.ERROR)
-            raise e
+            return None, "error"
         except requests.exceptions.RequestException as e:
             logger.log(f"API request to {endpoint} failed: {e}", level=LogLevel.ERROR)
-            raise e
+            return None, "error"
 
     def check_connection(self):
         logger.log("Checking ElevenLabs API connection...", level=LogLevel.INFO)

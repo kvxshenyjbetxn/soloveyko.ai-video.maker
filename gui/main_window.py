@@ -159,7 +159,7 @@ class MainWindow(QMainWindow):
         self.queue_manager = QueueManager()
         self.task_processor = TaskProcessor(self.queue_manager)
         self.threadpool = QThreadPool()
-        self.translation_review_queue = collections.deque()
+        self.text_review_queue = collections.deque()
         self.is_review_dialog_active = False
         self.init_ui()
         logger.log('Application started.', level=LogLevel.INFO)
@@ -383,6 +383,7 @@ class MainWindow(QMainWindow):
         self.task_processor.task_progress_log.connect(self.queue_tab.on_task_progress_log)
         self.task_processor.image_review_required.connect(self._on_image_review_required)
         self.task_processor.translation_review_required.connect(self._on_translation_review_required)
+        self.task_processor.rewrite_review_required.connect(self._on_rewrite_review_required)
         self.gallery_tab.continue_montage_requested.connect(self.task_processor.resume_all_montages)
         self.gallery_tab.image_deleted.connect(self.task_processor._on_image_deleted)
         self.gallery_tab.media_clicked.connect(self.show_media_viewer)
@@ -513,50 +514,71 @@ class MainWindow(QMainWindow):
         self.gallery_tab.show_continue_button()
 
     def _on_translation_review_required(self, task_id, translated_text):
-        self.translation_review_queue.append((task_id, translated_text))
+        self.text_review_queue.append((task_id, translated_text, 'stage_translation'))
+        if not self.is_review_dialog_active:
+            QTimer.singleShot(0, self._show_next_review_dialog)
+
+    def _on_rewrite_review_required(self, task_id, rewritten_text):
+        self.text_review_queue.append((task_id, rewritten_text, 'stage_rewrite'))
         if not self.is_review_dialog_active:
             QTimer.singleShot(0, self._show_next_review_dialog)
 
     def _show_next_review_dialog(self):
-        if self.is_review_dialog_active or not self.translation_review_queue:
+        if self.is_review_dialog_active or not self.text_review_queue:
             return
 
         self.is_review_dialog_active = True
-        task_id, translated_text = self.translation_review_queue.popleft()
+        task_id, text, stage = self.text_review_queue.popleft()
         
         state = self.task_processor.task_states[task_id]
-        dialog = TranslationReviewDialog(self, state, translated_text, self.translator)
+        dialog = TextReviewDialog(self, state, text, self.translator, stage)
 
         # Use open() instead of exec() to avoid blocking the main loop and causing 0x8001010d errors
         # Connect signals for result handling
-        dialog.finished.connect(lambda result: self._on_review_dialog_finished(result, dialog, task_id, state))
+        dialog.finished.connect(lambda result: self._on_review_dialog_finished(result, dialog, task_id, state, stage))
         
         def on_regenerate():
-            self.task_processor.regenerate_translation(task_id)
+            if stage == 'stage_translation':
+                self.task_processor.regenerate_translation(task_id)
+            else:
+                self.task_processor.regenerate_rewrite(task_id)
 
         dialog.regenerate_requested.connect(on_regenerate)
-        self.task_processor.translation_regenerated.connect(dialog.update_text)
+        
+        if stage == 'stage_translation':
+            self.task_processor.translation_regenerated.connect(dialog.update_text)
+        else:
+            self.task_processor.rewrite_regenerated.connect(dialog.update_text)
 
         dialog.open() 
 
-    def _on_review_dialog_finished(self, result, dialog, task_id, state):
+    def _on_review_dialog_finished(self, result, dialog, task_id, state, stage):
         try:
             if result == QDialog.DialogCode.Accepted:
                 new_text = dialog.get_text()
                 self.task_processor.task_states[task_id].text_for_processing = new_text
                 if state.dir_path:
                     try:
-                        with open(os.path.join(state.dir_path, "translation_reviewed.txt"), 'w', encoding='utf-8') as f:
+                        filename = "translation_reviewed.txt" if stage == 'stage_translation' else "rewrite_reviewed.txt"
+                        save_path = os.path.join(state.dir_path, filename)
+                        with open(save_path, 'w', encoding='utf-8') as f:
+                            f.write(new_text)
+                        
+                        # Also update translation.txt to keep consistency for skipping stages
+                        with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
                             f.write(new_text)
                     except Exception as e:
-                        logger.log(f"Failed to save reviewed translation: {e}", level=LogLevel.ERROR)
+                        logger.log(f"Failed to save reviewed {stage}: {e}", level=LogLevel.ERROR)
                 self.task_processor._on_text_ready(task_id)
             else:
-                self.task_processor._set_stage_status(task_id, 'stage_translation', 'error', 'User cancelled review.')
+                self.task_processor._set_stage_status(task_id, stage, 'error', 'User cancelled review.')
             
             # Clean up connections
             try:
-                self.task_processor.translation_regenerated.disconnect(dialog.update_text)
+                if stage == 'stage_translation':
+                    self.task_processor.translation_regenerated.disconnect(dialog.update_text)
+                else:
+                    self.task_processor.rewrite_regenerated.disconnect(dialog.update_text)
             except (RuntimeError, TypeError):
                 pass
                 
@@ -814,17 +836,20 @@ class MainWindow(QMainWindow):
         logger.log('Application closing.', level=LogLevel.INFO)
         super().closeEvent(event)
 
-class TranslationReviewDialog(QDialog):
-    # ... (rest of the file is the same)
+class TextReviewDialog(QDialog):
     regenerate_requested = Signal()
 
-    def __init__(self, parent, state, text, translator):
+    def __init__(self, parent, state, text, translator, stage='stage_translation'):
         super().__init__(parent)
         self.state = state
         self.translator = translator
+        self.stage = stage
         job_name = self.state.job_name
         lang_name = self.state.lang_name
-        self.setWindowTitle(f"Перевірка перекладу: {job_name} ({lang_name})")
+        
+        title_key = 'translation_review_label' if stage == 'stage_translation' else 'rewrite_review_label'
+        title = self.translator.translate(title_key).replace(':', '').strip()
+        self.setWindowTitle(f"{title}: {job_name} ({lang_name})")
         self.setMinimumSize(700, 500)
 
         main_layout = QVBoxLayout(self)
@@ -840,7 +865,7 @@ class TranslationReviewDialog(QDialog):
         bottom_layout.addStretch()
 
         self.button_box = QDialogButtonBox()
-        self.regenerate_button = self.button_box.addButton("Перегенерувати", QDialogButtonBox.ButtonRole.ActionRole)
+        self.regenerate_button = self.button_box.addButton(self.translator.translate("thumbnail_regen_button"), QDialogButtonBox.ButtonRole.ActionRole)
         self.ok_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Ok)
         self.cancel_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
         bottom_layout.addWidget(self.button_box)
@@ -862,7 +887,12 @@ class TranslationReviewDialog(QDialog):
         translated_len = len(self.get_text())
         
         original_str = self.translator.translate('original_chars').format(count=original_len)
-        translated_str = self.translator.translate('translated_chars').format(count=translated_len)
+        
+        res_key = 'translated_chars' if self.stage == 'stage_translation' else 'characters_count'
+        if res_key == 'characters_count':
+            translated_str = f"{self.translator.translate('stage_rewrite')}: {translated_len} {self.translator.translate('characters_count')}"
+        else:
+            translated_str = self.translator.translate(res_key).format(count=translated_len)
         
         self.char_count_label.setText(f"{original_str} | {translated_str}")
 
