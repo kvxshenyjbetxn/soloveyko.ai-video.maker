@@ -783,6 +783,19 @@ class TaskProcessor(QObject):
                 
                 # --- Prepare Settings for this Task (Global + Template) ---
                 current_settings = copy.deepcopy(self.settings.settings)
+
+                # CRITICAL FIX: Force update taxk data with LATEST global settings for this language.
+                # This ensures that if user changed settings (Model, Temp, Tokens) AFTER adding to queue,
+                # the task will use the NEW settings, not the old snapshot.
+                # We use update() to preserve keys like 'user_provided_files' that are in lang_data but not in global settings.
+                global_lang_config = current_settings.get("languages_config", {}).get(lang_id, {})
+                if global_lang_config:
+                    # Filter out keys that shouldn't override task-specifics if necessary, 
+                    # but generally we want global settings to take precedence over the snapshot 
+                    # unless it's user_provided_files which is not in global.
+                    # Dictionary update overwrites existing keys.
+                    lang_data.update(global_lang_config)
+
                 template_name = lang_data.get('template_name')
                 
                 if template_name:
@@ -794,6 +807,10 @@ class TaskProcessor(QObject):
                             else:
                                 current_settings[key] = value
                         logger.log(f"[{job['name']}_{lang_id}] Applied template: {template_name}", level=LogLevel.INFO)
+                        # Also merge template's specific language config into our task data
+                        template_lang_cfg = template_data.get('languages_config', {}).get(lang_id, {})
+                        if template_lang_cfg:
+                            lang_data.update(template_lang_cfg)
                     else:
                         logger.log(f"[{job['name']}_{lang_id}] Template '{template_name}' not found. Using global settings.", level=LogLevel.WARNING)
 
@@ -1100,24 +1117,33 @@ class TaskProcessor(QObject):
     def _launch_rewrite_worker(self, task_id, text):
         try:
             state = self.task_states[task_id]
-            lang_config = state.lang_data # Use data from the task itself
             
-            # Fallback hierarchy for model: 
-            # 1. rewrite_model from lang_config
-            # 2. model (translation) from lang_config
-            # 3. a sensible default
-            model = lang_config.get('rewrite_model')
+            # Smart model selection for Rewrite:
+            # 1. Template root override ('rewrite_model' then 'model')
+            # 2. Job language config (UI/Template-merged)
+            # 3. Fallback to main translation model
+            
+            model = state.settings.get('rewrite_model')
             if not model:
-                model = lang_config.get('model')
+                model = state.settings.get('model')
             if not model:
-                model = 'google/gemini-2.0-flash-exp:free' # Last resort
+                model = state.lang_data.get('rewrite_model')
+            if not model:
+                model = state.lang_data.get('model')
+            if not model:
+                model = state.settings.get('languages_config', {}).get(state.lang_id, {}).get('rewrite_model')
+            if not model:
+                model = state.settings.get('languages_config', {}).get(state.lang_id, {}).get('model')
+            if not model:
+                models = state.settings.get('openrouter_models', [])
+                model = models[0] if models else 'unknown'
             
             config = {
                 'text': text,
-                'prompt': lang_config.get('rewrite_prompt') or 'Rewrite this text:',
+                'prompt': state.lang_data.get('rewrite_prompt') or 'Rewrite this text:',
                 'model': model,
-                'max_tokens': lang_config.get('rewrite_max_tokens') or 4096,
-                'temperature': lang_config.get('rewrite_temperature') if lang_config.get('rewrite_temperature') is not None else 0.7,
+                'max_tokens': state.lang_data.get('rewrite_max_tokens') or 4096,
+                'temperature': state.lang_data.get('rewrite_temperature') if state.lang_data.get('rewrite_temperature') is not None else 0.7,
                 'openrouter_api_key': state.settings.get('openrouter_api_key')
             }
             self._start_worker(RewriteWorker, task_id, 'stage_rewrite', config, self._on_rewrite_finished, self._on_rewrite_error)
@@ -1172,15 +1198,30 @@ class TaskProcessor(QObject):
     def _launch_translation_worker(self, task_id):
         try:
             state = self.task_states[task_id]
-            lang_config = state.lang_data # Use data from the task itself
             
-            # Ensure model is present, otherwise fallback to a generic one
-            if not lang_config.get('model'):
-                lang_config['model'] = 'google/gemini-2.0-flash-exp:free'
+            # Smart model selection for Translation:
+            # 1. Template root override ('model')
+            # 2. Job language config (UI/Template-merged)
+            # 3. Global language setting
+            # 4. First available
+            
+            model = state.settings.get('model')
+            if not model:
+                model = state.lang_data.get('model')
+            if not model:
+                model = state.settings.get('languages_config', {}).get(state.lang_id, {}).get('model')
+            if not model:
+                models = state.settings.get('openrouter_models', [])
+                model = models[0] if models else 'unknown'
                 
             config = {
                 'text': state.original_text,
-                'lang_config': lang_config,
+                'lang_config': {
+                    'prompt': state.lang_data.get('prompt', ''),
+                    'model': model,
+                    'temperature': state.lang_data.get('temperature') if state.lang_data.get('temperature') is not None else 0.7,
+                    'max_tokens': state.lang_data.get('max_tokens') or 4096
+                },
                 'openrouter_api_key': state.settings.get('openrouter_api_key')
             }
             self._start_worker(TranslationWorker, task_id, 'stage_translation', config, self._on_translation_finished, self._on_translation_error)
@@ -1310,10 +1351,18 @@ class TaskProcessor(QObject):
             # Fallback to defaults if not specified or empty
             # If model is not in custom stage settings, use the image prompt model or default
             if not model:
-                # Try translation model from lang_data first
-                model = state.lang_data.get('model')
+                # 1. Template root override
+                model = state.settings.get('model')
+                # 2. Job language model
                 if not model:
-                    model = state.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
+                    model = state.lang_data.get('model')
+                # 3. Overall default from settings
+                if not model:
+                    model = state.settings.get("image_prompt_settings", {}).get("model")
+                # 4. Global fallback
+                if not model:
+                    models = state.settings.get('openrouter_models', [])
+                    model = models[0] if models else 'unknown'
             if not max_tokens:
                  max_tokens = 4096
             if temperature is None:
@@ -1373,9 +1422,29 @@ class TaskProcessor(QObject):
     def _launch_image_prompts_worker(self, task_id):
         try:
             state = self.task_states[task_id]
+            
+            # Smart settings merging for image prompts:
+            img_settings = state.settings.get("image_prompt_settings", {}).copy()
+            
+            # Hierarchy for model: 
+            # 1. Template root
+            # 2. Image prompt settings (could be from template)
+            # 3. Job-specific language model
+            
+            model = state.settings.get('model')
+            if not model:
+                model = img_settings.get('model')
+            if not model:
+                model = state.lang_data.get('model')
+            if not model:
+                models = state.settings.get('openrouter_models', [])
+                model = models[0] if models else 'unknown'
+            
+            img_settings['model'] = model
+            
             config = {
                 'text': state.text_for_processing,
-                'img_prompt_settings': state.settings.get("image_prompt_settings", {}),
+                'img_prompt_settings': img_settings,
                 'openrouter_api_key': state.settings.get('openrouter_api_key')
             }
             self._start_worker(ImagePromptWorker, task_id, 'stage_img_prompts', config, self._on_img_prompts_finished, self._on_img_prompts_error)
