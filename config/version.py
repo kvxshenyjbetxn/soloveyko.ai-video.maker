@@ -1,2 +1,2 @@
 # config/version.py
-__version__ = "v0.2.23-beta"
+__version__ = "v0.2.24-beta"
