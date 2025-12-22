@@ -46,15 +46,18 @@ def setup_dependency_paths():
     # Шлях до папки assets
     assets_dir = os.path.join(base_dir, "assets")
     
-    # Перевіряємо, чи є там ffmpeg
-    ffmpeg_exe = os.path.join(assets_dir, "ffmpeg.exe")
+    # Визначаємо назву файлу залежно від ОС
+    ffmpeg_name = "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg"
+    ffmpeg_path = os.path.join(assets_dir, ffmpeg_name)
     
-    if os.path.exists(ffmpeg_exe):
+    if os.path.exists(ffmpeg_path):
         # Додаємо assets на початок PATH, щоб програма спочатку шукала там
         os.environ["PATH"] = assets_dir + os.pathsep + os.environ["PATH"]
-        # print(f"Dependencies: Added {assets_dir} to PATH. FFmpeg found.")
+        # print(f"Dependencies: Added {assets_dir} to PATH. {ffmpeg_name} found.")
     else:
-        print(f"Dependencies: WARNING. FFmpeg not found in {assets_dir}")
+        # Fallback: навіть якщо не знайшли файл у assets, додамо шлях про всяк випадок
+        os.environ["PATH"] = assets_dir + os.pathsep + os.environ["PATH"]
+        print(f"Dependencies: WARNING. {ffmpeg_name} not found in {assets_dir}")
 
 # URL for the authentication server
 AUTH_SERVER_URL = "https://new-project-combain-server-production.up.railway.app"
