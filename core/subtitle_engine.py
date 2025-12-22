@@ -39,6 +39,33 @@ class SubtitleEngine:
         
         segments = []
 
+        # --- Handle 'auto' language detection for AMD (doesn't support it natively) ---
+        if language == 'auto' and engine_type == 'amd':
+            logger.log("AMD fork doesn't support 'auto'. Detecting language via standard whisper library...", LogLevel.INFO)
+            try:
+                import whisper
+                import torch
+                
+                # Use a fast model for detection.
+                model_type = "base"
+                if self.model_path and "medium" in self.model_path.lower():
+                    model_type = "medium"
+                elif self.model_path and "small" in self.model_path.lower():
+                    model_type = "small"
+                
+                model = whisper.load_model(model_type, device="cpu") 
+                audio = whisper.load_audio(audio_path)
+                audio = whisper.pad_or_trim(audio)
+                mel = whisper.log_mel_spectrogram(audio).to(model.device)
+                
+                _, probs = model.detect_language(mel)
+                language = max(probs, key=probs.get)
+                logger.log(f"Detected language for AMD: {language}", LogLevel.SUCCESS)
+            except Exception as e:
+                logger.log(f"Language detection failed: {e}. Defaulting to 'en'", LogLevel.WARNING)
+                language = 'en'
+
+        # --- Main Engine Routing ---
         if engine_type == 'assemblyai':
             logger.log(f"Running AssemblyAI Transcription: Lang={language}", LogLevel.INFO)
             transcript = assembly_ai_api.transcribe(audio_path, lang=language)
@@ -71,7 +98,10 @@ class SubtitleEngine:
                 logger.log(translator.translate("whisper_model_download_info", "Whisper model '{model_name}' not found. Starting one-time download. This may take some time...").format(model_name=self.model_path), LogLevel.INFO)
 
             model = whisper.load_model(self.model_path)
-            result = model.transcribe(audio_path, language=language)
+            
+            # Pass language=None for auto-detection in standard whisper
+            whisper_lang = language if language != 'auto' else None
+            result = model.transcribe(audio_path, language=whisper_lang)
             
             for s in result['segments']:
                 segments.append({
@@ -95,9 +125,11 @@ class SubtitleEngine:
                 self.exe_path,
                 "-m", self.model_path,
                 "-f", audio_path,
-                "-l", language,
                 "-osrt"       
             ]
+
+            # Add language flag, use the detected language
+            cmd.extend(["-l", language])
 
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -128,7 +160,7 @@ class SubtitleEngine:
             finally:
                 if os.path.exists(found_srt):
                     os.remove(found_srt)
-        
+
         return segments
 
     def _parse_srt(self, filename):

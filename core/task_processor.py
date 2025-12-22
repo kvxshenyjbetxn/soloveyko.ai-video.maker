@@ -583,6 +583,7 @@ class TaskState:
         self.stages = lang_data['stages']
         self.original_text = job.get('text', '')
         self.input_source = job.get('input_source', '')
+        self.job_type = job.get('type', 'text')
         self.lang_data = lang_data
         self.settings = settings
 
@@ -1018,7 +1019,7 @@ class TaskProcessor(QObject):
         config = {
             'audio_path': state.audio_path, # From download
             'sub_settings': sub_settings,
-            'lang_code': state.lang_id.split('-')[0].lower(), # or from video meta? usually source lang.
+            'lang_code': 'auto' if state.job_type == 'rewrite' else state.lang_id.split('-')[0].lower(),
             # Ideally we should autodetect or let user specify SOURCE language of video.
             # For now assuming target language code of the task, which might be wrong if we are rewriting from English video to Ukrainian.
             # But usually transcription is done on source. 
