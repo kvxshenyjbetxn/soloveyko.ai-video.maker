@@ -680,11 +680,8 @@ class TaskProcessor(QObject):
         self.video_semaphore = QSemaphore(max_video)
         
         # Queues for preventing thread starvation
-        self.pending_subtitles = collections.deque()
+        self.whisper_queue = collections.deque()
         self.pending_montages = collections.deque()
-        
-        max_video = googler_settings.get("max_video_threads", 1)
-        self.video_semaphore = QSemaphore(max_video)
         
         # Download concurrency
         max_downloads = self.settings.get("max_download_threads", 5)
@@ -881,7 +878,7 @@ class TaskProcessor(QObject):
             
             result = None
             try:
-                if stage_key == 'stage_translation' or stage_key == 'stage_img_prompts':
+                if stage_key in ['stage_translation', 'stage_rewrite', 'stage_img_prompts']:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         result = f.read()
                 elif stage_key == 'stage_images':
@@ -998,39 +995,39 @@ class TaskProcessor(QObject):
                 self._set_stage_status(task_id, stage, 'error', "Dependency (Download) failed")
 
     def _start_transcription(self, task_id):
-        state = self.task_states[task_id]
-        
-        # Prepare helper for whisper path (reused from subtitles)
-        sub_settings = state.settings.get('subtitles', {})
-        whisper_type = sub_settings.get('whisper_type', 'amd')
-        model_name = sub_settings.get('whisper_model', 'base.bin')
-        
-        whisper_exe = None; whisper_model_path = model_name
-        if whisper_type == 'amd':
-            if getattr(sys, 'frozen', False):
-                whisper_base_path = os.path.join(os.path.dirname(sys.executable), "whisper-cli-amd")
-            else:
-                current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
-            
-            whisper_exe = os.path.join(whisper_base_path, "main.exe")
-            whisper_model_path = os.path.join(whisper_base_path, model_name)
+        self.whisper_queue.append((task_id, 'transcription'))
+        self._process_whisper_queue()
 
-        config = {
-            'audio_path': state.audio_path, # From download
-            'sub_settings': sub_settings,
-            'lang_code': 'auto' if state.job_type == 'rewrite' else state.lang_id.split('-')[0].lower(),
-            # Ideally we should autodetect or let user specify SOURCE language of video.
-            # For now assuming target language code of the task, which might be wrong if we are rewriting from English video to Ukrainian.
-            # But usually transcription is done on source. 
-            # If the user gives a Ukrainian video and wants Ukrainian output, it's fine.
-            # If English video -> Ukrainian output: we transcribe English? 
-            # Whisper handles detection often if lang not specified, but we pass it.
-            # TODO: Add "Source Language" to RewriteTab? For now use task language.
-            'whisper_exe': whisper_exe,
-            'whisper_model_path': whisper_model_path
-        }
-        self._start_worker(TranscriptionWorker, task_id, 'stage_transcription', config, self._on_transcription_finished, self._on_transcription_error)
+    def _launch_transcription_worker(self, task_id):
+        try:
+            state = self.task_states[task_id]
+            
+            # Prepare helper for whisper path
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            model_name = sub_settings.get('whisper_model', 'base.bin')
+            
+            whisper_exe = None; whisper_model_path = model_name
+            if whisper_type == 'amd':
+                if getattr(sys, 'frozen', False):
+                    whisper_base_path = os.path.join(os.path.dirname(sys.executable), "whisper-cli-amd")
+                else:
+                    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+                
+                whisper_exe = os.path.join(whisper_base_path, "main.exe")
+                whisper_model_path = os.path.join(whisper_base_path, model_name)
+
+            config = {
+                'audio_path': state.audio_path,
+                'sub_settings': sub_settings,
+                'lang_code': 'auto' if state.job_type == 'rewrite' else state.lang_id.split('-')[0].lower(),
+                'whisper_exe': whisper_exe,
+                'whisper_model_path': whisper_model_path
+            }
+            self._start_worker(TranscriptionWorker, task_id, 'stage_transcription', config, self._on_transcription_finished, self._on_transcription_error)
+        except Exception as e:
+            self._on_transcription_error(task_id, f"Failed to start transcription: {e}")
 
     @Slot(str, object)
     def _on_transcription_finished(self, task_id, text):
@@ -1040,6 +1037,13 @@ class TaskProcessor(QObject):
         with open(os.path.join(state.dir_path, "transcription.txt"), 'w', encoding='utf-8') as f:
             f.write(text)
             
+        if state:
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            if whisper_type != 'assemblyai':
+                self.subtitle_semaphore.release()
+                self._process_whisper_queue()
+
         self._set_stage_status(task_id, 'stage_transcription', 'success')
         
         if 'stage_rewrite' in state.stages:
@@ -1050,6 +1054,14 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_transcription_error(self, task_id, error):
+        state = self.task_states.get(task_id)
+        if state:
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            if whisper_type != 'assemblyai':
+                self.subtitle_semaphore.release()
+                self._process_whisper_queue()
+        
         self._set_stage_status(task_id, 'stage_transcription', 'error', error)
         # Fail dependencies
         for stage in ['stage_rewrite', 'stage_img_prompts', 'stage_images', 'stage_voiceover', 'stage_subtitles', 'stage_montage']:
@@ -1074,7 +1086,7 @@ class TaskProcessor(QObject):
     def _on_rewrite_finished(self, task_id, rewritten_text):
         state = self.task_states[task_id]
         state.text_for_processing = rewritten_text
-        with open(os.path.join(state.dir_path, "rewritten.txt"), 'w', encoding='utf-8') as f:
+        with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
             f.write(rewritten_text)
             
         self._set_stage_status(task_id, 'stage_rewrite', 'success')
@@ -1435,23 +1447,29 @@ class TaskProcessor(QObject):
             self._increment_subtitle_counter()
 
     def _start_subtitles(self, task_id):
-        self.pending_subtitles.append(task_id)
-        self._process_subtitle_queue()
+        self.whisper_queue.append((task_id, 'subtitles'))
+        self._process_whisper_queue()
 
-    def _process_subtitle_queue(self):
-        sub_settings = self.settings.get('subtitles', {})
-        whisper_type = sub_settings.get('whisper_type', 'amd')
+    def _process_whisper_queue(self):
+        while self.whisper_queue:
+            task_id, worker_type = self.whisper_queue.popleft()
+            state = self.task_states[task_id]
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
 
-        while self.pending_subtitles:
-            # Since whisper_type is global setting (likely), we assume it applies to all.
             if whisper_type == 'assemblyai':
-                task_id = self.pending_subtitles.popleft()
-                self._launch_subtitle_worker(task_id)
-            else:
-                if self.subtitle_semaphore.tryAcquire():
-                    task_id = self.pending_subtitles.popleft()
+                if worker_type == 'subtitles':
                     self._launch_subtitle_worker(task_id)
                 else:
+                    self._launch_transcription_worker(task_id)
+            else:
+                if self.subtitle_semaphore.tryAcquire():
+                    if worker_type == 'subtitles':
+                        self._launch_subtitle_worker(task_id)
+                    else:
+                        self._launch_transcription_worker(task_id)
+                else:
+                    self.whisper_queue.appendleft((task_id, worker_type))
                     break
 
     def _launch_subtitle_worker(self, task_id):
@@ -1484,11 +1502,13 @@ class TaskProcessor(QObject):
         
     @Slot(str, object)
     def _on_subtitles_finished(self, task_id, subtitle_path):
-        sub_settings = self.settings.get('subtitles', {})
-        whisper_type = sub_settings.get('whisper_type', 'amd')
-        if whisper_type != 'assemblyai':
-            self.subtitle_semaphore.release()
-            self._process_subtitle_queue()
+        state = self.task_states.get(task_id)
+        if state:
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            if whisper_type != 'assemblyai':
+                self.subtitle_semaphore.release()
+                self._process_whisper_queue()
             
         self.task_states[task_id].subtitle_path = subtitle_path
         self._set_stage_status(task_id, 'stage_subtitles', 'success')
