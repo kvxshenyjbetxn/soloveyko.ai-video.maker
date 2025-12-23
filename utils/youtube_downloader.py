@@ -4,7 +4,7 @@ import re
 
 class YouTubeDownloader:
     @staticmethod
-    def download_audio(url, output_dir, yt_dlp_path="yt-dlp", progress_callback=None):
+    def download_audio(url, output_dir, yt_dlp_path="yt-dlp", ffmpeg_path=None, progress_callback=None):
         """
         Downloads audio from a YouTube URL to the specified directory using yt-dlp.
         
@@ -12,6 +12,7 @@ class YouTubeDownloader:
             url (str): The YouTube URL.
             output_dir (str): The directory to save the audio.
             yt_dlp_path (str): Path to the yt-dlp executable.
+            ffmpeg_path (str, optional): Path to the directory containing ffmpeg/ffprobe or the binary itself.
             progress_callback (callable, optional): function(str) to report progress (e.g. "45.0%").
             
         Returns:
@@ -36,6 +37,9 @@ class YouTubeDownloader:
             "--newline", # Ensure line-by-line output
             url
         ]
+        
+        if ffmpeg_path:
+             cmd.extend(["--ffmpeg-location", ffmpeg_path])
         
         # On Windows, prevent console window popping up
         startupinfo = None
