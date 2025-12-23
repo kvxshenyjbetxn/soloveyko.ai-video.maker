@@ -10,6 +10,13 @@ from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from gui.qt_material import apply_stylesheet
 
+# Windows COM handling for threads
+try:
+    import pythoncom
+except ImportError:
+    pythoncom = None
+
+
 from utils.settings import settings_manager
 from utils.translator import translator
 from config.version import __version__
@@ -55,9 +62,18 @@ class BalanceWorker(QRunnable):
         self.signals = BalanceWorkerSignals()
 
     def run(self):
-        api = OpenRouterAPI()
-        balance = api.get_balance()
-        self.signals.finished.emit(balance, balance is not None)
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = OpenRouterAPI()
+            balance = api.get_balance()
+            self.signals.finished.emit(balance, balance is not None)
+        except Exception as e:
+            logger.log(f"BalanceWorker error: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class GooglerUsageWorker(QRunnable):
     def __init__(self):
@@ -65,9 +81,18 @@ class GooglerUsageWorker(QRunnable):
         self.signals = GooglerUsageWorkerSignals()
 
     def run(self):
-        api = GooglerAPI()
-        usage = api.get_usage()
-        self.signals.finished.emit(usage, usage is not None)
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = GooglerAPI()
+            usage = api.get_usage()
+            self.signals.finished.emit(usage, usage is not None)
+        except Exception as e:
+            logger.log(f"GooglerUsageWorker error: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class ElevenLabsBalanceWorker(QRunnable):
     def __init__(self):
@@ -75,9 +100,18 @@ class ElevenLabsBalanceWorker(QRunnable):
         self.signals = ElevenLabsBalanceWorkerSignals()
 
     def run(self):
-        api = ElevenLabsAPI()
-        balance, status = api.get_balance()
-        self.signals.finished.emit(balance, status == 'connected')
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = ElevenLabsAPI()
+            balance, status = api.get_balance()
+            self.signals.finished.emit(balance, status == 'connected')
+        except Exception as e:
+            logger.log(f"ElevenLabsBalanceWorker error: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class VoicemakerBalanceWorker(QRunnable):
     def __init__(self):
@@ -85,12 +119,21 @@ class VoicemakerBalanceWorker(QRunnable):
         self.signals = VoicemakerBalanceWorkerSignals()
 
     def run(self):
-        api = VoicemakerAPI()
-        balance, status = api.get_balance()
-        if balance is not None:
-             self.signals.finished.emit(int(balance), status == 'connected')
-        else:
-             self.signals.finished.emit(None, False)
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = VoicemakerAPI()
+            balance, status = api.get_balance()
+            if balance is not None:
+                 self.signals.finished.emit(int(balance), status == 'connected')
+            else:
+                 self.signals.finished.emit(None, False)
+        except Exception as e:
+            logger.log(f"VoicemakerBalanceWorker error: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class GeminiTTSBalanceWorker(QRunnable):
     def __init__(self):
@@ -98,12 +141,21 @@ class GeminiTTSBalanceWorker(QRunnable):
         self.signals = GeminiTTSBalanceWorkerSignals()
 
     def run(self):
-        api = GeminiTTSAPI()
-        balance, status = api.get_balance()
-        if balance is not None:
-            self.signals.finished.emit(float(balance), status == 'connected')
-        else:
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = GeminiTTSAPI()
+            balance, status = api.get_balance()
+            if balance is not None:
+                self.signals.finished.emit(float(balance), status == 'connected')
+            else:
+                self.signals.finished.emit(None, False)
+        except Exception as e:
+            logger.log(f"GeminiTTSBalanceWorker error: {e}", level=LogLevel.ERROR)
             self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class ApiKeyCheckWorker(QRunnable):
     def __init__(self, api_key, server_url):
@@ -113,34 +165,40 @@ class ApiKeyCheckWorker(QRunnable):
         self.server_url = server_url
 
     def run(self):
-        is_valid = False
-        expires_at = None
-        subscription_level = 1 # Default to base level
-        if not self.api_key or not self.server_url:
-            self.signals.finished.emit(is_valid, expires_at, subscription_level)
-            return
+        if pythoncom:
+             pythoncom.CoInitialize()
         try:
-            from utils.hardware_id import get_hardware_id
-            hardware_id = get_hardware_id()
-            
-            response = requests.post(
-                f"{self.server_url}/validate_key/",
-                json={"key": self.api_key, "hardware_id": hardware_id},
-                timeout=5
-            )
-            if response.status_code == 200:
-                data = response.json()
-                is_valid = data.get("valid", False)
-                expires_at = data.get("expires_at")
-                subscription_level = data.get("subscription_level", 1)
-            else:
-                is_valid = False
-                expires_at = None
-                subscription_level = 1
-        except requests.RequestException:
-            # Network error, etc.
-            pass
-        self.signals.finished.emit(is_valid, expires_at, subscription_level)
+            is_valid = False
+            expires_at = None
+            subscription_level = 1 # Default to base level
+            if not self.api_key or not self.server_url:
+                self.signals.finished.emit(is_valid, expires_at, subscription_level)
+                return
+            try:
+                from utils.hardware_id import get_hardware_id
+                hardware_id = get_hardware_id()
+                
+                response = requests.post(
+                    f"{self.server_url}/validate_key/",
+                    json={"key": self.api_key, "hardware_id": hardware_id},
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    is_valid = data.get("valid", False)
+                    expires_at = data.get("expires_at")
+                    subscription_level = data.get("subscription_level", 1)
+                else:
+                    is_valid = False
+                    expires_at = None
+                    subscription_level = 1
+            except requests.RequestException:
+                # Network error, etc.
+                pass
+            self.signals.finished.emit(is_valid, expires_at, subscription_level)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class MainWindow(QMainWindow):
     SHOW_REWRITE_TAB = False # Default to False, enabled only if level >= 2
