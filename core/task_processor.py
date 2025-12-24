@@ -2133,6 +2133,18 @@ class TaskProcessor(QObject):
     def _on_montage_progress(self, task_id, message):
         job_id = task_id.split('_')[0] if '_' in task_id else task_id
         self.task_progress_log.emit(job_id, message)
+        
+        # Parse percentage from message, e.g., "progress=45.20%"
+        if "progress=" in message:
+            try:
+                parts = dict(re.findall(r'(\w+)=([^ |]+)', message))
+                progress_str = parts.get('progress')
+                if progress_str:
+                    # Parse float just in case, but keep string format
+                    state = self.task_states[task_id]
+                    self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_montage', progress_str)
+            except Exception:
+                pass
 
     @Slot(str)
     def _on_image_deleted(self, image_path):
