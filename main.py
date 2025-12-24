@@ -3,6 +3,7 @@ import os
 import requests
 import traceback
 import platform
+import multiprocessing
 from datetime import datetime
 
 # Avoid potential crashes on macOS with faulthandler + GUI
@@ -256,5 +257,6 @@ def main():
         sys.exit(exit_code)
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
     main()
 
