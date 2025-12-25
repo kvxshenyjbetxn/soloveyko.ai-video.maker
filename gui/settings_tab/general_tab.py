@@ -89,6 +89,12 @@ class GeneralTab(QWidget):
         self.translation_review_checkbox.stateChanged.connect(self.translation_review_changed)
         self.controls_layout.addRow(self.translation_review_label, self.translation_review_checkbox)
 
+        # Rewrite review checkbox
+        self.rewrite_review_label = QLabel()
+        self.rewrite_review_checkbox = QCheckBox()
+        self.rewrite_review_checkbox.stateChanged.connect(self.rewrite_review_changed)
+        self.controls_layout.addRow(self.rewrite_review_label, self.rewrite_review_checkbox)
+
         # Image review checkbox
         self.image_review_label = QLabel()
         self.image_review_checkbox = QCheckBox()
@@ -115,6 +121,13 @@ class GeneralTab(QWidget):
         prompt_count_layout.addStretch()
         
         self.controls_layout.addRow(self.prompt_count_widget)
+
+        # Max download threads
+        self.max_download_threads_label = QLabel()
+        self.max_download_threads_spinbox = QSpinBox()
+        self.max_download_threads_spinbox.setRange(1, 100)
+        self.max_download_threads_spinbox.valueChanged.connect(self.max_download_threads_changed)
+        self.controls_layout.addRow(self.max_download_threads_label, self.max_download_threads_spinbox)
         
         form_layout.addRow(self.controls_group)
 
@@ -142,6 +155,7 @@ class GeneralTab(QWidget):
         self.detailed_logging_checkbox.blockSignals(True)
         self.prompt_count_control_checkbox.blockSignals(True)
         self.prompt_count_spinbox.blockSignals(True)
+        self.max_download_threads_spinbox.blockSignals(True)
 
         lang_map = {"uk": 0, "en": 1, "ru": 2}
         current_lang = settings_manager.get('language')
@@ -155,6 +169,7 @@ class GeneralTab(QWidget):
 
         self.results_path_edit.setText(settings_manager.get('results_path'))
         self.translation_review_checkbox.setChecked(settings_manager.get('translation_review_enabled', False))
+        self.rewrite_review_checkbox.setChecked(settings_manager.get('rewrite_review_enabled', False))
         self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
         self.detailed_logging_checkbox.setChecked(settings_manager.get('detailed_logging_enabled', False))
         
@@ -162,6 +177,7 @@ class GeneralTab(QWidget):
         self.prompt_count_control_checkbox.setChecked(prompt_control_enabled)
         self.prompt_count_widget.setVisible(prompt_control_enabled)
         self.prompt_count_spinbox.setValue(settings_manager.get('prompt_count', 10))
+        self.max_download_threads_spinbox.setValue(settings_manager.get('max_download_threads', 5))
 
         self.update_style() # Set button color and border
 
@@ -174,6 +190,7 @@ class GeneralTab(QWidget):
         self.detailed_logging_checkbox.blockSignals(False)
         self.prompt_count_control_checkbox.blockSignals(False)
         self.prompt_count_spinbox.blockSignals(False)
+        self.max_download_threads_spinbox.blockSignals(False)
 
 
     def open_color_dialog(self):
@@ -189,6 +206,9 @@ class GeneralTab(QWidget):
 
     def translation_review_changed(self, state):
         settings_manager.set('translation_review_enabled', state == Qt.CheckState.Checked.value)
+
+    def rewrite_review_changed(self, state):
+        settings_manager.set('rewrite_review_enabled', state == Qt.CheckState.Checked.value)
 
     def image_review_changed(self, state):
         settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
@@ -213,6 +233,9 @@ class GeneralTab(QWidget):
     def detailed_logging_changed(self, state):
         settings_manager.set('detailed_logging_enabled', state == Qt.CheckState.Checked.value)
         logger.reconfigure()
+
+    def max_download_threads_changed(self, value):
+        settings_manager.set('max_download_threads', value)
 
     def language_changed(self, index):
         lang_map = {0: "uk", 1: "en", 2: "ru"}
@@ -246,8 +269,10 @@ class GeneralTab(QWidget):
         self.browse_button.setText(translator.translate('browse_button'))
         self.controls_group.setTitle(translator.translate('controls_group_title'))
         self.translation_review_label.setText(translator.translate('translation_review_label'))
+        self.rewrite_review_label.setText(translator.translate('rewrite_review_label'))
         self.image_review_label.setText(translator.translate('image_review_label'))
         self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
         self.accent_color_label.setText(translator.translate('accent_color_label'))
         self.prompt_count_control_label.setText(translator.translate('prompt_count_control_label'))
         self.prompt_count_label.setText(translator.translate('prompt_count_label'))
+        self.max_download_threads_label.setText(translator.translate('max_download_threads_label'))

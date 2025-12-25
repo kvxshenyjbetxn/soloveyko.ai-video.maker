@@ -2,12 +2,20 @@ import os
 import sys
 import requests
 import collections
+import platform
 from datetime import datetime
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray, QTimer
 from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from gui.qt_material import apply_stylesheet
+
+# Windows COM handling for threads
+try:
+    import pythoncom
+except ImportError:
+    pythoncom = None
+
 
 from utils.settings import settings_manager
 from utils.translator import translator
@@ -23,6 +31,7 @@ from gui.settings_tab.settings_tab import SettingsTab
 from gui.log_tab import LogTab
 from gui.queue_tab import QueueTab
 from gui.gallery_tab.gallery_tab import GalleryTab
+from gui.rewrite_tab import RewriteTab
 from gui.gallery_tab.image_viewer import ImageViewer
 from gui.gallery_tab.video_viewer import VideoViewer
 from core.queue_manager import QueueManager
@@ -44,8 +53,8 @@ class VoicemakerBalanceWorkerSignals(QObject):
 class GeminiTTSBalanceWorkerSignals(QObject):
     finished = Signal(object, bool)
 
-class ValidationWorkerSignals(QObject):
-    finished = Signal(bool, str) # is_valid, expires_at
+class ApiKeyCheckSignals(QObject):
+    finished = Signal(bool, str, int) # is_valid, expires_at, subscription_level
 
 class BalanceWorker(QRunnable):
     def __init__(self):
@@ -53,9 +62,18 @@ class BalanceWorker(QRunnable):
         self.signals = BalanceWorkerSignals()
 
     def run(self):
-        api = OpenRouterAPI()
-        balance = api.get_balance()
-        self.signals.finished.emit(balance, balance is not None)
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = OpenRouterAPI()
+            balance = api.get_balance()
+            self.signals.finished.emit(balance, balance is not None)
+        except Exception as e:
+            logger.log(f"BalanceWorker error: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class GooglerUsageWorker(QRunnable):
     def __init__(self):
@@ -63,9 +81,18 @@ class GooglerUsageWorker(QRunnable):
         self.signals = GooglerUsageWorkerSignals()
 
     def run(self):
-        api = GooglerAPI()
-        usage = api.get_usage()
-        self.signals.finished.emit(usage, usage is not None)
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = GooglerAPI()
+            usage = api.get_usage()
+            self.signals.finished.emit(usage, usage is not None)
+        except Exception as e:
+            logger.log(f"GooglerUsageWorker error: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class ElevenLabsBalanceWorker(QRunnable):
     def __init__(self):
@@ -73,9 +100,18 @@ class ElevenLabsBalanceWorker(QRunnable):
         self.signals = ElevenLabsBalanceWorkerSignals()
 
     def run(self):
-        api = ElevenLabsAPI()
-        balance, status = api.get_balance()
-        self.signals.finished.emit(balance, status == 'connected')
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = ElevenLabsAPI()
+            balance, status = api.get_balance()
+            self.signals.finished.emit(balance, status == 'connected')
+        except Exception as e:
+            logger.log(f"ElevenLabsBalanceWorker error: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class VoicemakerBalanceWorker(QRunnable):
     def __init__(self):
@@ -83,12 +119,21 @@ class VoicemakerBalanceWorker(QRunnable):
         self.signals = VoicemakerBalanceWorkerSignals()
 
     def run(self):
-        api = VoicemakerAPI()
-        balance, status = api.get_balance()
-        if balance is not None:
-             self.signals.finished.emit(int(balance), status == 'connected')
-        else:
-             self.signals.finished.emit(None, False)
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = VoicemakerAPI()
+            balance, status = api.get_balance()
+            if balance is not None:
+                 self.signals.finished.emit(int(balance), status == 'connected')
+            else:
+                 self.signals.finished.emit(None, False)
+        except Exception as e:
+            logger.log(f"VoicemakerBalanceWorker error: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class GeminiTTSBalanceWorker(QRunnable):
     def __init__(self):
@@ -96,52 +141,75 @@ class GeminiTTSBalanceWorker(QRunnable):
         self.signals = GeminiTTSBalanceWorkerSignals()
 
     def run(self):
-        api = GeminiTTSAPI()
-        balance, status = api.get_balance()
-        if balance is not None:
-            self.signals.finished.emit(float(balance), status == 'connected')
-        else:
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            api = GeminiTTSAPI()
+            balance, status = api.get_balance()
+            if balance is not None:
+                self.signals.finished.emit(float(balance), status == 'connected')
+            else:
+                self.signals.finished.emit(None, False)
+        except Exception as e:
+            logger.log(f"GeminiTTSBalanceWorker error: {e}", level=LogLevel.ERROR)
             self.signals.finished.emit(None, False)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
-class ValidationWorker(QRunnable):
+class ApiKeyCheckWorker(QRunnable):
     def __init__(self, api_key, server_url):
         super().__init__()
-        self.signals = ValidationWorkerSignals()
+        self.signals = ApiKeyCheckSignals()
         self.api_key = api_key
         self.server_url = server_url
 
     def run(self):
-        is_valid = False
-        expires_at = None
-        if not self.api_key or not self.server_url:
-            self.signals.finished.emit(is_valid, expires_at)
-            return
+        if pythoncom:
+             pythoncom.CoInitialize()
         try:
-            from utils.hardware_id import get_hardware_id
-            hardware_id = get_hardware_id()
-            
-            response = requests.post(
-                f"{self.server_url}/validate_key/",
-                json={"key": self.api_key, "hardware_id": hardware_id},
-                timeout=5
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("valid"):
-                    is_valid = True
+            is_valid = False
+            expires_at = None
+            subscription_level = 1 # Default to base level
+            if not self.api_key or not self.server_url:
+                self.signals.finished.emit(is_valid, expires_at, subscription_level)
+                return
+            try:
+                from utils.hardware_id import get_hardware_id
+                hardware_id = get_hardware_id()
+                
+                response = requests.post(
+                    f"{self.server_url}/validate_key/",
+                    json={"key": self.api_key, "hardware_id": hardware_id},
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    is_valid = data.get("valid", False)
                     expires_at = data.get("expires_at")
-        except requests.RequestException:
-            # Network error, etc.
-            pass
-        self.signals.finished.emit(is_valid, expires_at)
+                    subscription_level = data.get("subscription_level", 1)
+                else:
+                    is_valid = False
+                    expires_at = None
+                    subscription_level = 1
+            except requests.RequestException:
+                # Network error, etc.
+                pass
+            self.signals.finished.emit(is_valid, expires_at, subscription_level)
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 
 class MainWindow(QMainWindow):
+    SHOW_REWRITE_TAB = False # Default to False, enabled only if level >= 2
+    
     def __init__(self, app, subscription_info=None, api_key=None, server_url=None):
         super().__init__()
         self.app = app
         self.subscription_info = subscription_info
         self.api_key = api_key
         self.server_url = server_url
+        self.subscription_level = 1 # Default level
         self.settings_manager = settings_manager
         self.translator = translator
         
@@ -151,8 +219,9 @@ class MainWindow(QMainWindow):
         self.queue_manager = QueueManager()
         self.task_processor = TaskProcessor(self.queue_manager)
         self.threadpool = QThreadPool()
-        self.translation_review_queue = collections.deque()
+        self.text_review_queue = collections.deque()
         self.is_review_dialog_active = False
+        self.active_workers = set() # Track workers to prevent garbage collection and Segfaults
         self.init_ui()
         logger.log('Application started.', level=LogLevel.INFO)
         self.app.installEventFilter(self)
@@ -182,12 +251,70 @@ class MainWindow(QMainWindow):
         self.settings_manager.save_settings()
 
     def check_api_key_validity(self):
-        worker = ValidationWorker(api_key=self.api_key, server_url=self.server_url)
-        worker.signals.finished.connect(self.on_validation_finished)
+        worker = ApiKeyCheckWorker(self.api_key, self.server_url)
+        worker.signals.finished.connect(self.on_api_key_checked)
         self.threadpool.start(worker)
 
-    def on_validation_finished(self, is_valid, expires_at):
-        if not is_valid:
+    def on_api_key_checked(self, is_valid, expires_at, subscription_level):
+        self.subscription_level = subscription_level
+        if is_valid:
+            # Update subscription info logic
+            days_left = 0
+            if expires_at:
+                try:
+                     # Parse ISO format
+                    dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+                    now = datetime.now(dt.tzinfo) # Use tzinfo from dt for comparison
+                    if dt > now:
+                        days_left = (dt - now).days
+                        
+                        # --- Level 2 (Unlimited) Check ---
+                        if subscription_level >= 2:
+                            self.days_left_label.setText(self.translator.translate('subscription_unlimited'))
+                            self.days_left_label.setStyleSheet("color: gold; font-weight: bold;")
+                        else:
+                             # Basic Plan logic
+                            if days_left > 3650: # Fallback check
+                                days_left_str = self.translator.translate('subscription_unlimited')
+                                self.days_left_label.setText(days_left_str)
+                            else:
+                                days_left_str = str(days_left)
+                                prefix = self.translator.translate('subscription_days_left')
+                                self.days_left_label.setText(f"{prefix}{days_left_str}")
+                                
+                            self.days_left_label.setStyleSheet("") # Reset style
+                except Exception as e:
+                    logger.log(f"Error parsing date: {e}", level=LogLevel.ERROR)
+            
+            # --- Update Rewrite Tab Visibility ---
+            # Level 2 = Plus (With Rewrite)
+            should_show_rewrite = (subscription_level >= 2)
+            
+            if hasattr(self.settings_tab, 'languages_tab'):
+                self.settings_tab.languages_tab.set_rewrite_visible(should_show_rewrite)
+
+            if should_show_rewrite != self.SHOW_REWRITE_TAB:
+                self.SHOW_REWRITE_TAB = should_show_rewrite
+                if self.SHOW_REWRITE_TAB:
+                    # Add tab
+                    if not hasattr(self, 'rewrite_tab'):
+                         self.rewrite_tab = RewriteTab(main_window=self)
+                    
+                    # Insert after Text Translation tab (index 1)
+                    self.tabs.insertTab(1, self.rewrite_tab, self.translator.translate('rewrite_tab'))
+                    
+                else:
+                    # Remove tab
+                    # Check if rewrite_tab exists and is in tabs
+                    if hasattr(self, 'rewrite_tab'):
+                        idx = self.tabs.indexOf(self.rewrite_tab)
+                        if idx != -1:
+                            self.tabs.removeTab(idx)
+            
+            # Refresh balances for all valid users to ensure UI is up to date
+            self.start_background_updates()
+        else:
+            # Invalid key logic...
             # Clear the saved key as it's no longer valid
             settings_manager.set('api_key', None)
             settings_manager.save_settings()
@@ -199,10 +326,11 @@ class MainWindow(QMainWindow):
             # Visually indicate expiry
             self.days_left_label.setText("!")
             self.user_icon_button.setToolTip(self.translator.translate('subscription_expired_message'))
-        else:
-            # Update subscription info and UI
-            self.subscription_info = expires_at
-            self.update_subscription_status()
+            self.SHOW_REWRITE_TAB = False # Ensure rewrite tab is hidden if key is invalid
+            if hasattr(self, 'rewrite_tab'):
+                idx = self.tabs.indexOf(self.rewrite_tab)
+                if idx != -1:
+                    self.tabs.removeTab(idx)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -283,6 +411,9 @@ class MainWindow(QMainWindow):
         self.update_subscription_status()
 
         self.text_tab = TextTab(main_window=self)
+        if self.SHOW_REWRITE_TAB:
+            self.rewrite_tab = RewriteTab(main_window=self)
+
         self.settings_tab = SettingsTab(main_window=self)
         self.log_tab = LogTab()
         self.queue_tab = QueueTab(parent=self.tabs, main_window=self, log_tab=self.log_tab)
@@ -291,6 +422,8 @@ class MainWindow(QMainWindow):
         self.review_notification_shown = False
 
         self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
+        if self.SHOW_REWRITE_TAB:
+            self.tabs.addTab(self.rewrite_tab, self.translator.translate('rewrite_tab'))
         self.tabs.addTab(self.queue_tab, self.translator.translate('queue_tab'))
         self.tabs.addTab(self.gallery_tab, self.translator.translate('gallery_tab_title'))
         self.tabs.addTab(self.settings_tab, self.translator.translate('settings_tab'))
@@ -312,13 +445,13 @@ class MainWindow(QMainWindow):
         self.task_processor.task_progress_log.connect(self.queue_tab.on_task_progress_log)
         self.task_processor.image_review_required.connect(self._on_image_review_required)
         self.task_processor.translation_review_required.connect(self._on_translation_review_required)
+        self.task_processor.rewrite_review_required.connect(self._on_rewrite_review_required)
         self.gallery_tab.continue_montage_requested.connect(self.task_processor.resume_all_montages)
         self.gallery_tab.image_deleted.connect(self.task_processor._on_image_deleted)
         self.gallery_tab.media_clicked.connect(self.show_media_viewer)
         self.settings_tab.templates_tab.template_applied.connect(self.on_template_applied)
 
         QTimer.singleShot(100, self.check_api_key_validity) # Initial check
-        QTimer.singleShot(100, self.start_background_updates) # Initial balance check - run in background, non-blocking
         QTimer.singleShot(200, lambda: self.settings_tab.languages_tab.load_elevenlabs_templates()) # Load templates in background to avoid blocking startup
         
         self.update_active_template_display()
@@ -342,10 +475,14 @@ class MainWindow(QMainWindow):
         self.update_active_template_display()
 
     def _start_processing_checked(self):
-        worker = ValidationWorker(api_key=self.api_key, server_url=self.server_url)
-        # We connect to a lambda to pass a flag indicating this is a pre-processing check
+        worker = ApiKeyCheckWorker(api_key=self.api_key, server_url=self.server_url)
+        self.active_workers.add(worker)
+        # Fix: the signal emits 3 arguments (bool, str, int)
         worker.signals.finished.connect(
-            lambda is_valid, expires_at: self.on_pre_processing_validation_finished(is_valid)
+            lambda is_valid, expires_at, sub_level: (
+                self.on_pre_processing_validation_finished(is_valid),
+                self.active_workers.discard(worker)
+            )
         )
         self.threadpool.start(worker)
 
@@ -362,6 +499,12 @@ class MainWindow(QMainWindow):
     def update_subscription_status(self):
         days_left_text = ""
         tooltip_text = self.translator.translate('no_subscription_info')
+
+        if hasattr(self, 'subscription_level') and self.subscription_level >= 2:
+            self.days_left_label.setText(self.translator.translate('subscription_unlimited'))
+            self.days_left_label.setStyleSheet("color: gold; font-weight: bold;")
+            self.user_icon_button.setToolTip(self.translator.translate('subscription_unlimited'))
+            return
 
         if self.subscription_info:
             try:
@@ -407,7 +550,10 @@ class MainWindow(QMainWindow):
                 now = datetime.now(expires_at.tzinfo)
                 days_left = (expires_at - now).days
 
-                if days_left >= 0:
+                # Hide expiration info for Level 2 (Unlimited)
+                if hasattr(self, 'subscription_level') and self.subscription_level >= 2:
+                    menu.addAction(self.translator.translate('subscription_unlimited'))
+                elif days_left >= 0:
                     menu.addAction(f"{self.translator.translate('subscription_active_until')}: {expires_at_formatted}")
                     menu.addAction(f"{self.translator.translate('days_left')}: {days_left}")
                 else:
@@ -443,50 +589,73 @@ class MainWindow(QMainWindow):
         self.gallery_tab.show_continue_button()
 
     def _on_translation_review_required(self, task_id, translated_text):
-        self.translation_review_queue.append((task_id, translated_text))
+        self.text_review_queue.append((task_id, translated_text, 'stage_translation'))
+        if not self.is_review_dialog_active:
+            QTimer.singleShot(0, self._show_next_review_dialog)
+
+    def _on_rewrite_review_required(self, task_id, rewritten_text):
+        self.text_review_queue.append((task_id, rewritten_text, 'stage_rewrite'))
         if not self.is_review_dialog_active:
             QTimer.singleShot(0, self._show_next_review_dialog)
 
     def _show_next_review_dialog(self):
-        if self.is_review_dialog_active or not self.translation_review_queue:
+        if self.is_review_dialog_active or not self.text_review_queue:
             return
 
         self.is_review_dialog_active = True
-        task_id, translated_text = self.translation_review_queue.popleft()
+        task_id, text, stage = self.text_review_queue.popleft()
         
         state = self.task_processor.task_states[task_id]
-        dialog = TranslationReviewDialog(self, state, translated_text, self.translator)
+        dialog = TextReviewDialog(self, state, text, self.translator, stage)
 
         # Use open() instead of exec() to avoid blocking the main loop and causing 0x8001010d errors
         # Connect signals for result handling
-        dialog.finished.connect(lambda result: self._on_review_dialog_finished(result, dialog, task_id, state))
+        dialog.finished.connect(lambda result: self._on_review_dialog_finished(result, dialog, task_id, state, stage))
         
         def on_regenerate():
-            self.task_processor.regenerate_translation(task_id)
+            if stage == 'stage_translation':
+                self.task_processor.regenerate_translation(task_id)
+            else:
+                self.task_processor.regenerate_rewrite(task_id)
 
         dialog.regenerate_requested.connect(on_regenerate)
-        self.task_processor.translation_regenerated.connect(dialog.update_text)
+        
+        if stage == 'stage_translation':
+            self.task_processor.translation_regenerated.connect(dialog.update_text)
+        else:
+            self.task_processor.rewrite_regenerated.connect(dialog.update_text)
 
         dialog.open() 
 
-    def _on_review_dialog_finished(self, result, dialog, task_id, state):
+    def _on_review_dialog_finished(self, result, dialog, task_id, state, stage):
         try:
+            # If closed due to regeneration request, we do nothing.
+            # The regeneration was triggered in the background, and when it finishes,
+            # a new dialog will appear because we reset the 'shown' flag in task_processor.
+            if getattr(dialog, 'is_regenerating', False):
+                return
+
             if result == QDialog.DialogCode.Accepted:
                 new_text = dialog.get_text()
                 self.task_processor.task_states[task_id].text_for_processing = new_text
                 if state.dir_path:
                     try:
-                        with open(os.path.join(state.dir_path, "translation_reviewed.txt"), 'w', encoding='utf-8') as f:
+                        # We only update translation.txt which is the working copy.
+                        # Origin is saved as translation_orig.txt in task_processor.py
+                        with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
                             f.write(new_text)
                     except Exception as e:
-                        logger.log(f"Failed to save reviewed translation: {e}", level=LogLevel.ERROR)
+                        logger.log(f"Failed to save reviewed text: {e}", level=LogLevel.ERROR)
                 self.task_processor._on_text_ready(task_id)
             else:
-                self.task_processor._set_stage_status(task_id, 'stage_translation', 'error', 'User cancelled review.')
+                self.task_processor._set_stage_status(task_id, stage, 'error', 'User cancelled review.')
             
             # Clean up connections
             try:
-                self.task_processor.translation_regenerated.disconnect(dialog.update_text)
+                if stage == 'stage_translation':
+                    self.task_processor.translation_regenerated.disconnect(dialog.update_text)
+                else:
+                    self.task_processor.rewrite_regenerated.disconnect(dialog.update_text)
             except (RuntimeError, TypeError):
                 pass
                 
@@ -532,27 +701,32 @@ class MainWindow(QMainWindow):
 
     def update_balance(self, *args):
         worker = BalanceWorker()
-        worker.signals.finished.connect(self._on_balance_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda b, s: (self._on_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def update_googler_usage(self, *args):
         worker = GooglerUsageWorker()
-        worker.signals.finished.connect(self._on_googler_usage_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda u, s: (self._on_googler_usage_updated(u, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def update_elevenlabs_balance(self, *args):
         worker = ElevenLabsBalanceWorker()
-        worker.signals.finished.connect(self._on_elevenlabs_balance_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda b, s: (self._on_elevenlabs_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def update_voicemaker_balance(self, *args):
         worker = VoicemakerBalanceWorker()
-        worker.signals.finished.connect(self._on_voicemaker_balance_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda b, s: (self._on_voicemaker_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def update_gemini_tts_balance(self, *args):
         worker = GeminiTTSBalanceWorker()
-        worker.signals.finished.connect(self._on_gemini_tts_balance_updated)
+        self.active_workers.add(worker)
+        worker.signals.finished.connect(lambda b, s: (self._on_gemini_tts_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
 
     def _on_balance_updated(self, balance, success):
@@ -566,6 +740,8 @@ class MainWindow(QMainWindow):
             balance_text = ""
 
         self.text_tab.update_balance(balance_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_balance(balance_text)
         self.queue_tab.update_balance(balance_text)
         self.settings_tab.api_tab.openrouter_tab.update_balance_label(balance_text)
 
@@ -591,6 +767,8 @@ class MainWindow(QMainWindow):
                 display_text = self.translator.translate('error_label')
         
         self.text_tab.update_googler_usage(usage_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_googler_usage(usage_text)
         self.queue_tab.update_googler_usage(usage_text)
         self.settings_tab.api_tab.image_tab.googler_tab.usage_display_label.setText(display_text)
 
@@ -608,6 +786,8 @@ class MainWindow(QMainWindow):
                 balance_to_display_on_settings_tab = self.translator.translate('error_label')
 
         self.text_tab.update_elevenlabs_balance(balance_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_elevenlabs_balance(balance_text)
         self.queue_tab.update_elevenlabs_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.elevenlabs_tab.update_balance_label(balance_to_display_on_settings_tab)
 
@@ -625,6 +805,8 @@ class MainWindow(QMainWindow):
                 balance_to_display_on_settings_tab = self.translator.translate('error_label')
 
         self.text_tab.update_voicemaker_balance(balance_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_voicemaker_balance(balance_text)
         self.queue_tab.update_voicemaker_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.voicemaker_tab.update_balance_label(balance_to_display_on_settings_tab)
 
@@ -642,6 +824,8 @@ class MainWindow(QMainWindow):
                 balance_to_display_on_settings_tab = self.translator.translate('error_label')
 
         self.text_tab.update_gemini_tts_balance(balance_text)
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.update_gemini_tts_balance(balance_text)
         self.queue_tab.update_gemini_tts_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.gemini_tts_tab.update_balance_label(balance_to_display_on_settings_tab)
 
@@ -704,6 +888,9 @@ class MainWindow(QMainWindow):
     def retranslate_ui(self):
         self.update_title()
         self.tabs.setTabText(self.tabs.indexOf(self.text_tab), self.translator.translate('text_processing_tab'))
+        if self.SHOW_REWRITE_TAB:
+            self.tabs.setTabText(self.tabs.indexOf(self.rewrite_tab), self.translator.translate('rewrite_tab'))
+            self.rewrite_tab.retranslate_ui()
         self.tabs.setTabText(self.tabs.indexOf(self.queue_tab), self.translator.translate('queue_tab'))
         self.tabs.setTabText(self.tabs.indexOf(self.gallery_tab), self.translator.translate('gallery_tab_title'))
         self.tabs.setTabText(self.tabs.indexOf(self.settings_tab), self.translator.translate('settings_tab'))
@@ -731,17 +918,22 @@ class MainWindow(QMainWindow):
         logger.log('Application closing.', level=LogLevel.INFO)
         super().closeEvent(event)
 
-class TranslationReviewDialog(QDialog):
-    # ... (rest of the file is the same)
+class TextReviewDialog(QDialog):
     regenerate_requested = Signal()
 
-    def __init__(self, parent, state, text, translator):
+    def __init__(self, parent, state, text, translator, stage='stage_translation'):
         super().__init__(parent)
         self.state = state
         self.translator = translator
+        self.stage = stage
+        self.is_regenerating = False # Flag to track if regeneration was requested
+
         job_name = self.state.job_name
         lang_name = self.state.lang_name
-        self.setWindowTitle(f"Перевірка перекладу: {job_name} ({lang_name})")
+        
+        title_key = 'translation_review_label' if stage == 'stage_translation' else 'rewrite_review_label'
+        title = self.translator.translate(title_key).replace(':', '').strip()
+        self.setWindowTitle(f"{title}: {job_name} ({lang_name})")
         self.setMinimumSize(700, 500)
 
         main_layout = QVBoxLayout(self)
@@ -757,19 +949,24 @@ class TranslationReviewDialog(QDialog):
         bottom_layout.addStretch()
 
         self.button_box = QDialogButtonBox()
-        self.regenerate_button = self.button_box.addButton("Перегенерувати", QDialogButtonBox.ButtonRole.ActionRole)
+        self.regenerate_button = self.button_box.addButton(self.translator.translate("thumbnail_regen_button"), QDialogButtonBox.ButtonRole.ActionRole)
         self.ok_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Ok)
         self.cancel_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
         bottom_layout.addWidget(self.button_box)
         
         main_layout.addLayout(bottom_layout)
 
-        self.regenerate_button.clicked.connect(self.regenerate_requested.emit)
+        self.regenerate_button.clicked.connect(self.on_regenerate_clicked)
         self.ok_button.clicked.connect(self.accept)
         self.cancel_button.clicked.connect(self.reject)
         self.text_edit.textChanged.connect(self.update_char_count)
 
         self.update_char_count()
+
+    def on_regenerate_clicked(self):
+        self.is_regenerating = True
+        self.regenerate_requested.emit()
+        self.close() # Close immediately to allow other tasks to proceed
 
     def get_text(self):
         return self.text_edit.toPlainText()
@@ -779,7 +976,12 @@ class TranslationReviewDialog(QDialog):
         translated_len = len(self.get_text())
         
         original_str = self.translator.translate('original_chars').format(count=original_len)
-        translated_str = self.translator.translate('translated_chars').format(count=translated_len)
+        
+        res_key = 'translated_chars' if self.stage == 'stage_translation' else 'characters_count'
+        if res_key == 'characters_count':
+            translated_str = f"{self.translator.translate('stage_rewrite')}: {translated_len} {self.translator.translate('characters_count')}"
+        else:
+            translated_str = self.translator.translate(res_key).format(count=translated_len)
         
         self.char_count_label.setText(f"{original_str} | {translated_str}")
 

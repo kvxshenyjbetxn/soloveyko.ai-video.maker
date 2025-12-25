@@ -5,7 +5,6 @@ from utils.translator import translator
 from .openrouter_tab import OpenRouterTab
 from .audio_tab.audio_tab import AudioTab
 from .image_tab.image_tab import ImageTab
-from .dataimpulse_tab import DataImpulseTab
 from .assemblyai_tab import AssemblyAITab
 
 class ApiTab(QWidget):
@@ -21,13 +20,11 @@ class ApiTab(QWidget):
         self.openrouter_tab = OpenRouterTab(main_window=self.main_window)
         self.audio_tab = AudioTab(main_window=self.main_window)
         self.image_tab = ImageTab()
-        self.dataimpulse_tab = DataImpulseTab()
         self.assemblyai_tab = AssemblyAITab()
 
         self.tabs.addTab(self.openrouter_tab, translator.translate('openrouter_tab'))
         self.tabs.addTab(self.audio_tab, translator.translate('audio_tab'))
         self.tabs.addTab(self.image_tab, translator.translate('image_tab'))
-        self.tabs.addTab(self.dataimpulse_tab, translator.translate('dataimpulse_tab'))
         self.tabs.addTab(self.assemblyai_tab, translator.translate('assemblyai_tab'))
         
         layout.addWidget(self.tabs)
@@ -37,18 +34,15 @@ class ApiTab(QWidget):
         self.tabs.setTabText(0, translator.translate('openrouter_tab'))
         self.tabs.setTabText(1, translator.translate('audio_tab'))
         self.tabs.setTabText(2, translator.translate('image_tab'))
-        self.tabs.setTabText(3, translator.translate('dataimpulse_tab'))
-        self.tabs.setTabText(4, translator.translate('assemblyai_tab'))
+        self.tabs.setTabText(3, translator.translate('assemblyai_tab'))
         
         self.openrouter_tab.retranslate_ui()
         self.audio_tab.retranslate_ui()
         self.image_tab.retranslate_ui()
-        self.dataimpulse_tab.retranslate_ui()
         self.assemblyai_tab.retranslate_ui()
 
     def update_fields(self):
         self.openrouter_tab.update_fields()
         self.audio_tab.update_fields()
         self.image_tab.update_fields()
-        self.dataimpulse_tab.update_fields()
         self.assemblyai_tab.update_fields()

@@ -13,7 +13,7 @@ def compile_project():
     # ------------------------------------
 
     # Назва вихідного файлу (синхронізовано з Windows)
-    app_name = "CombainAI v0.37.10"
+    app_name = "Soloveyko.AI-Video.Maker v0.2.30-beta"
     
     # Перевірка наявності PyInstaller та залежностей
     try:
