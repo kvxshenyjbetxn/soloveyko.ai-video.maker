@@ -201,8 +201,8 @@ class VoiceoverWorker(BaseWorker):
                         continue
                     else: 
                         raise Exception("Failed to download ElevenLabs audio.")
-                elif task_status in ['error', 'error_handled']:
-                    raise Exception("ElevenLabs task processing resulted in an error.")
+                elif task_status in ['error', 'error_handled', 'error_handling']:
+                    raise Exception(f"ElevenLabs task processing resulted in an error (Status: {task_status}).")
                 
                 time.sleep(10)
 
@@ -694,6 +694,10 @@ class TaskProcessor(QObject):
         # OpenRouter concurrency
         self.openrouter_active_count = 0
         self.openrouter_queue = collections.deque()
+
+        # ElevenLabs concurrency
+        self.elevenlabs_active_count = 0
+        self.elevenlabs_queue = collections.deque()
 
         # Determine yt-dlp path
         yt_dlp_name = "yt-dlp.exe" if platform.system() == "Windows" else "yt-dlp"
@@ -1619,11 +1623,30 @@ class TaskProcessor(QObject):
             'job_name': state.job_name,
             'lang_name': state.lang_name
         }
-        self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
+
+        tts_provider = lang_config.get('tts_provider', 'ElevenLabs')
+        if tts_provider == 'ElevenLabs':
+            self.elevenlabs_queue.append((task_id, config))
+            self._process_elevenlabs_queue()
+        else:
+            self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
+
+    def _process_elevenlabs_queue(self):
+        max_threads = self.settings.get("elevenlabs_max_threads", 5)
+        while self.elevenlabs_queue and self.elevenlabs_active_count < max_threads:
+            task_id, config = self.elevenlabs_queue.popleft()
+            self.elevenlabs_active_count += 1
+            self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
         
     @Slot(str, object)
     def _on_voiceover_finished(self, task_id, audio_path):
         state = self.task_states[task_id]
+        
+        tts_provider = state.lang_data.get('tts_provider', 'ElevenLabs')
+        if tts_provider == 'ElevenLabs':
+            self.elevenlabs_active_count -= 1
+            self._process_elevenlabs_queue()
+
         state.audio_path = audio_path
         self._set_stage_status(task_id, 'stage_voiceover', 'success')
         
@@ -1648,6 +1671,13 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_voiceover_error(self, task_id, error):
+        state = self.task_states.get(task_id)
+        if state:
+            tts_provider = state.lang_data.get('tts_provider', 'ElevenLabs')
+            if tts_provider == 'ElevenLabs':
+                self.elevenlabs_active_count -= 1
+                self._process_elevenlabs_queue()
+
         self._set_stage_status(task_id, 'stage_voiceover', 'error', error)
         # CRITICAL FIX: If voiceover fails, we MUST fail or skip subtitles so the job doesn't hang forever in 'pending'
         if 'stage_subtitles' in self.task_states[task_id].stages:
