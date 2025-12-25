@@ -629,21 +629,23 @@ class MainWindow(QMainWindow):
 
     def _on_review_dialog_finished(self, result, dialog, task_id, state, stage):
         try:
+            # If closed due to regeneration request, we do nothing.
+            # The regeneration was triggered in the background, and when it finishes,
+            # a new dialog will appear because we reset the 'shown' flag in task_processor.
+            if getattr(dialog, 'is_regenerating', False):
+                return
+
             if result == QDialog.DialogCode.Accepted:
                 new_text = dialog.get_text()
                 self.task_processor.task_states[task_id].text_for_processing = new_text
                 if state.dir_path:
                     try:
-                        filename = "translation_reviewed.txt" if stage == 'stage_translation' else "rewrite_reviewed.txt"
-                        save_path = os.path.join(state.dir_path, filename)
-                        with open(save_path, 'w', encoding='utf-8') as f:
-                            f.write(new_text)
-                        
-                        # Also update translation.txt to keep consistency for skipping stages
+                        # We only update translation.txt which is the working copy.
+                        # Origin is saved as translation_orig.txt in task_processor.py
                         with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
                             f.write(new_text)
                     except Exception as e:
-                        logger.log(f"Failed to save reviewed {stage}: {e}", level=LogLevel.ERROR)
+                        logger.log(f"Failed to save reviewed text: {e}", level=LogLevel.ERROR)
                 self.task_processor._on_text_ready(task_id)
             else:
                 self.task_processor._set_stage_status(task_id, stage, 'error', 'User cancelled review.')
@@ -924,6 +926,8 @@ class TextReviewDialog(QDialog):
         self.state = state
         self.translator = translator
         self.stage = stage
+        self.is_regenerating = False # Flag to track if regeneration was requested
+
         job_name = self.state.job_name
         lang_name = self.state.lang_name
         
@@ -952,12 +956,17 @@ class TextReviewDialog(QDialog):
         
         main_layout.addLayout(bottom_layout)
 
-        self.regenerate_button.clicked.connect(self.regenerate_requested.emit)
+        self.regenerate_button.clicked.connect(self.on_regenerate_clicked)
         self.ok_button.clicked.connect(self.accept)
         self.cancel_button.clicked.connect(self.reject)
         self.text_edit.textChanged.connect(self.update_char_count)
 
         self.update_char_count()
+
+    def on_regenerate_clicked(self):
+        self.is_regenerating = True
+        self.regenerate_requested.emit()
+        self.close() # Close immediately to allow other tasks to proceed
 
     def get_text(self):
         return self.text_edit.toPlainText()
