@@ -3,29 +3,33 @@ import os
 import requests
 import traceback
 import platform
+import multiprocessing
 from datetime import datetime
 
-# Це виправить помилку 'NoneType object has no attribute write'
-class NullWriter:
-    def write(self, text):
-        pass
-    def flush(self):
-        pass
+# Avoid potential crashes on macOS with faulthandler + GUI
+# and use devnull instead of custom NullWriter for early logs
+if platform.system() == "Darwin":
+    # Suppress FFmpeg logs from Qt Multimedia on macOS to prevent some driver/lib conflicts
+    os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false;qt.text.font.db.*=false'
 
 if sys.stdout is None:
-    sys.stdout = NullWriter()
+    try:
+        sys.stdout = open(os.devnull, 'w')
+    except:
+        pass
 if sys.stderr is None:
-    sys.stderr = NullWriter()
-
-# Suppress FFmpeg logs from Qt Multimedia by default
-# For debugging, you can comment this line out or set the variable to "qt.multimedia.*=true"
-os.environ['QT_LOGGING_RULES'] = 'qt.multimedia.ffmpeg.debug=false;qt.multimedia.ffmpeg.*=false;qt.text.font.db.*=false'
+    try:
+        sys.stderr = open(os.devnull, 'w')
+    except:
+        pass
 
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 from gui.main_window import MainWindow
 from gui.auth_dialog import AuthDialog
 from gui.qt_material import apply_stylesheet
 from utils.settings import settings_manager
+from utils.yt_dlp_updater import YtDlpUpdater
+
 
 # --- НОВА ФУНКЦІЯ: ДОДАЄ ASSETS У PATH ---
 def setup_dependency_paths():
@@ -44,15 +48,47 @@ def setup_dependency_paths():
     # Шлях до папки assets
     assets_dir = os.path.join(base_dir, "assets")
     
-    # Перевіряємо, чи є там ffmpeg
-    ffmpeg_exe = os.path.join(assets_dir, "ffmpeg.exe")
+    # Визначаємо назву файлу залежно від ОС
+    ffmpeg_name = "ffmpeg.exe" if platform.system() == "Windows" else "ffmpeg"
+    ffmpeg_path = os.path.join(assets_dir, ffmpeg_name)
     
-    if os.path.exists(ffmpeg_exe):
+    if os.path.exists(ffmpeg_path):
         # Додаємо assets на початок PATH, щоб програма спочатку шукала там
         os.environ["PATH"] = assets_dir + os.pathsep + os.environ["PATH"]
-        # print(f"Dependencies: Added {assets_dir} to PATH. FFmpeg found.")
+        
+        # На macOS додаємо права на виконання
+        if platform.system() == "Darwin":
+            try:
+                import stat
+                for tool in ["ffmpeg", "ffprobe", "yt-dlp"]:
+                    tool_p = os.path.join(assets_dir, tool)
+                    if os.path.exists(tool_p):
+                        # Remove quarantine and set exec bit
+                        try:
+                            # 'xattr -d com.apple.quarantine' removes the "downloaded from internet" block
+                            subprocess.run(["xattr", "-d", "com.apple.quarantine", tool_p], stderr=subprocess.DEVNULL)
+                        except: pass
+                        
+                        st = os.stat(tool_p)
+                        os.chmod(tool_p, st.st_mode | stat.S_IEXEC)
+                
+                # Також для yt-dlp у папці налаштувань (куди користувач кладе його вручну)
+                from utils.settings import settings_manager
+                yt_dlp_ext = "yt-dlp.exe" if platform.system() == "Windows" else "yt-dlp"
+                yt_dlp_data_p = os.path.join(settings_manager.base_path, yt_dlp_ext)
+                if os.path.exists(yt_dlp_data_p):
+                    try:
+                        subprocess.run(["xattr", "-d", "com.apple.quarantine", yt_dlp_data_p], stderr=subprocess.DEVNULL)
+                    except: pass
+                    st = os.stat(yt_dlp_data_p)
+                    os.chmod(yt_dlp_data_p, st.st_mode | stat.S_IEXEC)
+            except Exception as e:
+                # print(f"DEBUG: Failed to setup macOS permissions: {e}")
+                pass
     else:
-        print(f"Dependencies: WARNING. FFmpeg not found in {assets_dir}")
+        # Fallback: навіть якщо не знайшли файл у assets, додамо шлях про всяк випадок
+        os.environ["PATH"] = assets_dir + os.pathsep + os.environ["PATH"]
+        print(f"Dependencies: WARNING. {ffmpeg_name} not found in {assets_dir}")
 
 # URL for the authentication server
 AUTH_SERVER_URL = "https://new-project-combain-server-production.up.railway.app"
@@ -198,6 +234,16 @@ def main():
                 pass
                 
         main_window.show()
+
+        # --- Start yt-dlp Auto-Updater in background ---
+        try:
+            updater = YtDlpUpdater(main_window)
+            # We keep a reference to prevent garbage collection
+            main_window._yt_dlp_updater = updater
+            updater.start()
+        except Exception as e:
+            print(f"DEBUG: Failed to start yt-dlp updater: {e}")
+
         exit_code = app.exec()
         
         # --- Uninitialize Windows COM after Qt event loop ends ---
@@ -211,5 +257,6 @@ def main():
         sys.exit(exit_code)
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
     main()
 

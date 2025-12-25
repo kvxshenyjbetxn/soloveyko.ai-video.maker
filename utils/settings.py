@@ -55,30 +55,27 @@ class SettingsManager:
 
     def _get_base_path(self):
         if platform.system() == "Darwin":
-            # На macOS використовуємо стандартний шлях для даних додатку
-            # Намагаємось отримати через Qt, але з перевіркою
-            try:
-                from PySide6.QtCore import QCoreApplication
-                if QCoreApplication.instance():
-                    base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
-                else:
-                    # Фоллбек якщо QApplication ще не створено
-                    base = os.path.expanduser("~/Library/Application Support/CombainAI")
-            except Exception as e:
-                print(f"DEBUG: Error getting macOS path via Qt: {e}")
-                base = os.path.expanduser("~/Library/Application Support/CombainAI")
-
-            # Якщо назва додатку не додалась автоматично
-            if not base.endswith("CombainAI"):
-                base = os.path.join(base, "CombainAI")
+            # На macOS використовуємо Application Support для уникнення PermissionError
+            app_support = os.path.expanduser("~/Library/Application Support/Soloveyko.AI-Video.Maker")
             
             try:
-                os.makedirs(base, exist_ok=True)
+                os.makedirs(app_support, exist_ok=True)
             except Exception as e:
-                print(f"DEBUG: Error creating directory {base}: {e}")
+                print(f"DEBUG: Error creating directory {app_support}: {e}")
             
-            print(f"DEBUG: macOS Data Path is: {base}")
-            return base
+            # Створюємо симлінк у Документах для видимості
+            docs_link = os.path.expanduser("~/Documents/Soloveyko.AI-Video.Maker")
+            if not os.path.exists(docs_link):
+                try:
+                    # Символьне посилання дозволяє бачити папку в Документах
+                    os.symlink(app_support, docs_link)
+                    print(f"DEBUG: Created symlink in Documents: {docs_link}")
+                except Exception as e:
+                    print(f"DEBUG: Could not create symlink in Documents: {e}")
+                    # Це не критично, програма продовжить працювати через App Support
+            
+            print(f"DEBUG: macOS Data Path is: {app_support}")
+            return app_support
             
         if getattr(sys, 'frozen', False):
             # Поруч з EXE (Windows)
@@ -160,18 +157,7 @@ class TemplateManager:
 
     def _get_base_path(self):
         if platform.system() == "Darwin":
-            try:
-                from PySide6.QtCore import QCoreApplication
-                if QCoreApplication.instance():
-                    base = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
-                else:
-                    base = os.path.expanduser("~/Library/Application Support/CombainAI")
-            except:
-                base = os.path.expanduser("~/Library/Application Support/CombainAI")
-                
-            if not base.endswith("CombainAI"):
-                base = os.path.join(base, "CombainAI")
-            return base
+            return os.path.expanduser("~/Library/Application Support/Soloveyko.AI-Video.Maker")
 
         if getattr(sys, 'frozen', False):
             return os.path.dirname(sys.executable)

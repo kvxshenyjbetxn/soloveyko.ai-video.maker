@@ -28,9 +28,8 @@ class EffectSelectionDialog(QDialog):
         
         # Визначаємо шлях до папки efects
         if platform.system() == "Darwin":
-            # На macOS використовуємо єдину папку в Application Support
-            base = settings_manager.base_path
-            self.assets_dir = os.path.join(base, "efects")
+            # На macOS використовуємо папку в Documents
+            self.assets_dir = os.path.join(settings_manager.base_path, "efects")
         elif getattr(sys, 'frozen', False):
             # Коли скомпільовано на Windows: efects поруч з exe файлом
             exe_dir = os.path.dirname(sys.executable)

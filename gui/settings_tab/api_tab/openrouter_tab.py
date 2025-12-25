@@ -1,5 +1,5 @@
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QListWidget, QHBoxLayout, QScrollArea
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QListWidget, QHBoxLayout, QScrollArea, QSpinBox
 from PySide6.QtCore import Signal, Qt
 from utils.translator import translator
 from utils.settings import settings_manager
@@ -49,6 +49,17 @@ class OpenRouterTab(QWidget):
         connection_layout.addWidget(self.check_connection_button)
         layout.addLayout(connection_layout)
 
+        # Max Threads
+        max_threads_layout = QHBoxLayout()
+        self.max_threads_label = QLabel(translator.translate("max_concurrent_requests"))
+        self.max_threads_input = QSpinBox()
+        self.max_threads_input.setRange(1, 50)
+        self.max_threads_input.setValue(settings_manager.get("openrouter_max_threads", 5))
+        self.max_threads_input.valueChanged.connect(self.save_max_threads)
+        max_threads_layout.addWidget(self.max_threads_label)
+        max_threads_layout.addWidget(self.max_threads_input)
+        layout.addLayout(max_threads_layout)
+
         # Balance
         self.balance_label = QLabel(translator.translate("balance_loading"))
         layout.addWidget(self.balance_label)
@@ -76,6 +87,7 @@ class OpenRouterTab(QWidget):
         self.api_key_label.setText(translator.translate("openrouter_api_key"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
+        self.max_threads_label.setText(translator.translate("max_concurrent_requests"))
         self.update_connection_status_label()
         self.models_label.setText(translator.translate("models"))
         self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
@@ -88,11 +100,19 @@ class OpenRouterTab(QWidget):
         self.api_key_input.setText(api_key)
         self.api.api_key = api_key
         self.api_key_input.blockSignals(False)
+        
+        self.max_threads_input.blockSignals(True)
+        self.max_threads_input.setValue(self.settings.get("openrouter_max_threads", 5))
+        self.max_threads_input.blockSignals(False)
+
         self.update_models_list()
         
     def save_api_key(self, key):
         self.settings.set("openrouter_api_key", key)
         self.api.api_key = key
+
+    def save_max_threads(self, value):
+        self.settings.set("openrouter_max_threads", value)
 
     def check_connection(self):
         self.update_connection_status_label("checking")

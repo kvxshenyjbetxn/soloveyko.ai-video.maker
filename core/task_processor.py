@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import time
+import platform
 import base64
 import json
 import traceback
@@ -12,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QElapsedTimer, QSemaphore, Slot, QMutex, Qt
 from PySide6.QtGui import QPixmap
 
-from utils.logger import logger, LogLevel
+from utils.youtube_downloader import YouTubeDownloader
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager, template_manager
 from utils.translator import translator
@@ -38,6 +39,7 @@ class WorkerSignals(QObject):
     progress_log = Signal(str, str)  # task_id, log_message (for card-only logs)
     video_generated = Signal(str, str) # old_image_path, new_video_path
     video_progress = Signal(str) # task_id
+    metadata_updated = Signal(str, str, str) # task_id, stage_key, metadata_text
 
 class BaseWorker(QRunnable):
     def __init__(self, task_id, config):
@@ -199,8 +201,8 @@ class VoiceoverWorker(BaseWorker):
                         continue
                     else: 
                         raise Exception("Failed to download ElevenLabs audio.")
-                elif task_status in ['error', 'error_handled']:
-                    raise Exception("ElevenLabs task processing resulted in an error.")
+                elif task_status in ['error', 'error_handled', 'error_handling']:
+                    raise Exception(f"ElevenLabs task processing resulted in an error (Status: {task_status}).")
                 
                 time.sleep(10)
 
@@ -240,7 +242,7 @@ class CustomStageWorker(BaseWorker):
         
         prompt = self.config['prompt']
         text = self.config['text']
-        model = self.config.get('model', 'google/gemini-2.0-flash-exp:free') 
+        model = self.config.get('model', 'unknown') 
         max_tokens = self.config.get('max_tokens', 4096)
         temperature = self.config.get('temperature', 0.7)
         
@@ -499,6 +501,73 @@ class MontageWorker(BaseWorker):
         
         return self.config['output_path']
 
+class DownloadWorker(BaseWorker):
+    def do_work(self):
+        url = self.config['url']
+        dir_path = self.config['dir_path']
+        yt_dlp_path = self.config['yt_dlp_path']
+        download_semaphore = self.config['download_semaphore']
+        
+        logger.log(f"[{self.task_id}] Queuing download for {url}", level=LogLevel.INFO)
+        
+        try:
+            download_semaphore.acquire()
+            logger.log(f"[{self.task_id}] Starting download...", level=LogLevel.INFO)
+            
+            def report_progress(percent_str):
+                 self.signals.metadata_updated.emit(self.task_id, 'stage_download', percent_str)
+
+            return YouTubeDownloader.download_audio(url, dir_path, yt_dlp_path, progress_callback=report_progress)
+
+        finally:
+            download_semaphore.release()
+
+class TranscriptionWorker(BaseWorker):
+    def do_work(self):
+        audio_path = self.config['audio_path']
+        sub_settings = self.config['sub_settings']
+        lang_code = self.config['lang_code']
+        whisper_exe = self.config['whisper_exe']
+        whisper_model_path = self.config['whisper_model_path']
+
+        logger.log(f"[{self.task_id}] Starting transcription for rewrite...", level=LogLevel.INFO)
+        
+        engine = SubtitleEngine(whisper_exe, whisper_model_path)
+        text = engine.transcribe_text(audio_path, sub_settings, language=lang_code)
+        
+        if not text:
+            raise Exception("Transcription yielded empty text.")
+            
+        return text
+
+class RewriteWorker(BaseWorker):
+    def do_work(self):
+        api_key = self.config.get('openrouter_api_key')
+        api = OpenRouterAPI(api_key=api_key)
+        
+        prompt = self.config['prompt']
+        text = self.config['text']
+        model = self.config.get('model', 'unknown')
+        max_tokens = self.config.get('max_tokens', 4096)
+        temperature = self.config.get('temperature', 0.7)
+        
+        logger.log(f"[{self.task_id}] [{model}] Starting rewrite (temp: {temperature}, tokens: {max_tokens})", level=LogLevel.INFO)
+        
+        full_prompt = f"{prompt}\n\n{text}"
+        response = api.get_chat_completion(
+            model=model,
+            messages=[{"role": "user", "content": full_prompt}],
+            max_tokens=max_tokens,
+            temperature=temperature
+        )
+        
+        if response and response['choices'][0]['message']['content']:
+            result = response['choices'][0]['message']['content']
+            logger.log(f"[{self.task_id}] [{model}] Rewrite completed", level=LogLevel.SUCCESS)
+            return result
+        else:
+            raise Exception(f"Empty or invalid response from API for model '{model}'.")
+
 # =================================================================================================================
 # region TASK PROCESSOR
 # =================================================================================================================
@@ -513,7 +582,9 @@ class TaskState:
         self.job_name = job['name']
         self.lang_name = lang_data['display_name']
         self.stages = lang_data['stages']
-        self.original_text = job['text']
+        self.original_text = job.get('text', '')
+        self.input_source = job.get('input_source', '')
+        self.job_type = job.get('type', 'text')
         self.lang_data = lang_data
         self.settings = settings
 
@@ -528,6 +599,7 @@ class TaskState:
 
         self.status = {stage: 'pending' for stage in self.stages}
         self.translation_review_dialog_shown = False
+        self.rewrite_review_dialog_shown = False
         self.prompt_regeneration_attempts = 0
         self.image_gen_status = 'pending'
         
@@ -544,7 +616,7 @@ class TaskState:
         try:
             safe_job_name = job_name.replace('…', '').replace('...', '')
             safe_job_name = re.sub(r'[<>:"/\\|?*]', '', safe_job_name).strip()
-            safe_job_name = safe_job_name[:100]
+            safe_job_name = safe_job_name[:100].strip()
             safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
             dir_path = os.path.join(base_path, safe_job_name, safe_lang_name)
             os.makedirs(dir_path, exist_ok=True)
@@ -568,6 +640,8 @@ class TaskProcessor(QObject):
     image_review_required = Signal()
     translation_review_required = Signal(str, str) # task_id, translated_text
     translation_regenerated = Signal(str, str) # task_id, new_text
+    rewrite_review_required = Signal(str, str) # task_id, rewritten_text
+    rewrite_regenerated = Signal(str, str) # task_id, new_text
     stage_metadata_updated = Signal(str, str, str, str) # job_id, lang_id, stage_key, metadata_text
 
 
@@ -610,10 +684,45 @@ class TaskProcessor(QObject):
         self.video_semaphore = QSemaphore(max_video)
         
         # Queues for preventing thread starvation
-        self.pending_subtitles = collections.deque()
+        self.whisper_queue = collections.deque()
         self.pending_montages = collections.deque()
         
-        logger.log(f"Task Processor initialized. Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}, Video concurrency: {max_video}", level=LogLevel.INFO)
+        # Download concurrency
+        max_downloads = self.settings.get("max_download_threads", 5)
+        self.download_semaphore = QSemaphore(max_downloads)
+
+        # OpenRouter concurrency
+        self.openrouter_active_count = 0
+        self.openrouter_queue = collections.deque()
+
+        # ElevenLabs concurrency
+        self.elevenlabs_active_count = 0
+        self.elevenlabs_queue = collections.deque()
+
+        # Determine yt-dlp path
+        yt_dlp_name = "yt-dlp.exe" if platform.system() == "Windows" else "yt-dlp"
+        
+        if getattr(sys, 'frozen', False):
+            # 1. Search in app results/data directory (where updater might have downloaded it)
+            path_in_data = os.path.join(self.settings.base_path, yt_dlp_name)
+            if os.path.exists(path_in_data):
+                self.yt_dlp_path = path_in_data
+            else:
+                # 2. Search in frozen bundle assets
+                self.yt_dlp_path = os.path.join(sys._MEIPASS, "assets", yt_dlp_name)
+        else:
+            # Running as script
+            self.yt_dlp_path = os.path.join(BASE_PATH, "assets", yt_dlp_name)
+
+        if not os.path.exists(self.yt_dlp_path):
+            logger.log(f"Warning: yt-dlp.exe not found at {self.yt_dlp_path}", level=LogLevel.WARNING)
+
+        # Queues for preventing thread starvation
+        self.pending_subtitles = collections.deque()
+        self.pending_montages = collections.deque()
+        self.active_workers = set() # Track for Segfault prevention
+        
+        logger.log(f"Task Processor initialized. Download concurrency: {max_downloads}, Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}, Video concurrency: {max_video}", level=LogLevel.INFO)
 
     def _load_voicemaker_voices(self):
         try:
@@ -678,6 +787,19 @@ class TaskProcessor(QObject):
                 
                 # --- Prepare Settings for this Task (Global + Template) ---
                 current_settings = copy.deepcopy(self.settings.settings)
+
+                # CRITICAL FIX: Force update taxk data with LATEST global settings for this language.
+                # This ensures that if user changed settings (Model, Temp, Tokens) AFTER adding to queue,
+                # the task will use the NEW settings, not the old snapshot.
+                # We use update() to preserve keys like 'user_provided_files' that are in lang_data but not in global settings.
+                global_lang_config = current_settings.get("languages_config", {}).get(lang_id, {})
+                if global_lang_config:
+                    # Filter out keys that shouldn't override task-specifics if necessary, 
+                    # but generally we want global settings to take precedence over the snapshot 
+                    # unless it's user_provided_files which is not in global.
+                    # Dictionary update overwrites existing keys.
+                    lang_data.update(global_lang_config)
+
                 template_name = lang_data.get('template_name')
                 
                 if template_name:
@@ -689,6 +811,10 @@ class TaskProcessor(QObject):
                             else:
                                 current_settings[key] = value
                         logger.log(f"[{job['name']}_{lang_id}] Applied template: {template_name}", level=LogLevel.INFO)
+                        # Also merge template's specific language config into our task data
+                        template_lang_cfg = template_data.get('languages_config', {}).get(lang_id, {})
+                        if template_lang_cfg:
+                            lang_data.update(template_lang_cfg)
                     else:
                         logger.log(f"[{job['name']}_{lang_id}] Template '{template_name}' not found. Using global settings.", level=LogLevel.WARNING)
 
@@ -768,7 +894,9 @@ class TaskProcessor(QObject):
         all_languages_config = self.settings.get("languages_config", {})
 
         for task_id, state in self.task_states.items():
-            if 'stage_translation' in state.stages:
+            if 'stage_download' in state.stages:
+                self._start_download(task_id)
+            elif 'stage_translation' in state.stages:
                 self._start_translation(task_id)
                 time.sleep(0.5)
             else:
@@ -785,7 +913,7 @@ class TaskProcessor(QObject):
             
             result = None
             try:
-                if stage_key == 'stage_translation' or stage_key == 'stage_img_prompts':
+                if stage_key in ['stage_translation', 'stage_rewrite', 'stage_img_prompts', 'stage_transcription']:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         result = f.read()
                 elif stage_key == 'stage_images':
@@ -805,11 +933,23 @@ class TaskProcessor(QObject):
 
         self.stage_status_changed.emit(self.task_states[task_id].job_id, self.task_states[task_id].lang_id, stage_key, 'processing')
         worker = worker_class(task_id, config)
-        worker.signals.finished.connect(on_finish_slot)
-        worker.signals.error.connect(on_error_slot)
-        worker.signals.status_changed.connect(self._on_worker_status_changed) # For gallery updates
-        worker.signals.video_generated.connect(self.video_generated) # For gallery updates
+        self.active_workers.add(worker)
+        
+        # Wrapped slots to ensure reference cleanup
+        def wrapped_finish(*args):
+             self.active_workers.discard(worker)
+             on_finish_slot(*args)
+        
+        def wrapped_error(*args):
+             self.active_workers.discard(worker)
+             on_error_slot(*args)
+
+        worker.signals.finished.connect(wrapped_finish)
+        worker.signals.error.connect(wrapped_error)
+        worker.signals.status_changed.connect(self._on_worker_status_changed)
+        worker.signals.video_generated.connect(self.video_generated)
         worker.signals.video_progress.connect(self._on_video_progress)
+        worker.signals.metadata_updated.connect(self._on_metadata_updated)
         self.threadpool.start(worker)
 
     @Slot(str, str, str, str)
@@ -836,6 +976,13 @@ class TaskProcessor(QObject):
             
             self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_images', metadata_text)
 
+    @Slot(str, str, str)
+    def _on_metadata_updated(self, task_id, stage_key, text):
+        """Generic handler for metadata updates from workers."""
+        state = self.task_states.get(task_id)
+        if state:
+            self.stage_metadata_updated.emit(state.job_id, state.lang_id, stage_key, text)
+
     def _set_stage_status(self, task_id, stage_key, status, error_message=None):
         state = self.task_states.get(task_id)
         if not state: return
@@ -851,7 +998,9 @@ class TaskProcessor(QObject):
             stage_names = {
                 'stage_translation': 'Translation', 'stage_img_prompts': 'Image prompts generation',
                 'stage_voiceover': 'Voiceover generation', 'stage_subtitles': 'Subtitle generation',
-                'stage_images': 'Image generation', 'stage_montage': 'Video montage'
+                'stage_images': 'Image generation', 'stage_montage': 'Video montage',
+                'stage_download': 'Download', 'stage_transcription': 'Transcription',
+                'stage_rewrite': 'Rewrite'
             }
             stage_name = stage_names.get(stage_key, stage_key)
             logger.log(f"[{task_id}] {stage_name} failed: {error_message}", level=LogLevel.ERROR)
@@ -860,22 +1009,245 @@ class TaskProcessor(QObject):
 
     # --- Pipeline Logic ---
 
-    def _start_translation(self, task_id):
+    def _start_download(self, task_id):
         state = self.task_states[task_id]
-        lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
         config = {
-            'text': state.original_text,
-            'lang_config': lang_config,
-            'openrouter_api_key': state.settings.get('openrouter_api_key')
+            'url': state.input_source, # For rewrite tasks, input_source is the URL
+            'dir_path': state.dir_path,
+            'yt_dlp_path': self.yt_dlp_path,
+            'download_semaphore': self.download_semaphore
         }
-        self._start_worker(TranslationWorker, task_id, 'stage_translation', config, self._on_translation_finished, self._on_translation_error)
+        self._start_worker(DownloadWorker, task_id, 'stage_download', config, self._on_download_finished, self._on_download_error)
+
+    @Slot(str, object)
+    def _on_download_finished(self, task_id, audio_path):
+        state = self.task_states[task_id]
+        state.audio_path = audio_path # Temporary path for transcription
+        self._set_stage_status(task_id, 'stage_download', 'success')
+        
+        # Check dependency for next stage (Transcription)
+        if 'stage_transcription' in state.stages:
+            self._start_transcription(task_id)
+        else:
+            # Should not happen in normal flow, but just in case
+            logger.log(f"[{task_id}] Download finished but no transcription stage found.", level=LogLevel.WARNING)
+
+    @Slot(str, str)
+    def _on_download_error(self, task_id, error):
+        self._set_stage_status(task_id, 'stage_download', 'error', error)
+        # Fail dependencies
+        for stage in ['stage_transcription', 'stage_rewrite', 'stage_img_prompts', 'stage_images', 'stage_voiceover', 'stage_subtitles', 'stage_montage']:
+            if stage in self.task_states[task_id].stages:
+                self._set_stage_status(task_id, stage, 'error', "Dependency (Download) failed")
+
+    def _start_transcription(self, task_id):
+        self.whisper_queue.append((task_id, 'transcription'))
+        self._process_whisper_queue()
+
+    def _launch_transcription_worker(self, task_id):
+        try:
+            state = self.task_states[task_id]
+            
+            # Prepare helper for whisper path
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            model_name = sub_settings.get('whisper_model', 'base.bin')
+            
+            whisper_exe = None; whisper_model_path = model_name
+            if whisper_type == 'amd':
+                if getattr(sys, 'frozen', False):
+                    whisper_base_path = os.path.join(os.path.dirname(sys.executable), "whisper-cli-amd")
+                else:
+                    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    whisper_base_path = os.path.join(current_dir, "whisper-cli-amd")
+                
+                whisper_exe = os.path.join(whisper_base_path, "main.exe")
+                whisper_model_path = os.path.join(whisper_base_path, model_name)
+
+            config = {
+                'audio_path': state.audio_path,
+                'sub_settings': sub_settings,
+                'lang_code': 'auto' if state.job_type == 'rewrite' else state.lang_id.split('-')[0].lower(),
+                'whisper_exe': whisper_exe,
+                'whisper_model_path': whisper_model_path
+            }
+            self._start_worker(TranscriptionWorker, task_id, 'stage_transcription', config, self._on_transcription_finished, self._on_transcription_error)
+        except Exception as e:
+            self._on_transcription_error(task_id, f"Failed to start transcription: {e}")
+
+    @Slot(str, object)
+    def _on_transcription_finished(self, task_id, text):
+        state = self.task_states[task_id]
+        # Store intermediate text if needed, or pass to rewrite
+        # Maybe save to file
+        with open(os.path.join(state.dir_path, "transcription.txt"), 'w', encoding='utf-8') as f:
+            f.write(text)
+            
+        if state:
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            if whisper_type != 'assemblyai':
+                self.subtitle_semaphore.release()
+                self._process_whisper_queue()
+
+        self._set_stage_status(task_id, 'stage_transcription', 'success')
+        
+        if 'stage_rewrite' in state.stages:
+            self._start_rewrite(task_id, text)
+        else:
+            state.text_for_processing = text
+            self._on_text_ready(task_id)
+
+    @Slot(str, str)
+    def _on_transcription_error(self, task_id, error):
+        state = self.task_states.get(task_id)
+        if state:
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            if whisper_type != 'assemblyai':
+                self.subtitle_semaphore.release()
+                self._process_whisper_queue()
+        
+        self._set_stage_status(task_id, 'stage_transcription', 'error', error)
+        # Fail dependencies
+        for stage in ['stage_rewrite', 'stage_img_prompts', 'stage_images', 'stage_voiceover', 'stage_subtitles', 'stage_montage']:
+            if stage in self.task_states[task_id].stages:
+                self._set_stage_status(task_id, stage, 'error', "Dependency (Transcription) failed")
+
+    def _start_rewrite(self, task_id, text):
+        self.openrouter_queue.append((task_id, 'rewrite', text))
+        self._process_openrouter_queue()
+
+    def _launch_rewrite_worker(self, task_id, text):
+        try:
+            state = self.task_states[task_id]
+            
+            # Smart model selection for Rewrite:
+            # 1. Template root override ('rewrite_model' then 'model')
+            # 2. Job language config (UI/Template-merged)
+            # 3. Fallback to main translation model
+            
+            model = state.settings.get('rewrite_model')
+            if not model:
+                model = state.settings.get('model')
+            if not model:
+                model = state.lang_data.get('rewrite_model')
+            if not model:
+                model = state.lang_data.get('model')
+            if not model:
+                model = state.settings.get('languages_config', {}).get(state.lang_id, {}).get('rewrite_model')
+            if not model:
+                model = state.settings.get('languages_config', {}).get(state.lang_id, {}).get('model')
+            if not model:
+                models = state.settings.get('openrouter_models', [])
+                model = models[0] if models else 'unknown'
+            
+            config = {
+                'text': text,
+                'prompt': state.lang_data.get('rewrite_prompt') or 'Rewrite this text:',
+                'model': model,
+                'max_tokens': state.lang_data.get('rewrite_max_tokens') or 4096,
+                'temperature': state.lang_data.get('rewrite_temperature') if state.lang_data.get('rewrite_temperature') is not None else 0.7,
+                'openrouter_api_key': state.settings.get('openrouter_api_key')
+            }
+            self._start_worker(RewriteWorker, task_id, 'stage_rewrite', config, self._on_rewrite_finished, self._on_rewrite_error)
+        except Exception as e:
+            self._on_rewrite_error(task_id, f"Failed to start rewrite: {e}")
+
+    @Slot(str, object)
+    def _on_rewrite_finished(self, task_id, rewritten_text):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
+        state = self.task_states[task_id]
+        state.text_for_processing = rewritten_text
+        state.text_for_processing = rewritten_text
+        if state.dir_path:
+            # Save original rewrite for reference
+            with open(os.path.join(state.dir_path, "translation_orig.txt"), 'w', encoding='utf-8') as f:
+                f.write(rewritten_text)
+            # Save working copy
+            with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
+                f.write(rewritten_text)
+            
+        # Update metadata with character count
+        char_count = len(rewritten_text)
+        metadata_text = f"{char_count} {translator.translate('characters_count')}"
+        self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_rewrite', metadata_text)
+
+        is_review_enabled = state.settings.get('rewrite_review_enabled', False)
+
+        if is_review_enabled:
+            self._set_stage_status(task_id, 'stage_rewrite', 'success')
+            self.rewrite_regenerated.emit(task_id, rewritten_text) # Update dialog if open
+
+            if not state.rewrite_review_dialog_shown:
+                state.rewrite_review_dialog_shown = True
+                self.rewrite_review_required.emit(task_id, rewritten_text)
+        else:
+            # No review, proceed as normal
+            self._set_stage_status(task_id, 'stage_rewrite', 'success')
+            self._on_text_ready(task_id)
+
+    @Slot(str, str)
+    def _on_rewrite_error(self, task_id, error):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
+        self._set_stage_status(task_id, 'stage_rewrite', 'error', error)
+        # Fail dependencies
+        for stage in ['stage_img_prompts', 'stage_images', 'stage_voiceover', 'stage_subtitles', 'stage_montage']:
+            if stage in self.task_states[task_id].stages:
+                self._set_stage_status(task_id, stage, 'error', "Dependency (Rewrite) failed")
+
+    def _start_translation(self, task_id):
+        self.openrouter_queue.append((task_id, 'translation', None))
+        self._process_openrouter_queue()
+
+    def _launch_translation_worker(self, task_id):
+        try:
+            state = self.task_states[task_id]
+            
+            # Smart model selection for Translation:
+            # 1. Template root override ('model')
+            # 2. Job language config (UI/Template-merged)
+            # 3. Global language setting
+            # 4. First available
+            
+            model = state.settings.get('model')
+            if not model:
+                model = state.lang_data.get('model')
+            if not model:
+                model = state.settings.get('languages_config', {}).get(state.lang_id, {}).get('model')
+            if not model:
+                models = state.settings.get('openrouter_models', [])
+                model = models[0] if models else 'unknown'
+                
+            config = {
+                'text': state.original_text,
+                'lang_config': {
+                    'prompt': state.lang_data.get('prompt', ''),
+                    'model': model,
+                    'temperature': state.lang_data.get('temperature') if state.lang_data.get('temperature') is not None else 0.7,
+                    'max_tokens': state.lang_data.get('max_tokens') or 4096
+                },
+                'openrouter_api_key': state.settings.get('openrouter_api_key')
+            }
+            self._start_worker(TranslationWorker, task_id, 'stage_translation', config, self._on_translation_finished, self._on_translation_error)
+        except Exception as e:
+            self._on_translation_error(task_id, f"Failed to start translation: {e}")
 
     @Slot(str, object)
     def _on_translation_finished(self, task_id, translated_text):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
         state = self.task_states[task_id]
         state.text_for_processing = translated_text
         if state.dir_path:
-            # Save the original translation before review
+            # Save the original translation before review for reference
+            with open(os.path.join(state.dir_path, "translation_orig.txt"), 'w', encoding='utf-8') as f:
+                f.write(translated_text)
+            # Save working copy
             with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
                 f.write(translated_text)
 
@@ -903,6 +1275,9 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_translation_error(self, task_id, error):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         self._set_stage_status(task_id, 'stage_translation', 'error', error)
         # If translation fails, subsequent stages that depend on it must also fail.
         state = self.task_states[task_id]
@@ -920,13 +1295,24 @@ class TaskProcessor(QObject):
 
     def regenerate_translation(self, task_id):
         logger.log(f"[{task_id}] User requested translation regeneration.", level=LogLevel.INFO)
+        # Reset flag so dialog will show again when new translation is ready
+        if task_id in self.task_states:
+            self.task_states[task_id].translation_review_dialog_shown = False
         self._start_translation(task_id)
+
+    def regenerate_rewrite(self, task_id):
+        logger.log(f"[{task_id}] User requested rewrite regeneration.", level=LogLevel.INFO)
+        # Reset flag so dialog will show again when new rewrite is ready
+        if task_id in self.task_states:
+            self.task_states[task_id].rewrite_review_dialog_shown = False
+        state = self.task_states[task_id]
+        self._start_rewrite(task_id, state.original_text)
 
     def _on_text_ready(self, task_id):
         state = self.task_states[task_id]
         
         # If translation was not used, emit metadata for original text
-        if 'stage_translation' not in state.stages and state.text_for_processing:
+        if 'stage_translation' not in state.stages and 'stage_rewrite' not in state.stages and state.text_for_processing:
             char_count = len(state.text_for_processing)
             metadata_text = f"{char_count} {translator.translate('characters_count')}"
             # For original text, we use a special key 'original_text'
@@ -957,35 +1343,71 @@ class TaskProcessor(QObject):
                     if stage_name and prompt:
                         self._start_custom_stage(task_id, stage_name, prompt, model, max_tokens, temperature)
 
+    def _process_openrouter_queue(self):
+        max_openrouter = self.settings.get("openrouter_max_threads", 5)
+        while self.openrouter_queue and self.openrouter_active_count < max_openrouter:
+            task_id, worker_type, extra_data = self.openrouter_queue.popleft()
+            self.openrouter_active_count += 1
+            
+            if worker_type == 'rewrite':
+                self._launch_rewrite_worker(task_id, extra_data)
+            elif worker_type == 'translation':
+                self._launch_translation_worker(task_id)
+            elif worker_type == 'image_prompts':
+                self._launch_image_prompts_worker(task_id)
+            elif worker_type == 'custom_stage':
+                self._launch_custom_stage_worker(task_id, *extra_data)
     def _start_custom_stage(self, task_id, stage_name, prompt, model=None, max_tokens=None, temperature=None):
-        state = self.task_states[task_id]
-        
-        # Fallback to defaults if not specified or empty
-        # If model is not in custom stage settings, use the image prompt model or default
-        if not model:
-            model = state.settings.get("image_prompt_settings", {}).get("model", "google/gemini-2.0-flash-exp:free")
-        if not max_tokens:
-             max_tokens = 4096
-        if temperature is None:
-            temperature = 0.7
+        extra_data = (stage_name, prompt, model, max_tokens, temperature)
+        self.openrouter_queue.append((task_id, 'custom_stage', extra_data))
+        self._process_openrouter_queue()
 
-        config = {
-            'text': state.text_for_processing,
-            'dir_path': state.dir_path,
-            'stage_name': stage_name,
-            'prompt': prompt,
-            'model': model,
-            'max_tokens': int(max_tokens),
-            'temperature': float(temperature),
-            'openrouter_api_key': state.settings.get('openrouter_api_key')
-        }
-        
-        # Define callbacks with closures to capture stage_name safely
-        self._start_worker(CustomStageWorker, task_id, f"custom_{stage_name}", config, 
-                           self._on_custom_stage_finished, self._on_custom_stage_error_slot)
+    def _launch_custom_stage_worker(self, task_id, stage_name, prompt, model=None, max_tokens=None, temperature=None):
+        try:
+            state = self.task_states[task_id]
+            
+            # Fallback to defaults if not specified or empty
+            # If model is not in custom stage settings, use the image prompt model or default
+            if not model:
+                # 1. Template root override
+                model = state.settings.get('model')
+                # 2. Job language model
+                if not model:
+                    model = state.lang_data.get('model')
+                # 3. Overall default from settings
+                if not model:
+                    model = state.settings.get("image_prompt_settings", {}).get("model")
+                # 4. Global fallback
+                if not model:
+                    models = state.settings.get('openrouter_models', [])
+                    model = models[0] if models else 'unknown'
+            if not max_tokens:
+                 max_tokens = 4096
+            if temperature is None:
+                 temperature = 0.7
+
+            config = {
+                'text': state.text_for_processing,
+                'dir_path': state.dir_path,
+                'stage_name': stage_name,
+                'prompt': prompt,
+                'model': model,
+                'max_tokens': int(max_tokens),
+                'temperature': float(temperature),
+                'openrouter_api_key': state.settings.get('openrouter_api_key')
+            }
+            
+            # Define callbacks with closures to capture stage_name safely
+            self._start_worker(CustomStageWorker, task_id, f"custom_{stage_name}", config, 
+                               self._on_custom_stage_finished, self._on_custom_stage_error_slot)
+        except Exception as e:
+            self._on_custom_stage_error_slot(task_id, f"Failed to start custom stage '{stage_name}': {e}")
 
     @Slot(str, object)
     def _on_custom_stage_finished(self, task_id, result_data):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         stage_name = result_data.get('stage_name')
         # output_path = result_data.get('path') 
         
@@ -997,7 +1419,9 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_custom_stage_error_slot(self, task_id, error):
-         
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         worker = self.sender()
         stage_name = "unknown"
         if worker and hasattr(worker, 'config') and 'stage_name' in worker.config:
@@ -1010,17 +1434,44 @@ class TaskProcessor(QObject):
 
 
     def _start_image_prompts(self, task_id):
-        state = self.task_states[task_id]
-        config = {
-            'text': state.text_for_processing,
-            'img_prompt_settings': state.settings.get("image_prompt_settings", {}),
-            'openrouter_api_key': state.settings.get('openrouter_api_key')
-        }
-        self._start_worker(ImagePromptWorker, task_id, 'stage_img_prompts', config, self._on_img_prompts_finished, self._on_img_prompts_error)
+        self.openrouter_queue.append((task_id, 'image_prompts', None))
+        self._process_openrouter_queue()
+
+    def _launch_image_prompts_worker(self, task_id):
+        try:
+            state = self.task_states[task_id]
+            
+            # Smart settings merging for image prompts:
+            img_settings = state.settings.get("image_prompt_settings", {}).copy()
+            
+            # Hierarchy for model: 
+            # 1. Template root
+            # 2. Image prompt settings (could be from template)
+            # 3. Job-specific language model
+            
+            model = state.settings.get('model')
+            if not model:
+                model = img_settings.get('model')
+            if not model:
+                model = state.lang_data.get('model')
+            if not model:
+                models = state.settings.get('openrouter_models', [])
+                model = models[0] if models else 'unknown'
+            
+            img_settings['model'] = model
+            
+            config = {
+                'text': state.text_for_processing,
+                'img_prompt_settings': img_settings,
+                'openrouter_api_key': state.settings.get('openrouter_api_key')
+            }
+            self._start_worker(ImagePromptWorker, task_id, 'stage_img_prompts', config, self._on_img_prompts_finished, self._on_img_prompts_error)
+        except Exception as e:
+            self._on_img_prompts_error(task_id, f"Failed to start image prompt worker: {e}")
 
     def _start_voiceover(self, task_id):
         state = self.task_states[task_id]
-        lang_config = state.settings.get("languages_config", {}).get(state.lang_id, {})
+        lang_config = state.lang_data # Use data from the task
         config = {
             'text': state.text_for_processing,
             'dir_path': state.dir_path,
@@ -1065,9 +1516,8 @@ class TaskProcessor(QObject):
             background_music_path = None
             background_music_volume = 100
             
-            # Use state.settings for languages config too
-            all_languages_config = state.settings.get("languages_config", {})
-            lang_config = all_languages_config.get(state.lang_id, {})
+            # Use state.lang_data (settings associated with this task)
+            lang_config = state.lang_data
             
             user_files = state.lang_data.get('user_provided_files', {})
 
@@ -1105,6 +1555,9 @@ class TaskProcessor(QObject):
 
     @Slot(str, object)
     def _on_img_prompts_finished(self, task_id, prompts_text):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         state = self.task_states[task_id]
         
         # Count prompts
@@ -1149,6 +1602,9 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_img_prompts_error(self, task_id, error):
+        self.openrouter_active_count -= 1
+        self._process_openrouter_queue()
+        
         self._set_stage_status(task_id, 'stage_img_prompts', 'error', error)
 
     def _start_voiceover(self, task_id):
@@ -1167,11 +1623,30 @@ class TaskProcessor(QObject):
             'job_name': state.job_name,
             'lang_name': state.lang_name
         }
-        self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
+
+        tts_provider = lang_config.get('tts_provider', 'ElevenLabs')
+        if tts_provider == 'ElevenLabs':
+            self.elevenlabs_queue.append((task_id, config))
+            self._process_elevenlabs_queue()
+        else:
+            self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
+
+    def _process_elevenlabs_queue(self):
+        max_threads = self.settings.get("elevenlabs_max_threads", 5)
+        while self.elevenlabs_queue and self.elevenlabs_active_count < max_threads:
+            task_id, config = self.elevenlabs_queue.popleft()
+            self.elevenlabs_active_count += 1
+            self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
         
     @Slot(str, object)
     def _on_voiceover_finished(self, task_id, audio_path):
         state = self.task_states[task_id]
+        
+        tts_provider = state.lang_data.get('tts_provider', 'ElevenLabs')
+        if tts_provider == 'ElevenLabs':
+            self.elevenlabs_active_count -= 1
+            self._process_elevenlabs_queue()
+
         state.audio_path = audio_path
         self._set_stage_status(task_id, 'stage_voiceover', 'success')
         
@@ -1196,6 +1671,13 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_voiceover_error(self, task_id, error):
+        state = self.task_states.get(task_id)
+        if state:
+            tts_provider = state.lang_data.get('tts_provider', 'ElevenLabs')
+            if tts_provider == 'ElevenLabs':
+                self.elevenlabs_active_count -= 1
+                self._process_elevenlabs_queue()
+
         self._set_stage_status(task_id, 'stage_voiceover', 'error', error)
         # CRITICAL FIX: If voiceover fails, we MUST fail or skip subtitles so the job doesn't hang forever in 'pending'
         if 'stage_subtitles' in self.task_states[task_id].stages:
@@ -1205,23 +1687,29 @@ class TaskProcessor(QObject):
             self._increment_subtitle_counter()
 
     def _start_subtitles(self, task_id):
-        self.pending_subtitles.append(task_id)
-        self._process_subtitle_queue()
+        self.whisper_queue.append((task_id, 'subtitles'))
+        self._process_whisper_queue()
 
-    def _process_subtitle_queue(self):
-        sub_settings = self.settings.get('subtitles', {})
-        whisper_type = sub_settings.get('whisper_type', 'amd')
+    def _process_whisper_queue(self):
+        while self.whisper_queue:
+            task_id, worker_type = self.whisper_queue.popleft()
+            state = self.task_states[task_id]
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
 
-        while self.pending_subtitles:
-            # Since whisper_type is global setting (likely), we assume it applies to all.
             if whisper_type == 'assemblyai':
-                task_id = self.pending_subtitles.popleft()
-                self._launch_subtitle_worker(task_id)
-            else:
-                if self.subtitle_semaphore.tryAcquire():
-                    task_id = self.pending_subtitles.popleft()
+                if worker_type == 'subtitles':
                     self._launch_subtitle_worker(task_id)
                 else:
+                    self._launch_transcription_worker(task_id)
+            else:
+                if self.subtitle_semaphore.tryAcquire():
+                    if worker_type == 'subtitles':
+                        self._launch_subtitle_worker(task_id)
+                    else:
+                        self._launch_transcription_worker(task_id)
+                else:
+                    self.whisper_queue.appendleft((task_id, worker_type))
                     break
 
     def _launch_subtitle_worker(self, task_id):
@@ -1254,11 +1742,13 @@ class TaskProcessor(QObject):
         
     @Slot(str, object)
     def _on_subtitles_finished(self, task_id, subtitle_path):
-        sub_settings = self.settings.get('subtitles', {})
-        whisper_type = sub_settings.get('whisper_type', 'amd')
-        if whisper_type != 'assemblyai':
-            self.subtitle_semaphore.release()
-            self._process_subtitle_queue()
+        state = self.task_states.get(task_id)
+        if state:
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            if whisper_type != 'assemblyai':
+                self.subtitle_semaphore.release()
+                self._process_whisper_queue()
             
         self.task_states[task_id].subtitle_path = subtitle_path
         self._set_stage_status(task_id, 'stage_subtitles', 'success')
@@ -1266,11 +1756,13 @@ class TaskProcessor(QObject):
 
     @Slot(str, str)
     def _on_subtitles_error(self, task_id, error):
-        sub_settings = self.settings.get('subtitles', {})
-        whisper_type = sub_settings.get('whisper_type', 'amd')
-        if whisper_type != 'assemblyai':
-            self.subtitle_semaphore.release()
-            self._process_subtitle_queue()
+        state = self.task_states.get(task_id)
+        if state:
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            if whisper_type != 'assemblyai':
+                self.subtitle_semaphore.release()
+                self._process_whisper_queue()
 
         self._set_stage_status(task_id, 'stage_subtitles', 'error', error)
         self._increment_subtitle_counter()
@@ -1395,6 +1887,8 @@ class TaskProcessor(QObject):
             if first_img_basename != '1':
                 logger.log(f"[{task_id}] First image is '{first_img_basename}', not '1'. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
                 state.fallback_to_quick_show = True
+                # Fix: Update status to success (or warning) so the flow continues, instead of stalling in 'processing_video'
+                self._set_stage_status(task_id, 'stage_images', state.image_gen_status) 
                 if self.subtitle_barrier_passed: self._check_and_start_montages()
                 return
 
@@ -1683,6 +2177,18 @@ class TaskProcessor(QObject):
     def _on_montage_progress(self, task_id, message):
         job_id = task_id.split('_')[0] if '_' in task_id else task_id
         self.task_progress_log.emit(job_id, message)
+        
+        # Parse percentage from message, e.g., "progress=45.20%"
+        if "progress=" in message:
+            try:
+                parts = dict(re.findall(r'(\w+)=([^ |]+)', message))
+                progress_str = parts.get('progress')
+                if progress_str:
+                    # Parse float just in case, but keep string format
+                    state = self.task_states[task_id]
+                    self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_montage', progress_str)
+            except Exception:
+                pass
 
     @Slot(str)
     def _on_image_deleted(self, image_path):
