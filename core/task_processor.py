@@ -1157,7 +1157,12 @@ class TaskProcessor(QObject):
         
         state = self.task_states[task_id]
         state.text_for_processing = rewritten_text
+        state.text_for_processing = rewritten_text
         if state.dir_path:
+            # Save original rewrite for reference
+            with open(os.path.join(state.dir_path, "translation_orig.txt"), 'w', encoding='utf-8') as f:
+                f.write(rewritten_text)
+            # Save working copy
             with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
                 f.write(rewritten_text)
             
@@ -1235,7 +1240,10 @@ class TaskProcessor(QObject):
         state = self.task_states[task_id]
         state.text_for_processing = translated_text
         if state.dir_path:
-            # Save the original translation before review
+            # Save the original translation before review for reference
+            with open(os.path.join(state.dir_path, "translation_orig.txt"), 'w', encoding='utf-8') as f:
+                f.write(translated_text)
+            # Save working copy
             with open(os.path.join(state.dir_path, "translation.txt"), 'w', encoding='utf-8') as f:
                 f.write(translated_text)
 
@@ -1283,10 +1291,16 @@ class TaskProcessor(QObject):
 
     def regenerate_translation(self, task_id):
         logger.log(f"[{task_id}] User requested translation regeneration.", level=LogLevel.INFO)
+        # Reset flag so dialog will show again when new translation is ready
+        if task_id in self.task_states:
+            self.task_states[task_id].translation_review_dialog_shown = False
         self._start_translation(task_id)
 
     def regenerate_rewrite(self, task_id):
         logger.log(f"[{task_id}] User requested rewrite regeneration.", level=LogLevel.INFO)
+        # Reset flag so dialog will show again when new rewrite is ready
+        if task_id in self.task_states:
+            self.task_states[task_id].rewrite_review_dialog_shown = False
         state = self.task_states[task_id]
         self._start_rewrite(task_id, state.original_text)
 
