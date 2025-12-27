@@ -4,12 +4,17 @@ from datetime import datetime, timedelta
 import threading
 import sys
 
+import platform
+
 class StatisticsManager:
     def __init__(self, db_name='statistics.json'):
         self.lock = threading.Lock()
         
-        if getattr(sys, 'frozen', False):
-            # Running as a bundled exe
+        if platform.system() == "Darwin":
+            base_dir = os.path.expanduser("~/Library/Application Support/Soloveyko.AI-Video.Maker")
+            os.makedirs(base_dir, exist_ok=True)
+        elif getattr(sys, 'frozen', False):
+            # Running as a bundled exe (Windows)
             base_dir = os.path.dirname(sys.executable)
         else:
             # Running as a script
