@@ -517,7 +517,18 @@ class TextTab(QWidget):
         self.add_to_queue_button.setEnabled(lang_selected and stages_selected)
 
     def add_to_queue(self):
-        task_name, ok = QInputDialog.getText(self, translator.translate('enter_task_name_title'), translator.translate('enter_task_name_label'))
+        # Custom QInputDialog to make it wider
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle(translator.translate('enter_task_name_title'))
+        dialog.setLabelText(translator.translate('enter_task_name_label'))
+        dialog.setInputMode(QInputDialog.InputMode.TextInput)
+        dialog.resize(600, dialog.height()) # Set initial size
+        # Or force minimum width
+        dialog.setMinimumWidth(600)
+        
+        ok = dialog.exec()
+        task_name = dialog.textValue()
+        
         if ok:
             if not task_name:
                 task_count = self.main_window.queue_manager.get_task_count()
