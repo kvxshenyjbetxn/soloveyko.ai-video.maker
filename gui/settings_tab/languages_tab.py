@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager, template_manager
 from api.elevenlabs import ElevenLabsAPI
+from api.edge_tts_api import EdgeTTSAPI
 from gui.widgets.prompt_editor_dialog import PromptEditorDialog
 
 # Determine the base path for resources, accommodating PyInstaller
@@ -24,13 +25,16 @@ class LanguagesTab(QWidget):
         super().__init__()
         self.settings = settings_manager
         self.elevenlabs_api = ElevenLabsAPI()
+        self.edge_tts_api = EdgeTTSAPI()
         self.elevenlabs_templates = []
         self.voicemaker_voices = []
         self.gemini_voices = []
+        self.edge_tts_voices = []
         self.current_lang_id = None
         self._is_loading_lang_settings = False
         self.load_voicemaker_voices()
         self.load_gemini_voices()
+        self.load_edge_tts_voices()
         self.init_ui()
         self.load_templates_combo() # Load templates for the new combobox
         self.load_languages()
@@ -55,6 +59,13 @@ class LanguagesTab(QWidget):
         except Exception as e:
             print(f"Error loading gemini voices: {e}")
             self.gemini_voices = []
+
+    def load_edge_tts_voices(self):
+        try:
+            self.edge_tts_voices = self.edge_tts_api.get_voices()
+        except Exception as e:
+            print(f"Error loading EdgeTTS voices: {e}")
+            self.edge_tts_voices = []
 
     def init_ui(self):
         main_layout = QHBoxLayout(self)
@@ -219,7 +230,7 @@ class LanguagesTab(QWidget):
         # TTS Provider
         self.tts_provider_label = QLabel("TTS Provider:")
         self.tts_provider_combo = QComboBox()
-        self.tts_provider_combo.addItems(["ElevenLabs", "VoiceMaker", "GeminiTTS"])
+        self.tts_provider_combo.addItems(["ElevenLabs", "VoiceMaker", "GeminiTTS", "EdgeTTS"])
         self.tts_provider_combo.currentIndexChanged.connect(self.on_tts_provider_changed)
         self.tts_provider_combo.currentIndexChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.tts_provider_label, self.tts_provider_combo)
@@ -249,6 +260,28 @@ class LanguagesTab(QWidget):
         self.gemini_tone_input.setPlaceholderText("sad, excited, whispering... or a full instruction")
         self.gemini_tone_input.textChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.gemini_tone_label, self.gemini_tone_input)
+
+        # EdgeTTS Settings
+        self.edgetts_voice_label = QLabel(translator.translate("edgetts_voice_label", "EdgeTTS Voice:"))
+        self.edgetts_voice_combo = QComboBox()
+        self.edgetts_voice_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.edgetts_voice_label, self.edgetts_voice_combo)
+
+        self.edgetts_rate_label = QLabel(translator.translate("edgetts_rate_label", "EdgeTTS Rate (%):"))
+        self.edgetts_rate_spinbox = QSpinBox()
+        self.edgetts_rate_spinbox.setRange(-100, 100)
+        self.edgetts_rate_spinbox.setValue(0)
+        self.edgetts_rate_spinbox.setSuffix("%")
+        self.edgetts_rate_spinbox.valueChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.edgetts_rate_label, self.edgetts_rate_spinbox)
+
+        self.edgetts_pitch_label = QLabel(translator.translate("edgetts_pitch_label", "EdgeTTS Pitch (Hz):"))
+        self.edgetts_pitch_spinbox = QSpinBox()
+        self.edgetts_pitch_spinbox.setRange(-100, 100)
+        self.edgetts_pitch_spinbox.setValue(0)
+        self.edgetts_pitch_spinbox.setSuffix("Hz")
+        self.edgetts_pitch_spinbox.valueChanged.connect(self.save_current_language_settings)
+        settings_layout.addRow(self.edgetts_pitch_label, self.edgetts_pitch_spinbox)
 
         # Background Music Settings
         self.bg_music_label = QLabel()
@@ -507,40 +540,78 @@ class LanguagesTab(QWidget):
                  self.voicemaker_voice_combo.addItem(text, data)
              self.voicemaker_voice_combo.insertSeparator(self.voicemaker_voice_combo.count())
         
+        
         # Add other voices
         for text, data in other_voices:
             self.voicemaker_voice_combo.addItem(text, data)
         self.voicemaker_voice_combo.blockSignals(False)
 
+    def populate_edgetts_voices(self, lang_id):
+        self.edgetts_voice_combo.blockSignals(True)
+        self.edgetts_voice_combo.clear()
+        
+        # Filter voices by lang_id (e.g. "en-US", "uk-UA")
+        # EdgeTTS voice "ShortName" usually looks like "uk-UA-OstapNeural"
+        
+        normalized_lang_id = lang_id.lower().replace("_", "-")
+        # Try to handle 'uk' -> 'uk-UA'
+        if normalized_lang_id == 'uk': normalized_lang_id = 'uk-ua'
+        if normalized_lang_id == 'en': normalized_lang_id = 'en-us'
+        if normalized_lang_id == 'ru': normalized_lang_id = 'ru-ru'
+        
+        matched_voices = []
+        other_voices = []
+        
+        for voice in self.edge_tts_voices:
+            short_name = voice.get("ShortName", "")
+            friendly_name = voice.get("FriendlyName", short_name)
+            locale = voice.get("Locale", "").lower()
+            
+            item_text = f"{friendly_name}"
+            
+            if normalized_lang_id in locale:
+                matched_voices.append((item_text, short_name))
+            else:
+                other_voices.append((item_text, short_name))
+        
+        if matched_voices:
+             for text, data in matched_voices:
+                 self.edgetts_voice_combo.addItem(text, data)
+             self.edgetts_voice_combo.insertSeparator(self.edgetts_voice_combo.count())
+             
+        for text, data in other_voices:
+            self.edgetts_voice_combo.addItem(text, data)
+            
+        self.edgetts_voice_combo.blockSignals(False)
+
     def on_tts_provider_changed(self, index):
         provider = self.tts_provider_combo.currentText()
-        if provider == "ElevenLabs":
-            self.elevenlabs_template_label.setVisible(True)
-            self.elevenlabs_template_combo.setVisible(True)
-            self.voicemaker_voice_label.setVisible(False)
-            self.voicemaker_voice_combo.setVisible(False)
-            self.gemini_voice_label.setVisible(False)
-            self.gemini_voice_combo.setVisible(False)
-            self.gemini_tone_label.setVisible(False)
-            self.gemini_tone_input.setVisible(False)
-        elif provider == "VoiceMaker":
-            self.elevenlabs_template_label.setVisible(False)
-            self.elevenlabs_template_combo.setVisible(False)
-            self.voicemaker_voice_label.setVisible(True)
-            self.voicemaker_voice_combo.setVisible(True)
-            self.gemini_voice_label.setVisible(False)
-            self.gemini_voice_combo.setVisible(False)
-            self.gemini_tone_label.setVisible(False)
-            self.gemini_tone_input.setVisible(False)
-        elif provider == "GeminiTTS":
-            self.elevenlabs_template_label.setVisible(False)
-            self.elevenlabs_template_combo.setVisible(False)
-            self.voicemaker_voice_label.setVisible(False)
-            self.voicemaker_voice_combo.setVisible(False)
-            self.gemini_voice_label.setVisible(True)
-            self.gemini_voice_combo.setVisible(True)
-            self.gemini_tone_label.setVisible(True)
-            self.gemini_tone_input.setVisible(True)
+        
+        # ElevenLabs
+        is_eleven = (provider == "ElevenLabs")
+        self.elevenlabs_template_label.setVisible(is_eleven)
+        self.elevenlabs_template_combo.setVisible(is_eleven)
+        
+        # VoiceMaker
+        is_vm = (provider == "VoiceMaker")
+        self.voicemaker_voice_label.setVisible(is_vm)
+        self.voicemaker_voice_combo.setVisible(is_vm)
+        
+        # GeminiTTS
+        is_gemini = (provider == "GeminiTTS")
+        self.gemini_voice_label.setVisible(is_gemini)
+        self.gemini_voice_combo.setVisible(is_gemini)
+        self.gemini_tone_label.setVisible(is_gemini)
+        self.gemini_tone_input.setVisible(is_gemini)
+
+        # EdgeTTS
+        is_edge = (provider == "EdgeTTS")
+        self.edgetts_voice_label.setVisible(is_edge)
+        self.edgetts_voice_combo.setVisible(is_edge)
+        self.edgetts_rate_label.setVisible(is_edge)
+        self.edgetts_rate_spinbox.setVisible(is_edge)
+        self.edgetts_pitch_label.setVisible(is_edge)
+        self.edgetts_pitch_spinbox.setVisible(is_edge)
 
     def on_language_selected(self, current, previous):
         self._is_loading_lang_settings = True
@@ -578,6 +649,9 @@ class LanguagesTab(QWidget):
             self.voicemaker_voice_combo.blockSignals(True)
             self.gemini_voice_combo.blockSignals(True)
             self.gemini_tone_input.blockSignals(True)
+            self.edgetts_voice_combo.blockSignals(True)
+            self.edgetts_rate_spinbox.blockSignals(True)
+            self.edgetts_pitch_spinbox.blockSignals(True)
             self.bg_music_path_input.blockSignals(True)
             self.bg_music_volume_slider.blockSignals(True)
             self.gemini_voice_combo.blockSignals(True)
@@ -618,7 +692,16 @@ class LanguagesTab(QWidget):
             current_gemini_voice = config.get("gemini_voice", "Puck")
             gemini_index = self.gemini_voice_combo.findData(current_gemini_voice)
             self.gemini_voice_combo.setCurrentIndex(gemini_index if gemini_index >= 0 else 0)
+            self.gemini_voice_combo.setCurrentIndex(gemini_index if gemini_index >= 0 else 0)
             self.gemini_tone_input.setText(config.get("gemini_tone", ""))
+
+            # EdgeTTS Settings
+            self.populate_edgetts_voices(self.current_lang_id)
+            current_edgetts_voice = config.get("edgetts_voice", "uk-UA-OstapNeural") # Default for uk-UA test
+            edge_index = self.edgetts_voice_combo.findData(current_edgetts_voice)
+            self.edgetts_voice_combo.setCurrentIndex(edge_index if edge_index >= 0 else 0)
+            self.edgetts_rate_spinbox.setValue(config.get("edgetts_rate", 0))
+            self.edgetts_pitch_spinbox.setValue(config.get("edgetts_pitch", 0))
 
             self.bg_music_path_input.setText(config.get("background_music_path", ""))
             volume = config.get("background_music_volume", 100)
@@ -676,6 +759,9 @@ class LanguagesTab(QWidget):
             self.voicemaker_voice_combo.blockSignals(False)
             self.gemini_voice_combo.blockSignals(False)
             self.gemini_tone_input.blockSignals(False)
+            self.edgetts_voice_combo.blockSignals(False)
+            self.edgetts_rate_spinbox.blockSignals(False)
+            self.edgetts_pitch_spinbox.blockSignals(False)
             self.bg_music_path_input.blockSignals(False)
             self.bg_music_volume_slider.blockSignals(False)
             self.default_template_combo.blockSignals(False)
@@ -717,6 +803,9 @@ class LanguagesTab(QWidget):
             "voicemaker_voice_id": "",
             "gemini_voice": "Puck",
             "gemini_tone": "",
+            "edgetts_voice": "",
+            "edgetts_rate": 0,
+            "edgetts_pitch": 0,
             "background_music_path": "",
             "background_music_volume": 100,
             "default_template": "",
@@ -779,6 +868,9 @@ class LanguagesTab(QWidget):
         lang_settings["voicemaker_voice_id"] = self.voicemaker_voice_combo.currentData()
         lang_settings["gemini_voice"] = self.gemini_voice_combo.currentData()
         lang_settings["gemini_tone"] = self.gemini_tone_input.text()
+        lang_settings["edgetts_voice"] = self.edgetts_voice_combo.currentData()
+        lang_settings["edgetts_rate"] = self.edgetts_rate_spinbox.value()
+        lang_settings["edgetts_pitch"] = self.edgetts_pitch_spinbox.value()
         lang_settings["background_music_path"] = self.bg_music_path_input.text()
         lang_settings["background_music_volume"] = self.bg_music_volume_slider.value()
         lang_settings["default_template"] = self.default_template_combo.currentData()

@@ -333,5 +333,8 @@
     "position_center_right": "По центру справа",
     "position_bottom_left": "Знизу зліва",
     "position_bottom_center": "Знизу по центру",
-    "position_bottom_right": "Знизу справа"
+    "position_bottom_right": "Знизу справа",
+    "edgetts_voice_label": "Голос EdgeTTS:",
+    "edgetts_rate_label": "Швидкість EdgeTTS (%):",
+    "edgetts_pitch_label": "Тон EdgeTTS (Гц):"
 }

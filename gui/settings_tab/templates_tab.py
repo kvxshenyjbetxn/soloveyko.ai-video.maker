@@ -110,6 +110,9 @@ SETTINGS_METADATA = {
         'voicemaker_voice_id': {'type': 'voicemaker_voice'},
         'gemini_voice': {'type': 'gemini_voice'},
         'gemini_tone': {'type': 'str'},
+        'edgetts_voice': {'type': 'str'}, 
+        'edgetts_rate': {'type': 'int', 'min': -100, 'max': 100, 'suffix': '%'},
+        'edgetts_pitch': {'type': 'int', 'min': -100, 'max': 100, 'suffix': ' Hz'},
         'elevenlabs_template_uuid': {'type': 'str'},
         'default_template': {'type': 'str'}, 
     }

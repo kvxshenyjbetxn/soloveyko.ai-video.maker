@@ -203,7 +203,17 @@ class RewriteTab(QWidget):
         if not links:
             return
 
-        task_name_input, ok = QInputDialog.getText(self, translator.translate('enter_task_name_title', 'Task Name'), translator.translate('enter_task_name_label', 'Enter task name:'))
+        # Custom QInputDialog to make it wider
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle(translator.translate('enter_task_name_title', 'Task Name'))
+        dialog.setLabelText(translator.translate('enter_task_name_label', 'Enter task name:'))
+        dialog.setInputMode(QInputDialog.InputMode.TextInput)
+        dialog.resize(600, 200) # Ensure it's wide enough
+        dialog.setMinimumWidth(600)
+        
+        ok = dialog.exec()
+        task_name_input = dialog.textValue()
+        
         if not ok:
             return
 

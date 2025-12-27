@@ -332,5 +332,8 @@
     "position_center_right": "Center Right",
     "position_bottom_left": "Bottom Left",
     "position_bottom_center": "Bottom Center",
-    "position_bottom_right": "Bottom Right"
+    "position_bottom_right": "Bottom Right",
+    "edgetts_voice_label": "EdgeTTS Voice:",
+    "edgetts_rate_label": "EdgeTTS Rate (%):",
+    "edgetts_pitch_label": "EdgeTTS Pitch (Hz):"
 }
