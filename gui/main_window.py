@@ -4,7 +4,7 @@ import requests
 import collections
 import platform
 from datetime import datetime
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu, QInputDialog
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray, QTimer
 from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.widgets.animated_tab_widget import AnimatedTabWidget
@@ -612,11 +612,11 @@ class MainWindow(QMainWindow):
         # Connect signals for result handling
         dialog.finished.connect(lambda result: self._on_review_dialog_finished(result, dialog, task_id, state, stage))
         
-        def on_regenerate():
+        def on_regenerate(prompt=None):
             if stage == 'stage_translation':
-                self.task_processor.regenerate_translation(task_id)
+                self.task_processor.regenerate_translation(task_id, prompt)
             else:
-                self.task_processor.regenerate_rewrite(task_id)
+                self.task_processor.regenerate_rewrite(task_id, prompt)
 
         dialog.regenerate_requested.connect(on_regenerate)
         
@@ -919,7 +919,7 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
 class TextReviewDialog(QDialog):
-    regenerate_requested = Signal()
+    regenerate_requested = Signal(object) # Can optionally carry a custom prompt (str) or None
 
     def __init__(self, parent, state, text, translator, stage='stage_translation'):
         super().__init__(parent)
@@ -949,6 +949,7 @@ class TextReviewDialog(QDialog):
         bottom_layout.addStretch()
 
         self.button_box = QDialogButtonBox()
+        self.edit_prompt_button = self.button_box.addButton(self.translator.translate("edit_prompt_button"), QDialogButtonBox.ButtonRole.ActionRole)
         self.regenerate_button = self.button_box.addButton(self.translator.translate("thumbnail_regen_button"), QDialogButtonBox.ButtonRole.ActionRole)
         self.ok_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Ok)
         self.cancel_button = self.button_box.addButton(QDialogButtonBox.StandardButton.Cancel)
@@ -956,6 +957,7 @@ class TextReviewDialog(QDialog):
         
         main_layout.addLayout(bottom_layout)
 
+        self.edit_prompt_button.clicked.connect(self.on_edit_prompt_clicked)
         self.regenerate_button.clicked.connect(self.on_regenerate_clicked)
         self.ok_button.clicked.connect(self.accept)
         self.cancel_button.clicked.connect(self.reject)
@@ -965,8 +967,21 @@ class TextReviewDialog(QDialog):
 
     def on_regenerate_clicked(self):
         self.is_regenerating = True
-        self.regenerate_requested.emit()
+        self.regenerate_requested.emit(None)
         self.close() # Close immediately to allow other tasks to proceed
+
+    def on_edit_prompt_clicked(self):
+        current_prompt = ""
+        if self.stage == 'stage_translation':
+            current_prompt = self.state.lang_data.get('prompt', '')
+        else:
+             current_prompt = self.state.lang_data.get('rewrite_prompt') or 'Rewrite this text:'
+
+        new_prompt, ok = QInputDialog.getMultiLineText(self, self.translator.translate("edit_prompt_title"), self.translator.translate("edit_prompt_text"), current_prompt)
+        if ok:
+            self.is_regenerating = True
+            self.regenerate_requested.emit(new_prompt)
+            self.close()
 
     def get_text(self):
         return self.text_edit.toPlainText()

@@ -15,13 +15,14 @@ class TranslationMixin:
               self.check_if_all_finished
     """
 
-    def _start_rewrite(self, task_id, text):
-        self.openrouter_queue.append((task_id, 'rewrite', text))
+    def _start_rewrite(self, task_id, text, prompt=None):
+        self.openrouter_queue.append((task_id, 'rewrite', (text, prompt)))
         self._process_openrouter_queue()
 
-    def _launch_rewrite_worker(self, task_id, text):
+    def _launch_rewrite_worker(self, task_id, extra_data):
         try:
             state = self.task_states[task_id]
+            text, custom_prompt = extra_data
             
             # Smart model selection for Rewrite:
             model = state.settings.get('rewrite_model')
@@ -36,7 +37,7 @@ class TranslationMixin:
             
             config = {
                 'text': text,
-                'prompt': state.lang_data.get('rewrite_prompt') or 'Rewrite this text:',
+                'prompt': custom_prompt if custom_prompt else (state.lang_data.get('rewrite_prompt') or 'Rewrite this text:'),
                 'model': model,
                 'max_tokens': state.lang_data.get('rewrite_max_tokens') or 4096,
                 'temperature': state.lang_data.get('rewrite_temperature') if state.lang_data.get('rewrite_temperature') is not None else 0.7,
@@ -91,11 +92,11 @@ class TranslationMixin:
             if stage in self.task_states[task_id].stages:
                 self._set_stage_status(task_id, stage, 'error', "Dependency (Rewrite) failed")
 
-    def _start_translation(self, task_id):
-        self.openrouter_queue.append((task_id, 'translation', None))
+    def _start_translation(self, task_id, prompt=None):
+        self.openrouter_queue.append((task_id, 'translation', prompt))
         self._process_openrouter_queue()
 
-    def _launch_translation_worker(self, task_id):
+    def _launch_translation_worker(self, task_id, custom_prompt=None):
         try:
             state = self.task_states[task_id]
             
@@ -110,7 +111,7 @@ class TranslationMixin:
             config = {
                 'text': state.original_text,
                 'lang_config': {
-                    'prompt': state.lang_data.get('prompt', ''),
+                    'prompt': custom_prompt if custom_prompt else state.lang_data.get('prompt', ''),
                     'model': model,
                     'temperature': state.lang_data.get('temperature') if state.lang_data.get('temperature') is not None else 0.7,
                     'max_tokens': state.lang_data.get('max_tokens') or 4096
@@ -170,18 +171,18 @@ class TranslationMixin:
         if getattr(self, 'subtitle_barrier_passed', False):
             self._check_and_start_montages()
 
-    def regenerate_translation(self, task_id):
-        logger.log(f"[{task_id}] User requested translation regeneration.", level=LogLevel.INFO)
+    def regenerate_translation(self, task_id, prompt=None):
+        logger.log(f"[{task_id}] User requested translation regeneration. Custom prompt: {bool(prompt)}", level=LogLevel.INFO)
         if task_id in self.task_states:
             self.task_states[task_id].translation_review_dialog_shown = False
-        self._start_translation(task_id)
+        self._start_translation(task_id, prompt)
 
-    def regenerate_rewrite(self, task_id):
-        logger.log(f"[{task_id}] User requested rewrite regeneration.", level=LogLevel.INFO)
+    def regenerate_rewrite(self, task_id, prompt=None):
+        logger.log(f"[{task_id}] User requested rewrite regeneration. Custom prompt: {bool(prompt)}", level=LogLevel.INFO)
         if task_id in self.task_states:
             self.task_states[task_id].rewrite_review_dialog_shown = False
         state = self.task_states[task_id]
-        self._start_rewrite(task_id, state.original_text)
+        self._start_rewrite(task_id, state.original_text, prompt)
 
     def _on_text_ready(self, task_id):
         state = self.task_states[task_id]
@@ -277,7 +278,7 @@ class TranslationMixin:
             if worker_type == 'rewrite':
                 self._launch_rewrite_worker(task_id, extra_data)
             elif worker_type == 'translation':
-                self._launch_translation_worker(task_id)
+                self._launch_translation_worker(task_id, extra_data)
             elif worker_type == 'image_prompts':
                 self._launch_image_prompts_worker(task_id)
             elif worker_type == 'custom_stage':
