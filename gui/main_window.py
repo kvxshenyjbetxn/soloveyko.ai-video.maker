@@ -680,7 +680,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, title, message)
 
     def update_title(self):
-        app_name = "CombainAI"
+        app_name = "Soloveyko.AI-Video.Maker"
         self.setWindowTitle(f"{app_name} v{__version__}")
 
     def update_active_template_display(self):
