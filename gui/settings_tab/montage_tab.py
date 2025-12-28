@@ -37,6 +37,7 @@ class MontageTab(QWidget):
         self.codec_combo = QComboBox()
         # Add codecs with (Label, Value) pairs
         self.codec_combo.addItem("libx264 (CPU)", "libx264")
+        self.codec_combo.addItem("libx265 (CPU)", "libx265")
         self.codec_combo.addItem("h264_nvenc (NVIDIA)", "h264_nvenc")
         self.codec_combo.addItem("h264_amf (AMD)", "h264_amf")
         self.codec_combo.addItem("h264_videotoolbox (Mac)", "h264_videotoolbox")
