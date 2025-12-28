@@ -335,5 +335,8 @@
     "position_bottom_right": "Bottom Right",
     "edgetts_voice_label": "EdgeTTS Voice:",
     "edgetts_rate_label": "EdgeTTS Rate (%):",
-    "edgetts_pitch_label": "EdgeTTS Pitch (Hz):"
+    "edgetts_pitch_label": "EdgeTTS Pitch (Hz):",
+    "edit_prompt_button": "Edit Prompt (1x)",
+    "edit_prompt_title": "Edit Prompt",
+    "edit_prompt_text": "Enter new prompt (for this generation only):"
 }

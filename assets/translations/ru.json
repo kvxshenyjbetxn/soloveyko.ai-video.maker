@@ -339,5 +339,8 @@
     "position_bottom_right": "Снизу справа",
     "edgetts_voice_label": "Голос EdgeTTS:",
     "edgetts_rate_label": "Скорость EdgeTTS (%):",
-    "edgetts_pitch_label": "Тон EdgeTTS (Гц):"
+    "edgetts_pitch_label": "Тон EdgeTTS (Гц):",
+    "edit_prompt_button": "Изменить промт (1 раз)",
+    "edit_prompt_title": "Редактировать промт",
+    "edit_prompt_text": "Введите новый промт (для этой генерации):"
 }

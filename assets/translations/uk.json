@@ -336,5 +336,8 @@
     "position_bottom_right": "Знизу справа",
     "edgetts_voice_label": "Голос EdgeTTS:",
     "edgetts_rate_label": "Швидкість EdgeTTS (%):",
-    "edgetts_pitch_label": "Тон EdgeTTS (Гц):"
+    "edgetts_pitch_label": "Тон EdgeTTS (Гц):",
+    "edit_prompt_button": "Змінити промт (1 раз)",
+    "edit_prompt_title": "Редагувати промт",
+    "edit_prompt_text": "Введіть новий промт (для цієї генерації):"
 }
