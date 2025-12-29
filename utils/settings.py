@@ -49,7 +49,9 @@ class SettingsManager:
                 'max_words': 10
             },
             'custom_stages': [],
-            'last_used_template_name': ''
+            'last_used_template_name': '',
+            'notifications_enabled': False,
+            'telegram_user_id': ''
         }
         self.settings = self.load_settings()
 

@@ -144,7 +144,7 @@ class TranslationMixin:
         is_review_enabled = state.settings.get('translation_review_enabled', False)
 
         if is_review_enabled:
-            self._set_stage_status(task_id, 'stage_translation', 'success')
+            self._set_stage_status(task_id, 'stage_translation', 'review_required')
             self.translation_regenerated.emit(task_id, translated_text) # Update dialog if open
 
             if not state.translation_review_dialog_shown:

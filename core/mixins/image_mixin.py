@@ -174,6 +174,8 @@ class ImageMixin:
             self._set_stage_status(task_id, 'stage_images', 'processing_video')
             self._start_video_generation(task_id)
         else:
+            logger.log(f"[{task_id}] Image gen finished. Status: {status}.", level=LogLevel.INFO)
+            
             self._set_stage_status(task_id, 'stage_images', status, "Failed to generate all images." if status != 'success' else None)
             if getattr(self, 'subtitle_barrier_passed', False):
                 self._check_and_start_montages()

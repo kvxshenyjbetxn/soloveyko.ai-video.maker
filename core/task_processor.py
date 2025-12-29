@@ -12,6 +12,8 @@ from PySide6.QtCore import QObject, Signal, QThreadPool, QElapsedTimer, QSemapho
 
 from utils.logger import logger, LogLevel
 from utils.settings import settings_manager, template_manager
+from utils.translator import translator
+from core.notification_manager import notification_manager
 
 from core.task_state import TaskState
 
@@ -323,6 +325,18 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         state.status[stage_key] = status
         self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, status)
         
+        if status == 'review_required':
+             # Notify user about review
+             task_name = state.job_name
+             if stage_key == 'stage_translation':
+                 title = translator.translate('notification_translation_review_title')
+                 body = translator.translate('notification_translation_review_body').format(task_name=task_name, lang_id=state.lang_id)
+                 notification_manager.send_notification(f"{title}\n{body}")
+             elif stage_key == 'stage_images':
+                 title = translator.translate('notification_image_review_title')
+                 body = translator.translate('notification_image_review_body')
+                 notification_manager.send_notification(f"{title}\n{body}")
+
         if status == 'error':
             if task_id in self.montage_tasks_ids and stage_key != 'stage_montage':
                 self.failed_montage_tasks_ids.add(task_id)
@@ -337,6 +351,14 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
             }
             stage_name = stage_names.get(stage_key, stage_key)
             logger.log(f"[{task_id}] {stage_name} failed: {error_message}", level=LogLevel.ERROR)
+
+            title = translator.translate('notification_task_error_title')
+            # Assuming 'task_name' is initialized above in review_required block, wait, it's inside `if status == 'review_required'`. 
+            # I need to get task_name again or move it up.
+            task_name = state.job_name # Get it safely here
+            body = translator.translate('notification_task_error_body').format(
+                task_name=task_name, lang_id=state.lang_id, stage_name=stage_name, error_message=error_message)
+            notification_manager.send_notification(f"{title}\n{body}")
         
         self.check_if_all_finished()
 
@@ -375,6 +397,11 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
             elapsed_ms = self.timer.elapsed()
             elapsed_str = time.strftime('%H:%M:%S', time.gmtime(elapsed_ms / 1000))
             logger.log(f"Queue processing finished in {elapsed_str}.", level=LogLevel.SUCCESS)
+            
+            title = translator.translate('notification_queue_finished_title')
+            body = translator.translate('notification_queue_finished_body').format(elapsed_time=elapsed_str)
+            notification_manager.send_notification(f"{title}\n{body}")
+
             self.processing_finished.emit(elapsed_str)
     
     def cleanup(self):
