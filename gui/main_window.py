@@ -646,6 +646,9 @@ class MainWindow(QMainWindow):
                             f.write(new_text)
                     except Exception as e:
                         logger.log(f"Failed to save reviewed text: {e}", level=LogLevel.ERROR)
+                
+                # Update status to success to turn green
+                self.task_processor._set_stage_status(task_id, stage, 'success')
                 self.task_processor._on_text_ready(task_id)
             else:
                 self.task_processor._set_stage_status(task_id, stage, 'error', 'User cancelled review.')

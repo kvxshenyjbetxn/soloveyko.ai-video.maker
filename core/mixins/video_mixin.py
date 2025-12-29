@@ -3,6 +3,8 @@ import re
 from PySide6.QtCore import Slot
 from utils.logger import logger, LogLevel
 from core.workers import VideoGenerationWorker, MontageWorker
+from utils.translator import translator
+from core.notification_manager import notification_manager
 
 class VideoMixin:
     """
@@ -202,6 +204,11 @@ class VideoMixin:
             # Only trigger if there are actually tasks waiting for review
             if len(self.tasks_awaiting_review) > 0:
                 logger.log(f"All {total_montage_tasks} tasks accounted for. Requesting review for {len(self.tasks_awaiting_review)} tasks.", level=LogLevel.SUCCESS)
+                
+                title = translator.translate('notification_image_review_title')
+                body = translator.translate('notification_image_review_body')
+                notification_manager.send_notification(f"{title}\n{body}")
+                
                 self.image_review_required.emit()
 
     @Slot()
