@@ -1,4 +1,18 @@
 {
+    "notification_tab": "Notifications",
+    "enable_notifications_label": "Enable notifications",
+    "telegram_user_id_label": "Telegram User ID",
+    "bot_link_info": "Link to bot:",
+    "test_notification_button": "Send test message",
+    "notification_translation_review_title": "📝 *Translation Review*",
+    "notification_translation_review_body": "Task: `{task_name}`\nLanguage: `{lang_id}`\nReview required.",
+    "notification_image_review_title": "🎨 *Image Review*",
+    "notification_image_review_body": "All images generated. Please check the gallery to proceed.",
+    "notification_queue_finished_title": "✅ *All tasks finished!*",
+    "notification_queue_finished_body": "Elapsed time: `{elapsed_time}`",
+    "notification_test_message": "🔔 This is a test message from Soloveyko.AI Video Maker!",
+    "notification_task_error_title": "❌ *Execution Error*",
+    "notification_task_error_body": "Task: `{task_name}`\nLanguage: `{lang_id}`\nStage: `{stage_name}`\nError: `{error_message}`",
     "app_title": "Combine",
     "subscription_unlimited": "Active: Forever ♾️",
     "subscription_days_left": "Days left: ",
@@ -332,5 +346,11 @@
     "position_center_right": "Center Right",
     "position_bottom_left": "Bottom Left",
     "position_bottom_center": "Bottom Center",
-    "position_bottom_right": "Bottom Right"
+    "position_bottom_right": "Bottom Right",
+    "edgetts_voice_label": "EdgeTTS Voice:",
+    "edgetts_rate_label": "EdgeTTS Rate (%):",
+    "edgetts_pitch_label": "EdgeTTS Pitch (Hz):",
+    "edit_prompt_button": "Edit Prompt (1x)",
+    "edit_prompt_title": "Edit Prompt",
+    "edit_prompt_text": "Enter new prompt (for this generation only):"
 }

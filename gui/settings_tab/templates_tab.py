@@ -45,7 +45,7 @@ SETTINGS_METADATA = {
     'results_path': {'type': 'folder_path', 'label': 'results_path'},
     'montage': {
         # Render
-        'codec': {'type': 'choice', 'options': ["libx264", "h264_nvenc", "h264_amf"]},
+        'codec': {'type': 'choice', 'options': ["libx264", "libx265", "h264_nvenc", "h264_amf"]},
         'preset': {'type': 'choice', 'options': ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]},
         'bitrate_mbps': {'type': 'int', 'min': 1, 'max': 100, 'suffix': ' Mbps'},
         'upscale_factor': {'type': 'float', 'min': 1.0, 'max': 5.0, 'step': 0.1, 'suffix': 'x'},
@@ -110,6 +110,9 @@ SETTINGS_METADATA = {
         'voicemaker_voice_id': {'type': 'voicemaker_voice'},
         'gemini_voice': {'type': 'gemini_voice'},
         'gemini_tone': {'type': 'str'},
+        'edgetts_voice': {'type': 'str'}, 
+        'edgetts_rate': {'type': 'int', 'min': -100, 'max': 100, 'suffix': '%'},
+        'edgetts_pitch': {'type': 'int', 'min': -100, 'max': 100, 'suffix': ' Hz'},
         'elevenlabs_template_uuid': {'type': 'str'},
         'default_template': {'type': 'str'}, 
     }

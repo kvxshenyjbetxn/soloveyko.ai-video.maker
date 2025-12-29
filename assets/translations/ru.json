@@ -1,4 +1,18 @@
 {
+    "notification_tab": "Уведомления",
+    "enable_notifications_label": "Включить уведомления",
+    "telegram_user_id_label": "Telegram ID пользователя",
+    "bot_link_info": "Ссылка на бота:",
+    "test_notification_button": "Отправить тестовое сообщение",
+    "notification_translation_review_title": "📝 *Контроль перевода*",
+    "notification_translation_review_body": "Задача: `{task_name}`\nЯзык: `{lang_id}`\nТребуется проверка.",
+    "notification_image_review_title": "🎨 *Контроль изображений*",
+    "notification_image_review_body": "Все изображения сгенерированы. Перейдите в галерею для просмотра и продолжения.",
+    "notification_queue_finished_title": "✅ *Все задачи завершены!*",
+    "notification_queue_finished_body": "Время выполнения: `{elapsed_time}`",
+    "notification_test_message": "🔔 Это тестовое сообщение от Soloveyko.AI Video Maker!",
+    "notification_task_error_title": "❌ *Ошибка выполнения*",
+    "notification_task_error_body": "Задача: `{task_name}`\nЯзык: `{lang_id}`\nЭтап: `{stage_name}`\nОшибка: `{error_message}`",
     "app_title": "Комбайн",
     "subscription_unlimited": "Срок действия: Навсегда ♾️",
     "subscription_days_left": "Осталось дней: ",
@@ -336,5 +350,11 @@
     "position_center_right": "По центру справа",
     "position_bottom_left": "Снизу слева",
     "position_bottom_center": "Снизу по центру",
-    "position_bottom_right": "Снизу справа"
+    "position_bottom_right": "Снизу справа",
+    "edgetts_voice_label": "Голос EdgeTTS:",
+    "edgetts_rate_label": "Скорость EdgeTTS (%):",
+    "edgetts_pitch_label": "Тон EdgeTTS (Гц):",
+    "edit_prompt_button": "Изменить промт (1 раз)",
+    "edit_prompt_title": "Редактировать промт",
+    "edit_prompt_text": "Введите новый промт (для этой генерации):"
 }

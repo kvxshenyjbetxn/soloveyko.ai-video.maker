@@ -1,4 +1,18 @@
 {
+    "notification_tab": "Сповіщення",
+    "enable_notifications_label": "Увімкнути сповіщення",
+    "telegram_user_id_label": "Telegram ID користувача",
+    "bot_link_info": "Посилання на бота:",
+    "test_notification_button": "Надіслати тестове повідомлення",
+    "notification_translation_review_title": "📝 *Контроль перекладу*",
+    "notification_translation_review_body": "Завдання: `{task_name}`\nМова: `{lang_id}`\nПотрібен ваш перегляд.",
+    "notification_image_review_title": "🎨 *Контроль зображень*",
+    "notification_image_review_body": "Всі зображення згенеровано. Перейдіть до галереї для перегляду та продовження.",
+    "notification_queue_finished_title": "✅ *Всі завдання завершено!*",
+    "notification_queue_finished_body": "Час виконання: `{elapsed_time}`",
+    "notification_test_message": "🔔 Це тестове повідомлення від Soloveyko.AI Video Maker!",
+    "notification_task_error_title": "❌ *Помилка виконання*",
+    "notification_task_error_body": "Завдання: `{task_name}`\nМова: `{lang_id}`\nЕтап: `{stage_name}`\nПомилка: `{error_message}`",
     "app_title": "Комбайн",
     "subscription_unlimited": "Термін дії: Назавжди ♾️",
     "subscription_days_left": "Залишилось днів: ",
@@ -333,5 +347,11 @@
     "position_center_right": "По центру справа",
     "position_bottom_left": "Знизу зліва",
     "position_bottom_center": "Знизу по центру",
-    "position_bottom_right": "Знизу справа"
+    "position_bottom_right": "Знизу справа",
+    "edgetts_voice_label": "Голос EdgeTTS:",
+    "edgetts_rate_label": "Швидкість EdgeTTS (%):",
+    "edgetts_pitch_label": "Тон EdgeTTS (Гц):",
+    "edit_prompt_button": "Змінити промт (1 раз)",
+    "edit_prompt_title": "Редагувати промт",
+    "edit_prompt_text": "Введіть новий промт (для цієї генерації):"
 }
