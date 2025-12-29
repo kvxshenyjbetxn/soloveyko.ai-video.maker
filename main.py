@@ -254,7 +254,10 @@ def main():
             except:
                 pass
         
-        sys.exit(exit_code)
+        # Use os._exit to force immediate termination, skipping global object cleanup
+        # This prevents 0x8001010d errors caused by threads trying to accept/read
+        # from closed sockets/pipes during interpreter shutdown.
+        os._exit(exit_code)
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
