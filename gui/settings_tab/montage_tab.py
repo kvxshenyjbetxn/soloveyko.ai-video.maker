@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QScrollArea,
 from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
+from gui.widgets.slider_spinbox import SliderWithSpinBox
 
 class MontageTab(QWidget):
     def __init__(self):
@@ -79,7 +80,7 @@ class MontageTab(QWidget):
         trans_layout.addRow(self.enable_trans_cb)
 
         self.trans_dur_label = QLabel()
-        self.trans_dur_spin = QDoubleSpinBox()
+        self.trans_dur_spin = SliderWithSpinBox()
         self.trans_dur_spin.setRange(0.1, 5.0)
         self.trans_dur_spin.setSingleStep(0.1)
         self.trans_dur_spin.setSuffix(" s")
@@ -98,14 +99,14 @@ class MontageTab(QWidget):
         zoom_layout.addRow(self.enable_zoom_cb)
 
         self.zoom_speed_label = QLabel()
-        self.zoom_speed_spin = QDoubleSpinBox()
+        self.zoom_speed_spin = SliderWithSpinBox()
         self.zoom_speed_spin.setRange(0.1, 5.0)
         self.zoom_speed_spin.setSingleStep(0.1)
         self.zoom_speed_spin.valueChanged.connect(self.save_settings)
         zoom_layout.addRow(self.zoom_speed_label, self.zoom_speed_spin)
 
         self.zoom_int_label = QLabel()
-        self.zoom_int_spin = QDoubleSpinBox()
+        self.zoom_int_spin = SliderWithSpinBox()
         self.zoom_int_spin.setRange(0.01, 1.0)
         self.zoom_int_spin.setSingleStep(0.05)
         self.zoom_int_spin.valueChanged.connect(self.save_settings)
@@ -123,7 +124,7 @@ class MontageTab(QWidget):
         sway_layout.addRow(self.enable_sway_cb)
 
         self.sway_speed_label = QLabel()
-        self.sway_speed_spin = QDoubleSpinBox()
+        self.sway_speed_spin = SliderWithSpinBox()
         self.sway_speed_spin.setRange(0.1, 5.0)
         self.sway_speed_spin.setSingleStep(0.1)
         self.sway_speed_spin.valueChanged.connect(self.save_settings)
@@ -153,7 +154,7 @@ class MontageTab(QWidget):
         special_proc_layout.addRow(self.special_proc_img_count_label, self.special_proc_img_count_spin)
 
         self.special_proc_dur_label = QLabel()
-        self.special_proc_dur_spin = QDoubleSpinBox()
+        self.special_proc_dur_spin = SliderWithSpinBox()
         self.special_proc_dur_spin.setRange(0.1, 10.0)
         self.special_proc_dur_spin.setSingleStep(0.1)
         self.special_proc_dur_spin.setSuffix(" s")
@@ -194,7 +195,7 @@ class MontageTab(QWidget):
 
         # Block signals
         for widget in self.findChildren(QWidget):
-            if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox)):
+            if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, SliderWithSpinBox)):
                 widget.blockSignals(True)
 
         codec = m_settings.get("codec", "libx264")
@@ -233,7 +234,7 @@ class MontageTab(QWidget):
 
         # Unblock signals
         for widget in self.findChildren(QWidget):
-            if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox)):
+            if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, SliderWithSpinBox)):
                 widget.blockSignals(False)
 
         self.toggle_special_proc_widgets()
