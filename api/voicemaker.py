@@ -122,7 +122,8 @@ class VoicemakerAPI:
         """Internal method to generate audio for a single chunk with retries."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Connection": "close"  # Prevent stale connections causing 408
         }
         
         payload = {
@@ -167,8 +168,11 @@ class VoicemakerAPI:
                     else:
                         error_message = f"API error: {data.get('message', 'Unknown error')}"
                         logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
+                elif response.status_code == 408: # Request Timeout from Server
+                     error_message = f"HTTP error: {response.status_code} - {response.text}"
+                     logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
                 else:
-                    error_message = f"HTTP error: {response.status_code}"
+                    error_message = f"HTTP error: {response.status_code} - {response.text}"
                     logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
             
             except requests.exceptions.RequestException as e:
