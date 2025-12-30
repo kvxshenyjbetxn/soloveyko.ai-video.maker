@@ -7,6 +7,7 @@ from PySide6.QtGui import QDesktopServices, QClipboard
 from utils.translator import translator
 from utils.settings import settings_manager
 from core.notification_manager import notification_manager
+from gui.api_workers import ApiKeyCheckWorker
 
 class NotificationTab(QWidget):
     def __init__(self, main_window=None):
@@ -31,8 +32,17 @@ class NotificationTab(QWidget):
         self.user_id_input = QLineEdit()
         self.user_id_input.setPlaceholderText("123456789")
         self.user_id_input.textChanged.connect(self.on_user_id_changed)
+        
+        self.get_id_button = QPushButton(translator.translate('get_id_button', 'Отримати ID'))
+        self.get_id_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.get_id_button.clicked.connect(self.on_get_id_clicked)
+        
+        user_id_layout = QHBoxLayout()
+        user_id_layout.addWidget(self.user_id_input)
+        user_id_layout.addWidget(self.get_id_button)
+        
         self.user_id_label = QLabel(translator.translate('telegram_user_id_label', 'Telegram ID користувача'))
-        form_layout.addRow(self.user_id_label, self.user_id_input)
+        form_layout.addRow(self.user_id_label, user_id_layout)
 
         # Bot Link Display
         self.bot_link_container = QWidget()
@@ -97,9 +107,43 @@ class NotificationTab(QWidget):
         notification_manager.send_test_notification()
         QMessageBox.information(self, "Info", "Test message sent (check log for status)")
 
+    def on_get_id_clicked(self):
+        if not self.main_window:
+            return
+            
+        api_key = self.main_window.api_key
+        server_url = self.main_window.server_url
+        
+        if not api_key or not server_url:
+            QMessageBox.warning(self, "Error", translator.translate('api_key_error', "API key or server URL is missing."))
+            return
+            
+        self.get_id_button.setEnabled(False)
+        self.get_id_button.setText(translator.translate('checking_status', "Checking..."))
+        
+        worker = ApiKeyCheckWorker(api_key, server_url)
+        # Using a lambda to handle the signal with extra arguments if needed, 
+        # but the signal matches: bool, str, int, object
+        worker.signals.finished.connect(self.on_id_fetched)
+        self.main_window.threadpool.start(worker)
+        
+    def on_id_fetched(self, is_valid, expires_at, subscription_level, telegram_id):
+        self.get_id_button.setEnabled(True)
+        self.get_id_button.setText(translator.translate('get_id_button', 'Отримати ID'))
+        
+        if is_valid and telegram_id:
+            self.user_id_input.setText(str(telegram_id))
+            QMessageBox.information(self, "Success", translator.translate('id_fetched_success', "Telegram ID fetched successfully."))
+        elif is_valid and not telegram_id:
+             QMessageBox.warning(self, "Warning", translator.translate('id_not_found', "ID not found on server. Please ensure you have started the bot."))
+        else:
+             QMessageBox.warning(self, "Error", translator.translate('api_validation_failed', "API validation failed."))
+
     def retranslate_ui(self):
         self.enable_label.setText(translator.translate('enable_notifications_label', 'Увімкнути сповіщення'))
         self.user_id_label.setText(translator.translate('telegram_user_id_label', 'Telegram ID користувача'))
         self.bot_info_label.setText(translator.translate('bot_link_info', 'Посилання на бота:'))
         self.test_button.setText(translator.translate('test_notification_button', 'Надіслати тестове повідомлення'))
+
         self.copy_button.setText(translator.translate('copy_button', 'Копіювати'))
+        self.get_id_button.setText(translator.translate('get_id_button', 'Отримати ID'))

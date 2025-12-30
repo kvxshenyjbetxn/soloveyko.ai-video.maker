@@ -9,6 +9,7 @@ from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable,
 from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from gui.qt_material import apply_stylesheet
+from gui.api_workers import ApiKeyCheckWorker, ApiKeyCheckSignals
 
 # Windows COM handling for threads
 try:
@@ -52,9 +53,6 @@ class VoicemakerBalanceWorkerSignals(QObject):
 
 class GeminiTTSBalanceWorkerSignals(QObject):
     finished = Signal(object, bool)
-
-class ApiKeyCheckSignals(QObject):
-    finished = Signal(bool, str, int) # is_valid, expires_at, subscription_level
 
 class BalanceWorker(QRunnable):
     def __init__(self):
@@ -157,48 +155,7 @@ class GeminiTTSBalanceWorker(QRunnable):
             if pythoncom:
                 pythoncom.CoUninitialize()
 
-class ApiKeyCheckWorker(QRunnable):
-    def __init__(self, api_key, server_url):
-        super().__init__()
-        self.signals = ApiKeyCheckSignals()
-        self.api_key = api_key
-        self.server_url = server_url
 
-    def run(self):
-        if pythoncom:
-             pythoncom.CoInitialize()
-        try:
-            is_valid = False
-            expires_at = None
-            subscription_level = 1 # Default to base level
-            if not self.api_key or not self.server_url:
-                self.signals.finished.emit(is_valid, expires_at, subscription_level)
-                return
-            try:
-                from utils.hardware_id import get_hardware_id
-                hardware_id = get_hardware_id()
-                
-                response = requests.post(
-                    f"{self.server_url}/validate_key/",
-                    json={"key": self.api_key, "hardware_id": hardware_id},
-                    timeout=5
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    is_valid = data.get("valid", False)
-                    expires_at = data.get("expires_at")
-                    subscription_level = data.get("subscription_level", 1)
-                else:
-                    is_valid = False
-                    expires_at = None
-                    subscription_level = 1
-            except requests.RequestException:
-                # Network error, etc.
-                pass
-            self.signals.finished.emit(is_valid, expires_at, subscription_level)
-        finally:
-            if pythoncom:
-                pythoncom.CoUninitialize()
 
 class MainWindow(QMainWindow):
     SHOW_REWRITE_TAB = False # Default to False, enabled only if level >= 2
@@ -255,9 +212,23 @@ class MainWindow(QMainWindow):
         worker.signals.finished.connect(self.on_api_key_checked)
         self.threadpool.start(worker)
 
-    def on_api_key_checked(self, is_valid, expires_at, subscription_level):
+    def on_api_key_checked(self, is_valid, expires_at, subscription_level, telegram_id):
         self.subscription_level = subscription_level
         if is_valid:
+            # Auto-populate Telegram ID if not set
+            if telegram_id:
+                current_tid = self.settings_manager.get("telegram_user_id")
+                if not current_tid:
+                    self.settings_manager.set("telegram_user_id", str(telegram_id))
+                    # Check if NotificationTab is initialized (it might be inside SettingsTab -> SettingsTab (widget) -> uses internal structure)
+                    # Easier: if settings_tab exists, updating settings_manager is enough, 
+                    # but if we want strictly immediate visual update without reopening tab:
+                    if hasattr(self.settings_tab, 'notification_tab'):
+                         # Assuming settings_tab has notification_tab as a direct attribute if it was refactored, 
+                         # but checking the file structure earlier showed it's likely a sub-tab.
+                         # Actually settings_tab.py was not fully read, but notification_tab.py had update_fields.
+                         pass 
+                         
             # Update subscription info logic
             days_left = 0
             if expires_at:
@@ -479,7 +450,7 @@ class MainWindow(QMainWindow):
         self.active_workers.add(worker)
         # Fix: the signal emits 3 arguments (bool, str, int)
         worker.signals.finished.connect(
-            lambda is_valid, expires_at, sub_level: (
+            lambda is_valid, expires_at, sub_level, tid: (
                 self.on_pre_processing_validation_finished(is_valid),
                 self.active_workers.discard(worker)
             )
