@@ -118,6 +118,100 @@ SETTINGS_METADATA = {
     }
 }
 
+KEY_TO_TRANSLATION_MAP = {
+    # General
+    'results_path': 'results_path_label',
+    'image_review_enabled': 'image_review_label',
+    'prompt_count_control_enabled': 'prompt_count_control_label',
+    'prompt_count': 'prompt_count_label',
+    'image_generation_provider': 'image_generation_provider_label',
+    
+    # API Tab
+    'openrouter_api_key': 'openrouter_api_key_label', # Assuming these are standard if not in tab file
+    'openrouter_models': 'openrouter_models_label',
+    'elevenlabs_api_key': 'elevenlabs_api_key_label',
+    'voicemaker_api_key': 'voicemaker_api_key_label',
+    'voicemaker_char_limit': 'voicemaker_char_limit_label',
+    'gemini_tts_api_key': 'gemini_tts_api_key_label',
+
+    # Montage Tab
+    'codec': 'codec_label',
+    'preset': 'preset_label',
+    'bitrate_mbps': 'bitrate_label',
+    'upscale_factor': 'upscale_factor_label',
+    'enable_transitions': 'enable_transitions_label',
+    'transition_duration': 'duration_label',
+    'enable_zoom': 'enable_zoom_label',
+    'zoom_speed_factor': 'zoom_speed_factor_label',
+    'zoom_intensity': 'zoom_intensity_label',
+    'enable_sway': 'enable_sway_label',
+    'sway_speed_factor': 'sway_speed_factor_label',
+    'special_processing_mode': 'special_proc_mode_label',
+    'special_processing_image_count': 'image_count_label',
+    'special_processing_duration_per_image': 'duration_per_image_label',
+    'special_processing_video_count': 'special_proc_video_count_label',
+    'special_processing_check_sequence': 'special_proc_check_sequence_label',
+    'max_concurrent_montages': 'max_concurrent_montages_label',
+
+    # Subtitles Tab
+    'whisper_model': 'model_label',
+    'font': 'font_label',
+    'fontsize': 'font_size_label',
+    'margin_v': 'vertical_margin_label',
+    'fade_in': 'fade_in_label',
+    'fade_out': 'fade_out_label',
+    'max_words': 'max_words_per_line_label',
+    'color': 'color_label',
+    
+    # Googler
+    'api_key': 'googler_api_key_label',
+    'aspect_ratio': 'googler_aspect_ratio_label',
+    'max_threads': 'googler_max_threads_label',
+    'max_video_threads': 'googler_max_video_threads_label',
+    'video_prompt': 'googler_video_prompt_label',
+    'negative_prompt': 'googler_negative_prompt_label',
+    'seed': 'googler_seed_label',
+
+    # Pollinations
+    'model': 'pollinations_model_label',
+    'token': 'pollinations_token_label',
+    'width': 'image_width_label', # Assuming generic existence or fallback
+    'height': 'image_height_label', # Assuming generic existence or fallback
+    'nologo': 'nologo_label',
+    'enhance': 'enhance_prompt_label',
+
+    # Image Prompt Settings
+    # 'prompt': 'prompt_label' (handled in Languages too)
+    'max_tokens': 'max_tokens_label',
+    'temperature': 'temperature_label',
+
+    # Languages Config keys
+    'prompt': 'language_prompt_label',
+    # 'model': 'translation_model_label', # Conflict with pollination model? Context matters. Key is same 'model'
+    # We might need context-aware lookup or keys in map are absolute paths?
+    # populate_tree logic uses current key.
+    
+    'background_music_path': 'background_music_path_label',
+    'background_music_volume': 'background_music_volume_label',
+    'tts_provider': 'tts_provider_label',
+    'voicemaker_voice_id': 'voicemaker_voice_label',
+    'gemini_voice': 'gemini_voice_label',
+    'gemini_tone': 'gemini_tone_label',
+    'edgetts_voice': 'edgetts_voice_label', 
+    'edgetts_rate': 'edgetts_rate_label',
+    'edgetts_pitch': 'edgetts_pitch_label',
+    'elevenlabs_template_uuid': 'elevenlabs_template_label',
+    'default_template': 'default_template_label',
+    'rewrite_prompt': 'rewrite_prompt_label',
+    'rewrite_model': 'rewrite_model_label',
+    'rewrite_max_tokens': 'rewrite_max_tokens_label', # Reuse max_tokens_label or specific?
+    'rewrite_temperature': 'rewrite_temperature_label', # Reuse temperature_label or specific?
+    'overlay_effect_path': 'effect_selection_title',
+    'watermark_path': 'watermark_group',
+    'watermark_size': 'watermark_size_label',
+    'watermark_position': 'watermark_position_label'
+}
+
 class SettingsDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -521,7 +615,20 @@ class TemplateEditorDialog(QDialog):
             current_path = key_path + [key]
             
             # Use original key for lookup, translated key for display
-            display_key = translator.translate(f"{key}_label", key.replace('_', ' ').title())
+            # Check map
+            trans_key = KEY_TO_TRANSLATION_MAP.get(key)
+            if not trans_key:
+                # Fallbacks or context logic
+                if key == 'model':
+                    # Context check? parent_item label?
+                    # Hard to know context just from key here easily without path.
+                    # But if we look at key sequence...
+                    pass
+
+            if trans_key:
+                 display_key = translator.translate(trans_key, key.replace('_', ' ').title())
+            else:
+                 display_key = translator.translate(f"{key}_label", key.replace('_', ' ').title())
             
             key_item = QStandardItem(display_key)
             key_item.setEditable(False)
@@ -736,7 +843,7 @@ class TemplatesTab(QWidget):
                 # User said "ignore ... transcription engine ...". 
                 # If I switch engine, model changes. So excluding model is safer.
                 elif key == 'subtitles' and isinstance(value, dict):
-                    value = {k: v for k, v in value.items() if k not in ['whisper_type', 'whisper_model']}
+                    value = {k: v for k, v in value.items() if k not in ['whisper_type']}
 
                 # Filter googler settings to exclude thread counts (global hardware settings)
                 elif key == 'googler' and isinstance(value, dict):
