@@ -167,8 +167,23 @@ class SubtitleEngine:
         return segments
 
     def _parse_srt(self, filename):
-        with open(filename, "r", encoding="utf-8") as f:
-            content = f.read()
+        encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'cp1251', 'latin-1']
+        content = None
+        
+        for encoding in encodings:
+            try:
+                with open(filename, "r", encoding=encoding) as f:
+                    content = f.read()
+                logger.log(f"Successfully read SRT with encoding: {encoding}", LogLevel.DEBUG)
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if content is None:
+            logger.log("Failed to decode SRT with standard encodings. Fallback to 'utf-8' with replacement.", LogLevel.WARNING)
+            with open(filename, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+                
         return self._parse_srt_content(content)
 
     def _parse_srt_content(self, content):
