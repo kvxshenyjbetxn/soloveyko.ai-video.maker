@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, QCombo
                                QLineEdit, QPushButton, QMessageBox, QInputDialog,
                                QSpacerItem, QSizePolicy, QDialog, QTreeView, QGroupBox, QTextEdit,
                                QStyledItemDelegate, QCheckBox, QSpinBox, QDoubleSpinBox, QStyleOptionViewItem,
-                               QApplication, QStyle, QColorDialog, QFontComboBox, QFileDialog)
+                               QApplication, QStyle, QColorDialog, QFontComboBox, QFileDialog, QAbstractItemView)
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor, QBrush
 from PySide6.QtCore import Qt, Signal, QTimer, QModelIndex, QEvent
 
@@ -360,8 +360,7 @@ class PathEditor(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.line_edit = QLineEdit()
-        self.browse_btn = QPushButton("...")
-        self.browse_btn.setMaximumWidth(30)
+        self.browse_btn = QPushButton(translator.translate("browse_button", "Select"))
         self.browse_btn.clicked.connect(self.browse)
         layout.addWidget(self.line_edit)
         layout.addWidget(self.browse_btn)
@@ -381,6 +380,8 @@ class PathEditor(QWidget):
             
         if path:
             self.line_edit.setText(path)
+            # Ensure line_edit signals modification if needed, and restore focus to facilitate commit on blur
+            self.line_edit.setFocus()
 
 class TemplateEditorDialog(QDialog):
     def __init__(self, title, data, parent=None, template_name=None):
@@ -404,6 +405,8 @@ class TemplateEditorDialog(QDialog):
             layout.addWidget(note_label)
 
         self.tree_view = QTreeView()
+        self.tree_view.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.tree_view.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         layout.addWidget(self.tree_view)
 
         self.model = QStandardItemModel()
