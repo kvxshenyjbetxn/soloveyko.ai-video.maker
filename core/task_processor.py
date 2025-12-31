@@ -290,8 +290,15 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         worker.signals.video_generated.connect(self.video_generated)
         worker.signals.video_progress.connect(self._on_video_progress)
         worker.signals.metadata_updated.connect(self._on_metadata_updated)
-        worker.signals.progress_log.connect(self.task_progress_log) # Forward generic logs if needed
+        worker.signals.metadata_updated.connect(self._on_metadata_updated)
+        worker.signals.progress_log.connect(self._on_worker_progress_log)
         self.threadpool.start(worker)
+
+    @Slot(str, str)
+    def _on_worker_progress_log(self, task_id, message):
+        state = self.task_states.get(task_id)
+        if state:
+            self.task_progress_log.emit(state.job_id, message)
 
     @Slot(str, str, str, str)
     def _on_worker_status_changed(self, task_id, image_path, prompt, thumbnail_path):

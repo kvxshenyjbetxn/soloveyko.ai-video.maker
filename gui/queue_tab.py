@@ -326,12 +326,30 @@ class TaskCard(QGroupBox):
             )
     
     def on_progress_log(self, message):
-        """Called for card-only logs (FFmpeg progress)"""
-        if not self.is_expanded:
-            return
+        """Called for card-only logs (FFmpeg progress, Voicemaker progress)"""
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         
-        # Format and append progress message (plain text, no colored icons)
-        formatted_message = f'<font color="#00ffff">{message}</font>'
+        # Determine level based on message content
+        if "success" in message.lower() or "completed" in message.lower():
+            level = LogLevel.SUCCESS
+        elif "error" in message.lower() or "failed" in message.lower():
+            level = LogLevel.ERROR
+        else:
+            level = LogLevel.INFO
+
+        color = level.to_color()
+        icon = level.to_icon()
+        
+        formatted_message = (
+            f'<font color="{color}">'
+            f'<b>[{timestamp}]</b> '
+            f'{icon} '
+            f'<b>{level.name: <7}</b> - '
+            f'{message}'
+            f'</font>'
+        )
+
         self.log_browser.append(formatted_message)
         # Auto-scroll to bottom
         self.log_browser.verticalScrollBar().setValue(

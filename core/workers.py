@@ -129,7 +129,11 @@ class VoiceoverWorker(BaseWorker):
             api = VoicemakerAPI(api_key=api_key)
             voice_id = lang_config.get('voicemaker_voice_id')
             language_code = self.config['voicemaker_lang_code']
-            audio_content, status = api.generate_audio(text, voice_id, language_code, temp_dir=dir_path)
+            
+            def progress_callback(msg):
+                self.signals.progress_log.emit(self.task_id, msg)
+
+            audio_content, status = api.generate_audio(text, voice_id, language_code, temp_dir=dir_path, progress_callback=progress_callback)
             if status == 'success' and audio_content:
                 return self.save_audio(audio_content, "voice.mp3")
             else:

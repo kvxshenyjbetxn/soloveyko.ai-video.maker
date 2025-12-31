@@ -118,7 +118,7 @@ class VoicemakerAPI:
             
         return chunks
 
-    def _generate_chunk(self, text, voice_id, language_code):
+    def _generate_chunk(self, text, voice_id, language_code, progress_callback=None):
         """Internal method to generate audio for a single chunk with retries."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -148,6 +148,9 @@ class VoicemakerAPI:
         for attempt in range(retries):
             try:
                 # First request to get the audio URL
+                if progress_callback:
+                    progress_callback(f"Voicemaker: Sending request for chunk...")
+                
                 response = session.post(self.base_url, headers=headers, json=payload, timeout=timeout)
                 
                 if response.status_code == 200:
@@ -158,6 +161,8 @@ class VoicemakerAPI:
                             # Second request to download the audio file
                             audio_response = session.get(audio_url, timeout=timeout)
                             if audio_response.status_code == 200:
+                                if progress_callback:
+                                    progress_callback(f"Voicemaker: Chunk downloaded successfully.")
                                 return audio_response.content, None # Success
                             else:
                                 error_message = f"Download failed with status {audio_response.status_code}"
@@ -186,7 +191,7 @@ class VoicemakerAPI:
 
         return None, f"Failed after {retries} attempts: {error_message}"
 
-    def generate_audio(self, text, voice_id, language_code="en-US", temp_dir=None):
+    def generate_audio(self, text, voice_id, language_code="en-US", temp_dir=None, progress_callback=None):
         if not self.api_key:
             return None, "not_configured"
 
@@ -197,7 +202,9 @@ class VoicemakerAPI:
 
         if len(chunks) == 1:
             # Simple case: just one chunk
-            content, error = self._generate_chunk(chunks[0], voice_id, language_code)
+            if progress_callback:
+                progress_callback(f"Voicemaker: Sending single chunk request...")
+            content, error = self._generate_chunk(chunks[0], voice_id, language_code, progress_callback)
             if content:
                 return content, "success"
             else:
@@ -220,7 +227,12 @@ class VoicemakerAPI:
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             future_to_index = {}
             for i, chunk in enumerate(chunks):
-                future = executor.submit(self._generate_chunk, chunk, voice_id, language_code)
+                msg = f"Voicemaker: Sending chunk {i+1}/{len(chunks)} | Language: {language_code}"
+                logger.log(msg, level=LogLevel.INFO)
+                if progress_callback:
+                    progress_callback(msg)
+                    
+                future = executor.submit(self._generate_chunk, chunk, voice_id, language_code, progress_callback)
                 future_to_index[future] = i
                 # Increased delay slightly to play nice with rate limits and socket opening
                 time.sleep(1.0) 
