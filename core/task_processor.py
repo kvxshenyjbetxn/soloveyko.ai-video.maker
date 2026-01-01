@@ -123,25 +123,47 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         logger.log(f"Task Processor initialized. Download concurrency: {max_downloads}, Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}, Video concurrency: {max_video}", level=LogLevel.INFO)
 
     def start_processing(self):
-        jobs = self.queue_manager.get_tasks()
-        if not jobs:
+        # Reset finish state
+        self.is_finished = False
+        
+        # Load any new tasks from the queue manager
+        new_tasks_count = self._load_new_tasks_from_queue()
+        
+        if not self.task_states and new_tasks_count == 0:
             logger.log("Queue is empty.", level=LogLevel.INFO)
             return
 
         self.timer.start()
-        self.task_states = {}
-        self.total_subtitle_tasks = 0
-        self.completed_subtitle_tasks = 0
-        self.subtitle_barrier_passed = False
-        self.is_finished = False
-        self.tasks_awaiting_review = []
-        self.montage_tasks_ids = set()
-        self.failed_montage_tasks_ids = set()
         
-        # 1. Initialize all task states
+        logger.log(f"Starting/Resuming processing. Total tracked tasks: {len(self.task_states)}. New tasks added: {new_tasks_count}", level=LogLevel.INFO)
+        
+        # Check if we have any work to do
+        self._start_pending_tasks()
+        self.check_if_all_finished()
+
+    def _load_new_tasks_from_queue(self):
+        """
+        Fetches tasks from QueueManager and adds them to task_states if not already present.
+        Returns the number of new tasks added.
+        """
+        jobs = self.queue_manager.get_tasks()
+        new_tasks_count = 0
+        
         for job in jobs:
             for lang_id, lang_data in job['languages'].items():
                 
+                # Construct a temporary ID to check existence (QueueManager doesn't seem to give unique IDs per lang variant easily available without logic duplication, 
+                # but TaskState constructor does. Let's pre-calculate or check by job_id + lang_id)
+                # TaskState generates ID as f"{job_id}_{lang_id}"
+                
+                potential_task_id = f"{job['id']}_{lang_id}"
+                
+                # improved check: if task exists, we might want to check if it's 'pending' vs 'success' 
+                # but for now, we assume if it's in task_states, it's being handled or done.
+                if potential_task_id in self.task_states:
+                    continue
+
+                # --- Task Initialization Logic (Moved from start_processing) ---
                 current_settings = copy.deepcopy(self.settings.settings)
 
                 global_lang_config = current_settings.get("languages_config", {}).get(lang_id, {})
@@ -223,26 +245,53 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                         logger.log(f"[{state.task_id}] Error processing user-provided files: {e}", level=LogLevel.ERROR)
                 
                 self.task_states[state.task_id] = state
+                new_tasks_count += 1
+                
                 if 'stage_subtitles' in state.stages:
                     self.total_subtitle_tasks += 1
+                    # CRITICAL: Reset barrier if new subtitle tasks are added, so they correctly trigger montage start logic later
+                    self.subtitle_barrier_passed = False
+                
                 if 'stage_montage' in state.stages:
                     self.montage_tasks_ids.add(state.task_id)
 
-        logger.log(f"Starting processing for {len(self.task_states)} language tasks. Montage tasks: {len(self.montage_tasks_ids)}", level=LogLevel.INFO)
+                # Announce initial status
+                for stage_key in state.stages:
+                   self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'pending')
+
+        return new_tasks_count
+
+    def _start_pending_tasks(self):
+        """Starts processing for any tasks that are in 'pending' state."""
         
+        # Check constraints or dependencies if needed
         if self.total_subtitle_tasks == 0:
             self.subtitle_barrier_passed = True
-            logger.log("No subtitle tasks in queue. Barrier passed immediately.", level=LogLevel.INFO)
+            # logger.log("No subtitle tasks in queue. Barrier passed immediately.", level=LogLevel.INFO) # Removing spam
 
+        started_count = 0
         for task_id, state in self.task_states.items():
-            if 'stage_download' in state.stages:
-                self._start_download(task_id)
-            elif 'stage_translation' in state.stages:
-                self._start_translation(task_id)
-                time.sleep(0.5)
-            else:
-                state.text_for_processing = state.original_text
-                self._on_text_ready(task_id)
+            # Check if task is completely untouched (all pending) to start it
+            # Or if it's partially done but stopped?
+            # Simplified: checking the FIRST stage.
+            
+            first_stage_key = state.stages[0] if state.stages else None
+            if not first_stage_key: continue
+
+            # If the very first stage is pending, we assume we need to kickstart this task
+            if state.status.get(first_stage_key) == 'pending':
+                started_count += 1
+                if 'stage_download' in state.stages:
+                    self._start_download(task_id)
+                elif 'stage_translation' in state.stages:
+                    self._start_translation(task_id)
+                    time.sleep(0.1) # Small delay to stagger starts
+                else:
+                    state.text_for_processing = state.original_text
+                    self._on_text_ready(task_id)
+        
+        if started_count > 0:
+            logger.log(f"Started processing for {started_count} pending tasks.", level=LogLevel.INFO)
     
     def _start_worker(self, worker_class, task_id, stage_key, config, on_finish_slot, on_error_slot):
         state = self.task_states[task_id]
@@ -390,16 +439,24 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         if self.is_finished:
             return
 
-        all_done = True
+        all_current_done = True
         for state in self.task_states.values():
             for stage_key in state.stages:
-                if state.status.get(stage_key) == 'pending' or state.status.get(stage_key) == 'processing':
-                    all_done = False
+                status = state.status.get(stage_key)
+                if status == 'pending' or status == 'processing' or status == 'review_required':
+                    all_current_done = False
                     break
-            if not all_done:
+            if not all_current_done:
                 break
         
-        if all_done:
+        if all_current_done:
+            # CHECK FOR NEW TASKS!
+            new_count = self._load_new_tasks_from_queue()
+            if new_count > 0:
+                logger.log(f"Found {new_count} new tasks in queue. Continuing processing loop.", level=LogLevel.INFO)
+                self._start_pending_tasks()
+                return # Do not finish, loop continues
+
             self.is_finished = True
             elapsed_ms = self.timer.elapsed()
             elapsed_str = time.strftime('%H:%M:%S', time.gmtime(elapsed_ms / 1000))

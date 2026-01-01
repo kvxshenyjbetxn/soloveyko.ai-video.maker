@@ -460,6 +460,8 @@ class MainWindow(QMainWindow):
 
     def on_pre_processing_validation_finished(self, is_valid):
         if is_valid:
+            if not self.task_processor.is_finished and self.task_processor.task_states:
+                 logger.log("Processing is already active. Checking for new tasks...", level=LogLevel.INFO)
             self.task_processor.start_processing()
         else:
             # The periodic validation will have already shown a dialog.
