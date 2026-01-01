@@ -15,17 +15,22 @@ class TranslationMixin:
               self.check_if_all_finished
     """
 
-    def _start_rewrite(self, task_id, text, prompt=None):
-        self.openrouter_queue.append((task_id, 'rewrite', (text, prompt)))
+    def _start_rewrite(self, task_id, text, prompt=None, extra_options=None):
+        data = (text, prompt, extra_options)
+        self.openrouter_queue.append((task_id, 'rewrite', data))
         self._process_openrouter_queue()
 
     def _launch_rewrite_worker(self, task_id, extra_data):
         try:
             state = self.task_states[task_id]
-            text, custom_prompt = extra_data
+            text, custom_prompt, extra_options = extra_data
             
             # Smart model selection for Rewrite:
-            model = state.settings.get('rewrite_model')
+            model = None
+            if extra_options and extra_options.get('model'):
+                model = extra_options.get('model')
+            
+            if not model: model = state.settings.get('rewrite_model')
             if not model: model = state.settings.get('model')
             if not model: model = state.lang_data.get('rewrite_model')
             if not model: model = state.lang_data.get('model')
@@ -35,12 +40,22 @@ class TranslationMixin:
                 models = state.settings.get('openrouter_models', [])
                 model = models[0] if models else 'unknown'
             
+            # Extract overrides from extra_options
+            max_tokens = state.lang_data.get('rewrite_max_tokens') or 4096
+            temperature = state.lang_data.get('rewrite_temperature') if state.lang_data.get('rewrite_temperature') is not None else 0.7
+            prompt = custom_prompt if custom_prompt else (state.lang_data.get('rewrite_prompt') or 'Rewrite this text:')
+            
+            if extra_options:
+                if extra_options.get('max_tokens'): max_tokens = int(extra_options.get('max_tokens'))
+                if extra_options.get('temperature') is not None: temperature = float(extra_options.get('temperature'))
+                if extra_options.get('prompt'): prompt = extra_options.get('prompt')
+
             config = {
                 'text': text,
-                'prompt': custom_prompt if custom_prompt else (state.lang_data.get('rewrite_prompt') or 'Rewrite this text:'),
+                'prompt': prompt,
                 'model': model,
-                'max_tokens': state.lang_data.get('rewrite_max_tokens') or 4096,
-                'temperature': state.lang_data.get('rewrite_temperature') if state.lang_data.get('rewrite_temperature') is not None else 0.7,
+                'max_tokens': max_tokens,
+                'temperature': temperature,
                 'openrouter_api_key': state.settings.get('openrouter_api_key')
             }
             self._start_worker(RewriteWorker, task_id, 'stage_rewrite', config, self._on_rewrite_finished, self._on_rewrite_error)
@@ -92,29 +107,50 @@ class TranslationMixin:
             if stage in self.task_states[task_id].stages:
                 self._set_stage_status(task_id, stage, 'error', "Dependency (Rewrite) failed")
 
-    def _start_translation(self, task_id, prompt=None):
-        self.openrouter_queue.append((task_id, 'translation', prompt))
+    def _start_translation(self, task_id, prompt=None, extra_options=None):
+        self.openrouter_queue.append((task_id, 'translation', (prompt, extra_options)))
         self._process_openrouter_queue()
 
-    def _launch_translation_worker(self, task_id, custom_prompt=None):
+    def _launch_translation_worker(self, task_id, extra_data=None):
         try:
             state = self.task_states[task_id]
+            custom_prompt = None
+            extra_options = None
+            
+            if isinstance(extra_data, tuple):
+                custom_prompt, extra_options = extra_data
+            else:
+                custom_prompt = extra_data
             
             # Smart model selection for Translation:
-            model = state.settings.get('model')
+            model = None
+            if extra_options and extra_options.get('model'):
+                model = extra_options.get('model')
+            
+            if not model: model = state.settings.get('model')
             if not model: model = state.lang_data.get('model')
             if not model: model = state.settings.get('languages_config', {}).get(state.lang_id, {}).get('model')
             if not model:
                 models = state.settings.get('openrouter_models', [])
                 model = models[0] if models else 'unknown'
                 
+            # Extract overrides
+            prompt = custom_prompt if custom_prompt else state.lang_data.get('prompt', '')
+            temperature = state.lang_data.get('temperature') if state.lang_data.get('temperature') is not None else 0.7
+            max_tokens = state.lang_data.get('max_tokens') or 4096
+
+            if extra_options:
+                if extra_options.get('prompt'): prompt = extra_options.get('prompt')
+                if extra_options.get('max_tokens'): max_tokens = int(extra_options.get('max_tokens'))
+                if extra_options.get('temperature') is not None: temperature = float(extra_options.get('temperature'))
+
             config = {
                 'text': state.original_text,
                 'lang_config': {
-                    'prompt': custom_prompt if custom_prompt else state.lang_data.get('prompt', ''),
+                    'prompt': prompt,
                     'model': model,
-                    'temperature': state.lang_data.get('temperature') if state.lang_data.get('temperature') is not None else 0.7,
-                    'max_tokens': state.lang_data.get('max_tokens') or 4096
+                    'temperature': temperature,
+                    'max_tokens': max_tokens
                 },
                 'openrouter_api_key': state.settings.get('openrouter_api_key')
             }
@@ -171,18 +207,34 @@ class TranslationMixin:
         if getattr(self, 'subtitle_barrier_passed', False):
             self._check_and_start_montages()
 
-    def regenerate_translation(self, task_id, prompt=None):
-        logger.log(f"[{task_id}] User requested translation regeneration. Custom prompt: {bool(prompt)}", level=LogLevel.INFO)
+    def regenerate_translation(self, task_id, extra_options=None):
+        # extra_options can be a dict or a string (prompt) for backward compatibility if needed, 
+        # but UI sends dict now.
+        prompt = None
+        if isinstance(extra_options, dict):
+            prompt = extra_options.get('prompt')
+        elif isinstance(extra_options, str):
+             prompt = extra_options
+             extra_options = None # Reset if it was just a string prompt
+             
+        logger.log(f"[{task_id}] User requested translation regeneration. Options provided: {bool(extra_options)}", level=LogLevel.INFO)
         if task_id in self.task_states:
             self.task_states[task_id].translation_review_dialog_shown = False
-        self._start_translation(task_id, prompt)
+        self._start_translation(task_id, prompt, extra_options)
 
-    def regenerate_rewrite(self, task_id, prompt=None):
-        logger.log(f"[{task_id}] User requested rewrite regeneration. Custom prompt: {bool(prompt)}", level=LogLevel.INFO)
+    def regenerate_rewrite(self, task_id, extra_options=None):
+        prompt = None
+        if isinstance(extra_options, dict):
+            prompt = extra_options.get('prompt')
+        elif isinstance(extra_options, str):
+             prompt = extra_options
+             extra_options = None
+
+        logger.log(f"[{task_id}] User requested rewrite regeneration. Options provided: {bool(extra_options)}", level=LogLevel.INFO)
         if task_id in self.task_states:
             self.task_states[task_id].rewrite_review_dialog_shown = False
         state = self.task_states[task_id]
-        self._start_rewrite(task_id, state.original_text, prompt)
+        self._start_rewrite(task_id, state.original_text, prompt, extra_options)
 
     def _on_text_ready(self, task_id):
         state = self.task_states[task_id]

@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbst
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray, QTimer
 from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.widgets.animated_tab_widget import AnimatedTabWidget
+from gui.dialogs.prompt_settings_dialog import PromptSettingsDialog
 from gui.qt_material import apply_stylesheet
 from gui.api_workers import ApiKeyCheckWorker, ApiKeyCheckSignals
 
@@ -583,11 +584,11 @@ class MainWindow(QMainWindow):
         # Connect signals for result handling
         dialog.finished.connect(lambda result: self._on_review_dialog_finished(result, dialog, task_id, state, stage))
         
-        def on_regenerate(prompt=None):
+        def on_regenerate(extra_options=None):
             if stage == 'stage_translation':
-                self.task_processor.regenerate_translation(task_id, prompt)
+                self.task_processor.regenerate_translation(task_id, extra_options)
             else:
-                self.task_processor.regenerate_rewrite(task_id, prompt)
+                self.task_processor.regenerate_rewrite(task_id, extra_options)
 
         dialog.regenerate_requested.connect(on_regenerate)
         
@@ -945,16 +946,44 @@ class TextReviewDialog(QDialog):
         self.close() # Close immediately to allow other tasks to proceed
 
     def on_edit_prompt_clicked(self):
+        # Get current settings from state
         current_prompt = ""
+        current_model = None
+        current_temp = None
+        current_tokens = None
+        
+        lang_config = self.state.lang_data
+        
         if self.stage == 'stage_translation':
-            current_prompt = self.state.lang_data.get('prompt', '')
+            current_prompt = lang_config.get('prompt', '')
+            current_model = lang_config.get('model')
+            current_temp = lang_config.get('temperature')
+            current_tokens = lang_config.get('max_tokens')
         else:
-             current_prompt = self.state.lang_data.get('rewrite_prompt') or 'Rewrite this text:'
+            current_prompt = lang_config.get('rewrite_prompt') or 'Rewrite this text:'
+            current_model = lang_config.get('rewrite_model')
+            current_temp = lang_config.get('rewrite_temperature')
+            current_tokens = lang_config.get('rewrite_max_tokens')
 
-        new_prompt, ok = QInputDialog.getMultiLineText(self, self.translator.translate("edit_prompt_title"), self.translator.translate("edit_prompt_text"), current_prompt)
-        if ok:
+        # Fallback to global settings if not found in language config
+        if not current_model:
+            current_model = self.state.settings.get('model')
+        
+        available_models = self.state.settings.get('openrouter_models', [])
+
+        dialog = PromptSettingsDialog(
+            self, 
+            current_prompt, 
+            current_model, 
+            current_temp, 
+            current_tokens, 
+            available_models
+        )
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            data = dialog.get_data()
             self.is_regenerating = True
-            self.regenerate_requested.emit(new_prompt)
+            self.regenerate_requested.emit(data)
             self.close()
 
     def get_text(self):
