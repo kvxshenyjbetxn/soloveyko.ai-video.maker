@@ -139,7 +139,7 @@ class VoicemakerAPI:
             "MasterPitch": "0"
         }
 
-        retries = 10
+        retries = 30
         retry_delay = 5 # seconds
         timeout = 300 # 5 minutes
 
