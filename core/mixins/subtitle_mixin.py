@@ -310,6 +310,21 @@ class SubtitleMixin:
         except Exception as e:
             self._on_transcription_error(task_id, f"Failed to start transcription: {e}")
 
+    @Slot(str, str)
+    def _on_transcription_error(self, task_id, error):
+        state = self.task_states.get(task_id)
+        if state:
+            sub_settings = state.settings.get('subtitles', {})
+            whisper_type = sub_settings.get('whisper_type', 'amd')
+            if whisper_type != 'assemblyai':
+                self.subtitle_semaphore.release()
+                self._process_whisper_queue()
+        
+        self._set_stage_status(task_id, 'stage_transcription', 'error', error)
+        
+        # If transcription fails, we should probably fail dependent stages like rewrite/translation
+        # For now just marking this stage as error solves the crash.
+
     @Slot(str, object)
     def _on_transcription_finished(self, task_id, text):
         state = self.task_states[task_id]
