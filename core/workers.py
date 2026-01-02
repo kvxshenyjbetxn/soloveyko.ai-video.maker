@@ -106,7 +106,7 @@ class ImagePromptWorker(BaseWorker):
             max_tokens=max_tokens,
             temperature=temp
         )
-        if response and response['choices'][0]['message']['content']:
+        if response and response.get('choices') and response['choices'][0]['message']['content']:
             result = response['choices'][0]['message']['content']
             # Count prompts
             prompts = re.findall(r"^\d+\.\s*(.*)", result, re.MULTILINE)
@@ -114,7 +114,7 @@ class ImagePromptWorker(BaseWorker):
             logger.log(f"[{self.task_id}] [{model}] Image prompts generated ({prompts_count} prompts)", level=LogLevel.SUCCESS)
             return result
         else:
-            raise Exception("Empty or invalid response from image prompt API.")
+            raise Exception(f"Empty or invalid response from image prompt API. Response: {response}")
 
 class VoiceoverWorker(BaseWorker):
     def do_work(self):

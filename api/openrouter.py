@@ -131,6 +131,5 @@ class OpenRouterAPI:
             if hasattr(e, 'response') and e.response is not None:
                  error_msg += f"\nResponse status: {e.response.status_code}"
                  error_msg += f"\nResponse body: {e.response.text}"
-            logger.log(error_msg, level=LogLevel.ERROR)
-            print(error_msg)
-            return None
+            logger.log(f"{error_msg}. Retrying...", level=LogLevel.WARNING)
+            raise e
