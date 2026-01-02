@@ -10,6 +10,9 @@ from utils.logger import logger, LogLevel
 # Use thread-local storage at module level to persist sessions across API instances
 thread_local_storage = threading.local()
 
+# Global semaphore to limit concurrent chunks across the entire application
+global_voicemaker_semaphore = threading.Semaphore(30)
+
 class VoicemakerAPI:
     def _get_session(self):
         if not hasattr(thread_local_storage, "session"):
@@ -151,7 +154,9 @@ class VoicemakerAPI:
                 if progress_callback:
                     progress_callback(f"Voicemaker: Sending request for chunk...")
                 
-                response = session.post(self.base_url, headers=headers, json=payload, timeout=timeout)
+                # Acquire global semaphore before making the request
+                with global_voicemaker_semaphore:
+                    response = session.post(self.base_url, headers=headers, json=payload, timeout=timeout)
                 
                 if response.status_code == 200:
                     data = response.json()
