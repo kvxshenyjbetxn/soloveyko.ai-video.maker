@@ -444,7 +444,7 @@ class LanguagesTab(QWidget):
 
     def open_rewrite_prompt_editor(self):
         current_text = self.rewrite_prompt_edit.toPlainText()
-        dialog = PromptEditorDialog(current_text, self)
+        dialog = PromptEditorDialog(self, current_text)
         if dialog.exec():
             self.rewrite_prompt_edit.setPlainText(dialog.get_text())
 
