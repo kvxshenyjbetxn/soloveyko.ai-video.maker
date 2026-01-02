@@ -57,3 +57,29 @@ class ApiKeyCheckWorker(QRunnable):
         finally:
             if pythoncom:
                 pythoncom.CoUninitialize()
+
+class ElevenLabsUnlimBalanceWorker(QRunnable):
+    finished = Signal(int, bool) # balance, success
+
+    def __init__(self, api_key):
+        super().__init__()
+        self.api_key = api_key
+        # Use a custom signal class to avoid QRunnable signal issues if not QObject
+        self.signals = WorkerSignals() 
+
+    def run(self):
+        try:
+            from api.elevenlabs_unlim import ElevenLabsUnlimAPI
+            api = ElevenLabsUnlimAPI(api_key=self.api_key)
+            balance, status = api.get_balance()
+            if status == 'connected' and balance is not None:
+                self.signals.finished.emit(balance, True)
+            else:
+                self.signals.finished.emit(0, False)
+        except Exception as e:
+            logger.log(f"ElevenLabsUnlim balance check failed: {e}", level=LogLevel.ERROR)
+            self.signals.finished.emit(0, False)
+
+class WorkerSignals(QObject):
+    finished = Signal(int, bool)
+

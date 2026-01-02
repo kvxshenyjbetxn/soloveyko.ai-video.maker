@@ -81,6 +81,7 @@ class RewriteTab(QWidget):
         self.openrouter_balance_label = QLabel("OpenRouter: -")
         self.googler_usage_label = QLabel("Googler: -")
         self.elevenlabs_balance_label = QLabel("ElevenLabs: -")
+        self.elevenlabs_unlim_balance_label = QLabel("ElevenLabsUnlim: -")
         self.voicemaker_balance_label = QLabel("Voicemaker: -")
         self.gemini_tts_balance_label = QLabel("GeminiTTS: -")
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
@@ -88,6 +89,8 @@ class RewriteTab(QWidget):
         self.status_bar_layout.addWidget(self.googler_usage_label)
         self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
+        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.elevenlabs_unlim_balance_label)
         self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.voicemaker_balance_label)
         self.status_bar_layout.addSpacing(20)
@@ -409,6 +412,9 @@ class RewriteTab(QWidget):
 
     def update_elevenlabs_balance(self, balance_text):
         self.elevenlabs_balance_label.setText(balance_text)
+
+    def update_elevenlabs_unlim_balance(self, balance_text):
+        self.elevenlabs_unlim_balance_label.setText(balance_text)
 
     def update_voicemaker_balance(self, balance_text):
         self.voicemaker_balance_label.setText(balance_text)

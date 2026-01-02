@@ -422,6 +422,7 @@ class TextTab(QWidget):
         self.openrouter_balance_label = QLabel()
         self.googler_usage_label = QLabel()
         self.elevenlabs_balance_label = QLabel()
+        self.elevenlabs_unlim_balance_label = QLabel()
         self.voicemaker_balance_label = QLabel()
         self.gemini_tts_balance_label = QLabel()
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
@@ -429,6 +430,8 @@ class TextTab(QWidget):
         self.status_bar_layout.addWidget(self.googler_usage_label)
         self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
+        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.elevenlabs_unlim_balance_label)
         self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.voicemaker_balance_label)
         self.status_bar_layout.addSpacing(20)
@@ -710,6 +713,9 @@ class TextTab(QWidget):
 
     def update_elevenlabs_balance(self, balance_text):
         self.elevenlabs_balance_label.setText(balance_text)
+
+    def update_elevenlabs_unlim_balance(self, balance_text):
+        self.elevenlabs_unlim_balance_label.setText(balance_text)
 
     def update_voicemaker_balance(self, balance_text):
         self.voicemaker_balance_label.setText(balance_text)
