@@ -339,5 +339,18 @@ class SubtitleMixin:
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
                 self._process_whisper_queue()
+            
+            # Update stage.text_for_processing or original_text depending on logic
+            # Usually transcription provides the "original text" for further processing
+            state.original_text = text
+            state.text_for_processing = text
 
-        self._set_stage_status(task_id, 'stage_transcription', 'success')
+            self._set_stage_status(task_id, 'stage_transcription', 'success')
+            
+            # Trigger next stage
+            if 'stage_rewrite' in state.stages:
+                self._start_rewrite(task_id, text)
+            elif 'stage_translation' in state.stages:
+                self._start_translation(task_id)
+            else:
+                self._on_text_ready(task_id)
