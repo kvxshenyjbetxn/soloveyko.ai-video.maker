@@ -18,6 +18,7 @@ from api.openrouter import OpenRouterAPI
 from api.pollinations import PollinationsAPI
 from api.googler import GooglerAPI
 from api.elevenlabs import ElevenLabsAPI
+from api.elevenlabs_unlim import ElevenLabsUnlimAPI
 from api.voicemaker import VoicemakerAPI
 from api.gemini_tts import GeminiTTSAPI
 from api.edge_tts_api import EdgeTTSAPI
@@ -179,6 +180,51 @@ class VoiceoverWorker(BaseWorker):
                 return output_path
             else:
                 raise Exception(f"EdgeTTS generation failed: {msg}")
+
+
+
+        elif tts_provider == 'ElevenLabsUnlim':
+            api_key = self.config.get('elevenlabs_unlim_api_key')
+            api = ElevenLabsUnlimAPI(api_key=api_key)
+            unlim_settings = lang_config.get('eleven_unlim_settings', {})
+
+            # Retry logic for task creation
+            task_id = None
+            last_error = "Unknown error"
+            
+            for attempt in range(3):
+                try:
+                    task_id, status = api.create_task(text, unlim_settings)
+                    if status == 'connected' and task_id:
+                        break
+                    else:
+                        last_error = "Failed to obtain valid task_id"
+                        logger.log(f"[{self.task_id}] Attempt {attempt+1}/3 failed to create ElevenLabsUnlim task. Retrying...", level=LogLevel.WARNING)
+                except Exception as e:
+                    last_error = str(e)
+                    logger.log(f"[{self.task_id}] Attempt {attempt+1}/3 raised exception: {e}", level=LogLevel.WARNING)
+                time.sleep(5)
+                
+            if not task_id:
+                raise Exception(f"Failed to create ElevenLabsUnlim task after 3 attempts. Last error: {last_error}")
+            
+            while True:
+                task_status, status = api.get_task_status(task_id)
+                if status != 'connected':
+                    logger.log(f"[{self.task_id}] Weak connection getting status for {task_id}, retrying...", level=LogLevel.WARNING)
+                    time.sleep(5)
+                    continue
+
+                if task_status == 'completed':
+                    audio_content, status = api.get_task_result(task_id)
+                    if status == 'connected' and audio_content:
+                        return self.save_audio(audio_content, "voice.mp3")
+                    else:
+                         raise Exception("Failed to download ElevenLabsUnlim audio.")
+                elif task_status == 'failed' or task_status == 'error': 
+                    raise Exception(f"ElevenLabsUnlim task failed (Status: {task_status}).")
+                
+                time.sleep(10)
 
         else: # ElevenLabs
             api_key = self.config.get('elevenlabs_api_key')

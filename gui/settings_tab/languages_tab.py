@@ -230,7 +230,7 @@ class LanguagesTab(QWidget):
         # TTS Provider
         self.tts_provider_label = QLabel("TTS Provider:")
         self.tts_provider_combo = QComboBox()
-        self.tts_provider_combo.addItems(["ElevenLabs", "VoiceMaker", "GeminiTTS", "EdgeTTS"])
+        self.tts_provider_combo.addItems(["ElevenLabs", "ElevenLabsUnlim", "VoiceMaker", "GeminiTTS", "EdgeTTS"])
         self.tts_provider_combo.currentIndexChanged.connect(self.on_tts_provider_changed)
         self.tts_provider_combo.currentIndexChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.tts_provider_label, self.tts_provider_combo)
@@ -240,6 +240,47 @@ class LanguagesTab(QWidget):
         self.elevenlabs_template_combo = QComboBox()
         self.elevenlabs_template_combo.currentIndexChanged.connect(self.save_current_language_settings)
         settings_layout.addRow(self.elevenlabs_template_label, self.elevenlabs_template_combo)
+
+        # ElevenLabs Unlim Settings
+        self.eleven_unlim_group = QGroupBox("ElevenLabs Unlim Settings")
+        eleven_unlim_layout = QFormLayout(self.eleven_unlim_group)
+
+        self.eleven_unlim_voice_id_label = QLabel("Voice ID:")
+        self.eleven_unlim_voice_id_input = QLineEdit()
+        self.eleven_unlim_voice_id_input.textChanged.connect(self.save_current_language_settings)
+        eleven_unlim_layout.addRow(self.eleven_unlim_voice_id_label, self.eleven_unlim_voice_id_input)
+
+        self.eleven_unlim_stability_label = QLabel("Stability:")
+        self.eleven_unlim_stability_spin = QDoubleSpinBox()
+        self.eleven_unlim_stability_spin.setRange(0.0, 1.0)
+        self.eleven_unlim_stability_spin.setSingleStep(0.1)
+        self.eleven_unlim_stability_spin.setValue(0.5)
+        self.eleven_unlim_stability_spin.valueChanged.connect(self.save_current_language_settings)
+        eleven_unlim_layout.addRow(self.eleven_unlim_stability_label, self.eleven_unlim_stability_spin)
+
+        self.eleven_unlim_similarity_label = QLabel("Similarity Boost:")
+        self.eleven_unlim_similarity_spin = QDoubleSpinBox()
+        self.eleven_unlim_similarity_spin.setRange(0.0, 1.0)
+        self.eleven_unlim_similarity_spin.setSingleStep(0.1)
+        self.eleven_unlim_similarity_spin.setValue(0.75)
+        self.eleven_unlim_similarity_spin.valueChanged.connect(self.save_current_language_settings)
+        eleven_unlim_layout.addRow(self.eleven_unlim_similarity_label, self.eleven_unlim_similarity_spin)
+
+        self.eleven_unlim_style_label = QLabel("Style:")
+        self.eleven_unlim_style_spin = QDoubleSpinBox()
+        self.eleven_unlim_style_spin.setRange(0.0, 1.0)
+        self.eleven_unlim_style_spin.setSingleStep(0.1)
+        self.eleven_unlim_style_spin.setValue(0.0)
+        self.eleven_unlim_style_spin.valueChanged.connect(self.save_current_language_settings)
+        eleven_unlim_layout.addRow(self.eleven_unlim_style_label, self.eleven_unlim_style_spin)
+
+        self.eleven_unlim_boost_label = QLabel("Speaker Boost:")
+        self.eleven_unlim_boost_check = QComboBox()
+        self.eleven_unlim_boost_check.addItems(["True", "False"])
+        self.eleven_unlim_boost_check.currentIndexChanged.connect(self.save_current_language_settings)
+        eleven_unlim_layout.addRow(self.eleven_unlim_boost_label, self.eleven_unlim_boost_check)
+
+        settings_layout.addRow(self.eleven_unlim_group)
 
         # VoiceMaker Settings
         self.voicemaker_voice_label = QLabel("VoiceMaker Voice:")
@@ -611,7 +652,12 @@ class LanguagesTab(QWidget):
         self.edgetts_rate_label.setVisible(is_edge)
         self.edgetts_rate_spinbox.setVisible(is_edge)
         self.edgetts_pitch_label.setVisible(is_edge)
+        self.edgetts_pitch_label.setVisible(is_edge)
         self.edgetts_pitch_spinbox.setVisible(is_edge)
+
+        # ElevenLabs Unlim
+        is_eleven_unlim = (provider == "ElevenLabsUnlim")
+        self.eleven_unlim_group.setVisible(is_eleven_unlim)
 
     def on_language_selected(self, current, previous):
         self._is_loading_lang_settings = True
@@ -661,6 +707,13 @@ class LanguagesTab(QWidget):
             self.bg_music_volume_slider.blockSignals(True)
             self.watermark_size_slider.blockSignals(True)
             self.watermark_position_combo.blockSignals(True)
+            self.watermark_size_slider.blockSignals(True)
+            self.watermark_position_combo.blockSignals(True)
+            self.eleven_unlim_voice_id_input.blockSignals(True)
+            self.eleven_unlim_stability_spin.blockSignals(True)
+            self.eleven_unlim_similarity_spin.blockSignals(True)
+            self.eleven_unlim_style_spin.blockSignals(True)
+            self.eleven_unlim_boost_check.blockSignals(True)
             self.default_template_combo.blockSignals(True)
             # No block signals needed for inputs that are read-only and updated by buttons,
             # but usually good practice if we were using textChanged on them.
@@ -680,7 +733,17 @@ class LanguagesTab(QWidget):
             # ElevenLabs Template
             current_template_uuid = config.get("elevenlabs_template_uuid", "")
             template_index = self.elevenlabs_template_combo.findData(current_template_uuid)
+            template_index = self.elevenlabs_template_combo.findData(current_template_uuid)
             self.elevenlabs_template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
+
+            # ElevenLabs Unlim Settings
+            unlim_settings = config.get("eleven_unlim_settings", {})
+            self.eleven_unlim_voice_id_input.setText(unlim_settings.get("voice_id", ""))
+            self.eleven_unlim_stability_spin.setValue(unlim_settings.get("stability", 0.5))
+            self.eleven_unlim_similarity_spin.setValue(unlim_settings.get("similarity_boost", 0.75))
+            self.eleven_unlim_style_spin.setValue(unlim_settings.get("style", 0.0))
+            use_boost = unlim_settings.get("use_speaker_boost", True)
+            self.eleven_unlim_boost_check.setCurrentIndex(0 if use_boost else 1)
 
             # VoiceMaker Voice
             self.populate_voicemaker_voices(self.current_lang_id)
@@ -771,6 +834,11 @@ class LanguagesTab(QWidget):
             self.rewrite_model_combo.blockSignals(False)
             self.rewrite_tokens_spinbox.blockSignals(False)
             self.rewrite_temperature_spinbox.blockSignals(False)
+            self.eleven_unlim_voice_id_input.blockSignals(False)
+            self.eleven_unlim_stability_spin.blockSignals(False)
+            self.eleven_unlim_similarity_spin.blockSignals(False)
+            self.eleven_unlim_style_spin.blockSignals(False)
+            self.eleven_unlim_boost_check.blockSignals(False)
 
             
             self.right_panel.setVisible(True)
@@ -881,6 +949,14 @@ class LanguagesTab(QWidget):
 
 
         # Explicitly save the entire settings file
+        lang_settings["eleven_unlim_settings"] = {
+            "voice_id": self.eleven_unlim_voice_id_input.text(),
+            "stability": self.eleven_unlim_stability_spin.value(),
+            "similarity_boost": self.eleven_unlim_similarity_spin.value(),
+            "style": self.eleven_unlim_style_spin.value(),
+            "use_speaker_boost": (self.eleven_unlim_boost_check.currentText() == "True")
+        }
+
         self.settings.save_settings()
 
     def update_fields(self):

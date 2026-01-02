@@ -8,7 +8,8 @@ from core.workers import VoiceoverWorker, SubtitleWorker, TranscriptionWorker
 class SubtitleMixin:
     """
     Mixin for TaskProcessor to handle Voiceover, Subtitles, and Transcription.
-    Requires: self.task_states, self.settings, self.elevenlabs_queue, self.elevenlabs_active_count,
+    Requires: self.task_states, self.settings,              self.elevenlabs_queue, self.elevenlabs_active_count,
+              self.elevenlabs_unlim_queue, self.elevenlabs_unlim_active_count,
               self.edgetts_queue, self.edgetts_active_count,
               self.whisper_queue, self.subtitle_semaphore, self.subtitle_lock,
               self.completed_subtitle_tasks, self.total_subtitle_tasks, self.subtitle_barrier_passed,
@@ -77,7 +78,9 @@ class SubtitleMixin:
             'dir_path': state.dir_path,
             'lang_config': lang_config,
             'voicemaker_api_key': task_settings.get('voicemaker_api_key'),
+            'voicemaker_api_key': task_settings.get('voicemaker_api_key'),
             'elevenlabs_api_key': task_settings.get('elevenlabs_api_key'),
+            'elevenlabs_unlim_api_key': task_settings.get('elevenlabs_unlim_api_key'),
             'gemini_tts_api_key': task_settings.get('gemini_tts_api_key'),
             'voicemaker_lang_code': self._get_voicemaker_language_code(lang_config.get('voicemaker_voice_id')),
             'job_name': state.job_name,
@@ -88,6 +91,9 @@ class SubtitleMixin:
         if tts_provider == 'ElevenLabs':
             self.elevenlabs_queue.append((task_id, config))
             self._process_elevenlabs_queue()
+        elif tts_provider == 'ElevenLabsUnlim':
+            self.elevenlabs_unlim_queue.append((task_id, config))
+            self._process_elevenlabs_unlim_queue()
         elif tts_provider == 'EdgeTTS':
             self.edgetts_queue.append((task_id, config))
             self._process_edgetts_queue()
@@ -100,6 +106,14 @@ class SubtitleMixin:
             task_id, config = self.elevenlabs_queue.popleft()
             self.elevenlabs_active_count += 1
             self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
+
+    def _process_elevenlabs_unlim_queue(self):
+        max_threads = 5
+        while self.elevenlabs_unlim_queue and self.elevenlabs_unlim_active_count < max_threads:
+            task_id, config = self.elevenlabs_unlim_queue.popleft()
+            self.elevenlabs_unlim_active_count += 1
+            self._start_worker(VoiceoverWorker, task_id, 'stage_voiceover', config, self._on_voiceover_finished, self._on_voiceover_error)
+
         
     def _process_edgetts_queue(self):
         max_threads = 5 # Fixed limit as per requirement
@@ -116,6 +130,9 @@ class SubtitleMixin:
         if tts_provider == 'ElevenLabs':
             self.elevenlabs_active_count -= 1
             self._process_elevenlabs_queue()
+        elif tts_provider == 'ElevenLabsUnlim':
+            self.elevenlabs_unlim_active_count -= 1
+            self._process_elevenlabs_unlim_queue()
         elif tts_provider == 'EdgeTTS':
             self.edgetts_active_count -= 1
             self._process_edgetts_queue()
@@ -150,6 +167,9 @@ class SubtitleMixin:
             if tts_provider == 'ElevenLabs':
                 self.elevenlabs_active_count -= 1
                 self._process_elevenlabs_queue()
+            elif tts_provider == 'ElevenLabsUnlim':
+                self.elevenlabs_unlim_active_count -= 1
+                self._process_elevenlabs_unlim_queue()
             elif tts_provider == 'EdgeTTS':
                 self.edgetts_active_count -= 1
                 self._process_edgetts_queue()

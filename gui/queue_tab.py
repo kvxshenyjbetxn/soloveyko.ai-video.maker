@@ -403,6 +403,7 @@ class QueueTab(QWidget):
         self.balance_label = QLabel()
         self.googler_usage_label = QLabel()
         self.elevenlabs_balance_label = QLabel()
+        self.elevenlabs_unlim_balance_label = QLabel()
         self.voicemaker_balance_label = QLabel()
         self.gemini_tts_balance_label = QLabel()
         top_layout.addWidget(self.balance_label)
@@ -410,6 +411,8 @@ class QueueTab(QWidget):
         top_layout.addWidget(self.googler_usage_label)
         top_layout.addSpacing(20)
         top_layout.addWidget(self.elevenlabs_balance_label)
+        top_layout.addSpacing(20)
+        top_layout.addWidget(self.elevenlabs_unlim_balance_label)
         top_layout.addSpacing(20)
         top_layout.addWidget(self.voicemaker_balance_label)
         top_layout.addSpacing(20)
@@ -526,6 +529,9 @@ class QueueTab(QWidget):
 
     def update_elevenlabs_balance(self, balance_text):
         self.elevenlabs_balance_label.setText(balance_text)
+
+    def update_elevenlabs_unlim_balance(self, balance_text):
+        self.elevenlabs_unlim_balance_label.setText(balance_text)
 
     def update_voicemaker_balance(self, balance_text):
         self.voicemaker_balance_label.setText(balance_text)

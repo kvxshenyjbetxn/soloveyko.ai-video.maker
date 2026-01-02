@@ -96,6 +96,10 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         # ElevenLabs concurrency
         self.elevenlabs_active_count = 0
         self.elevenlabs_queue = collections.deque()
+        
+        # ElevenLabs Unlim concurrency
+        self.elevenlabs_unlim_active_count = 0
+        self.elevenlabs_unlim_queue = collections.deque()
 
         # EdgeTTS concurrency
         self.edgetts_active_count = 0
