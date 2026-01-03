@@ -363,5 +363,8 @@
     "edgetts_pitch_label": "EdgeTTS Pitch (Hz):",
     "edit_prompt_button": "Edit Prompt (1x)",
     "edit_prompt_title": "Edit Prompt",
-    "edit_prompt_text": "Enter new prompt (for this generation only):"
+    "edit_prompt_text": "Enter new prompt (for this generation only):",
+    "aspect_ratio": "Aspect Ratio:",
+    "max_threads": "Max Threads:",
+    "elevenlabs_image_tab_title": "ElevenLabsImage"
 }

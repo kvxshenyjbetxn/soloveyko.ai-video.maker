@@ -22,6 +22,7 @@ from api.elevenlabs_unlim import ElevenLabsUnlimAPI
 from api.voicemaker import VoicemakerAPI
 from api.gemini_tts import GeminiTTSAPI
 from api.edge_tts_api import EdgeTTSAPI
+from api.elevenlabs_image import ElevenLabsImageAPI
 from core.subtitle_engine import SubtitleEngine
 from core.montage_engine import MontageEngine
 from core.statistics_manager import statistics_manager
@@ -364,6 +365,11 @@ class ImageGenerationWorker(BaseWorker):
             file_extension = 'jpg'
             api_key = self.config.get('api_key')
             shared_api = GooglerAPI(api_key=api_key)
+            api_kwargs = self.config['api_kwargs']
+        elif provider == 'elevenlabs_image':
+            file_extension = 'jpg' # Assuming jpg
+            api_key = self.config.get('api_key')
+            shared_api = ElevenLabsImageAPI(api_key=api_key)
             api_kwargs = self.config['api_kwargs']
         else: # pollinations
             file_extension = 'png'

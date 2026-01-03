@@ -3,6 +3,7 @@ from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from utils.translator import translator
 from .pollinations_tab import PollinationsTab
 from .googler_tab import GooglerTab
+from .elevenlabs_image_tab import ElevenLabsImageTab
 
 class ImageTab(QWidget):
 
@@ -43,6 +44,10 @@ class ImageTab(QWidget):
         self.googler_tab = GooglerTab()
 
         self.tabs.addTab(self.googler_tab, "Googler")
+        
+        # Add ElevenLabsImage Tab
+        self.elevenlabs_image_tab = ElevenLabsImageTab()
+        self.tabs.addTab(self.elevenlabs_image_tab, "ElevenLabsImage")
 
 
 
@@ -51,10 +56,14 @@ class ImageTab(QWidget):
         self.tabs.setTabText(0, translator.translate("pollinations_tab_title"))
 
         self.tabs.setTabText(1, translator.translate("googler_tab_title"))
+        
+        self.tabs.setTabText(2, translator.translate("elevenlabs_image_tab_title"))
 
         self.pollinations_tab.translate_ui()
 
         self.googler_tab.translate_ui()
+        
+        self.elevenlabs_image_tab.translate_ui()
 
 
 
@@ -63,3 +72,5 @@ class ImageTab(QWidget):
         self.pollinations_tab.update_fields()
 
         self.googler_tab.update_fields()
+        
+        self.elevenlabs_image_tab.update_fields()

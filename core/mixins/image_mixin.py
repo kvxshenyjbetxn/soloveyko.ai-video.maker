@@ -134,6 +134,13 @@ class ImageMixin:
                 'seed': googler_settings.get('seed'),
                 'negative_prompt': googler_settings.get('negative_prompt')
             }
+        elif provider == 'elevenlabs_image':
+            elevenlabs_image_settings = state.settings.get('elevenlabs_image', {})
+            api_kwargs = {
+                'aspect_ratio': elevenlabs_image_settings.get('aspect_ratio', '16:9')
+            }
+            # api_key is passed in config
+            
         elif provider == 'pollinations':
             pollinations_settings = state.settings.get('pollinations', {})
             # Filter kwargs to only include valid arguments for the generate_image method
@@ -141,14 +148,26 @@ class ImageMixin:
             valid_keys = ['model', 'width', 'height', 'nologo', 'enhance']
             api_kwargs = {k: v for k, v in pollinations_settings.items() if k in valid_keys}
 
+        # Determine effective max_threads for the current provider
+        if provider == 'googler':
+             current_max_threads = googler_settings.get("max_threads", 8)
+             current_api_key = googler_settings.get('api_key')
+        elif provider == 'elevenlabs_image':
+             elevenlabs_image_settings = state.settings.get('elevenlabs_image', {})
+             current_max_threads = elevenlabs_image_settings.get("max_threads", 5)
+             current_api_key = elevenlabs_image_settings.get('api_key')
+        else:
+             current_max_threads = 8 # Default for pollinations (sequential anyway)
+             current_api_key = None
+
         config = {
             'prompts_text': state.image_prompts,
             'dir_path': state.dir_path,
             'provider': provider,
             'api_kwargs': api_kwargs,
-            'api_key': googler_settings.get('api_key'), # Only used for Googler
+            'api_key': current_api_key, 
             'executor': self.image_gen_executor,
-            'max_threads': googler_settings.get("max_threads", 8)
+            'max_threads': current_max_threads
         }
         self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
 
