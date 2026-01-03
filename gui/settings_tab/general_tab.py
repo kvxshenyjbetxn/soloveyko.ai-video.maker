@@ -59,6 +59,7 @@ class GeneralTab(QWidget):
         self.image_provider_combo = QComboBox()
         self.image_provider_combo.addItem("Pollinations", "pollinations")
         self.image_provider_combo.addItem("Googler", "googler")
+        self.image_provider_combo.addItem("ElevenLabsImage", "elevenlabs_image")
         self.image_provider_combo.currentIndexChanged.connect(self.image_provider_changed)
         form_layout.addRow(self.image_provider_label, self.image_provider_combo)
 
