@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from utils.settings import settings_manager
 from utils.translator import translator
+from gui.widgets.help_label import HelpLabel
 
 class SubtitlesTab(QWidget):
     def __init__(self):
@@ -48,9 +49,25 @@ class SubtitlesTab(QWidget):
         self.rb_standard.toggled.connect(self.on_engine_changed)
         self.rb_assemblyai.toggled.connect(self.on_engine_changed)
         
-        engine_layout.addWidget(self.rb_standard)
-        engine_layout.addWidget(self.rb_amd)
-        engine_layout.addWidget(self.rb_assemblyai)
+        # Add labels with help icons
+        self.standard_help = HelpLabel("standard_python_hint")
+        self.amd_help = HelpLabel("amd_gpu_fork_hint")
+        self.assemblyai_help = HelpLabel("assemblyai_hint")
+
+        def create_radio_container(rb, help_label):
+            container = QWidget()
+            cont_layout = QHBoxLayout(container)
+            cont_layout.setContentsMargins(0, 0, 5, 0)
+            cont_layout.setSpacing(5)
+            cont_layout.addWidget(help_label)
+            cont_layout.addWidget(rb)
+            return container
+
+        engine_layout.addWidget(create_radio_container(self.rb_standard, self.standard_help))
+        engine_layout.addWidget(create_radio_container(self.rb_amd, self.amd_help))
+        engine_layout.addWidget(create_radio_container(self.rb_assemblyai, self.assemblyai_help))
+        engine_layout.addStretch()
+
         self.engine_group.setLayout(engine_layout)
         layout.addWidget(self.engine_group)
 
@@ -61,7 +78,16 @@ class SubtitlesTab(QWidget):
         self.model_label = QLabel()
         self.model_combo = QComboBox()
         self.model_combo.currentTextChanged.connect(self.save_settings)
-        whisper_layout.addRow(self.model_label, self.model_combo)
+        
+        self.model_help = HelpLabel("whisper_model_hint")
+        model_label_container = QWidget()
+        model_label_layout = QHBoxLayout(model_label_container)
+        model_label_layout.setContentsMargins(0, 0, 0, 0)
+        model_label_layout.setSpacing(5)
+        model_label_layout.addWidget(self.model_help)
+        model_label_layout.addWidget(self.model_label)
+
+        whisper_layout.addRow(model_label_container, self.model_combo)
 
         self.whisper_group.setLayout(whisper_layout)
         layout.addWidget(self.whisper_group)
@@ -90,7 +116,16 @@ class SubtitlesTab(QWidget):
         self.margin_v_spin = QSpinBox()
         self.margin_v_spin.setRange(0, 500)
         self.margin_v_spin.valueChanged.connect(self.save_settings)
-        style_layout.addRow(self.margin_v_label, self.margin_v_spin)
+        
+        self.margin_v_help = HelpLabel("vertical_margin_hint")
+        margin_v_container = QWidget()
+        margin_v_layout = QHBoxLayout(margin_v_container)
+        margin_v_layout.setContentsMargins(0, 0, 0, 0)
+        margin_v_layout.setSpacing(5)
+        margin_v_layout.addWidget(self.margin_v_help)
+        margin_v_layout.addWidget(self.margin_v_label)
+
+        style_layout.addRow(margin_v_container, self.margin_v_spin)
 
         self.style_group.setLayout(style_layout)
         layout.addWidget(self.style_group)
@@ -104,20 +139,44 @@ class SubtitlesTab(QWidget):
         self.fade_in_spin.setRange(0, 5000)
         self.fade_in_spin.setSuffix(" ms")
         self.fade_in_spin.valueChanged.connect(self.save_settings)
-        logic_layout.addRow(self.fade_in_label, self.fade_in_spin)
+        
+        self.fade_in_help = HelpLabel("fade_hint")
+        fade_in_container = QWidget()
+        fade_in_layout = QHBoxLayout(fade_in_container)
+        fade_in_layout.setContentsMargins(0, 0, 0, 0)
+        fade_in_layout.setSpacing(5)
+        fade_in_layout.addWidget(self.fade_in_help)
+        fade_in_layout.addWidget(self.fade_in_label)
+        logic_layout.addRow(fade_in_container, self.fade_in_spin)
 
         self.fade_out_label = QLabel()
         self.fade_out_spin = QSpinBox()
         self.fade_out_spin.setRange(0, 5000)
         self.fade_out_spin.setSuffix(" ms")
         self.fade_out_spin.valueChanged.connect(self.save_settings)
-        logic_layout.addRow(self.fade_out_label, self.fade_out_spin)
+
+        self.fade_out_help = HelpLabel("fade_hint")
+        fade_out_container = QWidget()
+        fade_out_layout = QHBoxLayout(fade_out_container)
+        fade_out_layout.setContentsMargins(0, 0, 0, 0)
+        fade_out_layout.setSpacing(5)
+        fade_out_layout.addWidget(self.fade_out_help)
+        fade_out_layout.addWidget(self.fade_out_label)
+        logic_layout.addRow(fade_out_container, self.fade_out_spin)
 
         self.max_words_label = QLabel()
         self.max_words_spin = QSpinBox()
         self.max_words_spin.setRange(1, 50)
         self.max_words_spin.valueChanged.connect(self.save_settings)
-        logic_layout.addRow(self.max_words_label, self.max_words_spin)
+
+        self.max_words_help = HelpLabel("max_words_hint")
+        max_words_container = QWidget()
+        max_words_layout = QHBoxLayout(max_words_container)
+        max_words_layout.setContentsMargins(0, 0, 0, 0)
+        max_words_layout.setSpacing(5)
+        max_words_layout.addWidget(self.max_words_help)
+        max_words_layout.addWidget(self.max_words_label)
+        logic_layout.addRow(max_words_container, self.max_words_spin)
 
         self.logic_group.setLayout(logic_layout)
         layout.addWidget(self.logic_group)
@@ -197,6 +256,15 @@ class SubtitlesTab(QWidget):
         self.fade_in_label.setText(translator.translate("fade_in_label"))
         self.fade_out_label.setText(translator.translate("fade_out_label"))
         self.max_words_label.setText(translator.translate("max_words_per_line_label"))
+
+        self.standard_help.update_tooltip()
+        self.amd_help.update_tooltip()
+        self.assemblyai_help.update_tooltip()
+        self.model_help.update_tooltip()
+        self.margin_v_help.update_tooltip()
+        self.fade_in_help.update_tooltip()
+        self.fade_out_help.update_tooltip()
+        self.max_words_help.update_tooltip()
 
     def update_models_list(self):
         self.model_combo.blockSignals(True)
