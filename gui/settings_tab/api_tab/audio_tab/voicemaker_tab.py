@@ -1,7 +1,8 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QSpinBox
+from api.voicemaker import VoicemakerAPI
+from gui.widgets.help_label import HelpLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QSpinBox, QWidget
 from utils.translator import translator
 from utils.settings import settings_manager
-from api.voicemaker import VoicemakerAPI
 
 class VoicemakerTab(QWidget):
     def __init__(self, main_window=None):
@@ -27,13 +28,22 @@ class VoicemakerTab(QWidget):
 
         # Character Limit
         limit_layout = QHBoxLayout()
+        self.limit_help = HelpLabel("char_limit")
         self.limit_label = QLabel(translator.translate("char_limit"))
+        
+        limit_label_container = QWidget()
+        limit_label_layout = QHBoxLayout(limit_label_container)
+        limit_label_layout.setContentsMargins(0, 0, 0, 0)
+        limit_label_layout.setSpacing(5)
+        limit_label_layout.addWidget(self.limit_help)
+        limit_label_layout.addWidget(self.limit_label)
+        
         self.limit_input = QSpinBox()
         self.limit_input.setRange(100, 100000)
         self.limit_input.setSingleStep(100)
         self.limit_input.setValue(2900) # Default
         self.limit_input.valueChanged.connect(self.save_char_limit)
-        limit_layout.addWidget(self.limit_label)
+        limit_layout.addWidget(limit_label_container)
         limit_layout.addWidget(self.limit_input)
         layout.addLayout(limit_layout)
 
@@ -70,6 +80,7 @@ class VoicemakerTab(QWidget):
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
         self.limit_label.setText(translator.translate("char_limit"))
+        self.limit_help.update_tooltip()
         self.info_label.setText(translator.translate("voicemaker_info"))
         self.update_connection_status_label()
         
