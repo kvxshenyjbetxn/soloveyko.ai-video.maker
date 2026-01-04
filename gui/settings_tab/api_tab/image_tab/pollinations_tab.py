@@ -45,6 +45,16 @@ class PollinationsTab(QWidget):
         self.enhance_checkbox = QCheckBox()
         layout.addRow(self.enhance_checkbox)
 
+        # Info Link
+        self.info_layout = QHBoxLayout()
+        self.info_label = QLabel()
+        self.link_label = QLabel('<a href="https://pollinations.ai/play" style="color: #0078d4;">https://pollinations.ai/play</a>')
+        self.link_label.setOpenExternalLinks(True)
+        self.info_layout.addWidget(self.info_label)
+        self.info_layout.addWidget(self.link_label)
+        self.info_layout.addStretch()
+        layout.addRow("", self.info_layout)
+
         self.setLayout(layout)
 
     def connect_signals(self):
@@ -62,6 +72,7 @@ class PollinationsTab(QWidget):
         self.size_label.setText(translator.translate("image_size_label"))
         self.nologo_checkbox.setText(translator.translate("nologo_label"))
         self.enhance_checkbox.setText(translator.translate("enhance_prompt_label"))
+        self.info_label.setText(translator.translate("pollinations_info"))
 
     def update_fields(self):
         self.model_combo.blockSignals(True)

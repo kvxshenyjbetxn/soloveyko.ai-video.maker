@@ -35,12 +35,23 @@ class AssemblyAITab(QWidget):
         max_threads_layout.addWidget(self.max_threads_input)
         layout.addLayout(max_threads_layout)
 
+        # Info Link
+        self.info_layout = QHBoxLayout()
+        self.info_label = QLabel()
+        self.link_label = QLabel('<a href="https://www.assemblyai.com/" style="color: #0078d4;">https://www.assemblyai.com/</a>')
+        self.link_label.setOpenExternalLinks(True)
+        self.info_layout.addWidget(self.info_label)
+        self.info_layout.addWidget(self.link_label)
+        self.info_layout.addStretch()
+        layout.addLayout(self.info_layout)
+
         layout.addStretch()
 
     def retranslate_ui(self):
         self.api_key_label.setText(translator.translate("assemblyai_api_key"))
         self.max_threads_label.setText(translator.translate("assemblyai_max_threads"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
+        self.info_label.setText(translator.translate("assemblyai_info"))
 
     def update_fields(self):
         self.api_key_input.blockSignals(True)

@@ -368,5 +368,11 @@
     "max_threads": "Max Threads:",
     "elevenlabs_image_tab_title": "ElevenLabsImage",
     "edgetts_info": "This service does not require any global settings, API keys, or registration.",
-    "edgetts_test_link": "You can test the service and choose voices at this link:"
+    "edgetts_test_link": "You can test the service and choose voices at this link:",
+    "elevenlabs_buy_info": "You can buy an API key (limits) for ElevenLabs here:",
+    "elevenlabs_unlim_buy_info": "You can buy an API key (limits) for ElevenLabs Unlimited here:",
+    "pollinations_info": "You can test the service and get a token at this link:",
+    "openrouter_info": "Here you can choose models and top up your balance:",
+    "voicemaker_info": "You can top up your balance and get a token here:",
+    "assemblyai_info": "You can get an API key on the official website:"
 }

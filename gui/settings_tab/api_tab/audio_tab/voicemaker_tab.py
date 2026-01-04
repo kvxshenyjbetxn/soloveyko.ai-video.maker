@@ -53,6 +53,16 @@ class VoicemakerTab(QWidget):
         balance_layout.addStretch()
         layout.addLayout(balance_layout)
 
+        # Info Link
+        self.info_layout = QHBoxLayout()
+        self.info_label = QLabel()
+        self.link_label = QLabel('<a href="https://developer.voicemaker.in/dashboard" style="color: #0078d4;">https://developer.voicemaker.in/dashboard</a>')
+        self.link_label.setOpenExternalLinks(True)
+        self.info_layout.addWidget(self.info_label)
+        self.info_layout.addWidget(self.link_label)
+        self.info_layout.addStretch()
+        layout.addLayout(self.info_layout)
+
         layout.addStretch()
 
     def retranslate_ui(self):
@@ -60,6 +70,7 @@ class VoicemakerTab(QWidget):
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
         self.limit_label.setText(translator.translate("char_limit"))
+        self.info_label.setText(translator.translate("voicemaker_info"))
         self.update_connection_status_label()
         
         # Preserve current balance text if it has a value, otherwise reset to default

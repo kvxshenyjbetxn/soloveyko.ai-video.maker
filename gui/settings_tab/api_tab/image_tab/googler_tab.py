@@ -63,6 +63,16 @@ class GooglerTab(QWidget):
         self.negative_prompt_input = QLineEdit()
         layout.addRow(self.negative_prompt_label, self.negative_prompt_input)
 
+        # Buy API Key Link
+        self.buy_info_layout = QHBoxLayout()
+        self.buy_info_label = QLabel()
+        self.buy_link_label = QLabel('<a href="https://t.me/logovo_shop_bot" style="color: #0078d4;">@logovo_shop_bot</a>')
+        self.buy_link_label.setOpenExternalLinks(True)
+        self.buy_info_layout.addWidget(self.buy_info_label)
+        self.buy_info_layout.addWidget(self.buy_link_label)
+        self.buy_info_layout.addStretch()
+        layout.addRow("", self.buy_info_layout)
+
         self.setLayout(layout)
 
     def connect_signals(self):
@@ -77,6 +87,7 @@ class GooglerTab(QWidget):
     def translate_ui(self):
         self.api_key_label.setText(translator.translate("googler_api_key_label"))
         self.api_key_input.setPlaceholderText(translator.translate("googler_api_key_placeholder"))
+        self.buy_info_label.setText(translator.translate("googler_buy_info"))
         self.usage_label.setText(translator.translate("googler_usage_label"))
         self.check_usage_button.setText(translator.translate("googler_check_usage_button"))
         self.aspect_ratio_label.setText(translator.translate("googler_aspect_ratio_label"))

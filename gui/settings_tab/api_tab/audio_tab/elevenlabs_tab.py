@@ -41,12 +41,23 @@ class ElevenLabsTab(QWidget):
         connection_layout.addWidget(self.check_connection_button)
         layout.addLayout(connection_layout)
 
+        # Buy API Key Link
+        self.buy_info_layout = QHBoxLayout()
+        self.buy_info_label = QLabel()
+        self.buy_link_label = QLabel('<a href="https://t.me/elevenLabsVoicerBot" style="color: #0078d4;">@elevenLabsVoicerBot</a>')
+        self.buy_link_label.setOpenExternalLinks(True)
+        self.buy_info_layout.addWidget(self.buy_info_label)
+        self.buy_info_layout.addWidget(self.buy_link_label)
+        self.buy_info_layout.addStretch()
+        layout.addLayout(self.buy_info_layout)
+
         layout.addStretch()
 
     def retranslate_ui(self):
         self.api_key_label.setText(translator.translate("elevenlabs_api_key"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
+        self.buy_info_label.setText(translator.translate("elevenlabs_buy_info"))
         self.update_connection_status_label()
         self.update_balance_label()
 

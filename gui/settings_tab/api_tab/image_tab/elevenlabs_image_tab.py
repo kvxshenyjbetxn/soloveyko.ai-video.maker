@@ -1,5 +1,5 @@
 
-from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox
+from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QHBoxLayout
 from utils.settings import settings_manager
 from utils.translator import translator
 
@@ -31,6 +31,17 @@ class ElevenLabsImageTab(QWidget):
         self.max_threads_spinbox.setRange(1, 25)
         layout.addRow(self.max_threads_label, self.max_threads_spinbox)
 
+        # layout.addRow(self.max_threads_label, self.max_threads_spinbox) # Already added above
+
+        self.buy_info_layout = QHBoxLayout()
+        self.buy_info_label = QLabel()
+        self.buy_link_label = QLabel('<a href="https://t.me/elevenLabsVoicerBot" style="color: #0078d4;">@elevenLabsVoicerBot</a>')
+        self.buy_link_label.setOpenExternalLinks(True)
+        self.buy_info_layout.addWidget(self.buy_info_label)
+        self.buy_info_layout.addWidget(self.buy_link_label)
+        self.buy_info_layout.addStretch()
+        layout.addRow("", self.buy_info_layout)
+
         self.setLayout(layout)
 
     def connect_signals(self):
@@ -43,6 +54,7 @@ class ElevenLabsImageTab(QWidget):
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.aspect_ratio_label.setText(translator.translate("aspect_ratio"))
         self.max_threads_label.setText(translator.translate("max_threads"))
+        self.buy_info_label.setText(translator.translate("elevenlabs_buy_info"))
 
     def update_fields(self):
         self.api_key_input.blockSignals(True)
