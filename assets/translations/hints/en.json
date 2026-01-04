@@ -67,5 +67,18 @@
     "standard_python_hint": "Standard (Python) - OpenAI's default library for audio transcription. It works everywhere but has one drawback: on Windows with an AMD GPU, the load will fall entirely on your CPU because this library doesn't support AMD hardware acceleration. In this case, use AMD(GPU\\Fork).",
     "amd_gpu_fork_hint": "AMD(GPU\\Fork) - an external library supporting AMD GPUs for better transcription performance. To use this library, you need to separately download the library files and the required models. Also, when using this library, it's crucial to correctly set the language ID in the Languages tab (e.g., 'uk' for Ukrainian).",
     "assemblyai_hint": "AssemblyAI - a cloud-based service for audio transcription. It places no load on your PC and allows up to 5 concurrent transcriptions. Model selection is not supported. To use it, you must obtain an API key from their website; the link is located in Settings\\API\\AssemblyAI tab.",
-    "whisper_model_hint": "Speed and quality of transcription depend on the selected model. For most tasks, the 'base' model is suitable. The higher and heavier the model, the longer the transcription will take, but quality increases significantly. Recommendation: use 'base' or 'small'."
+    "whisper_model_hint": "Speed and quality of transcription depend on the selected model. For most tasks, the 'base' model is suitable. The higher and heavier the model, the longer the transcription will take, but quality increases significantly. Recommendation: use 'base' or 'small'.",
+    "vertical_margin_hint": "Changes the vertical position of subtitles, always centered. Measured in pixels.",
+    "fade_hint": "Adjusts the fade-in and fade-out effect of subtitles so it's not abrupt.",
+    "max_words_hint": "The number of words that will appear on the screen simultaneously. Fewer words mean more frequent subtitle changes for dynamics; more words mean stay on screen longer.",
+    "template_list_hint": "A list of your saved templates. Selecting a template here doesn't change anything globally, so don't worry.",
+    "template_name_hint": "If the template exists, its name is displayed here. If it doesn't exist, the name for saving is taken from here. If overwriting an existing template, the name must match the one that already exists.",
+    "template_notes_hint": "This is a note that doesn't affect anything. It serves purely for your convenience to mark differences in the template. Saved separately for each template.",
+    "template_edit_hint": "This is the editor for the selected template. Choose a template from the list, click Edit, and you'll see a list of all settings saved in the template. You can change or view them without applying the template to the global program settings.",
+    "template_save_hint": "Saves settings to the template. Be careful: when saving, the settings of the selected template will be overwritten by the global settings currently saved in the program.",
+    "template_apply_hint": "Applies the selected template to the entire program, overwriting current settings. Use with caution.",
+    "notifications_enable_hint": "Enables Telegram notifications. The program will send important alerts about specific stages. For example, if Translation or Rewrite Review is enabled, the program will message you when the text for a language is ready. If Image Review is enabled, it will notify you when it's ready for montage with a request to review images for editing or continuation. Follow the link to activate the bot for the first time ensuring correct operation.",
+    "telegram_user_id_hint": "Your account ID where the bot will send messages. You can click 'Get ID' to automatically retrieve your Telegram ID.",
+    "bot_link_hint": "Follow the link to activate the bot for the first time to ensure it works correctly.",
+    "info_icon_hint": "In the settings, next to each item, there is such a hint icon with a detailed explanation of the function."
 }

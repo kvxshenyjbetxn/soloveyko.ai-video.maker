@@ -246,6 +246,8 @@
     "rename_button": "Rename",
     "error": "Error",
     "success": "Success",
+    "help_legend": "— <b>HINT</b>",
+    "info_icon_hint": "In the settings, next to each item, there is such a hint icon with a detailed explanation of the function.",
     "template_name_empty_error": "Template name cannot be empty.",
     "template_saved_success": "Template '{name}' saved successfully.",
     "save_as_title": "Save As",
