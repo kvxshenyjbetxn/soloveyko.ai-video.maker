@@ -11,6 +11,7 @@ from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from gui.dialogs.prompt_settings_dialog import PromptSettingsDialog
 from gui.qt_material import apply_stylesheet
 from gui.api_workers import ApiKeyCheckWorker, ApiKeyCheckSignals, ElevenLabsUnlimBalanceWorker
+from gui.widgets.help_label import HelpLabel
 
 # Windows COM handling for threads
 try:
@@ -39,6 +40,7 @@ from gui.gallery_tab.video_viewer import VideoViewer
 from core.queue_manager import QueueManager
 from core.task_processor import TaskProcessor
 from utils.logger import logger, LogLevel
+from utils.hint_manager import hint_manager
 
 class BalanceWorkerSignals(QObject):
     finished = Signal(object, bool)
@@ -358,7 +360,13 @@ class MainWindow(QMainWindow):
         corner_layout.setContentsMargins(0, 0, 10, 0) # Add some margin to the right
         corner_layout.setSpacing(10)
 
+        self.help_icon = HelpLabel("info_icon_hint")
+        self.help_legend_label = QLabel()
         self.active_template_label = QLabel()
+        
+        corner_layout.addWidget(self.help_icon)
+        corner_layout.addWidget(self.help_legend_label)
+        corner_layout.addSpacing(15)
         corner_layout.addWidget(self.active_template_label)
 
         self.days_left_label = QLabel()
@@ -435,6 +443,7 @@ class MainWindow(QMainWindow):
 
     def refresh_ui_from_settings(self):
         logger.log("Refreshing UI from new settings...", level=LogLevel.INFO)
+        hint_manager.load_hints()
         
         # Update all settings tabs
         if hasattr(self.settings_tab, '_update_all_tabs'):
@@ -662,6 +671,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{app_name} v{__version__}")
 
     def update_active_template_display(self):
+        self.help_icon.update_tooltip()
+        self.help_legend_label.setText(translator.translate('help_legend'))
+        
         template_name = self.settings_manager.get("last_applied_template")
         if template_name:
             self.active_template_label.setText(f"{translator.translate('active_template_label', 'Template')}: {template_name}")
@@ -896,6 +908,7 @@ class MainWindow(QMainWindow):
         self.retranslate_ui()
 
     def retranslate_ui(self):
+        hint_manager.load_hints()
         self.update_title()
         self.tabs.setTabText(self.tabs.indexOf(self.text_tab), self.translator.translate('text_processing_tab'))
         if self.SHOW_REWRITE_TAB:
