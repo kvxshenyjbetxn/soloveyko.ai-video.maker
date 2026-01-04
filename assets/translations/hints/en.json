@@ -20,5 +20,7 @@
     "googler_max_video_threads_label": "The number of simultaneous threads for video animation generation. This setting can be left at default for best performance.",
     "googler_video_prompt_label": "Additional description for creating animation from an image. This prompt applies globally to all generations.",
     "googler_seed_label": "A random number to reproduce identical results. If left blank, a new result will be used each time. Applies globally to all generations.",
-    "googler_negative_prompt_label": "What should NOT be in the image (e.g., distorted hands, defects). Applies globally to all generations."
+    "googler_negative_prompt_label": "What should NOT be in the image (e.g., distorted hands, defects). Applies globally to all generations.",
+    "elevenlabs_image_aspect_ratio": "Selection of the aspect ratio for generated images.",
+    "elevenlabs_image_max_threads": "The number of simultaneous threads for image generation. 10 threads is more than enough."
 }

@@ -2,6 +2,7 @@
 from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QHBoxLayout
 from utils.settings import settings_manager
 from utils.translator import translator
+from gui.widgets.help_label import HelpLabel
 
 class ElevenLabsImageTab(QWidget):
     def __init__(self, parent=None):
@@ -20,16 +21,32 @@ class ElevenLabsImageTab(QWidget):
         layout.addRow(self.api_key_label, self.api_key_input)
 
         # Aspect Ratio
+        self.aspect_ratio_help = HelpLabel("elevenlabs_image_aspect_ratio")
         self.aspect_ratio_label = QLabel()
+        aspect_label_container = QWidget()
+        aspect_label_layout = QHBoxLayout(aspect_label_container)
+        aspect_label_layout.setContentsMargins(0, 0, 0, 0)
+        aspect_label_layout.setSpacing(5)
+        aspect_label_layout.addWidget(self.aspect_ratio_help)
+        aspect_label_layout.addWidget(self.aspect_ratio_label)
+        
         self.aspect_ratio_combo = QComboBox()
         self.aspect_ratio_combo.addItems(self.aspect_ratios)
-        layout.addRow(self.aspect_ratio_label, self.aspect_ratio_combo)
+        layout.addRow(aspect_label_container, self.aspect_ratio_combo)
 
         # Max Threads
+        self.max_threads_help = HelpLabel("elevenlabs_image_max_threads")
         self.max_threads_label = QLabel()
+        max_threads_label_container = QWidget()
+        max_threads_label_layout = QHBoxLayout(max_threads_label_container)
+        max_threads_label_layout.setContentsMargins(0, 0, 0, 0)
+        max_threads_label_layout.setSpacing(5)
+        max_threads_label_layout.addWidget(self.max_threads_help)
+        max_threads_label_layout.addWidget(self.max_threads_label)
+        
         self.max_threads_spinbox = QSpinBox()
         self.max_threads_spinbox.setRange(1, 25)
-        layout.addRow(self.max_threads_label, self.max_threads_spinbox)
+        layout.addRow(max_threads_label_container, self.max_threads_spinbox)
 
         # layout.addRow(self.max_threads_label, self.max_threads_spinbox) # Already added above
 
@@ -55,6 +72,10 @@ class ElevenLabsImageTab(QWidget):
         self.aspect_ratio_label.setText(translator.translate("aspect_ratio"))
         self.max_threads_label.setText(translator.translate("max_threads"))
         self.buy_info_label.setText(translator.translate("elevenlabs_buy_info"))
+        
+        # Update hints
+        self.aspect_ratio_help.update_tooltip()
+        self.max_threads_help.update_tooltip()
 
     def update_fields(self):
         self.api_key_input.blockSignals(True)
