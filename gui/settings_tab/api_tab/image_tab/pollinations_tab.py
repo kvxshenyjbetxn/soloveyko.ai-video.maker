@@ -1,15 +1,55 @@
 import logging
 from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QCheckBox, QHBoxLayout
+from PySide6.QtCore import QThread, Signal
 from utils.settings import settings_manager
 from utils.translator import translator
+from api.pollinations import PollinationsAPI
+
+class ModelFetcher(QThread):
+    models_fetched = Signal(list)
+
+    def run(self):
+        api = PollinationsAPI()
+        models = api.get_models()
+        self.models_fetched.emit(models)
 
 class PollinationsTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.models = ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"]
+        # Default fallback models
+        self.models = ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"] 
         self.initUI()
         self.update_fields()
         self.connect_signals()
+        
+        # Start fetching models in background
+        self.fetch_models()
+
+    def fetch_models(self):
+        self.fetcher = ModelFetcher()
+        self.fetcher.models_fetched.connect(self.update_models_list)
+        self.fetcher.start()
+
+    def update_models_list(self, models):
+        if models:
+            self.models = models
+            current_model = self.model_combo.currentText()
+            
+            self.model_combo.blockSignals(True)
+            self.model_combo.clear()
+            self.model_combo.addItems(self.models)
+            
+            # Restore selection if it exists in new list, otherwise default to first
+            if current_model in self.models:
+                self.model_combo.setCurrentText(current_model)
+            elif "flux" in self.models:
+                self.model_combo.setCurrentText("flux")
+                
+            self.model_combo.blockSignals(False)
+            
+            # If the current selection changed (because previous one wasn't in list), save it
+            if self.model_combo.currentText() != current_model:
+                self.save_settings()
 
     def initUI(self):
         layout = QFormLayout(self)
@@ -83,7 +123,23 @@ class PollinationsTab(QWidget):
         self.enhance_checkbox.blockSignals(True)
 
         pollinations_settings = settings_manager.get("pollinations", {})
-        self.model_combo.setCurrentText(pollinations_settings.get("model", "flux"))
+        
+        # If model is not in current list (which might be just defaults initially), 
+        # add it temporarily so it shows up, or just select it if we can
+        saved_model = pollinations_settings.get("model", "flux")
+        
+        # Note: We rely on fetching to populate the full list. 
+        # If the saved model is not in the default list, we might want to add it or just wait for fetch.
+        # But if we just start, self.models is defaults. 
+        if saved_model not in self.models:
+             # Just set it, QComboBox might ignore or set to index -1? 
+             # Actually QComboBox.setCurrentText works if item exists.
+             # If it doesn't exist, we might want to add it?
+             # Let's add it if missing from defaults.
+             self.models.append(saved_model)
+             self.model_combo.addItem(saved_model)
+             
+        self.model_combo.setCurrentText(saved_model)
         self.token_input.setText(pollinations_settings.get("token", ""))
         self.width_spinbox.setValue(pollinations_settings.get("width", 1280))
         self.height_spinbox.setValue(pollinations_settings.get("height", 720))
