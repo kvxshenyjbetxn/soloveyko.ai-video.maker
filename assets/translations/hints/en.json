@@ -80,5 +80,6 @@
     "notifications_enable_hint": "Enables Telegram notifications. The program will send important alerts about specific stages. For example, if Translation or Rewrite Review is enabled, the program will message you when the text for a language is ready. If Image Review is enabled, it will notify you when it's ready for montage with a request to review images for editing or continuation. Follow the link to activate the bot for the first time ensuring correct operation.",
     "telegram_user_id_hint": "Your account ID where the bot will send messages. You can click 'Get ID' to automatically retrieve your Telegram ID.",
     "bot_link_hint": "Follow the link to activate the bot for the first time to ensure it works correctly.",
-    "info_icon_hint": "In the settings, next to each item, there is such a hint icon with a detailed explanation of the function."
+    "info_icon_hint": "In the settings, next to each item, there is such a hint icon with a detailed explanation of the function.",
+    "input_source_label": "Select the data source for this stage. You can use the processed text (translation/original) or the task name.\nUsing the task name allows you to generate content based on a short description or title, for example, to create specific metadata or ideas. Request structure: {Prompt} + {Translation\\Original text}\n {Prompt} + {Task name}"
 }
