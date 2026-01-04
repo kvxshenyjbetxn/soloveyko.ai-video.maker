@@ -263,18 +263,19 @@ class TranslationMixin:
                 model = stage.get("model")
                 max_tokens = stage.get("max_tokens")
                 temperature = stage.get("temperature")
+                input_source = stage.get("input_source", "text")
                 
                 stage_key = f"custom_{stage_name}"
                 if stage_key in state.stages:
                     if stage_name and prompt:
-                        self._start_custom_stage(task_id, stage_name, prompt, model, max_tokens, temperature)
+                        self._start_custom_stage(task_id, stage_name, prompt, model, max_tokens, temperature, input_source)
 
-    def _start_custom_stage(self, task_id, stage_name, prompt, model=None, max_tokens=None, temperature=None):
-        extra_data = (stage_name, prompt, model, max_tokens, temperature)
+    def _start_custom_stage(self, task_id, stage_name, prompt, model=None, max_tokens=None, temperature=None, input_source="text"):
+        extra_data = (stage_name, prompt, model, max_tokens, temperature, input_source)
         self.openrouter_queue.append((task_id, 'custom_stage', extra_data))
         self._process_openrouter_queue()
 
-    def _launch_custom_stage_worker(self, task_id, stage_name, prompt, model=None, max_tokens=None, temperature=None):
+    def _launch_custom_stage_worker(self, task_id, stage_name, prompt, model=None, max_tokens=None, temperature=None, input_source="text"):
         try:
             state = self.task_states[task_id]
             if not model:
@@ -283,7 +284,7 @@ class TranslationMixin:
                         (state.settings.get('openrouter_models', [])[0] if state.settings.get('openrouter_models') else 'unknown')
             
             config = {
-                'text': state.text_for_processing,
+                'text': state.job_name if input_source == "task_name" else state.text_for_processing,
                 'dir_path': state.dir_path,
                 'stage_name': stage_name,
                 'prompt': prompt,

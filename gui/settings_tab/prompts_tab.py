@@ -263,6 +263,30 @@ class PromptsTab(QWidget):
         settings_form_layout.addRow(model_label_container, model_combo)
         settings_form_layout.addRow(tokens_label_container, tokens_spinbox)
         settings_form_layout.addRow(temp_label_container, temperature_spinbox)
+        
+        # Input Source
+        input_source_help = HelpLabel("input_source_label")
+        input_source_label = QLabel()
+        input_source_container = QWidget()
+        input_source_layout = QHBoxLayout(input_source_container)
+        input_source_layout.setContentsMargins(0,0,0,0)
+        input_source_layout.setSpacing(5)
+        input_source_layout.addWidget(input_source_help)
+        input_source_layout.addWidget(input_source_label)
+
+        input_source_combo = QComboBox()
+        input_source_combo.addItem(translator.translate("input_source_text"), "text")
+        input_source_combo.addItem(translator.translate("input_source_task_name"), "task_name")
+        
+        if stage_data:
+            source = stage_data.get("input_source", "text")
+            index = input_source_combo.findData(source)
+            if index >= 0:
+                input_source_combo.setCurrentIndex(index)
+        input_source_combo.currentIndexChanged.connect(self.save_custom_stages)
+        
+        settings_form_layout.addRow(input_source_container, input_source_combo)
+
         stage_layout.addLayout(settings_form_layout)
 
         self.stages_container.addWidget(stage_group)
@@ -278,15 +302,18 @@ class PromptsTab(QWidget):
                 "prompt": prompt_label,
                 "model": model_label,
                 "tokens": tokens_label,
-                "temperature": temp_label
+                "temperature": temp_label,
+                "input_source": input_source_label
             },
             "helps": {
                 "stage_name": stage_name_help,
                 "prompt": prompt_help,
                 "model": model_help,
                 "tokens": tokens_help,
-                "temperature": temp_help
-            }
+                "temperature": temp_help,
+                "input_source": input_source_help
+            },
+            "input_source_combo": input_source_combo
         })
         
         if not stage_data:
@@ -365,7 +392,9 @@ class PromptsTab(QWidget):
             prompt = stage["prompt_edit"].toPlainText()
             model = stage["model_combo"].currentText()
             max_tokens = stage["tokens_spinbox"].value()
+            max_tokens = stage["tokens_spinbox"].value()
             temperature = stage["temperature_spinbox"].value()
+            input_source = stage["input_source_combo"].currentData()
             
             if name:
                 stages_data.append({
@@ -373,7 +402,10 @@ class PromptsTab(QWidget):
                     "prompt": prompt,
                     "model": model,
                     "max_tokens": max_tokens,
-                    "temperature": temperature
+                    "model": model,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "input_source": input_source
                 })
         self.settings.set("custom_stages", stages_data)
 
@@ -400,7 +432,17 @@ class PromptsTab(QWidget):
             stage["labels"]["prompt"].setText(translator.translate("prompt_label"))
             stage["labels"]["model"].setText(translator.translate("image_model_label"))
             stage["labels"]["tokens"].setText(translator.translate("tokens_label"))
+            stage["labels"]["tokens"].setText(translator.translate("tokens_label"))
             stage["labels"]["temperature"].setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
+            stage["labels"]["input_source"].setText(translator.translate("input_source_label"))
+            
+            # Update combo items text while keeping data
+            input_combo = stage["input_source_combo"]
+            current_data = input_combo.currentData()
+            input_combo.blockSignals(True)
+            input_combo.setItemText(0, translator.translate("input_source_text"))
+            input_combo.setItemText(1, translator.translate("input_source_task_name"))
+            input_combo.blockSignals(False)
             
             stage["name_edit"].setPlaceholderText(translator.translate("stage_name_placeholder"))
             stage["prompt_edit"].setPlaceholderText(translator.translate("enter_prompt_placeholder"))
