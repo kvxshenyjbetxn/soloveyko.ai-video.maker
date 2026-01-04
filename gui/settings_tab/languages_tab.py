@@ -13,6 +13,7 @@ from utils.settings import settings_manager, template_manager
 from api.elevenlabs import ElevenLabsAPI
 from api.edge_tts_api import EdgeTTSAPI
 from gui.widgets.prompt_editor_dialog import PromptEditorDialog
+from gui.widgets.help_label import HelpLabel
 
 # Determine the base path for resources, accommodating PyInstaller
 if getattr(sys, 'frozen', False):
@@ -123,8 +124,15 @@ class LanguagesTab(QWidget):
         trans_layout = QVBoxLayout(trans_group)
 
         # Translation Prompt Section
+        self.prompt_help = HelpLabel("language_prompt_label")
         self.prompt_label = QLabel(translator.translate("language_prompt_label"))
-        trans_layout.addWidget(self.prompt_label)
+        prompt_label_layout = QHBoxLayout()
+        prompt_label_layout.setContentsMargins(0, 0, 0, 0)
+        prompt_label_layout.setSpacing(5)
+        prompt_label_layout.addWidget(self.prompt_help)
+        prompt_label_layout.addWidget(self.prompt_label)
+        prompt_label_layout.addStretch()
+        trans_layout.addLayout(prompt_label_layout)
 
         trans_prompt_area = QHBoxLayout()
         self.prompt_edit = QTextEdit()
@@ -145,25 +153,49 @@ class LanguagesTab(QWidget):
         # Translation Parameters (Form Layout)
         trans_params = QFormLayout()
         
+        self.model_help = HelpLabel("translation_model_label")
         self.model_label = QLabel(translator.translate("translation_model_label"))
+        model_label_container = QWidget()
+        model_label_layout = QHBoxLayout(model_label_container)
+        model_label_layout.setContentsMargins(0, 0, 0, 0)
+        model_label_layout.setSpacing(5)
+        model_label_layout.addWidget(self.model_help)
+        model_label_layout.addWidget(self.model_label)
+        
         self.model_combo = QComboBox()
         self.model_combo.currentIndexChanged.connect(self.save_current_language_settings)
-        trans_params.addRow(self.model_label, self.model_combo)
+        trans_params.addRow(model_label_container, self.model_combo)
 
+        self.tokens_help = HelpLabel("tokens_label")
         self.tokens_label = QLabel(translator.translate("tokens_label"))
+        tokens_label_container = QWidget()
+        tokens_label_layout = QHBoxLayout(tokens_label_container)
+        tokens_label_layout.setContentsMargins(0, 0, 0, 0)
+        tokens_label_layout.setSpacing(5)
+        tokens_label_layout.addWidget(self.tokens_help)
+        tokens_label_layout.addWidget(self.tokens_label)
+        
         self.tokens_spinbox = QSpinBox()
         self.tokens_spinbox.setRange(0, 128000)
         self.tokens_spinbox.setValue(4096)
         self.tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
-        trans_params.addRow(self.tokens_label, self.tokens_spinbox)
+        trans_params.addRow(tokens_label_container, self.tokens_spinbox)
 
+        self.temperature_help = HelpLabel("temperature_label")
         self.temperature_label = QLabel(translator.translate("temperature_label"))
+        temp_label_container = QWidget()
+        temp_label_layout = QHBoxLayout(temp_label_container)
+        temp_label_layout.setContentsMargins(0, 0, 0, 0)
+        temp_label_layout.setSpacing(5)
+        temp_label_layout.addWidget(self.temperature_help)
+        temp_label_layout.addWidget(self.temperature_label)
+        
         self.temperature_spinbox = QDoubleSpinBox()
         self.temperature_spinbox.setRange(0.0, 2.0)
         self.temperature_spinbox.setSingleStep(0.1)
         self.temperature_spinbox.setValue(0.7)
         self.temperature_spinbox.valueChanged.connect(self.save_current_language_settings)
-        trans_params.addRow(self.temperature_label, self.temperature_spinbox)
+        trans_params.addRow(temp_label_container, self.temperature_spinbox)
 
         trans_layout.addLayout(trans_params)
         
@@ -175,8 +207,15 @@ class LanguagesTab(QWidget):
         rewrite_layout = QVBoxLayout(self.rewrite_group)
 
         # Rewrite Prompt Section
+        self.rewrite_prompt_help = HelpLabel("rewrite_prompt_label")
         self.rewrite_prompt_label = QLabel(translator.translate("rewrite_prompt_label"))
-        rewrite_layout.addWidget(self.rewrite_prompt_label)
+        rewrite_prompt_label_layout = QHBoxLayout()
+        rewrite_prompt_label_layout.setContentsMargins(0, 0, 0, 0)
+        rewrite_prompt_label_layout.setSpacing(5)
+        rewrite_prompt_label_layout.addWidget(self.rewrite_prompt_help)
+        rewrite_prompt_label_layout.addWidget(self.rewrite_prompt_label)
+        rewrite_prompt_label_layout.addStretch()
+        rewrite_layout.addLayout(rewrite_prompt_label_layout)
 
         rewrite_prompt_area = QHBoxLayout()
         self.rewrite_prompt_edit = QTextEdit()
@@ -197,58 +236,114 @@ class LanguagesTab(QWidget):
         # Rewrite Parameters (Form Layout)
         rewrite_params = QFormLayout()
         
+        self.rewrite_model_help = HelpLabel("rewrite_model_label")
         self.rewrite_model_label = QLabel(translator.translate("rewrite_model_label"))
+        rewrite_model_label_container = QWidget()
+        rewrite_model_label_layout = QHBoxLayout(rewrite_model_label_container)
+        rewrite_model_label_layout.setContentsMargins(0, 0, 0, 0)
+        rewrite_model_label_layout.setSpacing(5)
+        rewrite_model_label_layout.addWidget(self.rewrite_model_help)
+        rewrite_model_label_layout.addWidget(self.rewrite_model_label)
+        
         self.rewrite_model_combo = QComboBox()
         self.rewrite_model_combo.currentIndexChanged.connect(self.save_current_language_settings)
-        rewrite_params.addRow(self.rewrite_model_label, self.rewrite_model_combo)
+        rewrite_params.addRow(rewrite_model_label_container, self.rewrite_model_combo)
 
+        self.rewrite_tokens_help = HelpLabel("rewrite_tokens_label")
         self.rewrite_tokens_label = QLabel(translator.translate("tokens_label"))
+        rewrite_tokens_label_container = QWidget()
+        rewrite_tokens_label_layout = QHBoxLayout(rewrite_tokens_label_container)
+        rewrite_tokens_label_layout.setContentsMargins(0, 0, 0, 0)
+        rewrite_tokens_label_layout.setSpacing(5)
+        rewrite_tokens_label_layout.addWidget(self.rewrite_tokens_help)
+        rewrite_tokens_label_layout.addWidget(self.rewrite_tokens_label)
+        
         self.rewrite_tokens_spinbox = QSpinBox()
         self.rewrite_tokens_spinbox.setRange(0, 128000)
         self.rewrite_tokens_spinbox.setValue(4096)
         self.rewrite_tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
-        rewrite_params.addRow(self.rewrite_tokens_label, self.rewrite_tokens_spinbox)
+        rewrite_params.addRow(rewrite_tokens_label_container, self.rewrite_tokens_spinbox)
 
+        self.rewrite_temperature_help = HelpLabel("rewrite_temperature_label")
         self.rewrite_temperature_label = QLabel(translator.translate("temperature_label"))
+        rewrite_temp_label_container = QWidget()
+        rewrite_temp_label_layout = QHBoxLayout(rewrite_temp_label_container)
+        rewrite_temp_label_layout.setContentsMargins(0, 0, 0, 0)
+        rewrite_temp_label_layout.setSpacing(5)
+        rewrite_temp_label_layout.addWidget(self.rewrite_temperature_help)
+        rewrite_temp_label_layout.addWidget(self.rewrite_temperature_label)
+        
         self.rewrite_temperature_spinbox = QDoubleSpinBox()
         self.rewrite_temperature_spinbox.setRange(0.0, 2.0)
         self.rewrite_temperature_spinbox.setSingleStep(0.1)
         self.rewrite_temperature_spinbox.setValue(0.7)
         self.rewrite_temperature_spinbox.valueChanged.connect(self.save_current_language_settings)
-        rewrite_params.addRow(self.rewrite_temperature_label, self.rewrite_temperature_spinbox)
+        rewrite_params.addRow(rewrite_temp_label_container, self.rewrite_temperature_spinbox)
         
         rewrite_layout.addLayout(rewrite_params)
 
         settings_layout.addRow(self.rewrite_group)
 
         # Default Template
+        self.default_template_help = HelpLabel("default_template_label")
         self.default_template_label = QLabel()
+        template_label_container = QWidget()
+        template_label_layout = QHBoxLayout(template_label_container)
+        template_label_layout.setContentsMargins(0, 0, 0, 0)
+        template_label_layout.setSpacing(5)
+        template_label_layout.addWidget(self.default_template_help)
+        template_label_layout.addWidget(self.default_template_label)
+        
         self.default_template_combo = QComboBox()
         self.default_template_combo.currentIndexChanged.connect(self.save_current_language_settings)
-        settings_layout.addRow(self.default_template_label, self.default_template_combo)
+        settings_layout.addRow(template_label_container, self.default_template_combo)
 
         # TTS Provider
+        self.tts_provider_help = HelpLabel("tts_provider_label")
         self.tts_provider_label = QLabel("TTS Provider:")
+        tts_label_container = QWidget()
+        tts_label_layout = QHBoxLayout(tts_label_container)
+        tts_label_layout.setContentsMargins(0, 0, 0, 0)
+        tts_label_layout.setSpacing(5)
+        tts_label_layout.addWidget(self.tts_provider_help)
+        tts_label_layout.addWidget(self.tts_provider_label)
+        
         self.tts_provider_combo = QComboBox()
         self.tts_provider_combo.addItems(["ElevenLabs", "ElevenLabsUnlim", "VoiceMaker", "GeminiTTS", "EdgeTTS"])
         self.tts_provider_combo.currentIndexChanged.connect(self.on_tts_provider_changed)
         self.tts_provider_combo.currentIndexChanged.connect(self.save_current_language_settings)
-        settings_layout.addRow(self.tts_provider_label, self.tts_provider_combo)
+        settings_layout.addRow(tts_label_container, self.tts_provider_combo)
 
         # ElevenLabs Settings
+        self.elevenlabs_template_help = HelpLabel("elevenlabs_template_label")
         self.elevenlabs_template_label = QLabel()
+        self.elevenlabs_label_container = QWidget()
+        elevenlabs_label_layout = QHBoxLayout(self.elevenlabs_label_container)
+        elevenlabs_label_layout.setContentsMargins(0, 0, 0, 0)
+        elevenlabs_label_layout.setSpacing(5)
+        elevenlabs_label_layout.addWidget(self.elevenlabs_template_help)
+        elevenlabs_label_layout.addWidget(self.elevenlabs_template_label)
+        
         self.elevenlabs_template_combo = QComboBox()
         self.elevenlabs_template_combo.currentIndexChanged.connect(self.save_current_language_settings)
-        settings_layout.addRow(self.elevenlabs_template_label, self.elevenlabs_template_combo)
+        settings_layout.addRow(self.elevenlabs_label_container, self.elevenlabs_template_combo)
 
         # ElevenLabs Unlim Settings
         self.eleven_unlim_group = QGroupBox("ElevenLabs Unlim Settings")
         eleven_unlim_layout = QFormLayout(self.eleven_unlim_group)
 
+        self.eleven_unlim_voice_id_help = HelpLabel("eleven_unlim_voice_id_label")
         self.eleven_unlim_voice_id_label = QLabel("Voice ID:")
+        self.voice_id_label_container = QWidget()
+        voice_id_label_layout = QHBoxLayout(self.voice_id_label_container)
+        voice_id_label_layout.setContentsMargins(0, 0, 0, 0)
+        voice_id_label_layout.setSpacing(5)
+        voice_id_label_layout.addWidget(self.eleven_unlim_voice_id_help)
+        voice_id_label_layout.addWidget(self.eleven_unlim_voice_id_label)
+        
         self.eleven_unlim_voice_id_input = QLineEdit()
         self.eleven_unlim_voice_id_input.textChanged.connect(self.save_current_language_settings)
-        eleven_unlim_layout.addRow(self.eleven_unlim_voice_id_label, self.eleven_unlim_voice_id_input)
+        eleven_unlim_layout.addRow(self.voice_id_label_container, self.eleven_unlim_voice_id_input)
 
         self.eleven_unlim_stability_label = QLabel("Stability:")
         self.eleven_unlim_stability_spin = QDoubleSpinBox()
@@ -283,10 +378,18 @@ class LanguagesTab(QWidget):
         settings_layout.addRow(self.eleven_unlim_group)
 
         # VoiceMaker Settings
+        self.voicemaker_voice_help = HelpLabel("voicemaker_voice_label")
         self.voicemaker_voice_label = QLabel("VoiceMaker Voice:")
+        self.voicemaker_label_container = QWidget()
+        voicemaker_label_layout = QHBoxLayout(self.voicemaker_label_container)
+        voicemaker_label_layout.setContentsMargins(0, 0, 0, 0)
+        voicemaker_label_layout.setSpacing(5)
+        voicemaker_label_layout.addWidget(self.voicemaker_voice_help)
+        voicemaker_label_layout.addWidget(self.voicemaker_voice_label)
+        
         self.voicemaker_voice_combo = QComboBox()
         self.voicemaker_voice_combo.currentIndexChanged.connect(self.save_current_language_settings)
-        settings_layout.addRow(self.voicemaker_voice_label, self.voicemaker_voice_combo)
+        settings_layout.addRow(self.voicemaker_label_container, self.voicemaker_voice_combo)
 
         # GeminiTTS Settings
         self.gemini_voice_label = QLabel("Gemini Voice:")
@@ -303,10 +406,18 @@ class LanguagesTab(QWidget):
         settings_layout.addRow(self.gemini_tone_label, self.gemini_tone_input)
 
         # EdgeTTS Settings
+        self.edgetts_voice_help = HelpLabel("edgetts_voice_label")
         self.edgetts_voice_label = QLabel(translator.translate("edgetts_voice_label", "EdgeTTS Voice:"))
+        self.edgetts_label_container = QWidget()
+        edgetts_label_layout = QHBoxLayout(self.edgetts_label_container)
+        edgetts_label_layout.setContentsMargins(0, 0, 0, 0)
+        edgetts_label_layout.setSpacing(5)
+        edgetts_label_layout.addWidget(self.edgetts_voice_help)
+        edgetts_label_layout.addWidget(self.edgetts_voice_label)
+        
         self.edgetts_voice_combo = QComboBox()
         self.edgetts_voice_combo.currentIndexChanged.connect(self.save_current_language_settings)
-        settings_layout.addRow(self.edgetts_voice_label, self.edgetts_voice_combo)
+        settings_layout.addRow(self.edgetts_label_container, self.edgetts_voice_combo)
 
         self.edgetts_rate_label = QLabel(translator.translate("edgetts_rate_label", "EdgeTTS Rate (%):"))
         self.edgetts_rate_spinbox = QSpinBox()
@@ -325,7 +436,14 @@ class LanguagesTab(QWidget):
         settings_layout.addRow(self.edgetts_pitch_label, self.edgetts_pitch_spinbox)
 
         # Background Music Settings
+        self.bg_music_help = HelpLabel("background_music_label")
         self.bg_music_label = QLabel()
+        bg_music_label_container = QWidget()
+        bg_music_label_layout = QHBoxLayout(bg_music_label_container)
+        bg_music_label_layout.setContentsMargins(0, 0, 0, 0)
+        bg_music_label_layout.setSpacing(5)
+        bg_music_label_layout.addWidget(self.bg_music_help)
+        bg_music_label_layout.addWidget(self.bg_music_label)
         
         bg_music_layout = QHBoxLayout()
         self.bg_music_path_input = QLineEdit()
@@ -342,9 +460,16 @@ class LanguagesTab(QWidget):
         bg_music_layout.addWidget(self.browse_bg_music_button)
         bg_music_layout.addWidget(self.clear_bg_music_button)
 
-        settings_layout.addRow(self.bg_music_label, bg_music_layout)
+        settings_layout.addRow(bg_music_label_container, bg_music_layout)
 
+        self.bg_music_volume_help = HelpLabel("music_volume_label")
         self.bg_music_volume_label = QLabel()
+        volume_label_container = QWidget()
+        volume_label_layout = QHBoxLayout(volume_label_container)
+        volume_label_layout.setContentsMargins(0, 0, 0, 0)
+        volume_label_layout.setSpacing(5)
+        volume_label_layout.addWidget(self.bg_music_volume_help)
+        volume_label_layout.addWidget(self.bg_music_volume_label)
         
         volume_layout = QHBoxLayout()
         self.bg_music_volume_slider = QSlider(Qt.Orientation.Horizontal)
@@ -357,14 +482,22 @@ class LanguagesTab(QWidget):
         volume_layout.addWidget(self.bg_music_volume_slider)
         volume_layout.addWidget(self.bg_music_volume_value_label)
         
-        settings_layout.addRow(self.bg_music_volume_label, volume_layout)
+        settings_layout.addRow(volume_label_container, volume_layout)
         
         # --- Effects & Watermark Settings (New) ---
         effects_group = QGroupBox(translator.translate("overlay_effects_group", "Overlay Effects"))
         effects_layout = QFormLayout(effects_group)
         
         # Effect Selection
+        self.overlay_effect_help = HelpLabel("overlay_effect_label")
         self.overlay_effect_label = QLabel(translator.translate("effect_selection_title", "Overlay Effect:"))
+        overlay_label_container = QWidget()
+        overlay_label_layout = QHBoxLayout(overlay_label_container)
+        overlay_label_layout.setContentsMargins(0, 0, 0, 0)
+        overlay_label_layout.setSpacing(5)
+        overlay_label_layout.addWidget(self.overlay_effect_help)
+        overlay_label_layout.addWidget(self.overlay_effect_label)
+        
         self.overlay_effect_path_input = QLineEdit()
         self.overlay_effect_path_input.setReadOnly(True)
         # self.overlay_effect_path_input.textChanged.connect(self.save_current_language_settings) # ReadOnly, so no direct text change
@@ -379,10 +512,18 @@ class LanguagesTab(QWidget):
         effect_buttons_layout.addWidget(self.select_effect_button)
         effect_buttons_layout.addWidget(self.clear_effect_button)
         
-        effects_layout.addRow(self.overlay_effect_label, effect_buttons_layout)
+        effects_layout.addRow(overlay_label_container, effect_buttons_layout)
 
         # Watermark Selection
+        self.watermark_help = HelpLabel("watermark_label")
         self.watermark_label = QLabel(translator.translate("watermark_group", "Watermark:"))
+        watermark_label_container = QWidget()
+        watermark_label_layout = QHBoxLayout(watermark_label_container)
+        watermark_label_layout.setContentsMargins(0, 0, 0, 0)
+        watermark_label_layout.setSpacing(5)
+        watermark_label_layout.addWidget(self.watermark_help)
+        watermark_label_layout.addWidget(self.watermark_label)
+        
         self.watermark_path_input = QLineEdit()
         self.watermark_path_input.setReadOnly(True)
         
@@ -396,7 +537,7 @@ class LanguagesTab(QWidget):
         watermark_buttons_layout.addWidget(self.select_watermark_button)
         watermark_buttons_layout.addWidget(self.clear_watermark_button)
         
-        effects_layout.addRow(self.watermark_label, watermark_buttons_layout)
+        effects_layout.addRow(watermark_label_container, watermark_buttons_layout)
         
         # Watermark Size
         self.watermark_size_label = QLabel()
@@ -630,12 +771,12 @@ class LanguagesTab(QWidget):
         
         # ElevenLabs
         is_eleven = (provider == "ElevenLabs")
-        self.elevenlabs_template_label.setVisible(is_eleven)
+        self.elevenlabs_label_container.setVisible(is_eleven)
         self.elevenlabs_template_combo.setVisible(is_eleven)
         
         # VoiceMaker
         is_vm = (provider == "VoiceMaker")
-        self.voicemaker_voice_label.setVisible(is_vm)
+        self.voicemaker_label_container.setVisible(is_vm)
         self.voicemaker_voice_combo.setVisible(is_vm)
         
         # GeminiTTS
@@ -647,11 +788,10 @@ class LanguagesTab(QWidget):
 
         # EdgeTTS
         is_edge = (provider == "EdgeTTS")
-        self.edgetts_voice_label.setVisible(is_edge)
+        self.edgetts_label_container.setVisible(is_edge)
         self.edgetts_voice_combo.setVisible(is_edge)
         self.edgetts_rate_label.setVisible(is_edge)
         self.edgetts_rate_spinbox.setVisible(is_edge)
-        self.edgetts_pitch_label.setVisible(is_edge)
         self.edgetts_pitch_label.setVisible(is_edge)
         self.edgetts_pitch_spinbox.setVisible(is_edge)
 
@@ -995,9 +1135,15 @@ class LanguagesTab(QWidget):
         self.add_lang_button.setText(translator.translate("add_model"))
         self.remove_lang_button.setText(translator.translate("remove_model"))
         self.prompt_label.setText(translator.translate("language_prompt_label"))
+        self.prompt_help.update_tooltip()
         self.model_label.setText(translator.translate("translation_model_label"))
         self.elevenlabs_template_label.setText(translator.translate("elevenlabs_template_label"))
         self.tokens_label.setText(translator.translate("tokens_label"))
+        
+        # Update hints
+        self.model_help.update_tooltip()
+        self.tokens_help.update_tooltip()
+        self.temperature_help.update_tooltip()
         self.tts_provider_label.setText(translator.translate("tts_provider_label"))
         self.voicemaker_voice_label.setText(translator.translate("voicemaker_voice_label"))
         self.gemini_voice_label.setText(translator.translate("gemini_voice_label"))
@@ -1007,10 +1153,29 @@ class LanguagesTab(QWidget):
         self.rewrite_model_label.setText(translator.translate("rewrite_model_label"))
         self.rewrite_tokens_label.setText(translator.translate("tokens_label"))
         self.rewrite_temperature_label.setText(translator.translate("temperature_label"))
+        
+        # Update hints
+        self.rewrite_prompt_help.update_tooltip()
+        self.rewrite_model_help.update_tooltip()
+        self.rewrite_tokens_help.update_tooltip()
+        self.rewrite_temperature_help.update_tooltip()
+        
         self.bg_music_label.setText(translator.translate("background_music_label", "Background Music:"))
         self.browse_bg_music_button.setText(translator.translate("browse_button", "Browse..."))
         self.clear_bg_music_button.setText(translator.translate("clear_button", "Clear"))
         self.bg_music_volume_label.setText(translator.translate("music_volume_label", "Music Volume:"))
+        
+        # Update hints
+        self.default_template_help.update_tooltip()
+        self.tts_provider_help.update_tooltip()
+        self.bg_music_help.update_tooltip()
+        self.bg_music_volume_help.update_tooltip()
+        self.elevenlabs_template_help.update_tooltip()
+        self.eleven_unlim_voice_id_help.update_tooltip()
+        self.voicemaker_voice_help.update_tooltip()
+        self.edgetts_voice_help.update_tooltip()
+        self.overlay_effect_help.update_tooltip()
+        self.watermark_help.update_tooltip()
         
         self.overlay_effect_label.setText(translator.translate("effect_selection_title", "Overlay Effect:"))
         self.select_effect_button.setText(translator.translate("select_effect_button", "Select Effect"))
