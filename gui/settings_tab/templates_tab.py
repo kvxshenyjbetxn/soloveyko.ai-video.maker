@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, Signal, QTimer, QModelIndex, QEvent
 from utils.translator import translator
 from utils.settings import settings_manager, template_manager
 from gui.widgets.prompt_editor_dialog import PromptEditorDialog
+from gui.widgets.help_label import HelpLabel
 import json
 import os
 import sys
@@ -692,8 +693,14 @@ class TemplatesTab(QWidget):
         self.template_name_label = QLabel()
         self.template_name_edit = QLineEdit()
         
+        self.template_list_help = HelpLabel("template_list_hint")
+        self.template_name_help = HelpLabel("template_name_hint")
+
+        selection_layout.addWidget(self.template_list_help)
         selection_layout.addWidget(self.template_label)
         selection_layout.addWidget(self.templates_combo)
+        selection_layout.addSpacing(10)
+        selection_layout.addWidget(self.template_name_help)
         selection_layout.addWidget(self.template_name_label)
         selection_layout.addWidget(self.template_name_edit)
         main_layout.addLayout(selection_layout)
@@ -706,10 +713,17 @@ class TemplatesTab(QWidget):
         self.rename_button = QPushButton()
         self.edit_button = QPushButton()
         
+        self.save_help = HelpLabel("template_save_hint")
+        self.apply_help = HelpLabel("template_apply_hint")
+        self.edit_help = HelpLabel("template_edit_hint")
+
+        buttons_layout.addWidget(self.save_help)
         buttons_layout.addWidget(self.save_button)
+        buttons_layout.addWidget(self.apply_help)
         buttons_layout.addWidget(self.apply_button)
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.rename_button)
+        buttons_layout.addWidget(self.edit_help)
         buttons_layout.addWidget(self.edit_button)
         buttons_layout.addWidget(self.delete_button)
         main_layout.addLayout(buttons_layout)
@@ -719,6 +733,15 @@ class TemplatesTab(QWidget):
         notes_layout = QVBoxLayout(self.notes_group)
         self.notes_edit = QTextEdit()
         self.notes_edit.setPlaceholderText(translator.translate("template_notes_placeholder", "Enter notes for the selected template here..."))
+        
+        self.notes_help = HelpLabel("template_notes_hint")
+        # To put help label in group box title area, we can either use a layout or just add it to the group layout.
+        # User said "біля поля для вводу нотатки", so let's put it in a horizontal layout at the top of notes_layout.
+        note_header_layout = QHBoxLayout()
+        note_header_layout.addWidget(self.notes_help)
+        note_header_layout.addStretch()
+        notes_layout.addLayout(note_header_layout)
+        
         notes_layout.addWidget(self.notes_edit)
         main_layout.addWidget(self.notes_group)
         
@@ -732,7 +755,15 @@ class TemplatesTab(QWidget):
         self.edit_button.setText(translator.translate("edit_template_button", "Edit"))
         self.template_label.setText(translator.translate("template_label"))
         self.template_name_label.setText(translator.translate("template_name_label"))
-        self.notes_group.setTitle(translator.translate("template_notes_group_title", "Notes"))
+        self.notes_group.setTitle(translator.translate("template_notes_group_title", "NOTES"))
+        self.notes_edit.setPlaceholderText(translator.translate("template_notes_placeholder"))
+
+        self.template_list_help.update_tooltip()
+        self.template_name_help.update_tooltip()
+        self.save_help.update_tooltip()
+        self.apply_help.update_tooltip()
+        self.edit_help.update_tooltip()
+        self.notes_help.update_tooltip()
 
     def connect_signals(self):
         self.templates_combo.currentTextChanged.connect(self._on_template_select)

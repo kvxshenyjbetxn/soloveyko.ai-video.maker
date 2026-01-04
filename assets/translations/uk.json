@@ -238,6 +238,8 @@
     "continue_montage_button": "Продовжити монтаж",
     "template_label": "Шаблон:",
     "template_name_label": "Ім'я шаблону:",
+    "template_notes_group_title": "НОТАТКИ",
+    "template_notes_placeholder": "Введіть нотатки для обраного шаблону тут...",
     "new_button": "Створити",
     "save_button": "Зберегти",
     "save_as_button": "Зберегти як...",
