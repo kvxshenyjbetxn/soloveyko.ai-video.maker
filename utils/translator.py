@@ -36,5 +36,7 @@ class Translator:
         self.language = language_code
         settings_manager.set('language', self.language)
         self.translations = self.load_translations()
+        from utils.hint_manager import hint_manager
+        hint_manager.load_hints()
 
 translator = Translator()

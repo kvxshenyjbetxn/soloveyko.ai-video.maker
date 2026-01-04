@@ -1,4 +1,5 @@
 {
+    "help_title": "Information",
     "notification_tab": "Notifications",
     "enable_notifications_label": "Enable notifications",
     "telegram_user_id_label": "Telegram User ID",

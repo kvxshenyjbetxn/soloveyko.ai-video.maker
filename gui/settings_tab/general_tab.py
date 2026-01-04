@@ -55,16 +55,35 @@ class GeneralTab(QWidget):
         form_layout.addRow(self.accent_color_label, self.accent_color_button)
 
         # Image generation provider selection
+        from gui.widgets.help_label import HelpLabel
+        self.image_provider_help = HelpLabel("image_generation_provider_label")
         self.image_provider_label = QLabel()
+        
+        provider_label_widget = QWidget()
+        provider_label_layout = QHBoxLayout(provider_label_widget)
+        provider_label_layout.setContentsMargins(0, 0, 0, 0)
+        provider_label_layout.setSpacing(5)
+        provider_label_layout.addWidget(self.image_provider_help)
+        provider_label_layout.addWidget(self.image_provider_label)
+        
         self.image_provider_combo = QComboBox()
         self.image_provider_combo.addItem("Pollinations", "pollinations")
         self.image_provider_combo.addItem("Googler", "googler")
         self.image_provider_combo.addItem("ElevenLabsImage", "elevenlabs_image")
         self.image_provider_combo.currentIndexChanged.connect(self.image_provider_changed)
-        form_layout.addRow(self.image_provider_label, self.image_provider_combo)
+        form_layout.addRow(provider_label_widget, self.image_provider_combo)
 
         # Results path selection
+        self.results_path_help = HelpLabel("results_path_label")
         self.results_path_label = QLabel()
+        
+        results_label_widget = QWidget()
+        results_label_layout = QHBoxLayout(results_label_widget)
+        results_label_layout.setContentsMargins(0, 0, 0, 0)
+        results_label_layout.setSpacing(5)
+        results_label_layout.addWidget(self.results_path_help)
+        results_label_layout.addWidget(self.results_path_label)
+        
         self.results_path_edit = QLineEdit()
         self.results_path_edit.setReadOnly(True)
         self.browse_button = QPushButton()
@@ -72,41 +91,86 @@ class GeneralTab(QWidget):
         path_layout = QHBoxLayout()
         path_layout.addWidget(self.results_path_edit)
         path_layout.addWidget(self.browse_button)
-        form_layout.addRow(self.results_path_label, path_layout)
+        form_layout.addRow(results_label_widget, path_layout)
 
         # Detailed logging checkbox
+        self.detailed_logging_help = HelpLabel("detailed_logging_label")
         self.detailed_logging_label = QLabel()
+        
+        logging_label_widget = QWidget()
+        logging_label_layout = QHBoxLayout(logging_label_widget)
+        logging_label_layout.setContentsMargins(0, 0, 0, 0)
+        logging_label_layout.setSpacing(5)
+        logging_label_layout.addWidget(self.detailed_logging_help)
+        logging_label_layout.addWidget(self.detailed_logging_label)
+        
         self.detailed_logging_checkbox = QCheckBox()
         self.detailed_logging_checkbox.stateChanged.connect(self.detailed_logging_changed)
-        form_layout.addRow(self.detailed_logging_label, self.detailed_logging_checkbox)
+        form_layout.addRow(logging_label_widget, self.detailed_logging_checkbox)
 
         # --- Controls Group ---
         self.controls_group = QGroupBox()
         self.controls_layout = QFormLayout(self.controls_group)
 
         # Translation review checkbox
+        self.translation_review_help = HelpLabel("translation_review_label")
         self.translation_review_label = QLabel()
+        
+        translation_label_widget = QWidget()
+        translation_label_layout = QHBoxLayout(translation_label_widget)
+        translation_label_layout.setContentsMargins(0, 0, 0, 0)
+        translation_label_layout.setSpacing(5)
+        translation_label_layout.addWidget(self.translation_review_help)
+        translation_label_layout.addWidget(self.translation_review_label)
+        
         self.translation_review_checkbox = QCheckBox()
         self.translation_review_checkbox.stateChanged.connect(self.translation_review_changed)
-        self.controls_layout.addRow(self.translation_review_label, self.translation_review_checkbox)
+        self.controls_layout.addRow(translation_label_widget, self.translation_review_checkbox)
 
         # Rewrite review checkbox
+        self.rewrite_review_help = HelpLabel("rewrite_review_label")
         self.rewrite_review_label = QLabel()
+        
+        rewrite_label_widget = QWidget()
+        rewrite_label_layout = QHBoxLayout(rewrite_label_widget)
+        rewrite_label_layout.setContentsMargins(0, 0, 0, 0)
+        rewrite_label_layout.setSpacing(5)
+        rewrite_label_layout.addWidget(self.rewrite_review_help)
+        rewrite_label_layout.addWidget(self.rewrite_review_label)
+        
         self.rewrite_review_checkbox = QCheckBox()
         self.rewrite_review_checkbox.stateChanged.connect(self.rewrite_review_changed)
-        self.controls_layout.addRow(self.rewrite_review_label, self.rewrite_review_checkbox)
+        self.controls_layout.addRow(rewrite_label_widget, self.rewrite_review_checkbox)
 
         # Image review checkbox
+        self.image_review_help = HelpLabel("image_review_label")
         self.image_review_label = QLabel()
+        
+        image_label_widget = QWidget()
+        image_label_layout = QHBoxLayout(image_label_widget)
+        image_label_layout.setContentsMargins(0, 0, 0, 0)
+        image_label_layout.setSpacing(5)
+        image_label_layout.addWidget(self.image_review_help)
+        image_label_layout.addWidget(self.image_review_label)
+        
         self.image_review_checkbox = QCheckBox()
         self.image_review_checkbox.stateChanged.connect(self.image_review_changed)
-        self.controls_layout.addRow(self.image_review_label, self.image_review_checkbox)
+        self.controls_layout.addRow(image_label_widget, self.image_review_checkbox)
         
         # Prompt count control checkbox
+        self.prompt_count_control_help = HelpLabel("prompt_count_control_label")
         self.prompt_count_control_label = QLabel()
+        
+        prompt_control_label_widget = QWidget()
+        prompt_control_label_layout = QHBoxLayout(prompt_control_label_widget)
+        prompt_control_label_layout.setContentsMargins(0, 0, 0, 0)
+        prompt_control_label_layout.setSpacing(5)
+        prompt_control_label_layout.addWidget(self.prompt_count_control_help)
+        prompt_control_label_layout.addWidget(self.prompt_count_control_label)
+        
         self.prompt_count_control_checkbox = QCheckBox()
         self.prompt_count_control_checkbox.stateChanged.connect(self.prompt_count_control_changed)
-        self.controls_layout.addRow(self.prompt_count_control_label, self.prompt_count_control_checkbox)
+        self.controls_layout.addRow(prompt_control_label_widget, self.prompt_count_control_checkbox)
         
         # Prompt count spinbox
         self.prompt_count_label = QLabel()
@@ -124,11 +188,20 @@ class GeneralTab(QWidget):
         self.controls_layout.addRow(self.prompt_count_widget)
 
         # Max download threads
+        self.max_download_threads_help = HelpLabel("max_download_threads_label")
         self.max_download_threads_label = QLabel()
+        
+        threads_label_widget = QWidget()
+        threads_label_layout = QHBoxLayout(threads_label_widget)
+        threads_label_layout.setContentsMargins(0, 0, 0, 0)
+        threads_label_layout.setSpacing(5)
+        threads_label_layout.addWidget(self.max_download_threads_help)
+        threads_label_layout.addWidget(self.max_download_threads_label)
+        
         self.max_download_threads_spinbox = QSpinBox()
         self.max_download_threads_spinbox.setRange(1, 100)
         self.max_download_threads_spinbox.valueChanged.connect(self.max_download_threads_changed)
-        self.controls_layout.addRow(self.max_download_threads_label, self.max_download_threads_spinbox)
+        self.controls_layout.addRow(threads_label_widget, self.max_download_threads_spinbox)
         
         form_layout.addRow(self.controls_group)
 
@@ -266,14 +339,22 @@ class GeneralTab(QWidget):
         self.theme_combo.setItemText(1, translator.translate('dark_theme'))
         self.theme_combo.setItemText(2, translator.translate('black_theme'))
         self.image_provider_label.setText(translator.translate('image_generation_provider_label'))
+        self.image_provider_help.update_tooltip()
         self.results_path_label.setText(translator.translate('results_path_label'))
+        self.results_path_help.update_tooltip()
         self.browse_button.setText(translator.translate('browse_button'))
         self.controls_group.setTitle(translator.translate('controls_group_title'))
         self.translation_review_label.setText(translator.translate('translation_review_label'))
+        self.translation_review_help.update_tooltip()
         self.rewrite_review_label.setText(translator.translate('rewrite_review_label'))
+        self.rewrite_review_help.update_tooltip()
         self.image_review_label.setText(translator.translate('image_review_label'))
+        self.image_review_help.update_tooltip()
         self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
+        self.detailed_logging_help.update_tooltip()
         self.accent_color_label.setText(translator.translate('accent_color_label'))
         self.prompt_count_control_label.setText(translator.translate('prompt_count_control_label'))
+        self.prompt_count_control_help.update_tooltip()
         self.prompt_count_label.setText(translator.translate('prompt_count_label'))
         self.max_download_threads_label.setText(translator.translate('max_download_threads_label'))
+        self.max_download_threads_help.update_tooltip()
