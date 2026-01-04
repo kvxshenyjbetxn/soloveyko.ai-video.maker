@@ -1,9 +1,9 @@
-import logging
-from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QCheckBox, QHBoxLayout
 from PySide6.QtCore import QThread, Signal
 from utils.settings import settings_manager
 from utils.translator import translator
 from api.pollinations import PollinationsAPI
+from gui.widgets.help_label import HelpLabel
+from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QCheckBox, QHBoxLayout
 
 class ModelFetcher(QThread):
     models_fetched = Signal(list)
@@ -55,18 +55,42 @@ class PollinationsTab(QWidget):
         layout = QFormLayout(self)
 
         # Model
+        self.model_help = HelpLabel("pollinations_model_label")
         self.model_label = QLabel()
+        model_label_container = QWidget()
+        model_label_layout = QHBoxLayout(model_label_container)
+        model_label_layout.setContentsMargins(0, 0, 0, 0)
+        model_label_layout.setSpacing(5)
+        model_label_layout.addWidget(self.model_help)
+        model_label_layout.addWidget(self.model_label)
+        
         self.model_combo = QComboBox()
         self.model_combo.addItems(self.models)
-        layout.addRow(self.model_label, self.model_combo)
+        layout.addRow(model_label_container, self.model_combo)
 
-        # Token
+        # Token (API)
+        self.token_help = HelpLabel("pollinations_token_label")
         self.token_label = QLabel()
+        token_label_container = QWidget()
+        token_label_layout = QHBoxLayout(token_label_container)
+        token_label_layout.setContentsMargins(0, 0, 0, 0)
+        token_label_layout.setSpacing(5)
+        token_label_layout.addWidget(self.token_help)
+        token_label_layout.addWidget(self.token_label)
+        
         self.token_input = QLineEdit()
-        layout.addRow(self.token_label, self.token_input)
+        layout.addRow(token_label_container, self.token_input)
 
         # Width and Height
+        self.size_help = HelpLabel("image_size_label")
         self.size_label = QLabel()
+        size_label_container = QWidget()
+        size_label_layout = QHBoxLayout(size_label_container)
+        size_label_layout.setContentsMargins(0, 0, 0, 0)
+        size_label_layout.setSpacing(5)
+        size_label_layout.addWidget(self.size_help)
+        size_label_layout.addWidget(self.size_label)
+        
         size_layout = QHBoxLayout()
         self.width_spinbox = QSpinBox()
         self.width_spinbox.setRange(1, 4096)
@@ -75,15 +99,29 @@ class PollinationsTab(QWidget):
         size_layout.addWidget(self.width_spinbox)
         size_layout.addWidget(QLabel("x"))
         size_layout.addWidget(self.height_spinbox)
-        layout.addRow(self.size_label, size_layout)
+        layout.addRow(size_label_container, size_layout)
 
         # NoLogo
+        self.nologo_help = HelpLabel("nologo_label")
         self.nologo_checkbox = QCheckBox()
-        layout.addRow(self.nologo_checkbox)
+        nologo_container = QWidget()
+        nologo_layout = QHBoxLayout(nologo_container)
+        nologo_layout.setContentsMargins(0, 0, 0, 0)
+        nologo_layout.setSpacing(5)
+        nologo_layout.addWidget(self.nologo_help)
+        nologo_layout.addWidget(self.nologo_checkbox)
+        layout.addRow(nologo_container)
 
         # Enhance
+        self.enhance_help = HelpLabel("enhance_prompt_label")
         self.enhance_checkbox = QCheckBox()
-        layout.addRow(self.enhance_checkbox)
+        enhance_container = QWidget()
+        enhance_layout = QHBoxLayout(enhance_container)
+        enhance_layout.setContentsMargins(0, 0, 0, 0)
+        enhance_layout.setSpacing(5)
+        enhance_layout.addWidget(self.enhance_help)
+        enhance_layout.addWidget(self.enhance_checkbox)
+        layout.addRow(enhance_container)
 
         # Info Link
         self.info_layout = QHBoxLayout()
@@ -113,6 +151,13 @@ class PollinationsTab(QWidget):
         self.nologo_checkbox.setText(translator.translate("nologo_label"))
         self.enhance_checkbox.setText(translator.translate("enhance_prompt_label"))
         self.info_label.setText(translator.translate("pollinations_info"))
+        
+        # Update hints
+        self.model_help.update_tooltip()
+        self.token_help.update_tooltip()
+        self.size_help.update_tooltip()
+        self.nologo_help.update_tooltip()
+        self.enhance_help.update_tooltip()
 
     def update_fields(self):
         self.model_combo.blockSignals(True)
