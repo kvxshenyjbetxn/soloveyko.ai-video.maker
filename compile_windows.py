@@ -10,7 +10,7 @@ def compile_project():
     # ------------------------------------
 
     # Назва вихідного файлу
-    app_name = "Soloveyko.AI-Video.Maker v0.44.4"
+    app_name = "Soloveyko.AI-Video.Maker v0.44.5"
 
     # Перевірка наявності PyInstaller та залежностей
     try:
