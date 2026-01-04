@@ -1,8 +1,9 @@
 
-from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QPushButton, QHBoxLayout
 from utils.settings import settings_manager
 from utils.translator import translator
 from api.googler import GooglerAPI
+from gui.widgets.help_label import HelpLabel
+from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QPushButton, QHBoxLayout, QWidget
 
 class GooglerTab(QWidget):
     def __init__(self, parent=None):
@@ -31,37 +32,85 @@ class GooglerTab(QWidget):
         layout.addRow(self.usage_label, usage_layout)
 
         # Aspect Ratio
+        self.aspect_ratio_help = HelpLabel("googler_aspect_ratio_label")
         self.aspect_ratio_label = QLabel()
+        aspect_label_container = QWidget()
+        aspect_label_layout = QHBoxLayout(aspect_label_container)
+        aspect_label_layout.setContentsMargins(0, 0, 0, 0)
+        aspect_label_layout.setSpacing(5)
+        aspect_label_layout.addWidget(self.aspect_ratio_help)
+        aspect_label_layout.addWidget(self.aspect_ratio_label)
+        
         self.aspect_ratio_combo = QComboBox()
         self.aspect_ratio_combo.addItems(self.aspect_ratios)
-        layout.addRow(self.aspect_ratio_label, self.aspect_ratio_combo)
+        layout.addRow(aspect_label_container, self.aspect_ratio_combo)
 
         # Max Threads
+        self.max_threads_help = HelpLabel("googler_max_threads_label")
         self.max_threads_label = QLabel()
+        max_threads_label_container = QWidget()
+        max_threads_label_layout = QHBoxLayout(max_threads_label_container)
+        max_threads_label_layout.setContentsMargins(0, 0, 0, 0)
+        max_threads_label_layout.setSpacing(5)
+        max_threads_label_layout.addWidget(self.max_threads_help)
+        max_threads_label_layout.addWidget(self.max_threads_label)
+        
         self.max_threads_spinbox = QSpinBox()
         self.max_threads_spinbox.setRange(1, 25)
-        layout.addRow(self.max_threads_label, self.max_threads_spinbox)
+        layout.addRow(max_threads_label_container, self.max_threads_spinbox)
 
         # Max Video Threads
+        self.max_video_threads_help = HelpLabel("googler_max_video_threads_label")
         self.max_video_threads_label = QLabel()
+        max_video_label_container = QWidget()
+        max_video_label_layout = QHBoxLayout(max_video_label_container)
+        max_video_label_layout.setContentsMargins(0, 0, 0, 0)
+        max_video_label_layout.setSpacing(5)
+        max_video_label_layout.addWidget(self.max_video_threads_help)
+        max_video_label_layout.addWidget(self.max_video_threads_label)
+        
         self.max_video_threads_spinbox = QSpinBox()
         self.max_video_threads_spinbox.setRange(1, 25)
-        layout.addRow(self.max_video_threads_label, self.max_video_threads_spinbox)
+        layout.addRow(max_video_label_container, self.max_video_threads_spinbox)
 
         # Video Prompt
+        self.video_prompt_help = HelpLabel("googler_video_prompt_label")
         self.video_prompt_label = QLabel()
+        video_prompt_label_container = QWidget()
+        video_prompt_label_layout = QHBoxLayout(video_prompt_label_container)
+        video_prompt_label_layout.setContentsMargins(0, 0, 0, 0)
+        video_prompt_label_layout.setSpacing(5)
+        video_prompt_label_layout.addWidget(self.video_prompt_help)
+        video_prompt_label_layout.addWidget(self.video_prompt_label)
+        
         self.video_prompt_input = QLineEdit()
-        layout.addRow(self.video_prompt_label, self.video_prompt_input)
+        layout.addRow(video_prompt_label_container, self.video_prompt_input)
 
         # Seed
+        self.seed_help = HelpLabel("googler_seed_label")
         self.seed_label = QLabel()
+        seed_label_container = QWidget()
+        seed_label_layout = QHBoxLayout(seed_label_container)
+        seed_label_layout.setContentsMargins(0, 0, 0, 0)
+        seed_label_layout.setSpacing(5)
+        seed_label_layout.addWidget(self.seed_help)
+        seed_label_layout.addWidget(self.seed_label)
+        
         self.seed_input = QLineEdit()
-        layout.addRow(self.seed_label, self.seed_input)
+        layout.addRow(seed_label_container, self.seed_input)
 
         # Negative Prompt
+        self.negative_prompt_help = HelpLabel("googler_negative_prompt_label")
         self.negative_prompt_label = QLabel()
+        negative_prompt_label_container = QWidget()
+        negative_prompt_label_layout = QHBoxLayout(negative_prompt_label_container)
+        negative_prompt_label_layout.setContentsMargins(0, 0, 0, 0)
+        negative_prompt_label_layout.setSpacing(5)
+        negative_prompt_label_layout.addWidget(self.negative_prompt_help)
+        negative_prompt_label_layout.addWidget(self.negative_prompt_label)
+        
         self.negative_prompt_input = QLineEdit()
-        layout.addRow(self.negative_prompt_label, self.negative_prompt_input)
+        layout.addRow(negative_prompt_label_container, self.negative_prompt_input)
 
         # Buy API Key Link
         self.buy_info_layout = QHBoxLayout()
@@ -98,6 +147,14 @@ class GooglerTab(QWidget):
         self.seed_label.setText(translator.translate("googler_seed_label"))
         self.negative_prompt_label.setText(translator.translate("googler_negative_prompt_label"))
         self.negative_prompt_input.setPlaceholderText(translator.translate("googler_negative_prompt_placeholder"))
+        
+        # Update hints
+        self.aspect_ratio_help.update_tooltip()
+        self.max_threads_help.update_tooltip()
+        self.max_video_threads_help.update_tooltip()
+        self.video_prompt_help.update_tooltip()
+        self.seed_help.update_tooltip()
+        self.negative_prompt_help.update_tooltip()
 
     def update_fields(self):
         self.api_key_input.blockSignals(True)

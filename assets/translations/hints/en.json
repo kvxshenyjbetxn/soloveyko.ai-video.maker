@@ -14,5 +14,11 @@
     "pollinations_token_label": "Entering the Pollinations API key (token). \nWhen using the API, all service models are available, while without API only kontext and turbo are available.",
     "image_size_label": "Settings for the resolution of generated images (Width x Height). It is recommended to use standard sizes, such as 1280x720.",
     "nologo_label": "If enabled, the program will try to generate images without the Pollinations watermark.",
-    "enhance_prompt_label": "Automatic enhancement of your text prompt by the neural network to get a more detailed and higher quality result."
+    "enhance_prompt_label": "Automatic enhancement of your text prompt by the neural network to get a more detailed and higher quality result.",
+    "googler_aspect_ratio_label": "Selection of the aspect ratio for generated images (landscape, portrait, or square).",
+    "googler_max_threads_label": "The number of simultaneous threads for image generation. This setting can be left at default for the best generation performance.",
+    "googler_max_video_threads_label": "The number of simultaneous threads for video animation generation. This setting can be left at default for best performance.",
+    "googler_video_prompt_label": "Additional description for creating animation from an image. This prompt applies globally to all generations.",
+    "googler_seed_label": "A random number to reproduce identical results. If left blank, a new result will be used each time. Applies globally to all generations.",
+    "googler_negative_prompt_label": "What should NOT be in the image (e.g., distorted hands, defects). Applies globally to all generations."
 }
