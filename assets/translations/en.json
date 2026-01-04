@@ -236,6 +236,8 @@
     "continue_montage_button": "Continue Montage",
     "template_label": "Template:",
     "template_name_label": "Template Name:",
+    "template_notes_group_title": "NOTES",
+    "template_notes_placeholder": "Enter notes for the selected template here...",
     "new_button": "New",
     "save_button": "Save",
     "save_as_button": "Save As...",
