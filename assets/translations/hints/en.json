@@ -1,5 +1,5 @@
 {
-    "image_generation_provider_label": "Choose the service that will create images for your video. \n\n- Pollinations - free using flux and turbo models. To use better models, an API key is required. \n- Googler - Highest quality service using Google Imagen 4, API key can be obtained via Telegram bot. \n- ElevenLabsImage - Slightly lower quality than Googler, but free.",
+    "image_generation_provider_label": "Choose the service that will create images for your video. \n\n- Pollinations - free using kontext and turbo models. To use better models, an API key is required. \n- Googler - Highest quality service using Google Imagen 4, API key can be obtained via Telegram bot. \n- ElevenLabsImage - Slightly lower quality than Googler, but free.",
     "results_path_label": "The folder where the program will save all created tasks, images, and final videos. It is recommended to choose a drive with enough free space.",
     "detailed_logging_label": "Enables recording of detailed technical information about the program's operation. Useful for diagnosing errors and understanding generation processes. It is recommended to keep it enabled as the program clears old logs automatically.",
     "translation_review_label": "Pauses the program after text translation so you can review and adjust it before the next stages. \nYou will have the opportunity to regenerate the translation, as well as change translation settings and the prompt for one specific time.",
@@ -9,5 +9,10 @@
     "max_download_threads_label": "The number of simultaneous threads for downloading content during rewriting. More threads speed up work but may load the network.",
     "max_concurrent_requests": "The number of simultaneous requests to the neural network. It is recommended to set from 5 to 10 depending on your API key limits. Higher numbers may lead to 'Rate Limit' errors.",
     "openrouter_add_model_hint": "To add a new model, copy its full name from the OpenRouter website (e.g., 'google/gemini-2.0-flash-exp:free') and paste it into this field, then click the 'Add' button. The added model will appear in the list above.",
-    "char_limit": "This is the maximum number of characters that your current Voicemaker subscription plan allows you to voice in a single request.\nIf the text is longer, the program will automatically split it into parts (chunks) according to this limit."
+    "char_limit": "This is the maximum number of characters that your current Voicemaker subscription plan allows you to voice in a single request.\nIf the text is longer, the program will automatically split it into parts (chunks) according to this limit.",
+    "pollinations_model_label": "Selection of the model for image generation. Different models have different styles and capabilities.",
+    "pollinations_token_label": "Entering the Pollinations API key (token). \nWhen using the API, all service models are available, while without API only kontext and turbo are available.",
+    "image_size_label": "Settings for the resolution of generated images (Width x Height). It is recommended to use standard sizes, such as 1280x720.",
+    "nologo_label": "If enabled, the program will try to generate images without the Pollinations watermark.",
+    "enhance_prompt_label": "Automatic enhancement of your text prompt by the neural network to get a more detailed and higher quality result."
 }
