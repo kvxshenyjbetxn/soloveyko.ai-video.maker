@@ -148,17 +148,23 @@ class ImageMixin:
             valid_keys = ['model', 'width', 'height', 'nologo', 'enhance']
             api_kwargs = {k: v for k, v in pollinations_settings.items() if k in valid_keys}
 
-        # Determine effective max_threads for the current provider
+        # Determine effective max_threads, executor, and semaphore for the current provider
         if provider == 'googler':
              current_max_threads = googler_settings.get("max_threads", 8)
              current_api_key = googler_settings.get('api_key')
+             executor = self.image_gen_executor
+             current_semaphore = getattr(self, 'googler_semaphore', None)
         elif provider == 'elevenlabs_image':
              elevenlabs_image_settings = state.settings.get('elevenlabs_image', {})
              current_max_threads = elevenlabs_image_settings.get("max_threads", 5)
              current_api_key = elevenlabs_image_settings.get('api_key')
+             executor = self.elevenlabs_executor
+             current_semaphore = getattr(self, 'elevenlabs_image_semaphore', None)
         else:
              current_max_threads = 8 # Default for pollinations (sequential anyway)
              current_api_key = None
+             executor = self.image_gen_executor
+             current_semaphore = None
 
         config = {
             'prompts_text': state.image_prompts,
@@ -166,8 +172,9 @@ class ImageMixin:
             'provider': provider,
             'api_kwargs': api_kwargs,
             'api_key': current_api_key, 
-            'executor': self.image_gen_executor,
-            'max_threads': current_max_threads
+            'executor': executor,
+            'max_threads': current_max_threads,
+            'semaphore': current_semaphore if 'current_semaphore' in locals() else None
         }
         self._start_worker(ImageGenerationWorker, task_id, 'stage_images', config, self._on_img_generation_finished, self._on_img_generation_error)
 

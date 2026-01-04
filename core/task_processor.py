@@ -79,10 +79,11 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         
         elevenlabs_image_settings = self.settings.get("elevenlabs_image", {})
         max_elevenlabs_image = elevenlabs_image_settings.get("max_threads", 5)
+        self.elevenlabs_image_semaphore = QSemaphore(max_elevenlabs_image)
+        self.elevenlabs_executor = ThreadPoolExecutor(max_workers=max_elevenlabs_image)
         
-        # Ensure executor is large enough for the maximum concurrency requirement of either service
-        max_img_threads = max(max_googler, max_elevenlabs_image, 32)
-        self.image_gen_executor = ThreadPoolExecutor(max_workers=max_img_threads)
+        # Restore original executor for Googler/Pollinations
+        self.image_gen_executor = ThreadPoolExecutor(max_workers=max_googler)
         
         max_video = googler_settings.get("max_video_threads", 1)
         self.video_semaphore = QSemaphore(max_video)
@@ -489,6 +490,13 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                 logger.log("Image generation executor shut down successfully.", level=LogLevel.INFO)
             except Exception as e:
                 logger.log(f"Error shutting down image_gen_executor: {e}", level=LogLevel.WARNING)
+
+        if hasattr(self, 'elevenlabs_executor'):
+            try:
+                self.elevenlabs_executor.shutdown(wait=False, cancel_futures=True)
+                logger.log("ElevenLabs executor shut down successfully.", level=LogLevel.INFO)
+            except Exception as e:
+                logger.log(f"Error shutting down elevenlabs_executor: {e}", level=LogLevel.WARNING)
         
         if hasattr(self, 'threadpool'):
             try:
