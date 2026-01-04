@@ -7,5 +7,6 @@ matplotlib
 pandas
 assemblyai==0.28.0
 openai-whisper
+edge-tts
 pyinstaller
 pywin32; platform_system == "Windows"
