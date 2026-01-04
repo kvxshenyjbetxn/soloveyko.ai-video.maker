@@ -5,6 +5,7 @@ from utils.translator import translator
 from utils.settings import settings_manager
 from api.openrouter import OpenRouterAPI
 from utils.logger import logger, LogLevel
+from gui.widgets.help_label import HelpLabel
 
 class OpenRouterTab(QWidget):
     def __init__(self, main_window=None):
@@ -51,12 +52,21 @@ class OpenRouterTab(QWidget):
 
         # Max Threads
         max_threads_layout = QHBoxLayout()
+        self.max_threads_help = HelpLabel("max_concurrent_requests")
         self.max_threads_label = QLabel(translator.translate("max_concurrent_requests"))
+        
+        threads_label_container = QWidget()
+        threads_label_layout = QHBoxLayout(threads_label_container)
+        threads_label_layout.setContentsMargins(0, 0, 0, 0)
+        threads_label_layout.setSpacing(5)
+        threads_label_layout.addWidget(self.max_threads_help)
+        threads_label_layout.addWidget(self.max_threads_label)
+        
         self.max_threads_input = QSpinBox()
         self.max_threads_input.setRange(1, 50)
         self.max_threads_input.setValue(settings_manager.get("openrouter_max_threads", 5))
         self.max_threads_input.valueChanged.connect(self.save_max_threads)
-        max_threads_layout.addWidget(self.max_threads_label)
+        max_threads_layout.addWidget(threads_label_container)
         max_threads_layout.addWidget(self.max_threads_input)
         layout.addLayout(max_threads_layout)
 
@@ -72,12 +82,15 @@ class OpenRouterTab(QWidget):
         layout.addWidget(self.models_list)
 
         model_management_layout = QHBoxLayout()
+        self.add_model_help = HelpLabel("openrouter_add_model_hint")
         self.add_model_input = QLineEdit()
         self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
         self.add_model_button = QPushButton(translator.translate("add_model"))
         self.add_model_button.clicked.connect(self.add_model)
         self.remove_model_button = QPushButton(translator.translate("remove_model"))
         self.remove_model_button.clicked.connect(self.remove_model)
+        
+        model_management_layout.addWidget(self.add_model_help)
         model_management_layout.addWidget(self.add_model_input)
         model_management_layout.addWidget(self.add_model_button)
         model_management_layout.addWidget(self.remove_model_button)
@@ -98,11 +111,13 @@ class OpenRouterTab(QWidget):
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
         self.max_threads_label.setText(translator.translate("max_concurrent_requests"))
+        self.max_threads_help.update_tooltip()
         self.update_connection_status_label()
         self.models_label.setText(translator.translate("models"))
         self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
         self.add_model_button.setText(translator.translate("add_model"))
         self.remove_model_button.setText(translator.translate("remove_model"))
+        self.add_model_help.update_tooltip()
         self.info_label.setText(translator.translate("openrouter_info"))
 
     def update_fields(self):
