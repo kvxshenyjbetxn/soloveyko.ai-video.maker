@@ -366,5 +366,7 @@
     "edit_prompt_text": "Enter new prompt (for this generation only):",
     "aspect_ratio": "Aspect Ratio:",
     "max_threads": "Max Threads:",
-    "elevenlabs_image_tab_title": "ElevenLabsImage"
+    "elevenlabs_image_tab_title": "ElevenLabsImage",
+    "edgetts_info": "This service does not require any global settings, API keys, or registration.",
+    "edgetts_test_link": "You can test the service and choose voices at this link:"
 }

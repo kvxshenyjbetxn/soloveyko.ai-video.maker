@@ -5,6 +5,7 @@ from .elevenlabs_tab import ElevenLabsTab
 from .voicemaker_tab import VoicemakerTab
 from .gemini_tts_tab import GeminiTTSTab
 from .elevenlabs_unlim_tab import ElevenLabsUnlimTab
+from .edgetts_tab import EdgeTTSTab
 
 class AudioTab(QWidget):
     def __init__(self, main_window=None):
@@ -30,6 +31,9 @@ class AudioTab(QWidget):
         self.gemini_tts_tab = GeminiTTSTab(self.main_window)
         self.tab_widget.addTab(self.gemini_tts_tab, "GeminiTTS")
         
+        self.edgetts_tab = EdgeTTSTab(self.main_window)
+        self.tab_widget.addTab(self.edgetts_tab, "EdgeTTS")
+        
         layout.addWidget(self.tab_widget)
 
     def retranslate_ui(self):
@@ -37,6 +41,7 @@ class AudioTab(QWidget):
         self.tab_widget.setTabText(1, "ElevenLabs Unlim")
         self.tab_widget.setTabText(2, "Voicemaker")
         self.tab_widget.setTabText(3, "GeminiTTS")
+        self.tab_widget.setTabText(4, "EdgeTTS")
 
     def update_fields(self):
         self.elevenlabs_tab.update_fields()
@@ -47,4 +52,5 @@ class AudioTab(QWidget):
         # self.elevenlabs_unlim_tab.update_fields() 
         self.voicemaker_tab.update_fields()
         self.gemini_tts_tab.update_fields()
+        self.edgetts_tab.update_fields()
 

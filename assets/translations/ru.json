@@ -370,5 +370,7 @@
     "edit_prompt_text": "Введите новый промт (для этой генерации):",
     "aspect_ratio": "Соотношение сторон:",
     "max_threads": "Макс. потоков:",
-    "elevenlabs_image_tab_title": "ElevenLabsImage"
+    "elevenlabs_image_tab_title": "ElevenLabsImage",
+    "edgetts_info": "Для этого сервиса не требуется никаких глобальных настроек, API-ключей или регистрации.",
+    "edgetts_test_link": "Вы можете протестировать сервис и выбрать голоса по этой ссылке:"
 }
