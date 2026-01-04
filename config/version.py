@@ -1,2 +1,2 @@
 # config/version.py
-__version__ = "0.44.5"
+__version__ = "0.44.6"
