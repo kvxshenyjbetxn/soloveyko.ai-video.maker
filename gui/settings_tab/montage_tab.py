@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QScrollArea,
                                QCheckBox, QDoubleSpinBox, QComboBox, QSpinBox,
-                               QFormLayout, QGroupBox, QLabel)
+                               QFormLayout, QGroupBox, QLabel, QHBoxLayout)
 from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
 from gui.widgets.slider_spinbox import SliderWithSpinBox
+from gui.widgets.help_label import HelpLabel
 
 class MontageTab(QWidget):
     def __init__(self):
@@ -34,9 +35,16 @@ class MontageTab(QWidget):
         self.render_group = QGroupBox()
         render_layout = QFormLayout()
 
+        self.codec_help = HelpLabel("codec_label")
         self.codec_label = QLabel()
+        codec_label_container = QWidget()
+        codec_label_layout = QHBoxLayout(codec_label_container)
+        codec_label_layout.setContentsMargins(0,0,0,0)
+        codec_label_layout.setSpacing(5)
+        codec_label_layout.addWidget(self.codec_help)
+        codec_label_layout.addWidget(self.codec_label)
+
         self.codec_combo = QComboBox()
-        # Add codecs with (Label, Value) pairs
         self.codec_combo.addItem("libx264 (CPU)", "libx264")
         self.codec_combo.addItem("libx265 (CPU)", "libx265")
         self.codec_combo.addItem("h264_nvenc (NVIDIA)", "h264_nvenc")
@@ -44,29 +52,52 @@ class MontageTab(QWidget):
         self.codec_combo.addItem("h264_videotoolbox (Mac)", "h264_videotoolbox")
         
         self.codec_combo.currentIndexChanged.connect(self.save_settings)
-        render_layout.addRow(self.codec_label, self.codec_combo)
+        render_layout.addRow(codec_label_container, self.codec_combo)
 
+        self.preset_help = HelpLabel("preset_label")
         self.preset_label = QLabel()
+        preset_label_container = QWidget()
+        preset_label_layout = QHBoxLayout(preset_label_container)
+        preset_label_layout.setContentsMargins(0,0,0,0)
+        preset_label_layout.setSpacing(5)
+        preset_label_layout.addWidget(self.preset_help)
+        preset_label_layout.addWidget(self.preset_label)
+
         self.preset_combo = QComboBox()
         self.preset_combo.addItems(["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"])
         self.preset_combo.currentTextChanged.connect(self.save_settings)
-        render_layout.addRow(self.preset_label, self.preset_combo)
+        render_layout.addRow(preset_label_container, self.preset_combo)
 
+        self.bitrate_help = HelpLabel("bitrate_label")
         self.bitrate_label = QLabel()
+        bitrate_label_container = QWidget()
+        bitrate_label_layout = QHBoxLayout(bitrate_label_container)
+        bitrate_label_layout.setContentsMargins(0,0,0,0)
+        bitrate_label_layout.setSpacing(5)
+        bitrate_label_layout.addWidget(self.bitrate_help)
+        bitrate_label_layout.addWidget(self.bitrate_label)
+
         self.bitrate_spin = QSpinBox()
         self.bitrate_spin.setRange(1, 100)
         self.bitrate_spin.setSuffix(" Mbps")
         self.bitrate_spin.valueChanged.connect(self.save_settings)
-        render_layout.addRow(self.bitrate_label, self.bitrate_spin)
+        render_layout.addRow(bitrate_label_container, self.bitrate_spin)
 
+        self.upscale_help = HelpLabel("upscale_factor_label")
         self.upscale_label = QLabel()
+        upscale_label_container = QWidget()
+        upscale_label_layout = QHBoxLayout(upscale_label_container)
+        upscale_label_layout.setContentsMargins(0,0,0,0)
+        upscale_label_layout.setSpacing(5)
+        upscale_label_layout.addWidget(self.upscale_help)
+        upscale_label_layout.addWidget(self.upscale_label)
+
         self.upscale_spin = QDoubleSpinBox()
         self.upscale_spin.setRange(1.0, 5.0)
         self.upscale_spin.setSingleStep(0.1)
         self.upscale_spin.setSuffix("x")
-        self.upscale_spin.setToolTip("Image upscale factor before processing (Default: 3.0)")
         self.upscale_spin.valueChanged.connect(self.save_settings)
-        render_layout.addRow(self.upscale_label, self.upscale_spin)
+        render_layout.addRow(upscale_label_container, self.upscale_spin)
 
         self.render_group.setLayout(render_layout)
         self.layout.addWidget(self.render_group)
@@ -75,17 +106,33 @@ class MontageTab(QWidget):
         self.trans_group = QGroupBox()
         trans_layout = QFormLayout()
 
+        self.enable_trans_help = HelpLabel("enable_transitions_label")
         self.enable_trans_cb = QCheckBox()
+        enable_trans_container = QWidget()
+        enable_trans_layout = QHBoxLayout(enable_trans_container)
+        enable_trans_layout.setContentsMargins(0,0,0,0)
+        enable_trans_layout.setSpacing(5)
+        enable_trans_layout.addWidget(self.enable_trans_help)
+        enable_trans_layout.addWidget(self.enable_trans_cb)
+        
         self.enable_trans_cb.toggled.connect(self.save_settings)
-        trans_layout.addRow(self.enable_trans_cb)
+        trans_layout.addRow(enable_trans_container)
 
+        self.trans_dur_help = HelpLabel("duration_label")
         self.trans_dur_label = QLabel()
+        trans_dur_container = QWidget()
+        trans_dur_layout = QHBoxLayout(trans_dur_container)
+        trans_dur_layout.setContentsMargins(0,0,0,0)
+        trans_dur_layout.setSpacing(5)
+        trans_dur_layout.addWidget(self.trans_dur_help)
+        trans_dur_layout.addWidget(self.trans_dur_label)
+
         self.trans_dur_spin = SliderWithSpinBox()
         self.trans_dur_spin.setRange(0.1, 5.0)
         self.trans_dur_spin.setSingleStep(0.1)
         self.trans_dur_spin.setSuffix(" s")
         self.trans_dur_spin.valueChanged.connect(self.save_settings)
-        trans_layout.addRow(self.trans_dur_label, self.trans_dur_spin)
+        trans_layout.addRow(trans_dur_container, self.trans_dur_spin)
 
         self.trans_group.setLayout(trans_layout)
         self.layout.addWidget(self.trans_group)
@@ -94,23 +141,47 @@ class MontageTab(QWidget):
         self.zoom_group = QGroupBox()
         zoom_layout = QFormLayout()
 
+        self.enable_zoom_help = HelpLabel("enable_zoom_label")
         self.enable_zoom_cb = QCheckBox()
-        self.enable_zoom_cb.toggled.connect(self.save_settings)
-        zoom_layout.addRow(self.enable_zoom_cb)
+        enable_zoom_container = QWidget()
+        enable_zoom_layout = QHBoxLayout(enable_zoom_container)
+        enable_zoom_layout.setContentsMargins(0,0,0,0)
+        enable_zoom_layout.setSpacing(5)
+        enable_zoom_layout.addWidget(self.enable_zoom_help)
+        enable_zoom_layout.addWidget(self.enable_zoom_cb)
 
+        self.enable_zoom_cb.toggled.connect(self.save_settings)
+        zoom_layout.addRow(enable_zoom_container)
+
+        self.zoom_speed_help = HelpLabel("zoom_speed_factor_label")
         self.zoom_speed_label = QLabel()
+        zoom_speed_container = QWidget()
+        zoom_speed_layout = QHBoxLayout(zoom_speed_container)
+        zoom_speed_layout.setContentsMargins(0,0,0,0)
+        zoom_speed_layout.setSpacing(5)
+        zoom_speed_layout.addWidget(self.zoom_speed_help)
+        zoom_speed_layout.addWidget(self.zoom_speed_label)
+
         self.zoom_speed_spin = SliderWithSpinBox()
         self.zoom_speed_spin.setRange(0.1, 5.0)
         self.zoom_speed_spin.setSingleStep(0.1)
         self.zoom_speed_spin.valueChanged.connect(self.save_settings)
-        zoom_layout.addRow(self.zoom_speed_label, self.zoom_speed_spin)
+        zoom_layout.addRow(zoom_speed_container, self.zoom_speed_spin)
 
+        self.zoom_int_help = HelpLabel("zoom_intensity_label")
         self.zoom_int_label = QLabel()
+        zoom_int_container = QWidget()
+        zoom_int_layout = QHBoxLayout(zoom_int_container)
+        zoom_int_layout.setContentsMargins(0,0,0,0)
+        zoom_int_layout.setSpacing(5)
+        zoom_int_layout.addWidget(self.zoom_int_help)
+        zoom_int_layout.addWidget(self.zoom_int_label)
+
         self.zoom_int_spin = SliderWithSpinBox()
         self.zoom_int_spin.setRange(0.01, 1.0)
         self.zoom_int_spin.setSingleStep(0.05)
         self.zoom_int_spin.valueChanged.connect(self.save_settings)
-        zoom_layout.addRow(self.zoom_int_label, self.zoom_int_spin)
+        zoom_layout.addRow(zoom_int_container, self.zoom_int_spin)
 
         self.zoom_group.setLayout(zoom_layout)
         self.layout.addWidget(self.zoom_group)
@@ -119,16 +190,32 @@ class MontageTab(QWidget):
         self.sway_group = QGroupBox()
         sway_layout = QFormLayout()
 
+        self.enable_sway_help = HelpLabel("enable_sway_label")
         self.enable_sway_cb = QCheckBox()
-        self.enable_sway_cb.toggled.connect(self.save_settings)
-        sway_layout.addRow(self.enable_sway_cb)
+        enable_sway_container = QWidget()
+        enable_sway_layout = QHBoxLayout(enable_sway_container)
+        enable_sway_layout.setContentsMargins(0,0,0,0)
+        enable_sway_layout.setSpacing(5)
+        enable_sway_layout.addWidget(self.enable_sway_help)
+        enable_sway_layout.addWidget(self.enable_sway_cb)
 
+        self.enable_sway_cb.toggled.connect(self.save_settings)
+        sway_layout.addRow(enable_sway_container)
+
+        self.sway_speed_help = HelpLabel("sway_speed_factor_label")
         self.sway_speed_label = QLabel()
+        sway_speed_container = QWidget()
+        sway_speed_layout = QHBoxLayout(sway_speed_container)
+        sway_speed_layout.setContentsMargins(0,0,0,0)
+        sway_speed_layout.setSpacing(5)
+        sway_speed_layout.addWidget(self.sway_speed_help)
+        sway_speed_layout.addWidget(self.sway_speed_label)
+
         self.sway_speed_spin = SliderWithSpinBox()
         self.sway_speed_spin.setRange(0.1, 5.0)
         self.sway_speed_spin.setSingleStep(0.1)
         self.sway_speed_spin.valueChanged.connect(self.save_settings)
-        sway_layout.addRow(self.sway_speed_label, self.sway_speed_spin)
+        sway_layout.addRow(sway_speed_container, self.sway_speed_spin)
 
         self.sway_group.setLayout(sway_layout)
         self.layout.addWidget(self.sway_group)
@@ -137,14 +224,22 @@ class MontageTab(QWidget):
         self.special_proc_group = QGroupBox()
         special_proc_layout = QFormLayout()
 
+        self.special_proc_mode_help = HelpLabel("special_proc_mode_label")
         self.special_proc_mode_label = QLabel()
+        mode_label_container = QWidget()
+        mode_label_layout = QHBoxLayout(mode_label_container)
+        mode_label_layout.setContentsMargins(0,0,0,0)
+        mode_label_layout.setSpacing(5)
+        mode_label_layout.addWidget(self.special_proc_mode_help)
+        mode_label_layout.addWidget(self.special_proc_mode_label)
+
         self.special_proc_mode_combo = QComboBox()
         self.special_proc_mode_combo.addItem(translator.translate("special_proc_mode_disabled"), "Disabled")
         self.special_proc_mode_combo.addItem(translator.translate("special_proc_mode_quick_show"), "Quick show")
         self.special_proc_mode_combo.addItem(translator.translate("special_proc_mode_video_at_beginning"), "Video at the beginning")
         self.special_proc_mode_combo.currentIndexChanged.connect(self.save_settings)
         self.special_proc_mode_combo.currentIndexChanged.connect(self.toggle_special_proc_widgets)
-        special_proc_layout.addRow(self.special_proc_mode_label, self.special_proc_mode_combo)
+        special_proc_layout.addRow(mode_label_container, self.special_proc_mode_combo)
 
         # Quick show settings
         self.special_proc_img_count_label = QLabel()
@@ -168,9 +263,17 @@ class MontageTab(QWidget):
         self.special_proc_video_count_spin.valueChanged.connect(self.save_settings)
         special_proc_layout.addRow(self.special_proc_video_count_label, self.special_proc_video_count_spin)
 
+        self.special_proc_check_sequence_help = HelpLabel("special_proc_check_sequence_label")
         self.special_proc_check_sequence_cb = QCheckBox()
+        check_seq_container = QWidget()
+        check_seq_layout = QHBoxLayout(check_seq_container)
+        check_seq_layout.setContentsMargins(0,0,0,0)
+        check_seq_layout.setSpacing(5)
+        check_seq_layout.addWidget(self.special_proc_check_sequence_help)
+        check_seq_layout.addWidget(self.special_proc_check_sequence_cb)
+
         self.special_proc_check_sequence_cb.toggled.connect(self.save_settings)
-        special_proc_layout.addRow(self.special_proc_check_sequence_cb)
+        special_proc_layout.addRow(check_seq_container)
         
         self.special_proc_group.setLayout(special_proc_layout)
         self.layout.addWidget(self.special_proc_group)
@@ -179,11 +282,19 @@ class MontageTab(QWidget):
         self.perf_group = QGroupBox()
         perf_layout = QFormLayout()
 
+        self.max_concurrent_montages_help = HelpLabel("max_concurrent_montages_label")
         self.max_concurrent_montages_label = QLabel()
+        max_montages_container = QWidget()
+        max_montages_layout = QHBoxLayout(max_montages_container)
+        max_montages_layout.setContentsMargins(0,0,0,0)
+        max_montages_layout.setSpacing(5)
+        max_montages_layout.addWidget(self.max_concurrent_montages_help)
+        max_montages_layout.addWidget(self.max_concurrent_montages_label)
+
         self.max_concurrent_montages_spin = QSpinBox()
         self.max_concurrent_montages_spin.setRange(1, 10)
         self.max_concurrent_montages_spin.valueChanged.connect(self.save_settings)
-        perf_layout.addRow(self.max_concurrent_montages_label, self.max_concurrent_montages_spin)
+        perf_layout.addRow(max_montages_container, self.max_concurrent_montages_spin)
 
         self.perf_group.setLayout(perf_layout)
         self.layout.addWidget(self.perf_group)
@@ -193,7 +304,6 @@ class MontageTab(QWidget):
     def update_fields(self):
         m_settings = self.settings.get("montage", {})
 
-        # Block signals
         for widget in self.findChildren(QWidget):
             if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, SliderWithSpinBox)):
                 widget.blockSignals(True)
@@ -203,7 +313,6 @@ class MontageTab(QWidget):
         if index != -1:
             self.codec_combo.setCurrentIndex(index)
         else:
-             # Fallback if the saved codec isn't in our list (e.g., config file manual edit)
              self.codec_combo.setCurrentIndex(0)
 
         self.preset_combo.setCurrentText(m_settings.get("preset", "medium"))
@@ -232,7 +341,6 @@ class MontageTab(QWidget):
 
         self.max_concurrent_montages_spin.setValue(m_settings.get("max_concurrent_montages", 1))
 
-        # Unblock signals
         for widget in self.findChildren(QWidget):
             if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, SliderWithSpinBox)):
                 widget.blockSignals(False)
@@ -294,6 +402,22 @@ class MontageTab(QWidget):
 
         self.perf_group.setTitle(translator.translate("performance_group"))
         self.max_concurrent_montages_label.setText(translator.translate("max_concurrent_montages_label"))
+
+        # Update all hints
+        self.codec_help.update_tooltip()
+        self.preset_help.update_tooltip()
+        self.bitrate_help.update_tooltip()
+        self.upscale_help.update_tooltip()
+        self.enable_trans_help.update_tooltip()
+        self.trans_dur_help.update_tooltip()
+        self.enable_zoom_help.update_tooltip()
+        self.zoom_speed_help.update_tooltip()
+        self.zoom_int_help.update_tooltip()
+        self.enable_sway_help.update_tooltip()
+        self.sway_speed_help.update_tooltip()
+        self.special_proc_mode_help.update_tooltip()
+        self.special_proc_check_sequence_help.update_tooltip()
+        self.max_concurrent_montages_help.update_tooltip()
 
     def toggle_special_proc_widgets(self):
         mode = self.special_proc_mode_combo.currentData()
