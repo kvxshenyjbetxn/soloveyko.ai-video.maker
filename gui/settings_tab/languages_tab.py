@@ -87,12 +87,31 @@ class LanguagesTab(QWidget):
         left_layout.addWidget(self.add_remove_group)
         
         add_form_layout = QFormLayout()
+        
+        self.lang_name_help = HelpLabel("language_name_label")
         self.lang_name_label = QLabel()
+        lang_name_container = QWidget()
+        lang_name_layout = QHBoxLayout(lang_name_container)
+        lang_name_layout.setContentsMargins(0, 0, 0, 0)
+        lang_name_layout.setSpacing(5)
+        lang_name_layout.addWidget(self.lang_name_help)
+        lang_name_layout.addWidget(self.lang_name_label)
+        
         self.lang_name_input = QLineEdit()
+        
+        self.lang_id_help = HelpLabel("language_id_label")
         self.lang_id_label = QLabel()
+        lang_id_container = QWidget()
+        lang_id_layout = QHBoxLayout(lang_id_container)
+        lang_id_layout.setContentsMargins(0, 0, 0, 0)
+        lang_id_layout.setSpacing(5)
+        lang_id_layout.addWidget(self.lang_id_help)
+        lang_id_layout.addWidget(self.lang_id_label)
+        
         self.lang_id_input = QLineEdit()
-        add_form_layout.addRow(self.lang_name_label, self.lang_name_input)
-        add_form_layout.addRow(self.lang_id_label, self.lang_id_input)
+        
+        add_form_layout.addRow(lang_name_container, self.lang_name_input)
+        add_form_layout.addRow(lang_id_container, self.lang_id_input)
         add_remove_layout.addLayout(add_form_layout)
 
         add_remove_buttons_layout = QHBoxLayout()
@@ -1132,6 +1151,8 @@ class LanguagesTab(QWidget):
         self.add_remove_group.setTitle(translator.translate("manage_languages"))
         self.lang_name_label.setText(translator.translate("language_name_label"))
         self.lang_id_label.setText(translator.translate("language_id_label"))
+        self.lang_name_help.update_tooltip()
+        self.lang_id_help.update_tooltip()
         self.add_lang_button.setText(translator.translate("add_model"))
         self.remove_lang_button.setText(translator.translate("remove_model"))
         self.prompt_label.setText(translator.translate("language_prompt_label"))

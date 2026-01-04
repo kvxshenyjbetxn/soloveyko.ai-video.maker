@@ -75,7 +75,7 @@
     "templates_settings_label": "Настройки шаблонов",
     "manage_languages": "Управление языками",
     "language_name_label": "Отображаемое имя:",
-    "language_id_label": "Идентификатор языка (напр. ru-RU):",
+    "language_id_label": "Идентификатор языка (напр. ru):",
     "enter_links_label": "Введите ссылки на YouTube (по одной в строке):",
     "links_count_label": "Количество ссылок:",
     "language_prompt_label": "Промт для этого языка:",

@@ -75,7 +75,7 @@
     "templates_settings_label": "Налаштування шаблонів",
     "manage_languages": "Керування мовами",
     "language_name_label": "Відображувана назва:",
-    "language_id_label": "Ідентифікатор мови (напр. uk-UK):",
+    "language_id_label": "Ідентифікатор мови (напр. uk):",
     "enter_links_label": "Введіть посилання на YouTube (по одному в рядку):",
     "links_count_label": "Кількість посилань:",
     "language_prompt_label": "Промт для цієї мови:",

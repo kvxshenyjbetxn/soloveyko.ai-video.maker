@@ -41,5 +41,7 @@
     "voicemaker_voice_label": "Selection of a voice model from the available VoiceMaker library. Each voice features unique timbre and intonational characteristics.",
     "edgetts_voice_label": "Selection of a system voice from the EdgeTTS service. To preview and select the most suitable option, use the official website (link provided in Settings > API > Audio > EdgeTTS).",
     "overlay_effect_label": "Selection of visual overlay effects with transparency applied over the video to create ambiance (similar to effects in CapCut).",
-    "watermark_label": "Adding a static image (logo or icon) to a specified corner of the video. The size and position of the watermark can be adjusted below."
+    "watermark_label": "Adding a static image (logo or icon) to a specified corner of the video. The size and position of the watermark can be adjusted below.",
+    "language_name_label": "The name of the language for your convenience. It will be displayed in the task card on the Queue tab, and a project folder with this name will be created to store all generated data.",
+    "language_id_label": "A critical setting for correct transcription, especially when using the Whisper (AMD/Fork) engine. Specify the two-letter language code (e.g., uk for Ukrainian, en for English) to ensure accurate speech recognition."
 }
