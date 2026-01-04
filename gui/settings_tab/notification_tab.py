@@ -8,12 +8,14 @@ from utils.translator import translator
 from utils.settings import settings_manager
 from core.notification_manager import notification_manager
 from gui.api_workers import ApiKeyCheckWorker
+from gui.widgets.help_label import HelpLabel
 
 class NotificationTab(QWidget):
     def __init__(self, main_window=None):
         super().__init__()
         self.main_window = main_window
         self.init_ui()
+        self.retranslate_ui()
         self.update_fields()
 
     def init_ui(self):
@@ -24,9 +26,17 @@ class NotificationTab(QWidget):
         # Enable Notifications Checkbox
         self.enable_checkbox = QCheckBox()
         self.enable_checkbox.stateChanged.connect(self.on_enable_changed)
-        # Using a default key for translation, but falling back to Ukrainian as requested
-        self.enable_label = QLabel(translator.translate('enable_notifications_label', 'Увімкнути сповіщення'))
-        form_layout.addRow(self.enable_label, self.enable_checkbox)
+        
+        self.enable_help = HelpLabel("notifications_enable_hint")
+        enable_container = QWidget()
+        enable_layout = QHBoxLayout(enable_container)
+        enable_layout.setContentsMargins(0, 0, 0, 0)
+        enable_layout.setSpacing(5)
+        enable_layout.addWidget(self.enable_help)
+        self.enable_label = QLabel()
+        enable_layout.addWidget(self.enable_label)
+
+        form_layout.addRow(enable_container, self.enable_checkbox)
 
         # Telegram User ID Field
         self.user_id_input = QLineEdit()
@@ -41,8 +51,16 @@ class NotificationTab(QWidget):
         user_id_layout.addWidget(self.user_id_input)
         user_id_layout.addWidget(self.get_id_button)
         
-        self.user_id_label = QLabel(translator.translate('telegram_user_id_label', 'Telegram ID користувача'))
-        form_layout.addRow(self.user_id_label, user_id_layout)
+        self.user_id_label = QLabel()
+        self.user_id_help = HelpLabel("telegram_user_id_hint")
+        user_id_label_container = QWidget()
+        user_id_label_layout = QHBoxLayout(user_id_label_container)
+        user_id_label_layout.setContentsMargins(0, 0, 0, 0)
+        user_id_label_layout.setSpacing(5)
+        user_id_label_layout.addWidget(self.user_id_help)
+        user_id_label_layout.addWidget(self.user_id_label)
+
+        form_layout.addRow(user_id_label_container, user_id_layout)
 
         # Bot Link Display
         self.bot_link_container = QWidget()
@@ -63,8 +81,16 @@ class NotificationTab(QWidget):
         link_layout.addWidget(self.copy_button)
         link_layout.addStretch()
 
-        self.bot_info_label = QLabel(translator.translate('bot_link_info', 'Посилання на бота:'))
-        form_layout.addRow(self.bot_info_label, self.bot_link_container)
+        self.bot_info_label = QLabel()
+        self.bot_info_help = HelpLabel("bot_link_hint")
+        bot_info_label_container = QWidget()
+        bot_info_label_layout = QHBoxLayout(bot_info_label_container)
+        bot_info_label_layout.setContentsMargins(0, 0, 0, 0)
+        bot_info_label_layout.setSpacing(5)
+        bot_info_label_layout.addWidget(self.bot_info_help)
+        bot_info_label_layout.addWidget(self.bot_info_label)
+
+        form_layout.addRow(bot_info_label_container, self.bot_link_container)
 
         layout.addLayout(form_layout)
 
@@ -147,3 +173,7 @@ class NotificationTab(QWidget):
 
         self.copy_button.setText(translator.translate('copy_button', 'Копіювати'))
         self.get_id_button.setText(translator.translate('get_id_button', 'Отримати ID'))
+
+        self.enable_help.update_tooltip()
+        self.user_id_help.update_tooltip()
+        self.bot_info_help.update_tooltip()
