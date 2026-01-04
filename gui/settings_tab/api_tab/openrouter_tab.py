@@ -83,6 +83,16 @@ class OpenRouterTab(QWidget):
         model_management_layout.addWidget(self.remove_model_button)
         layout.addLayout(model_management_layout)
 
+        # Info Link
+        self.info_layout = QHBoxLayout()
+        self.info_label = QLabel()
+        self.link_label = QLabel('<a href="https://openrouter.ai/models" style="color: #0078d4;">https://openrouter.ai/models</a>')
+        self.link_label.setOpenExternalLinks(True)
+        self.info_layout.addWidget(self.info_label)
+        self.info_layout.addWidget(self.link_label)
+        self.info_layout.addStretch()
+        layout.addLayout(self.info_layout)
+
     def retranslate_ui(self):
         self.api_key_label.setText(translator.translate("openrouter_api_key"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
@@ -93,6 +103,7 @@ class OpenRouterTab(QWidget):
         self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
         self.add_model_button.setText(translator.translate("add_model"))
         self.remove_model_button.setText(translator.translate("remove_model"))
+        self.info_label.setText(translator.translate("openrouter_info"))
 
     def update_fields(self):
         self.api_key_input.blockSignals(True)

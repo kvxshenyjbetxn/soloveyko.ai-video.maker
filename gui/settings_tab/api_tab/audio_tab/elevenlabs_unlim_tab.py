@@ -39,6 +39,16 @@ class ElevenLabsUnlimTab(QWidget):
         self.check_btn.clicked.connect(self.check_balance)
         self.layout.addWidget(self.check_btn)
         
+        # Buy API Key Link
+        self.buy_info_layout = QHBoxLayout()
+        self.buy_info_label = QLabel(translator.translate("elevenlabs_unlim_buy_info"))
+        self.buy_link_label = QLabel('<a href="https://t.me/Elevenlabs_unlimited_bot" style="color: #0078d4;">@Elevenlabs_unlimited_bot</a>')
+        self.buy_link_label.setOpenExternalLinks(True)
+        self.buy_info_layout.addWidget(self.buy_info_label)
+        self.buy_info_layout.addWidget(self.buy_link_label)
+        self.buy_info_layout.addStretch()
+        self.layout.addLayout(self.buy_info_layout)
+
         self.layout.addStretch()
 
         # Initial balance check if key exists
