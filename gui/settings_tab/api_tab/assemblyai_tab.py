@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QComboBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QComboBox, QWidget
+from gui.widgets.help_label import HelpLabel
 from utils.translator import translator
 from utils.settings import settings_manager
 from api.assemblyai import assembly_ai_api
@@ -26,12 +27,20 @@ class AssemblyAITab(QWidget):
         layout.addLayout(api_key_layout)
 
         # Max Threads
+        self.max_threads_help = HelpLabel("assemblyai_max_threads")
         max_threads_layout = QHBoxLayout()
         self.max_threads_label = QLabel()
+        max_label_container = QWidget()
+        max_label_layout = QHBoxLayout(max_label_container)
+        max_label_layout.setContentsMargins(0, 0, 0, 0)
+        max_label_layout.setSpacing(5)
+        max_label_layout.addWidget(self.max_threads_help)
+        max_label_layout.addWidget(self.max_threads_label)
+
         self.max_threads_input = QComboBox()
         self.max_threads_input.addItems(["5", "100"])
         self.max_threads_input.currentIndexChanged.connect(self.save_max_threads)
-        max_threads_layout.addWidget(self.max_threads_label)
+        max_threads_layout.addWidget(max_label_container)
         max_threads_layout.addWidget(self.max_threads_input)
         layout.addLayout(max_threads_layout)
 
@@ -52,6 +61,9 @@ class AssemblyAITab(QWidget):
         self.max_threads_label.setText(translator.translate("assemblyai_max_threads"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.info_label.setText(translator.translate("assemblyai_info"))
+        
+        # Update hints
+        self.max_threads_help.update_tooltip()
 
     def update_fields(self):
         self.api_key_input.blockSignals(True)
