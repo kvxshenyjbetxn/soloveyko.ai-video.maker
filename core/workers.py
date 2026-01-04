@@ -381,7 +381,11 @@ class ImageGenerationWorker(BaseWorker):
         
         def generate_single_image(index, prompt):
             """Generate a single image and return its data"""
+            semaphore = self.config.get('semaphore')
             try:
+                if semaphore:
+                    semaphore.acquire()
+                
                 logger.log(f"[{self.task_id}] [{service_name}] Generating image {index + 1}/{len(prompts)}", level=LogLevel.INFO)
                 image_data = shared_api.generate_image(prompt, **api_kwargs)
 
@@ -393,6 +397,9 @@ class ImageGenerationWorker(BaseWorker):
             except Exception as e:
                 logger.log(f"[{self.task_id}] [{service_name}] Error generating image {index + 1}: {e}", level=LogLevel.ERROR)
                 return None
+            finally:
+                if semaphore:
+                    semaphore.release()
         
         if provider == 'pollinations':
             # Sequential processing for Pollinations to avoid rate limits and 429 errors
