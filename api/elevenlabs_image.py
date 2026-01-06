@@ -31,11 +31,18 @@ class ElevenLabsImageAPI:
             kwargs["headers"].update(headers)
         else:
             kwargs["headers"] = headers
+
+        # Proxy configuration
+        proxies = {}
+        if self.settings.get("proxy_enabled", False):
+            proxy_url = self.settings.get("proxy_url", "").strip()
+            if proxy_url:
+                proxies = {"http": proxy_url, "https": proxy_url}
         
         try:
             url = f"{self.base_url}/{endpoint}"
             session = self._get_session()
-            response = session.request(method, url, **kwargs)
+            response = session.request(method, url, proxies=proxies, **kwargs)
             
             if response.status_code not in [200, 201]:
                  logger.log(f"API request to {endpoint} failed with status {response.status_code}: {response.text}", level=LogLevel.ERROR)
