@@ -319,11 +319,14 @@ class VideoMixin:
         except Exception as e:
             logger.log(f"[{task_id}] Failed to get video file size: {e}", level=LogLevel.WARNING)
 
+        self._check_if_all_are_ready_or_failed()
+
     @Slot(str, str)
     def _on_montage_error(self, task_id, error):
         self.montage_semaphore.release()
         self._process_montage_queue()
         self._set_stage_status(task_id, 'stage_montage', 'error', error)
+        self._check_if_all_are_ready_or_failed()
     
     @Slot(str, str)
     def _on_montage_progress(self, task_id, message):
