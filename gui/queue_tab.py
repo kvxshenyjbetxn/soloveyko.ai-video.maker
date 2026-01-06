@@ -144,7 +144,10 @@ class TaskCard(QGroupBox):
         # Custom header
         header_layout = QHBoxLayout()
         task_name_label = QLabel(f"<b>{self.job_name}</b>", self)
-        task_name_label.setWordWrap(True)  # Enable word wrap for long task names
+        task_name_label.setToolTip(self.job_name)
+        task_name_label.setWordWrap(True)
+        task_name_label.setFixedWidth(150)
+        task_name_label.setFixedHeight(50) # Approx height for 3 lines
         header_layout.addWidget(task_name_label)
         header_layout.addStretch()
 
