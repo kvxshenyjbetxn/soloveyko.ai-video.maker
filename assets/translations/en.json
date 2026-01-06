@@ -382,5 +382,8 @@
     "pollinations_info": "You can test the service and get a token at this link:",
     "openrouter_info": "Here you can choose models and top up your balance:",
     "voicemaker_info": "You can top up your balance and get a token here:",
-    "assemblyai_info": "You can get an API key on the official website:"
+    "assemblyai_info": "You can get an API key on the official website:",
+    "enable_proxy": "Enable Proxy",
+    "proxy_placeholder": "http://user:pass@host:port",
+    "proxy_recommendation": "Recommended proxy service:"
 }

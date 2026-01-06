@@ -47,10 +47,25 @@ class ElevenLabsAPI:
         headers = {"X-API-Key": self.api_key}
         if json:
             headers["Content-Type"] = "application/json"
+
+        # Proxy configuration
+        proxies = {}
+        if settings_manager.get("elevenlabs_proxy_enabled", False):
+            proxy_url = settings_manager.get("elevenlabs_proxy_url", "").strip()
+            if proxy_url:
+                proxies = {"http": proxy_url, "https": proxy_url}
         
         try:
             session = self._get_session()
-            response = session.request(method, f"{self.base_url}/{endpoint}", headers=headers, json=json, timeout=10, **kwargs)
+            response = session.request(
+                method, 
+                f"{self.base_url}/{endpoint}", 
+                headers=headers, 
+                json=json, 
+                timeout=10, 
+                proxies=proxies, # Add proxies here
+                **kwargs
+            )
             response.raise_for_status() 
             if response.status_code == 200:
                 if "audio/mpeg" in response.headers.get("Content-Type", ""):
@@ -122,10 +137,17 @@ class ElevenLabsAPI:
         
         headers = {"X-API-Key": self.api_key}
         url = f"{self.base_url}/tasks/{task_id}/result"
+
+        # Proxy configuration
+        proxies = {}
+        if settings_manager.get("elevenlabs_proxy_enabled", False):
+            proxy_url = settings_manager.get("elevenlabs_proxy_url", "").strip()
+            if proxy_url:
+                proxies = {"http": proxy_url, "https": proxy_url}
         
         try:
             session = self._get_session()
-            response = session.get(url, headers=headers)
+            response = session.get(url, headers=headers, proxies=proxies)
             if response.status_code == 200:
                 logger.log(f"Successfully downloaded audio for task {task_id}", level=LogLevel.SUCCESS)
                 return response.content, "connected"
