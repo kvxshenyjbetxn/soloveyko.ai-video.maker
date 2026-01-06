@@ -386,5 +386,8 @@
     "pollinations_info": "Вы можете протестировать сервис и получить токен по этой ссылке:",
     "openrouter_info": "Здесь вы можете выбрать модели и пополнить баланс:",
     "voicemaker_info": "Пополнить баланс и получить токен можно здесь:",
-    "assemblyai_info": "Получить API ключ можно на официальном сайте:"
+    "assemblyai_info": "Получить API ключ можно на официальном сайте:",
+    "enable_proxy": "Включить прокси",
+    "proxy_placeholder": "http://user:pass@host:port",
+    "proxy_recommendation": "Рекомендуемый сервис прокси:"
 }

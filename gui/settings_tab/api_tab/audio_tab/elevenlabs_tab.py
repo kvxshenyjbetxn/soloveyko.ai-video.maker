@@ -1,7 +1,9 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QCheckBox
 from utils.translator import translator
 from utils.settings import settings_manager
+from utils.hint_manager import hint_manager
 from api.elevenlabs import ElevenLabsAPI
+from gui.widgets.help_label import HelpLabel
 
 class ElevenLabsTab(QWidget):
     def __init__(self, main_window=None):
@@ -51,6 +53,46 @@ class ElevenLabsTab(QWidget):
         self.buy_info_layout.addStretch()
         layout.addLayout(self.buy_info_layout)
 
+        # Proxy Settings
+        proxy_layout = QVBoxLayout()
+        
+        proxy_header_layout = QHBoxLayout()
+        
+        # Hint Label (Left of the setting)
+        self.proxy_hint_label = HelpLabel("elevenlabs_proxy_hint")
+        
+        self.proxy_checkbox = QCheckBox()
+        self.proxy_checkbox.toggled.connect(self.toggle_proxy_input)
+        self.proxy_checkbox.toggled.connect(self.save_proxy_settings)
+        
+        proxy_header_layout.addWidget(self.proxy_hint_label)
+        proxy_header_layout.addWidget(self.proxy_checkbox)
+        proxy_header_layout.addStretch()
+        
+        self.proxy_input = QLineEdit()
+        self.proxy_input.setPlaceholderText("http://user:pass@host:port")
+        self.proxy_input.textChanged.connect(self.save_proxy_settings)
+        
+        # Proxy Recommendation
+        self.proxy_recommendation_layout = QHBoxLayout()
+        self.proxy_recommendation_label = QLabel()
+        self.proxy_recommendation_link = QLabel('<a href="https://stableproxy.com/" style="color: #0078d4;">StableProxy</a>')
+        self.proxy_recommendation_link.setOpenExternalLinks(True)
+        self.proxy_recommendation_layout.addWidget(self.proxy_recommendation_label)
+        self.proxy_recommendation_layout.addWidget(self.proxy_recommendation_link)
+        self.proxy_recommendation_layout.addStretch()
+        
+        # Container for proxy input and recommendation to easily toggle visibility
+        self.proxy_details_widget = QWidget()
+        proxy_details_layout = QVBoxLayout(self.proxy_details_widget)
+        proxy_details_layout.setContentsMargins(0, 0, 0, 0)
+        proxy_details_layout.addWidget(self.proxy_input)
+        proxy_details_layout.addLayout(self.proxy_recommendation_layout)
+        
+        proxy_layout.addLayout(proxy_header_layout)
+        proxy_layout.addWidget(self.proxy_details_widget)
+        layout.addLayout(proxy_layout)
+
         layout.addStretch()
 
     def retranslate_ui(self):
@@ -58,6 +100,10 @@ class ElevenLabsTab(QWidget):
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.check_connection_button.setText(translator.translate("check_connection"))
         self.buy_info_label.setText(translator.translate("elevenlabs_buy_info"))
+        self.proxy_checkbox.setText(translator.translate("enable_proxy", "Enable Proxy"))
+        self.proxy_input.setPlaceholderText(translator.translate("proxy_placeholder", "http://user:pass@127.0.0.1:8080"))
+        self.proxy_recommendation_label.setText(translator.translate("proxy_recommendation"))
+        self.proxy_hint_label.update_tooltip()
         self.update_connection_status_label()
         self.update_balance_label()
 
@@ -67,6 +113,26 @@ class ElevenLabsTab(QWidget):
         self.api_key_input.setText(api_key)
         self.api.api_key = api_key
         self.api_key_input.blockSignals(False)
+
+        self.proxy_checkbox.blockSignals(True)
+        self.proxy_input.blockSignals(True)
+        
+        proxy_enabled = self.settings.get("elevenlabs_proxy_enabled", False)
+        proxy_url = self.settings.get("elevenlabs_proxy_url", "")
+        
+        self.proxy_checkbox.setChecked(proxy_enabled)
+        self.proxy_input.setText(proxy_url)
+        self.toggle_proxy_input(proxy_enabled)
+        
+        self.proxy_checkbox.blockSignals(False)
+        self.proxy_input.blockSignals(False)
+
+    def toggle_proxy_input(self, checked):
+        self.proxy_details_widget.setVisible(checked)
+
+    def save_proxy_settings(self):
+        self.settings.set("elevenlabs_proxy_enabled", self.proxy_checkbox.isChecked())
+        self.settings.set("elevenlabs_proxy_url", self.proxy_input.text().strip())
 
     def save_api_key(self, key):
         self.settings.set("elevenlabs_api_key", key)
