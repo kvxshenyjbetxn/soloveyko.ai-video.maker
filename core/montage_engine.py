@@ -17,9 +17,19 @@ class MontageEngine:
                 progress_callback(msg)
         
         # 1. ОТРИМУЄМО ДАНІ
+        valid_files = []
+        for f in visual_files:
+            abs_path = os.path.abspath(f)
+            if os.path.exists(abs_path):
+                valid_files.append(abs_path)
+            else:
+                logger.log(f"{prefix}[Warning] File not found, skipping: {f}", level=LogLevel.WARNING)
+        
+        visual_files = valid_files
+        
         audio_dur = self._get_duration(audio_path)
         if audio_dur == 0: raise Exception("Аудіо пусте або не читається.")
-        if not visual_files: raise Exception("Немає файлів.")
+        if not visual_files: raise Exception("Немає файлів (або жоден файл не знайдено).")
 
         num_files = len(visual_files)
         
@@ -141,7 +151,12 @@ class MontageEngine:
             this_dur = final_clip_durations[i]
             this_dur_str = fmt(this_dur)
             
-            inputs.append("-i"); inputs.append(f.replace("\\", "/"))
+            abs_path = os.path.abspath(f).replace("\\", "/")
+            if not os.path.exists(abs_path):
+                 logger.log(f"{prefix}[Error] Input file not found: {abs_path}", level=LogLevel.ERROR)
+                 raise Exception(f"Input file missing: {abs_path}")
+
+            inputs.append("-i"); inputs.append(abs_path)
             v_in = f"[{i}:v]"; v_out = f"v{i}_final"
             
             if is_video:
@@ -355,7 +370,7 @@ class MontageEngine:
                 filter_file.write(full_graph)
                 filter_script_path = filter_file.name
 
-            cmd = ["ffmpeg", "-y", "-hide_banner"]
+            cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-stats"]
             cmd.extend(inputs)
             cmd.extend(["-filter_complex_script", filter_script_path.replace("\\", "/"), "-map", output_v_stream, "-map", final_audio_map, "-c:v", codec])
 
@@ -378,7 +393,7 @@ class MontageEngine:
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             
             process = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, 
                 stdin=subprocess.DEVNULL,
                 text=True, encoding='utf-8', errors='replace', startupinfo=startupinfo
             )
