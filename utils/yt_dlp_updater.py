@@ -1,114 +1,160 @@
 import os
 import sys
 import subprocess
+import requests
+import zipfile
+import shutil
 import platform
+import stat
 from PySide6.QtCore import QThread
 from utils.logger import logger, LogLevel
+from utils.settings import settings_manager
 
 class YtDlpUpdater(QThread):
     """
-    Background worker to check for and apply updates to yt-dlp.
-    Works on Windows and macOS.
+    Background worker to check for and download/update yt-dlp and Deno binaries.
+    Ensures they are present in the settings.base_path (UserData folder).
     """
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.yt_dlp_path = self._find_yt_dlp()
-
-    def _find_yt_dlp(self):
-        """
-        Locates the yt-dlp executable in the assets directory or system PATH.
-        """
-        if getattr(sys, 'frozen', False):
-            # If running as compiled bundle
-            base_dir = sys._MEIPASS
-        else:
-            # If running as script
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-        assets_dir = os.path.join(base_dir, "assets")
+        self.base_path = settings_manager.base_path
+        # Use 'assets' subdirectory for binaries
+        self.assets_path = os.path.join(self.base_path, "assets")
+        self._ensure_assets_path()
         
-        # Determine executable name based on OS
-        if platform.system() == "Windows":
-            exe_name = "yt-dlp.exe"
-        else:
-            exe_name = "yt-dlp"
+        # Define binary names based on OS
+        self.is_windows = platform.system() == "Windows"
+        self.yt_dlp_name = "yt-dlp.exe" if self.is_windows else "yt-dlp"
+        self.deno_name = "deno.exe" if self.is_windows else "deno"
+        
+        self.yt_dlp_path = os.path.join(self.assets_path, self.yt_dlp_name)
+        self.deno_path = os.path.join(self.assets_path, self.deno_name)
 
-        # 1. Check in Common Data path (where user will manually put it)
-        from utils.settings import settings_manager
-        path_in_base = os.path.join(settings_manager.base_path, exe_name)
-        if os.path.exists(path_in_base):
-            return path_in_base
-
-        # 2. Check in assets (internal bundle)
-        path_in_assets = os.path.join(assets_dir, exe_name)
-        if os.path.exists(path_in_assets):
-            return path_in_assets
-
-        # 3. Fallback to system path
-        return exe_name
+    def _ensure_assets_path(self):
+        if not os.path.exists(self.assets_path):
+            try:
+                os.makedirs(self.assets_path)
+            except Exception as e:
+                logger.log(f"Error creating assets path {self.assets_path}: {e}", level=LogLevel.ERROR)
 
     def run(self):
         """
-        Main update logic executed in background thread.
+        Main logic: check Deno, then check yt-dlp.
         """
-        logger.log(f"Checking for yt-dlp updates (Path: {self.yt_dlp_path})...", level=LogLevel.INFO)
-        
+        logger.log(f"Checking dependencies in {self.assets_path}...", level=LogLevel.INFO)
         try:
-            # Command to update yt-dlp
-            # --update-to stable ensures we stay on stable versions
-            # --update-to is preferred over -U in newer versions, but -U is more compatible
-            cmd = [self.yt_dlp_path, "-U"]
+            self._check_and_update_deno()
+            self._check_and_update_ytdlp()
             
-            # Check if file exists and is executable
-            if not os.path.exists(self.yt_dlp_path):
-                # If path is just the name, it might be in PATH
-                if "/" not in self.yt_dlp_path and "\\" not in self.yt_dlp_path:
-                    pass # Trust result from shutil.which or similar (handled by system)
-                else:
-                    logger.log(f"yt-dlp not found at {self.yt_dlp_path}. Skipping update.", level=LogLevel.WARNING)
-                    return
-
-            # On macOS, ensure execution permissions if we have a direct path
-            if platform.system() == "Darwin" and os.path.exists(self.yt_dlp_path):
-                try:
-                    import stat
-                    # Remove the "downloaded from internet" quarantine attribute
-                    subprocess.run(["xattr", "-d", "com.apple.quarantine", self.yt_dlp_path], stderr=subprocess.DEVNULL)
-                    st = os.stat(self.yt_dlp_path)
-                    os.chmod(self.yt_dlp_path, st.st_mode | stat.S_IEXEC)
-                except:
-                    pass
-            
-            # On Windows, prevent console window popping up
-            startupinfo = None
-            if platform.system() == "Windows":
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            
-            process = subprocess.Popen(
-                cmd,
-                startupinfo=startupinfo,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                universal_newlines=True
-            )
-            
-            stdout, stderr = process.communicate()
-            
-            if process.returncode == 0:
-                if "yt-dlp is up to date" in stdout or "yt-dlp is up-to-date" in stdout:
-                    logger.log("yt-dlp is already up to date.", level=LogLevel.INFO)
-                else:
-                    logger.log(f"yt-dlp update successful: {stdout.strip()}", level=LogLevel.SUCCESS)
-            else:
-                # Some versions might return non-zero if no update is found or for other reasons
-                if "up to date" in stdout.lower() or "up-to-date" in stdout.lower():
-                    logger.log("yt-dlp is already up to date.", level=LogLevel.INFO)
-                else:
-                    logger.log(f"yt-dlp update check finished with issues. Output: {stdout.strip()}", level=LogLevel.WARNING)
-                    if stderr:
-                        logger.log(f"yt-dlp stderr: {stderr.strip()}", level=LogLevel.DEBUG)
-                        
+            # Ensure PATH is updated for the current process so subsequent calls find them
+            if self.assets_path not in os.environ["PATH"]:
+                os.environ["PATH"] = self.assets_path + os.pathsep + os.environ["PATH"]
+                logger.log("Added assets folder to PATH", level=LogLevel.DEBUG)
+                
         except Exception as e:
-            logger.log(f"Error checking for yt-dlp updates: {str(e)}", level=LogLevel.ERROR)
+            logger.log(f"Dependency check failed: {e}", level=LogLevel.ERROR)
+
+    def _check_and_update_deno(self):
+        if os.path.exists(self.deno_path):
+            # Optimistic check: if exists, assume it's okay for now to save startup time.
+            # Real Deno updates are rare compared to yt-dlp.
+            # Verify it runs
+            try:
+                subprocess.run([self.deno_path, "--version"], capture_output=True, check=True)
+                return
+            except Exception:
+                logger.log("Deno binary exists but seems broken. Re-downloading...", level=LogLevel.WARNING)
+
+        logger.log("Deno is missing or broken. Downloading...", level=LogLevel.INFO)
+        self._download_deno()
+
+    def _download_deno(self):
+        # determine URL
+        if self.is_windows:
+            url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
+        elif platform.system() == "Darwin":
+            # Taking a safe bet on x86_64 for compatibility or aarch64 if we detect Apple Silicon?
+            # Universal binary isn't a simple zip usually. Let's check machine.
+            machine = platform.machine()
+            if machine == 'arm64':
+                url = "https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip"
+            else:
+                url = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-apple-darwin.zip"
+        else:
+            logger.log("Unsupported OS for auto-Deno download.", level=LogLevel.ERROR)
+            return
+
+        zip_path = os.path.join(self.assets_path, "deno.zip")
+        try:
+            self._download_file(url, zip_path)
+            
+            # Extract
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(self.assets_path)
+            
+            # Cleanup zip
+            os.remove(zip_path)
+            
+            # Chmod on Unix
+            if not self.is_windows:
+                self._make_executable(self.deno_path)
+                
+            logger.log("Deno downloaded and installed successfully.", level=LogLevel.SUCCESS)
+        except Exception as e:
+            logger.log(f"Failed to download Deno: {e}", level=LogLevel.ERROR)
+
+    def _check_and_update_ytdlp(self):
+        # Always try to update yt-dlp, or at least check if it exists
+        if not os.path.exists(self.yt_dlp_path):
+            logger.log("yt-dlp is missing. Downloading...", level=LogLevel.INFO)
+            self._download_ytdlp()
+        else:
+            # Check for updates by running it with -U
+            # Note: This updates the binary IN PLACE.
+            logger.log("Checking for yt-dlp updates...", level=LogLevel.INFO)
+            try:
+                cmd = [self.yt_dlp_path, "-U"]
+                subprocess.run(cmd, capture_output=True, text=True)
+                # We trust it updated itself if needed
+                logger.log("yt-dlp update check completed.", level=LogLevel.SUCCESS)
+            except Exception as e:
+                logger.log(f"Failed to auto-update yt-dlp: {e}", level=LogLevel.WARNING)
+                # If update fails (e.g. permissions), maybe try re-downloading?
+                # For now, let's stick to in-place update.
+
+    def _download_ytdlp(self):
+        base_url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/"
+        if self.is_windows:
+            url = base_url + "yt-dlp.exe"
+        elif platform.system() == "Darwin":
+            url = base_url + "yt-dlp_macos"
+        else:
+             url = base_url + "yt-dlp"
+
+        try:
+            self._download_file(url, self.yt_dlp_path)
+            if not self.is_windows:
+                self._make_executable(self.yt_dlp_path)
+            logger.log("yt-dlp downloaded successfully.", level=LogLevel.SUCCESS)
+        except Exception as e:
+            logger.log(f"Failed to download yt-dlp: {e}", level=LogLevel.ERROR)
+
+    def _download_file(self, url, dest_path):
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            with open(dest_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+    def _make_executable(self, path):
+        try:
+            st = os.stat(path)
+            os.chmod(path, st.st_mode | stat.S_IEXEC)
+            # Remove quarantine attribute on macOS
+            if platform.system() == "Darwin":
+                 subprocess.run(["xattr", "-d", "com.apple.quarantine", path], stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+
