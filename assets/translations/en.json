@@ -385,5 +385,7 @@
     "assemblyai_info": "You can get an API key on the official website:",
     "enable_proxy": "Enable Proxy",
     "proxy_placeholder": "http://user:pass@host:port",
-    "proxy_recommendation": "Recommended proxy service:"
+    "proxy_recommendation": "Recommended proxy service:",
+    "update_available_title": "Update Available",
+    "update_available_message": "A new version ({remote_version}) is available.<br><br>Changelog: <a href=\"https://t.me/c/3594600798/41\">Link</a><br>Download via: <a href=\"https://t.me/SoloveykoAIManagerBot\">@SoloveykoAIManagerBot</a><br><br>To update, simply replace the old application file with the new one."
 }
