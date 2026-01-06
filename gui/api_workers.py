@@ -80,6 +80,40 @@ class ElevenLabsUnlimBalanceWorker(QRunnable):
             logger.log(f"ElevenLabsUnlim balance check failed: {e}", level=LogLevel.ERROR)
             self.signals.finished.emit(0, False)
 
+
 class WorkerSignals(QObject):
     finished = Signal(int, bool)
+
+class VersionCheckSignals(QObject):
+    finished = Signal(bool, str) # success, version_string_or_error
+
+class VersionCheckWorker(QRunnable):
+    def __init__(self, server_url):
+        super().__init__()
+        self.server_url = server_url
+        self.signals = VersionCheckSignals()
+
+    def run(self):
+        if pythoncom:
+             pythoncom.CoInitialize()
+        try:
+            try:
+                response = requests.get(
+                    f"{self.server_url}/latest_version",
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    version = data.get("version")
+                    if version:
+                        self.signals.finished.emit(True, version)
+                    else:
+                        self.signals.finished.emit(False, "Version not found in response")
+                else:
+                    self.signals.finished.emit(False, f"Server returned {response.status_code}")
+            except requests.RequestException as e:
+                self.signals.finished.emit(False, str(e))
+        finally:
+            if pythoncom:
+                pythoncom.CoUninitialize()
 

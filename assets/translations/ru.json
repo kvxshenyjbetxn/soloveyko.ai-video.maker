@@ -389,5 +389,7 @@
     "assemblyai_info": "Получить API ключ можно на официальном сайте:",
     "enable_proxy": "Включить прокси",
     "proxy_placeholder": "http://user:pass@host:port",
-    "proxy_recommendation": "Рекомендуемый сервис прокси:"
+    "proxy_recommendation": "Рекомендуемый сервис прокси:",
+    "update_available_title": "Доступно обновление",
+    "update_available_message": "Доступна новая версия ({remote_version}).<br><br>Список изменений доступен за этой <a href=\"https://t.me/c/3594600798/41\">ссылкой</a>.<br>Скачать обновление можно через: <a href=\"https://t.me/SoloveykoAIManagerBot\">@SoloveykoAIManagerBot</a><br><br>Для обновления просто замените старый файл программы новым."
 }

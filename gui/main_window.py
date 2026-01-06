@@ -10,7 +10,7 @@ from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from gui.dialogs.prompt_settings_dialog import PromptSettingsDialog
 from gui.qt_material import apply_stylesheet
-from gui.api_workers import ApiKeyCheckWorker, ApiKeyCheckSignals, ElevenLabsUnlimBalanceWorker
+from gui.api_workers import ApiKeyCheckWorker, ApiKeyCheckSignals, ElevenLabsUnlimBalanceWorker, VersionCheckWorker, VersionCheckSignals
 from gui.widgets.help_label import HelpLabel
 
 # Windows COM handling for threads
@@ -185,6 +185,9 @@ class MainWindow(QMainWindow):
         self.init_ui()
         logger.log('Application started.', level=LogLevel.INFO)
         self.app.installEventFilter(self)
+        
+        # Start version check
+        self.check_app_version()
 
     def _apply_startup_template(self):
         template_name = self.settings_manager.get("last_applied_template")
@@ -214,6 +217,42 @@ class MainWindow(QMainWindow):
         worker = ApiKeyCheckWorker(self.api_key, self.server_url)
         worker.signals.finished.connect(self.on_api_key_checked)
         self.threadpool.start(worker)
+
+    def check_app_version(self):
+        worker = VersionCheckWorker(self.server_url)
+        worker.signals.finished.connect(self.on_version_checked)
+        self.threadpool.start(worker)
+
+    def on_version_checked(self, success, remote_version):
+        if not success:
+            logger.log(f"Version check failed: {remote_version}", level=LogLevel.WARNING)
+            return
+
+        try:
+            # Simple semver comparison
+            current_v = __version__.strip()
+            remote_v = remote_version.strip()
+            
+            logger.log(f"Version Check: Current={current_v}, Remote={remote_v}", level=LogLevel.INFO)
+
+            def parse_version(v_str):
+                return [int(x) for x in v_str.split('.') if x.isdigit()]
+
+            if parse_version(remote_v) > parse_version(current_v):
+                title = self.translator.translate("update_available_title")
+                message = self.translator.translate("update_available_message").format(remote_version=remote_version)
+                
+                # Using QMessageBox with custom text
+                msg_box = QMessageBox(self)
+                msg_box.setWindowTitle(title)
+                msg_box.setTextFormat(Qt.RichText) # Enable HTML/Links
+                msg_box.setText(message)
+                msg_box.setIcon(QMessageBox.Information)
+                msg_box.setStandardButtons(QMessageBox.Ok)
+                msg_box.exec()
+
+        except Exception as e:
+            logger.log(f"Error comparing versions: {e}", level=LogLevel.ERROR)
 
     def on_api_key_checked(self, is_valid, expires_at, subscription_level, telegram_id):
         self.subscription_level = subscription_level

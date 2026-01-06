@@ -387,5 +387,7 @@
     "assemblyai_info": "Отримати API ключ можна на офіційному сайті:",
     "enable_proxy": "Увімкнути проксі",
     "proxy_placeholder": "http://user:pass@host:port",
-    "proxy_recommendation": "Рекомендований сервіс проксі:"
+    "proxy_recommendation": "Рекомендований сервіс проксі:",
+    "update_available_title": "Доступне оновлення",
+    "update_available_message": "Доступна нова версія ({remote_version}).<br><br>Переглянути список змін можна за цим <a href=\"https://t.me/c/3594600798/41\">посиланням</a>.<br>Завантажити оновлення можна через: <a href=\"https://t.me/SoloveykoAIManagerBot\">@SoloveykoAIManagerBot</a><br><br>Для оновлення просто замініть старий файл програми новим."
 }
