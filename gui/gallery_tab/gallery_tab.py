@@ -46,6 +46,10 @@ class RegenerateImageWorker(QRunnable):
                 api = self.pollinations_api
                 pollinations_config = self.config.get('pollinations_config', {})
                 api.model = pollinations_config.get('model', 'flux')
+            elif provider == 'elevenlabs':
+                from api.elevenlabs_image import ElevenLabsImageAPI
+                api = ElevenLabsImageAPI()
+                file_extension = 'png'
             
             if not api:
                 raise ValueError(f"Invalid image generation provider: {provider}")
@@ -60,7 +64,8 @@ class RegenerateImageWorker(QRunnable):
             new_image_path = f"{base_name}.{file_extension}"
             
             data_to_write = image_data
-            if provider == 'googler' and isinstance(image_data, str):
+            if isinstance(image_data, str):
+                # Decode base64 if it's a string (Googler and ElevenLabs return b64 strings)
                 data_to_write = base64.b64decode(image_data.split(",", 1)[1] if "," in image_data else image_data)
 
             with open(new_image_path, 'wb') as f:
@@ -70,19 +75,6 @@ class RegenerateImageWorker(QRunnable):
             
             # --- Thumbnail Generation ---
             thumbnail_path = ""
-            try:
-                base, ext = os.path.splitext(new_image_path)
-                thumbnail_path = f"{base}_thumb.jpg"
-                
-                pixmap = QPixmap(new_image_path)
-                if not pixmap.isNull():
-                    scaled_pixmap = pixmap.scaled(290, 290, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                    scaled_pixmap.save(thumbnail_path, "JPG", 85)
-                else:
-                    thumbnail_path = ""
-            except Exception as thumb_e:
-                thumbnail_path = ""
-                logger.log(f"Error generating thumbnail for regenerated image {new_image_path}: {thumb_e}", level=LogLevel.ERROR)
             # --- End Thumbnail Generation ---
 
             self.signals.finished.emit(self.old_image_path, new_image_path, thumbnail_path)
