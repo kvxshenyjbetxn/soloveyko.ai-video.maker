@@ -167,6 +167,7 @@ class MontageEngine:
                  logger.log(f"{prefix}[Error] Input file not found: {abs_path}", level=LogLevel.ERROR)
                  raise Exception(f"Input file missing: {abs_path}")
 
+            inputs.append("-thread_queue_size"); inputs.append("4096")
             inputs.append("-i"); inputs.append(abs_path)
             v_in = f"[{i}:v]"; v_out = f"v{i}_final"
             
@@ -265,7 +266,7 @@ class MontageEngine:
         
         if overlay_effect_path and os.path.exists(overlay_effect_path):
             logger.log(f"{prefix}[FFmpeg] Adding overlay effect: {os.path.basename(overlay_effect_path)}", level=LogLevel.INFO)
-            inputs.extend(["-stream_loop", "-1", "-i", overlay_effect_path.replace("\\", "/")])
+            inputs.extend(["-stream_loop", "-1", "-thread_queue_size", "4096", "-i", overlay_effect_path.replace("\\", "/")])
             effect_index = current_input_count
             current_input_count += 1
             
@@ -285,7 +286,7 @@ class MontageEngine:
         # 7. WATERMARK
         if watermark_path and os.path.exists(watermark_path):
             logger.log(f"{prefix}[FFmpeg] Adding watermark: {os.path.basename(watermark_path)}", level=LogLevel.INFO)
-            inputs.extend(["-i", watermark_path.replace("\\", "/")])
+            inputs.extend(["-thread_queue_size", "4096", "-i", watermark_path.replace("\\", "/")])
             wm_index = current_input_count
             current_input_count += 1
             
@@ -330,6 +331,7 @@ class MontageEngine:
         full_graph = ";".join(filter_parts)
         
         # --- AUDIO INPUTS AND FILTERS ---
+        inputs.append("-thread_queue_size"); inputs.append("4096")
         inputs.append("-i"); inputs.append(audio_path.replace("\\", "/"))
         voiceover_input_index = audio_input_index # Use the tracked index
 
@@ -340,7 +342,7 @@ class MontageEngine:
         if background_music_path and os.path.exists(background_music_path):
             logger.log(f"{prefix}[FFmpeg] Adding background music.", level=LogLevel.INFO)
             # Use -stream_loop on the input
-            inputs.extend(["-stream_loop", "-1", "-i", background_music_path.replace("\\", "/")])
+            inputs.extend(["-stream_loop", "-1", "-thread_queue_size", "4096", "-i", background_music_path.replace("\\", "/")])
             
             bg_music_input_index = voiceover_input_index + 1
 
