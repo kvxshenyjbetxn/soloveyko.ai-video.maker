@@ -390,5 +390,9 @@
     "proxy_placeholder": "http://user:pass@host:port",
     "proxy_recommendation": "Рекомендований сервіс проксі:",
     "update_available_title": "Доступне оновлення",
-    "update_available_message": "Доступна нова версія ({remote_version}).<br><br>Переглянути список змін можна за цим <a href=\"https://t.me/c/3594600798/41\">посиланням</a>.<br>Завантажити оновлення можна через: <a href=\"https://t.me/SoloveykoAIManagerBot\">@SoloveykoAIManagerBot</a><br><br>Для оновлення просто замініть старий файл програми новим."
+    "update_available_message": "Доступна нова версія ({remote_version}).<br><br>Переглянути список змін можна за цим <a href=\"https://t.me/c/3594600798/41\">посиланням</a>.<br>Завантажити оновлення можна через: <a href=\"https://t.me/SoloveykoAIManagerBot\">@SoloveykoAIManagerBot</a><br><br>Для оновлення просто замініть старий файл програми новим.",
+    "welcome_title": "Ласкаво просимо до Soloveyko.AI!",
+    "welcome_message_body": "<p>Вас вітає команда <b>Soloveyko.AI</b>!</p><p>Ця програма створена для автоматичного створення відео з можливістю:<br>• Створювати чергу завдань<br>• Перекладати на будь-яку кількість мов<br>• Виконувати рерайт текстів</p><p>ℹ️ <b>Підказки:</b> Біля кожного налаштування є значок питання, який містить детальну інформацію про його призначення.</p><p><b>Корисні посилання:</b><br>• <a href='https://t.me/c/3594600798/52'>FAQ (Інструкція)</a><br>• <a href='https://t.me/+d6vKtsy0iI5kOTM6'>Чат спільноти</a><br>• <a href='https://t.me/SoloveykoAIManagerBot'>Менеджер (Бот)</a></p>",
+    "do_not_show_again": "Більше не показувати це вікно при запуску",
+    "start_working": "Почати роботу"
 }
