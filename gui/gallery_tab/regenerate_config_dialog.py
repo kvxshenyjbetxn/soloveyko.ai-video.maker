@@ -20,7 +20,7 @@ class RegenerateConfigDialog(QDialog):
 
         # Service selector
         self.service_combo = QComboBox()
-        self.service_combo.addItems(['pollinations', 'googler'])
+        self.service_combo.addItems(['pollinations', 'googler', 'elevenlabs'])
         self.service_combo.setCurrentText(self.initial_provider)
         self.service_combo.currentTextChanged.connect(self.update_visible_options)
         form_layout.addRow(translator.translate("image_generation_provider_label"), self.service_combo)
