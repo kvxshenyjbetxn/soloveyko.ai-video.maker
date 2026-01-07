@@ -28,7 +28,7 @@ class MontageEngine:
             
             # Strict extension check
             if ext not in ALLOWED_EXTS:
-                logger.log(f"{prefix}[Warning] Skipping file with unsupported extension: {os.path.basename(abs_path)}", level=LogLevel.WARNING)
+                # Silently skip unsupported/system files
                 continue
                 
             if os.path.exists(abs_path):
