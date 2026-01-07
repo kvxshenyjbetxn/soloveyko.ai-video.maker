@@ -190,10 +190,6 @@ class MainWindow(QMainWindow):
         # Start version check
         self.check_app_version()
 
-        # Check for welcome dialog
-        if self.settings_manager.get('show_welcome_dialog', True):
-            QTimer.singleShot(1000, self.show_welcome_dialog) # Delay to ensure main window is visible
-
     def _apply_startup_template(self):
         template_name = self.settings_manager.get("last_applied_template")
         if not template_name:
@@ -231,6 +227,8 @@ class MainWindow(QMainWindow):
     def on_version_checked(self, success, remote_version):
         if not success:
             logger.log(f"Version check failed: {remote_version}", level=LogLevel.WARNING)
+            # Ensure welcome dialog still shows even if version check fails
+            QTimer.singleShot(500, self.show_welcome_dialog)
             return
 
         try:
@@ -258,8 +256,13 @@ class MainWindow(QMainWindow):
 
         except Exception as e:
             logger.log(f"Error comparing versions: {e}", level=LogLevel.ERROR)
+        finally:
+             QTimer.singleShot(500, self.show_welcome_dialog)
 
     def show_welcome_dialog(self):
+        if not self.settings_manager.get('show_welcome_dialog', True):
+            return
+
         try:
             dialog = WelcomeDialog(self)
             dialog.exec()
