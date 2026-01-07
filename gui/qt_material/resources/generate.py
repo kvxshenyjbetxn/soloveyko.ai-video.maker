@@ -2,7 +2,8 @@ import os
 import shutil
 from pathlib import Path
 
-HOME = Path.home()
+import tempfile
+HOME = Path(tempfile.gettempdir())
 RESOURCES_PATH = os.path.join(HOME, '.qt_material')
 
 
