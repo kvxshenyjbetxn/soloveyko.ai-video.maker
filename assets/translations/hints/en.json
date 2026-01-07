@@ -11,7 +11,7 @@
     "openrouter_add_model_hint": "To add a new model, copy its full name from the OpenRouter website (e.g., 'google/gemini-2.0-flash-exp:free') and paste it into this field, then click the 'Add' button. The added model will appear in the list above.",
     "char_limit": "This is the maximum number of characters that your current Voicemaker subscription plan allows you to voice in a single request.\nIf the text is longer, the program will automatically split it into parts (chunks) according to this limit.",
     "pollinations_model_label": "Selection of the model for image generation. Different models have different styles and capabilities.",
-    "pollinations_token_label": "Entering the Pollinations API key (token). \nWhen using the API, all service models are available, while without API only kontext and turbo are available.",
+    "pollinations_token_label": "Entering the Pollinations API key (token). Without an API key, there are very strict restrictions, with images limited to 15 seconds (this is a restriction of the PollinationsAI service). Therefore, obtain a free API access key at https://enter.pollinations.ai/ to generate 1 image in 5 seconds. \nWithout a key, the following models are available: flux, trubo, zimage. \nWith a key, the following models are available: kontext, nanobanana, seedream, seedance, veo.",
     "image_size_label": "Settings for the resolution of generated images (Width x Height). It is recommended to use standard sizes, such as 1280x720.",
     "nologo_label": "If enabled, the program will try to generate images without the Pollinations watermark.",
     "enhance_prompt_label": "Automatic enhancement of your text prompt by the neural network to get a more detailed and higher quality result.",

@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QComboBox, QTextEdit, QDialogButtonBox, QWidget, QLineEdit, QSpinBox
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QComboBox, QTextEdit, QDialogButtonBox, QWidget, QLineEdit, QSpinBox, QCheckBox, QHBoxLayout, QLabel
 from utils.translator import translator
 from utils.settings import settings_manager
 
@@ -35,9 +35,35 @@ class RegenerateConfigDialog(QDialog):
         pollinations_layout = QFormLayout(self.pollinations_options_widget)
         pollinations_layout.setContentsMargins(0, 0, 0, 0)
         self.pollinations_model_combo = QComboBox()
-        self.pollinations_model_combo.addItems(["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"])
+        default_models = ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"]
+        cached_models = self.settings.get("pollinations_models_cache", default_models)
+        self.pollinations_model_combo.addItems(cached_models)
         self.pollinations_model_combo.setCurrentText(self.initial_pollinations_config.get('model', 'flux'))
         pollinations_layout.addRow(translator.translate("pollinations_model_label"), self.pollinations_model_combo)
+
+        # Width and Height
+        size_layout = QHBoxLayout()
+        self.pollinations_width_spinbox = QSpinBox()
+        self.pollinations_width_spinbox.setRange(1, 4096)
+        self.pollinations_width_spinbox.setValue(self.initial_pollinations_config.get('width', 1280))
+        self.pollinations_height_spinbox = QSpinBox()
+        self.pollinations_height_spinbox.setRange(1, 4096)
+        self.pollinations_height_spinbox.setValue(self.initial_pollinations_config.get('height', 720))
+        size_layout.addWidget(self.pollinations_width_spinbox)
+        size_layout.addWidget(QLabel("x"))
+        size_layout.addWidget(self.pollinations_height_spinbox)
+        pollinations_layout.addRow(translator.translate("image_size_label"), size_layout)
+
+        # Enhance
+        self.pollinations_enhance_checkbox = QCheckBox(translator.translate("enhance_prompt_label"))
+        self.pollinations_enhance_checkbox.setChecked(self.initial_pollinations_config.get('enhance', False))
+        pollinations_layout.addRow(self.pollinations_enhance_checkbox)
+
+        # NoLogo
+        self.pollinations_nologo_checkbox = QCheckBox(translator.translate("nologo_label"))
+        self.pollinations_nologo_checkbox.setChecked(self.initial_pollinations_config.get('nologo', True))
+        pollinations_layout.addRow(self.pollinations_nologo_checkbox)
+
         form_layout.addRow(self.pollinations_options_widget)
 
         # --- Googler Specific Options ---
@@ -93,7 +119,11 @@ class RegenerateConfigDialog(QDialog):
             }
         elif config["provider"] == 'pollinations':
             config['pollinations_config'] = {
-                "model": self.pollinations_model_combo.currentText()
+                "model": self.pollinations_model_combo.currentText(),
+                "width": self.pollinations_width_spinbox.value(),
+                "height": self.pollinations_height_spinbox.value(),
+                "enhance": self.pollinations_enhance_checkbox.isChecked(),
+                "nologo": self.pollinations_nologo_checkbox.isChecked()
             }
             
         return config
