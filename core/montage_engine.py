@@ -396,7 +396,7 @@ class MontageEngine:
             else:
                 cmd.extend(["-preset", preset, "-b:v", bitrate_str, "-maxrate", bitrate_str, "-bufsize", f"{bitrate*2}M", "-pix_fmt", "yuv420p"])
             
-            cmd.extend(["-shortest", output_path.replace("\\", "/")])
+            cmd.extend(["-shortest", "-max_muxing_queue_size", "9999", output_path.replace("\\", "/")])
 
             startupinfo = None
             if platform.system() == "Windows":
