@@ -388,5 +388,9 @@
     "proxy_placeholder": "http://user:pass@host:port",
     "proxy_recommendation": "Recommended proxy service:",
     "update_available_title": "Update Available",
-    "update_available_message": "A new version ({remote_version}) is available.<br><br>Changelog: <a href=\"https://t.me/c/3594600798/41\">Link</a><br>Download via: <a href=\"https://t.me/SoloveykoAIManagerBot\">@SoloveykoAIManagerBot</a><br><br>To update, simply replace the old application file with the new one."
+    "update_available_message": "A new version ({remote_version}) is available.<br><br>Changelog: <a href=\"https://t.me/c/3594600798/41\">Link</a><br>Download via: <a href=\"https://t.me/SoloveykoAIManagerBot\">@SoloveykoAIManagerBot</a><br><br>To update, simply replace the old application file with the new one.",
+    "welcome_title": "Welcome to Soloveyko.AI!",
+    "welcome_message_body": "<p>Welcome from the <b>Soloveyko.AI</b> team!</p><p>This program is designed for automatic video creation with the ability to:<br>• Create a task queue<br>• Translate into any number of languages<br>• Rewrite texts</p><p>ℹ️ <b>Hints:</b> Next to each setting there is a question mark icon containing detailed information about its purpose.</p><p><b>Useful links:</b><br>• <a href='https://t.me/c/3594600798/52'>FAQ (Instructions)</a><br>• <a href='https://t.me/+d6vKtsy0iI5kOTM6'>Community Chat</a><br>• <a href='https://t.me/SoloveykoAIManagerBot'>Manager (Bot)</a></p>",
+    "do_not_show_again": "Do not show this window again",
+    "start_working": "Start Working"
 }

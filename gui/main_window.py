@@ -9,6 +9,7 @@ from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable,
 from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from gui.dialogs.prompt_settings_dialog import PromptSettingsDialog
+from gui.dialogs.welcome_dialog import WelcomeDialog
 from gui.qt_material import apply_stylesheet
 from gui.api_workers import ApiKeyCheckWorker, ApiKeyCheckSignals, ElevenLabsUnlimBalanceWorker, VersionCheckWorker, VersionCheckSignals
 from gui.widgets.help_label import HelpLabel
@@ -189,6 +190,10 @@ class MainWindow(QMainWindow):
         # Start version check
         self.check_app_version()
 
+        # Check for welcome dialog
+        if self.settings_manager.get('show_welcome_dialog', True):
+            QTimer.singleShot(1000, self.show_welcome_dialog) # Delay to ensure main window is visible
+
     def _apply_startup_template(self):
         template_name = self.settings_manager.get("last_applied_template")
         if not template_name:
@@ -253,6 +258,13 @@ class MainWindow(QMainWindow):
 
         except Exception as e:
             logger.log(f"Error comparing versions: {e}", level=LogLevel.ERROR)
+
+    def show_welcome_dialog(self):
+        try:
+            dialog = WelcomeDialog(self)
+            dialog.exec()
+        except Exception as e:
+            logger.log(f"Error showing welcome dialog: {e}", level=LogLevel.ERROR)
 
     def on_api_key_checked(self, is_valid, expires_at, subscription_level, telegram_id):
         self.subscription_level = subscription_level

@@ -294,7 +294,8 @@ Original Russian Text:
             'custom_stages': [],
             'last_used_template_name': '',
             'notifications_enabled': False,
-            'telegram_user_id': ''
+            'telegram_user_id': '',
+            'show_welcome_dialog': True
         }
         self.settings = self.load_settings()
 
