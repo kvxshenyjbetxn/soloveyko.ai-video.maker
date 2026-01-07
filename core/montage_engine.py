@@ -17,9 +17,20 @@ class MontageEngine:
                 progress_callback(msg)
         
         # 1. ОТРИМУЄМО ДАНІ
+        VIDEO_EXTS = ['.mp4', '.mkv', '.mov', '.avi', '.webm']
+        IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.bmp']
+        ALLOWED_EXTS = set(VIDEO_EXTS + IMAGE_EXTS)
+
         valid_files = []
         for f in visual_files:
             abs_path = os.path.abspath(f)
+            ext = os.path.splitext(abs_path)[1].lower()
+            
+            # Strict extension check
+            if ext not in ALLOWED_EXTS:
+                logger.log(f"{prefix}[Warning] Skipping file with unsupported extension: {os.path.basename(abs_path)}", level=LogLevel.WARNING)
+                continue
+                
             if os.path.exists(abs_path):
                 valid_files.append(abs_path)
             else:
