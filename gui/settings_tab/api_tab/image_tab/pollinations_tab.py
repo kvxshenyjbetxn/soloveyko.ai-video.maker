@@ -33,6 +33,7 @@ class PollinationsTab(QWidget):
     def update_models_list(self, models):
         if models:
             self.models = models
+            settings_manager.set("pollinations_models_cache", models)
             current_model = self.model_combo.currentText()
             
             self.model_combo.blockSignals(True)
@@ -133,6 +134,16 @@ class PollinationsTab(QWidget):
         self.info_layout.addStretch()
         layout.addRow("", self.info_layout)
 
+        # Get Key Info Link
+        self.get_key_info_layout = QHBoxLayout()
+        self.get_key_info_label = QLabel()
+        self.get_key_link_label = QLabel('<a href="https://enter.pollinations.ai/" style="color: #0078d4;">https://enter.pollinations.ai/</a>')
+        self.get_key_link_label.setOpenExternalLinks(True)
+        self.get_key_info_layout.addWidget(self.get_key_info_label)
+        self.get_key_info_layout.addWidget(self.get_key_link_label)
+        self.get_key_info_layout.addStretch()
+        layout.addRow("", self.get_key_info_layout)
+
         self.setLayout(layout)
 
     def connect_signals(self):
@@ -151,6 +162,7 @@ class PollinationsTab(QWidget):
         self.nologo_checkbox.setText(translator.translate("nologo_label"))
         self.enhance_checkbox.setText(translator.translate("enhance_prompt_label"))
         self.info_label.setText(translator.translate("pollinations_info"))
+        self.get_key_info_label.setText(translator.translate("pollinations_get_key_info"))
         
         # Update hints
         self.model_help.update_tooltip()

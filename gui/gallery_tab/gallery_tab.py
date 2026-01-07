@@ -45,7 +45,11 @@ class RegenerateImageWorker(QRunnable):
             elif provider == 'pollinations':
                 api = self.pollinations_api
                 pollinations_config = self.config.get('pollinations_config', {})
-                api.model = pollinations_config.get('model', 'flux')
+                api_kwargs['model'] = pollinations_config.get('model', 'flux')
+                api_kwargs['width'] = pollinations_config.get('width')
+                api_kwargs['height'] = pollinations_config.get('height')
+                api_kwargs['nologo'] = pollinations_config.get('nologo')
+                api_kwargs['enhance'] = pollinations_config.get('enhance')
             elif provider == 'elevenlabs':
                 from api.elevenlabs_image import ElevenLabsImageAPI
                 api = ElevenLabsImageAPI()

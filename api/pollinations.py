@@ -8,6 +8,8 @@ from utils.logger import logger, LogLevel
 thread_local_storage = threading.local()
 
 class PollinationsAPI:
+    _lock = threading.Lock()
+
     def __init__(self):
         self.base_url = "https://gen.pollinations.ai"
         self.load_credentials()
@@ -58,6 +60,11 @@ class PollinationsAPI:
             return []
 
     def generate_image(self, prompt, model=None, width=None, height=None, nologo=None, enhance=None):
+        """Thread-safe wrapper with rate limiting enforcement"""
+        with PollinationsAPI._lock:
+            return self._generate_core(prompt, model, width, height, nologo, enhance)
+
+    def _generate_core(self, prompt, model=None, width=None, height=None, nologo=None, enhance=None):
         self.load_credentials() 
         
         # Override with provided arguments if they exist
@@ -113,6 +120,14 @@ class PollinationsAPI:
                         return None
 
                 response.raise_for_status()
+                
+                # Rate Limiting Logic
+                # If token exists -> 10 seconds delay (safer limit)
+                # If no token -> 30 seconds delay (strict limit for free tier)
+                delay = 10 if (self.token and self.token.strip()) else 30
+                logger.log(f"      - Waiting {delay}s (Rate Limiting)...", LogLevel.INFO)
+                time.sleep(delay)
+                
                 return response.content
             except requests.exceptions.RequestException as e:
                 logger.log(f"      - Error generating image for prompt: '{prompt[:50]}...': {e}", LogLevel.ERROR)

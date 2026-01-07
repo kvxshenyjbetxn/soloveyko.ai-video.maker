@@ -467,6 +467,7 @@ class MainWindow(QMainWindow):
         self.task_processor.translation_review_required.connect(self._on_translation_review_required)
         self.task_processor.rewrite_review_required.connect(self._on_rewrite_review_required)
         self.gallery_tab.continue_montage_requested.connect(self.task_processor.resume_all_montages)
+        self.gallery_tab.continue_montage_requested.connect(lambda: self.tabs.setCurrentIndex(self.tabs.indexOf(self.queue_tab))) # Switch to Queue tab reliably
         self.gallery_tab.image_deleted.connect(self.task_processor._on_image_deleted)
         self.gallery_tab.image_regenerated.connect(self.task_processor._on_image_regenerated)
         self.gallery_tab.media_clicked.connect(self.show_media_viewer)
