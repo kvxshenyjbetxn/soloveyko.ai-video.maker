@@ -413,5 +413,13 @@
     "language_prompt_label": "💾 Промт для цієї мови:",
     "translation_model_label": "💾 Модель для перекладу:",
     "prompt_content_label": "💾 Промт для генерації зображень:",
-    "image_model_label": "💾 Модель для зображень:"
+    "image_model_label": "💾 Модель для зображень:",
+    "template_changes_title": "Підтвердження змін шаблону",
+    "template_changes_intro": "Наступні налаштування будуть змінені:",
+    "template_changes_template_column": "Шаблон / Налаштування",
+    "template_changes_old_value_column": "Старе значення",
+    "template_changes_new_value_column": "Нове значення",
+    "template_changes_confirm": "Підтвердити",
+    "template_changes_cancel": "Скасувати",
+    "template_changes_no_changes": "Змін не виявлено."
 }

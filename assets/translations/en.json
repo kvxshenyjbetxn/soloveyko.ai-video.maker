@@ -406,5 +406,13 @@
     "language_prompt_label": "💾 Prompt for this language:",
     "translation_model_label": "💾 Translation Model:",
     "prompt_content_label": "💾 Prompt for image generation:",
-    "image_model_label": "💾 Image Model:"
+    "image_model_label": "💾 Image Model:",
+    "template_changes_title": "Confirm Template Changes",
+    "template_changes_intro": "The following settings will be changed:",
+    "template_changes_template_column": "Template / Setting",
+    "template_changes_old_value_column": "Old Value",
+    "template_changes_new_value_column": "New Value",
+    "template_changes_confirm": "Confirm",
+    "template_changes_cancel": "Cancel",
+    "template_changes_no_changes": "No changes detected."
 }

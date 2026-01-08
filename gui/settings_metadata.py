@@ -30,15 +30,18 @@ GEMINI_VOICES = load_json_assets("gemini_tts_voices.json")
 # 'type' can be 'bool', 'int', 'float', 'choice', 'str'
 # 'options' is for 'choice' type
 SETTINGS_METADATA = {
-    'openrouter_models': {'type': 'string_list', 'label': 'openrouter_models'},
-    'image_generation_provider': {'type': 'choice', 'options': ["pollinations", "googler"], 'label': 'image_generation_provider'},
-    'image_review_enabled': {'type': 'bool', 'label': 'image_review_enabled'},
-    'results_path': {'type': 'folder_path', 'label': 'results_path'},
+    'openrouter_models': {'type': 'string_list', 'label': 'models'},
+    'image_generation_provider': {'type': 'choice', 'options': ["pollinations", "googler", "elevenlabs_image"], 'label': 'image_generation_provider_label'},
+    'image_review_enabled': {'type': 'bool', 'label': 'image_review_label'},
+    'results_path': {'type': 'folder_path', 'label': 'results_path_label'},
+    'rewrite_review_enabled': {'type': 'bool', 'label': 'rewrite_review_label'},
+    'translation_review_enabled': {'type': 'bool', 'label': 'translation_review_label'},
     'openrouter_api_key': {'type': 'str', 'label': 'openrouter_api_key'},
     'elevenlabs_api_key': {'type': 'str', 'label': 'elevenlabs_api_key'},
-    'voicemaker_api_key': {'type': 'str', 'label': 'voicemaker_api_key'},
-    'voicemaker_char_limit': {'type': 'int', 'min': 0, 'max': 10000, 'label': 'voicemaker_char_limit'},
+    'voicemaker_api_key': {'type': 'str', 'label': 'voicemaker_api_key_label'},
+    'voicemaker_char_limit': {'type': 'int', 'min': 0, 'max': 10000, 'label': 'char_limit'},
     'gemini_tts_api_key': {'type': 'str', 'label': 'gemini_tts_api_key'},
+    'elevenlabs_unlim_api_key': {'type': 'str', 'label': 'elevenlabs_unlim_api_key'},
     'assemblyai_api_key': {'type': 'str', 'label': 'assemblyai_api_key'},
     'montage': {
         # Render
@@ -76,23 +79,23 @@ SETTINGS_METADATA = {
         'color': {'type': 'color'},
     },
     'googler': {
-        'api_key': {'type': 'str'}, # Assuming basic string
-        'aspect_ratio': {'type': 'choice', 'options': ["IMAGE_ASPECT_RATIO_LANDSCAPE", "IMAGE_ASPECT_RATIO_PORTRAIT", "IMAGE_ASPECT_RATIO_SQUARE"]},
-        'video_prompt': {'type': 'text_edit_button'},
-        'negative_prompt': {'type': 'str'},
-        'seed': {'type': 'str'},
+        'api_key': {'type': 'str', 'label': 'googler_api_key_label'}, 
+        'aspect_ratio': {'type': 'choice', 'options': ["IMAGE_ASPECT_RATIO_LANDSCAPE", "IMAGE_ASPECT_RATIO_PORTRAIT", "IMAGE_ASPECT_RATIO_SQUARE"], 'label': 'googler_aspect_ratio_label'},
+        'video_prompt': {'type': 'text_edit_button', 'label': 'googler_video_prompt_label'},
+        'negative_prompt': {'type': 'str', 'label': 'googler_negative_prompt_label'},
+        'seed': {'type': 'str', 'label': 'googler_seed_label'},
     },
     'pollinations': {
-        'model': {'type': 'choice', 'options': ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"]},
-        'token': {'type': 'str'},
-        'width': {'type': 'int', 'min': 64, 'max': 4096},
-        'height': {'type': 'int', 'min': 64, 'max': 4096},
-        'nologo': {'type': 'bool'},
-        'enhance': {'type': 'bool'},
+        'model': {'type': 'choice', 'options': ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"], 'label': 'pollinations_model_label'},
+        'token': {'type': 'str', 'label': 'pollinations_token_label'},
+        'width': {'type': 'int', 'min': 64, 'max': 4096, 'label': 'image_size_label'},
+        'height': {'type': 'int', 'min': 64, 'max': 4096, 'label': 'image_height_label'},
+        'nologo': {'type': 'bool', 'label': 'nologo_label'},
+        'enhance': {'type': 'bool', 'label': 'enhance_prompt_label'},
     },
     'elevenlabs_image': {
         'api_key': {'type': 'str', 'label': 'elevenlabs_image_api_key'}, 
-        'aspect_ratio': {'type': 'choice', 'options': ["3:2", "16:9", "1:1", "9:16", "2:3", "4:5", "5:4"]},
+        'aspect_ratio': {'type': 'choice', 'options': ["3:2", "16:9", "1:1", "9:16", "2:3", "4:5", "5:4"], 'label': 'aspect_ratio'},
     },
      'image_prompt_settings': {
         'prompt': {'type': 'text_edit_button'},
@@ -206,6 +209,7 @@ KEY_TO_TRANSLATION_MAP = {
     'enhance': 'enhance_prompt_label',
 
     # ElevenLabsImage
+    'elevenlabs_image': 'elevenlabs_image_tab_title',
     'api_key': 'elevenlabs_image_api_key',
 
     'max_tokens': 'tokens_label', # "tokens_label": "Макс. токенів:",
@@ -235,6 +239,8 @@ KEY_TO_TRANSLATION_MAP = {
     'watermark_position': 'watermark_position_label',
     
     # Missing explicit mappings for some
-    'display_name': 'language_name_label' # "language_name_label": "Відображувана назва:",
+    'rewrite_review_enabled': 'rewrite_review_label',
+    'translation_review_enabled': 'translation_review_label',
+    'elevenlabs_unlim_api_key': 'elevenlabs_unlim_api_key',
 }
 
