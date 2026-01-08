@@ -402,5 +402,8 @@
     "select_setting": "Выберите параметр",
     "select_setting_hint": "Выберите настройку, которую вы хотите изменить в нескольких шаблонах одновременно.",
     "mass_edit_success": "Успешно обновлено {count} шаблонов.",
-    "eleven_unlim_settings_title": "ElevenLabs Unlimited"
+    "eleven_unlim_settings_title": "ElevenLabs Unlimited",
+    "image_height_label": "Высота:",
+    "voicemaker_api_key_label": "Ключ API VoiceMaker:",
+    "rewrite_temperature_label": "Температура:"
 }

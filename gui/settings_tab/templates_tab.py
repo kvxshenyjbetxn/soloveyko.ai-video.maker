@@ -658,7 +658,10 @@ class TemplatesTab(QWidget):
         buttons_layout.addWidget(self.edit_help)
         buttons_layout.addWidget(self.edit_button)
         buttons_layout.addWidget(self.delete_button)
+        
         self.mass_edit_button = QPushButton()
+        self.mass_edit_help = HelpLabel("mass_edit_hint")
+        buttons_layout.addWidget(self.mass_edit_help)
         buttons_layout.addWidget(self.mass_edit_button)
         main_layout.addLayout(buttons_layout)
 
@@ -699,6 +702,7 @@ class TemplatesTab(QWidget):
         self.apply_help.update_tooltip()
         self.edit_help.update_tooltip()
         self.notes_help.update_tooltip()
+        self.mass_edit_help.update_tooltip()
 
     def connect_signals(self):
         self.templates_combo.currentTextChanged.connect(self._on_template_select)

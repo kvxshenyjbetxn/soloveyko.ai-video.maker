@@ -409,5 +409,8 @@
     "param_image_provider": "Провайдер зображень",
     "param_whisper_model": "Модель Whisper",
     "mass_edit_success": "Успішно оновлено {count} шаблонів.",
-    "eleven_unlim_settings_title": "ElevenLabs Unlimited"
+    "eleven_unlim_settings_title": "ElevenLabs Unlimited",
+    "image_height_label": "Висота:",
+    "voicemaker_api_key_label": "Ключ API VoiceMaker:",
+    "rewrite_temperature_label": "Температура:"
 }
