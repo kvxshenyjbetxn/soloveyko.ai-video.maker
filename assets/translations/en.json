@@ -402,5 +402,8 @@
     "select_setting": "Select Setting",
     "select_setting_hint": "Select the setting you want to change across multiple templates.",
     "mass_edit_success": "Successfully updated {count} templates.",
-    "eleven_unlim_settings_title": "ElevenLabs Unlimited"
+    "eleven_unlim_settings_title": "ElevenLabs Unlimited",
+    "image_height_label": "Height:",
+    "voicemaker_api_key_label": "VoiceMaker API Key:",
+    "rewrite_temperature_label": "Temperature:"
 }

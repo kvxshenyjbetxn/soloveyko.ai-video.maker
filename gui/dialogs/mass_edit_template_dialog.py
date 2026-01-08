@@ -120,6 +120,8 @@ class MassEditTemplateDialog(QDialog):
             
     def _flatten_metadata_recursive(self, metadata, current_path, items):
         for key, value in metadata.items():
+            if key == 'whisper_type':
+                continue
             if 'type' in value:
                 # Leaf node
                 # Construct path
