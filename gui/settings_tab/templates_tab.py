@@ -14,9 +14,42 @@ from utils.settings import settings_manager, template_manager
 from gui.widgets.prompt_editor_dialog import PromptEditorDialog
 from gui.widgets.help_label import HelpLabel
 from gui.dialogs.mass_edit_template_dialog import MassEditTemplateDialog
+from gui.dialogs.template_changes_dialog import TemplateChangesDialog
 import json
 import os
 import sys
+
+def calculate_diff(d1, d2, path=""):
+    diffs = {}
+    
+    # Handle One-sided None (Treat as empty dict if the other is a dict)
+    is_d1_dict = isinstance(d1, dict)
+    is_d2_dict = isinstance(d2, dict)
+    
+    if d1 is None and is_d2_dict: d1 = {}
+    if d2 is None and is_d1_dict: d2 = {}
+    
+    # Re-check types after None adjustment
+    if isinstance(d1, dict) and isinstance(d2, dict):
+        all_keys = set(d1.keys()) | set(d2.keys())
+        for k in all_keys:
+            if k == "__note__": continue 
+            
+            val1 = d1.get(k)
+            val2 = d2.get(k)
+            
+            current_path = f"{path} -> {k}" if path else k
+            
+            # Recurse
+            nested_diffs = calculate_diff(val1, val2, current_path)
+            diffs.update(nested_diffs)
+            
+    else:
+        # One is not a dict (leaf comparison)
+        if d1 != d2:
+            diffs[path] = (d1, d2)
+            
+    return diffs
 
 # Determine the base path for resources, accommodating PyInstaller
 if getattr(sys, 'frozen', False):
@@ -46,25 +79,47 @@ class SettingsDelegate(QStyledItemDelegate):
         if not key_path:
             return {}
 
+        # Virtual Groups Handling
+        SKIP_KEYS = {'general_tab', 'api_tab', 'elevenlabs_unlim_settings_title'}
+        REPLACE_KEYS = {
+            'montage_tab': 'montage',
+            'subtitles_tab': 'subtitles',
+            'languages_tab': 'languages_config',
+            'prompts_tab': 'image_prompt_settings'
+        }
+
         # Traverse metadata using the key path
         metadata = SETTINGS_METADATA
+        
+        # Construct logical path
+        logical_path = []
+        for key in key_path:
+            if key in SKIP_KEYS:
+                continue
+            if key in REPLACE_KEYS:
+                logical_path.append(REPLACE_KEYS[key])
+            else:
+                logical_path.append(key)
+        
         # Special handling for languages_config which has dynamic keys (language IDs)
         # Structure: languages_config -> [lang_id] -> [setting_key]
-        if len(key_path) >= 3 and key_path[0] == 'languages_config':
-             # key_path[0] is 'languages_config'
-             # key_path[1] is 'uk', 'en', etc (the lang_id)
-             # key_path[2] is the actual setting, e.g., 'prompt'
+        if len(logical_path) >= 2 and logical_path[0] == 'languages_config':
+             # We want to look up [setting_key] inside 'languages_config' in our METADATA
+             # So we skip the lang_id (logical_path[1]) level in metadata lookup
              
-             # We want to look up 'prompt' inside 'languages_config' in our METADATA
-             # So we skip the lang_id level in metadata lookup
-             setting_key = key_path[-1]
+             current_meta = metadata.get('languages_config', {})
              
-             # Check if defined directly under languages_config
-             if setting_key in SETTINGS_METADATA['languages_config']:
-                 return SETTINGS_METADATA['languages_config'][setting_key]
+             # Remaining path after lang_id
+             remaining_path = logical_path[2:]
+             
+             for k in remaining_path:
+                 if isinstance(current_meta, dict):
+                     current_meta = current_meta.get(k, {})
+                 else:
+                     return {}
+             return current_meta or {}
 
-        
-        for key in key_path:
+        for key in logical_path:
             if isinstance(metadata, dict):
                 metadata = metadata.get(key, {})
             else:
@@ -313,8 +368,8 @@ class TemplateEditorDialog(QDialog):
         
         # Define Layout
         self.GROUPS = {
-            "general_tab": ["results_path", "image_review_enabled", "prompt_count_control_enabled", "prompt_count", "image_generation_provider"],
-            "api_tab": ["openrouter_models", "openrouter_api_key", "elevenlabs_api_key", "voicemaker_api_key", "voicemaker_char_limit", "gemini_tts_api_key", "assemblyai_api_key", "googler", "pollinations"],
+            "general_tab": ["results_path", "image_review_enabled", "rewrite_review_enabled", "translation_review_enabled", "prompt_count_control_enabled", "prompt_count", "image_generation_provider"],
+            "api_tab": ["openrouter_models", "openrouter_api_key", "elevenlabs_api_key", "elevenlabs_unlim_api_key", "voicemaker_api_key", "voicemaker_char_limit", "gemini_tts_api_key", "assemblyai_api_key", "googler", "pollinations", "elevenlabs_image"],
             "languages_tab": ["languages_config"],
             "prompts_tab": ["image_prompt_settings"],
             "montage_tab": ["montage"],
@@ -460,6 +515,16 @@ class TemplateEditorDialog(QDialog):
             new_data["__note__"] = self.original_data["__note__"]
         
         if self.template_name:
+            diff = calculate_diff(self.original_data, new_data)
+            if diff:
+                changes = {self.template_name: diff}
+                dialog = TemplateChangesDialog(changes, self)
+                if not dialog.exec():
+                    return
+            else:
+                 QMessageBox.information(self, translator.translate("info"), translator.translate("template_changes_no_changes"))
+                 return
+
             template_manager.save_template(self.template_name, new_data)
             if self.parent() and isinstance(self.parent(), TemplatesTab):
                 self.parent()._on_template_select(self.template_name)
@@ -475,22 +540,7 @@ class TemplateEditorDialog(QDialog):
             key_item = parent_item.child(row, 0)
             key_path = key_item.data(Qt.UserRole + 1)
             
-            # If key_path is empty (shouldn't be), use text? 
-            # Actually key_path stores the full path. We want the KEY for this level.
-            # But wait, logic in populate_tree sets key_path as full path.
-            # Here we are reconstructing structure.
-            # We need the key relative to parent.
-            
-            # If we used populate_tree recursively, the structure of items matches structure of data.
-            # But we stored 'key_path' which is absolute.
-            # We can just look at key definition.
-            # BUT: key_item text is localized. We need original key.
-            # Option: Store original key in UserRole+2 or retrieve from key_path[-1]?
-            # Yes, key_path[-1] is the key.
-            
             if not key_path: 
-                 # Maybe it's a group key added manually?
-                 # No, populate_tree adds group keys too.
                  continue
 
             key = key_path[-1]
@@ -499,21 +549,23 @@ class TemplateEditorDialog(QDialog):
                 data[key] = self._get_children_data(key_item)
             else:
                 value_item = parent_item.child(row, 1)
-                data[key] = self._get_value(value_item)
+                
+                # Fetch metadata using absolute key path
+                # key_path is stored in the key item.
+                metadata = self._get_metadata_for_path(key_path)
+                data[key] = self._get_value(value_item, metadata)
         return data
 
-    def _get_value(self, value_item):
+    def _get_value(self, value_item, metadata=None):
         value = value_item.data(Qt.EditRole)
-        # We need metadata for the path. 
-        # But get_metadata_for_index uses the key_path stored in item. 
-        # The delegate has logic to fetch metadata.
-        # But here we are in the dialog.
         
-        # The value already comes from the editor/user input. 
-        # If it's a QStandardItem, data(Qt.EditRole) should hold the value.
-        
-        # Type conversion logic (as before)
-        
+        # If metadata specifies string_list, and value is a string, split it
+        if metadata and metadata.get('type') == 'string_list':
+            if isinstance(value, str):
+                return [x.strip() for x in value.split(',') if x.strip()]
+            if isinstance(value, list):
+                return value # Already a list (unlikely if edited, but possible if untouched)
+                
         if isinstance(value, str):
             # Checking valid boolean strings
             if value.lower() == 'true': return True
@@ -558,11 +610,18 @@ class TemplateEditorDialog(QDialog):
             if key in self.GROUPS:
                 display_key = translator.translate(key, key)
             else:
-                trans_key = KEY_TO_TRANSLATION_MAP.get(key)
-                if trans_key:
-                     display_key = translator.translate(trans_key, key.replace('_', ' ').title())
+                # Use metadata to find the correct label key!
+                metadata = self._get_metadata_for_path(current_path)
+                label_key = metadata.get('label')
+                
+                if label_key:
+                     display_key = translator.translate(label_key, key.replace('_', ' ').title())
                 else:
-                     display_key = translator.translate(f"{key}_label", key.replace('_', ' ').title())
+                    trans_key = KEY_TO_TRANSLATION_MAP.get(key)
+                    if trans_key:
+                         display_key = translator.translate(trans_key, key.replace('_', ' ').title())
+                    else:
+                         display_key = translator.translate(f"{key}_label", key.replace('_', ' ').title())
             
             key_item = QStandardItem(display_key)
             key_item.setEditable(False)
@@ -851,14 +910,21 @@ class TemplatesTab(QWidget):
         data_to_save = self._gather_current_settings()
         data_to_save["__note__"] = self.notes_edit.toPlainText()
 
-        # Confirmation for saving
-        reply = QMessageBox.question(self, translator.translate("confirm_save_title"), 
-                                     translator.translate("confirm_save_template_text").format(name=name),
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-                                     QMessageBox.StandardButton.No)
-
-        if reply != QMessageBox.StandardButton.Yes:
-            return
+        # Check existing
+        existing_data = template_manager.load_template(name)
+        if existing_data:
+            diff = calculate_diff(existing_data, data_to_save)
+        else:
+            diff = calculate_diff({}, data_to_save)
+            
+        if diff:
+            changes = {name: diff}
+            dialog = TemplateChangesDialog(changes, self)
+            if not dialog.exec():
+                return
+        else:
+             QMessageBox.information(self, translator.translate("info"), translator.translate("template_changes_no_changes"))
+             return
 
         template_manager.save_template(name, data_to_save)
         self.populate_templates_combo()

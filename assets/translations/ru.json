@@ -406,5 +406,13 @@
     "language_prompt_label": "💾 Промт для этого языка:",
     "translation_model_label": "💾 Модель для перевода:",
     "prompt_content_label": "💾 Промт для генерации изображений:",
-    "image_model_label": "💾 Модель для изображений:"
+    "image_model_label": "💾 Модель для изображений:",
+    "template_changes_title": "Подтверждение изменений шаблона",
+    "template_changes_intro": "Следующие настройки будут изменены:",
+    "template_changes_template_column": "Шаблон / Настройка",
+    "template_changes_old_value_column": "Старое значение",
+    "template_changes_new_value_column": "Новое значение",
+    "template_changes_confirm": "Подтвердить",
+    "template_changes_cancel": "Отмена",
+    "template_changes_no_changes": "Изменений не обнаружено."
 }

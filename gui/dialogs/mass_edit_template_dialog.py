@@ -6,6 +6,8 @@ from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import template_manager, settings_manager
 from gui.settings_metadata import SETTINGS_METADATA, KEY_TO_TRANSLATION_MAP, VOICEMAKER_VOICES, GEMINI_VOICES
+from gui.dialogs.template_changes_dialog import TemplateChangesDialog
+import copy
 
 class PathEditor(QWidget):
     def __init__(self, parent=None, mode='directory'):
@@ -262,12 +264,8 @@ class MassEditTemplateDialog(QDialog):
             if editor_type == 'bool':
                  new_value = (self.value_widget.currentText() == "True")
             elif editor_type in ['voicemaker_voice', 'gemini_voice']:
-                 # Use user data if available choice has data, but QComboBox.currentData needs us to have set it.
-                 # In my widget creation above:
-                 # voicemaker: addItem(label, voice_id) -> so currentData() is voice_id
-                 # gemini: addItem(label, value) -> currentData()
                  new_value = self.value_widget.currentData()
-                 if new_value is None: # Fallback just in case
+                 if new_value is None: 
                       new_value = self.value_widget.currentText()
             else:
                  new_value = self.value_widget.currentText()
@@ -294,19 +292,37 @@ class MassEditTemplateDialog(QDialog):
         if not selected_templates:
             return
 
-        count = 0
+        updates_to_apply = []
+        changes_for_dialog = {}
+
         for t_name in selected_templates:
-            data = template_manager.load_template(t_name)
-            if not data: continue
+            original_data = template_manager.load_template(t_name)
+            if not original_data: continue
             
-            modified = self._recursive_update(data, path, new_value)
+            temp_data = copy.deepcopy(original_data)
+            modified = self._recursive_update(temp_data, path, new_value)
+            
             if modified:
+                diff = self._recursive_diff(original_data, temp_data)
+                if diff:
+                    changes_for_dialog[t_name] = diff
+                updates_to_apply.append((t_name, temp_data))
+        
+        if not updates_to_apply:
+            QMessageBox.information(self, translator.translate("info"), translator.translate("template_changes_no_changes", "No changes detected."))
+            return
+
+        # Show confirmation dialog
+        dialog = TemplateChangesDialog(changes_for_dialog, self)
+        if dialog.exec():
+            count = 0
+            for t_name, data in updates_to_apply:
                 template_manager.save_template(t_name, data)
                 count += 1
-                
-        QMessageBox.information(self, translator.translate("success"), 
-                                translator.translate("mass_edit_success").format(count=count))
-        self.accept()
+                    
+            QMessageBox.information(self, translator.translate("success"), 
+                                    translator.translate("mass_edit_success").format(count=count))
+            self.accept()
             
     def _recursive_update(self, current_data, path, value):
         if not path:
@@ -322,31 +338,14 @@ class MassEditTemplateDialog(QDialog):
                 if isinstance(current_data, dict):
                     for k, v in current_data.items():
                         if isinstance(v, dict):
-                            # Usually languages_config -> language_code (dict) -> setting
-                            # NOTE: This block is unreachable if the schema is strictly followed because 
-                            # 'languages_config' -> '*' -> 'prompt' means 'prompt' is the leaf, and it's INSIDE the wildcard dict
-                            # So 'prompt' (leaf) will never be handled by 'key == *' branch if logic is correct.
-                            # BUT if path is just ['languages_config', '*'] (editing the whole dict?) - disallowed by UI logic (only leafs editable)
-                            # OR if I inserted '*' incorrectly.
-                            
-                            # Actually, look at logic in Step 2:
-                            # path = ['*', 'prompt']
-                            # key = '*'
-                            # match all k in current_data
-                            # call recursive(['prompt'], v)
-                            # so we go to "Branch node" section for key == "*".
                             pass
                 pass
             else:
                 if key in current_data:
-                     # Only update if exists? Or add if missing?
-                     # Templates might be partial. If key is standard, usually safe to add.
-                     # But let's check equality to track 'modified'.
                      if current_data.get(key) != value:
                         current_data[key] = value
                         modified = True
                 else:
-                     # Add it
                      current_data[key] = value
                      modified = True
             return modified
@@ -360,15 +359,37 @@ class MassEditTemplateDialog(QDialog):
                              modified = True
         else:
             if key in current_data:
-                 # Check if next level is dict
                  if isinstance(current_data[key], dict):
                      if self._recursive_update(current_data[key], path[1:], value):
                         modified = True
             else:
-                 # If path implies deeper structure but it's missing, should we create it?
-                 # E.g. languages_config -> uk -> new_setting
-                 # If 'uk' exists but 'new_setting' missing, handled by recursion.
-                 # If 'uk' missing? We probably shouldn't create arbitrary languages via mass edit unless explicit.
                  pass
                     
         return modified
+
+    def _recursive_diff(self, d1, d2, path=""):
+        diffs = {}
+        # Keys in d2 that are different from d1
+        # We assume d2 is a modified version of d1, so keys match mostly.
+        # But we might have added keys.
+        
+        all_keys = set(d1.keys()) | set(d2.keys())
+        
+        for k in all_keys:
+            if k == "__note__": continue 
+            
+            val1 = d1.get(k)
+            val2 = d2.get(k)
+            
+            current_path = f"{path} -> {k}" if path else k
+            
+            if isinstance(val1, dict) and isinstance(val2, dict):
+                nested_diffs = self._recursive_diff(val1, val2, current_path)
+                diffs.update(nested_diffs)
+            elif val1 != val2:
+                # Key changed
+                # Make the key look nice if possible? 
+                # Already handled by path construction
+                diffs[current_path] = (val1, val2)
+                
+        return diffs
