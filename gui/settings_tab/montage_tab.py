@@ -108,12 +108,15 @@ class MontageTab(QWidget):
 
         self.enable_trans_help = HelpLabel("enable_transitions_label")
         self.enable_trans_cb = QCheckBox()
+        self.enable_trans_label = QLabel()
         enable_trans_container = QWidget()
         enable_trans_layout = QHBoxLayout(enable_trans_container)
         enable_trans_layout.setContentsMargins(0,0,0,0)
         enable_trans_layout.setSpacing(5)
         enable_trans_layout.addWidget(self.enable_trans_help)
+        enable_trans_layout.addWidget(self.enable_trans_label)
         enable_trans_layout.addWidget(self.enable_trans_cb)
+        enable_trans_layout.addStretch()
         
         self.enable_trans_cb.toggled.connect(self.save_settings)
         trans_layout.addRow(enable_trans_container)
@@ -143,12 +146,15 @@ class MontageTab(QWidget):
 
         self.enable_zoom_help = HelpLabel("enable_zoom_label")
         self.enable_zoom_cb = QCheckBox()
+        self.enable_zoom_label = QLabel()
         enable_zoom_container = QWidget()
         enable_zoom_layout = QHBoxLayout(enable_zoom_container)
         enable_zoom_layout.setContentsMargins(0,0,0,0)
         enable_zoom_layout.setSpacing(5)
         enable_zoom_layout.addWidget(self.enable_zoom_help)
+        enable_zoom_layout.addWidget(self.enable_zoom_label)
         enable_zoom_layout.addWidget(self.enable_zoom_cb)
+        enable_zoom_layout.addStretch()
 
         self.enable_zoom_cb.toggled.connect(self.save_settings)
         zoom_layout.addRow(enable_zoom_container)
@@ -192,12 +198,15 @@ class MontageTab(QWidget):
 
         self.enable_sway_help = HelpLabel("enable_sway_label")
         self.enable_sway_cb = QCheckBox()
+        self.enable_sway_label = QLabel()
         enable_sway_container = QWidget()
         enable_sway_layout = QHBoxLayout(enable_sway_container)
         enable_sway_layout.setContentsMargins(0,0,0,0)
         enable_sway_layout.setSpacing(5)
         enable_sway_layout.addWidget(self.enable_sway_help)
+        enable_sway_layout.addWidget(self.enable_sway_label)
         enable_sway_layout.addWidget(self.enable_sway_cb)
+        enable_sway_layout.addStretch()
 
         self.enable_sway_cb.toggled.connect(self.save_settings)
         sway_layout.addRow(enable_sway_container)
@@ -265,12 +274,15 @@ class MontageTab(QWidget):
 
         self.special_proc_check_sequence_help = HelpLabel("special_proc_check_sequence_label")
         self.special_proc_check_sequence_cb = QCheckBox()
+        self.special_proc_check_sequence_label = QLabel()
         check_seq_container = QWidget()
         check_seq_layout = QHBoxLayout(check_seq_container)
         check_seq_layout.setContentsMargins(0,0,0,0)
         check_seq_layout.setSpacing(5)
         check_seq_layout.addWidget(self.special_proc_check_sequence_help)
+        check_seq_layout.addWidget(self.special_proc_check_sequence_label)
         check_seq_layout.addWidget(self.special_proc_check_sequence_cb)
+        check_seq_layout.addStretch()
 
         self.special_proc_check_sequence_cb.toggled.connect(self.save_settings)
         special_proc_layout.addRow(check_seq_container)
@@ -377,16 +389,16 @@ class MontageTab(QWidget):
         self.upscale_label.setText(translator.translate("upscale_factor_label"))
 
         self.trans_group.setTitle(translator.translate("transitions_settings"))
-        self.enable_trans_cb.setText(translator.translate("enable_transitions_label"))
+        self.enable_trans_label.setText(translator.translate("enable_transitions_label"))
         self.trans_dur_label.setText(translator.translate("duration_label"))
 
         self.zoom_group.setTitle(translator.translate("zoom_effects"))
-        self.enable_zoom_cb.setText(translator.translate("enable_zoom_label"))
+        self.enable_zoom_label.setText(translator.translate("enable_zoom_label"))
         self.zoom_speed_label.setText(translator.translate("zoom_speed_factor_label"))
         self.zoom_int_label.setText(translator.translate("zoom_intensity_label"))
 
         self.sway_group.setTitle(translator.translate("sway_effects"))
-        self.enable_sway_cb.setText(translator.translate("enable_sway_label"))
+        self.enable_sway_label.setText(translator.translate("enable_sway_label"))
         self.sway_speed_label.setText(translator.translate("sway_speed_factor_label"))
 
         self.special_proc_group.setTitle(translator.translate("special_processing_group"))
@@ -398,7 +410,7 @@ class MontageTab(QWidget):
         self.special_proc_img_count_label.setText(translator.translate("image_count_label"))
         self.special_proc_dur_label.setText(translator.translate("duration_per_image_label"))
         self.special_proc_video_count_label.setText(translator.translate("special_proc_video_count_label"))
-        self.special_proc_check_sequence_cb.setText(translator.translate("special_proc_check_sequence_label"))
+        self.special_proc_check_sequence_label.setText(translator.translate("special_proc_check_sequence_label"))
 
         self.perf_group.setTitle(translator.translate("performance_group"))
         self.max_concurrent_montages_label.setText(translator.translate("max_concurrent_montages_label"))

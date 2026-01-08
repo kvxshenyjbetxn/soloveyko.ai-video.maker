@@ -109,7 +109,7 @@ class ElevenLabsImageTab(QWidget):
         self.proxy_details_widget.setVisible(checked)
 
     def translate_ui(self):
-        self.api_key_label.setText("ElevenLabsImage API")
+        self.api_key_label.setText(translator.translate("elevenlabs_image_api_key"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.aspect_ratio_label.setText(translator.translate("aspect_ratio"))
         self.max_threads_label.setText(translator.translate("max_threads"))

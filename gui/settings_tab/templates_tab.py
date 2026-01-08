@@ -786,11 +786,18 @@ class TemplatesTab(QWidget):
             'openrouter_api_key',
             'openrouter_models',
             'elevenlabs_api_key',
+            'elevenlabs_unlim_api_key',
             'voicemaker_api_key',
             'voicemaker_char_limit',
             'gemini_tts_api_key',
             'pollinations',  # This is a dictionary
             'googler',       # This is a dictionary
+            'elevenlabs_image', # Dictionary
+            'assemblyai_api_key',
+            
+            # Review Settings
+            'translation_review_enabled',
+            'rewrite_review_enabled',
 
             # Full tabs saved as dictionaries
             'languages_config',
@@ -819,6 +826,9 @@ class TemplatesTab(QWidget):
                 # Filter googler settings to exclude thread counts (global hardware settings)
                 elif key == 'googler' and isinstance(value, dict):
                     value = {k: v for k, v in value.items() if k not in ['max_threads', 'max_video_threads']}
+
+                elif key == 'elevenlabs_image' and isinstance(value, dict):
+                    value = {k: v for k, v in value.items() if k not in ['max_threads', 'proxy_enabled', 'proxy_url']}
                 
                 elif key == 'languages_config' and isinstance(value, dict):
                     # Create a deep copy to modify, ensuring the original settings object is not changed

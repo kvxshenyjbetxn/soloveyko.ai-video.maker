@@ -90,6 +90,10 @@ SETTINGS_METADATA = {
         'nologo': {'type': 'bool'},
         'enhance': {'type': 'bool'},
     },
+    'elevenlabs_image': {
+        'api_key': {'type': 'str', 'label': 'elevenlabs_image_api_key'}, 
+        'aspect_ratio': {'type': 'choice', 'options': ["3:2", "16:9", "1:1", "9:16", "2:3", "4:5", "5:4"]},
+    },
      'image_prompt_settings': {
         'prompt': {'type': 'text_edit_button'},
         'model': {'type': 'model_selection'},
@@ -198,11 +202,12 @@ KEY_TO_TRANSLATION_MAP = {
     'token': 'pollinations_token_label',
     'width': 'image_size_label', # Reusing size label? "image_size_label": "Розмір (Ширина x Висота):"
     'height': 'image_height_label', # Maybe not needed if width label covers context? But individual inputs?
-    # Actually pollinators uses width/height separately. 
     'nologo': 'nologo_label',
     'enhance': 'enhance_prompt_label',
 
-    # Image Prompt Settings
+    # ElevenLabsImage
+    'api_key': 'elevenlabs_image_api_key',
+
     'max_tokens': 'tokens_label', # "tokens_label": "Макс. токенів:",
     'temperature': 'temperature_label',
 
