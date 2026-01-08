@@ -392,5 +392,14 @@
     "welcome_title": "Welcome to Soloveyko.AI!",
     "welcome_message_body": "<p>Welcome from the <b>Soloveyko.AI</b> team!</p><p>This program is designed for automatic video creation with the ability to:<br>• Create a task queue<br>• Translate into any number of languages<br>• Rewrite texts</p><p>ℹ️ <b>Hints:</b> Next to each setting there is a question mark icon containing detailed information about its purpose.</p><p><b>Useful links:</b><br>• <a href='https://t.me/c/3594600798/52'>FAQ (Instructions)</a><br>• <a href='https://t.me/+d6vKtsy0iI5kOTM6'>Community Chat</a><br>• <a href='https://t.me/SoloveykoAIManagerBot'>Manager (Bot)</a></p>",
     "do_not_show_again": "Do not show this window again",
-    "start_working": "Start Working"
+    "start_working": "Start Working",
+    "mass_edit_button": "Mass Edit",
+    "mass_edit_title": "Mass Edit Templates",
+    "select_parameter": "Select parameter to change:",
+    "new_value": "New value:",
+    "target_templates": "Select templates:",
+    "apply_changes": "Apply Changes",
+    "mass_edit_success": "Successfully updated {count} templates.",
+    "select_setting": "Select Setting",
+    "select_setting_hint": "Select the setting you want to change across multiple templates."
 }

@@ -245,6 +245,7 @@
     "save_as_button": "Зберегти як...",
     "apply_button": "Застосувати",
     "delete_button": "Видалити",
+    "rename_button": "Перейменувати",
     "error": "Помилка",
     "success": "Успіх",
     "help_legend": "— <b>ПАМАГІ! НАТИСНИ НА МЕНЕ!</b>",
@@ -394,5 +395,18 @@
     "welcome_title": "Ласкаво просимо до Soloveyko.AI!",
     "welcome_message_body": "<p>Вас вітає команда <b>Soloveyko.AI</b>!</p><p>Ця програма створена для автоматичного створення відео з можливістю:<br>• Створювати чергу завдань<br>• Перекладати на будь-яку кількість мов<br>• Виконувати рерайт текстів</p><p>ℹ️ <b>Підказки:</b> Біля кожного налаштування є значок питання, який містить детальну інформацію про його призначення.</p><p><b>Корисні посилання:</b><br>• <a href='https://t.me/c/3594600798/52'>FAQ (Інструкція)</a><br>• <a href='https://t.me/+d6vKtsy0iI5kOTM6'>Чат спільноти</a><br>• <a href='https://t.me/SoloveykoAIManagerBot'>Менеджер (Бот)</a></p>",
     "do_not_show_again": "Більше не показувати це вікно при запуску",
-    "start_working": "Почати роботу"
+    "start_working": "Почати роботу",
+    "mass_edit_button": "Масове редагування",
+    "mass_edit_title": "Масове редагування шаблонів",
+    "select_parameter": "Оберіть параметр для зміни:",
+    "new_value": "Нове значення:",
+    "target_templates": "Оберіть шаблони:",
+    "apply_changes": "Застосувати зміни",
+    "param_translation_model": "Модель перекладу (всі мови)",
+    "param_rewrite_model": "Модель рерайту (всі мови)",
+    "param_tts_provider": "Сервіс озвучки (всі мови)",
+    "param_pollinations_model": "Модель Pollinations",
+    "param_image_provider": "Провайдер зображень",
+    "param_whisper_model": "Модель Whisper",
+    "mass_edit_success": "Успішно оновлено {count} шаблонів."
 }
