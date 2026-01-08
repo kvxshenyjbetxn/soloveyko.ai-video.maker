@@ -399,7 +399,8 @@
     "new_value": "New value:",
     "target_templates": "Select templates:",
     "apply_changes": "Apply Changes",
-    "mass_edit_success": "Successfully updated {count} templates.",
     "select_setting": "Select Setting",
-    "select_setting_hint": "Select the setting you want to change across multiple templates."
+    "select_setting_hint": "Select the setting you want to change across multiple templates.",
+    "mass_edit_success": "Successfully updated {count} templates.",
+    "eleven_unlim_settings_title": "ElevenLabs Unlimited"
 }

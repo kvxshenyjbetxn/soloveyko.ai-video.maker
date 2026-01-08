@@ -392,14 +392,15 @@
     "proxy_placeholder": "http://user:pass@host:port",
     "proxy_recommendation": "Рекомендуемый сервис прокси:",
     "update_available_title": "Доступно обновление",
-    "update_available_message": "Доступна новая версия ({remote_version}).<br><br>Список изменений доступен за этой <a href=\"https://t.me/c/3594600798/41\">ссылкой</a>.<br>Скачать обновление можно через: <a href=\"https://t.me/SoloveykoAIManagerBot\">@SoloveykoAIManagerBot</a><br><br>Для обновления просто замените старый файл программы новым.",
+    "start_working": "Начать",
     "mass_edit_button": "Массовое редактирование",
     "mass_edit_title": "Массовое редактирование шаблонов",
     "select_parameter": "Выберите параметр для изменения:",
     "new_value": "Новое значение:",
     "target_templates": "Выберите шаблоны:",
     "apply_changes": "Применить изменения",
+    "select_setting": "Выберите параметр",
+    "select_setting_hint": "Выберите настройку, которую вы хотите изменить в нескольких шаблонах одновременно.",
     "mass_edit_success": "Успешно обновлено {count} шаблонов.",
-    "select_setting": "Выберите настройку",
-    "select_setting_hint": "Выберите настройку, которую вы хотите изменить во всех шаблонах."
+    "eleven_unlim_settings_title": "ElevenLabs Unlimited"
 }

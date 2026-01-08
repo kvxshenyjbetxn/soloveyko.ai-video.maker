@@ -408,5 +408,6 @@
     "param_pollinations_model": "Модель Pollinations",
     "param_image_provider": "Провайдер зображень",
     "param_whisper_model": "Модель Whisper",
-    "mass_edit_success": "Успішно оновлено {count} шаблонів."
+    "mass_edit_success": "Успішно оновлено {count} шаблонів.",
+    "eleven_unlim_settings_title": "ElevenLabs Unlimited"
 }

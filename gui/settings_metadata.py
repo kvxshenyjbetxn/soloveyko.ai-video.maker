@@ -34,6 +34,12 @@ SETTINGS_METADATA = {
     'image_generation_provider': {'type': 'choice', 'options': ["pollinations", "googler"], 'label': 'image_generation_provider'},
     'image_review_enabled': {'type': 'bool', 'label': 'image_review_enabled'},
     'results_path': {'type': 'folder_path', 'label': 'results_path'},
+    'openrouter_api_key': {'type': 'str', 'label': 'openrouter_api_key'},
+    'elevenlabs_api_key': {'type': 'str', 'label': 'elevenlabs_api_key'},
+    'voicemaker_api_key': {'type': 'str', 'label': 'voicemaker_api_key'},
+    'voicemaker_char_limit': {'type': 'int', 'min': 0, 'max': 10000, 'label': 'voicemaker_char_limit'},
+    'gemini_tts_api_key': {'type': 'str', 'label': 'gemini_tts_api_key'},
+    'assemblyai_api_key': {'type': 'str', 'label': 'assemblyai_api_key'},
     'montage': {
         # Render
         'codec': {'type': 'choice', 'options': ["libx264", "libx265", "h264_nvenc", "h264_amf"]},
@@ -131,13 +137,24 @@ KEY_TO_TRANSLATION_MAP = {
     'image_generation_provider': 'image_generation_provider_label',
     
     # API Tab
-    'openrouter_api_key': 'openrouter_api_key_label', 
-    'openrouter_models': 'openrouter_models_label',
-    'elevenlabs_api_key': 'elevenlabs_api_key_label',
-    'voicemaker_api_key': 'voicemaker_api_key_label',
-    'voicemaker_char_limit': 'voicemaker_char_limit_label',
-    'gemini_tts_api_key': 'gemini_tts_api_key_label',
-
+    # API Tab
+    'openrouter_api_key': 'openrouter_api_key', # No label? defined in json as key itself maybe?
+    # Let's check json files for "openrouter_api_key". Yes it exists: "openrouter_api_key": "Ключ API OpenRouter:",
+    # but map usually points to key ending in _label if not exact match.
+    # In json 'openrouter_api_key' is the key.
+    # So map should be: 'openrouter_api_key': 'openrouter_api_key' OR if key matches, map not needed?
+    # Code says: trans_key = KEY_TO_TRANSLATION_MAP.get(key) -> if trans_key: translator.translate(trans_key)
+    # So if I want 'openrouter_models' to translate as "Openrouter Models", I need a key in json.
+    
+    'openrouter_api_key': 'openrouter_api_key', 
+    'openrouter_models': 'models', # "models": "Моделі" ? Or specific?
+    'elevenlabs_api_key': 'elevenlabs_api_key',
+    'voicemaker_api_key': 'voicemaker_api_key_label', # Check if this exists. 
+    # Actually, let's map to existing known keys.
+    'voicemaker_char_limit': 'char_limit', # "char_limit": "Ліміт символів:",
+    'gemini_tts_api_key': 'gemini_tts_api_key',
+    'assemblyai_api_key': 'assemblyai_api_key',
+    
     # Montage Tab
     'codec': 'codec_label',
     'preset': 'preset_label',
@@ -179,20 +196,21 @@ KEY_TO_TRANSLATION_MAP = {
     # Pollinations
     'model': 'pollinations_model_label',
     'token': 'pollinations_token_label',
-    'width': 'image_width_label', 
-    'height': 'image_height_label', 
+    'width': 'image_size_label', # Reusing size label? "image_size_label": "Розмір (Ширина x Висота):"
+    'height': 'image_height_label', # Maybe not needed if width label covers context? But individual inputs?
+    # Actually pollinators uses width/height separately. 
     'nologo': 'nologo_label',
     'enhance': 'enhance_prompt_label',
 
     # Image Prompt Settings
-    'max_tokens': 'max_tokens_label',
+    'max_tokens': 'tokens_label', # "tokens_label": "Макс. токенів:",
     'temperature': 'temperature_label',
 
     # Languages Config keys
-    'prompt': 'language_prompt_label',
+    'prompt': 'prompt_label', # "prompt_label": "Промт:",
     
-    'background_music_path': 'background_music_path_label',
-    'background_music_volume': 'background_music_volume_label',
+    'background_music_path': 'background_music_label', # "background_music_label": "Фонова музика:",
+    'background_music_volume': 'music_volume_label', # "music_volume_label": "Гучність музики:",
     'tts_provider': 'tts_provider_label',
     'voicemaker_voice_id': 'voicemaker_voice_label',
     'gemini_voice': 'gemini_voice_label',
@@ -204,10 +222,14 @@ KEY_TO_TRANSLATION_MAP = {
     'default_template': 'default_template_label',
     'rewrite_prompt': 'rewrite_prompt_label',
     'rewrite_model': 'rewrite_model_label',
-    'rewrite_max_tokens': 'rewrite_max_tokens_label',
+    'rewrite_max_tokens': 'tokens_label',
     'rewrite_temperature': 'rewrite_temperature_label',
     'overlay_effect_path': 'effect_selection_title',
     'watermark_path': 'watermark_group',
     'watermark_size': 'watermark_size_label',
-    'watermark_position': 'watermark_position_label'
+    'watermark_position': 'watermark_position_label',
+    
+    # Missing explicit mappings for some
+    'display_name': 'language_name_label' # "language_name_label": "Відображувана назва:",
 }
+
