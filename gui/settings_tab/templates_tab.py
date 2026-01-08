@@ -305,11 +305,32 @@ class TemplateEditorDialog(QDialog):
     def __init__(self, title, data, parent=None, template_name=None):
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.setMinimumSize(600, 500)
+        self.setMinimumSize(600, 700)
         self.template_name = template_name
         
         # Make a deep copy to avoid modifying the original dict from template_manager
         self.original_data = copy.deepcopy(data)
+        
+        # Define Layout
+        self.GROUPS = {
+            "general_tab": ["results_path", "image_review_enabled", "prompt_count_control_enabled", "prompt_count", "image_generation_provider"],
+            "api_tab": ["openrouter_models", "openrouter_api_key", "elevenlabs_api_key", "voicemaker_api_key", "voicemaker_char_limit", "gemini_tts_api_key", "assemblyai_api_key", "googler", "pollinations"],
+            "languages_tab": ["languages_config"],
+            "prompts_tab": ["image_prompt_settings"],
+            "montage_tab": ["montage"],
+            "subtitles_tab": ["subtitles"],
+            "elevenlabs_unlim_settings_title": ["eleven_unlim_settings"] # If it appears at root
+        }
+
+        # Define Flatten Groups (Group Key -> Content Key)
+        # These groups will directly contain the content of the specified key, 
+        # avoiding an extra nested level in the UI.
+        self.FLATTEN_GROUPS = {
+            "montage_tab": "montage",
+            "subtitles_tab": "subtitles",
+            "languages_tab": "languages_config",
+            "prompts_tab": "image_prompt_settings"
+        }
 
         layout = QVBoxLayout(self)
 
@@ -334,13 +355,14 @@ class TemplateEditorDialog(QDialog):
         self.delegate = SettingsDelegate(self.tree_view)
         self.tree_view.setItemDelegateForColumn(1, self.delegate)
         
-        # We don't want the note in the tree view
+        # Prepare data with grouping
         tree_data = {k: v for k, v in self.original_data.items() if k != "__note__"}
+        self.grouped_data = self._group_data(tree_data)
 
-        self.populate_tree(tree_data, self.model.invisibleRootItem(), [])
+        self.populate_tree(self.grouped_data, self.model.invisibleRootItem(), [])
 
-        self.tree_view.expandAll()
-        self.tree_view.resizeColumnToContents(0)
+        self.tree_view.collapseAll()
+        self.tree_view.setColumnWidth(0, 350)
         
         buttons_layout = QHBoxLayout()
         self.save_button = QPushButton(translator.translate("save_button", "Save"))
@@ -354,16 +376,75 @@ class TemplateEditorDialog(QDialog):
         buttons_layout.addWidget(close_button)
         layout.addLayout(buttons_layout)
 
+    def _group_data(self, data):
+        grouped = {}
+        processed_keys = set()
+        
+        # Initialize groups
+        for group_key in self.GROUPS:
+            grouped[group_key] = {}
+            
+        # Place items into groups
+        for key, value in data.items():
+            placed = False
+            for group_key, keys in self.GROUPS.items():
+                if key in keys:
+                    # Check for Flattening
+                    if group_key in self.FLATTEN_GROUPS and self.FLATTEN_GROUPS[group_key] == key and isinstance(value, dict):
+                        # Merge content directly into the group dict
+                        grouped[group_key].update(value)
+                    else:
+                        # Standard nesting
+                        grouped[group_key][key] = value
+                        
+                    processed_keys.add(key)
+                    placed = True
+                    break
+            
+            if not placed:
+                grouped[key] = value
+                
+        # Remove empty groups
+        return {k: v for k, v in grouped.items() if v or k not in self.GROUPS}
+
+    def _ungroup_data(self, grouped_data):
+        flat = {}
+        for key, value in grouped_data.items():
+            if key in self.GROUPS:
+                # Group found
+                if key in self.FLATTEN_GROUPS:
+                    # Re-nest flattened content
+                    target_key = self.FLATTEN_GROUPS[key]
+                    flat[target_key] = value
+                else:
+                    # Standard group, flatten children
+                    if isinstance(value, dict):
+                        flat.update(value)
+            else:
+                flat[key] = value
+        return flat
+
     def _get_metadata_for_path(self, key_path):
         metadata = SETTINGS_METADATA
         
+        # Filter out group keys from path/ Handle flattening
+        filtered_path = []
+        for k in key_path:
+            if k in self.FLATTEN_GROUPS:
+                # If group is flattened, substitute with the real content key
+                filtered_path.append(self.FLATTEN_GROUPS[k])
+            elif k in self.GROUPS:
+                continue # Skip standard group keys
+            else:
+                filtered_path.append(k)
+        
         # Similar logic to Delegate for languages_config wildcard
-        if len(key_path) >= 3 and key_path[0] == 'languages_config':
-             setting_key = key_path[-1]
-             if setting_key in SETTINGS_METADATA['languages_config']:
+        if len(filtered_path) >= 3 and filtered_path[0] == 'languages_config':
+             setting_key = filtered_path[-1]
+             if setting_key in SETTINGS_METADATA.get('languages_config', {}):
                  return SETTINGS_METADATA['languages_config'][setting_key]
 
-        for key in key_path:
+        for key in filtered_path:
             if isinstance(metadata, dict):
                 metadata = metadata.get(key)
             else:
@@ -371,7 +452,9 @@ class TemplateEditorDialog(QDialog):
         return metadata or {}
 
     def _on_save(self):
-        new_data = self.get_data_from_tree()
+        grouped_data = self.get_data_from_tree()
+        new_data = self._ungroup_data(grouped_data)
+        
         # Preserve the original note
         if "__note__" in self.original_data:
             new_data["__note__"] = self.original_data["__note__"]
@@ -391,8 +474,25 @@ class TemplateEditorDialog(QDialog):
         for row in range(parent_item.rowCount()):
             key_item = parent_item.child(row, 0)
             key_path = key_item.data(Qt.UserRole + 1)
-            if not key_path: continue
             
+            # If key_path is empty (shouldn't be), use text? 
+            # Actually key_path stores the full path. We want the KEY for this level.
+            # But wait, logic in populate_tree sets key_path as full path.
+            # Here we are reconstructing structure.
+            # We need the key relative to parent.
+            
+            # If we used populate_tree recursively, the structure of items matches structure of data.
+            # But we stored 'key_path' which is absolute.
+            # We can just look at key definition.
+            # BUT: key_item text is localized. We need original key.
+            # Option: Store original key in UserRole+2 or retrieve from key_path[-1]?
+            # Yes, key_path[-1] is the key.
+            
+            if not key_path: 
+                 # Maybe it's a group key added manually?
+                 # No, populate_tree adds group keys too.
+                 continue
+
             key = key_path[-1]
             
             if key_item.hasChildren():
@@ -404,30 +504,34 @@ class TemplateEditorDialog(QDialog):
 
     def _get_value(self, value_item):
         value = value_item.data(Qt.EditRole)
-        metadata = self.delegate.get_metadata_for_index(value_item.index())
+        # We need metadata for the path. 
+        # But get_metadata_for_index uses the key_path stored in item. 
+        # The delegate has logic to fetch metadata.
+        # But here we are in the dialog.
         
-        if metadata.get('type') == 'string_list':
-            if isinstance(value, str):
-                return [item.strip() for item in value.split(',') if item.strip()]
-            else:
-                return []
-
+        # The value already comes from the editor/user input. 
+        # If it's a QStandardItem, data(Qt.EditRole) should hold the value.
+        
+        # Type conversion logic (as before)
+        
         if isinstance(value, str):
-            # Attempt to convert to bool
+            # Checking valid boolean strings
             if value.lower() == 'true': return True
             if value.lower() == 'false': return False
             
-            # Attempt to convert to number
+            # Checking valid numbers
             try: return int(value)
             except (ValueError, TypeError): pass
             try: return float(value)
             except (ValueError, TypeError): pass
 
             # Attempt to safely evaluate as a Python literal (list, dict, etc.)
-            try:
-                return ast.literal_eval(value)
-            except (ValueError, SyntaxError, TypeError):
-                pass # If it's not a valid literal, return as string
+            # Careful with strings that look like literals but are just strings
+            if value.startswith('[') or value.startswith('{'):
+                try:
+                    return ast.literal_eval(value)
+                except (ValueError, SyntaxError, TypeError):
+                    pass 
 
         return value
 
@@ -435,24 +539,30 @@ class TemplateEditorDialog(QDialog):
         if not isinstance(data, dict):
             return
 
-        for key, value in sorted(data.items()):
+        # Explicit Sort Order?
+        # If we are at root, we want to respect GROUPS order.
+        is_root = (parent_item == self.model.invisibleRootItem())
+        
+        if is_root:
+            # Sort by defined group order, then others
+            group_order = list(self.GROUPS.keys())
+            sorted_keys = sorted(data.keys(), key=lambda k: group_order.index(k) if k in group_order else 999)
+        else:
+            sorted_keys = sorted(data.keys())
+
+        for key in sorted_keys:
+            value = data[key]
             current_path = key_path + [key]
             
-            # Use original key for lookup, translated key for display
-            # Check map
-            trans_key = KEY_TO_TRANSLATION_MAP.get(key)
-            if not trans_key:
-                # Fallbacks or context logic
-                if key == 'model':
-                    # Context check? parent_item label?
-                    # Hard to know context just from key here easily without path.
-                    # But if we look at key sequence...
-                    pass
-
-            if trans_key:
-                 display_key = translator.translate(trans_key, key.replace('_', ' ').title())
+            # Determine Display Key
+            if key in self.GROUPS:
+                display_key = translator.translate(key, key)
             else:
-                 display_key = translator.translate(f"{key}_label", key.replace('_', ' ').title())
+                trans_key = KEY_TO_TRANSLATION_MAP.get(key)
+                if trans_key:
+                     display_key = translator.translate(trans_key, key.replace('_', ' ').title())
+                else:
+                     display_key = translator.translate(f"{key}_label", key.replace('_', ' ').title())
             
             key_item = QStandardItem(display_key)
             key_item.setEditable(False)
@@ -464,6 +574,7 @@ class TemplateEditorDialog(QDialog):
             if isinstance(value, dict):
                 parent_item.appendRow([key_item, value_item])
                 value_item.setEditable(False)
+                # Expand specific tabs by default maybe?
                 self.populate_tree(value, key_item, current_path)
             elif metadata.get('type') == 'string_list':
                 value_item.setText(", ".join(value) if isinstance(value, list) else "")
@@ -471,13 +582,11 @@ class TemplateEditorDialog(QDialog):
                 value_item.setData(current_path, Qt.UserRole + 1)
                 parent_item.appendRow([key_item, value_item])
             elif metadata.get('type') == 'color':
-                # Handle color
                 value_item.setData(value, Qt.EditRole)
                 value_item.setEditable(True)
                 value_item.setData(current_path, Qt.UserRole + 1)
                 parent_item.appendRow([key_item, value_item])
             elif isinstance(value, list):
-                # Handle other lists (like color) - for now, just display them as non-editable strings
                 parent_item.appendRow([key_item, value_item])
                 value_item.setEditable(False)
                 value_item.setText(str(value))
