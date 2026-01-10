@@ -117,7 +117,7 @@ class StageSelectionWidget(QWidget):
         
         self.checkboxes = {}
         self.add_buttons = {}
-        stage_keys = available_stages if available_stages else ["stage_translation", "stage_img_prompts", "stage_images", 
+        stage_keys = available_stages if available_stages else ["stage_translation", "stage_preview", "stage_img_prompts", "stage_images", 
                       "stage_voiceover", "stage_subtitles", "stage_montage"]
         
         for key in stage_keys:
@@ -579,6 +579,10 @@ class TextTab(QWidget):
                         if os.path.isfile(translation_path):
                             add_found("stage_translation", translation_path)
 
+                        preview_dir = os.path.join(dir_path, "preview")
+                        if os.path.isdir(preview_dir) and os.listdir(preview_dir):
+                             add_found("stage_preview", preview_dir)
+
                         prompts_path = os.path.join(dir_path, "image_prompts.txt")
                         if os.path.isfile(prompts_path):
                             add_found("stage_img_prompts", prompts_path)
@@ -620,7 +624,7 @@ class TextTab(QWidget):
 
             use_existing = False
             if found_files_per_lang:
-                display_order = ["stage_translation", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
+                display_order = ["stage_translation", "stage_preview", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
                 
                 message = translator.translate("found_existing_files_prompt") + f" '{task_name}':<br><br>"
                 for lang_name, found_stages in found_files_per_lang.items():

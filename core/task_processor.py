@@ -23,6 +23,7 @@ from core.mixins.translation_mixin import TranslationMixin
 from core.mixins.subtitle_mixin import SubtitleMixin
 from core.mixins.image_mixin import ImageMixin
 from core.mixins.video_mixin import VideoMixin
+from core.mixins.preview_mixin import PreviewMixin
 
 # Determine the base path for resources, accommodating PyInstaller
 if getattr(sys, 'frozen', False):
@@ -30,7 +31,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, ImageMixin, VideoMixin):
+class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, ImageMixin, VideoMixin, PreviewMixin):
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
     image_generated = Signal(str, str, str, str, str) # job_name, lang_name, image_path, prompt, thumbnail_path

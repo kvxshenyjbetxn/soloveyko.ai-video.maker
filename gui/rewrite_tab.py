@@ -133,6 +133,7 @@ class RewriteTab(QWidget):
                     'stage_download',
                     'stage_transcription', 
                     'stage_rewrite',
+                    'stage_preview',
                     'stage_img_prompts',
                     'stage_images',
                     'stage_voiceover',
@@ -286,9 +287,12 @@ class RewriteTab(QWidget):
                             add_found("stage_transcription", transcription_path)
 
                         # For rewrite, the output is 'translation.txt' for compatibility
-                        rewrite_path = os.path.join(dir_path, "translation.txt")
                         if os.path.isfile(rewrite_path):
                             add_found("stage_rewrite", rewrite_path)
+
+                        preview_dir = os.path.join(dir_path, "preview")
+                        if os.path.isdir(preview_dir) and os.listdir(preview_dir):
+                             add_found("stage_preview", preview_dir)
 
                         prompts_path = os.path.join(dir_path, "image_prompts.txt")
                         if os.path.isfile(prompts_path):
@@ -329,7 +333,7 @@ class RewriteTab(QWidget):
 
             use_existing = False
             if found_files_per_lang:
-                display_order = ["stage_download", "stage_transcription", "stage_rewrite", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
+                display_order = ["stage_download", "stage_transcription", "stage_rewrite", "stage_preview", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
                 
                 message = translator.translate("found_existing_files_prompt") + f" '{job_name}':<br><br>"
                 for lang_name, found_stages in found_files_per_lang.items():
