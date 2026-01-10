@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QTreeWidget, QTreeWidgetItem, 
-                               QPushButton, QHBoxLayout, QHeaderView)
+                               QPushButton, QHBoxLayout, QHeaderView, QAbstractItemView)
 from PySide6.QtCore import Qt
 from utils.translator import translator
 
@@ -21,6 +21,7 @@ class TemplateChangesDialog(QDialog):
         
         # Tree Widget
         self.tree = QTreeWidget()
+        self.tree.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.tree.setHeaderLabels([
             translator.translate("template_changes_template_column", "Template / Setting"),
             translator.translate("template_changes_old_value_column", "Old Value"),
@@ -76,7 +77,7 @@ class TemplateChangesDialog(QDialog):
         "general_tab": ["results_path", "image_review_enabled", "rewrite_review_enabled", "translation_review_enabled", "prompt_count_control_enabled", "prompt_count", "image_generation_provider"],
         "api_tab": ["openrouter_models", "openrouter_api_key", "elevenlabs_api_key", "elevenlabs_unlim_api_key", "voicemaker_api_key", "voicemaker_char_limit", "gemini_tts_api_key", "assemblyai_api_key", "googler", "pollinations", "elevenlabs_image"],
         "languages_tab": ["languages_config"],
-        "prompts_tab": ["image_prompt_settings"],
+        "prompts_tab": ["image_prompt_settings", "preview_settings"],
         "montage_tab": ["montage"],
         "subtitles_tab": ["subtitles"],
         "elevenlabs_unlim_settings_title": ["eleven_unlim_settings"]
@@ -85,8 +86,7 @@ class TemplateChangesDialog(QDialog):
     FLATTEN_GROUPS = {
         "montage_tab": "montage",
         "subtitles_tab": "subtitles",
-        "languages_tab": "languages_config",
-        "prompts_tab": "image_prompt_settings"
+        "languages_tab": "languages_config"
     }
 
     def populate_tree(self):
@@ -220,5 +220,12 @@ class TemplateChangesDialog(QDialog):
         if isinstance(value, (list, dict)):
             # Truncate if too long?
             s = str(value)
+            if len(s) > 100:
+                return s[:100] + "..."
             return s
-        return str(value)
+        
+        # For strings (including prompts)
+        s_val = str(value)
+        if len(s_val) > 100:
+            return s_val[:100] + "..."
+        return s_val

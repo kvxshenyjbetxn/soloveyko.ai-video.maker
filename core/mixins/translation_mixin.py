@@ -245,13 +245,16 @@ class TranslationMixin:
             metadata_text = f"{char_count} {translator.translate('characters_count')}"
             self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'original_text', metadata_text)
         
+        if 'stage_preview' in state.stages:
+            self._start_preview(task_id)
+        
         if 'stage_img_prompts' in state.stages:
             self._start_image_prompts(task_id)
         if 'stage_voiceover' in state.stages:
             self._start_voiceover(task_id)
         if 'stage_img_prompts' not in state.stages and 'stage_images' in state.stages:
              self._start_image_generation(task_id)
-        if 'stage_img_prompts' not in state.stages and 'stage_voiceover' not in state.stages and 'stage_images' not in state.stages:
+        if 'stage_img_prompts' not in state.stages and 'stage_voiceover' not in state.stages and 'stage_images' not in state.stages and 'stage_preview' not in state.stages:
             self.check_if_all_finished()
 
         # --- Custom Stages ---
@@ -334,6 +337,8 @@ class TranslationMixin:
                 self._launch_translation_worker(task_id, extra_data)
             elif worker_type == 'image_prompts':
                 self._launch_image_prompts_worker(task_id)
+            elif worker_type == 'preview':
+                self._launch_preview_worker(task_id)
             elif worker_type == 'custom_stage':
                 self._launch_custom_stage_worker(task_id, *extra_data)
 

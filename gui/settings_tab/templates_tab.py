@@ -371,7 +371,7 @@ class TemplateEditorDialog(QDialog):
             "general_tab": ["results_path", "image_review_enabled", "rewrite_review_enabled", "translation_review_enabled", "prompt_count_control_enabled", "prompt_count", "image_generation_provider"],
             "api_tab": ["openrouter_models", "openrouter_api_key", "elevenlabs_api_key", "elevenlabs_unlim_api_key", "voicemaker_api_key", "voicemaker_char_limit", "gemini_tts_api_key", "assemblyai_api_key", "googler", "pollinations", "elevenlabs_image"],
             "languages_tab": ["languages_config"],
-            "prompts_tab": ["image_prompt_settings"],
+            "prompts_tab": ["image_prompt_settings", "preview_settings"],
             "montage_tab": ["montage"],
             "subtitles_tab": ["subtitles"],
             "elevenlabs_unlim_settings_title": ["eleven_unlim_settings"] # If it appears at root
@@ -383,8 +383,7 @@ class TemplateEditorDialog(QDialog):
         self.FLATTEN_GROUPS = {
             "montage_tab": "montage",
             "subtitles_tab": "subtitles",
-            "languages_tab": "languages_config",
-            "prompts_tab": "image_prompt_settings"
+            "languages_tab": "languages_config"
         }
 
         layout = QVBoxLayout(self)
@@ -861,6 +860,7 @@ class TemplatesTab(QWidget):
             # Full tabs saved as dictionaries
             'languages_config',
             'image_prompt_settings',
+            'preview_settings',
             'montage',    # Will be filtered to exclude codec and preset
             'subtitles'   # Will be filtered to exclude whisper_type
         ]

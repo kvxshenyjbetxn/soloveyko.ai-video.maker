@@ -117,6 +117,36 @@ class ImagePromptWorker(BaseWorker):
         else:
             raise Exception(f"Empty or invalid response from image prompt API. Response: {response}")
 
+class PreviewWorker(BaseWorker):
+    def do_work(self):
+        api_key = self.config.get('openrouter_api_key')
+        api = OpenRouterAPI(api_key=api_key)
+        preview_settings = self.config['preview_settings']
+        model = preview_settings.get('model', 'unknown')
+        temp = preview_settings.get('temperature', 1.0)
+        max_tokens = preview_settings.get('max_tokens', 10000)
+        
+        logger.log(f"[{self.task_id}] [{model}] Starting preview prompts generation (temp: {temp}, max_tokens: {max_tokens})", level=LogLevel.INFO)
+        
+        template = preview_settings.get('prompt', '')
+        full_prompt = template.replace('{story}', self.config.get('story', '')).replace('{title}', self.config.get('title', ''))
+        
+        response = api.get_chat_completion(
+            model=model,
+            messages=[{"role": "user", "content": full_prompt}],
+            max_tokens=max_tokens,
+            temperature=temp
+        )
+        if response and response.get('choices') and response['choices'][0]['message']['content']:
+            result = response['choices'][0]['message']['content']
+            # Count prompts
+            prompts = re.findall(r"^\d+\.\s*(.*)", result, re.MULTILINE)
+            prompts_count = len(prompts)
+            logger.log(f"[{self.task_id}] [{model}] Preview prompts generated ({prompts_count} prompts)", level=LogLevel.SUCCESS)
+            return result
+        else:
+            raise Exception(f"Empty or invalid response from preview prompt API. Response: {response}")
+
 class VoiceoverWorker(BaseWorker):
     def do_work(self):
         text = self.config['text']

@@ -1,9 +1,25 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QMessageBox
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl, QThread, Signal
 from PySide6.QtGui import QDesktopServices
 from utils.settings import settings_manager
 from utils.translator import translator
 from api.elevenlabs_unlim import ElevenLabsUnlimAPI
+
+class BalanceCheckWorker(QThread):
+    finished = Signal(int, str) # balance, status
+    error = Signal(str)
+
+    def __init__(self, api_key):
+        super().__init__()
+        self.api_key = api_key
+
+    def run(self):
+        try:
+            api = ElevenLabsUnlimAPI(api_key=self.api_key)
+            balance, status = api.get_balance()
+            self.finished.emit(balance, status)
+        except Exception as e:
+            self.error.emit(str(e))
 
 class ElevenLabsUnlimTab(QWidget):
     def __init__(self):
@@ -77,20 +93,28 @@ class ElevenLabsUnlimTab(QWidget):
         self.check_btn.setEnabled(False)
         self.check_btn.setText(translator.translate("checking_status", "Checking..."))
         
-        # Let's do a synchronous call for now for simplicity in settings, but handle UI state.
-        try:
-             api = ElevenLabsUnlimAPI(api_key=api_key)
-             balance, status = api.get_balance()
-             self.update_balance_label(balance)
-             if status == "connected":
-                 if not silent:
-                    QMessageBox.information(self, translator.translate("success_title"), translator.translate("connection_successful", "Connection Successful!"))
-             else:
-                 if not silent:
-                    QMessageBox.warning(self, translator.translate("error_title"), translator.translate("connection_failed", "Connection Failed."))
-        except Exception as e:
+        self.worker = BalanceCheckWorker(api_key)
+        self.worker.finished.connect(lambda b, s: self._on_check_finished(b, s, silent))
+        self.worker.error.connect(lambda e: self._on_check_error(e, silent))
+        # Keep worker reference alive or ensure it deletes later
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.error.connect(self.worker.deleteLater)
+        self.worker.start()
+
+    def _on_check_finished(self, balance, status, silent):
+        self.check_btn.setEnabled(True)
+        self.check_btn.setText(translator.translate("check_balance_button"))
+        self.update_balance_label(balance)
+        
+        if status == "connected":
              if not silent:
-                QMessageBox.critical(self, translator.translate("error_title"), str(e))
-        finally:
-             self.check_btn.setEnabled(True)
-             self.check_btn.setText(translator.translate("check_balance_button"))
+                QMessageBox.information(self, translator.translate("success_title"), translator.translate("connection_successful", "Connection Successful!"))
+        else:
+             if not silent:
+                QMessageBox.warning(self, translator.translate("error_title"), translator.translate("connection_failed", "Connection Failed."))
+
+    def _on_check_error(self, error_msg, silent):
+        self.check_btn.setEnabled(True)
+        self.check_btn.setText(translator.translate("check_balance_button"))
+        if not silent:
+            QMessageBox.critical(self, translator.translate("error_title"), error_msg)

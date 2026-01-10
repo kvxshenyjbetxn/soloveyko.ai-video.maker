@@ -307,3 +307,9 @@ class MediaThumbnail(QWidget):
         if pixmap.isNull():
              return QPixmap()
         return pixmap.scaled(290, 290, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+
+    def cleanup(self):
+        """Releases any resources held by this thumbnail, such as file handles."""
+        if self.is_video and self.player:
+            self.player.stop()
+            self.player.setSource(QUrl())

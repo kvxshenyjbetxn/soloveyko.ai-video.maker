@@ -103,6 +103,13 @@ SETTINGS_METADATA = {
         'max_tokens': {'type': 'int', 'min': 1, 'max': 128000},
         'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
     },
+    'preview_settings': {
+        'prompt': {'type': 'text_edit_button'},
+        'model': {'type': 'model_selection'},
+        'max_tokens': {'type': 'int', 'min': 1, 'max': 128000},
+        'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
+        'image_count': {'type': 'int', 'min': 1, 'max': 4},
+    },
     'languages_config': {
         'prompt': {'type': 'text_edit_button'},
         'model': {'type': 'model_selection'},
@@ -208,12 +215,16 @@ KEY_TO_TRANSLATION_MAP = {
     'nologo': 'nologo_label',
     'enhance': 'enhance_prompt_label',
 
+    'image_prompt_settings': 'stage_img_prompts',
+
     # ElevenLabsImage
     'elevenlabs_image': 'elevenlabs_image_tab_title',
     'api_key': 'elevenlabs_image_api_key',
 
     'max_tokens': 'tokens_label', # "tokens_label": "Макс. токенів:",
     'temperature': 'temperature_label',
+    'image_count': 'preview_image_count_label',
+    'preview_settings': 'preview_settings_group',
 
     # Languages Config keys
     'prompt': 'prompt_label', # "prompt_label": "Промт:",

@@ -269,6 +269,9 @@ class GalleryTab(QWidget):
 
     def _on_delete_requested(self, thumbnail_widget, lang_group):
         try:
+            # Release any file locks (e.g. video player)
+            thumbnail_widget.cleanup()
+            
             media_path = thumbnail_widget.media_path
             self.image_deleted.emit(media_path) # Повідомити про видалення
 
@@ -297,7 +300,7 @@ class GalleryTab(QWidget):
                 del self.task_groups[task_group.title]
 
         except OSError as e:
-            logger.log(f"Error deleting image file {thumbnail_widget.image_path}: {e}", level=LogLevel.ERROR)
+            logger.log(f"Error deleting image file {thumbnail_widget.media_path}: {e}", level=LogLevel.ERROR)
             QMessageBox.critical(self, "Error", f"Could not delete image file:\n{e}")
 
     def update_total_media_count(self):

@@ -125,6 +125,102 @@ class PromptsTab(QWidget):
         
         self.content_layout.addWidget(img_group)
 
+        # --- Preview Settings Section ---
+        preview_group = QGroupBox()
+        self.preview_group_layout = QVBoxLayout(preview_group)
+
+        self.preview_prompt_help = HelpLabel("preview_prompt_tooltip")
+        self.preview_prompt_label = QLabel()
+        preview_prompt_label_container = QWidget()
+        preview_prompt_label_layout = QHBoxLayout(preview_prompt_label_container)
+        preview_prompt_label_layout.setContentsMargins(0,0,0,0)
+        preview_prompt_label_layout.setSpacing(5)
+        preview_prompt_label_layout.addWidget(self.preview_prompt_help)
+        preview_prompt_label_layout.addWidget(self.preview_prompt_label)
+
+        self.preview_prompt_edit = QTextEdit()
+        self.preview_prompt_edit.textChanged.connect(self.save_settings)
+        self.preview_prompt_edit.setMinimumHeight(150)
+
+        self.open_preview_editor_button = QPushButton(translator.translate("open_editor_button", "Open Editor"))
+        self.open_preview_editor_button.clicked.connect(self.open_preview_prompt_editor)
+
+        preview_settings_form_layout = QFormLayout()
+
+        # Model
+        self.preview_model_help = HelpLabel("image_model_label")
+        self.preview_model_label = QLabel(translator.translate("image_model_label"))
+        preview_model_container = QWidget()
+        preview_model_layout = QHBoxLayout(preview_model_container)
+        preview_model_layout.setContentsMargins(0,0,0,0)
+        preview_model_layout.setSpacing(5)
+        preview_model_layout.addWidget(self.preview_model_help)
+        preview_model_layout.addWidget(self.preview_model_label)
+        
+        self.preview_model_combo = QComboBox()
+        self.preview_model_combo.currentIndexChanged.connect(self.save_settings)
+        preview_settings_form_layout.addRow(preview_model_container, self.preview_model_combo)
+
+        # Tokens
+        self.preview_tokens_help = HelpLabel("tokens_label")
+        self.preview_tokens_label = QLabel(translator.translate("tokens_label"))
+        preview_tokens_container = QWidget()
+        preview_tokens_layout = QHBoxLayout(preview_tokens_container)
+        preview_tokens_layout.setContentsMargins(0,0,0,0)
+        preview_tokens_layout.setSpacing(5)
+        preview_tokens_layout.addWidget(self.preview_tokens_help)
+        preview_tokens_layout.addWidget(self.preview_tokens_label)
+
+        self.preview_tokens_spinbox = QSpinBox()
+        self.preview_tokens_spinbox.setRange(0, 128000)
+        self.preview_tokens_spinbox.valueChanged.connect(self.save_settings)
+        preview_settings_form_layout.addRow(preview_tokens_container, self.preview_tokens_spinbox)
+
+        # Temperature
+        self.preview_temp_help = HelpLabel("temperature_label")
+        self.preview_temp_label = QLabel(translator.translate("temperature_label"))
+        preview_temp_container = QWidget()
+        preview_temp_layout = QHBoxLayout(preview_temp_container)
+        preview_temp_layout.setContentsMargins(0,0,0,0)
+        preview_temp_layout.setSpacing(5)
+        preview_temp_layout.addWidget(self.preview_temp_help)
+        preview_temp_layout.addWidget(self.preview_temp_label)
+
+        self.preview_temperature_spinbox = QDoubleSpinBox()
+        self.preview_temperature_spinbox.setRange(0.0, 2.0)
+        self.preview_temperature_spinbox.setSingleStep(0.1)
+        self.preview_temperature_spinbox.valueChanged.connect(self.save_settings)
+        preview_settings_form_layout.addRow(preview_temp_container, self.preview_temperature_spinbox)
+
+        # Image Count
+        self.preview_image_count_help = HelpLabel("preview_image_count_tooltip")
+        self.preview_image_count_label = QLabel()
+        preview_image_count_container = QWidget()
+        preview_image_count_layout = QHBoxLayout(preview_image_count_container)
+        preview_image_count_layout.setContentsMargins(0,0,0,0)
+        preview_image_count_layout.setSpacing(5)
+        preview_image_count_layout.addWidget(self.preview_image_count_help)
+        preview_image_count_layout.addWidget(self.preview_image_count_label)
+        
+        self.preview_image_count_spinbox = QSpinBox()
+        self.preview_image_count_spinbox.setRange(1, 4)
+        self.preview_image_count_spinbox.valueChanged.connect(self.save_settings)
+        preview_settings_form_layout.addRow(preview_image_count_container, self.preview_image_count_spinbox)
+
+        preview_main_prompt_layout = QHBoxLayout()
+        preview_main_prompt_layout.addWidget(self.preview_prompt_edit)
+
+        preview_editor_button_layout = QVBoxLayout()
+        preview_editor_button_layout.addWidget(self.open_preview_editor_button)
+        preview_editor_button_layout.addStretch()
+        preview_main_prompt_layout.addLayout(preview_editor_button_layout)
+
+        self.preview_group_layout.addWidget(preview_prompt_label_container)
+        self.preview_group_layout.addLayout(preview_main_prompt_layout)
+        self.preview_group_layout.addLayout(preview_settings_form_layout)
+
+        self.content_layout.addWidget(preview_group)
+
         # --- Custom Stages Section ---
         custom_stages_header_layout = QHBoxLayout()
         self.custom_stages_label = QLabel()
@@ -148,6 +244,11 @@ class PromptsTab(QWidget):
         dialog = PromptEditorDialog(self, self.prompt_edit.toPlainText())
         if dialog.exec():
             self.prompt_edit.setPlainText(dialog.get_text())
+
+    def open_preview_prompt_editor(self):
+        dialog = PromptEditorDialog(self, self.preview_prompt_edit.toPlainText())
+        if dialog.exec():
+            self.preview_prompt_edit.setPlainText(dialog.get_text())
 
     def open_custom_stage_prompt_editor(self, prompt_edit_widget):
         dialog = PromptEditorDialog(self, prompt_edit_widget.toPlainText())
@@ -356,6 +457,32 @@ class PromptsTab(QWidget):
         self.temperature_spinbox.blockSignals(False)
         self.prompt_count_spinbox.blockSignals(False)
 
+        # --- Update Preview Fields ---
+        preview_config = self.settings.get("preview_settings", {})
+        self.preview_prompt_edit.blockSignals(True)
+        self.preview_model_combo.blockSignals(True)
+        self.preview_tokens_spinbox.blockSignals(True)
+        self.preview_temperature_spinbox.blockSignals(True)
+        self.preview_image_count_spinbox.blockSignals(True)
+
+        self.preview_prompt_edit.setPlainText(preview_config.get("prompt", ""))
+        self.preview_model_combo.clear()
+        self.preview_model_combo.addItems(self.settings.get("openrouter_models", []))
+        
+        preview_model = preview_config.get("model", "")
+        p_index = self.preview_model_combo.findText(preview_model)
+        self.preview_model_combo.setCurrentIndex(p_index if p_index >= 0 else 0)
+
+        self.preview_tokens_spinbox.setValue(preview_config.get("max_tokens", 10000))
+        self.preview_temperature_spinbox.setValue(preview_config.get("temperature", 1.0))
+        self.preview_image_count_spinbox.setValue(preview_config.get("image_count", 3))
+
+        self.preview_prompt_edit.blockSignals(False)
+        self.preview_model_combo.blockSignals(False)
+        self.preview_tokens_spinbox.blockSignals(False)
+        self.preview_temperature_spinbox.blockSignals(False)
+        self.preview_image_count_spinbox.blockSignals(False)
+
         while self.stages_container.count():
             item = self.stages_container.takeAt(0)
             if item.widget():
@@ -380,6 +507,15 @@ class PromptsTab(QWidget):
         }
         self.settings.set("image_prompt_settings", config)
         self.settings.set('prompt_count', self.prompt_count_spinbox.value())
+
+        preview_config = {
+            "prompt": self.preview_prompt_edit.toPlainText(),
+            "model": self.preview_model_combo.currentText(),
+            "max_tokens": self.preview_tokens_spinbox.value(),
+            "temperature": self.preview_temperature_spinbox.value(),
+            "image_count": self.preview_image_count_spinbox.value()
+        }
+        self.settings.set("preview_settings", preview_config)
 
         if self.main_window:
             if hasattr(self.main_window, 'settings_tab') and hasattr(self.main_window.settings_tab, 'general_tab'):
@@ -422,6 +558,19 @@ class PromptsTab(QWidget):
         self.tokens_help.update_tooltip()
         self.temperature_help.update_tooltip()
         self.prompt_count_help.update_tooltip()
+
+        self.preview_group_layout.parentWidget().setTitle(translator.translate("preview_settings_group"))
+        self.preview_prompt_label.setText(translator.translate("preview_prompt_label"))
+        self.preview_image_count_label.setText(translator.translate("preview_image_count_label"))
+        self.preview_model_label.setText(translator.translate("image_model_label"))
+        self.preview_tokens_label.setText(translator.translate("tokens_label"))
+        self.preview_temp_label.setText(translator.translate("temperature_label"))
+        
+        self.preview_prompt_help.update_tooltip()
+        self.preview_model_help.update_tooltip()
+        self.preview_tokens_help.update_tooltip()
+        self.preview_temp_help.update_tooltip()
+        self.preview_image_count_help.update_tooltip()
 
         self.custom_stages_label.setText(translator.translate("custom_stages_label") if translator.translate("custom_stages_label") != "custom_stages_label" else "Custom Stages")
         self.custom_stages_help.update_tooltip()
