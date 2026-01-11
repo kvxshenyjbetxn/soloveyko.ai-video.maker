@@ -61,6 +61,10 @@ class GeminiTTSAPI:
             balance = data.get("balance", 0.0)
             logger.log(f"Successfully retrieved balance: {balance}", level=LogLevel.SUCCESS)
             return balance, status
+        
+        if status == "not_configured":
+             return None, status
+
         logger.log("Failed to retrieve GeminiTTS balance.", level=LogLevel.ERROR)
         return None, status
 

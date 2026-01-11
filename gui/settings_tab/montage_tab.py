@@ -275,8 +275,8 @@ class MontageTab(QWidget):
         self.special_proc_check_sequence_help = HelpLabel("special_proc_check_sequence_label")
         self.special_proc_check_sequence_cb = QCheckBox()
         self.special_proc_check_sequence_label = QLabel()
-        check_seq_container = QWidget()
-        check_seq_layout = QHBoxLayout(check_seq_container)
+        self.check_seq_container = QWidget()
+        check_seq_layout = QHBoxLayout(self.check_seq_container)
         check_seq_layout.setContentsMargins(0,0,0,0)
         check_seq_layout.setSpacing(5)
         check_seq_layout.addWidget(self.special_proc_check_sequence_help)
@@ -285,7 +285,7 @@ class MontageTab(QWidget):
         check_seq_layout.addStretch()
 
         self.special_proc_check_sequence_cb.toggled.connect(self.save_settings)
-        special_proc_layout.addRow(check_seq_container)
+        special_proc_layout.addRow(self.check_seq_container)
         
         self.special_proc_group.setLayout(special_proc_layout)
         self.layout.addWidget(self.special_proc_group)
@@ -444,4 +444,4 @@ class MontageTab(QWidget):
         
         self.special_proc_video_count_spin.setVisible(is_video)
         self.special_proc_video_count_label.setVisible(is_video)
-        self.special_proc_check_sequence_cb.setVisible(is_video)
+        self.check_seq_container.setVisible(is_video)

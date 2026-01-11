@@ -42,7 +42,6 @@ class YtDlpUpdater(QThread):
         """
         Main logic: check Deno, then check yt-dlp.
         """
-        logger.log(f"Checking dependencies in {self.assets_path}...", level=LogLevel.INFO)
         try:
             self._check_and_update_deno()
             self._check_and_update_ytdlp()
@@ -50,7 +49,7 @@ class YtDlpUpdater(QThread):
             # Ensure PATH is updated for the current process so subsequent calls find them
             if self.assets_path not in os.environ["PATH"]:
                 os.environ["PATH"] = self.assets_path + os.pathsep + os.environ["PATH"]
-                logger.log("Added assets folder to PATH", level=LogLevel.DEBUG)
+
                 
         except Exception as e:
             logger.log(f"Dependency check failed: {e}", level=LogLevel.ERROR)
@@ -61,7 +60,11 @@ class YtDlpUpdater(QThread):
             # Real Deno updates are rare compared to yt-dlp.
             # Verify it runs
             try:
-                subprocess.run([self.deno_path, "--version"], capture_output=True, check=True)
+                kwargs = {}
+                if self.is_windows:
+                     kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+                
+                subprocess.run([self.deno_path, "--version"], capture_output=True, check=True, **kwargs)
                 return
             except Exception:
                 logger.log("Deno binary exists but seems broken. Re-downloading...", level=LogLevel.WARNING)
@@ -115,7 +118,11 @@ class YtDlpUpdater(QThread):
             logger.log("Checking for yt-dlp updates...", level=LogLevel.INFO)
             try:
                 cmd = [self.yt_dlp_path, "-U"]
-                subprocess.run(cmd, capture_output=True, text=True)
+                kwargs = {}
+                if self.is_windows:
+                     kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+                
+                subprocess.run(cmd, capture_output=True, text=True, **kwargs)
                 # We trust it updated itself if needed
                 logger.log("yt-dlp update check completed.", level=LogLevel.SUCCESS)
             except Exception as e:

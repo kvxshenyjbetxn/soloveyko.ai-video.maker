@@ -79,6 +79,10 @@ class OpenRouterAPI:
             balance = credits - usage
             logger.log(f"Successfully retrieved balance: {balance:.4f}$", level=LogLevel.SUCCESS)
             return balance
+        
+        if status == "not_configured":
+             return None
+
         logger.log("Failed to retrieve OpenRouter balance.", level=LogLevel.ERROR)
         return None
 

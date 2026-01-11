@@ -62,6 +62,10 @@ class GooglerAPI:
         if status == "connected" and data:
             logger.log(f"Successfully retrieved Googler usage.", level=LogLevel.SUCCESS)
             return data
+        
+        if status == "not_configured":
+             return None
+
         logger.log("Failed to retrieve Googler usage.", level=LogLevel.ERROR)
         return None
 
