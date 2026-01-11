@@ -99,6 +99,10 @@ class ElevenLabsUnlimAPI:
             remaining = data.get("remaining_characters", 0)
             logger.log(f"Successfully retrieved balance: {remaining} chars", level=LogLevel.SUCCESS)
             return remaining, status
+        
+        if status == "not_configured":
+             return None, status
+
         logger.log("Failed to retrieve ElevenLabsUnlim balance.", level=LogLevel.ERROR)
         return None, status
         

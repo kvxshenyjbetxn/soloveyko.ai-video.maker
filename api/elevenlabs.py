@@ -96,6 +96,10 @@ class ElevenLabsAPI:
             balance = data.get("balance", 0)
             logger.log(f"Successfully retrieved balance: {balance}", level=LogLevel.SUCCESS)
             return balance, status
+        
+        if status == "not_configured":
+             return None, status
+
         logger.log("Failed to retrieve ElevenLabs balance.", level=LogLevel.ERROR)
         return None, status
         
@@ -105,6 +109,10 @@ class ElevenLabsAPI:
         if status == "connected" and data:
             logger.log("Successfully retrieved templates.", level=LogLevel.SUCCESS)
             return data, status
+        
+        if status == "not_configured":
+            return None, status
+
         logger.log("Failed to retrieve ElevenLabs templates.", level=LogLevel.ERROR)
         return None, status
 
