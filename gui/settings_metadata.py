@@ -51,6 +51,15 @@ SETTINGS_METADATA = {
         'upscale_factor': {'type': 'float', 'min': 1.0, 'max': 5.0, 'step': 0.1, 'suffix': 'x'},
         # Transitions
         'enable_transitions': {'type': 'bool'},
+        'transition_effect': {'type': 'choice', 'options': [
+            "random", "fade", "wipeleft", "wiperight", "wipeup", "wipedown", 
+            "slideleft", "slideright", "slideup", "slidedown", "circlecrop", 
+            "rectcrop", "distance", "fadeblack", "fadewhite", "radial", 
+            "smoothleft", "smoothright", "smoothup", "smoothdown", 
+            "circleopen", "circleclose", "vertopen", "vertclose", 
+            "horzopen", "horzclose", "dissolve", "pixelize", "diagtl", 
+            "diagtr", "diagbl", "diagbr", "hlslice", "hrslice", "vu"
+        ]},
         'transition_duration': {'type': 'float', 'min': 0.1, 'max': 5.0, 'step': 0.1, 'suffix': ' s'},
         # Zoom
         'enable_zoom': {'type': 'bool'},
@@ -175,6 +184,7 @@ KEY_TO_TRANSLATION_MAP = {
     'bitrate_mbps': 'bitrate_label',
     'upscale_factor': 'upscale_factor_label',
     'enable_transitions': 'enable_transitions_label',
+    'transition_effect': 'transition_effect_label',
     'transition_duration': 'duration_label',
     'enable_zoom': 'enable_zoom_label',
     'zoom_speed_factor': 'zoom_speed_factor_label',
