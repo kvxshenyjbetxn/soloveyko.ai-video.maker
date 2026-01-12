@@ -21,10 +21,11 @@ class VoicemakerAPI:
 
     def __init__(self, api_key=None):
         if api_key is not None:
-            self.api_key = api_key
+            self.api_key = api_key.strip() if api_key else None
         else:
-            self.api_key = settings_manager.get("voicemaker_api_key")
-        self.base_url = "https://developer.voicemaker.in/voice/api"
+            key = settings_manager.get("voicemaker_api_key")
+            self.api_key = key.strip() if key else None
+        self.base_url = "https://developer.voicemaker.in/api/v1/voice/convert"
 
     def check_connection(self):
         logger.log("Checking Voicemaker API connection...", level=LogLevel.INFO)
@@ -64,7 +65,10 @@ class VoicemakerAPI:
                     logger.log(f"Voicemaker connection successful. Remaining chars: {remaining}", level=LogLevel.SUCCESS)
                     return remaining, "connected"
                 else:
-                    logger.log(f"Voicemaker API error: {data.get('message')}", level=LogLevel.ERROR)
+                    msg = data.get('message')
+                    if msg and "Error 012" in msg:
+                        msg += " (Check if API Key has extra spaces or newlines)"
+                    logger.log(f"Voicemaker API error: {msg}", level=LogLevel.ERROR)
                     return None, "error"
             elif response.status_code == 401:
                 logger.log("Voicemaker unauthorized (401). Check API Key.", level=LogLevel.ERROR)
@@ -176,8 +180,11 @@ class VoicemakerAPI:
                             error_message = "No audio path in API response"
                             logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
                     else:
-                        error_message = f"API error: {data.get('message', 'Unknown error')}"
-                        logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
+                        msg = data.get('message', 'Unknown error')
+                        if msg and "Error 012" in msg:
+                            msg += " (Check API Key format or Voice permissions)"
+                        error_message = f"API error: {msg}"
+                        logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message} | Payload: {payload}", level=LogLevel.WARNING)
                 elif response.status_code == 408: # Request Timeout from Server
                      error_message = f"HTTP error: {response.status_code} - {response.text}"
                      logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
