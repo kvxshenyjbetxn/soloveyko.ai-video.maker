@@ -11,6 +11,15 @@ class MontageTab(QWidget):
     def __init__(self):
         super().__init__()
         self.settings = settings_manager
+        self.transition_effects = [
+            "random", "fade", "wipeleft", "wiperight", "wipeup", "wipedown", 
+            "slideleft", "slideright", "slideup", "slidedown", "circlecrop", 
+            "rectcrop", "distance", "fadeblack", "fadewhite", "radial", 
+            "smoothleft", "smoothright", "smoothup", "smoothdown", 
+            "circleopen", "circleclose", "vertopen", "vertclose", 
+            "horzopen", "horzclose", "dissolve", "pixelize", "diagtl", 
+            "diagtr", "diagbl", "diagbr", "hlslice", "hrslice", "vu"
+        ]
         self.init_ui()
         self.update_fields()
         self.retranslate_ui()
@@ -120,6 +129,29 @@ class MontageTab(QWidget):
         
         self.enable_trans_cb.toggled.connect(self.save_settings)
         trans_layout.addRow(enable_trans_container)
+
+        self.trans_effect_help = HelpLabel("transition_effect_label")
+        self.trans_effect_label = QLabel()
+        trans_effect_container = QWidget()
+        trans_effect_layout = QHBoxLayout(trans_effect_container)
+        trans_effect_layout.setContentsMargins(0,0,0,0)
+        trans_effect_layout.setSpacing(5)
+        trans_effect_layout.addWidget(self.trans_effect_help)
+        trans_effect_layout.addWidget(self.trans_effect_label)
+
+        self.trans_effect_combo = QComboBox()
+        for effect in self.transition_effects:
+            self.trans_effect_combo.addItem(effect, effect) # Label, Data
+        
+        self.trans_effect_combo.currentIndexChanged.connect(self.save_settings)
+        self.trans_effect_combo.currentIndexChanged.connect(self.update_trans_description)
+        trans_layout.addRow(trans_effect_container, self.trans_effect_combo)
+
+        # Description Label
+        self.trans_desc_label = QLabel()
+        self.trans_desc_label.setWordWrap(True)
+        self.trans_desc_label.setStyleSheet("color: #888; font-style: italic; font-size: 11px;")
+        trans_layout.addRow("", self.trans_desc_label)
 
         self.trans_dur_help = HelpLabel("duration_label")
         self.trans_dur_label = QLabel()
@@ -332,6 +364,16 @@ class MontageTab(QWidget):
         self.upscale_spin.setValue(m_settings.get("upscale_factor", 3.0))
 
         self.enable_trans_cb.setChecked(m_settings.get("enable_transitions", True))
+        
+        effect = m_settings.get("transition_effect", "random")
+        index = self.trans_effect_combo.findData(effect)
+        if index != -1:
+            self.trans_effect_combo.setCurrentIndex(index)
+        else:
+             self.trans_effect_combo.setCurrentIndex(0)
+        
+        self.update_trans_description()
+
         self.trans_dur_spin.setValue(m_settings.get("transition_duration", 0.5))
 
         self.enable_zoom_cb.setChecked(m_settings.get("enable_zoom", True))
@@ -366,6 +408,7 @@ class MontageTab(QWidget):
             "bitrate_mbps": self.bitrate_spin.value(),
             "upscale_factor": self.upscale_spin.value(),
             "enable_transitions": self.enable_trans_cb.isChecked(),
+            "transition_effect": self.trans_effect_combo.currentData(),
             "transition_duration": self.trans_dur_spin.value(),
             "enable_zoom": self.enable_zoom_cb.isChecked(),
             "zoom_speed_factor": self.zoom_speed_spin.value(),
@@ -390,6 +433,14 @@ class MontageTab(QWidget):
 
         self.trans_group.setTitle(translator.translate("transitions_settings"))
         self.enable_trans_label.setText(translator.translate("enable_transitions_label"))
+        self.trans_effect_label.setText(translator.translate("transition_effect_label"))
+        # Update 'random' label
+        random_idx = self.trans_effect_combo.findData("random")
+        if random_idx != -1:
+            self.trans_effect_combo.setItemText(random_idx, translator.translate("transition_random"))
+        
+        self.update_trans_description()
+        
         self.trans_dur_label.setText(translator.translate("duration_label"))
 
         self.zoom_group.setTitle(translator.translate("zoom_effects"))
@@ -429,7 +480,16 @@ class MontageTab(QWidget):
         self.sway_speed_help.update_tooltip()
         self.special_proc_mode_help.update_tooltip()
         self.special_proc_check_sequence_help.update_tooltip()
+        self.trans_effect_help.update_tooltip()
         self.max_concurrent_montages_help.update_tooltip()
+
+    def update_trans_description(self):
+        effect = self.trans_effect_combo.currentData()
+        if effect:
+             desc_key = f"trans_desc_{effect}"
+             self.trans_desc_label.setText(translator.translate(desc_key, ""))
+        else:
+             self.trans_desc_label.setText("")
 
     def toggle_special_proc_widgets(self):
         mode = self.special_proc_mode_combo.currentData()

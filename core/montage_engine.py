@@ -5,6 +5,7 @@ import sys
 import tempfile
 import re
 import platform
+import random
 from utils.logger import logger, LogLevel
 
 class MontageEngine:
@@ -47,8 +48,19 @@ class MontageEngine:
         # Налаштування переходів
         enable_trans = settings.get('enable_transitions', True)
         trans_dur = settings.get('transition_duration', 0.5) if enable_trans else 0
-        
-        # Налаштування рендеру
+        enable_trans = settings.get('enable_transitions', True)
+        trans_dur = settings.get('transition_duration', 0.5) if enable_trans else 0
+        transition_effect = settings.get('transition_effect', 'random')
+
+        valid_transitions = [
+            "fade", "wipeleft", "wiperight", "wipeup", "wipedown", 
+            "slideleft", "slideright", "slideup", "slidedown", "circlecrop", 
+            "rectcrop", "distance", "fadeblack", "fadewhite", "radial", 
+            "smoothleft", "smoothright", "smoothup", "smoothdown", 
+            "circleopen", "circleclose", "vertopen", "vertclose", 
+            "horzopen", "horzclose", "dissolve", "pixelize", "diagtl", 
+            "diagtr", "diagbl", "diagbr", "hlslice", "hrslice", "vu"
+        ]
         codec = settings.get('codec', 'libx264')
         preset = settings.get('preset', 'medium')
         bitrate = settings.get('bitrate_mbps', 15)
@@ -231,8 +243,13 @@ class MontageEngine:
             for i in range(1, num_files):
                 next_stream = f"[v{i}_final]"; target = f"[v_m{i}]"
                 off_str = fmt(current_offset)
+                
+                current_trans = transition_effect
+                if current_trans == "random" or current_trans not in valid_transitions:
+                     current_trans = random.choice(valid_transitions)
+
                 xfade = (
-                    f"{curr}{next_stream}xfade=transition=fade:"
+                    f"{curr}{next_stream}xfade=transition={current_trans}:"
                     f"duration={trans_dur_str_filt}:offset={off_str}{target}"
                 )
                 filter_parts.append(xfade)
