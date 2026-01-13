@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QLabel, QScrollArea, QGroupBox, QMenu, QToolButton, QMessageBox, QTextBrowser, QSizePolicy
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QLabel, QScrollArea, QGroupBox, QMenu, QToolButton, QMessageBox, QTextBrowser, QSizePolicy, QGridLayout
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QCursor
 from functools import partial
@@ -11,9 +11,11 @@ class StatusDot(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(12, 12)
+        self.current_status = 'pending'
         self.set_status('pending')
 
     def set_status(self, status):
+        self.current_status = status
         if status == 'processing':
             color = '#FFD700' # Bright Yellow
         elif status == 'warning':
@@ -68,26 +70,45 @@ class DeletableStageWidget(QWidget):
     def get_dot(self):
         return self.dot
     
+    def get_status(self):
+        return self.dot.current_status
+
     def update_metadata(self, metadata_text):
         """Update the metadata display text"""
         self.metadata_label.setText(metadata_text)
 
 
 class DeletableLanguageHeader(QWidget):
-    """A widget for the language header, allowing deletion via context menu."""
+    """A widget for the language header, allowing deletion via context menu and collapsing via click."""
     delete_requested = Signal()
+    toggled = Signal(bool)  # is_expanded
 
     def __init__(self, display_name, template_name=None, parent=None):
         super().__init__(parent)
         self.display_name = display_name
+        self.is_expanded = True
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        
+        # Ensure header has consistent height for alignment in grid
+        self.setFixedHeight(30)
 
         layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 5, 0, 5)
+        layout.setSpacing(5)
         self.setLayout(layout)
+
+        # Chevron indicator
+        self.chevron = QLabel("▼", self)
+        self.chevron.setStyleSheet("font-size: 10px; color: #888;")
+        layout.addWidget(self.chevron)
 
         self.label = QLabel(f"<b>{self.display_name}</b>", self)
         layout.addWidget(self.label)
+        
+        # Status Dot
+        self.status_dot = StatusDot(self)
+        self.status_dot.setVisible(False)
+        layout.addWidget(self.status_dot)
 
         if template_name:
             template_label = QLabel(f"<i>({template_name})</i>")
@@ -102,6 +123,130 @@ class DeletableLanguageHeader(QWidget):
         delete_action.triggered.connect(self.delete_requested.emit)
         menu.addAction(delete_action)
         menu.exec(event.globalPos())
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.toggle()
+            event.accept() # Prevent bubbling to TaskCard
+        else:
+            super().mousePressEvent(event)
+
+    def toggle(self):
+        self.is_expanded = not self.is_expanded
+        self.chevron.setText("▼" if self.is_expanded else "▶")
+        self.status_dot.setVisible(not self.is_expanded)
+        self.toggled.emit(self.is_expanded)
+
+    def set_expanded(self, expanded):
+        if self.is_expanded != expanded:
+            self.toggle()
+    
+    def set_status(self, status):
+        self.status_dot.set_status(status)
+
+class LanguageSection(QWidget):
+    """A widget grouping a language header and its stages."""
+    def __init__(self, lang_id, lang_data, job_type, parent_card):
+        super().__init__(parent_card)
+        self.lang_id = lang_id
+        self.stage_map = {}
+        self.original_text_metadata_label = None
+        self.original_text_status = 'pending'
+        
+        # Main layout for this section
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 10) # Add some bottom spacing
+        layout.setSpacing(0)
+
+        # Header
+        template_name = lang_data.get("template_name")
+        self.header = DeletableLanguageHeader(lang_data['display_name'], template_name, self)
+        self.header.delete_requested.connect(lambda: parent_card.on_language_delete(lang_id))
+        self.header.toggled.connect(self.on_header_toggled)
+        layout.addWidget(self.header)
+
+        # Content container (for collapsing)
+        self.content_widget = QWidget(self)
+        self.content_layout = QVBoxLayout(self.content_widget)
+        self.content_layout.setContentsMargins(15, 0, 0, 0) # Indent content
+        self.content_layout.setSpacing(2)
+        layout.addWidget(self.content_widget)
+
+        # Build content
+        # If translation is not a selected stage, show 'Original'
+        if 'stage_translation' not in lang_data['stages'] and job_type != 'rewrite':
+            original_widget = QWidget()
+            original_layout = QHBoxLayout(original_widget)
+            original_layout.setContentsMargins(4, 0, 4, 0)
+            
+            dot = StatusDot(self)
+            dot.set_status('success') # Original text is always 'successful'
+            self.original_text_status = 'success'
+            label = QLabel(translator.translate('original_text'), self)
+            
+            # Metadata label for original text
+            metadata_label = QLabel("", self)
+            metadata_label.setStyleSheet("color: #888; font-size: 10px;")
+            self.original_text_metadata_label = metadata_label
+            
+            original_layout.addWidget(dot)
+            original_layout.addWidget(label)
+            original_layout.addStretch()
+            original_layout.addWidget(metadata_label)
+            self.content_layout.addWidget(original_widget)
+
+        for stage_key in lang_data['stages']:
+            stage_widget = DeletableStageWidget(stage_key, self)
+            stage_widget.delete_requested.connect(
+                lambda skey=stage_key: parent_card.on_stage_delete(lang_id, skey)
+            )
+            self.stage_map[stage_key] = stage_widget
+            self.content_layout.addWidget(stage_widget)
+        
+        self.update_header_status()
+
+    @property
+    def stage_widgets(self):
+        return list(self.stage_map.values())
+
+    def set_expanded(self, expanded):
+        self.header.set_expanded(expanded)
+
+    def on_header_toggled(self, is_expanded):
+        self.content_widget.setVisible(is_expanded)
+
+    def update_stage_status(self, stage_key, status):
+        if stage_key in self.stage_map:
+            self.stage_map[stage_key].get_dot().set_status(status)
+        self.update_header_status()
+
+    def remove_stage(self, stage_key):
+        if stage_key in self.stage_map:
+            widget = self.stage_map.pop(stage_key)
+            widget.setVisible(False)
+            self.content_layout.removeWidget(widget)
+            widget.deleteLater()
+            self.update_header_status()
+
+    def update_header_status(self):
+        statuses = [w.get_status() for w in self.stage_map.values()]
+        if self.original_text_status != 'pending':
+             statuses.append(self.original_text_status)
+
+        if 'error' in statuses:
+            final_status = 'error'
+        elif 'processing' in statuses:
+            final_status = 'processing'
+        # Treat 'warning' (e.g. partial images) as success for the group status, 
+        # or at least ensure it doesn't fall back to pending. 
+        # User requested green even if 49/50 images (which is usually warning/orange).
+        elif all(s in ['success', 'warning'] for s in statuses) and statuses:
+            final_status = 'success'
+        else:
+            final_status = 'pending'
+        
+        self.header.set_status(final_status)
+
 
 class TaskCard(QGroupBox):
     """A widget that displays a single task and its stage statuses."""
@@ -126,9 +271,10 @@ class TaskCard(QGroupBox):
         """)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
-        self.language_widgets = {}
-        self.stage_widgets = {}
-        self.original_text_metadata_labels = {}  # For storing metadata labels for original text
+        # Store references for updates
+        self.language_sections = {} # lang_id -> LanguageSection
+        self.stage_widgets = {} # lang_id -> list of DeletableStageWidget
+        self.original_text_metadata_labels = {}  # lang_id -> QLabel
 
         self.init_ui(job)
 
@@ -140,14 +286,20 @@ class TaskCard(QGroupBox):
         left_content = QWidget()
         layout = QVBoxLayout(left_content)
         layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Hint label
+        hint_label = QLabel(translator.translate("click_for_logs_hint"), self)
+        hint_label.setStyleSheet("color: #777; font-size: 10px; margin-bottom: 2px;")
+        layout.addWidget(hint_label)
 
         # Custom header
         header_layout = QHBoxLayout()
         task_name_label = QLabel(f"<b>{self.job_name}</b>", self)
         task_name_label.setToolTip(self.job_name)
         task_name_label.setWordWrap(True)
-        task_name_label.setFixedWidth(150)
-        task_name_label.setFixedHeight(50) # Approx height for 3 lines
+        task_name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        task_name_label.setMinimumHeight(40)
+        
         header_layout.addWidget(task_name_label)
         header_layout.addStretch()
 
@@ -161,43 +313,49 @@ class TaskCard(QGroupBox):
         delete_button.clicked.connect(self.on_corner_delete_clicked)
         header_layout.addWidget(delete_button)
         layout.addLayout(header_layout)
-
-        for lang_id, lang_data in job['languages'].items():
-            template_name = lang_data.get("template_name")
-            lang_header = DeletableLanguageHeader(lang_data['display_name'], template_name, self)
-            self.language_widgets[lang_id] = lang_header
-            layout.addWidget(lang_header)
-            
-            self.stage_widgets[lang_id] = []
-
-            # If translation is not a selected stage, show 'Original'
-            if 'stage_translation' not in lang_data['stages'] and job.get('type') != 'rewrite':
-                original_widget = QWidget()
-                original_layout = QHBoxLayout(original_widget)
-                original_layout.setContentsMargins(4, 0, 4, 0)
-                
-                dot = StatusDot(self)
-                dot.set_status('success') # Original text is always 'successful'
-                label = QLabel(translator.translate('original_text'), self)
-                
-                # Metadata label for original text
-                metadata_label = QLabel("", self)
-                metadata_label.setStyleSheet("color: #888; font-size: 10px;")
-                self.original_text_metadata_labels[lang_id] = metadata_label
-                
-                original_layout.addWidget(dot)
-                original_layout.addWidget(label)
-                original_layout.addStretch()
-                original_layout.addWidget(metadata_label)
-                layout.addWidget(original_widget)
-
-            for stage_key in lang_data['stages']:
-                stage_widget = DeletableStageWidget(stage_key, self)
-                stage_widget.delete_requested.connect(lambda lid=lang_id, skey=stage_key: self.on_stage_delete(lid, skey))
-                
-                self.stage_widgets[lang_id].append(stage_widget)
-                layout.addWidget(stage_widget)
         
+        # Separator line to distinguish title from content
+        line = QWidget()
+        line.setFixedHeight(1)
+        line.setStyleSheet("background-color: #333;")
+        layout.addWidget(line)
+        layout.addSpacing(5)
+
+        # Languages Container
+        languages_container = QWidget()
+        num_languages = len(job['languages'])
+        
+        # Logic: 1-2 languages = Vertical; 3+ languages = 2-Column Grid
+        if num_languages >= 3:
+            langs_layout = QGridLayout(languages_container)
+            langs_layout.setContentsMargins(0, 0, 0, 0)
+            langs_layout.setColumnStretch(0, 1)
+            langs_layout.setColumnStretch(1, 1)
+            langs_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        else:
+            langs_layout = QVBoxLayout(languages_container)
+            langs_layout.setContentsMargins(0, 0, 0, 0)
+
+        idx = 0
+        for lang_id, lang_data in job['languages'].items():
+            lang_section = LanguageSection(lang_id, lang_data, job.get('type'), self)
+            self.language_sections[lang_id] = lang_section
+            
+            # Map exposed widgets for existing logic
+            self.stage_widgets[lang_id] = lang_section.stage_widgets
+            if lang_section.original_text_metadata_label:
+                self.original_text_metadata_labels[lang_id] = lang_section.original_text_metadata_label
+            
+            if num_languages >= 3:
+                row = idx // 2
+                col = idx % 2
+                langs_layout.addWidget(lang_section, row, col)
+            else:
+                langs_layout.addWidget(lang_section)
+            
+            idx += 1
+
+        layout.addWidget(languages_container)
         layout.addStretch()
         
         # Add left content to main layout
@@ -211,27 +369,36 @@ class TaskCard(QGroupBox):
         self.log_browser.setMaximumWidth(800)
         self.log_browser.setStyleSheet("QTextBrowser { font-family: 'Courier New', monospace; }")
         main_layout.addWidget(self.log_browser)
+    
+    def set_all_languages_expanded(self, expanded):
+        for section in self.language_sections.values():
+            section.set_expanded(expanded)
 
     def hide_language(self, lang_id):
-        if lang_id in self.language_widgets:
-            self.language_widgets[lang_id].setVisible(False)
-        if lang_id in self.stage_widgets:
-            for stage_widget in self.stage_widgets[lang_id]:
-                stage_widget.setVisible(False)
+        if lang_id in self.language_sections:
+            self.language_sections[lang_id].setVisible(False)
 
     def hide_stage(self, lang_id, stage_key):
-        if lang_id in self.stage_widgets:
-            if stage_key.startswith("custom_"):
+        if lang_id in self.language_sections:
+             section = self.language_sections[lang_id]
+             
+             if stage_key.startswith("custom_"):
                  stage_name_to_find = stage_key.replace("custom_", "", 1)
-            else:
-                 stage_name_to_find = translator.translate(stage_key)
-
-            for stage_widget in self.stage_widgets[lang_id]:
-                if stage_widget.label.text() == stage_name_to_find:
-                    stage_widget.setVisible(False)
-                    # Also remove it from the list to avoid finding it again
-                    self.stage_widgets[lang_id].remove(stage_widget)
-                    break
+                 # We need to find matching key in map if map uses key, not name.
+                 # LanguageSection init: self.stage_map[stage_key] = widget
+                 # So we should use stage_key directly!
+                 if stage_key in section.stage_map:
+                     section.remove_stage(stage_key)
+                     return
+             
+             # Fallback if we only have display name logic (old code)
+             # But LanguageSection uses stage_key.
+             if stage_key in section.stage_map:
+                 section.remove_stage(stage_key)
+             else:
+                 # Try finding via name if needed? 
+                 # Code usually passes stage_key.
+                 pass
     
     def contextMenuEvent(self, event):
         menu = QMenu(self)
@@ -257,16 +424,8 @@ class TaskCard(QGroupBox):
         self.stage_delete_requested.emit(self.job_id, lang_id, stage_key)
 
     def update_stage_status(self, lang_id, stage_key, status):
-        if lang_id in self.stage_widgets:
-            if stage_key.startswith("custom_"):
-                 stage_name_to_find = stage_key.replace("custom_", "", 1)
-            else:
-                 stage_name_to_find = translator.translate(stage_key)
-            
-            for stage_widget in self.stage_widgets[lang_id]:
-                if stage_widget.label.text() == stage_name_to_find:
-                    stage_widget.get_dot().set_status(status)
-                    break
+        if lang_id in self.language_sections:
+            self.language_sections[lang_id].update_stage_status(stage_key, status)
     
     def update_stage_metadata(self, lang_id, stage_key, metadata_text):
         """Update metadata display for a specific stage"""
@@ -277,11 +436,11 @@ class TaskCard(QGroupBox):
             return
         
         # Handle regular stage metadata
-        if lang_id in self.stage_widgets:
-            for stage_widget in self.stage_widgets[lang_id]:
-                if stage_widget.stage_key == stage_key:
-                    stage_widget.update_metadata(metadata_text)
-                    break
+        if lang_id in self.language_sections:
+             section = self.language_sections[lang_id]
+             if stage_key in section.stage_map:
+                 section.stage_map[stage_key].update_metadata(metadata_text)
+
 
 
     def mousePressEvent(self, event):
@@ -397,6 +556,7 @@ class QueueTab(QWidget):
         self.main_window = main_window
         self.log_tab = log_tab
         self.task_cards = {}
+        self.all_expanded = True # State for toggle button
         self.init_ui()
 
     def init_ui(self):
@@ -422,11 +582,31 @@ class QueueTab(QWidget):
         top_layout.addWidget(self.gemini_tts_balance_label)
         top_layout.addStretch()
 
+        # Toggle All Button
+        self.toggle_all_button = QPushButton()
+        self.toggle_all_button.clicked.connect(self.on_toggle_all_clicked)
+        top_layout.addWidget(self.toggle_all_button)
+
         self.clear_queue_button = QPushButton()
         self.clear_queue_button.clicked.connect(self.on_clear_queue_clicked)
         top_layout.addWidget(self.clear_queue_button)
         
         self.start_processing_button = QPushButton()
+        self.start_processing_button.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745; 
+                color: white; 
+                font-weight: bold; 
+                padding: 5px 15px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+            }
+        """)
         top_layout.addWidget(self.start_processing_button)
         main_layout.addLayout(top_layout)
 
@@ -443,6 +623,25 @@ class QueueTab(QWidget):
         main_layout.addWidget(scroll_area)
         
         self.retranslate_ui()
+
+    def set_processing_state(self, is_processing):
+        self.start_processing_button.setDisabled(is_processing)
+        self.clear_queue_button.setDisabled(is_processing)
+        # self.start_processing_button.setText(
+        #     "Processing..." if is_processing else translator.translate('start_processing')
+        # )
+
+    def on_toggle_all_clicked(self):
+        self.all_expanded = not self.all_expanded
+        
+        # update UI text
+        if self.all_expanded:
+            self.toggle_all_button.setText(translator.translate('collapse_all'))
+        else:
+            self.toggle_all_button.setText(translator.translate('expand_all'))
+            
+        for card in self.task_cards.values():
+            card.set_all_languages_expanded(self.all_expanded)
 
     def on_clear_queue_clicked(self):
         msg_box = QMessageBox(self)
@@ -469,6 +668,9 @@ class QueueTab(QWidget):
         task_card = TaskCard(job, log_tab=self.log_tab)
         task_card.task_delete_requested.connect(self.on_task_deleted)
         task_card.language_delete_requested.connect(self.on_partial_delete)
+        
+        # Respect current global toggled state
+        task_card.set_all_languages_expanded(self.all_expanded)
         task_card.stage_delete_requested.connect(self.on_partial_delete)
 
         self.tasks_layout.addWidget(task_card)
@@ -545,5 +747,11 @@ class QueueTab(QWidget):
     def retranslate_ui(self):
         self.start_processing_button.setText(translator.translate('start_processing'))
         self.clear_queue_button.setText(translator.translate('clear_queue'))
+        
+        if self.all_expanded:
+            self.toggle_all_button.setText(translator.translate('collapse_all'))
+        else:
+            self.toggle_all_button.setText(translator.translate('expand_all'))
+            
         # Retranslating cards would be complex. For now, this is omitted.
         pass
