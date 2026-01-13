@@ -317,8 +317,16 @@ class TranslationMixin:
         self.openrouter_active_count -= 1
         self._process_openrouter_queue()
         
+        # Try to extract stage name from error message or config
         worker = self.sender()
-        stage_name = getattr(worker, 'config', {}).get('stage_name', 'unknown') if worker else 'unknown'
+        stage_name = 'unknown'
+        if worker:
+            stage_name = getattr(worker, 'config', {}).get('stage_name', 'unknown')
+        else:
+            # Try to parse from error message "Failed to start custom stage 'NAME': ..."
+            match = re.search(r"custom stage '([^']+)'", error)
+            if match:
+                stage_name = match.group(1)
         
         stage_key = f"custom_{stage_name}"
         logger.log(f"[{task_id}] [Custom Stage: {stage_name}] Failed: {error}", level=LogLevel.ERROR)

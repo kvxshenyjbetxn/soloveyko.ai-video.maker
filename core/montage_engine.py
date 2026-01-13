@@ -48,9 +48,7 @@ class MontageEngine:
         # Налаштування переходів
         enable_trans = settings.get('enable_transitions', True)
         trans_dur = settings.get('transition_duration', 0.5) if enable_trans else 0
-        enable_trans = settings.get('enable_transitions', True)
-        trans_dur = settings.get('transition_duration', 0.5) if enable_trans else 0
-        transition_effect = settings.get('transition_effect', 'random')
+        transition_effect = settings.get('transition_effect', 'fade')
 
         valid_transitions = [
             "fade", "wipeleft", "wiperight", "wipeup", "wipedown", 
@@ -364,7 +362,7 @@ class MontageEngine:
             bg_music_input_index = voiceover_input_index + 1
 
             
-            vol_multiplier = (background_music_volume or 100) / 100.0
+            vol_multiplier = (background_music_volume if background_music_volume is not None else 100) / 100.0
             
             fade_duration = 5
             # Ensure fade out doesn't start before the audio begins

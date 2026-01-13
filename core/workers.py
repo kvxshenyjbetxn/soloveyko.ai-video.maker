@@ -379,10 +379,13 @@ class ImageGenerationWorker(BaseWorker):
             raise Exception("Executor not provided to ImageGenerationWorker")
 
         prompts_text = self.config['prompts_text']
+        # Try to find numbered prompts first (1. ..., 2. ...)
         prompts = re.findall(r"^\d+\.\s*(.*)", prompts_text, re.MULTILINE)
         if not prompts:
-            logger.log(f"[{self.task_id}] No numbered prompts found. Parsing by lines.", level=LogLevel.INFO)
+            # If no numbers, take each non-empty line as a prompt
             prompts = [line.strip() for line in prompts_text.split('\n') if line.strip()]
+            if prompts:
+                logger.log(f"[{self.task_id}] No numbered prompts found. Parsing {len(prompts)} prompts by lines.", level=LogLevel.INFO)
 
         if not prompts:
             raise Exception("No prompts found in the generated text.")

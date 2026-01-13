@@ -578,10 +578,37 @@ class TextTab(QWidget):
                         translation_path = os.path.join(dir_path, "translation.txt")
                         if os.path.isfile(translation_path):
                             add_found("stage_translation", translation_path)
+                        
+                        # Check for custom stages
+                        custom_stages = self.settings.get("custom_stages", [])
+                        for stage in custom_stages:
+                            stage_name = stage.get("name")
+                            if stage_name:
+                                safe_name = "".join(c for c in stage_name if c.isalnum() or c in (' ', '_')).rstrip()
+                                custom_path = os.path.join(dir_path, f"{safe_name}.txt")
+                                if os.path.isfile(custom_path):
+                                    add_found(f"custom_{stage_name}", custom_path, display_name=stage_name)
 
                         preview_dir = os.path.join(dir_path, "preview")
-                        if os.path.isdir(preview_dir) and os.listdir(preview_dir):
-                             add_found("stage_preview", preview_dir)
+                        if os.path.isdir(preview_dir):
+                            # ImageGenerationWorker saves to preview/images
+                            preview_images_dir = os.path.join(preview_dir, "images")
+                            count = 0
+                            
+                            if os.path.isdir(preview_images_dir):
+                                preview_files = os.listdir(preview_images_dir)
+                                image_ext = ('.png', '.jpg', '.jpeg', '.webp')
+                                preview_images = [f for f in preview_files if f.lower().endswith(image_ext)]
+                                count = len(preview_images)
+                            
+                            # Also check for prompts
+                            prompts_exist = os.path.isfile(os.path.join(preview_dir, "preview_prompts.txt"))
+                            
+                            if count > 0 or prompts_exist:
+                                display_name = translator.translate('stage_preview')
+                                if count > 0:
+                                    display_name += f" ({count} {translator.translate('images_label')})"
+                                add_found("stage_preview", preview_dir, display_name=display_name)
 
                         prompts_path = os.path.join(dir_path, "image_prompts.txt")
                         if os.path.isfile(prompts_path):
@@ -624,8 +651,28 @@ class TextTab(QWidget):
 
             use_existing = False
             if found_files_per_lang:
-                display_order = ["stage_translation", "stage_preview", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
+                standard_order = ["stage_translation", "stage_preview", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
                 
+                # Get all unique custom stage keys found
+                custom_keys = set()
+                for found_stages in found_files_per_lang.values():
+                    for key in found_stages.keys():
+                        if key.startswith("custom_"):
+                            custom_keys.add(key)
+                
+                # Insert custom keys after translation/rewrite if they exist, or at the start
+                display_order = []
+                if "stage_translation" in standard_order:
+                    display_order.append("stage_translation")
+                
+                # Add custom stages
+                display_order.extend(sorted(list(custom_keys)))
+                
+                # Add rest of standard stages
+                for s in standard_order:
+                    if s not in display_order:
+                        display_order.append(s)
+
                 message = translator.translate("found_existing_files_prompt") + f" '{task_name}':<br><br>"
                 for lang_name, found_stages in found_files_per_lang.items():
                     message += f"<b>{lang_name}:</b><ul>"
