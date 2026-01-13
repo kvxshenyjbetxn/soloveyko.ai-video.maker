@@ -311,27 +311,77 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
 
         if stage_key in pre_found_files:
             file_path = pre_found_files[stage_key]
-            logger.log(f"[{task_id}] Skipping stage '{stage_key}' using existing file: {os.path.basename(file_path)}", level=LogLevel.INFO)
             
+            should_skip = True
             result = None
-            try:
-                if stage_key in ['stage_translation', 'stage_rewrite', 'stage_img_prompts', 'stage_transcription']:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        result = f.read()
-                elif stage_key == 'stage_images':
-                    image_paths = sorted(
-                        [os.path.join(file_path, f) for f in os.listdir(file_path) if os.path.isfile(os.path.join(file_path, f))],
-                        key=lambda x: int(os.path.splitext(os.path.basename(x))[0]) if os.path.splitext(os.path.basename(x))[0].isdigit() else -1
-                    )
-                    result = {'paths': image_paths, 'total_prompts': len(image_paths)}
+            
+            # Special logic for stage_preview which involves two separate worker types
+            if stage_key == 'stage_preview':
+                if worker_class.__name__ == 'PreviewWorker':
+                    # We need the prompt text file to skip
+                    prompts_file = os.path.join(file_path, "preview_prompts.txt") if os.path.isdir(file_path) else file_path
+                    if os.path.isfile(prompts_file):
+                        try:
+                            with open(prompts_file, 'r', encoding='utf-8') as f:
+                                result = f.read()
+                                logger.log(f"[{task_id}] Skipping PreviewWorker using existing prompts: {os.path.basename(prompts_file)}", level=LogLevel.INFO)
+                        except Exception as e:
+                            logger.log(f"[{task_id}] Failed to read existing preview prompts at {prompts_file}: {e}", level=LogLevel.WARNING)
+                            should_skip = False
+                    else:
+                        should_skip = False
+                elif worker_class.__name__ == 'ImageGenerationWorker':
+                    # Only skip if we have images in that directory
+                    # Note: Preview images are stored in file_path/images
+                    target_images_dir = os.path.join(file_path, "images")
+                    if os.path.isdir(target_images_dir):
+                        image_exts = ('.png', '.jpg', '.jpeg', '.webp')
+                        images = sorted([os.path.join(target_images_dir, f) for f in os.listdir(target_images_dir) if f.lower().endswith(image_exts)])
+                        if images:
+                            result = {'paths': images, 'total_prompts': len(images)}
+                            logger.log(f"[{task_id}] Skipping ImageGenerationWorker for preview using {len(images)} existing images in {os.path.basename(target_images_dir)}", level=LogLevel.INFO)
+                        else:
+                            should_skip = False
+                    else:
+                        should_skip = False
                 else:
-                    result = file_path
-                
+                    # Some other worker for stage_preview? (Should not happen)
+                    should_skip = False
+            
+            else:
+                # Standard stage skipping
+                logger.log(f"[{task_id}] Skipping stage '{stage_key}' using existing file: {os.path.basename(file_path)}", level=LogLevel.INFO)
+                try:
+                    is_custom = stage_key.startswith("custom_")
+                    is_text_stage = is_custom or stage_key in ['stage_translation', 'stage_rewrite', 'stage_img_prompts', 'stage_transcription']
+                    
+                    if is_text_stage:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            result = f.read()
+                    elif stage_key == 'stage_images':
+                        image_paths = sorted(
+                            [os.path.join(file_path, f) for f in os.listdir(file_path) if os.path.isfile(os.path.join(file_path, f))],
+                            key=lambda x: int(os.path.splitext(os.path.basename(x))[0]) if os.path.splitext(os.path.basename(x))[0].isdigit() else -1
+                        )
+                        result = {'paths': image_paths, 'total_prompts': len(image_paths)}
+                    else:
+                        result = file_path
+                    
+                    # For custom stages, the finish slot expects a dict with 'stage_name'
+                    if is_custom:
+                        sn = stage_key.replace("custom_", "")
+                        result = {'path': file_path, 'stage_name': sn, 'content': result}
+
+                except Exception as e:
+                    error_msg = f"Failed to process existing file for stage '{stage_key}': {e}"
+                    on_error_slot(task_id, error_msg)
+                    return
+
+            if should_skip:
                 on_finish_slot(task_id, result)
-            except Exception as e:
-                error_msg = f"Failed to process existing file for stage '{stage_key}': {e}"
-                on_error_slot(task_id, error_msg)
-            return
+                return
+            else:
+                 logger.log(f"[{task_id}] Found partial data for '{stage_key}', but proceeding with {worker_class.__name__} to ensure completeness.", level=LogLevel.INFO)
 
         self.stage_status_changed.emit(self.task_states[task_id].job_id, self.task_states[task_id].lang_id, stage_key, 'processing')
         worker = worker_class(task_id, config)
