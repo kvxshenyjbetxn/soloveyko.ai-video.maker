@@ -57,7 +57,7 @@ class MontageEngine:
             "smoothleft", "smoothright", "smoothup", "smoothdown", 
             "circleopen", "circleclose", "vertopen", "vertclose", 
             "horzopen", "horzclose", "dissolve", "pixelize", "diagtl", 
-            "diagtr", "diagbl", "diagbr", "hlslice", "hrslice", "vu"
+            "diagtr", "diagbl", "diagbr"
         ]
         codec = settings.get('codec', 'libx264')
         preset = settings.get('preset', 'medium')
@@ -243,8 +243,13 @@ class MontageEngine:
                 off_str = fmt(current_offset)
                 
                 current_trans = transition_effect
-                if current_trans == "random" or current_trans not in valid_transitions:
+                if current_trans == "random":
                      current_trans = random.choice(valid_transitions)
+                elif current_trans not in valid_transitions:
+                     # Warn only once or simple fallback
+                     current_trans = "fade"
+                
+                # logger.log(f"{prefix}[FFmpeg] Transition {i}->{i+1}: {current_trans}", level=LogLevel.DEBUG)
 
                 xfade = (
                     f"{curr}{next_stream}xfade=transition={current_trans}:"
