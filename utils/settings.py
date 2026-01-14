@@ -384,12 +384,38 @@ Original Russian Text:
         return destination
 
     def get(self, key, default=None):
+        if "." in key:
+            parts = key.split(".")
+            val = self.settings
+            try:
+                for p in parts:
+                    val = val[p]
+                return val
+            except (KeyError, TypeError):
+                 # Fallback to defaults
+                 val = self.defaults
+                 try:
+                    for p in parts:
+                        val = val[p]
+                    return val
+                 except (KeyError, TypeError):
+                    return default
+
         if default is None:
             default = self.defaults.get(key)
         return self.settings.get(key, default)
 
     def set(self, key, value):
-        self.settings[key] = value
+        if "." in key:
+            parts = key.split(".")
+            target = self.settings
+            for p in parts[:-1]:
+                if p not in target or not isinstance(target[p], dict):
+                    target[p] = {}
+                target = target[p]
+            target[parts[-1]] = value
+        else:
+            self.settings[key] = value
         self.save_settings()
 
     def save_settings(self):

@@ -4,6 +4,7 @@ from utils.settings import settings_manager
 from utils.hint_manager import hint_manager
 from api.elevenlabs import ElevenLabsAPI
 from gui.widgets.help_label import HelpLabel
+from gui.widgets.setting_row import add_setting_row
 
 class ElevenLabsTab(QWidget):
     def __init__(self, main_window=None):
@@ -19,13 +20,16 @@ class ElevenLabsTab(QWidget):
         layout = QVBoxLayout(self)
 
         # API Key
-        api_key_layout = QHBoxLayout()
+
         self.api_key_label = QLabel("ElevenLabs API Key:")
         self.api_key_input = QLineEdit()
         self.api_key_input.textChanged.connect(self.save_api_key)
-        api_key_layout.addWidget(self.api_key_label)
-        api_key_layout.addWidget(self.api_key_input)
-        layout.addLayout(api_key_layout)
+
+        def refresh_quick_panel():
+            if self.main_window:
+                self.main_window.refresh_quick_settings_panels()
+
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "elevenlabs_api_key", refresh_quick_panel)
 
         # Balance
         balance_layout = QHBoxLayout()

@@ -163,7 +163,7 @@
     "thumbnail_regen_button": "Перегенерировать",
     "thumbnail_delete_button": "Удалить",
     "load_demo_button": "Загрузить демо",
-    "api_key_label": "Ключ API:",
+    "api_key_label": "💾 Ключ API:",
     "check_balance_button": "Проверить баланс",
     "checking_status": "Проверка...",
     "connection_successful": "Соединение успешно!",

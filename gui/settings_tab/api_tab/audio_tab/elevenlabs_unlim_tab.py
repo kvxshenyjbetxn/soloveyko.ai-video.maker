@@ -4,6 +4,7 @@ from PySide6.QtGui import QDesktopServices
 from utils.settings import settings_manager
 from utils.translator import translator
 from api.elevenlabs_unlim import ElevenLabsUnlimAPI
+from gui.widgets.setting_row import add_setting_row
 
 class BalanceCheckWorker(QThread):
     finished = Signal(int, str) # balance, status
@@ -36,14 +37,25 @@ class ElevenLabsUnlimTab(QWidget):
 
         # API Key Input
         self.api_key_label = QLabel(translator.translate("api_key_label"))
-        self.layout.addWidget(self.api_key_label)
         
         self.api_key_input = QLineEdit()
         self.api_key_input.setEchoMode(QLineEdit.EchoMode.Normal)
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key_placeholder"))
         self.api_key_input.setText(settings_manager.get("elevenlabs_unlim_api_key", ""))
         self.api_key_input.textChanged.connect(self.save_api_key)
-        self.layout.addWidget(self.api_key_input)
+
+        def refresh_quick_panel():
+            # Assuming main window access via parent chain if needed, 
+            # but usually tab is initialized with main_window passed or obtainable.
+            # However, this class init doesn't take main_window. 
+            # We can try to find window or just pass None if we rely on signaling later.
+            # But the requirement is to refresh the panel.
+            # Let's try to get top level window.
+            window = self.window()
+            if hasattr(window, 'refresh_quick_settings_panels'):
+                window.refresh_quick_settings_panels()
+
+        add_setting_row(self.layout, self.api_key_label, self.api_key_input, "elevenlabs_unlim_api_key", refresh_quick_panel)
 
         # Balance Display
         self.balance_label = QLabel("")

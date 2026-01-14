@@ -162,7 +162,7 @@
     "thumbnail_regen_button": "Regenerate",
     "thumbnail_delete_button": "Delete",
     "load_demo_button": "Load Demo",
-    "api_key_label": "API Key:",
+    "api_key_label": "💾 API Key:",
     "check_balance_button": "Check Balance",
     "checking_status": "Checking...",
     "connection_successful": "Connection Successful!",
