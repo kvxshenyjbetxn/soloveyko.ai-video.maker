@@ -172,7 +172,11 @@ class VideoMixin:
                     continue
                 
                 # Use per-task settings for review
-                if state.settings.get('image_review_enabled'):
+                should_review = state.settings.get('image_review_enabled')
+                if 'stage_images' in state.skipped_stages:
+                    should_review = False
+                
+                if should_review:
                     if task_id not in self.tasks_awaiting_review:
                         logger.log(f"[{task_id}] Ready for image review.", level=LogLevel.INFO)
                         self.tasks_awaiting_review.append(task_id)
