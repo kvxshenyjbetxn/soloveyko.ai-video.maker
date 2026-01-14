@@ -83,6 +83,8 @@ class TranslationMixin:
         self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_rewrite', metadata_text)
 
         is_review_enabled = state.settings.get('rewrite_review_enabled', False)
+        if 'stage_rewrite' in state.skipped_stages:
+            is_review_enabled = False
 
         if is_review_enabled:
             self._set_stage_status(task_id, 'stage_rewrite', 'success')
@@ -178,6 +180,8 @@ class TranslationMixin:
         self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_translation', metadata_text)
 
         is_review_enabled = state.settings.get('translation_review_enabled', False)
+        if 'stage_translation' in state.skipped_stages:
+            is_review_enabled = False
 
         if is_review_enabled:
             self._set_stage_status(task_id, 'stage_translation', 'review_required')

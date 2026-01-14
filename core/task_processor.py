@@ -351,6 +351,7 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
             else:
                 # Standard stage skipping
                 logger.log(f"[{task_id}] Skipping stage '{stage_key}' using existing file: {os.path.basename(file_path)}", level=LogLevel.INFO)
+                state.skipped_stages.add(stage_key)
                 try:
                     is_custom = stage_key.startswith("custom_")
                     is_text_stage = is_custom or stage_key in ['stage_translation', 'stage_rewrite', 'stage_img_prompts', 'stage_transcription']
