@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor
 from utils.settings import settings_manager
 from utils.translator import translator
 from gui.widgets.help_label import HelpLabel
+from gui.widgets.setting_row import add_setting_row, QuickSettingButton
 
 class SubtitlesTab(QWidget):
     def __init__(self):
@@ -37,6 +38,11 @@ class SubtitlesTab(QWidget):
         # --- Engine Selection ---
         self.engine_group = QGroupBox()
         engine_layout = QHBoxLayout()
+        
+        def refresh_quick_panel():
+            if self.window():
+                 if hasattr(self.window(), 'refresh_quick_settings_panels'):
+                      self.window().refresh_quick_settings_panels()
 
         self.engine_group_btn = QButtonGroup(self)
         self.rb_amd = QRadioButton()
@@ -67,6 +73,10 @@ class SubtitlesTab(QWidget):
         engine_layout.addWidget(create_radio_container(self.rb_amd, self.amd_help))
         engine_layout.addWidget(create_radio_container(self.rb_assemblyai, self.assemblyai_help))
         engine_layout.addStretch()
+        
+        # Add star button manually to be inside the group
+        self.engine_star = QuickSettingButton("subtitles.whisper_type", refresh_quick_panel)
+        engine_layout.addWidget(self.engine_star)
 
         self.engine_group.setLayout(engine_layout)
         layout.addWidget(self.engine_group)
@@ -87,7 +97,7 @@ class SubtitlesTab(QWidget):
         model_label_layout.addWidget(self.model_help)
         model_label_layout.addWidget(self.model_label)
 
-        whisper_layout.addRow(model_label_container, self.model_combo)
+        add_setting_row(whisper_layout, model_label_container, self.model_combo, "subtitles.whisper_model", refresh_quick_panel)
 
         self.whisper_group.setLayout(whisper_layout)
         layout.addWidget(self.whisper_group)
@@ -99,18 +109,18 @@ class SubtitlesTab(QWidget):
         self.font_label = QLabel()
         self.font_combo = QFontComboBox()
         self.font_combo.currentFontChanged.connect(self.save_settings)
-        style_layout.addRow(self.font_label, self.font_combo)
+        add_setting_row(style_layout, self.font_label, self.font_combo, "subtitles.font", refresh_quick_panel)
 
         self.fontsize_label = QLabel()
         self.fontsize_spin = QSpinBox()
         self.fontsize_spin.setRange(10, 200)
         self.fontsize_spin.valueChanged.connect(self.save_settings)
-        style_layout.addRow(self.fontsize_label, self.fontsize_spin)
+        add_setting_row(style_layout, self.fontsize_label, self.fontsize_spin, "subtitles.fontsize", refresh_quick_panel)
 
         self.color_label = QLabel()
         self.color_btn = QPushButton()
         self.color_btn.clicked.connect(self.choose_color)
-        style_layout.addRow(self.color_label, self.color_btn)
+        add_setting_row(style_layout, self.color_label, self.color_btn, "subtitles.color", refresh_quick_panel)
 
         self.margin_v_label = QLabel()
         self.margin_v_spin = QSpinBox()
@@ -125,7 +135,7 @@ class SubtitlesTab(QWidget):
         margin_v_layout.addWidget(self.margin_v_help)
         margin_v_layout.addWidget(self.margin_v_label)
 
-        style_layout.addRow(margin_v_container, self.margin_v_spin)
+        add_setting_row(style_layout, margin_v_container, self.margin_v_spin, "subtitles.margin_v", refresh_quick_panel)
 
         self.style_group.setLayout(style_layout)
         layout.addWidget(self.style_group)
@@ -147,7 +157,7 @@ class SubtitlesTab(QWidget):
         fade_in_layout.setSpacing(5)
         fade_in_layout.addWidget(self.fade_in_help)
         fade_in_layout.addWidget(self.fade_in_label)
-        logic_layout.addRow(fade_in_container, self.fade_in_spin)
+        add_setting_row(logic_layout, fade_in_container, self.fade_in_spin, "subtitles.fade_in", refresh_quick_panel)
 
         self.fade_out_label = QLabel()
         self.fade_out_spin = QSpinBox()
@@ -162,7 +172,7 @@ class SubtitlesTab(QWidget):
         fade_out_layout.setSpacing(5)
         fade_out_layout.addWidget(self.fade_out_help)
         fade_out_layout.addWidget(self.fade_out_label)
-        logic_layout.addRow(fade_out_container, self.fade_out_spin)
+        add_setting_row(logic_layout, fade_out_container, self.fade_out_spin, "subtitles.fade_out", refresh_quick_panel)
 
         self.max_words_label = QLabel()
         self.max_words_spin = QSpinBox()
@@ -176,7 +186,7 @@ class SubtitlesTab(QWidget):
         max_words_layout.setSpacing(5)
         max_words_layout.addWidget(self.max_words_help)
         max_words_layout.addWidget(self.max_words_label)
-        logic_layout.addRow(max_words_container, self.max_words_spin)
+        add_setting_row(logic_layout, max_words_container, self.max_words_spin, "subtitles.max_words", refresh_quick_panel)
 
         self.logic_group.setLayout(logic_layout)
         layout.addWidget(self.logic_group)

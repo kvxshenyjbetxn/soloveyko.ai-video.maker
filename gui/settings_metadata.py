@@ -50,12 +50,12 @@ SETTINGS_METADATA = {
     'detailed_logging_enabled': {'type': 'bool', 'label': 'detailed_logging_label'}, # Also missing explicitly in dict though hardcoded in panel as fallback
     'montage': {
         # Render
-        'codec': {'type': 'choice', 'options': ["libx264", "libx265", "h264_nvenc", "h264_amf"]},
-        'preset': {'type': 'choice', 'options': ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"]},
-        'bitrate_mbps': {'type': 'int', 'min': 1, 'max': 100, 'suffix': ' Mbps'},
-        'upscale_factor': {'type': 'float', 'min': 1.0, 'max': 5.0, 'step': 0.1, 'suffix': 'x'},
+        'codec': {'type': 'choice', 'options': ["libx264", "libx265", "h264_nvenc", "h264_amf"], 'label': 'codec_label'},
+        'preset': {'type': 'choice', 'options': ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"], 'label': 'preset_label'},
+        'bitrate_mbps': {'type': 'int', 'min': 1, 'max': 100, 'suffix': ' Mbps', 'label': 'bitrate_label'},
+        'upscale_factor': {'type': 'float', 'min': 1.0, 'max': 5.0, 'step': 0.1, 'suffix': 'x', 'label': 'upscale_factor_label'},
         # Transitions
-        'enable_transitions': {'type': 'bool'},
+        'enable_transitions': {'type': 'bool', 'label': 'enable_transitions_label'},
         'transition_effect': {'type': 'choice', 'options': [
             "random", "fade", "wipeleft", "wiperight", "wipeup", "wipedown", 
             "slideleft", "slideright", "slideup", "slidedown", "circlecrop", 
@@ -64,33 +64,33 @@ SETTINGS_METADATA = {
             "circleopen", "circleclose", "vertopen", "vertclose", 
             "horzopen", "horzclose", "dissolve", "pixelize", "diagtl", 
             "diagtr", "diagbl", "diagbr", "hlslice", "hrslice", "vu"
-        ]},
-        'transition_duration': {'type': 'float', 'min': 0.1, 'max': 5.0, 'step': 0.1, 'suffix': ' s'},
+        ], 'label': 'transition_effect_label'},
+        'transition_duration': {'type': 'float', 'min': 0.1, 'max': 5.0, 'step': 0.1, 'suffix': ' s', 'label': 'duration_label'},
         # Zoom
-        'enable_zoom': {'type': 'bool'},
-        'zoom_speed_factor': {'type': 'float', 'min': 0.1, 'max': 5.0, 'step': 0.1},
-        'zoom_intensity': {'type': 'float', 'min': 0.01, 'max': 1.0, 'step': 0.05},
+        'enable_zoom': {'type': 'bool', 'label': 'enable_zoom_label'},
+        'zoom_speed_factor': {'type': 'float', 'min': 0.1, 'max': 5.0, 'step': 0.1, 'label': 'zoom_speed_factor_label'},
+        'zoom_intensity': {'type': 'float', 'min': 0.01, 'max': 1.0, 'step': 0.05, 'label': 'zoom_intensity_label'},
         # Sway
-        'enable_sway': {'type': 'bool'},
-        'sway_speed_factor': {'type': 'float', 'min': 0.1, 'max': 5.0, 'step': 0.1},
+        'enable_sway': {'type': 'bool', 'label': 'enable_sway_label'},
+        'sway_speed_factor': {'type': 'float', 'min': 0.1, 'max': 5.0, 'step': 0.1, 'label': 'sway_speed_factor_label'},
         # Special Processing
-        'special_processing_mode': {'type': 'choice', 'options': ["Disabled", "Quick show", "Video at the beginning"]},
-        'special_processing_image_count': {'type': 'int', 'min': 1, 'max': 100},
-        'special_processing_duration_per_image': {'type': 'float', 'min': 0.1, 'max': 10.0, 'step': 0.1, 'suffix': ' s'},
-        'special_processing_video_count': {'type': 'int', 'min': 1, 'max': 100},
-        'special_processing_check_sequence': {'type': 'bool'},
-        'max_concurrent_montages': {'type': 'int', 'min': 1, 'max': 10}
+        'special_processing_mode': {'type': 'choice', 'options': ["Disabled", "Quick show", "Video at the beginning"], 'label': 'special_proc_mode_label'},
+        'special_processing_image_count': {'type': 'int', 'min': 1, 'max': 100, 'label': 'image_count_label'},
+        'special_processing_duration_per_image': {'type': 'float', 'min': 0.1, 'max': 10.0, 'step': 0.1, 'suffix': ' s', 'label': 'duration_per_image_label'},
+        'special_processing_video_count': {'type': 'int', 'min': 1, 'max': 100, 'label': 'special_proc_video_count_label'},
+        'special_processing_check_sequence': {'type': 'bool', 'label': 'special_proc_check_sequence_label'},
+        'max_concurrent_montages': {'type': 'int', 'min': 1, 'max': 10, 'label': 'max_concurrent_montages_label'}
     },
     'subtitles': {
-        'whisper_type': {'type': 'choice', 'options': ['standard', 'amd', 'assemblyai']},
-        'whisper_model': {'type': 'choice', 'options': ["tiny", "base", "small", "medium", "large", "base.bin", "small.bin", "medium.bin", "large.bin"]},
-        'font': {'type': 'font'},
-        'fontsize': {'type': 'int', 'min': 10, 'max': 200},
-        'margin_v': {'type': 'int', 'min': 0, 'max': 500},
-        'fade_in': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms'},
-        'fade_out': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms'},
-        'max_words': {'type': 'int', 'min': 1, 'max': 50},
-        'color': {'type': 'color'},
+        'whisper_type': {'type': 'choice', 'options': ['standard', 'amd', 'assemblyai'], 'label': 'whisper_engine_group'},
+        'whisper_model': {'type': 'choice', 'options': ["tiny", "base", "small", "medium", "large", "base.bin", "small.bin", "medium.bin", "large.bin"], 'label': 'model_label'},
+        'font': {'type': 'font', 'label': 'font_label'},
+        'fontsize': {'type': 'int', 'min': 10, 'max': 200, 'label': 'font_size_label'},
+        'margin_v': {'type': 'int', 'min': 0, 'max': 500, 'label': 'vertical_margin_label'},
+        'fade_in': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms', 'label': 'fade_in_label'},
+        'fade_out': {'type': 'int', 'min': 0, 'max': 5000, 'suffix': ' ms', 'label': 'fade_out_label'},
+        'max_words': {'type': 'int', 'min': 1, 'max': 50, 'label': 'max_words_per_line_label'},
+        'color': {'type': 'color', 'label': 'color_label'},
     },
     'googler': {
         'api_key': {'type': 'str', 'label': 'googler_api_key_label'}, 
@@ -98,6 +98,9 @@ SETTINGS_METADATA = {
         'video_prompt': {'type': 'text_edit_button', 'label': 'googler_video_prompt_label'},
         'negative_prompt': {'type': 'str', 'label': 'googler_negative_prompt_label'},
         'seed': {'type': 'str', 'label': 'googler_seed_label'},
+        # max threads not strictly requested for quick settings but added for completeness since tab has them
+        'max_threads': {'type': 'int', 'min': 1, 'max': 25, 'label': 'googler_max_threads_label'},
+        'max_video_threads': {'type': 'int', 'min': 1, 'max': 25, 'label': 'googler_max_video_threads_label'},
     },
     'pollinations': {
         'model': {'type': 'choice', 'options': ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"], 'label': 'pollinations_model_label'},
@@ -110,6 +113,7 @@ SETTINGS_METADATA = {
     'elevenlabs_image': {
         'api_key': {'type': 'str', 'label': 'elevenlabs_image_api_key'}, 
         'aspect_ratio': {'type': 'choice', 'options': ["3:2", "16:9", "1:1", "9:16", "2:3", "4:5", "5:4"], 'label': 'aspect_ratio'},
+        'max_threads': {'type': 'int', 'min': 1, 'max': 25, 'label': 'max_threads'}
     },
      'image_prompt_settings': {
         'prompt': {'type': 'text_edit_button'},

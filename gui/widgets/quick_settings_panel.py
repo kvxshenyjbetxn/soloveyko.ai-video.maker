@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QScrollArea, 
                                QCheckBox, QComboBox, QSpinBox, QDoubleSpinBox, 
                                QRadioButton, QButtonGroup, QFrame, QToolButton,
-                               QPushButton, QLineEdit, QFileDialog, QColorDialog, QHBoxLayout, QStyle, QSizePolicy)
+                               QPushButton, QLineEdit, QFileDialog, QColorDialog, QHBoxLayout, QStyle, QSizePolicy, QFormLayout)
 from PySide6.QtCore import Qt, QSize, QByteArray
 from PySide6.QtGui import QColor, QIcon, QPixmap
 from utils.settings import settings_manager
@@ -95,9 +95,18 @@ class QuickSettingsPanel(QWidget):
         disabled_quick_settings = ['accent_color', 'detailed_logging_enabled', 'max_download_threads', 'language', 'theme']
         quick_settings = [k for k in quick_settings if k not in disabled_quick_settings]
         
-        # If 'prompt_count_control_enabled' exists, we handle 'prompt_count' inside it, so remove separate 'prompt_count'
         if 'prompt_count_control_enabled' in quick_settings and 'prompt_count' in quick_settings:
              quick_settings.remove('prompt_count')
+        
+        # If 'montage.special_processing_mode' is present, filter out its dependent keys
+        special_proc_dependents = [
+            'montage.special_processing_image_count',
+            'montage.special_processing_duration_per_image',
+            'montage.special_processing_video_count',
+            'montage.special_processing_check_sequence'
+        ]
+        if 'montage.special_processing_mode' in quick_settings:
+             quick_settings = [k for k in quick_settings if k not in special_proc_dependents]
         
         has_items = False
         for key in quick_settings:
@@ -142,6 +151,7 @@ class QuickSettingsPanel(QWidget):
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
+        self.content_layout.addWidget(container)
         
         # Label
         label_key = metadata.get('label')
@@ -203,6 +213,97 @@ class QuickSettingsPanel(QWidget):
             
             layout.addWidget(checkbox)
             layout.addWidget(spin_container)
+
+        elif key == 'montage.special_processing_mode':
+             # Compound widget for Special Processing
+             
+             # 1. Mode ComboBox
+             options = metadata.get('options', [])
+             mode_combo = QComboBox()
+             for opt in options:
+                 mode_combo.addItem(translator.translate(f"special_proc_mode_{opt.lower().replace(' ', '_')}", opt), opt)
+                 
+             idx = mode_combo.findData(current_value)
+             if idx >= 0:
+                 mode_combo.setCurrentIndex(idx)
+             
+             layout.addWidget(mode_combo)
+             
+             # 2. Container for sub-settings
+             sub_settings_container = QWidget()
+             sub_layout = QFormLayout(sub_settings_container)
+             sub_layout.setContentsMargins(10, 0, 0, 0) # Indent
+             
+             # --- Sub Widgets ---
+             
+             # Image Count
+             img_count_label = QLabel(translator.translate("image_count_label"))
+             img_count_spin = QSpinBox()
+             img_count_spin.setRange(1, 100)
+             img_count_spin.setValue(int(settings_manager.get("montage.special_processing_image_count", 5)))
+             img_count_spin.valueChanged.connect(lambda v: self._update_setting("montage.special_processing_image_count", v))
+             
+             # Duration
+             dur_label = QLabel(translator.translate("duration_per_image_label"))
+             dur_spin = QDoubleSpinBox()
+             dur_spin.setRange(0.1, 10.0)
+             dur_spin.setSingleStep(0.1)
+             dur_spin.setSuffix(" s")
+             dur_spin.setValue(float(settings_manager.get("montage.special_processing_duration_per_image", 2.0)))
+             dur_spin.valueChanged.connect(lambda v: self._update_setting("montage.special_processing_duration_per_image", v))
+             
+             # Video Count
+             vid_count_label = QLabel(translator.translate("special_proc_video_count_label"))
+             vid_count_spin = QSpinBox()
+             vid_count_spin.setRange(1, 100)
+             vid_count_spin.setValue(int(settings_manager.get("montage.special_processing_video_count", 1)))
+             vid_count_spin.valueChanged.connect(lambda v: self._update_setting("montage.special_processing_video_count", v))
+             
+             # Check Sequence
+             check_seq_cb = QCheckBox(translator.translate("special_proc_check_sequence_label"))
+             check_seq_cb.setChecked(settings_manager.get("montage.special_processing_check_sequence", False))
+             check_seq_cb.toggled.connect(lambda v: self._update_setting("montage.special_processing_check_sequence", v))
+             
+             # Add to layout (we will control visibility by Row or Widget)
+             # To make it easier, let's group them into "Quick Show Group" and "Video Group" widgets?
+             # Or just add all to form and hide rows. QFormLayout doesn't easily hide rows by widget reference usually without iterating.
+             # Better: Use distinct widgets for groups.
+             
+             # Group: Quick Show
+             quick_show_widget = QWidget()
+             qs_layout = QFormLayout(quick_show_widget)
+             qs_layout.setContentsMargins(0,0,0,0)
+             qs_layout.addRow(img_count_label, img_count_spin)
+             qs_layout.addRow(dur_label, dur_spin)
+             
+             # Group: Video
+             video_widget = QWidget()
+             v_layout = QFormLayout(video_widget)
+             v_layout.setContentsMargins(0,0,0,0)
+             v_layout.addRow(vid_count_label, vid_count_spin)
+             v_layout.addRow(check_seq_cb)
+             
+             sub_layout.addRow(quick_show_widget)
+             sub_layout.addRow(video_widget)
+             
+             layout.addWidget(sub_settings_container)
+             
+             def update_visibility(index, save=True):
+                 data = mode_combo.itemData(index)
+                 if save:
+                     self._update_setting(key, data)
+                 
+                 is_quick_show = (data == "Quick show")
+                 is_video = (data == "Video at the beginning")
+                 
+                 quick_show_widget.setVisible(is_quick_show)
+                 video_widget.setVisible(is_video)
+                 sub_settings_container.setVisible(is_quick_show or is_video)
+
+             mode_combo.currentIndexChanged.connect(lambda idx: update_visibility(idx, save=True))
+             
+             # Initial state
+             update_visibility(mode_combo.currentIndex(), save=False)
 
         elif setting_type == 'bool':
             widget = QCheckBox(translator.translate('enable', 'Enable'))
@@ -291,29 +392,51 @@ class QuickSettingsPanel(QWidget):
 
         elif setting_type == 'color':
             btn = QPushButton()
-            btn.setFixedSize(50, 25)
+            btn.setMinimumHeight(30)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             btn.setAutoFillBackground(True)
-            initial_color = current_value if current_value else '#FFFFFF'
-            btn.setStyleSheet(f"background-color: {initial_color}; border: 1px solid gray;")
             
-            def pick_color(b=btn):
-                curr = settings_manager.get(key, '#FFFFFF')
-                c = QColorDialog.getColor(QColor(curr), self)
+            # Determine initial color and format type
+            is_rgb_list = False
+            col = QColor('#FFFFFF')
+            
+            if isinstance(current_value, list) and len(current_value) == 3:
+                col = QColor(current_value[0], current_value[1], current_value[2])
+                is_rgb_list = True
+            elif isinstance(current_value, str) and current_value:
+                col = QColor(current_value)
+            
+            if not col.isValid():
+                col = QColor('#FFFFFF')
+                
+            btn.setStyleSheet(f"background-color: {col.name()}; border: 1px solid gray;")
+            
+            def pick_color(b=btn, _is_list=is_rgb_list):
+                # Fetch current formatted value
+                curr_val = settings_manager.get(key)
+                start_col = QColor('#FFFFFF')
+                
+                if isinstance(curr_val, list) and len(curr_val) == 3:
+                     start_col = QColor(curr_val[0], curr_val[1], curr_val[2])
+                elif isinstance(curr_val, str) and curr_val:
+                     start_col = QColor(curr_val)
+                
+                c = QColorDialog.getColor(start_col, self)
                 if c.isValid():
                     hex_c = c.name()
-                    settings_manager.set(key, hex_c)
                     b.setStyleSheet(f"background-color: {hex_c}; border: 1px solid gray;")
-                    self._update_setting(key, hex_c) # Trigger update
+                    
+                    if _is_list:
+                        # Save back as list [r, g, b]
+                        new_val = [c.red(), c.green(), c.blue()]
+                        self._update_setting(key, new_val)
+                    else:
+                        # Save back as hex string
+                        self._update_setting(key, hex_c)
             
             btn.clicked.connect(pick_color)
             
-            # Wrap in HBox to force left alignment
-            h_layout = QHBoxLayout()
-            h_layout.setContentsMargins(0,0,0,0)
-            h_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-            h_layout.addWidget(btn)
-            h_layout.addStretch()
-            layout.addLayout(h_layout)
+            layout.addWidget(btn)
 
         elif setting_type == 'folder_path':
              h_path = QHBoxLayout()
@@ -346,7 +469,7 @@ class QuickSettingsPanel(QWidget):
              widget = QLabel(translator.translate('complex_setting_placeholder', "Setting available in main tab"))
              layout.addWidget(widget)
 
-        self.content_layout.addWidget(container)
+        # self.content_layout.addWidget(container) # Moved to top
         
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)

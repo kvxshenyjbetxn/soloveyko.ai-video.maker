@@ -774,7 +774,6 @@ class MainWindow(QMainWindow):
         self.update_balance()
         self.update_googler_usage()
         self.update_elevenlabs_balance()
-        self.update_elevenlabs_balance()
         self.update_elevenlabs_unlim_balance()
         self.update_voicemaker_balance()
         self.update_gemini_tts_balance()
