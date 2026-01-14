@@ -3,6 +3,7 @@ from gui.widgets.help_label import HelpLabel
 from utils.translator import translator
 from utils.settings import settings_manager
 from api.assemblyai import assembly_ai_api
+from gui.widgets.setting_row import add_setting_row
 
 class AssemblyAITab(QWidget):
     def __init__(self, main_window=None):
@@ -16,15 +17,19 @@ class AssemblyAITab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
+
         # API Key
-        api_key_layout = QHBoxLayout()
         self.api_key_label = QLabel()
         self.api_key_input = QLineEdit()
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.api_key_input.textChanged.connect(self.save_api_key)
-        api_key_layout.addWidget(self.api_key_label)
-        api_key_layout.addWidget(self.api_key_input)
-        layout.addLayout(api_key_layout)
+        
+        def refresh_quick_panel():
+            if self.window():
+                 if hasattr(self.window(), 'refresh_quick_settings_panels'):
+                      self.window().refresh_quick_settings_panels()
+
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "assemblyai_api_key", refresh_quick_panel)
 
         # Max Threads
         self.max_threads_help = HelpLabel("assemblyai_max_threads")

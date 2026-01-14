@@ -3,6 +3,7 @@ from utils.settings import settings_manager
 from utils.translator import translator
 from api.googler import GooglerAPI
 from gui.widgets.help_label import HelpLabel
+from gui.widgets.setting_row import add_setting_row
 from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QPushButton, QHBoxLayout, QWidget
 
 class GooglerTab(QWidget):
@@ -16,10 +17,16 @@ class GooglerTab(QWidget):
     def initUI(self):
         layout = QFormLayout(self)
 
-        # API Key
+
         self.api_key_label = QLabel()
         self.api_key_input = QLineEdit()
-        layout.addRow(self.api_key_label, self.api_key_input)
+        
+        def refresh_quick_panel():
+            if self.window():
+                 if hasattr(self.window(), 'refresh_quick_settings_panels'):
+                      self.window().refresh_quick_settings_panels()
+
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "googler.api_key", refresh_quick_panel)
 
         # Usage
         self.usage_label = QLabel()
@@ -43,7 +50,7 @@ class GooglerTab(QWidget):
         
         self.aspect_ratio_combo = QComboBox()
         self.aspect_ratio_combo.addItems(self.aspect_ratios)
-        layout.addRow(aspect_label_container, self.aspect_ratio_combo)
+        add_setting_row(layout, aspect_label_container, self.aspect_ratio_combo, "googler.aspect_ratio", refresh_quick_panel)
 
         # Max Threads
         self.max_threads_help = HelpLabel("googler_max_threads_label")
@@ -84,7 +91,7 @@ class GooglerTab(QWidget):
         video_prompt_label_layout.addWidget(self.video_prompt_label)
         
         self.video_prompt_input = QLineEdit()
-        layout.addRow(video_prompt_label_container, self.video_prompt_input)
+        add_setting_row(layout, video_prompt_label_container, self.video_prompt_input, "googler.video_prompt", refresh_quick_panel)
 
         # Seed
         self.seed_help = HelpLabel("googler_seed_label")
@@ -97,7 +104,7 @@ class GooglerTab(QWidget):
         seed_label_layout.addWidget(self.seed_label)
         
         self.seed_input = QLineEdit()
-        layout.addRow(seed_label_container, self.seed_input)
+        add_setting_row(layout, seed_label_container, self.seed_input, "googler.seed", refresh_quick_panel)
 
         # Negative Prompt
         self.negative_prompt_help = HelpLabel("googler_negative_prompt_label")
@@ -110,7 +117,7 @@ class GooglerTab(QWidget):
         negative_prompt_label_layout.addWidget(self.negative_prompt_label)
         
         self.negative_prompt_input = QLineEdit()
-        layout.addRow(negative_prompt_label_container, self.negative_prompt_input)
+        add_setting_row(layout, negative_prompt_label_container, self.negative_prompt_input, "googler.negative_prompt", refresh_quick_panel)
 
         # Buy API Key Link
         self.buy_info_layout = QHBoxLayout()

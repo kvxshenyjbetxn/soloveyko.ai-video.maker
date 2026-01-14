@@ -77,17 +77,23 @@ def add_setting_row(layout, label, widget, setting_key, quick_panel_refresh_call
     
     # Add to main layout
     if isinstance(layout, QFormLayout):
-        layout.addRow(label, container)
+        if label is None:
+            layout.addRow(container)
+        else:
+            layout.addRow(label, container)
     else:
         # Fallback 
         row_widget = QWidget()
         row_layout = QHBoxLayout(row_widget)
         row_layout.setContentsMargins(0,0,0,0)
-        if isinstance(label, str):
-            lbl = QLabel(label)
-            row_layout.addWidget(lbl)
-        else:
-            row_layout.addWidget(label)
+        
+        if label is not None:
+            if isinstance(label, str):
+                lbl = QLabel(label)
+                row_layout.addWidget(lbl)
+            else:
+                row_layout.addWidget(label)
+        
         row_layout.addWidget(container)
         layout.addWidget(row_widget)
     

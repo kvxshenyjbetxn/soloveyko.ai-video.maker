@@ -1,8 +1,10 @@
 
 from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QHBoxLayout, QCheckBox, QVBoxLayout
 from utils.settings import settings_manager
+
 from utils.translator import translator
 from gui.widgets.help_label import HelpLabel
+from gui.widgets.setting_row import add_setting_row
 
 class ElevenLabsImageTab(QWidget):
     def __init__(self, parent=None):
@@ -18,7 +20,13 @@ class ElevenLabsImageTab(QWidget):
         # API Key
         self.api_key_label = QLabel()
         self.api_key_input = QLineEdit()
-        layout.addRow(self.api_key_label, self.api_key_input)
+        
+        def refresh_quick_panel():
+            if self.window():
+                 if hasattr(self.window(), 'refresh_quick_settings_panels'):
+                      self.window().refresh_quick_settings_panels()
+
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "elevenlabs_image.api_key", refresh_quick_panel)
 
         # Aspect Ratio
         self.aspect_ratio_help = HelpLabel("elevenlabs_image_aspect_ratio")
@@ -32,7 +40,7 @@ class ElevenLabsImageTab(QWidget):
         
         self.aspect_ratio_combo = QComboBox()
         self.aspect_ratio_combo.addItems(self.aspect_ratios)
-        layout.addRow(aspect_label_container, self.aspect_ratio_combo)
+        add_setting_row(layout, aspect_label_container, self.aspect_ratio_combo, "elevenlabs_image.aspect_ratio", refresh_quick_panel)
 
         # Max Threads
         self.max_threads_help = HelpLabel("elevenlabs_image_max_threads")
@@ -46,7 +54,7 @@ class ElevenLabsImageTab(QWidget):
         
         self.max_threads_spinbox = QSpinBox()
         self.max_threads_spinbox.setRange(1, 25)
-        layout.addRow(max_threads_label_container, self.max_threads_spinbox)
+        add_setting_row(layout, max_threads_label_container, self.max_threads_spinbox, "elevenlabs_image.max_threads", refresh_quick_panel)
 
         # layout.addRow(self.max_threads_label, self.max_threads_spinbox) # Already added above
 

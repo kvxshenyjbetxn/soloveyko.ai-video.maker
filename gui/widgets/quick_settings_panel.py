@@ -102,12 +102,24 @@ class QuickSettingsPanel(QWidget):
         has_items = False
         for key in quick_settings:
             # Check hardcoded first or metadata
+            # Check hardcoded first or metadata
             metadata = None
             hardcoded = self._get_hardcoded_metadata(key)
-            if key in SETTINGS_METADATA:
-                metadata = SETTINGS_METADATA[key]
-            elif hardcoded: 
+            
+            if hardcoded:
                  metadata = hardcoded
+            elif key in SETTINGS_METADATA:
+                metadata = SETTINGS_METADATA[key]
+            elif "." in key:
+                 # Try nested metadata
+                 parts = key.split(".")
+                 current_meta = SETTINGS_METADATA
+                 try:
+                     for p in parts:
+                         current_meta = current_meta[p]
+                     metadata = current_meta
+                 except (KeyError, TypeError):
+                     pass
             
             if metadata:
                 self._add_setting_widget(key, metadata)
@@ -220,6 +232,12 @@ class QuickSettingsPanel(QWidget):
                         "elevenlabs_image": "ElevenLabsImage"
                     }
                     display_text = provider_map.get(opt, opt)
+                elif key == 'googler.aspect_ratio' or key == 'elevenlabs_image.aspect_ratio':
+                     # Mapping for aspect ratio values if needed, or just nicer display
+                     # For now usually they are readable, but metadata has label mapping in json usually
+                     # "IMAGE_ASPECT_RATIO_LANDSCAPE" -> translator? 
+                     # Let's try to translate the option itself
+                     display_text = translator.translate(opt, opt)
                 else:
                     pass
                 

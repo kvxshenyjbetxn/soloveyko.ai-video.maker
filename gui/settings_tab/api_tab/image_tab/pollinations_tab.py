@@ -3,6 +3,7 @@ from utils.settings import settings_manager
 from utils.translator import translator
 from api.pollinations import PollinationsAPI
 from gui.widgets.help_label import HelpLabel
+from gui.widgets.setting_row import add_setting_row
 from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QCheckBox, QHBoxLayout
 
 class ModelFetcher(QThread):
@@ -67,7 +68,13 @@ class PollinationsTab(QWidget):
         
         self.model_combo = QComboBox()
         self.model_combo.addItems(self.models)
-        layout.addRow(model_label_container, self.model_combo)
+        
+        def refresh_quick_panel():
+            if self.window():
+                 if hasattr(self.window(), 'refresh_quick_settings_panels'):
+                      self.window().refresh_quick_settings_panels()
+
+        add_setting_row(layout, model_label_container, self.model_combo, "pollinations.model", refresh_quick_panel)
 
         # Token (API)
         self.token_help = HelpLabel("pollinations_token_label")
@@ -80,7 +87,7 @@ class PollinationsTab(QWidget):
         token_label_layout.addWidget(self.token_label)
         
         self.token_input = QLineEdit()
-        layout.addRow(token_label_container, self.token_input)
+        add_setting_row(layout, token_label_container, self.token_input, "pollinations.token", refresh_quick_panel)
 
         # Width and Height
         self.size_help = HelpLabel("image_size_label")
@@ -122,7 +129,7 @@ class PollinationsTab(QWidget):
         enhance_layout.setSpacing(5)
         enhance_layout.addWidget(self.enhance_help)
         enhance_layout.addWidget(self.enhance_checkbox)
-        layout.addRow(enhance_container)
+        add_setting_row(layout, None, enhance_container, "pollinations.enhance", refresh_quick_panel)
 
         # Info Link
         self.info_layout = QHBoxLayout()
