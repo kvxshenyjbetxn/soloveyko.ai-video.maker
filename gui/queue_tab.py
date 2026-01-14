@@ -589,6 +589,22 @@ class QueueTab(QWidget):
 
         self.clear_queue_button = QPushButton()
         self.clear_queue_button.clicked.connect(self.on_clear_queue_clicked)
+        self.clear_queue_button.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+                font-weight: bold;
+                padding: 5px 15px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+            QPushButton:disabled {
+                background-color: #6c757d;
+            }
+        """)
         top_layout.addWidget(self.clear_queue_button)
         
         self.start_processing_button = QPushButton()
@@ -599,6 +615,7 @@ class QueueTab(QWidget):
                 font-weight: bold; 
                 padding: 5px 15px;
                 border-radius: 4px;
+                border: none;
             }
             QPushButton:hover {
                 background-color: #218838;
