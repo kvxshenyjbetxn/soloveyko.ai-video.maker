@@ -463,5 +463,8 @@
     "template_changes_new_value_column": "Нове значення",
     "template_changes_confirm": "Підтвердити",
     "template_changes_cancel": "Скасувати",
-    "template_changes_no_changes": "Змін не виявлено."
+    "template_changes_no_changes": "Змін не виявлено.",
+    "quick_settings_title": "Швидкі налаштування",
+    "quick_settings_footer": "Швидкий доступ до часто використовуваних налаштувань без перемикання вкладок.",
+    "quick_settings_close_hint": "Щоб закрити, перетягніть роздільник вправо."
 }

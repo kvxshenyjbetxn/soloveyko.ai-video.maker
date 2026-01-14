@@ -690,11 +690,25 @@ class LanguagesTab(QWidget):
             self.default_template_combo.addItem(template_name, template_name)
         self.default_template_combo.blockSignals(False)
 
-    def load_elevenlabs_templates(self):
+    def load_elevenlabs_templates(self, force=False):
+        # Avoid reloading from API if we already have templates, unless forced
+        if self.elevenlabs_templates and not force:
+             # Just refresh the combo from cached templates
+             self.elevenlabs_template_combo.blockSignals(True)
+             self.elevenlabs_template_combo.clear()
+             for template in self.elevenlabs_templates:
+                 self.elevenlabs_template_combo.addItem(template["name"], template["uuid"])
+             self.elevenlabs_template_combo.blockSignals(False)
+             return
+
         self.elevenlabs_template_combo.blockSignals(True)
         self.elevenlabs_template_combo.clear()
-        self.elevenlabs_templates, status = self.elevenlabs_api.get_templates()
-        if status == "connected" and self.elevenlabs_templates:
+        
+        # This makes the API request
+        templates, status = self.elevenlabs_api.get_templates()
+        
+        if status == "connected" and templates:
+            self.elevenlabs_templates = templates
             for template in self.elevenlabs_templates:
                 self.elevenlabs_template_combo.addItem(template["name"], template["uuid"])
         else:

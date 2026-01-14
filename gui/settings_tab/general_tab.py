@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt
 from utils.translator import translator
 from utils.settings import settings_manager
 from utils.logger import logger
+from gui.widgets.setting_row import add_setting_row
 import os
 
 class GeneralTab(QWidget):
@@ -30,12 +31,15 @@ class GeneralTab(QWidget):
         content_layout = QVBoxLayout(scroll_content)
         form_layout = QFormLayout()
 
+        # Callback for refreshing quick settings panels
+        refresh_cb = self.main_window.refresh_quick_settings_panels if self.main_window else None
+
         # Language selection
         self.language_label = QLabel()
         self.language_combo = QComboBox()
         self.language_combo.addItems(["Українська", "English", "Русский"])
         self.language_combo.currentIndexChanged.connect(self.language_changed)
-        form_layout.addRow(self.language_label, self.language_combo)
+        add_setting_row(form_layout, self.language_label, self.language_combo, "language", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
         # Theme selection
         self.theme_label = QLabel()
@@ -44,7 +48,7 @@ class GeneralTab(QWidget):
         self.theme_combo.addItem(translator.translate('dark_theme'), 'dark')
         self.theme_combo.addItem(translator.translate('black_theme'), 'black')
         self.theme_combo.currentIndexChanged.connect(self.theme_changed)
-        form_layout.addRow(self.theme_label, self.theme_combo)
+        add_setting_row(form_layout, self.theme_label, self.theme_combo, "theme", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
         # Accent color selection
         self.accent_color_label = QLabel()
@@ -52,7 +56,7 @@ class GeneralTab(QWidget):
         self.accent_color_button.setFixedSize(100, 25)
         self.accent_color_button.setAutoFillBackground(True)
         self.accent_color_button.clicked.connect(self.open_color_dialog)
-        form_layout.addRow(self.accent_color_label, self.accent_color_button)
+        add_setting_row(form_layout, self.accent_color_label, self.accent_color_button, "accent_color", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
         # Image generation provider selection
         from gui.widgets.help_label import HelpLabel
@@ -71,7 +75,7 @@ class GeneralTab(QWidget):
         self.image_provider_combo.addItem("Googler", "googler")
         self.image_provider_combo.addItem("ElevenLabsImage", "elevenlabs_image")
         self.image_provider_combo.currentIndexChanged.connect(self.image_provider_changed)
-        form_layout.addRow(provider_label_widget, self.image_provider_combo)
+        add_setting_row(form_layout, provider_label_widget, self.image_provider_combo, "image_generation_provider", quick_panel_refresh_callback=refresh_cb)
 
         # Results path selection
         self.results_path_help = HelpLabel("results_path_label")
@@ -88,10 +92,14 @@ class GeneralTab(QWidget):
         self.results_path_edit.setReadOnly(True)
         self.browse_button = QPushButton()
         self.browse_button.clicked.connect(self.browse_results_path)
-        path_layout = QHBoxLayout()
+        
+        path_container = QWidget()
+        path_layout = QHBoxLayout(path_container)
+        path_layout.setContentsMargins(0,0,0,0)
         path_layout.addWidget(self.results_path_edit)
         path_layout.addWidget(self.browse_button)
-        form_layout.addRow(results_label_widget, path_layout)
+        
+        add_setting_row(form_layout, results_label_widget, path_container, "results_path", quick_panel_refresh_callback=refresh_cb)
 
         # Detailed logging checkbox
         self.detailed_logging_help = HelpLabel("detailed_logging_label")
@@ -106,7 +114,7 @@ class GeneralTab(QWidget):
         
         self.detailed_logging_checkbox = QCheckBox()
         self.detailed_logging_checkbox.stateChanged.connect(self.detailed_logging_changed)
-        form_layout.addRow(logging_label_widget, self.detailed_logging_checkbox)
+        add_setting_row(form_layout, logging_label_widget, self.detailed_logging_checkbox, "detailed_logging_enabled", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
         # --- Controls Group ---
         self.controls_group = QGroupBox()
@@ -125,7 +133,7 @@ class GeneralTab(QWidget):
         
         self.translation_review_checkbox = QCheckBox()
         self.translation_review_checkbox.stateChanged.connect(self.translation_review_changed)
-        self.controls_layout.addRow(translation_label_widget, self.translation_review_checkbox)
+        add_setting_row(self.controls_layout, translation_label_widget, self.translation_review_checkbox, "translation_review_enabled", quick_panel_refresh_callback=refresh_cb)
 
         # Rewrite review checkbox
         self.rewrite_review_help = HelpLabel("rewrite_review_label")
@@ -140,7 +148,7 @@ class GeneralTab(QWidget):
         
         self.rewrite_review_checkbox = QCheckBox()
         self.rewrite_review_checkbox.stateChanged.connect(self.rewrite_review_changed)
-        self.controls_layout.addRow(rewrite_label_widget, self.rewrite_review_checkbox)
+        add_setting_row(self.controls_layout, rewrite_label_widget, self.rewrite_review_checkbox, "rewrite_review_enabled", quick_panel_refresh_callback=refresh_cb)
 
         # Image review checkbox
         self.image_review_help = HelpLabel("image_review_label")
@@ -155,7 +163,7 @@ class GeneralTab(QWidget):
         
         self.image_review_checkbox = QCheckBox()
         self.image_review_checkbox.stateChanged.connect(self.image_review_changed)
-        self.controls_layout.addRow(image_label_widget, self.image_review_checkbox)
+        add_setting_row(self.controls_layout, image_label_widget, self.image_review_checkbox, "image_review_enabled", quick_panel_refresh_callback=refresh_cb)
         
         # Prompt count control checkbox
         self.prompt_count_control_help = HelpLabel("prompt_count_control_label")
@@ -170,7 +178,7 @@ class GeneralTab(QWidget):
         
         self.prompt_count_control_checkbox = QCheckBox()
         self.prompt_count_control_checkbox.stateChanged.connect(self.prompt_count_control_changed)
-        self.controls_layout.addRow(prompt_control_label_widget, self.prompt_count_control_checkbox)
+        add_setting_row(self.controls_layout, prompt_control_label_widget, self.prompt_count_control_checkbox, "prompt_count_control_enabled", quick_panel_refresh_callback=refresh_cb)
         
         # Prompt count spinbox
         self.prompt_count_label = QLabel()
@@ -178,14 +186,43 @@ class GeneralTab(QWidget):
         self.prompt_count_spinbox.setRange(1, 100)
         self.prompt_count_spinbox.valueChanged.connect(self.prompt_count_changed)
         
-        self.prompt_count_widget = QWidget()
-        prompt_count_layout = QHBoxLayout(self.prompt_count_widget)
-        prompt_count_layout.setContentsMargins(0, 0, 0, 0)
-        prompt_count_layout.addWidget(self.prompt_count_label)
-        prompt_count_layout.addWidget(self.prompt_count_spinbox)
-        prompt_count_layout.addStretch()
+        # Widget for the field side (spinbox only)
+        # We wrap in a widget to ensure alignment if needed, or just pass spinbox?
+        # QSpinBox doesn't take full width usually, but let's wrap to be safe and add stretch
+        self.prompt_count_field_widget = QWidget()
+        pc_layout = QHBoxLayout(self.prompt_count_field_widget)
+        pc_layout.setContentsMargins(0, 0, 0, 0)
+        pc_layout.addWidget(self.prompt_count_spinbox)
+        pc_layout.addStretch()
         
-        self.controls_layout.addRow(self.prompt_count_widget)
+        # Capture the container returned by add_setting_row so we can hide/show the star group too
+        self.prompt_count_container = add_setting_row(
+            self.controls_layout, 
+            self.prompt_count_label, 
+            self.prompt_count_field_widget, 
+            "prompt_count", 
+            quick_panel_refresh_callback=refresh_cb,
+            show_star=False 
+        )
+        # Note: USER said "remove star ... from prompt count" ? 
+        # "прибери зірку ... [list]". List was "Accent", "Logging", "Max threads".
+        # Prompt count was NOT in the list.
+        # But in the screenshot provided by user, Prompt count HAS a star.
+        # User complained about ALIGNMENT.
+        # "Кількість промтів так само зїхала в цент треба виправити"
+        # "ну подвинь кажу блять параметр Кількість промтів в ліво!"
+        
+        # IMPORTANT: Logic for removing star for those 3 items was handled in previous step.
+        # This item (prompt_count) functionality implies it SHOULD be in quick settings? 
+        # Actually, "Prompt Count" is a detail of "Prompt Count Control".
+        # If "Control" is enabled, "Count" is visible.
+        # If user adds "Prompt Count" to Quick Settings, it might be weird if the toggle isn't there.
+        # But let's stick to default: `show_star=True` (default).
+        # WAIT. `add_setting_row` return value is NOT currently supported. I need to modify `setting_row.py` first.
+        
+        # Also, check `self.prompt_count_control_changed`:
+        # It currently toggles `self.prompt_count_widget`.
+        # I need to update it to toggle `self.prompt_count_label` and `self.prompt_count_container`.
 
         # Max download threads
         self.max_download_threads_help = HelpLabel("max_download_threads_label")
@@ -201,7 +238,7 @@ class GeneralTab(QWidget):
         self.max_download_threads_spinbox = QSpinBox()
         self.max_download_threads_spinbox.setRange(1, 100)
         self.max_download_threads_spinbox.valueChanged.connect(self.max_download_threads_changed)
-        self.controls_layout.addRow(threads_label_widget, self.max_download_threads_spinbox)
+        add_setting_row(self.controls_layout, threads_label_widget, self.max_download_threads_spinbox, "max_download_threads", quick_panel_refresh_callback=refresh_cb, show_star=False)
         
         form_layout.addRow(self.controls_group)
 
@@ -249,7 +286,12 @@ class GeneralTab(QWidget):
         
         prompt_control_enabled = settings_manager.get('prompt_count_control_enabled', False)
         self.prompt_count_control_checkbox.setChecked(prompt_control_enabled)
-        self.prompt_count_widget.setVisible(prompt_control_enabled)
+        
+        if hasattr(self, 'prompt_count_label'):
+             self.prompt_count_label.setVisible(prompt_control_enabled)
+        if hasattr(self, 'prompt_count_container'):
+             self.prompt_count_container.setVisible(prompt_control_enabled)
+             
         self.prompt_count_spinbox.setValue(settings_manager.get('prompt_count', 10))
         self.max_download_threads_spinbox.setValue(settings_manager.get('max_download_threads', 5))
 
@@ -280,17 +322,29 @@ class GeneralTab(QWidget):
 
     def translation_review_changed(self, state):
         settings_manager.set('translation_review_enabled', state == Qt.CheckState.Checked.value)
+        if self.main_window:
+            self.main_window.refresh_quick_settings_panels()
 
     def rewrite_review_changed(self, state):
         settings_manager.set('rewrite_review_enabled', state == Qt.CheckState.Checked.value)
+        if self.main_window:
+            self.main_window.refresh_quick_settings_panels()
 
     def image_review_changed(self, state):
         settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
+        if self.main_window:
+            self.main_window.refresh_quick_settings_panels()
 
     def prompt_count_control_changed(self, state):
         is_checked = state == Qt.CheckState.Checked.value
         settings_manager.set('prompt_count_control_enabled', is_checked)
-        self.prompt_count_widget.setVisible(is_checked)
+        
+        # Toggle visibility of the label and the field container (field + star)
+        if hasattr(self, 'prompt_count_label'):
+             self.prompt_count_label.setVisible(is_checked)
+        if hasattr(self, 'prompt_count_container'):
+             self.prompt_count_container.setVisible(is_checked)
+             
         # We might need to inform other tabs about this change.
         # A signal from settings_manager or a direct call could work.
         if self.main_window:
@@ -303,6 +357,7 @@ class GeneralTab(QWidget):
         if self.main_window:
             if hasattr(self.main_window, 'settings_tab') and hasattr(self.main_window.settings_tab, 'prompts_tab'):
                 self.main_window.settings_tab.prompts_tab.update_fields()
+            self.main_window.refresh_quick_settings_panels()
 
     def detailed_logging_changed(self, state):
         settings_manager.set('detailed_logging_enabled', state == Qt.CheckState.Checked.value)
@@ -325,12 +380,16 @@ class GeneralTab(QWidget):
     def image_provider_changed(self, index):
         provider_name = self.image_provider_combo.itemData(index)
         settings_manager.set('image_generation_provider', provider_name)
+        if self.main_window:
+            self.main_window.refresh_quick_settings_panels()
 
     def browse_results_path(self):
         directory = QFileDialog.getExistingDirectory(self, translator.translate('select_directory'))
         if directory:
             self.results_path_edit.setText(directory)
             settings_manager.set('results_path', directory)
+            if self.main_window:
+                self.main_window.refresh_quick_settings_panels()
 
     def retranslate_ui(self):
         self.language_label.setText(translator.translate('language_label'))

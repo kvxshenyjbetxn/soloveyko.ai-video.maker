@@ -456,5 +456,8 @@
     "template_changes_new_value_column": "Новое значение",
     "template_changes_confirm": "Подтвердить",
     "template_changes_cancel": "Отмена",
-    "template_changes_no_changes": "Изменений не обнаружено."
+    "template_changes_no_changes": "Изменений не обнаружено.",
+    "quick_settings_title": "Быстрые настройки",
+    "quick_settings_footer": "Быстрый доступ к часто используемым настройкам без переключения вкладок.",
+    "quick_settings_close_hint": "Чтобы закрыть, перетащите разделитель вправо."
 }

@@ -43,6 +43,11 @@ SETTINGS_METADATA = {
     'gemini_tts_api_key': {'type': 'str', 'label': 'gemini_tts_api_key'},
     'elevenlabs_unlim_api_key': {'type': 'str', 'label': 'elevenlabs_unlim_api_key'},
     'assemblyai_api_key': {'type': 'str', 'label': 'assemblyai_api_key'},
+    'accent_color': {'type': 'color', 'label': 'accent_color_label'},
+    'prompt_count_control_enabled': {'type': 'bool', 'label': 'prompt_count_control_label'},
+    'prompt_count': {'type': 'int', 'min': 1, 'max': 100, 'label': 'prompt_count_label'},
+    'max_download_threads': {'type': 'int', 'min': 1, 'max': 100, 'label': 'max_download_threads_label'},
+    'detailed_logging_enabled': {'type': 'bool', 'label': 'detailed_logging_label'}, # Also missing explicitly in dict though hardcoded in panel as fallback
     'montage': {
         # Render
         'codec': {'type': 'choice', 'options': ["libx264", "libx265", "h264_nvenc", "h264_amf"]},

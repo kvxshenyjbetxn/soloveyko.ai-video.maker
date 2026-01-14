@@ -4,7 +4,7 @@ import uuid
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
     QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog, QGridLayout, QMessageBox, QStyle, QSlider,
-    QMenu, QWidgetAction
+    QMenu, QWidgetAction, QSplitter
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QColor, QAction
 from PySide6.QtCore import Qt, QMimeData, Signal
@@ -14,6 +14,8 @@ from utils.translator import translator
 from utils.settings import settings_manager, template_manager
 from gui.file_dialog import FileDialog
 from utils.animator import Animator
+from gui.widgets.quick_settings_panel import QuickSettingsPanel
+from PySide6.QtWidgets import QSplitter, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QPlainTextEdit, QProgressBar, QMessageBox, QApplication, QFrame, QSizePolicy
 
 def get_text_color_for_background(bg_color_hex):
     """
@@ -29,6 +31,30 @@ def get_text_color_for_background(bg_color_hex):
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     except ValueError:
         return "#FFFFFF"
+# ... (skip to init_ui)
+    def init_ui(self):
+        root_layout = QHBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Use CollapsibleSplitter instead of standard QSplitter
+        self.splitter = CollapsibleSplitter(Qt.Orientation.Horizontal)
+        root_layout.addWidget(self.splitter)
+        
+        # Main Content Container
+        self.content_container = QWidget()
+        layout = QVBoxLayout(self.content_container)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.splitter.addWidget(self.content_container)
+# ... (skip to end of init_ui)
+        # Quick Settings Panel
+        self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
+        self.quick_settings_panel.setMinimumWidth(300)
+        self.splitter.addWidget(self.quick_settings_panel)
+        
+        # Stretch factors
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 0)
 
     # Calculate luminance (standard formula)
     luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
@@ -361,8 +387,18 @@ class TextTab(QWidget):
         self.load_languages_menu()
 
     def init_ui(self):
-        layout = QVBoxLayout(self)
+        root_layout = QHBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        root_layout.addWidget(self.splitter)
+        
+        # Main Content Container
+        self.content_container = QWidget()
+        layout = QVBoxLayout(self.content_container)
         layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.splitter.addWidget(self.content_container)
 
         # Character count labels
         self.char_count_layout = QHBoxLayout()
@@ -438,6 +474,20 @@ class TextTab(QWidget):
         self.status_bar_layout.addWidget(self.gemini_tts_balance_label)
         self.status_bar_layout.addStretch()
         layout.addLayout(self.status_bar_layout)
+
+        # Quick Settings Panel
+        self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
+        # Keep minimum width to display content nicely, but allow collapsing via splitter handle
+        self.quick_settings_panel.setMinimumWidth(280)
+        self.splitter.addWidget(self.quick_settings_panel)
+        
+        # Make QuickSettingsPanel collapsible (index 1)
+        self.splitter.setCollapsible(1, True)
+        
+        # Stretch factors
+
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 0)
 
         self.update_char_count()
         self.update_char_count()
@@ -781,5 +831,3 @@ class TextTab(QWidget):
         else:
             text_color = 'white'
         self.text_edit.setStyleSheet(f"QTextEdit#textEdit {{ color: {text_color}; }}")
-
-
