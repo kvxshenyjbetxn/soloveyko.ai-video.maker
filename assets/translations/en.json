@@ -459,5 +459,6 @@
     "template_changes_no_changes": "No changes detected.",
     "quick_settings_title": "Quick Settings",
     "quick_settings_footer": "Quickly access frequently used settings without switching tabs.",
-    "quick_settings_close_hint": "To close, drag the slider to the right."
+    "quick_settings_close_hint": "To close, drag the slider to the right.",
+    "special_proc_mode_video_at_the_beginning": "Video at the beginning"
 }

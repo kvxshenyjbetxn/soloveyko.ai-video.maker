@@ -459,5 +459,6 @@
     "template_changes_no_changes": "Изменений не обнаружено.",
     "quick_settings_title": "Быстрые настройки",
     "quick_settings_footer": "Быстрый доступ к часто используемым настройкам без переключения вкладок.",
-    "quick_settings_close_hint": "Чтобы закрыть, перетащите разделитель вправо."
+    "quick_settings_close_hint": "Чтобы закрыть, перетащите разделитель вправо.",
+    "special_proc_mode_video_at_the_beginning": "Видео в начале"
 }

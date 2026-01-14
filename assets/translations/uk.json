@@ -466,5 +466,6 @@
     "template_changes_no_changes": "Змін не виявлено.",
     "quick_settings_title": "Швидкі налаштування",
     "quick_settings_footer": "Швидкий доступ до часто використовуваних налаштувань без перемикання вкладок.",
-    "quick_settings_close_hint": "Щоб закрити, перетягніть роздільник вправо."
+    "quick_settings_close_hint": "Щоб закрити, перетягніть роздільник вправо.",
+    "special_proc_mode_video_at_the_beginning": "Відео на початку"
 }
