@@ -487,11 +487,15 @@ class MainWindow(QMainWindow):
         self.gallery_tab.image_regenerated.connect(self.task_processor._on_image_regenerated)
         self.gallery_tab.media_clicked.connect(self.show_media_viewer)
         self.settings_tab.templates_tab.template_applied.connect(self.on_template_applied)
+        self.tabs.currentChanged.connect(self.on_tab_changed)
 
         QTimer.singleShot(100, self.check_api_key_validity) # Initial check
         QTimer.singleShot(200, lambda: self.settings_tab.languages_tab.load_elevenlabs_templates()) # Load templates in background to avoid blocking startup
         
         self.update_active_template_display()
+
+    def on_tab_changed(self, index):
+        self.refresh_quick_settings_panels()
 
     def on_template_applied(self):
         QMessageBox.information(self, translator.translate('template_applied_title', "Template Applied"), translator.translate('template_applied_message', "Template settings have been applied and saved."))
@@ -509,8 +513,36 @@ class MainWindow(QMainWindow):
         self.text_tab.retranslate_ui()
         self.apply_current_theme()
         
+        # Update Quick Settings Panels
+        self.refresh_quick_settings_panels()
+        
         # Update the template label in the corner
         self.update_active_template_display()
+
+    def refresh_quick_settings_panels(self):
+        """Refreshes the QuickSettingsPanel in TextTab and RewriteTab."""
+        if hasattr(self, 'text_tab') and hasattr(self.text_tab, 'quick_settings_panel'):
+            self.text_tab.quick_settings_panel.refresh()
+        
+        if hasattr(self, 'rewrite_tab') and hasattr(self.rewrite_tab, 'quick_settings_panel'):
+            self.rewrite_tab.quick_settings_panel.refresh()
+
+    def on_quick_setting_changed(self, key):
+        """Called when a setting is changed from the QuickSettingsPanel."""
+        # Update Settings Tab UI without full app visual refresh if possible,
+        # but for things like Theme or Language we definitely need full refresh.
+        
+        # Always trigger settings tab update so values sync
+        if hasattr(self.settings_tab, '_update_all_tabs'):
+            self.settings_tab._update_all_tabs()
+            
+        settings_needing_full_refresh = ['language', 'theme', 'accent_color']
+        if key in settings_needing_full_refresh:
+            self.refresh_ui_from_settings()
+        else:
+             # Just update global UI elements that depend on settings if any (like tooltips?)
+             # Most real-time things are read from settings_manager directly when used.
+             pass
 
     def _start_processing_checked(self):
         worker = ApiKeyCheckWorker(api_key=self.api_key, server_url=self.server_url)

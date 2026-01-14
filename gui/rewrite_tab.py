@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle, QInputDialog
+    QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle, QInputDialog, QSplitter
 )
 from PySide6.QtCore import Qt
 from gui.text_tab import DroppableTextEdit, StageSelectionWidget
@@ -14,6 +14,9 @@ import os
 import re
 import uuid
 import datetime
+import datetime
+from PySide6.QtWidgets import QSplitter
+from gui.widgets.quick_settings_panel import QuickSettingsPanel
 
 class RewriteTab(QWidget):
     def __init__(self, main_window=None):
@@ -25,8 +28,18 @@ class RewriteTab(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout(self)
+        root_layout = QHBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        root_layout.addWidget(self.splitter)
+        
+        # Main Content Container
+        self.content_container = QWidget()
+        layout = QVBoxLayout(self.content_container)
         layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.splitter.addWidget(self.content_container)
 
         # Input Header
         input_header_layout = QHBoxLayout()
@@ -98,6 +111,15 @@ class RewriteTab(QWidget):
         self.status_bar_layout.addStretch()
         layout.addLayout(self.status_bar_layout)
         
+        # Quick Settings Panel
+        self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
+        self.quick_settings_panel.setMinimumWidth(280)
+        self.splitter.addWidget(self.quick_settings_panel)
+        self.splitter.setCollapsible(1, True)
+        
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 0)
+
         self.load_languages_menu()
 
     def load_languages_menu(self):
@@ -456,7 +478,7 @@ class RewriteTab(QWidget):
             widget.retranslate_ui()
 
         self.update_link_count() 
-
+        
     def update_balance(self, balance_text):
         self.openrouter_balance_label.setText(balance_text)
 
