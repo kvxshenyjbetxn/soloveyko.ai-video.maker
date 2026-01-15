@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit
 class GooglerTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.aspect_ratios = ["IMAGE_ASPECT_RATIO_LANDSCAPE", "IMAGE_ASPECT_RATIO_PORTRAIT", "IMAGE_ASPECT_RATIO_SQUARE"]
+        self.aspect_ratios = ["IMAGE_ASPECT_RATIO_LANDSCAPE", "IMAGE_ASPECT_RATIO_PORTRAIT"]
         self.initUI()
         self.update_fields()
         self.connect_signals()
@@ -49,7 +49,8 @@ class GooglerTab(QWidget):
         aspect_label_layout.addWidget(self.aspect_ratio_label)
         
         self.aspect_ratio_combo = QComboBox()
-        self.aspect_ratio_combo.addItems(self.aspect_ratios)
+        for ratio in self.aspect_ratios:
+             self.aspect_ratio_combo.addItem(ratio, ratio)
         add_setting_row(layout, aspect_label_container, self.aspect_ratio_combo, "googler.aspect_ratio", refresh_quick_panel)
 
         # Max Threads
@@ -147,6 +148,8 @@ class GooglerTab(QWidget):
         self.usage_label.setText(translator.translate("googler_usage_label"))
         self.check_usage_button.setText(translator.translate("googler_check_usage_button"))
         self.aspect_ratio_label.setText(translator.translate("googler_aspect_ratio_label"))
+        self.aspect_ratio_combo.setItemText(0, translator.translate("aspect_ratio_landscape"))
+        self.aspect_ratio_combo.setItemText(1, translator.translate("aspect_ratio_portrait"))
         self.max_threads_label.setText(translator.translate("googler_max_threads_label"))
         self.max_video_threads_label.setText(translator.translate("googler_max_video_threads_label"))
         self.video_prompt_label.setText(translator.translate("googler_video_prompt_label"))
@@ -174,7 +177,9 @@ class GooglerTab(QWidget):
 
         googler_settings = settings_manager.get("googler", {})
         self.api_key_input.setText(googler_settings.get("api_key", ""))
-        self.aspect_ratio_combo.setCurrentText(googler_settings.get("aspect_ratio", "IMAGE_ASPECT_RATIO_LANDSCAPE"))
+        idx = self.aspect_ratio_combo.findData(googler_settings.get("aspect_ratio", "IMAGE_ASPECT_RATIO_LANDSCAPE"))
+        if idx >= 0:
+            self.aspect_ratio_combo.setCurrentIndex(idx)
         self.max_threads_spinbox.setValue(googler_settings.get("max_threads", 25))
         self.max_video_threads_spinbox.setValue(googler_settings.get("max_video_threads", 10))
         self.video_prompt_input.setText(googler_settings.get("video_prompt", "Animate this scene, cinematic movement, 4k"))
@@ -192,7 +197,7 @@ class GooglerTab(QWidget):
     def save_settings(self):
         googler_settings = {
             "api_key": self.api_key_input.text(),
-            "aspect_ratio": self.aspect_ratio_combo.currentText(),
+            "aspect_ratio": self.aspect_ratio_combo.currentData(),
             "max_threads": self.max_threads_spinbox.value(),
             "max_video_threads": self.max_video_threads_spinbox.value(),
             "video_prompt": self.video_prompt_input.text(),

@@ -9,7 +9,7 @@ from gui.widgets.setting_row import add_setting_row
 class ElevenLabsImageTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.aspect_ratios = ["3:2", "16:9", "1:1", "9:16", "2:3", "4:5", "5:4"] # Common aspects
+        self.aspect_ratios = ["16:9", "9:16"] # Common aspects
         self.initUI()
         self.update_fields()
         self.connect_signals()

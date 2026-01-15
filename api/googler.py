@@ -106,7 +106,7 @@ class GooglerAPI:
         logger.log(f"Failed to generate image for prompt: {prompt}. Error: {error_message}", level=LogLevel.ERROR)
         return None
 
-    def generate_video(self, image_path, prompt):
+    def generate_video(self, image_path, prompt, aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE"):
         
         def encode_image(path):
             if not os.path.exists(path):
@@ -130,6 +130,7 @@ class GooglerAPI:
             "parameters": {
                 "prompt": prompt,
                 "input_image": image_data_uri,
+                "aspect_ratio": aspect_ratio
             }
         }
         

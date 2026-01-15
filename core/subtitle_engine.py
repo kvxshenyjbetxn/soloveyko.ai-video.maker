@@ -209,22 +209,35 @@ class SubtitleEngine:
 
 
     def _split_long_lines(self, segments, max_words):
-        new_segments = []
-        for seg in segments:
+        """
+        Iteratively split segments until no segment has more than max_words.
+        Distributes time proportionally to the number of words.
+        """
+        def split_recursive(seg):
             words = seg['text'].split()
             if len(words) <= max_words:
-                new_segments.append(seg)
-                continue
+                return [seg]
             
-            mid = len(words) // 2
-            part1_words = words[:mid]
-            part2_words = words[mid:]
+            # Split off the first max_words
+            part1_words = words[:max_words]
+            part2_words = words[max_words:]
             
+            total_words = len(words)
             duration = seg['end'] - seg['start']
-            split_time = seg['start'] + (duration / 2)
             
-            new_segments.append({'start': seg['start'], 'end': split_time, 'text': " ".join(part1_words)})
-            new_segments.append({'start': split_time, 'end': seg['end'], 'text': " ".join(part2_words)})
+            # Duration proportional to words
+            part1_dur = (len(part1_words) / total_words) * duration
+            split_time = seg['start'] + part1_dur
+            
+            part1 = {'start': seg['start'], 'end': split_time, 'text': " ".join(part1_words)}
+            part2 = {'start': split_time, 'end': seg['end'], 'text': " ".join(part2_words)}
+            
+            # Recursively split the second part if it's still too long
+            return [part1] + split_recursive(part2)
+
+        new_segments = []
+        for seg in segments:
+            new_segments.extend(split_recursive(seg))
             
         return new_segments
 
@@ -237,10 +250,13 @@ class SubtitleEngine:
         font = s.get('font', 'Arial')
         size = s.get('fontsize', 60)
 
+        # Reverted to original fixed resolution and settings use
+        res_x, res_y = 1920, 1080
+
         header = f"""[Script Info]
 ScriptType: v4.00+
-PlayResX: 1920
-PlayResY: 1080
+PlayResX: {res_x}
+PlayResY: {res_y}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, Alignment, BorderStyle, Outline, Shadow, MarginL, MarginR, MarginV, Encoding

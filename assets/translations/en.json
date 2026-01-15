@@ -470,5 +470,7 @@
     "no_history_yet": "No history yet",
     "clear_history_title": "Clear History?",
     "clear_history_confirm": "Are you sure you want to delete all history?",
-    "click_to_view": "Click to view"
+    "click_to_view": "Click to view",
+    "aspect_ratio_landscape": "Landscape (16:9)",
+    "aspect_ratio_portrait": "Portrait (9:16)"
 }
