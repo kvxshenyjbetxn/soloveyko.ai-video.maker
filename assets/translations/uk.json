@@ -159,6 +159,8 @@
     "gallery_total_media_label": "Всього медіа: {count}",
     "gallery_task_group_title": "{title} ({count} медіа)",
     "gallery_language_group_title": "{title} ({count} медіа)",
+    "gallery_preview_group": "Прев'ю ({count})",
+    "gallery_main_media_group": "Картинки відео ({count})",
     "confirm_image_deletion_message": "Ви впевнені, що хочете назавжди видалити це зображення з диска?\n\n{}",
     "regenerate_image_title": "Перегенерувати зображення",
     "thumbnail_regen_button": "Перегенерувати",
@@ -467,5 +469,13 @@
     "quick_settings_title": "Швидкі налаштування",
     "quick_settings_footer": "Швидкий доступ до часто використовуваних налаштувань без перемикання вкладок.",
     "quick_settings_close_hint": "Щоб закрити, перетягніть роздільник вправо.",
-    "special_proc_mode_video_at_the_beginning": "Відео на початку"
+    "special_proc_mode_video_at_the_beginning": "Відео на початку",
+    "history_tab_title": "Історія",
+    "clear_history_button": "Очистити історію",
+    "history_text_preview_title": "Перегляд тексту",
+    "view_texts": "Подивитись тексти",
+    "no_history_yet": "Історії поки немає",
+    "clear_history_title": "Очистити історію?",
+    "clear_history_confirm": "Ви впевнені, що хочете видалити всю історію?",
+    "click_to_view": "Клікніть для перегляду"
 }

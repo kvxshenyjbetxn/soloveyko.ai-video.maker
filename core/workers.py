@@ -384,11 +384,63 @@ class ImageGenerationWorker(BaseWorker):
         if not prompts:
             # If no numbers, take each non-empty line as a prompt
             prompts = [line.strip() for line in prompts_text.split('\n') if line.strip()]
-            if prompts:
-                logger.log(f"[{self.task_id}] No numbered prompts found. Parsing {len(prompts)} prompts by lines.", level=LogLevel.INFO)
+        
+        # Filter out headers and technical lines
+        filtered_prompts = []
+        # Patterns to strip from the beginning of a line
+        strip_patterns = [
+            r"^Option\s*\d+\s*[:\-]?\s*(\"[^\"]*\")?\s*",
+            r"^HOOK\s+SECTION\s*(IDENTIFIED)?\s*[:\-]*\s*",
+            r"^CHARACTER\s+REFERENCE\s*[:\-]*\s*",
+            r"^UNIFIED\s+STYLE\s*[:\-]*\s*",
+            r"^PROMPTS\s*[:\-]*\s*",
+            r"^MAIN\s+STORY\s*[:\-\(]*.*[\s\)]*",
+            r"^VERIFICATION\s+BEFORE\s+SUBMITTING\s*[:\-]*\s*",
+            r"^CRITICAL\s+REMINDERS\s*[:\-]*\s*",
+            r"^INPUT\s+DATA\s*[:\-]*\s*",
+            r"^STORY\s+TEXT\s*[:\-]*\s*",
+            r"^VIDEO\s+TITLE\s*[:\-]*\s*",
+            r"^ACT\s+AS\s+A\s+.*",
+            r"^STRICT\s+GUIDELINES\s*.*"
+        ]
+        
+        for p in prompts:
+            p_clean = p.strip()
+            if not p_clean:
+                continue
+            
+            # Apply strip patterns with re.IGNORECASE flag
+            for pattern in strip_patterns:
+                p_clean = re.sub(pattern, "", p_clean, flags=re.IGNORECASE).strip()
+            
+            if not p_clean:
+                continue
+            
+            # Additional check: if prompt is too short (less than 15 chars) it's likely a leftover header
+            if len(p_clean) < 15:
+                # But only if it has technical markers
+                if ":" in p_clean or p_clean.isupper() or p_clean.startswith("["):
+                    continue
+            
+            # One more specific check for strings like "Conflict & Emotion" that might remain
+            if p_clean in ['"Conflict & Emotion"', '"Mystery & Atmosphere"', '"The Key Detail"']:
+                continue
+
+            filtered_prompts.append(p_clean)
+        
+        prompts = filtered_prompts
+
+        # Support image_count (multiply prompts)
+        image_count = self.config.get('image_count', 1)
+        if image_count > 1:
+            multiplied_prompts = []
+            for p in prompts:
+                for _ in range(image_count):
+                    multiplied_prompts.append(p)
+            prompts = multiplied_prompts
 
         if not prompts:
-            raise Exception("No prompts found in the generated text.")
+            raise Exception("No valid prompts found in the generated text.")
 
         provider = self.config['provider']
         images_dir = os.path.join(self.config['dir_path'], "images")

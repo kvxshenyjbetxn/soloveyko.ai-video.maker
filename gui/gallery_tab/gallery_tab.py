@@ -176,19 +176,52 @@ class GalleryTab(QWidget):
             logger.log(f"Media path does not exist: {media_path}", level=LogLevel.WARNING)
             return
 
+        # 1. Task Group
         if task_name not in self.task_groups:
             task_group = CollapsibleGroup(task_name)
             self.content_layout.addWidget(task_group)
             self.task_groups[task_name] = task_group
+            # Store sub-groups mapping
+            task_group.sub_groups = {}
         
         task_group = self.task_groups[task_name]
 
-        if language not in task_group.language_groups:
-            lang_group = CollapsibleGroup(language, use_flow_layout=True, is_language_group=True, parent_group=task_group)
+        # 2. Language Group
+        if language not in task_group.sub_groups:
+            lang_group = CollapsibleGroup(language, is_language_group=True, parent_group=task_group)
             task_group.add_widget(lang_group)
-            task_group.language_groups[language] = lang_group
+            task_group.sub_groups[language] = lang_group
+            # Store types mapping
+            lang_group.type_groups = {}
 
-        lang_group = task_group.language_groups[language]
+        lang_group = task_group.sub_groups[language]
+
+        # 3. Determine if it's Preview or Main Media
+        is_preview = "preview" in media_path.replace("\\", "/").split("/")
+        type_key = "preview" if is_preview else "main"
+        type_title = "gallery_preview_group" if is_preview else "gallery_main_media_group"
+
+        if type_key not in lang_group.type_groups:
+            type_group = CollapsibleGroup(
+                "", # Title is handled by translation_key
+                use_flow_layout=True, 
+                is_language_group=True, 
+                parent_group=lang_group
+            )
+            # Custom title update logic for this group
+            type_group.custom_translation_key = type_title
+            type_group.set_title("", 0, translation_key=type_title)
+            
+            # Update translate_ui behavior for this specific group later if needed, 
+            # but for now we manually call it
+            lang_group.add_widget(type_group)
+            lang_group.type_groups[type_key] = type_group
+            
+            # Auto-collapse preview by default
+            if is_preview:
+                type_group.toggle()
+
+        type_group = lang_group.type_groups[type_key]
 
         # --- Thumbnail Loading ---
         pixmap = MediaThumbnail.get_thumbnail_for_media(media_path)
@@ -198,13 +231,16 @@ class GalleryTab(QWidget):
             logger.log(f"Failed to load media or generate thumbnail for: {media_path}", level=LogLevel.WARNING)
             return
         
-        thumbnail = MediaThumbnail(media_path, prompt, pixmap, lang_group)
+        thumbnail = MediaThumbnail(media_path, prompt, pixmap, type_group)
         
         thumbnail.media_clicked.connect(self._on_media_clicked)
-        thumbnail.delete_requested.connect(lambda: self._on_delete_requested(thumbnail, lang_group))
+        thumbnail.delete_requested.connect(lambda: self._on_delete_requested(thumbnail, type_group))
         thumbnail.regenerate_requested.connect(self._on_regenerate_requested)
 
-        lang_group.add_widget(thumbnail)
+        type_group.add_widget(thumbnail)
+        # Need to re-apply custom title because add_widget calls update_title -> set_title
+        type_group.set_title("", type_group.get_media_count(), translation_key=type_title)
+        
         self.update_total_media_count()
 
     def _on_media_clicked(self, media_path):
@@ -267,40 +303,58 @@ class GalleryTab(QWidget):
         QMessageBox.critical(self, "Regeneration Failed", f"Could not regenerate image for '{os.path.basename(old_path)}':\n\n{error_message}")
 
 
-    def _on_delete_requested(self, thumbnail_widget, lang_group):
+    def _on_delete_requested(self, thumbnail_widget, parent_group):
         try:
             # Release any file locks (e.g. video player)
             thumbnail_widget.cleanup()
             
             media_path = thumbnail_widget.media_path
-            self.image_deleted.emit(media_path) # Повідомити про видалення
+            self.image_deleted.emit(media_path) 
 
             is_demo_file = os.path.dirname(media_path).endswith('demo')
             if not is_demo_file:
-                os.remove(media_path)
-                logger.log(f"Deleted image from disk: {media_path}", level=LogLevel.INFO)
+                if os.path.exists(media_path):
+                    os.remove(media_path)
+                    logger.log(f"Deleted image from disk: {media_path}", level=LogLevel.INFO)
             else:
                 logger.log(f"Removed demo image from gallery: {media_path}", level=LogLevel.INFO)
 
-            lang_group.content_layout.removeWidget(thumbnail_widget)
+            parent_group.content_layout.removeWidget(thumbnail_widget)
             thumbnail_widget.deleteLater()
 
-            lang_group.update_title()
+            parent_group.update_title()
+            
+            # Manually update title with custom key if it exists
+            if hasattr(parent_group, 'custom_translation_key'):
+                parent_group.set_title("", parent_group.get_media_count(), translation_key=parent_group.custom_translation_key)
+
             self.update_total_media_count()
+
+            # Recursive cleanup of empty groups
+            lang_group = parent_group.parent_group
+            if parent_group.get_media_count() == 0:
+                lang_group.content_layout.removeWidget(parent_group)
+                parent_group.deleteLater()
+                # Find and remove key from type_groups
+                for k, v in list(lang_group.type_groups.items()):
+                    if v == parent_group:
+                        del lang_group.type_groups[k]
 
             task_group = lang_group.parent_group
             if lang_group.get_media_count() == 0:
                 task_group.content_layout.removeWidget(lang_group)
                 lang_group.deleteLater()
-                del task_group.language_groups[lang_group.title]
+                for k, v in list(task_group.sub_groups.items()):
+                    if v == lang_group:
+                        del task_group.sub_groups[k]
 
             if task_group.get_media_count() == 0:
                 self.content_layout.removeWidget(task_group)
                 task_group.deleteLater()
                 del self.task_groups[task_group.title]
 
-        except OSError as e:
-            logger.log(f"Error deleting image file {thumbnail_widget.media_path}: {e}", level=LogLevel.ERROR)
+        except Exception as e:
+            logger.log(f"Error during image deletion: {e}", level=LogLevel.ERROR)
             QMessageBox.critical(self, "Error", f"Could not delete image file:\n{e}")
 
     def update_total_media_count(self):
@@ -309,10 +363,16 @@ class GalleryTab(QWidget):
 
     def retranslate_ui(self):
         self.update_total_media_count()
-        #self.load_demo_button.setText(translator.translate("load_demo_button"))
         self.continue_button.setText(translator.translate("continue_montage_button"))
-        for group in self.task_groups.values():
-            group.translate_ui()
+        for task_group in self.task_groups.values():
+            task_group.translate_ui()
+            # Also need to handle custom titles for type groups
+            if hasattr(task_group, 'sub_groups'):
+                for lang_group in task_group.sub_groups.values():
+                    if hasattr(lang_group, 'type_groups'):
+                        for type_group in lang_group.type_groups.values():
+                            if hasattr(type_group, 'custom_translation_key'):
+                                type_group.set_title("", type_group.get_media_count(), translation_key=type_group.custom_translation_key)
 
     def show_continue_button(self):
         self.continue_button.show()

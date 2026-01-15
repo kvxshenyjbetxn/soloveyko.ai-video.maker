@@ -43,6 +43,12 @@ class TaskState:
         self.is_image_reviewed = False
         self.skipped_stages = set()
 
+        # History data
+        self.start_time = None
+        self.end_time = None
+        self.original_text_preview = None
+        self.translated_text_preview = None
+
     def _get_save_path(self, base_path, job_name, lang_name):
         if not base_path: return None
         try:
