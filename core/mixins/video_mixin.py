@@ -77,6 +77,7 @@ class VideoMixin:
         config = {
             'image_paths': paths_to_animate,
             'prompt': googler_settings.get("video_prompt", "Animate this scene, cinematic movement, 4k"),
+            'aspect_ratio': googler_settings.get("aspect_ratio", "IMAGE_ASPECT_RATIO_LANDSCAPE"),
             'video_semaphore': self.video_semaphore,
             'max_threads': googler_settings.get("max_video_threads", 1)
         }

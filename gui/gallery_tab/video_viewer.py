@@ -19,7 +19,7 @@ class VideoViewer(QWidget):
     def init_ui(self):
         from PySide6.QtMultimediaWidgets import QVideoWidget
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(20, 20, 20, 20)
+        self.main_layout.setContentsMargins(10, 10, 10, 10)
 
         self.video_widget = QVideoWidget()
         self.main_layout.addWidget(self.video_widget)

@@ -230,7 +230,9 @@ class SubtitleMixin:
             
             config = {
                 'audio_path': state.audio_path, 'dir_path': state.dir_path,
-                'sub_settings': sub_settings, 'lang_code': state.lang_id.split('-')[0].lower(),
+                'sub_settings': sub_settings, 
+                'full_settings': state.settings, # Pass full settings for resolution detection
+                'lang_code': state.lang_id.split('-')[0].lower(),
                 'whisper_exe': whisper_exe, 'whisper_model_path': whisper_model_path
             }
             self._start_worker(SubtitleWorker, task_id, 'stage_subtitles', config,

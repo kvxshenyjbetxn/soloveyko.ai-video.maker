@@ -293,8 +293,20 @@ class MediaThumbnail(QWidget):
                     return QPixmap()
 
                 success, frame = vid.read()
+                
+                # Check for rotation metadata (Qt and modern players handle it, cv2 doesn't always)
+                # cv2.CAP_PROP_ORIENTATION_META might return degrees (90, 180, 270)
+                rotation = vid.get(cv2.CAP_PROP_ORIENTATION_META)
+                
                 vid.release()
                 if success:
+                    if rotation == 90:
+                        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+                    elif rotation == 180:
+                        frame = cv2.rotate(frame, cv2.ROTATE_180)
+                    elif rotation == 270:
+                        frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
                     height, width, channel = frame.shape
                     bytes_per_line = 3 * width
                     q_img = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_BGR888)

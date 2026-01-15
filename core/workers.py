@@ -325,7 +325,8 @@ class SubtitleWorker(BaseWorker):
         engine = SubtitleEngine(self.config['whisper_exe'], self.config['whisper_model_path'])
         output_filename = os.path.splitext(os.path.basename(self.config['audio_path']))[0] + ".ass"
         output_path = os.path.join(self.config['dir_path'], output_filename)
-        engine.generate_ass(self.config['audio_path'], output_path, self.config['sub_settings'], language=self.config['lang_code'])
+        merged_settings = {**self.config.get('sub_settings', {}), **self.config.get('full_settings', {})}
+        engine.generate_ass(self.config['audio_path'], output_path, merged_settings, language=self.config['lang_code'])
         logger.log(f"[{self.task_id}] [{whisper_label}] Subtitles saved", level=LogLevel.SUCCESS)
         return output_path
 
@@ -570,6 +571,10 @@ class ImageGenerationWorker(BaseWorker):
         return {'paths': final_paths, 'total_prompts': len(prompts)}
 
 class VideoGenerationWorker(BaseWorker):
+    # Class-level semaphore to ensure only one FFmpeg squish process runs at a time
+    # to prevent CPU exhaustion while allowing parallel downloads.
+    _squish_lock = threading.Lock()
+
     def do_work(self):
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
@@ -591,7 +596,7 @@ class VideoGenerationWorker(BaseWorker):
                         logger_msg += f" (Attempt {attempt + 1}/{max_retries})"
                     logger.log(logger_msg, level=LogLevel.INFO)
 
-                    video_data = api.generate_video(image_path, video_prompt)
+                    video_data = api.generate_video(image_path, video_prompt, aspect_ratio=self.config.get('aspect_ratio', 'IMAGE_ASPECT_RATIO_LANDSCAPE'))
                     
                     if not video_data:
                         raise Exception("API returned no data.")
@@ -604,6 +609,39 @@ class VideoGenerationWorker(BaseWorker):
                         with open(video_path, 'wb') as f:
                             f.write(data_to_write)
                         
+                        # --- FIX STRETCHED VIDEO ---
+                        # Some APIs (like Googler) might return a 16:9 video even for portrait requests, 
+                        # but with stretched content. We squish it back to 1080:1920.
+                        if self.config.get('aspect_ratio') == 'IMAGE_ASPECT_RATIO_PORTRAIT':
+                            import subprocess
+                            temp_path = video_path.replace(".mp4", ".stretched.mp4")
+                            try:
+                                if os.path.exists(video_path):
+                                    os.rename(video_path, temp_path)
+                                    logger.log(f"[{self.task_id}] [Googler Video] Fixing stretched proportions (1080x1920)...", level=LogLevel.INFO)
+                                    
+                                    startupinfo = None
+                                    if platform.system() == "Windows":
+                                        startupinfo = subprocess.STARTUPINFO()
+                                        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+                                    cmd = ["ffmpeg", "-y", "-i", temp_path, "-vf", "scale=1080:1920", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "copy", video_path]
+                                    
+                                    # Use class-level lock to ensure squishing happens in 1 thread only
+                                    with VideoGenerationWorker._squish_lock:
+                                        subprocess.run(cmd, startupinfo=startupinfo, capture_output=True, text=True)
+                                    
+                                    if os.path.exists(video_path) and os.path.getsize(video_path) > 0:
+                                        os.remove(temp_path)
+                                    else:
+                                        if os.path.exists(temp_path):
+                                            os.rename(temp_path, video_path)
+                            except Exception as fe:
+                                logger.log(f"[{self.task_id}] [Googler Video] Error fixing proportions: {fe}", level=LogLevel.ERROR)
+                                if os.path.exists(temp_path) and not os.path.exists(video_path):
+                                    os.rename(temp_path, video_path)
+                        # --- END FIX ---
+
                         self.signals.video_generated.emit(image_path, video_path)
                         self.signals.video_progress.emit(self.task_id)
                         

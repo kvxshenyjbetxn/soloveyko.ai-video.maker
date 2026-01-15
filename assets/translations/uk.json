@@ -477,5 +477,7 @@
     "no_history_yet": "Історії поки немає",
     "clear_history_title": "Очистити історію?",
     "clear_history_confirm": "Ви впевнені, що хочете видалити всю історію?",
-    "click_to_view": "Клікніть для перегляду"
+    "click_to_view": "Клікніть для перегляду",
+    "aspect_ratio_landscape": "Альбомна (16:9)",
+    "aspect_ratio_portrait": "Портретна (9:16)"
 }

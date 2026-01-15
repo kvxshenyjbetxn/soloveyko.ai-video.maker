@@ -71,8 +71,41 @@ class MontageEngine:
         enable_sway = settings.get('enable_sway', False)
         s_spd = settings.get('sway_speed_factor', 1.0)
 
+        # 1.1 Detection of Aspect Ratio
+        is_portrait = False
+        
+        # Priority 1: Check settings for explicit hints
+        pollinations = settings.get('pollinations', {})
+        googler = settings.get('googler', {})
+        elevenlabs = settings.get('elevenlabs_image', {})
+        
+        if (pollinations.get('height', 0) > pollinations.get('width', 0) or 
+            googler.get('aspect_ratio') == 'IMAGE_ASPECT_RATIO_PORTRAIT' or 
+            elevenlabs.get('aspect_ratio') == '9:16'):
+            is_portrait = True
+            logger.log(f"{prefix}[Montage] Portrait mode detected from settings hint", level=LogLevel.INFO)
+
+        # Priority 2: Check actual files (especially if settings were generic or missing)
+        if not is_portrait and visual_files:
+            portrait_count = 0
+            check_count = min(20, len(visual_files)) # Check up to 20 files
+            for i in range(check_count):
+                w, h = self._get_dimensions(visual_files[i])
+                if h > w:
+                    portrait_count += 1
+            
+            # If at least 30% of checked files are portrait, we treat it as a portrait project
+            # (To account for landscape intro/outro videos)
+            if portrait_count >= (check_count * 0.3) and portrait_count > 0:
+                is_portrait = True
+                logger.log(f"{prefix}[Montage] Portrait mode detected from files ({portrait_count}/{check_count} portrait)", level=LogLevel.INFO)
+
         up_factor = settings.get('upscale_factor', 3.0)
-        base_w, base_h = 1920, 1080
+        if is_portrait:
+            base_w, base_h = 1080, 1920
+        else:
+            base_w, base_h = 1920, 1080
+            
         up_w, up_h = int(base_w * up_factor), int(base_h * up_factor)
 
         # Effects & Watermark Settings
@@ -183,8 +216,8 @@ class MontageEngine:
             
             if is_video:
                 vf = (
-                    f"{v_in}scale=1920:1080:force_original_aspect_ratio=decrease,"
-                    f"pad=1920:1080:(ow-iw)/2:(oh-ih)/2,"
+                    f"{v_in}scale={base_w}:{base_h}:force_original_aspect_ratio=decrease,"
+                    f"pad={base_w}:{base_h}:(ow-iw)/2:(oh-ih)/2,"
                     f"format=yuv420p,setsar=1,fps={fps},"
                     f"setpts=PTS-STARTPTS[{v_out}]"
                 )
@@ -228,7 +261,7 @@ class MontageEngine:
                 d_frames = int(this_dur * fps) + 5
                 zoom_cmd = (
                     f"[{v_up}]zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':"
-                    f"d={d_frames}:s=1920x1080:fps={fps},"
+                    f"d={d_frames}:s={base_w}x{base_h}:fps={fps},"
                     f"setpts=PTS-STARTPTS[{v_out}]"
                 )
                 filter_parts.append(zoom_cmd)
@@ -294,7 +327,7 @@ class MontageEngine:
             eff_v = f"[v_eff_scaled]"
             # Force yuva420p to ensure alpha channel is preserved/respected if present
             # Застосовуємо effect_speed для зміни швидкості відтворення ефекту
-            scale_eff = f"[{effect_index}:v]format=yuva420p,scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080{eff_v}"
+            scale_eff = f"[{effect_index}:v]format=yuva420p,scale={base_w}:{base_h}:force_original_aspect_ratio=increase,crop={base_w}:{base_h}{eff_v}"
             filter_parts.append(scale_eff)
             
             v_overlaid = f"[v_overlaid]"
@@ -313,7 +346,7 @@ class MontageEngine:
             
             wm_v = f"[v_wm]"
             # Обчислюємо розмір вотермарки: watermark_size відсотків від 1920px
-            wm_width = int(1920 * (float(watermark_size) / 100.0))
+            wm_width = int(base_w * (float(watermark_size) / 100.0))
             logger.log(f"{prefix}[FFmpeg] Watermark size: {watermark_size}% = {wm_width}px", level=LogLevel.INFO)
             scale_wm = f"[{wm_index}:v]scale={wm_width}:-1{wm_v}"
             filter_parts.append(scale_wm)
@@ -478,6 +511,24 @@ class MontageEngine:
             if filter_script_path and os.path.exists(filter_script_path):
                 os.remove(filter_script_path)
         # Success log is handled by MontageWorker
+
+    def _get_dimensions(self, path):
+        normalized_path = path.replace("\\", "/")
+        cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", 
+               "-of", "csv=s=x:p=0", normalized_path]
+        try:
+            startupinfo = None
+            if platform.system() == "Windows":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+            res = subprocess.run(cmd, capture_output=True, text=True, startupinfo=startupinfo)
+            val = res.stdout.strip().split('x')
+            if len(val) == 2:
+                return int(val[0]), int(val[1])
+            return 0, 0
+        except Exception:
+            return 0, 0
 
     def _get_duration(self, path):
         normalized_path = path.replace("\\", "/")

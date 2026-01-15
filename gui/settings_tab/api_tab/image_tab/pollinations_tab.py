@@ -89,25 +89,20 @@ class PollinationsTab(QWidget):
         self.token_input = QLineEdit()
         add_setting_row(layout, token_label_container, self.token_input, "pollinations.token", refresh_quick_panel)
 
-        # Width and Height
-        self.size_help = HelpLabel("image_size_label")
-        self.size_label = QLabel()
-        size_label_container = QWidget()
-        size_label_layout = QHBoxLayout(size_label_container)
-        size_label_layout.setContentsMargins(0, 0, 0, 0)
-        size_label_layout.setSpacing(5)
-        size_label_layout.addWidget(self.size_help)
-        size_label_layout.addWidget(self.size_label)
+        # Aspect Ratio
+        self.aspect_ratio_help = HelpLabel("googler_aspect_ratio_label")
+        self.aspect_ratio_label = QLabel()
+        aspect_label_container = QWidget()
+        aspect_label_layout = QHBoxLayout(aspect_label_container)
+        aspect_label_layout.setContentsMargins(0, 0, 0, 0)
+        aspect_label_layout.setSpacing(5)
+        aspect_label_layout.addWidget(self.aspect_ratio_help)
+        aspect_label_layout.addWidget(self.aspect_ratio_label)
         
-        size_layout = QHBoxLayout()
-        self.width_spinbox = QSpinBox()
-        self.width_spinbox.setRange(1, 4096)
-        self.height_spinbox = QSpinBox()
-        self.height_spinbox.setRange(1, 4096)
-        size_layout.addWidget(self.width_spinbox)
-        size_layout.addWidget(QLabel("x"))
-        size_layout.addWidget(self.height_spinbox)
-        layout.addRow(size_label_container, size_layout)
+        self.aspect_ratio_combo = QComboBox()
+        self.aspect_ratio_combo.addItem("landscape", "landscape")
+        self.aspect_ratio_combo.addItem("portrait", "portrait")
+        layout.addRow(aspect_label_container, self.aspect_ratio_combo)
 
         # NoLogo
         self.nologo_help = HelpLabel("nologo_label")
@@ -156,8 +151,7 @@ class PollinationsTab(QWidget):
     def connect_signals(self):
         self.model_combo.currentIndexChanged.connect(self.save_settings)
         self.token_input.textChanged.connect(self.save_settings)
-        self.width_spinbox.valueChanged.connect(self.save_settings)
-        self.height_spinbox.valueChanged.connect(self.save_settings)
+        self.aspect_ratio_combo.currentIndexChanged.connect(self.save_settings)
         self.nologo_checkbox.stateChanged.connect(self.save_settings)
         self.enhance_checkbox.stateChanged.connect(self.save_settings)
         
@@ -165,7 +159,9 @@ class PollinationsTab(QWidget):
         self.model_label.setText(translator.translate("pollinations_model_label"))
         self.token_label.setText(translator.translate("pollinations_token_label"))
         self.token_input.setPlaceholderText(translator.translate("pollinations_token_placeholder"))
-        self.size_label.setText(translator.translate("image_size_label"))
+        self.aspect_ratio_label.setText(translator.translate("aspect_ratio"))
+        self.aspect_ratio_combo.setItemText(0, translator.translate("aspect_ratio_landscape"))
+        self.aspect_ratio_combo.setItemText(1, translator.translate("aspect_ratio_portrait"))
         self.nologo_checkbox.setText(translator.translate("nologo_label"))
         self.enhance_checkbox.setText(translator.translate("enhance_prompt_label"))
         self.info_label.setText(translator.translate("pollinations_info"))
@@ -174,15 +170,14 @@ class PollinationsTab(QWidget):
         # Update hints
         self.model_help.update_tooltip()
         self.token_help.update_tooltip()
-        self.size_help.update_tooltip()
+        self.aspect_ratio_help.update_tooltip()
         self.nologo_help.update_tooltip()
         self.enhance_help.update_tooltip()
 
     def update_fields(self):
         self.model_combo.blockSignals(True)
         self.token_input.blockSignals(True)
-        self.width_spinbox.blockSignals(True)
-        self.height_spinbox.blockSignals(True)
+        self.aspect_ratio_combo.blockSignals(True)
         self.nologo_checkbox.blockSignals(True)
         self.enhance_checkbox.blockSignals(True)
 
@@ -205,15 +200,19 @@ class PollinationsTab(QWidget):
              
         self.model_combo.setCurrentText(saved_model)
         self.token_input.setText(pollinations_settings.get("token", ""))
-        self.width_spinbox.setValue(pollinations_settings.get("width", 1280))
-        self.height_spinbox.setValue(pollinations_settings.get("height", 720))
+        width = pollinations_settings.get("width", 1920)
+        height = pollinations_settings.get("height", 1080)
+        
+        if width == 1080 and height == 1920:
+            self.aspect_ratio_combo.setCurrentIndex(1) # portrait
+        else:
+            self.aspect_ratio_combo.setCurrentIndex(0) # landscape
         self.nologo_checkbox.setChecked(pollinations_settings.get("nologo", True))
         self.enhance_checkbox.setChecked(pollinations_settings.get("enhance", False))
 
         self.model_combo.blockSignals(False)
         self.token_input.blockSignals(False)
-        self.width_spinbox.blockSignals(False)
-        self.height_spinbox.blockSignals(False)
+        self.aspect_ratio_combo.blockSignals(False)
         self.nologo_checkbox.blockSignals(False)
         self.enhance_checkbox.blockSignals(False)
 
@@ -221,8 +220,8 @@ class PollinationsTab(QWidget):
         pollinations_settings = {
             "model": self.model_combo.currentText(),
             "token": self.token_input.text(),
-            "width": self.width_spinbox.value(),
-            "height": self.height_spinbox.value(),
+            "width": 1920 if self.aspect_ratio_combo.currentData() == "landscape" else 1080,
+            "height": 1080 if self.aspect_ratio_combo.currentData() == "landscape" else 1920,
             "nologo": self.nologo_checkbox.isChecked(),
             "enhance": self.enhance_checkbox.isChecked(),
         }
