@@ -203,11 +203,13 @@ class ImageMixin:
             logger.log(f"[{task_id}] Image gen finished. Status: {status}.", level=LogLevel.INFO)
             
             self._set_stage_status(task_id, 'stage_images', status, "Failed to generate all images." if status != 'success' else None)
+            self._check_if_image_review_ready()
             if getattr(self, 'subtitle_barrier_passed', False):
                 self._check_and_start_montages()
 
     @Slot(str, str)
     def _on_img_generation_error(self, task_id, error):
         self._set_stage_status(task_id, 'stage_images', 'error', error)
+        self._check_if_image_review_ready()
         if getattr(self, 'subtitle_barrier_passed', False):
             self._check_and_start_montages()
