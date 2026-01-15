@@ -158,6 +158,8 @@
     "gallery_total_media_label": "Всего медиа: {count}",
     "gallery_task_group_title": "{title} ({count} медиа)",
     "gallery_language_group_title": "{title} ({count} медиа)",
+    "gallery_preview_group": "Превью ({count})",
+    "gallery_main_media_group": "Картинки видео ({count})",
     "confirm_image_deletion_message": "Вы уверены, что хотите навсегда удалить это изображение с диска?\n\n{}",
     "regenerate_image_title": "Перегенерировать изображение",
     "thumbnail_regen_button": "Перегенерировать",
@@ -283,7 +285,7 @@
     "success": "Успех",
     "help_legend": "— <b>ПОДСКАЗКА</b>",
     "click_for_logs_hint": "Нажмите для просмотра логов",
-    "info_icon_hint": "<img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAABFklEQVR4nKWUMa5GQBSFD3mFKCl1ElGKDSjtYCoLmD2IRmcDCi3JREKrYQcqvUWIRul/FeGZ8Yt3urlz8s2ZmzsjQaAsyz68OqVU4tUvxQ1QVRX3AEIIF3haZFn2EQF4wCNMfgPZEh+vL7+B8GA/d0bP8xAEAQzDwDzPaNsWRVFgXdeLVxKlsSwLaZqiLEvUdQ3TNJEkCfI8B2Ps5CWEiBON4wjf9/f1MAyYpgmO41xAwKHZd1IUBWEYQtd1NE3D9dz2aFMcx7BtG1EUoe97rudrIlVV4bouGGNCyKNEy7KceiWSTCmVtrHnSdM0dF0HSil3f5vwR81+ov2tvJnu43vbE3274h3klOiYDPjnN8ID/pXoY/sFhOh/CLOkNJgAAAAASUVORK5CYII='>  — подсказки возле каждой опции. Наведите или нажмите для просмотра деталей.<br>💾 — эта настройка сохраняется в шаблоне.<br><br><b>Статусы этапов в карточке задачи:</b><br><span style='color: #6c757d'>●</span> — не начато<br><span style='color: #FFD700'>●</span> — в процессе<br><span style='color: #28a745'>●</span> — готово<br><span style='color: #FF8C00'>●</span> — исключительно для картинок, не все картинки сгенерированы<br><span style='color: #dc3545'>●</span> — ошибка<br><br><b>Полезные ссылки:</b><br>Чат Soloveyko.AI: <a href='https://t.me/+d6vKtsy0iI5kOTM6'>t.me/soloveyko_ai</a><br>Скачать последнюю версию программы: <a href='https://t.me/SoloveykoAIManagerBot'>@SoloveykoAIManagerBot</a><br>Инструкция (FAQ): <a href='https://t.me/c/3594600798/52'>t.me/faq</a>",
+    "info_icon_hint": "<img src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAASCAYAAABWzo5XAAABFklEQVR4nKWUMa5GQBSFD3mFKCl1ElGKDSjtYCoLmD2IRmcDCi3JREKrYQcqvUWIRul/FeGZ8Yt3urlz8s2ZmzsjQaAsyz68OqVU4tUvxQ1QVRX3AEIIF3haZFn2EQF4wCNMfgPZEh+vL7+B8GA/d0bP8xAEAQzDwDzPaNsWRVFgXdeLVxKlsSwLaZqiLEvUdQ3TNJEkCfI8B2Ps5CWEiBON4wjf9/f1MAyYpgmO41xAwKHZd1IUBWEYQtd1NE3D9dz2aFMcx7BtG1EUoe97rudrIlVV4bouGGNCyKNEy7KceiWSTCmVtrHnSdM0dF0HSil3f5/wR81+ov2tvJnu43vbE3274h3klOiYDPjnN8ID/pXoY/sFhOh/CLOkNJgAAAAASUVORK5CYII='>  — подсказки возле каждой опции. Наведите или нажмите для просмотра деталей.<br>💾 — эта настройка сохраняется в шаблоне.<br><br><b>Статусы этапов в карточке задачи:</b><br><span style='color: #6c757d'>●</span> — не начато<br><span style='color: #FFD700'>●</span> — в процессе<br><span style='color: #28a745'>●</span> — готово<br><span style='color: #FF8C00'>●</span> — исключительно для картинок, не все картинки сгенерированы<br><span style='color: #dc3545'>●</span> — ошибка<br><br><b>Полезные ссылки:</b><br>Чат Soloveyko.AI: <a href='https://t.me/+d6vKtsy0iI5kOTM6'>t.me/soloveyko_ai</a><br>Скачать последнюю версию программы: <a href='https://t.me/SoloveykoAIManagerBot'>@SoloveykoAIManagerBot</a><br>Инструкция (FAQ): <a href='https://t.me/c/3594600798/52'>t.me/faq</a>",
     "template_name_empty_error": "Имя шаблона не может быть пустым.",
     "template_saved_success": "Шаблон '{name}' успешно сохранен.",
     "save_as_title": "Сохранить как",
@@ -460,5 +462,13 @@
     "quick_settings_title": "Быстрые настройки",
     "quick_settings_footer": "Быстрый доступ к часто используемым настройкам без переключения вкладок.",
     "quick_settings_close_hint": "Чтобы закрыть, перетащите разделитель вправо.",
-    "special_proc_mode_video_at_the_beginning": "Видео в начале"
+    "special_proc_mode_video_at_the_beginning": "Видео в начале",
+    "history_tab_title": "История",
+    "clear_history_button": "Очистить историю",
+    "history_text_preview_title": "Просмотр текста",
+    "view_texts": "Посмотреть тексты",
+    "no_history_yet": "Истории пока нет",
+    "clear_history_title": "Очистить историю?",
+    "clear_history_confirm": "Вы уверены, что хотите удалить всю историю?",
+    "click_to_view": "Кликните для просмотра"
 }

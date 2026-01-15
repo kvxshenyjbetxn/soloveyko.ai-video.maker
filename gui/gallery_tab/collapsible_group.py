@@ -41,9 +41,13 @@ class CollapsibleGroup(QWidget):
         main_layout.addWidget(self.content_area)
         self.set_title(self.title)
 
-    def set_title(self, title, image_count=0):
+    def set_title(self, title, image_count=0, translation_key=None):
         self.title = title
-        key = "gallery_language_group_title" if self.is_language_group else "gallery_task_group_title"
+        if translation_key:
+            key = translation_key
+        else:
+            key = "gallery_language_group_title" if self.is_language_group else "gallery_task_group_title"
+            
         text = translator.translate(key).format(
             title=title,
             count=image_count

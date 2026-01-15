@@ -109,11 +109,15 @@ class PreviewMixin:
              executor = self.image_gen_executor
              current_semaphore = None
 
+        preview_settings = state.settings.get("preview_settings", {})
+        image_count = preview_settings.get('image_count', 1)
+
         config = {
             'prompts_text': prompts_text,
             'dir_path': preview_dir, # Write images to preview folder
             'provider': provider,
             'api_kwargs': api_kwargs,
+            'image_count': image_count,
             'api_key': current_api_key, 
             'executor': executor,
             'max_threads': current_max_threads,

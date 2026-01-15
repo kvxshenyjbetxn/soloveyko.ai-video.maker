@@ -69,6 +69,7 @@ class TranslationMixin:
         
         state = self.task_states[task_id]
         state.text_for_processing = rewritten_text
+        state.translated_text_preview = rewritten_text
         if state.dir_path:
             # Save original rewrite for reference
             with open(os.path.join(state.dir_path, "translation_orig.txt"), 'w', encoding='utf-8') as f:
@@ -166,6 +167,7 @@ class TranslationMixin:
         self._process_openrouter_queue()
         state = self.task_states[task_id]
         state.text_for_processing = translated_text
+        state.translated_text_preview = translated_text
         if state.dir_path:
             # Save the original translation before review for reference
             with open(os.path.join(state.dir_path, "translation_orig.txt"), 'w', encoding='utf-8') as f:

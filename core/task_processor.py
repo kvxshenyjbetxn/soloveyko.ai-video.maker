@@ -6,6 +6,7 @@ import threading
 import shutil
 import collections
 import copy
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import QObject, Signal, QThreadPool, QElapsedTimer, QSemaphore, Slot
@@ -14,6 +15,7 @@ from utils.logger import logger, LogLevel
 from utils.settings import settings_manager, template_manager
 from utils.translator import translator
 from core.notification_manager import notification_manager
+from core.history_manager import history_manager
 
 from core.task_state import TaskState
 
@@ -210,6 +212,7 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                      current_settings['montage']['watermark_position'] = merged_lang_config.get('watermark_position', 8)
 
                 state = TaskState(job, lang_id, lang_data, base_save_path, current_settings)
+                state.start_time = datetime.now()
 
                 if not state.dir_path:
                     logger.log(f"[{state.task_id}] CRITICAL: Directory path could not be created. Aborting this task.", level=LogLevel.ERROR)
@@ -483,6 +486,11 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                 task_name=task_name, lang_id=state.lang_id, stage_name=stage_name, error_message=error_message)
             notification_manager.send_notification(f"{title}\n{body}")
         
+        if status == 'success' or status == 'error':
+            if stage_key == state.stages[-1]:
+                state.end_time = datetime.now()
+                history_manager.add_entry(state)
+
         self.check_if_all_finished()
 
     @Slot(str)
