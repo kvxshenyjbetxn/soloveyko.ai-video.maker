@@ -60,6 +60,7 @@ def compile_project():
         "--noconfirm",
         "--clean",
         "--windowed",
+        "--noupx",
         "--icon=assets/icon.icns",
         
         # Assets (формат source:dest)

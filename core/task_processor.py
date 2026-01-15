@@ -67,6 +67,7 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         self.tasks_awaiting_review = []
         self.montage_tasks_ids = set()
         self.failed_montage_tasks_ids = set()
+        self.image_review_notification_emitted = False
 
         # --- Semaphores for concurrency control ---
         self.subtitle_semaphore = QSemaphore(1)
@@ -264,6 +265,9 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                     # CRITICAL: Reset barrier if new subtitle tasks are added, so they correctly trigger montage start logic later
                     self.subtitle_barrier_passed = False
                 
+                if 'stage_images' in state.stages:
+                    self.image_review_notification_emitted = False
+                
                 if 'stage_montage' in state.stages:
                     self.montage_tasks_ids.add(state.task_id)
 
@@ -459,7 +463,7 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         if status == 'error':
             if task_id in self.montage_tasks_ids and stage_key != 'stage_montage':
                 self.failed_montage_tasks_ids.add(task_id)
-                self._check_if_all_are_ready_or_failed()
+                self._check_if_image_review_ready()
 
             stage_names = {
                 'stage_translation': 'Translation', 'stage_img_prompts': 'Image prompts generation',

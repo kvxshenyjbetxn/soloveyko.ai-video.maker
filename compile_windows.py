@@ -61,6 +61,7 @@ def compile_project():
         "--noconfirm",
         "--onefile",
         "--windowed",
+        "--noupx",
         "--icon=assets/icon.ico",
         # Assets files manually listed (без efects папки)
         "--add-data", "assets/ffmpeg.exe;assets",

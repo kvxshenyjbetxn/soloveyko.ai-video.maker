@@ -454,10 +454,10 @@ class QuickSettingsPanel(QWidget):
              btn.setFixedSize(30, 25)
              btn.setToolTip(translator.translate("browse_button", "Browse"))
              
-             def browse(l=le):
+             def browse():
                  d = QFileDialog.getExistingDirectory(self, translator.translate("select_directory", "Select Directory"))
                  if d:
-                     l.setText(d)
+                     le.setText(d)
                      self._update_setting(key, d)
              
              btn.clicked.connect(browse)

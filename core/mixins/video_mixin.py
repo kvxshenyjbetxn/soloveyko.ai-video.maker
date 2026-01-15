@@ -123,6 +123,7 @@ class VideoMixin:
                 error_message = "Failed to generate all images and/or videos."
             
         self._set_stage_status(task_id, 'stage_images', final_status, error_message)
+        self._check_if_image_review_ready()
         
         if self.subtitle_barrier_passed:
             self._check_and_start_montages()
@@ -142,6 +143,7 @@ class VideoMixin:
         error_message = "Video animation failed, using Quick Show mode."
         
         self._set_stage_status(task_id, 'stage_images', final_status, error_message)
+        self._check_if_image_review_ready()
         
         # Continue to montage
         if self.subtitle_barrier_passed:
@@ -173,58 +175,62 @@ class VideoMixin:
                 
                 # Use per-task settings for review
                 should_review = state.settings.get('image_review_enabled')
-                if 'stage_images' in state.skipped_stages:
+                if 'stage_images' not in state.stages or 'stage_images' in state.skipped_stages:
                     should_review = False
                 
-                if should_review:
-                    if task_id not in self.tasks_awaiting_review:
-                        logger.log(f"[{task_id}] Ready for image review.", level=LogLevel.INFO)
-                        self.tasks_awaiting_review.append(task_id)
-                else:
-                    self._start_montage(task_id)
+                if should_review and not state.is_image_reviewed:
+                    # Still waiting for image review approval
+                    continue
+                
+                self._start_montage(task_id)
         
         self._check_if_all_are_ready_or_failed()
 
-    def _check_if_all_are_ready_or_failed(self):
-        total_montage_tasks = len(self.montage_tasks_ids)
-        if total_montage_tasks == 0:
+    def _check_if_image_review_ready(self):
+        # We only care about active tasks (those in self.task_states)
+        tasks_with_images = [t for t in self.task_states.values() if 'stage_images' in t.stages]
+        if not tasks_with_images:
             return
 
-        ready_or_processed_count = 0
+        all_images_done = True
+        any_needs_review = False
         
-        for task_id in self.montage_tasks_ids:
-            state = self.task_states.get(task_id)
-            if not state: continue 
-
-            is_waiting = task_id in self.tasks_awaiting_review
-            is_failed = task_id in self.failed_montage_tasks_ids
-            # If stage_montage is NOT pending, it means it started processing (skipped review)
-            is_processed = state.status.get('stage_montage') != 'pending'
+        for state in tasks_with_images:
+            # Check if stage_images is finished (not pending or processing)
+            status = state.status.get('stage_images')
+            if status in ['pending', 'processing', 'processing_video']:
+                # Note: if it's 'error', it's still considered "done" for the sake of starting others
+                all_images_done = False
+                break
             
-            if is_waiting or is_failed or is_processed:
-                ready_or_processed_count += 1
+            if state.settings.get('image_review_enabled') and 'stage_images' not in state.skipped_stages:
+                if not state.is_image_reviewed:
+                    any_needs_review = True
 
-        if ready_or_processed_count >= total_montage_tasks:
-            # Only trigger if there are actually tasks waiting for review
-            if len(self.tasks_awaiting_review) > 0:
-                logger.log(f"All {total_montage_tasks} tasks accounted for. Requesting review for {len(self.tasks_awaiting_review)} tasks.", level=LogLevel.SUCCESS)
-                
-                title = translator.translate('notification_image_review_title')
-                body = translator.translate('notification_image_review_body')
-                notification_manager.send_notification(f"{title}\n{body}")
-                
-                self.image_review_required.emit()
+        if all_images_done and any_needs_review and not self.image_review_notification_emitted:
+            logger.log("All image generation tasks finished. Requesting user review.", level=LogLevel.SUCCESS)
+            self.image_review_notification_emitted = True
+            
+            title = translator.translate('notification_image_review_title')
+            body = translator.translate('notification_image_review_body')
+            notification_manager.send_notification(f"{title}\n{body}")
+            
+            self.image_review_required.emit()
+
+    def _check_if_all_are_ready_or_failed(self):
+        # This now only checks if we need to emit notification about ALL tasks finishing or similar
+        # (Actually TaskProcessor.check_if_all_finished does most of this)
+        pass
 
     @Slot()
     def resume_all_montages(self):
-        logger.log(f"Resuming montage for {len(self.tasks_awaiting_review)} tasks.", level=LogLevel.INFO)
-        tasks_to_start = list(self.tasks_awaiting_review)
-        self.tasks_awaiting_review.clear()
+        logger.log("User approved image review. Resuming/allowing montages.", level=LogLevel.INFO)
+        for state in self.task_states.values():
+            if 'stage_images' in state.stages:
+                state.is_image_reviewed = True
         
-        for task_id in tasks_to_start:
-            state = self.task_states.get(task_id)
-            if state:
-                self._start_montage(task_id)
+        # Now that review is approved, try to start any montages that were waiting
+        self._check_and_start_montages()
 
     def _start_montage(self, task_id):
         self.pending_montages.append(task_id)
