@@ -113,7 +113,7 @@ class RewriteTab(QWidget):
         
         # Quick Settings Panel
         self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
-        self.quick_settings_panel.setMinimumWidth(280)
+        self.quick_settings_panel.setMinimumWidth(300)
         self.splitter.addWidget(self.quick_settings_panel)
         self.splitter.setCollapsible(1, True)
         

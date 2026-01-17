@@ -101,6 +101,37 @@ class GeneralTab(QWidget):
         
         add_setting_row(form_layout, results_label_widget, path_container, "results_path", quick_panel_refresh_callback=refresh_cb)
 
+        # Simultaneous Montage and Subtitles
+        self.simultaneous_montage_help = HelpLabel("simultaneous_montage_label")
+        self.simultaneous_montage_label = QLabel()
+
+        simultaneous_label_widget = QWidget()
+        simultaneous_label_layout = QHBoxLayout(simultaneous_label_widget)
+        simultaneous_label_layout.setContentsMargins(0, 0, 0, 0)
+        simultaneous_label_layout.setSpacing(5)
+        simultaneous_label_layout.addWidget(self.simultaneous_montage_help)
+        simultaneous_label_layout.addWidget(self.simultaneous_montage_label)
+
+        self.simultaneous_montage_checkbox = QCheckBox()
+        self.simultaneous_montage_checkbox.stateChanged.connect(self.simultaneous_montage_changed)
+        add_setting_row(form_layout, simultaneous_label_widget, self.simultaneous_montage_checkbox, "simultaneous_montage_and_subs", quick_panel_refresh_callback=refresh_cb, show_star=False)
+
+        # Max download threads
+        self.max_download_threads_help = HelpLabel("max_download_threads_label")
+        self.max_download_threads_label = QLabel()
+        
+        threads_label_widget = QWidget()
+        threads_label_layout = QHBoxLayout(threads_label_widget)
+        threads_label_layout.setContentsMargins(0, 0, 0, 0)
+        threads_label_layout.setSpacing(5)
+        threads_label_layout.addWidget(self.max_download_threads_help)
+        threads_label_layout.addWidget(self.max_download_threads_label)
+        
+        self.max_download_threads_spinbox = QSpinBox()
+        self.max_download_threads_spinbox.setRange(1, 100)
+        self.max_download_threads_spinbox.valueChanged.connect(self.max_download_threads_changed)
+        add_setting_row(form_layout, threads_label_widget, self.max_download_threads_spinbox, "max_download_threads", quick_panel_refresh_callback=refresh_cb, show_star=False)
+
         # Detailed logging checkbox
         self.detailed_logging_help = HelpLabel("detailed_logging_label")
         self.detailed_logging_label = QLabel()
@@ -149,6 +180,7 @@ class GeneralTab(QWidget):
         self.rewrite_review_checkbox = QCheckBox()
         self.rewrite_review_checkbox.stateChanged.connect(self.rewrite_review_changed)
         add_setting_row(self.controls_layout, rewrite_label_widget, self.rewrite_review_checkbox, "rewrite_review_enabled", quick_panel_refresh_callback=refresh_cb)
+
 
         # Image review checkbox
         self.image_review_help = HelpLabel("image_review_label")
@@ -224,21 +256,6 @@ class GeneralTab(QWidget):
         # It currently toggles `self.prompt_count_widget`.
         # I need to update it to toggle `self.prompt_count_label` and `self.prompt_count_container`.
 
-        # Max download threads
-        self.max_download_threads_help = HelpLabel("max_download_threads_label")
-        self.max_download_threads_label = QLabel()
-        
-        threads_label_widget = QWidget()
-        threads_label_layout = QHBoxLayout(threads_label_widget)
-        threads_label_layout.setContentsMargins(0, 0, 0, 0)
-        threads_label_layout.setSpacing(5)
-        threads_label_layout.addWidget(self.max_download_threads_help)
-        threads_label_layout.addWidget(self.max_download_threads_label)
-        
-        self.max_download_threads_spinbox = QSpinBox()
-        self.max_download_threads_spinbox.setRange(1, 100)
-        self.max_download_threads_spinbox.valueChanged.connect(self.max_download_threads_changed)
-        add_setting_row(self.controls_layout, threads_label_widget, self.max_download_threads_spinbox, "max_download_threads", quick_panel_refresh_callback=refresh_cb, show_star=False)
         
         form_layout.addRow(self.controls_group)
 
@@ -263,6 +280,7 @@ class GeneralTab(QWidget):
         self.image_provider_combo.blockSignals(True)
         self.translation_review_checkbox.blockSignals(True)
         self.image_review_checkbox.blockSignals(True)
+        self.simultaneous_montage_checkbox.blockSignals(True)
         self.detailed_logging_checkbox.blockSignals(True)
         self.prompt_count_control_checkbox.blockSignals(True)
         self.prompt_count_spinbox.blockSignals(True)
@@ -282,6 +300,7 @@ class GeneralTab(QWidget):
         self.translation_review_checkbox.setChecked(settings_manager.get('translation_review_enabled', False))
         self.rewrite_review_checkbox.setChecked(settings_manager.get('rewrite_review_enabled', False))
         self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
+        self.simultaneous_montage_checkbox.setChecked(settings_manager.get('simultaneous_montage_and_subs', False))
         self.detailed_logging_checkbox.setChecked(settings_manager.get('detailed_logging_enabled', False))
         
         prompt_control_enabled = settings_manager.get('prompt_count_control_enabled', False)
@@ -303,6 +322,7 @@ class GeneralTab(QWidget):
         self.image_provider_combo.blockSignals(False)
         self.translation_review_checkbox.blockSignals(False)
         self.image_review_checkbox.blockSignals(False)
+        self.simultaneous_montage_checkbox.blockSignals(False)
         self.detailed_logging_checkbox.blockSignals(False)
         self.prompt_count_control_checkbox.blockSignals(False)
         self.prompt_count_spinbox.blockSignals(False)
@@ -334,6 +354,9 @@ class GeneralTab(QWidget):
         settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
         if self.main_window:
             self.main_window.refresh_quick_settings_panels()
+
+    def simultaneous_montage_changed(self, state):
+        settings_manager.set('simultaneous_montage_and_subs', state == Qt.CheckState.Checked.value)
 
     def prompt_count_control_changed(self, state):
         is_checked = state == Qt.CheckState.Checked.value
@@ -409,6 +432,8 @@ class GeneralTab(QWidget):
         self.rewrite_review_help.update_tooltip()
         self.image_review_label.setText(translator.translate('image_review_label'))
         self.image_review_help.update_tooltip()
+        self.simultaneous_montage_label.setText(translator.translate('simultaneous_montage_label'))
+        self.simultaneous_montage_help.update_tooltip()
         self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
         self.detailed_logging_help.update_tooltip()
         self.accent_color_label.setText(translator.translate('accent_color_label'))

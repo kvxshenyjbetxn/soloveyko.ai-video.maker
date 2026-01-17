@@ -137,6 +137,26 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         
         logger.log(f"Task Processor initialized. Download concurrency: {max_downloads}, Subtitle concurrency: 1, Montage concurrency: {max_montage}, Googler concurrency: {max_googler}, Video concurrency: {max_video}", level=LogLevel.INFO)
 
+    def _are_subtitles_running(self):
+        """Checks if any subtitle or transcription workers are currently active."""
+        # Using self.subtitle_semaphore.available() < 1 is not fully reliable if we start allowing >1,
+        # but for now Subtitle concurrency is 1.
+        # Better: check active_workers list for instances of SubtitleWorker or TranscriptionWorker.
+        # Or check if semaphore is acquired.
+        from core.workers import SubtitleWorker, TranscriptionWorker
+        for worker in self.active_workers:
+             if isinstance(worker, (SubtitleWorker, TranscriptionWorker)):
+                 return True
+        return False
+
+    def _are_montages_running(self):
+        """Checks if any montage workers are currently active."""
+        from core.workers import MontageWorker
+        for worker in self.active_workers:
+             if isinstance(worker, MontageWorker):
+                 return True
+        return False
+
     def start_processing(self):
         # Reset finish state
         self.is_finished = False

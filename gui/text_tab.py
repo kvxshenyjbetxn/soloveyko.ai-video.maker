@@ -31,32 +31,6 @@ def get_text_color_for_background(bg_color_hex):
         r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
     except ValueError:
         return "#FFFFFF"
-# ... (skip to init_ui)
-    def init_ui(self):
-        root_layout = QHBoxLayout(self)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Use CollapsibleSplitter instead of standard QSplitter
-        self.splitter = CollapsibleSplitter(Qt.Orientation.Horizontal)
-        root_layout.addWidget(self.splitter)
-        
-        # Main Content Container
-        self.content_container = QWidget()
-        layout = QVBoxLayout(self.content_container)
-        layout.setContentsMargins(10, 10, 10, 10)
-        
-        self.splitter.addWidget(self.content_container)
-# ... (skip to end of init_ui)
-        # Quick Settings Panel
-        self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
-        self.quick_settings_panel.setMinimumWidth(300)
-        self.splitter.addWidget(self.quick_settings_panel)
-        
-        # Stretch factors
-        self.splitter.setStretchFactor(0, 1)
-        self.splitter.setStretchFactor(1, 0)
-
-    # Calculate luminance (standard formula)
     luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
 
     if luminance > 0.5:
@@ -478,14 +452,13 @@ class TextTab(QWidget):
         # Quick Settings Panel
         self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
         # Keep minimum width to display content nicely, but allow collapsing via splitter handle
-        self.quick_settings_panel.setMinimumWidth(280)
+        self.quick_settings_panel.setMinimumWidth(300)
         self.splitter.addWidget(self.quick_settings_panel)
         
         # Make QuickSettingsPanel collapsible (index 1)
         self.splitter.setCollapsible(1, True)
         
         # Stretch factors
-
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 0)
 

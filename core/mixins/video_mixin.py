@@ -234,11 +234,30 @@ class VideoMixin:
         self._check_and_start_montages()
 
     def _start_montage(self, task_id):
+        # --- Global Concurrency Check ---
+        allow_simultaneous = self.settings.get("simultaneous_montage_and_subs", False)
+        if not allow_simultaneous:
+            if self._are_subtitles_running():
+                logger.log(f"[{task_id}] Montage deferred. Subtitles are running and simultaneous execution is disabled.", level=LogLevel.INFO)
+                self.pending_montages.append(task_id)
+                # We do NOT return here if we want it to be queued.
+                # But _process_montage_queue needs to know not to start if subtitles running.
+                # So we push to queue and rely on _process_montage_queue check.
+                return 
+
         self.pending_montages.append(task_id)
         self._process_montage_queue()
 
     def _process_montage_queue(self):
+        # --- Global Concurrency Check ---
+        # Note: We check again here because this method is called when montages finish too.
+        allow_simultaneous = self.settings.get("simultaneous_montage_and_subs", False)
+        
         while self.pending_montages:
+            if not allow_simultaneous and self._are_subtitles_running():
+                 # Cannot start new montages yet
+                 break
+
             if self.montage_semaphore.tryAcquire():
                 task_id = self.pending_montages.popleft()
                 self._launch_montage_worker(task_id)
@@ -320,6 +339,10 @@ class VideoMixin:
         self.task_states[task_id].final_video_path = video_path
         self._set_stage_status(task_id, 'stage_montage', 'success')
         
+        # Check if we can unblock subtitles now
+        if not self.settings.get("simultaneous_montage_and_subs", False):
+            self._process_whisper_queue()
+        
         # Get file size and emit metadata
         try:
             state = self.task_states[task_id]
@@ -336,6 +359,11 @@ class VideoMixin:
     def _on_montage_error(self, task_id, error):
         self.montage_semaphore.release()
         self._process_montage_queue()
+        
+        # Check if we can unblock subtitles now
+        if not self.settings.get("simultaneous_montage_and_subs", False):
+            self._process_whisper_queue()
+
         self._set_stage_status(task_id, 'stage_montage', 'error', error)
         self._check_if_all_are_ready_or_failed()
     
