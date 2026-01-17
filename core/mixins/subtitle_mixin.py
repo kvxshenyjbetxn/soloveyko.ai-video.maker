@@ -187,7 +187,19 @@ class SubtitleMixin:
         self._process_whisper_queue()
 
     def _process_whisper_queue(self):
+        # --- Global Concurrency Check ---
+        allow_simultaneous = self.settings.get("simultaneous_montage_and_subs", False)
+
         while self.whisper_queue:
+            # Note: We peek/pop in loop, so we check condition inside
+            
+            # If not allowed simultaneous, checking if montages are running
+            if not allow_simultaneous and self._are_montages_running():
+                # Cannot start new subtitles yet.
+                # We stop the loop. The queue remains populated.
+                # processing will resume when _process_whisper_queue is called again (e.g. from montage finished)
+                break
+
             task_id, worker_type = self.whisper_queue.popleft()
             state = self.task_states[task_id]
             sub_settings = state.settings.get('subtitles', {})
@@ -249,6 +261,13 @@ class SubtitleMixin:
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
                 self._process_whisper_queue()
+        
+        # Check if we can unblock montages now (if setting dependent)
+        if not self.settings.get("simultaneous_montage_and_subs", False):
+            # We call this via task_processor (self)
+            # Assuming task_processor has _process_montage_queue mixed in (it does from VideoMixin)
+            if hasattr(self, '_process_montage_queue'):
+                 self._process_montage_queue()
             
         self.task_states[task_id].subtitle_path = subtitle_path
         self._set_stage_status(task_id, 'stage_subtitles', 'success')
@@ -263,6 +282,11 @@ class SubtitleMixin:
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
                 self._process_whisper_queue()
+
+        # Check if we can unblock montages now
+        if not self.settings.get("simultaneous_montage_and_subs", False):
+            if hasattr(self, '_process_montage_queue'):
+                 self._process_montage_queue()
 
         self._set_stage_status(task_id, 'stage_subtitles', 'error', error)
         self._increment_subtitle_counter()
