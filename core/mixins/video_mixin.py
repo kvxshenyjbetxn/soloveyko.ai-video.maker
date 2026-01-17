@@ -235,14 +235,21 @@ class VideoMixin:
 
     def _start_montage(self, task_id):
         # --- Global Concurrency Check ---
+        # Prevent duplicate queueing
+        if task_id in self.pending_montages:
+            logger.log(f"[{task_id}] Montage already in queue. Skipping duplicate request.", level=LogLevel.DEBUG)
+            return
+
+        state = self.task_states.get(task_id)
+        if state and state.status.get('stage_montage') in ['processing', 'success']:
+             logger.log(f"[{task_id}] Montage already {state.status.get('stage_montage')}. Skipping request.", level=LogLevel.DEBUG)
+             return
+
         allow_simultaneous = self.settings.get("simultaneous_montage_and_subs", False)
         if not allow_simultaneous:
             if self._are_subtitles_running():
                 logger.log(f"[{task_id}] Montage deferred. Subtitles are running and simultaneous execution is disabled.", level=LogLevel.INFO)
                 self.pending_montages.append(task_id)
-                # We do NOT return here if we want it to be queued.
-                # But _process_montage_queue needs to know not to start if subtitles running.
-                # So we push to queue and rely on _process_montage_queue check.
                 return 
 
         self.pending_montages.append(task_id)
