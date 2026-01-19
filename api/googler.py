@@ -57,17 +57,29 @@ class GooglerAPI:
             return None, "error"
 
     def get_usage(self):
-        logger.log("Requesting Googler account usage...", level=LogLevel.INFO)
-        data, status = self._make_request("get", "usage")
-        if status == "connected" and data:
-            logger.log(f"Successfully retrieved Googler usage.", level=LogLevel.SUCCESS)
-            return data
+        """Fetches detailed account usage from v3 endpoint."""
+        logger.log("Requesting Googler account usage (v3)...", level=LogLevel.INFO)
+        # Construct full URL for v3 endpoint
+        url = "https://app.recrafter.fun/api/v3/account/usage"
         
-        if status == "not_configured":
-             return None
-
-        logger.log("Failed to retrieve Googler usage.", level=LogLevel.ERROR)
-        return None
+        headers = {
+            "X-API-Key": self.api_key,
+            "Accept": "application/json"
+        }
+        
+        try:
+            session = self._get_session()
+            response = session.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                logger.log(f"Successfully retrieved Googler usage stats.", level=LogLevel.SUCCESS)
+                return data
+            else:
+                logger.log(f"Googler usage request failed with status {response.status_code}: {response.text}", level=LogLevel.ERROR)
+                return None
+        except Exception as e:
+            logger.log(f"Error fetching Googler usage: {e}", level=LogLevel.ERROR)
+            return None
 
     def generate_image(self, prompt, aspect_ratio="IMAGE_ASPECT_RATIO_LANDSCAPE", seed=None, negative_prompt=None):
         logger.log(f"Requesting image generation from Googler for prompt: {prompt}", level=LogLevel.INFO)

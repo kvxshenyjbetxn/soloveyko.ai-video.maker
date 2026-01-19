@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle, QInputDialog, QSplitter
+    QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle, QInputDialog, QSplitter,
+    QToolButton
 )
 from PySide6.QtCore import Qt
 from gui.text_tab import DroppableTextEdit, StageSelectionWidget
@@ -92,14 +93,25 @@ class RewriteTab(QWidget):
         # Status bar
         self.status_bar_layout = QHBoxLayout()
         self.openrouter_balance_label = QLabel()
+
+        self.googler_usage_layout = QHBoxLayout()
+        self.googler_usage_layout.setSpacing(2)
         self.googler_usage_label = QLabel()
+        self.googler_info_btn = QToolButton()
+        self.googler_info_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxInformation))
+        self.googler_info_btn.setFixedSize(16, 16)
+        self.googler_info_btn.setStyleSheet("QToolButton { border: none; background: transparent; }")
+        self.googler_info_btn.setToolTip("Googler Detailed Stats")
+        self.googler_usage_layout.addWidget(self.googler_usage_label)
+        self.googler_usage_layout.addWidget(self.googler_info_btn)
+
         self.elevenlabs_balance_label = QLabel()
         self.elevenlabs_unlim_balance_label = QLabel()
         self.voicemaker_balance_label = QLabel()
         self.gemini_tts_balance_label = QLabel()
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
         self.status_bar_layout.addSpacing(20)
-        self.status_bar_layout.addWidget(self.googler_usage_label)
+        self.status_bar_layout.addLayout(self.googler_usage_layout)
         self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
         self.status_bar_layout.addSpacing(20)
@@ -484,6 +496,41 @@ class RewriteTab(QWidget):
 
     def update_googler_usage(self, usage_text):
         self.googler_usage_label.setText(usage_text)
+
+    def update_googler_usage_detailed(self, usage_text, usage_data):
+        self.update_googler_usage(usage_text)
+        if not usage_data:
+            return
+
+        try:
+            img_limits = usage_data.get("account_limits") or {}
+            img_limit = img_limits.get("img_gen_per_hour_limit", 0)
+            img_threads_limit = img_limits.get("img_generation_threads_allowed", 0)
+            
+            vid_limit = img_limits.get("video_gen_per_hour_limit", 0)
+            vid_threads_limit = img_limits.get("video_generation_threads_allowed", 0)
+            
+            cur_usage = usage_data.get("current_usage") or {}
+            hourly = cur_usage.get("hourly_usage") or {}
+            img_stats = hourly.get("image_generation") or {}
+            img_cur = img_stats.get("current_usage", 0)
+            vid_stats = hourly.get("video_generation") or {}
+            vid_cur = vid_stats.get("current_usage", 0)
+            
+            active = cur_usage.get("active_threads") or {}
+            img_threads = active.get("image_threads", 0)
+            vid_threads = active.get("video_threads", 0)
+            
+            tooltip = (
+                f"<b>Googler Usage Stats:</b><br><br>"
+                f"Images: {img_cur} / {img_limit} (Hourly)<br>"
+                f"Videos: {vid_cur} / {vid_limit} (Hourly)<br>"
+                f"Image Threads: {img_threads} / {img_threads_limit}<br>"
+                f"Video Threads: {vid_threads} / {vid_threads_limit}"
+            )
+            self.googler_info_btn.setToolTip(tooltip)
+        except:
+            pass
 
     def update_elevenlabs_balance(self, balance_text):
         self.elevenlabs_balance_label.setText(balance_text)

@@ -217,12 +217,44 @@ class GooglerTab(QWidget):
         usage_data = googler_api.get_usage()
 
         if usage_data:
-            img_usage = usage_data.get("current_usage", {}).get("hourly_usage", {}).get("image_generation", {})
-            current_usage = img_usage.get("current_usage", "N/A")
-            
-            img_limits = usage_data.get("account_limits", {})
-            limit = img_limits.get("img_gen_per_hour_limit", "N/A")
+            # New v3 structure
+            try:
+                # Images
+                img_limits = usage_data.get("account_limits") or {}
+                img_limit = img_limits.get("img_gen_per_hour_limit", 0)
+                
+                cur_usage = usage_data.get("current_usage") or {}
+                hourly = cur_usage.get("hourly_usage") or {}
+                img_stats = hourly.get("image_generation") or {}
+                img_cur = img_stats.get("current_usage", 0)
+                
+                # Videos
+                vid_limit = img_limits.get("video_gen_per_hour_limit", 0)
+                vid_stats = hourly.get("video_generation") or {}
+                vid_cur = vid_stats.get("current_usage", 0)
+                
+                # Threads
+                active = cur_usage.get("active_threads") or {}
+                img_threads = active.get("image_threads", 0)
+                vid_threads = active.get("video_threads", 0)
+                
+                img_thread_limit = img_limits.get("img_generation_threads_allowed", 0)
+                vid_thread_limit = img_limits.get("video_generation_threads_allowed", 0)
 
-            self.usage_display_label.setText(f"{current_usage} / {limit}")
+                summary = f"Img: {img_cur}/{img_limit} | Vid: {vid_cur}/{vid_limit}"
+                self.usage_display_label.setText(summary)
+                
+                tooltip = (
+                    f"Googler Usage Stats:\n"
+                    f"Images: {img_cur} / {img_limit} (Hourly)\n"
+                    f"Videos: {vid_cur} / {vid_limit} (Hourly)\n"
+                    f"Image Threads: {img_threads} / {img_thread_limit}\n"
+                    f"Video Threads: {vid_threads} / {vid_thread_limit}"
+                )
+                self.usage_display_label.setToolTip(tooltip)
+                
+            except Exception as e:
+                logger.log(f"Error parsing usage data: {e}", level=LogLevel.ERROR)
+                self.usage_display_label.setText("Error parsing")
         else:
             self.usage_display_label.setText(translator.translate("googler_usage_failed"))
