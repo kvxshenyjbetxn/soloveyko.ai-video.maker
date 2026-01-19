@@ -113,32 +113,46 @@ class SubtitleEngine:
 
         else: # amd
             # --- AMD / Fork Whisper (EXE) ---
-            if not self.exe_path or not os.path.exists(self.exe_path):
-                raise FileNotFoundError(f"Whisper EXE not found: {self.exe_path}")
-            if not self.model_path or not os.path.exists(self.model_path):
-                raise FileNotFoundError(f"Model file not found: {self.model_path}")
+            
+            # Windows path fixes for stability with external binaries
+            exe_path = self.exe_path
+            model_path = self.model_path
+            audio_path_to_use = audio_path
+            
+            if platform.system() == "Windows":
+                exe_path = self._get_safe_path(exe_path)
+                model_path = self._get_safe_path(model_path)
+                audio_path_to_use = self._get_safe_path(audio_path)
+
+            if not exe_path or not os.path.exists(exe_path):
+                # Fallback check with original paths if safe path check fails for some reason
+                if not (self.exe_path and os.path.exists(self.exe_path)):
+                    raise FileNotFoundError(f"Whisper EXE not found: {exe_path}")
+            
+            if not model_path or not os.path.exists(model_path):
+                if not (self.model_path and os.path.exists(self.model_path)):
+                    raise FileNotFoundError(f"Model file not found: {model_path}")
 
             srt_path = os.path.splitext(audio_path)[0] + ".srt"
             if os.path.exists(srt_path):
                 os.remove(srt_path)
-
-            cmd = [
-                self.exe_path,
-                "-m", self.model_path,
-                "-f", audio_path,
-                "-osrt"       
-            ]
-
-            # Add language flag, use the detected language
-            cmd.extend(["-l", language])
 
             startupinfo = None
             if platform.system() == "Windows":
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
-            logger.log(f"Running Whisper CLI (AMD): {' '.join(cmd)}", LogLevel.INFO)
-            process = subprocess.run(cmd, startupinfo=startupinfo, capture_output=True, text=True)
+            # Re-construct cmd with safe paths
+            final_cmd = [
+                exe_path,
+                "-m", model_path,
+                "-f", audio_path_to_use,
+                "-osrt",
+                "-l", language
+            ]
+            
+            logger.log(f"Running Whisper CLI (AMD): {' '.join(final_cmd)}", LogLevel.INFO)
+            process = subprocess.run(final_cmd, startupinfo=startupinfo, capture_output=True, text=True)
 
             possible_files = [
                 audio_path + ".srt",
@@ -280,3 +294,26 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 text = seg['text'].strip()
                 anim_tag = f"{{\\fad({fade_in},{fade_out})}}" if (fade_in > 0 or fade_out > 0) else ""
                 f.write(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{anim_tag}{text}\n")
+
+    def _get_safe_path(self, path):
+        """Returns a short path (8.3) for Windows if it exists, to avoid issues with special characters."""
+        if not path or platform.system() != "Windows":
+            return path
+        
+        safe_path = path
+        try:
+            import ctypes
+            buf = ctypes.create_unicode_buffer(1024)
+            if ctypes.windll.kernel32.GetShortPathNameW(path, buf, 1024) > 0:
+                safe_path = buf.value
+                logger.log(f"Converted path for CLI compatibility: {safe_path}", LogLevel.DEBUG)
+        except Exception as e:
+            logger.log(f"Failed to get short path: {e}", LogLevel.WARNING)
+            
+        if safe_path.startswith("\\\\?\\"):
+            if safe_path.startswith("\\\\?\\UNC\\"):
+                safe_path = "\\\\" + safe_path[8:]
+            else:
+                safe_path = safe_path[4:]
+        
+        return safe_path
