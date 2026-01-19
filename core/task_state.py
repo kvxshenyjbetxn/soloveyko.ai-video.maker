@@ -1,5 +1,6 @@
 import os
 import re
+import platform
 from utils.logger import logger, LogLevel
 
 class TaskState:
@@ -65,16 +66,19 @@ class TaskState:
             # --- Windows Long Path & Special Char Prefix ---
             # Using \\?\ allows paths with trailing dots and spaces, which otherwise break in Windows
             # It also bypasses the 260 character limit.
-            abs_path = os.path.abspath(raw_path)
-            if abs_path.startswith("\\\\"):
-                 # It's already a UNC or absolute path with prefix? 
-                 # If it starts with \\ but not \\?\, we fix it
-                 if not abs_path.startswith("\\\\?\\"):
-                     dir_path = "\\\\?\\UNC\\" + abs_path[2:]
-                 else:
-                     dir_path = abs_path
+            if platform.system() == "Windows":
+                abs_path = os.path.abspath(raw_path)
+                if abs_path.startswith("\\\\"):
+                     # It's already a UNC or absolute path with prefix? 
+                     # If it starts with \\ but not \\?\, we fix it
+                     if not abs_path.startswith("\\\\?\\"):
+                         dir_path = "\\\\?\\UNC\\" + abs_path[2:]
+                     else:
+                         dir_path = abs_path
+                else:
+                    dir_path = "\\\\?\\" + abs_path
             else:
-                dir_path = "\\\\?\\" + abs_path
+                dir_path = os.path.abspath(raw_path)
             
             os.makedirs(dir_path, exist_ok=True)
             return dir_path
