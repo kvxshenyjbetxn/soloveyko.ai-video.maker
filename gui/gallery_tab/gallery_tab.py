@@ -393,3 +393,28 @@ class GalleryTab(QWidget):
                 else:
                     logger.log(f"Failed to create new pixmap for {new_path}", level=LogLevel.WARNING)
                 return # Found and processed, so exit
+
+    def get_all_media_paths(self):
+        """Returns a list of all media paths in the gallery, in the order they appear."""
+        paths = []
+        for i in range(self.content_layout.count()):
+            item = self.content_layout.itemAt(i)
+            widget = item.widget()
+            if isinstance(widget, CollapsibleGroup):
+                self._collect_paths(widget, paths)
+        return paths
+
+    def _collect_paths(self, group, paths):
+        """Recursively collects media paths from groups."""
+        if group.use_flow_layout:
+            # Type groups (Preview/Main) use FlowLayout and contain MediaThumbnail widgets
+            for i in range(group.content_layout.count()):
+                widget = group.content_layout.itemAt(i).widget()
+                if hasattr(widget, 'media_path'):
+                    paths.append(widget.media_path)
+        else:
+            # Task and Language groups contain other CollapsibleGroup widgets
+            for i in range(group.content_layout.count()):
+                widget = group.content_layout.itemAt(i).widget()
+                if isinstance(widget, CollapsibleGroup):
+                    self._collect_paths(widget, paths)

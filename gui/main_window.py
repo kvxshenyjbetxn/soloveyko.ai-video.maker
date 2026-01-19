@@ -740,10 +740,17 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self._show_next_review_dialog)
 
     def show_media_viewer(self, media_path):
+        all_paths = self.gallery_tab.get_all_media_paths()
+        try:
+            current_index = all_paths.index(media_path)
+        except ValueError:
+            current_index = 0
+            all_paths = [media_path]
+
         if media_path.lower().endswith(('.mp4', '.avi', '.mov', '.webm')):
-            self.viewer = VideoViewer(media_path, parent=self.central_widget)
+            self.viewer = VideoViewer(all_paths, current_index, parent=self.central_widget)
         else:
-            self.viewer = ImageViewer(media_path, self.central_widget)
+            self.viewer = ImageViewer(all_paths, current_index, self.central_widget)
         
         self.viewer.setGeometry(self.central_widget.rect())
         self.viewer.show()
