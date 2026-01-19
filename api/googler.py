@@ -15,7 +15,7 @@ class GooglerAPI:
     def __init__(self, api_key=None):
         self.settings = settings_manager.get("googler", {})
         self.api_key = api_key or self.settings.get("api_key")
-        self.base_url = "https://app.recrafter.fun/api/v2"
+        self.base_url = "https://app.recrafter.fun/api/v3"
 
     def _get_session(self):
         if not hasattr(thread_local_storage, "session"):
@@ -97,13 +97,8 @@ class GooglerAPI:
         if negative_prompt:
             parameters["negative_prompt"] = negative_prompt
 
-        json_data = {
-            "provider": "google_fx",
-            "operation": "generate",
-            "parameters": parameters
-        }
-
-        data, status = self._make_request("post", "images", json=json_data)
+        parameters["provider"] = "google_fx"
+        data, status = self._make_request("post", "image/from-text", json=parameters)
 
         if status == "connected" and data and data.get("success"):
             result = data.get("result")
@@ -138,17 +133,14 @@ class GooglerAPI:
 
         payload = {
             "provider": "google_fx",
-            "operation": "generate_video_from_image",
-            "parameters": {
-                "prompt": prompt,
-                "input_image": image_data_uri,
-                "aspect_ratio": aspect_ratio
-            }
+            "prompt": prompt,
+            "input_image": image_data_uri,
+            "aspect_ratio": aspect_ratio
         }
         
         logger.log(f"Requesting video generation for image: {os.path.basename(image_path)}", level=LogLevel.INFO)
         
-        start_data, start_status = self._make_request("post", "videos", json=payload)
+        start_data, start_status = self._make_request("post", "video/from-image-legacy", json=payload)
         
         if start_status != "connected" or not start_data or "operation_id" not in start_data:
             logger.log(f"Failed to start video generation for {os.path.basename(image_path)}. Response: {start_data}", level=LogLevel.ERROR)
@@ -160,7 +152,7 @@ class GooglerAPI:
         # Polling for result
         for i in range(60): # 5 minute timeout
             time.sleep(5)
-            status_data, status_status = self._make_request("get", f"videos/status/{operation_id}")
+            status_data, status_status = self._make_request("get", f"video/status/{operation_id}")
 
             if status_status != "connected":
                 logger.log(f"Failed to get status for operation {operation_id}", level=LogLevel.WARNING)
@@ -170,7 +162,7 @@ class GooglerAPI:
             logger.log(f"Polling for {operation_id}: status is '{status}'", level=LogLevel.INFO)
             
             if status == "success":
-                result = status_data.get("result") or status_data.get("output")
+                result = status_data.get("result")
                 if result:
                     logger.log(f"Successfully generated video for {os.path.basename(image_path)}", level=LogLevel.SUCCESS)
                     return result
