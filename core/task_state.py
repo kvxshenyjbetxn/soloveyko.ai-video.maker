@@ -55,10 +55,10 @@ class TaskState:
         dir_path = None
         try:
             # Basic cleanup of characters that and totally illegal even with prefixes
-            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', job_name).strip()
-            safe_job_name = safe_job_name[:120].strip()
+            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', job_name).strip('. ')
+            safe_job_name = safe_job_name[:120].strip('. ')
             
-            safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).strip()
+            safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).strip('. ')
             if not safe_job_name: safe_job_name = "Untitled_Task"
             
             raw_path = os.path.join(base_path, safe_job_name, safe_lang_name)
