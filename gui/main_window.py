@@ -848,14 +848,36 @@ class MainWindow(QMainWindow):
 
         if api_key:
             if success and usage_data:
-                img_usage = usage_data.get("current_usage", {}).get("hourly_usage", {}).get("image_generation", {})
-                current_usage = img_usage.get("current_usage", "N/A")
-                
-                img_limits = usage_data.get("account_limits", {})
-                limit = img_limits.get("img_gen_per_hour_limit", "N/A")
+                try:
+                    # Safely get data even if keys are missing or null
+                    img_limits = usage_data.get("account_limits") or {}
+                    img_limit = img_limits.get("img_gen_per_hour_limit", 0)
+                    
+                    cur_usage = usage_data.get("current_usage") or {}
+                    hourly = cur_usage.get("hourly_usage") or {}
+                    
+                    img_stats = hourly.get("image_generation") or {}
+                    img_cur = img_stats.get("current_usage", 0)
+                    
+                    vid_limit = img_limits.get("video_gen_per_hour_limit", 0)
+                    vid_stats = hourly.get("video_generation") or {}
+                    vid_cur = vid_stats.get("current_usage", 0)
 
-                usage_text = f"Googler: {current_usage} / {limit}"
-                display_text = f"{current_usage} / {limit}"
+                    usage_text = f"Googler: Img {img_cur}/{img_limit} | Vid {vid_cur}/{vid_limit}"
+                    display_text = f"Img: {img_cur}/{img_limit} | Vid: {vid_cur}/{vid_limit}"
+                    
+                    # Update tooltips with detailed info
+                    if hasattr(self.text_tab, 'update_googler_usage_detailed'):
+                        self.text_tab.update_googler_usage_detailed(usage_text, usage_data)
+                    if hasattr(self, 'rewrite_tab') and hasattr(self.rewrite_tab, 'update_googler_usage_detailed'):
+                        self.rewrite_tab.update_googler_usage_detailed(usage_text, usage_data)
+                    if hasattr(self, 'queue_tab') and hasattr(self.queue_tab, 'update_googler_usage_detailed'):
+                        self.queue_tab.update_googler_usage_detailed(usage_text, usage_data)
+                        
+                except Exception as e:
+                    logger.log(f"Error processing Googler usage data: {e}", level=LogLevel.ERROR)
+                    usage_text = "Googler: Parse Error"
+                    display_text = "Parse Error"
             else:
                 usage_text = f"Googler: {self.translator.translate('error_label')}"
                 display_text = self.translator.translate('error_label')

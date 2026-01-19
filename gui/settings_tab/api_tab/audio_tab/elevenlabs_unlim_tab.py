@@ -79,9 +79,6 @@ class ElevenLabsUnlimTab(QWidget):
 
         self.layout.addStretch()
 
-        # Initial balance check if key exists
-        if self.api_key_input.text():
-             QTimer.singleShot(500, lambda: self.check_balance(silent=True))
 
     def save_api_key(self):
         key = self.api_key_input.text().strip()
