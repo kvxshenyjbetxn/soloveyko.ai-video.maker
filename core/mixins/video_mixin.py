@@ -90,6 +90,21 @@ class VideoMixin:
         
         logger.log(f"[{task_id}] Video generation finished. Generated {len(generated_videos)} videos.", level=LogLevel.SUCCESS)
 
+        # CHECK FOR "SKIPPED" WORKER RESULT (Full Directory Scan)
+        # If the worker was skipped by TaskProcessor because files existed, 
+        # result_dict will contain 'total_prompts' (added by _start_worker logic).
+        # In this case, 'generated_videos' is actually ALL files in the directory, so we just accept it as the new state.
+        if 'total_prompts' in result_dict:
+            logger.log(f"[{task_id}] Video generation skipped (existing files used). Update image_paths to detected files.", level=LogLevel.INFO)
+            state.image_paths = generated_videos
+            
+            # Since we have full valid list, status is success
+            self._set_stage_status(task_id, 'stage_images', 'success')
+            self._check_if_image_review_ready()
+            if self.subtitle_barrier_passed:
+                self._check_and_start_montages()
+            return
+
         video_count_animated = getattr(state, 'video_animation_count', 0)
         
         # Determine video generation status
