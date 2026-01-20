@@ -331,6 +331,13 @@ class VideoMixin:
                 config['background_music_volume'] = background_music_volume
             # --- End Background Music Config ---
 
+            # --- Initial Video Config ---
+            initial_video_path = lang_config.get("initial_video_path")
+            if initial_video_path and os.path.exists(initial_video_path):
+                config['initial_video_path'] = initial_video_path
+                logger.log(f"[{task_id}] Using initial video: {os.path.basename(initial_video_path)}", level=LogLevel.INFO)
+            # --- End Initial Video Config ---
+
             worker = MontageWorker(task_id, config)
             worker.signals.finished.connect(self._on_montage_finished)
             worker.signals.error.connect(self._on_montage_error)
