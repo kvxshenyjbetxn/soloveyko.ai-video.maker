@@ -250,13 +250,83 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                         if 'stage_images' in user_files:
                             stage_key = 'stage_images'
                             source_list = user_files[stage_key]
-                            logger.log(f"[{state.task_id}] Copying {len(source_list)} user-provided images...", level=LogLevel.INFO)
+                            
+                            # Filter source list
+                            valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.mp4', '.mkv', '.mov', '.avi', '.webm')
+                            cleaned_list = [
+                                p for p in source_list 
+                                if os.path.basename(p).lower().endswith(valid_exts) 
+                                and not os.path.basename(p).startswith('.')
+                            ]
+                            
+                            logger.log(f"[{state.task_id}] Processing {len(cleaned_list)} user-provided images...", level=LogLevel.INFO)
                             image_dir = os.path.join(state.dir_path, "images")
+                            abs_image_dir = os.path.abspath(image_dir)
+                            
+                            # 1. Check if we need to preserve local files ("Move to Temp")
+                            # Put temp dir OUTSIDE image_dir to survive cleanup
+                            temp_source_dir = os.path.join(state.dir_path, "temp_images_processing")
+                            files_preserved = False
+                            
+                            final_source_list = []
+                            
+                            # Identify which files are local
+                            local_indices = []
+                            for idx, p in enumerate(cleaned_list):
+                                if os.path.dirname(os.path.abspath(p)) == abs_image_dir:
+                                    local_indices.append(idx)
+                            
+                            if local_indices:
+                                os.makedirs(temp_source_dir, exist_ok=True)
+                                logger.log(f"[{state.task_id}] Preserving {len(local_indices)} local files to {temp_source_dir}", level=LogLevel.INFO)
+                                
+                                for idx, p in enumerate(cleaned_list):
+                                    if idx in local_indices: # It's local
+                                        fname = os.path.basename(p)
+                                        temp_path = os.path.join(temp_source_dir, fname)
+                                        try:
+                                            # Move safe
+                                            if os.path.exists(p):
+                                                shutil.move(p, temp_path)
+                                                final_source_list.append(temp_path)
+                                                files_preserved = True
+                                            elif os.path.exists(temp_path):
+                                                final_source_list.append(temp_path) # Already moved?
+                                            else:
+                                                 logger.log(f"[{state.task_id}] Warning: Source file missing for move: {p}", level=LogLevel.WARNING)
+                                        except Exception as e:
+                                            logger.log(f"[{state.task_id}] Error moving to temp: {e}", level=LogLevel.ERROR)
+                                    else:
+                                        final_source_list.append(p)
+                            else:
+                                final_source_list = cleaned_list
+
+                            # 2. CLEANUP TARGET DIRECTORY
+                            # This ensures no stale files (like 11..20 from previous run) remain
+                            if os.path.exists(image_dir):
+                                try:
+                                    shutil.rmtree(image_dir)
+                                except Exception as e:
+                                    logger.log(f"[{state.task_id}] Warning: Failed to clean image dir {image_dir}: {e}", level=LogLevel.WARNING)
+                            
                             os.makedirs(image_dir, exist_ok=True)
-                            for i, src_path in enumerate(source_list):
-                                _, ext = os.path.splitext(src_path)
-                                dest_path = os.path.join(image_dir, f"{i+1}{ext}")
-                                shutil.copy(src_path, dest_path)
+
+                            # 3. POPULATE (Copy back)
+                            for i, src_path in enumerate(final_source_list):
+                                try:
+                                    _, ext = os.path.splitext(src_path)
+                                    dest_path = os.path.join(image_dir, f"{i+1}{ext}")
+                                    shutil.copy(src_path, dest_path)
+                                except Exception as e:
+                                    logger.log(f"[{state.task_id}] Error copying {src_path} -> {i+1}: {e}", level=LogLevel.ERROR)
+
+                            # 4. Remove Temp
+                            if files_preserved and os.path.exists(temp_source_dir):
+                                try:
+                                    shutil.rmtree(temp_source_dir)
+                                except Exception as e:
+                                    logger.log(f"[{state.task_id}] Warning: Failed to remove temp dir: {e}", level=LogLevel.WARNING)
+
                             state.lang_data['pre_found_files'][stage_key] = image_dir
                             
                             if 'stage_img_prompts' in state.stages:
@@ -387,8 +457,12 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                         with open(file_path, 'r', encoding='utf-8') as f:
                             result = f.read()
                     elif stage_key == 'stage_images':
+                        valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.mp4', '.mkv', '.mov', '.avi', '.webm')
                         image_paths = sorted(
-                            [os.path.join(file_path, f) for f in os.listdir(file_path) if os.path.isfile(os.path.join(file_path, f))],
+                            [os.path.join(file_path, f) for f in os.listdir(file_path) 
+                             if os.path.isfile(os.path.join(file_path, f)) 
+                             and f.lower().endswith(valid_exts) 
+                             and not f.startswith('.')],
                             key=lambda x: int(os.path.splitext(os.path.basename(x))[0]) if os.path.splitext(os.path.basename(x))[0].isdigit() else -1
                         )
                         result = {'paths': image_paths, 'total_prompts': len(image_paths)}

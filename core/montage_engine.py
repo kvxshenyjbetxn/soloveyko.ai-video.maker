@@ -31,6 +31,9 @@ class MontageEngine:
             if ext not in ALLOWED_EXTS:
                 # Silently skip unsupported/system files
                 continue
+            
+            if os.path.basename(abs_path).startswith('.'):
+                continue
                 
             if os.path.exists(abs_path):
                 valid_files.append(abs_path)
@@ -482,18 +485,18 @@ class MontageEngine:
             
             # --- PAUSE LOGIC (3s delay for voiceover) ---
             # User requested ~3s pause between Intro and Voiceover.
-            pause_dur = 1.0
+            pause_dur = 1.5
             
-            # Delay Main Audio by 1s (adds silence at start)
+            # Delay Main Audio (insert silence at start)
             a_main_delayed = "[a_main_delayed]"
             # adelay expects milliseconds. all=1 applies to all channels (stereo)
             full_graph += ";" + f"{a_main_fmt}adelay={int(pause_dur*1000)}:all=1{a_main_delayed}"
             a_main_fmt = a_main_delayed
 
-            # Extend Main Video tail by 1s to prevent audio tail cut (due to shift)
-            # tpad clones the last frame. 
+            # Delay Main Video (pad start with clone of first frame)
+            # This creates a "static pause" effect before the main video starts playing
             v_main_padded = "[v_main_padded]"
-            full_graph += ";" + f"{final_v}tpad=stop_mode=clone:stop_duration={pause_dur}{v_main_padded}"
+            full_graph += ";" + f"{final_v}tpad=start_mode=clone:start_duration={pause_dur}{v_main_padded}"
             final_v = v_main_padded
             
             # Reset PTS for Main Video to ensure clean start for transitions/concat
