@@ -429,6 +429,114 @@ class MontageEngine:
         
         # --- END AUDIO ---
 
+        # 8. INITIAL VIDEO (PREPEND)
+        initial_video_path = kwargs.get('initial_video_path')
+        if initial_video_path and os.path.exists(initial_video_path):
+            logger.log(f"{prefix}[FFmpeg] Prepending initial video: {os.path.basename(initial_video_path)}", level=LogLevel.INFO)
+            
+            inputs.extend(["-thread_queue_size", "4096", "-i", initial_video_path.replace("\\", "/")])
+            # Correctly calculate index based on actual number of inputs added so far
+            # (Audio/Music inputs might have been added without updating current_input_count)
+            intro_index = inputs.count("-i") - 1
+            current_input_count = intro_index + 1 # Align for safety
+            
+            # --- Intro Video Processing ---
+            v_intro = "[v_intro]"
+            # Scale and Pad to match base dimensions
+            intro_scale = (
+                f"[{intro_index}:v]scale={base_w}:{base_h}:force_original_aspect_ratio=decrease,"
+                f"pad={base_w}:{base_h}:(ow-iw)/2:(oh-ih)/2,"
+                f"format=yuv420p,setsar=1,fps={fps},"
+                f"setpts=PTS-STARTPTS{v_intro}"
+            )
+            full_graph += ";" + intro_scale
+            
+            # --- Intro Audio Processing ---
+            a_intro = "[a_intro]"
+            has_intro_audio = self._has_audio(initial_video_path)
+            intro_dur = self._get_duration(initial_video_path)
+            
+            if has_intro_audio:
+                # Resample to match common settings (stereo, 44100) to avoid concat issues
+                intro_audio_filter = f"[{intro_index}:a]aformat=sample_rates=44100:channel_layouts=stereo{a_intro}"
+                full_graph += ";" + intro_audio_filter
+            else:
+                # Generate silence
+                intro_audio_filter = f"anullsrc=channel_layout=stereo:sample_rate=44100,atrim=duration={intro_dur}{a_intro}"
+                full_graph += ";" + intro_audio_filter
+
+            # --- Concat/Transition Intro + Main ---
+            v_total = "[v_total]"
+            a_total = "[a_total]"
+            
+            # We assume main audio is already at final_audio_map (and might need formatting to match?)
+            # Usually main audio (voiceover/music) is robust, but let's ensure it matches format too just in case
+            a_main_fmt = "[a_main_fmt]"
+            
+            # Ensure final_audio_map is wrapped in brackets for filter syntax if it's a raw stream selector
+            safe_audio_map = final_audio_map
+            if ":" in final_audio_map and not final_audio_map.startswith("["):
+                safe_audio_map = f"[{final_audio_map}]"
+            
+            full_graph += ";" + f"{safe_audio_map}aformat=sample_rates=44100:channel_layouts=stereo{a_main_fmt}"
+            
+            # --- PAUSE LOGIC (3s delay for voiceover) ---
+            # User requested ~3s pause between Intro and Voiceover.
+            pause_dur = 1.0
+            
+            # Delay Main Audio by 1s (adds silence at start)
+            a_main_delayed = "[a_main_delayed]"
+            # adelay expects milliseconds. all=1 applies to all channels (stereo)
+            full_graph += ";" + f"{a_main_fmt}adelay={int(pause_dur*1000)}:all=1{a_main_delayed}"
+            a_main_fmt = a_main_delayed
+
+            # Extend Main Video tail by 1s to prevent audio tail cut (due to shift)
+            # tpad clones the last frame. 
+            v_main_padded = "[v_main_padded]"
+            full_graph += ";" + f"{final_v}tpad=stop_mode=clone:stop_duration={pause_dur}{v_main_padded}"
+            final_v = v_main_padded
+            
+            # Reset PTS for Main Video to ensure clean start for transitions/concat
+            final_v_reset = "[final_v_reset]"
+            full_graph += ";" + f"{final_v}setpts=PTS-STARTPTS{final_v_reset}"
+            final_v = final_v_reset
+            
+            # Apply transition if enabled
+            if enable_trans and intro_dur > trans_dur:
+                # XFADE for Video
+                offset = intro_dur - trans_dur
+                
+                # Use configured transition (or default to fade if random/invalid)
+                current_trans = transition_effect
+                if current_trans == "random": current_trans = random.choice(valid_transitions)
+                elif current_trans not in valid_transitions: current_trans = "fade"
+                
+                xfade_cmd = (
+                    f"{v_intro}{final_v}xfade=transition={current_trans}:"
+                    f"duration={trans_dur}:offset={offset}{v_total}"
+                )
+                full_graph += ";" + xfade_cmd
+                
+                # ACROSSFADE for Audio
+                # Note: acrossfade consumes the overlap, so duration math works out similar to xfade
+                acrossfade_cmd = f"{a_intro}{a_main_fmt}acrossfade=d={trans_dur}:c1=tri:c2=tri{a_total}"
+                full_graph += ";" + acrossfade_cmd
+                
+            else:
+                # Fallback to hard cut (Concat)
+                concat_v = f"{v_intro}{final_v}concat=n=2:v=1:a=0{v_total}"
+                concat_a = f"{a_intro}{a_main_fmt}concat=n=2:v=0:a=1{a_total}"
+                
+                full_graph += ";" + concat_v
+                full_graph += ";" + concat_a
+            
+            output_v_stream = v_total
+            final_audio_map = a_total
+        else:
+             intro_dur = 0 # No intro video
+             pause_dur = 0
+
+
         filter_script_path = None
         try:
             # Створюємо тимчасовий файл для filter_complex
@@ -451,7 +559,9 @@ class MontageEngine:
             else:
                 cmd.extend(["-preset", preset, "-b:v", bitrate_str, "-maxrate", bitrate_str, "-bufsize", f"{bitrate*2}M", "-pix_fmt", "yuv420p"])
             
-            cmd.extend(["-shortest", "-max_muxing_queue_size", "9999", output_path.replace("\\", "/")])
+            # Clean output path for FFmpeg (remove \\?\ prefix which can break when slashes are flipped)
+            clean_out_path = output_path.replace("\\\\?\\", "").replace("//?/", "")
+            cmd.extend(["-shortest", "-max_muxing_queue_size", "9999", clean_out_path.replace("\\", "/")])
 
             startupinfo = None
             if platform.system() == "Windows":
@@ -465,6 +575,13 @@ class MontageEngine:
             )
 
             full_log = []
+            
+            # Calculate total expected duration for progress bar
+            # Total = (Intro Video) + (Main Audio + Pause) - (Overlap if transition used)
+            total_expected_duration = audio_dur + intro_dur + pause_dur
+            if enable_trans and intro_dur > 0:
+                 total_expected_duration -= trans_dur
+
             while True:
                 line = process.stderr.readline()
                 if not line and process.poll() is not None: break
@@ -486,7 +603,9 @@ class MontageEngine:
                         except (ValueError, IndexError):
                             time_sec = 0.0
 
-                        progress = (time_sec / audio_dur) * 100 if audio_dur > 0 else 0
+                        # Calculate progress based on NEW total duration
+                        denom = total_expected_duration if total_expected_duration > 0.1 else 1.0
+                        progress = min(max((time_sec / denom) * 100, 0.0), 100.0)
                         
                         fps = parts.get('fps', '0')
                         bitrate = parts.get('bitrate', 'N/A')
@@ -511,6 +630,31 @@ class MontageEngine:
             if filter_script_path and os.path.exists(filter_script_path):
                 os.remove(filter_script_path)
         # Success log is handled by MontageWorker
+
+    def _has_audio(self, path):
+        """Checks if the file has an audio stream."""
+        path = path.replace("\\", "/")
+        cmd = [
+            "ffprobe", 
+            "-v", "error", 
+            "-select_streams", "a:0", 
+            "-show_entries", "stream=codec_type", 
+            "-of", "csv=p=0", 
+            path
+        ]
+        try:
+            # Use subprocess directly to avoid overhead? No, keep consistent style if possible but simple here
+            import subprocess
+            # startupinfo needed for non-blocking console on Windows
+            startupinfo = None
+            if platform.system() == 'Windows':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+            output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, startupinfo=startupinfo).decode().strip()
+            return bool(output)
+        except Exception:
+            return False
 
     def _get_dimensions(self, path):
         normalized_path = path.replace("\\", "/")
