@@ -11,7 +11,7 @@ from utils.logger import logger, LogLevel
 thread_local_storage = threading.local()
 
 # Global semaphore to limit concurrent chunks across the entire application
-global_voicemaker_semaphore = threading.Semaphore(30)
+global_voicemaker_semaphore = threading.Semaphore(25)
 
 class VoicemakerAPI:
     def _get_session(self):
@@ -166,13 +166,14 @@ class VoicemakerAPI:
                     data = response.json()
                     if data.get("success"):
                         audio_url = data.get("path")
+                        remaining = data.get("remainChars")
                         if audio_url:
                             # Second request to download the audio file
                             audio_response = session.get(audio_url, timeout=timeout)
                             if audio_response.status_code == 200:
                                 if progress_callback:
                                     progress_callback(f"Voicemaker: Chunk downloaded successfully.")
-                                return audio_response.content, None # Success
+                                return audio_response.content, None, remaining # Success
                             else:
                                 error_message = f"Download failed with status {audio_response.status_code}"
                                 logger.log(f"Voicemaker chunk failed (attempt {attempt + 1}/{retries}): {error_message}", level=LogLevel.WARNING)
@@ -201,7 +202,7 @@ class VoicemakerAPI:
                 logger.log(f"Retrying in {retry_delay} seconds...", level=LogLevel.INFO)
                 time.sleep(retry_delay)
 
-        return None, f"Failed after {retries} attempts: {error_message}"
+        return None, f"Failed after {retries} attempts: {error_message}", None
 
     def generate_audio(self, text, voice_id, language_code="en-US", temp_dir=None, progress_callback=None):
         if not self.api_key:
@@ -212,18 +213,6 @@ class VoicemakerAPI:
         
         logger.log(f"Voicemaker: Text length {len(text)}. Split into {len(chunks)} chunks (Limit: {limit}).", level=LogLevel.INFO)
 
-        if len(chunks) == 1:
-            # Simple case: just one chunk
-            if progress_callback:
-                progress_callback(f"Voicemaker: Sending single chunk request...")
-            content, error = self._generate_chunk(chunks[0], voice_id, language_code, progress_callback)
-            if content:
-                return content, "success"
-            else:
-                logger.log(f"Voicemaker error: {error}", level=LogLevel.ERROR)
-                return None, error
-
-        # Multiple chunks: Parallel execution
         combined_audio = b""
         temp_audio_folder = None
         
@@ -232,11 +221,11 @@ class VoicemakerAPI:
             os.makedirs(temp_audio_folder, exist_ok=True)
 
         results = [None] * len(chunks)
+        last_balance = None
         
-        # Reduced max_workers to prevent SSL socket exhaustion
-        # Previous value of 10 was causing Access Violation on Windows with many concurrent requests
-        # With Session reuse, we can safely increase this back up. User requested higher concurrency.
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        # Use a higher max_workers locally since the global_voicemaker_semaphore 
+        # centrally controls the actual number of concurrent API requests.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
             future_to_index = {}
             for i, chunk in enumerate(chunks):
                 msg = f"Voicemaker: Sending chunk {i+1}/{len(chunks)} | Language: {language_code}"
@@ -246,15 +235,17 @@ class VoicemakerAPI:
                     
                 future = executor.submit(self._generate_chunk, chunk, voice_id, language_code, progress_callback)
                 future_to_index[future] = i
-                # Increased delay slightly to play nice with rate limits and socket opening
+                # Delay as requested to prevent simultaneous spikes and respect rate limits
                 time.sleep(1.0) 
             
             for future in concurrent.futures.as_completed(future_to_index):
                 index = future_to_index[future]
                 try:
-                    content, error = future.result()
+                    content, error, balance = future.result()
                     if content:
                         results[index] = content
+                        if balance is not None:
+                            last_balance = balance # This will eventually be the balance from whichever chunk finished last
                         
                         # Save temp chunk if folder exists
                         if temp_audio_folder:
@@ -265,16 +256,16 @@ class VoicemakerAPI:
                             logger.log(f"Voicemaker: Saved chunk {index+1}/{len(chunks)} to {chunk_path}", level=LogLevel.INFO)
                     else:
                         logger.log(f"Voicemaker: Failed to generate chunk {index}: {error}", level=LogLevel.ERROR)
-                        return None, f"Chunk {index} failed: {error}"
+                        return None, f"Chunk {index} failed: {error}", None
                 except Exception as e:
                     logger.log(f"Voicemaker: Exception in chunk {index}: {e}", level=LogLevel.ERROR)
-                    return None, f"Exception in chunk {index}"
+                    return None, f"Exception in chunk {index}", None
 
         # Concatenate in order
         for content in results:
             if content:
                 combined_audio += content
             else:
-                return None, "Missing chunk data"
+                return None, "Missing chunk data", None
                 
-        return combined_audio, "success"
+        return combined_audio, "success", last_balance

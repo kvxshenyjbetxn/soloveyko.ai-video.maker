@@ -45,6 +45,7 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
     rewrite_review_required = Signal(str, str) # task_id, rewritten_text
     rewrite_regenerated = Signal(str, str) # task_id, new_text
     stage_metadata_updated = Signal(str, str, str, str) # job_id, lang_id, stage_key, metadata_text
+    balance_updated = Signal(str, object) # provider, data
 
 
     def __init__(self, queue_manager):
@@ -504,7 +505,7 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         worker.signals.video_generated.connect(self.video_generated)
         worker.signals.video_progress.connect(self._on_video_progress)
         worker.signals.metadata_updated.connect(self._on_metadata_updated)
-        worker.signals.metadata_updated.connect(self._on_metadata_updated)
+        worker.signals.balance_updated.connect(self.balance_updated.emit)
         worker.signals.progress_log.connect(self._on_worker_progress_log)
         self.threadpool.start(worker)
 
