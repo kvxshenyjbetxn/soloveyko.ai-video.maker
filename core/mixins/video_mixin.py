@@ -90,6 +90,21 @@ class VideoMixin:
         
         logger.log(f"[{task_id}] Video generation finished. Generated {len(generated_videos)} videos.", level=LogLevel.SUCCESS)
 
+        # CHECK FOR "SKIPPED" WORKER RESULT (Full Directory Scan)
+        # If the worker was skipped by TaskProcessor because files existed, 
+        # result_dict will contain 'total_prompts' (added by _start_worker logic).
+        # In this case, 'generated_videos' is actually ALL files in the directory, so we just accept it as the new state.
+        if 'total_prompts' in result_dict:
+            logger.log(f"[{task_id}] Video generation skipped (existing files used). Update image_paths to detected files.", level=LogLevel.INFO)
+            state.image_paths = generated_videos
+            
+            # Since we have full valid list, status is success
+            self._set_stage_status(task_id, 'stage_images', 'success')
+            self._check_if_image_review_ready()
+            if self.subtitle_barrier_passed:
+                self._check_and_start_montages()
+            return
+
         video_count_animated = getattr(state, 'video_animation_count', 0)
         
         # Determine video generation status
@@ -155,19 +170,43 @@ class VideoMixin:
             if 'stage_montage' not in state.stages or state.status.get('stage_montage') != 'pending':
                 continue
             
-            sub_status = state.status.get('stage_subtitles') if 'stage_subtitles' in state.stages else 'success'
-            img_status = state.status.get('stage_images') if 'stage_images' in state.stages else 'success'
+            # Find all stages that come before 'stage_montage'
+            try:
+                montage_idx = state.stages.index('stage_montage')
+                prerequisite_stages = state.stages[:montage_idx]
+            except ValueError:
+                prerequisite_stages = []
 
-            prerequisites_are_done = sub_status not in ['pending', 'processing'] and img_status not in ['pending', 'processing', 'processing_video']
+            prerequisites_are_done = True
+            failed_prerequisite = None
+            
+            for stage in prerequisite_stages:
+                status = state.status.get(stage)
+                if status in ['pending', 'processing', 'processing_video']:
+                    prerequisites_are_done = False
+                    break
+                if status == 'error':
+                    failed_prerequisite = stage
+                    # We don't break here to ensure we caught any 'processing' ones first, 
+                    # but actually if one is error and none are processing, we are "done" but failed.
 
             if prerequisites_are_done:
-                if sub_status == 'error' or img_status == 'error':
-                    error_msg = f"Prerequisite failed. Subtitles: {sub_status}, Images: {img_status}"
+                if failed_prerequisite:
+                    error_msg = f"Prerequisite stage '{failed_prerequisite}' failed."
                     self._set_stage_status(task_id, 'stage_montage', 'error', error_msg)
                     continue
 
                 if not state.audio_path or not os.path.exists(state.audio_path):
-                    self._set_stage_status(task_id, 'stage_montage', 'error', "Audio file missing")
+                    # This might happen if 'stage_voiceover' was skipped but file doesn't exist
+                    # or if the logic above somehow missed a processing stage.
+                    # We'll log it as error only if the stage was supposed to be there.
+                    if 'stage_voiceover' in state.stages:
+                        # If we think prerequisites are done but audio is missing, it's a real error
+                        self._set_stage_status(task_id, 'stage_montage', 'error', "Audio file missing")
+                    else:
+                        # Maybe it's a silent video? But usually montage needs audio.
+                        # For now, keep the error as it was.
+                        self._set_stage_status(task_id, 'stage_montage', 'error', "Audio file missing")
                     continue
                 
                 if not state.image_paths or len(state.image_paths) == 0:
@@ -330,6 +369,13 @@ class VideoMixin:
                 config['background_music_path'] = background_music_path
                 config['background_music_volume'] = background_music_volume
             # --- End Background Music Config ---
+
+            # --- Initial Video Config ---
+            initial_video_path = lang_config.get("initial_video_path")
+            if initial_video_path and os.path.exists(initial_video_path):
+                config['initial_video_path'] = initial_video_path
+                logger.log(f"[{task_id}] Using initial video: {os.path.basename(initial_video_path)}", level=LogLevel.INFO)
+            # --- End Initial Video Config ---
 
             worker = MontageWorker(task_id, config)
             worker.signals.finished.connect(self._on_montage_finished)

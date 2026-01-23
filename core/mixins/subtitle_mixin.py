@@ -157,6 +157,8 @@ class SubtitleMixin:
         if 'stage_subtitles' in state.stages:
             self._start_subtitles(task_id)
         else:
+            if self.subtitle_barrier_passed:
+                self._check_and_start_montages()
             self.check_if_all_finished()
 
     @Slot(str, str)
