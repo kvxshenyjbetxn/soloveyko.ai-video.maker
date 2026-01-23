@@ -827,9 +827,9 @@ class MainWindow(QMainWindow):
         api_key = self.settings_manager.get("openrouter_api_key")
         if api_key:
             if success:
-                balance_text = f"{self.translator.translate('balance_label')} {balance:.4f}$"
+                balance_text = f"{self.translator.translate('openrouter_balance_label')} {balance:.4f}$"
             else:
-                balance_text = f"{self.translator.translate('balance_label')} {self.translator.translate('error_label')}"
+                balance_text = f"{self.translator.translate('openrouter_balance_label')} {self.translator.translate('error_label')}"
         else:
             balance_text = ""
 
