@@ -502,6 +502,30 @@ class LanguagesTab(QWidget):
         volume_layout.addWidget(self.bg_music_volume_value_label)
         
         settings_layout.addRow(volume_label_container, volume_layout)
+
+        # --- Initial Video Settings ---
+        self.initial_video_help = HelpLabel("initial_video_label")
+        self.initial_video_label = QLabel()
+        initial_video_label_container = QWidget()
+        initial_video_label_layout = QHBoxLayout(initial_video_label_container)
+        initial_video_label_layout.setContentsMargins(0, 0, 0, 0)
+        initial_video_label_layout.setSpacing(5)
+        initial_video_label_layout.addWidget(self.initial_video_help)
+        initial_video_label_layout.addWidget(self.initial_video_label)
+        
+        initial_video_layout = QHBoxLayout()
+        self.initial_video_path_input = QLineEdit()
+        self.initial_video_path_input.setReadOnly(True)
+        self.initial_video_browse_button = QPushButton()
+        self.initial_video_browse_button.clicked.connect(self.browse_for_initial_video)
+        self.initial_video_clear_button = QPushButton()
+        self.initial_video_clear_button.clicked.connect(self.clear_initial_video)
+        
+        initial_video_layout.addWidget(self.initial_video_path_input)
+        initial_video_layout.addWidget(self.initial_video_browse_button)
+        initial_video_layout.addWidget(self.initial_video_clear_button)
+        
+        settings_layout.addRow(initial_video_label_container, initial_video_layout)
         
         # --- Effects & Watermark Settings (New) ---
         effects_group = QGroupBox(translator.translate("overlay_effects_group", "Overlay Effects"))
@@ -625,6 +649,21 @@ class LanguagesTab(QWidget):
             
     def clear_background_music(self):
         self.bg_music_path_input.clear()
+
+    def browse_for_initial_video(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            translator.translate("select_initial_video_file", "Select Initial Video File"),
+            "",
+            translator.translate("video_files_filter", "Video Files (*.mp4 *.mkv *.mov *.avi *.webm)")
+        )
+        if file_path:
+            self.initial_video_path_input.setText(file_path)
+            self.save_current_language_settings()
+
+    def clear_initial_video(self):
+        self.initial_video_path_input.clear()
+        self.save_current_language_settings()
 
     def on_volume_slider_changed(self, value):
         self.bg_music_volume_value_label.setText(str(value))
@@ -878,6 +917,7 @@ class LanguagesTab(QWidget):
             self.bg_music_path_input.blockSignals(True)
             self.bg_music_path_input.blockSignals(True)
             self.bg_music_volume_slider.blockSignals(True)
+            self.initial_video_path_input.blockSignals(True)
             self.watermark_size_slider.blockSignals(True)
             self.watermark_position_combo.blockSignals(True)
             self.watermark_size_slider.blockSignals(True)
@@ -944,6 +984,8 @@ class LanguagesTab(QWidget):
             self.bg_music_volume_slider.setValue(volume)
             self.bg_music_volume_value_label.setText(str(volume))
 
+            self.initial_video_path_input.setText(config.get("initial_video_path", ""))
+
             self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
             self.temperature_spinbox.setValue(config.get("temperature", 0.7))
 
@@ -1000,6 +1042,7 @@ class LanguagesTab(QWidget):
             self.edgetts_pitch_spinbox.blockSignals(False)
             self.bg_music_path_input.blockSignals(False)
             self.bg_music_volume_slider.blockSignals(False)
+            self.initial_video_path_input.blockSignals(False)
             self.default_template_combo.blockSignals(False)
             self.watermark_size_slider.blockSignals(False)
             self.watermark_position_combo.blockSignals(False)
@@ -1049,6 +1092,7 @@ class LanguagesTab(QWidget):
             "edgetts_pitch": 0,
             "background_music_path": "",
             "background_music_volume": 25,
+            "initial_video_path": "",
             "default_template": "",
             "overlay_effect_path": "",
             "watermark_path": "",
@@ -1114,6 +1158,7 @@ class LanguagesTab(QWidget):
         lang_settings["edgetts_pitch"] = self.edgetts_pitch_spinbox.value()
         lang_settings["background_music_path"] = self.bg_music_path_input.text()
         lang_settings["background_music_volume"] = self.bg_music_volume_slider.value()
+        lang_settings["initial_video_path"] = self.initial_video_path_input.text()
         lang_settings["default_template"] = self.default_template_combo.currentData()
         lang_settings["overlay_effect_path"] = self.overlay_effect_path_input.text()
         lang_settings["watermark_path"] = self.watermark_path_input.text()
@@ -1199,6 +1244,11 @@ class LanguagesTab(QWidget):
         self.browse_bg_music_button.setText(translator.translate("browse_button", "Browse..."))
         self.clear_bg_music_button.setText(translator.translate("clear_button", "Clear"))
         self.bg_music_volume_label.setText(translator.translate("music_volume_label", "Music Volume:"))
+        
+        self.initial_video_label.setText(translator.translate("initial_video_label", "Initial Video:"))
+        self.initial_video_browse_button.setText(translator.translate("browse_button", "Browse..."))
+        self.initial_video_clear_button.setText(translator.translate("clear_button", "Clear"))
+        self.initial_video_help.update_tooltip()
         
         # Update hints
         self.default_template_help.update_tooltip()

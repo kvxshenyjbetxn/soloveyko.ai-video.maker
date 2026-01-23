@@ -463,7 +463,6 @@
     "quick_settings_title": "Quick Settings",
     "quick_settings_footer": "Quickly access frequently used settings without switching tabs.",
     "quick_settings_close_hint": "To close, drag the slider to the right.",
-    "special_proc_mode_video_at_the_beginning": "Video at the beginning",
     "history_tab_title": "History",
     "clear_history_button": "Clear History",
     "history_text_preview_title": "Text Preview",
@@ -473,5 +472,7 @@
     "clear_history_confirm": "Are you sure you want to delete all history?",
     "click_to_view": "Click to view",
     "aspect_ratio_landscape": "Landscape (16:9)",
-    "aspect_ratio_portrait": "Portrait (9:16)"
+    "aspect_ratio_portrait": "Portrait (9:16)",
+    "initial_video_label": "💾 Initial Video:",
+    "select_initial_video_file": "Select Initial Video File"
 }

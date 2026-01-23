@@ -261,6 +261,8 @@ class TranslationMixin:
         if 'stage_img_prompts' not in state.stages and 'stage_images' in state.stages:
              self._start_image_generation(task_id)
         if 'stage_img_prompts' not in state.stages and 'stage_voiceover' not in state.stages and 'stage_images' not in state.stages and 'stage_preview' not in state.stages:
+            if getattr(self, 'subtitle_barrier_passed', False):
+                self._check_and_start_montages()
             self.check_if_all_finished()
 
         # --- Custom Stages ---
