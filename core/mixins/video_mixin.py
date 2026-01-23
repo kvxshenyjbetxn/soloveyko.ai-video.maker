@@ -63,6 +63,13 @@ class VideoMixin:
             if self.subtitle_barrier_passed: self._check_and_start_montages()
             return
             
+        # --- Skip check: If all target files are already videos, we don't need the worker ---
+        VIDEO_EXTS = ['.mp4', '.mkv', '.mov', '.avi', '.webm']
+        if all(os.path.splitext(p)[1].lower() in VIDEO_EXTS for p in paths_to_animate):
+            logger.log(f"[{task_id}] All requested animations already exist as videos. Skipping worker.", level=LogLevel.INFO)
+            self._on_video_generation_finished(task_id, {'paths': paths_to_animate})
+            return
+
         state.video_animation_count = len(paths_to_animate)
         state.videos_total_count = len(paths_to_animate)
         state.videos_generated_count = 0
@@ -90,14 +97,23 @@ class VideoMixin:
         
         logger.log(f"[{task_id}] Video generation finished. Generated {len(generated_videos)} videos.", level=LogLevel.SUCCESS)
 
-        # CHECK FOR "SKIPPED" WORKER RESULT (Full Directory Scan)
-        # If the worker was skipped by TaskProcessor because files existed, 
-        # result_dict will contain 'total_prompts' (added by _start_worker logic).
-        # In this case, 'generated_videos' is actually ALL files in the directory, so we just accept it as the new state.
+        # Since we changed VideoGenerationWorker to return ALL results (as a list with None for failures),
+        # generated_videos is now a list of length 'video_count_animated'
+
+        # CHECK FOR "SKIPPED" WORKER RESULT (Full Directory Scan from TaskProcessor)
         if 'total_prompts' in result_dict:
-            logger.log(f"[{task_id}] Video generation skipped (existing files used). Update image_paths to detected files.", level=LogLevel.INFO)
-            state.image_paths = generated_videos
+            logger.log(f"[{task_id}] Video generation skipped (existing files used). Update image_paths and ensure no images in video section.", level=LogLevel.INFO)
             
+            # generated_videos here is state.image_paths before start_worker was called
+            # We must ensure that if "Video at the beginning" is enabled, we don't have images in the prefix
+            # actually, if TaskProcessor skipped it, it means it just scanned the directory.
+            # But we want to re-sort so all videos are first.
+            
+            VIDEO_EXTS = ['.mp4', '.mkv', '.mov', '.avi', '.webm']
+            vids = [p for p in generated_videos if os.path.splitext(p)[1].lower() in VIDEO_EXTS]
+            imgs = [p for p in generated_videos if os.path.splitext(p)[1].lower() not in VIDEO_EXTS]
+            state.image_paths = vids + imgs
+
             # Since we have full valid list, status is success
             self._set_stage_status(task_id, 'stage_images', 'success')
             self._check_if_image_review_ready()
@@ -107,36 +123,44 @@ class VideoMixin:
 
         video_count_animated = getattr(state, 'video_animation_count', 0)
         
+        # New merge logic: successful videos first, then rest (failed animations are discarded)
+        success_videos = [p for p in generated_videos if p is not None]
+        remaining_images = state.image_paths[video_count_animated:]
+        
+        if success_videos:
+            # If at least some videos were generated, discard failed ones as requested by the user
+            state.image_paths = success_videos + remaining_images
+        else:
+            # If 0 videos were produced, we keep the original image_paths as they are
+            # so they can be used for the 'Quick Show' fallback.
+            pass
+        
         # Determine video generation status
         video_gen_status = 'success'
-        if len(generated_videos) < video_count_animated:
+        if len(success_videos) < video_count_animated:
             video_gen_status = 'warning'
-        if len(generated_videos) == 0 and video_count_animated > 0:
+        if len(success_videos) == 0 and video_count_animated > 0:
             # Instead of marking as error, we'll fallback to Quick Show
             # So we use 'warning' status to allow montage to proceed
             video_gen_status = 'warning'
 
-        if generated_videos:
-            remaining_images = state.image_paths[video_count_animated:]
-            state.image_paths = generated_videos + remaining_images
-        elif video_count_animated > 0: # This means video gen failed for all
+        if len(success_videos) == 0 and video_count_animated > 0: 
             logger.log(f"[{task_id}] Video animation produced 0 videos. Fallback to 'Quick Show' mode.", level=LogLevel.WARNING)
             state.fallback_to_quick_show = True
 
-        # Combine statuses: warning is the "lowest" priority besides success
+        # Combine statuses
         final_status = state.image_gen_status
         if final_status == 'success' and video_gen_status != 'success':
-            final_status = video_gen_status # 'warning' only now (not 'error')
+            final_status = video_gen_status 
         elif final_status == 'warning' and video_gen_status == 'warning':
             final_status = 'warning'
-        # If image_gen_status was 'error', it remains 'error' (real failure in image generation)
 
         error_message = None
         if final_status != 'success':
             if state.fallback_to_quick_show:
-                error_message = "Video animation failed, using Quick Show mode."
+                error_message = f"Video animation failed (generated {len(success_videos)}/{video_count_animated}), using Quick Show mode for missing ones."
             else:
-                error_message = "Failed to generate all images and/or videos."
+                error_message = f"Failed to generate all images and/or videos ({len(success_videos)}/{video_count_animated})."
             
         self._set_stage_status(task_id, 'stage_images', final_status, error_message)
         self._check_if_image_review_ready()

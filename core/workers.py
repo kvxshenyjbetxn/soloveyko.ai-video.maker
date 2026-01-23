@@ -590,6 +590,12 @@ class VideoGenerationWorker(BaseWorker):
             max_retries = 3
             for attempt in range(max_retries):
                 try:
+                    # Check if the file is already a video
+                    ext = os.path.splitext(image_path)[1].lower()
+                    if ext in ['.mp4', '.mkv', '.mov', '.avi', '.webm']:
+                        logger.log(f"[{self.task_id}] [Googler Video] File {index + 1} is already a video. Skipping animation.", level=LogLevel.INFO)
+                        return (index, image_path)
+
                     video_semaphore.acquire()
                     logger_msg = f"[{self.task_id}] [Googler Video] Animating image {index + 1}/{len(image_paths_to_animate)}: {os.path.basename(image_path)}"
                     if max_retries > 1:
@@ -677,12 +683,8 @@ class VideoGenerationWorker(BaseWorker):
                     index, video_path = result
                     generated_videos[index] = video_path
         
-        final_paths = [path for path in generated_videos if path is not None]
-        
-        if len(final_paths) != len(image_paths_to_animate):
-            logger.log(f"[{self.task_id}] [Googler Video] Warning: only {len(final_paths)} of {len(image_paths_to_animate)} videos were generated.", level=LogLevel.WARNING)
-
-        return {'paths': final_paths}
+        # Return the full list including None's so the mixin can reconstruct the image paths correctly
+        return {'paths': generated_videos}
 
 class MontageWorker(BaseWorker):
     def do_work(self):
