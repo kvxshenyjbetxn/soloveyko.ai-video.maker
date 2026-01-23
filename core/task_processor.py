@@ -412,8 +412,11 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
             should_skip = True
             result = None
             
-            # Special logic for stage_preview which involves two separate worker types
-            if stage_key == 'stage_preview':
+            if worker_class.__name__ == 'VideoGenerationWorker':
+                # Do not skip VideoGenerationWorker automatically based on directory presence.
+                # VideoMixin handles skipping logic manually by checking for video extensions.
+                should_skip = False
+            elif stage_key == 'stage_preview':
                 if worker_class.__name__ == 'PreviewWorker':
                     # We need the prompt text file to skip
                     prompts_file = os.path.join(file_path, "preview_prompts.txt") if os.path.isdir(file_path) else file_path
@@ -429,14 +432,12 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                         should_skip = False
                 elif worker_class.__name__ == 'ImageGenerationWorker':
                     # Only skip if we have images in that directory
-                    # Note: Preview images are stored in file_path/images
-                    target_images_dir = os.path.join(file_path, "images")
-                    if os.path.isdir(target_images_dir):
+                    if os.path.isdir(file_path):
                         image_exts = ('.png', '.jpg', '.jpeg', '.webp')
-                        images = sorted([os.path.join(target_images_dir, f) for f in os.listdir(target_images_dir) if f.lower().endswith(image_exts)])
+                        images = sorted([os.path.join(file_path, f) for f in os.listdir(file_path) if f.lower().endswith(image_exts)])
                         if images:
                             result = {'paths': images, 'total_prompts': len(images)}
-                            logger.log(f"[{task_id}] Skipping ImageGenerationWorker for preview using {len(images)} existing images in {os.path.basename(target_images_dir)}", level=LogLevel.INFO)
+                            logger.log(f"[{task_id}] Skipping ImageGenerationWorker for preview using {len(images)} existing images in {os.path.basename(file_path)}", level=LogLevel.INFO)
                         else:
                             should_skip = False
                     else:
