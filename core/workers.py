@@ -39,6 +39,7 @@ class WorkerSignals(QObject):
     video_generated = Signal(str, str) # old_image_path, new_video_path
     video_progress = Signal(str) # task_id
     metadata_updated = Signal(str, str, str) # task_id, stage_key, metadata_text
+    balance_updated = Signal(str, object) # provider, data
 
 class BaseWorker(QRunnable):
     def __init__(self, task_id, config):
@@ -85,6 +86,7 @@ class TranslationWorker(BaseWorker):
         if response and response['choices'][0]['message']['content']:
             result = response['choices'][0]['message']['content']
             logger.log(f"[{self.task_id}] [{model}] Translation completed", level=LogLevel.SUCCESS)
+            self.signals.balance_updated.emit('openrouter', None)
             return result
         else:
             raise Exception(f"Empty or invalid response from translation API for model '{model}'. Response: {response}")
@@ -113,6 +115,7 @@ class ImagePromptWorker(BaseWorker):
             prompts = re.findall(r"^\d+\.\s*(.*)", result, re.MULTILINE)
             prompts_count = len(prompts)
             logger.log(f"[{self.task_id}] [{model}] Image prompts generated ({prompts_count} prompts)", level=LogLevel.SUCCESS)
+            self.signals.balance_updated.emit('openrouter', None)
             return result
         else:
             raise Exception(f"Empty or invalid response from image prompt API. Response: {response}")
@@ -143,6 +146,7 @@ class PreviewWorker(BaseWorker):
             prompts = re.findall(r"^\d+\.\s*(.*)", result, re.MULTILINE)
             prompts_count = len(prompts)
             logger.log(f"[{self.task_id}] [{model}] Preview prompts generated ({prompts_count} prompts)", level=LogLevel.SUCCESS)
+            self.signals.balance_updated.emit('openrouter', None)
             return result
         else:
             raise Exception(f"Empty or invalid response from preview prompt API. Response: {response}")
@@ -165,8 +169,10 @@ class VoiceoverWorker(BaseWorker):
             def progress_callback(msg):
                 self.signals.progress_log.emit(self.task_id, msg)
 
-            audio_content, status = api.generate_audio(text, voice_id, language_code, temp_dir=dir_path, progress_callback=progress_callback)
+            audio_content, status, balance = api.generate_audio(text, voice_id, language_code, temp_dir=dir_path, progress_callback=progress_callback)
             if status == 'success' and audio_content:
+                if balance is not None:
+                    self.signals.balance_updated.emit('voicemaker', balance)
                 return self.save_audio(audio_content, "voice.mp3")
             else:
                 raise Exception(f"VoiceMaker generation failed: {status}")
@@ -185,6 +191,7 @@ class VoiceoverWorker(BaseWorker):
                     context = f"Task: {self.config['job_name']}, Lang: {self.config['lang_name']}"
                     audio_content, status = api.download_audio(task_id, context_info=context)
                     if status == 'connected' and audio_content:
+                        self.signals.balance_updated.emit('gemini_tts', None)
                         return self.save_audio(audio_content, "voice.wav")
                     else:
                         raise Exception("Failed to download GeminiTTS audio.")
@@ -249,6 +256,7 @@ class VoiceoverWorker(BaseWorker):
                 if task_status == 'completed':
                     audio_content, status = api.get_task_result(task_id)
                     if status == 'connected' and audio_content:
+                        self.signals.balance_updated.emit('elevenlabs_unlim', None)
                         return self.save_audio(audio_content, "voice.mp3")
                     else:
                          raise Exception("Failed to download ElevenLabsUnlim audio.")
@@ -292,6 +300,7 @@ class VoiceoverWorker(BaseWorker):
                 if task_status in ['ending', 'ending_processed']:
                     audio_content, status = api.get_task_result(task_id)
                     if status == 'connected' and audio_content:
+                        self.signals.balance_updated.emit('elevenlabs', None)
                         return self.save_audio(audio_content, "voice.mp3")
                     elif status == 'not_ready': 
                         time.sleep(10)
@@ -366,6 +375,7 @@ class CustomStageWorker(BaseWorker):
                 f.write(result)
                 
             logger.log(f"[{self.task_id}] [Custom Stage: {stage_name}] Completed and saved to {filename}", level=LogLevel.SUCCESS)
+            self.signals.balance_updated.emit('openrouter', None)
             return {'path': output_path, 'stage_name': stage_name}
         else:
             raise Exception("Empty or invalid response from API.")
@@ -543,6 +553,8 @@ class ImageGenerationWorker(BaseWorker):
                                 generated_paths[index_from_result] = image_path
                                 
                                 self.signals.status_changed.emit(self.task_id, image_path, prompt_from_result, image_path)
+                                if service_name.lower() == 'googler':
+                                    self.signals.balance_updated.emit('googler', None)
                             except Exception as e:
                                 logger.log(f"[{self.task_id}] [{service_name}] Error processing/saving image {index_from_result + 1}: {e}", level=LogLevel.ERROR)
                 

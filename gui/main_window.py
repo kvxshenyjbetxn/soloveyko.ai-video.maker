@@ -5,7 +5,7 @@ import collections
 import platform
 from datetime import datetime
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu, QInputDialog
-from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray, QTimer
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray, QTimer, Slot
 from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.widgets.animated_tab_widget import AnimatedTabWidget
 from gui.dialogs.prompt_settings_dialog import PromptSettingsDialog
@@ -183,6 +183,11 @@ class MainWindow(QMainWindow):
         self.text_review_queue = collections.deque()
         self.is_review_dialog_active = False
         self.active_workers = set() # Track workers to prevent garbage collection and Segfaults
+        
+        # Periodic Googler usage updates during processing
+        self._googler_timer = QTimer(self)
+        self._googler_timer.timeout.connect(self.update_googler_usage)
+        
         self.init_ui()
         logger.log('Application started.', level=LogLevel.INFO)
         self.app.installEventFilter(self)
@@ -467,6 +472,7 @@ class MainWindow(QMainWindow):
         self.queue_manager.task_added.connect(self.queue_tab.add_task)
         self.queue_tab.start_processing_button.clicked.connect(self._start_processing_checked)
         self.task_processor.processing_finished.connect(self.show_processing_finished_dialog)
+        self.task_processor.processing_finished.connect(self._googler_timer.stop)
         self.task_processor.processing_finished.connect(self.update_balance)
         self.task_processor.processing_finished.connect(self.update_googler_usage)
         self.task_processor.processing_finished.connect(self.update_elevenlabs_balance)
@@ -478,6 +484,7 @@ class MainWindow(QMainWindow):
         self.task_processor.image_generated.connect(self.gallery_tab.add_media)
         self.task_processor.video_generated.connect(self.gallery_tab.update_thumbnail)
         self.task_processor.task_progress_log.connect(self.queue_tab.on_task_progress_log)
+        self.task_processor.balance_updated.connect(self._on_direct_balance_update)
         self.task_processor.image_review_required.connect(self._on_image_review_required)
         self.task_processor.translation_review_required.connect(self._on_translation_review_required)
         self.task_processor.rewrite_review_required.connect(self._on_rewrite_review_required)
@@ -561,6 +568,7 @@ class MainWindow(QMainWindow):
             if not self.task_processor.is_finished and self.task_processor.task_states:
                  logger.log("Processing is already active. Checking for new tasks...", level=LogLevel.INFO)
             self.task_processor.start_processing()
+            self._googler_timer.start(15000) # Update Googler usage every 15s during execution
         else:
             # The periodic validation will have already shown a dialog.
             # We show a specific one here for the action of starting processing.
@@ -946,7 +954,25 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'rewrite_tab'):
             self.rewrite_tab.update_voicemaker_balance(balance_text)
         self.queue_tab.update_voicemaker_balance(balance_text)
-        self.settings_tab.api_tab.audio_tab.voicemaker_tab.update_balance_label(balance_to_display_on_settings_tab)
+    
+    @Slot(str, object)
+    def _on_direct_balance_update(self, provider, data):
+        """Handle direct balance updates from workers."""
+        if provider == 'voicemaker':
+            # Data is the balance value itself
+            self._on_voicemaker_balance_updated(data, True)
+        elif provider == 'openrouter':
+            # Data is None, trigger refresh
+            self.update_balance()
+        elif provider == 'googler':
+            # Periodic updates are handled by _googler_timer during processing
+            pass
+        elif provider == 'elevenlabs':
+            self.update_elevenlabs_balance()
+        elif provider == 'elevenlabs_unlim':
+            self.update_elevenlabs_unlim_balance()
+        elif provider == 'gemini_tts':
+            self.update_gemini_tts_balance()
 
     def _on_gemini_tts_balance_updated(self, balance, success):
         api_key = self.settings_manager.get("gemini_tts_api_key")
