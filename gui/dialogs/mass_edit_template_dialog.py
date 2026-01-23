@@ -145,33 +145,37 @@ class MassEditTemplateDialog(QDialog):
                          pass
                 
                 # Construct Label
-                label = self._build_friendly_label(path)
+                label = self._build_friendly_label(path, value)
                 items.append((label, path, value))
             elif isinstance(value, dict):
                 # Branch
                 self._flatten_metadata_recursive(value, current_path + [key], items)
 
-    def _build_friendly_label(self, path):
+    def _build_friendly_label(self, path, leaf_metadata=None):
         parts = []
-        for p in path:
+        for i, p in enumerate(path):
             if p == '*':
                 parts.append("(All Languages)")
                 continue
                 
-            # Try to find translation for key
-            trans_key = KEY_TO_TRANSLATION_MAP.get(p)
-            if trans_key:
-                part_label = translator.translate(trans_key)
+            # If it's the leaf node, try to use its label from metadata
+            if i == len(path) - 1 and leaf_metadata and 'label' in leaf_metadata:
+                part_label = translator.translate(leaf_metadata['label'])
             else:
-                # Try section titles or fallbacks
-                if p == 'languages_config': part_label = translator.translate("languages_tab")
-                elif p == 'montage': part_label = translator.translate("montage_tab")
-                elif p == 'subtitles': part_label = translator.translate("subtitles_tab")
-                elif p == 'googler': part_label = "Googler"
-                elif p == 'pollinations': part_label = "Pollinations"
-                else: 
-                     # Fallback to titling the key
-                     part_label = p.replace('_', ' ').title()
+                # Try to find translation for key
+                trans_key = KEY_TO_TRANSLATION_MAP.get(p)
+                if trans_key:
+                    part_label = translator.translate(trans_key)
+                else:
+                    # Try section titles or fallbacks
+                    if p == 'languages_config': part_label = translator.translate("languages_tab")
+                    elif p == 'montage': part_label = translator.translate("montage_tab")
+                    elif p == 'subtitles': part_label = translator.translate("subtitles_tab")
+                    elif p == 'googler': part_label = "Googler"
+                    elif p == 'pollinations': part_label = "Pollinations"
+                    else: 
+                         # Fallback to titling the key
+                         part_label = p.replace('_', ' ').title()
             
             parts.append(part_label)
             
