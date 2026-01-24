@@ -67,6 +67,8 @@ class VideoMixin:
         VIDEO_EXTS = ['.mp4', '.mkv', '.mov', '.avi', '.webm']
         if all(os.path.splitext(p)[1].lower() in VIDEO_EXTS for p in paths_to_animate):
             logger.log(f"[{task_id}] All requested animations already exist as videos. Skipping worker.", level=LogLevel.INFO)
+            state.video_animation_count = len(paths_to_animate)
+            state.videos_total_count = len(paths_to_animate)
             self._on_video_generation_finished(task_id, {'paths': paths_to_animate})
             return
 
@@ -128,8 +130,19 @@ class VideoMixin:
         remaining_images = state.image_paths[video_count_animated:]
         
         if success_videos:
-            # If at least some videos were generated, discard failed ones as requested by the user
-            state.image_paths = success_videos + remaining_images
+            # Об'єднуємо та прибираємо дублікати (ретельно перевіряємо шлях, ігноруючи регістр на Windows)
+            new_paths = []
+            seen_abs = set()
+            
+            # success_videos - це нові (або знайдені) відео
+            # remaining_images - це решта картинок
+            for p in success_videos + remaining_images:
+                abs_p = os.path.abspath(p).lower()
+                if abs_p not in seen_abs:
+                    new_paths.append(p)
+                    seen_abs.add(abs_p)
+            
+            state.image_paths = new_paths
         else:
             # If 0 videos were produced, we keep the original image_paths as they are
             # so they can be used for the 'Quick Show' fallback.
