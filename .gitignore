@@ -1,6 +1,4 @@
 __pycache__/
-ffmpeg.exe
-ffprobe.exe
 build/
 templates/
 settings.json
@@ -16,8 +14,6 @@ statistics.json
 CombainAI.spec
 efects/
 icon.jpg
-ffmpeg
-ffprobe
 assets/yt-dlp.exe
 assets/yt-dlp
 assets/deno.exe
