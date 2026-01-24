@@ -294,11 +294,19 @@ class TaskCard(QGroupBox):
 
         # Custom header
         header_layout = QHBoxLayout()
-        task_name_label = QLabel(f"<b>{self.job_name}</b>", self)
+        # Візуальне обмеження: 100 символів для тексту мітки
+        display_name = self.job_name[:100] + ("..." if len(self.job_name) > 100 else "")
+        task_name_label = QLabel(f"<b>{display_name}</b>", self)
         task_name_label.setToolTip(self.job_name)
         task_name_label.setWordWrap(True)
-        task_name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        task_name_label.setMinimumHeight(40)
+        task_name_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        
+        # Візуальне обмеження: рівно 3 рядки. 
+        # Використовуємо setFixedHeight, щоб наступні рядки не "виглядали" знизу.
+        fm = task_name_label.fontMetrics()
+        line_height = fm.lineSpacing()
+        task_name_label.setFixedHeight(line_height * 3) 
+        task_name_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         
         header_layout.addWidget(task_name_label)
         header_layout.addStretch()

@@ -52,36 +52,26 @@ class TaskState:
 
     def _get_save_path(self, base_path, job_name, lang_name):
         if not base_path: return None
-        dir_path = None
         try:
-            # Basic cleanup of characters that and totally illegal even with prefixes
-            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', job_name).strip('. ')
-            safe_job_name = safe_job_name[:120].strip('. ')
+            # 1. Видаляємо трикрапки
+            clean_job_name = job_name.replace('…', '').replace('...', '')
             
-            safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).strip('. ')
+            # 2. Видаляємо заборонені символи Windows (навіть для Mac для уніфікації)
+            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', clean_job_name)
+            
+            # 3. Обрізаємо до 100 символів та чистимо кінець (крапки/пробіли)
+            safe_job_name = safe_job_name[:100].strip('. ')
+            
             if not safe_job_name: safe_job_name = "Untitled_Task"
             
-            raw_path = os.path.join(base_path, safe_job_name, safe_lang_name)
+            # Аналогічно для мови
+            safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).strip('. ')
             
-            # --- Windows Long Path & Special Char Prefix ---
-            # Using \\?\ allows paths with trailing dots and spaces, which otherwise break in Windows
-            # It also bypasses the 260 character limit.
-            if platform.system() == "Windows":
-                abs_path = os.path.abspath(raw_path)
-                if abs_path.startswith("\\\\"):
-                     # It's already a UNC or absolute path with prefix? 
-                     # If it starts with \\ but not \\?\, we fix it
-                     if not abs_path.startswith("\\\\?\\"):
-                         dir_path = "\\\\?\\UNC\\" + abs_path[2:]
-                     else:
-                         dir_path = abs_path
-                else:
-                    dir_path = "\\\\?\\" + abs_path
-            else:
-                dir_path = os.path.abspath(raw_path)
+            # Прямий шлях без префіксів довгих шляхів
+            dir_path = os.path.abspath(os.path.join(base_path, safe_job_name, safe_lang_name))
             
             os.makedirs(dir_path, exist_ok=True)
             return dir_path
         except Exception as e:
-            logger.log(f"[{self.task_id}] Failed to create save directory {dir_path if dir_path else raw_path}. Error: {e}", level=LogLevel.ERROR)
+            logger.log(f"[{self.task_id}] Failed to create save directory. Error: {e}", level=LogLevel.ERROR)
             return None
