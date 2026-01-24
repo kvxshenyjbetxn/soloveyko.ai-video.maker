@@ -218,9 +218,11 @@ class MontageEngine:
             v_in = f"[{i}:v]"; v_out = f"v{i}_final"
             
             if is_video:
+                # Нативно прибираємо водяний знак для всіх відео в монтажі (Zoom 8% + Crop top-left)
+                # Також примусово масштабуємо до розміру проекту, щоб виправити можливе розтягування (Googler/Veo).
                 vf = (
-                    f"{v_in}scale={base_w}:{base_h}:force_original_aspect_ratio=decrease,"
-                    f"pad={base_w}:{base_h}:(ow-iw)/2:(oh-ih)/2,"
+                    f"{v_in}scale={base_w}:{base_h},"
+                    f"scale=1.08*iw:-1,crop={base_w}:{base_h}:0:0,"
                     f"format=yuv420p,setsar=1,fps={fps},"
                     f"setpts=PTS-STARTPTS[{v_out}]"
                 )
