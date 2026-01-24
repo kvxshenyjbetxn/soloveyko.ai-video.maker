@@ -577,9 +577,6 @@ class TextTab(QWidget):
             found_files_details = {}
 
             # --- Check for existing files ---
-            safe_job_name = task_name.replace('…', '').replace('...', '')
-            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', safe_job_name).strip()
-            safe_job_name = safe_job_name[:100].strip()
             for lang_id, btn in self.language_buttons.items():
                 if btn.isChecked():
                     stage_widget = self.stage_widgets.get(lang_id)
@@ -595,8 +592,17 @@ class TextTab(QWidget):
                         continue
 
                     lang_name = btn.text()
-                    safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).rstrip()
-                    dir_path = os.path.join(base_save_path, safe_job_name, safe_lang_name)
+                    
+                    # --- Логіка очистки шляху (має збігатися з TaskState) ---
+                    clean_job_name = task_name.replace('…', '').replace('...', '')
+                    safe_job_name = re.sub(r'[<>:"/\\|?*]', '', clean_job_name)
+                    safe_job_name = safe_job_name[:100].strip('. ')
+                    if not safe_job_name: safe_job_name = "Untitled_Task"
+                    
+                    safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).strip('. ')
+                    
+                    # Прямий шлях без префіксів
+                    dir_path = os.path.abspath(os.path.join(base_save_path, safe_job_name, safe_lang_name))
                     
                     if os.path.isdir(dir_path):
                         found_files_for_lang = {}
