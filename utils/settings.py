@@ -171,12 +171,12 @@ NO HUMAN NAMES IN PROMTS!
 
 STORY TEXT:
 """,
-                'model': 'google/gemini-2.5-flash',
+                'model': 'openai/gpt-oss-120b:free',
                 'max_tokens': 10000,
                 'temperature': 1.0
             },
             'preview_settings': {
-                'model': 'google/gemini-2.5-flash',
+                'model': 'openai/gpt-oss-120b:free',
                 'max_tokens': 10000,
                 'temperature': 1.0,
                 'image_count': 3,
@@ -199,7 +199,7 @@ STORY TEXT:
                 'nologo': True,
                 'enhance': False
             },
-            'openrouter_models': ['google/gemini-2.5-flash'],
+            'openrouter_models': ['openai/gpt-oss-120b:free', 'google/gemini-2.5-flash'],
             'subtitles': {
                 'whisper_model': 'base.bin',
                 'font': 'Arial',
@@ -268,7 +268,7 @@ Don't write anything unnecessary! Write the translation text right away! Don't w
 
 story:
 """,
-                    'model': 'google/gemini-2.5-flash',
+                    'model': 'openai/gpt-oss-120b:free',
                     'max_tokens': 128000,
                     'temperature': 1.0,
                     'rewrite_prompt': """Role: You are an expert documentary scriptwriter and historian, specializing in Ancient Civilizations (similar to the style of "Kurzgesagt" or high-quality History Channel productions).
@@ -289,7 +289,7 @@ Main Body: Unfold the history with dramatic flair and sensory details.
 Outro: A strong concluding thought or a bridge to modern times.
 Original Russian Text: 
 """,
-                    'rewrite_model': 'google/gemini-2.5-flash',
+                    'rewrite_model': 'openai/gpt-oss-120b:free',
                     'rewrite_max_tokens': 128000,
                     'rewrite_temperature': 1.0,
                     'tts_provider': 'EdgeTTS',

@@ -98,7 +98,8 @@ class OpenRouterAPI:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "X-Title": "Combine App"
+            "HTTP-Referer": "https://soloveyko.ai", # Required for some free models/policies
+            "X-Title": "Soloveyko.AI-Video.Maker"
         }
         
         # Prepare payload
