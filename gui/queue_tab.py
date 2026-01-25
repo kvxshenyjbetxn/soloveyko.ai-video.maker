@@ -195,11 +195,23 @@ class LanguageSection(QWidget):
             original_layout.addWidget(metadata_label)
             self.content_layout.addWidget(original_widget)
 
+        pre_found = lang_data.get("pre_found_files", {})
+        user_provided = lang_data.get("user_provided_files", {})
+        
         for stage_key in lang_data['stages']:
             stage_widget = DeletableStageWidget(stage_key, self)
             stage_widget.delete_requested.connect(
                 lambda skey=stage_key: parent_card.on_stage_delete(lang_id, skey)
             )
+            
+            # Check if this stage was already found in the destination folder or provided by user
+            if stage_key in pre_found or stage_key in user_provided:
+                stage_widget.get_dot().set_status('success')
+            
+            # Special case: if user provided images, image prompts are also technically skipped
+            if stage_key == 'stage_img_prompts' and 'stage_images' in user_provided:
+                stage_widget.get_dot().set_status('success')
+
             self.stage_map[stage_key] = stage_widget
             self.content_layout.addWidget(stage_widget)
         
