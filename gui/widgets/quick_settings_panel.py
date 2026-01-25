@@ -19,7 +19,7 @@ class QuickSettingsPanel(QWidget):
     def init_ui(self):
         # Regular Vertical Layout (No internal sidebar)
         self.root_layout = QVBoxLayout(self)
-        self.root_layout.setContentsMargins(0, 5, 0, 0)
+        self.root_layout.setContentsMargins(0, 5, 0, 0) 
         self.root_layout.setSpacing(0)
         
         # Header
@@ -40,7 +40,7 @@ class QuickSettingsPanel(QWidget):
         
         self.settings_container_widget = QWidget()
         self.content_layout = QVBoxLayout(self.settings_container_widget)
-        self.content_layout.setContentsMargins(10, 5, 10, 5)
+        self.content_layout.setContentsMargins(10, 5, 20, 5) # Margin to prevent clipping by scrollbar
         self.content_layout.setSpacing(15)
         self.content_layout.addStretch()
         
@@ -440,9 +440,11 @@ class QuickSettingsPanel(QWidget):
 
         elif setting_type == 'folder_path':
              h_path = QHBoxLayout()
-             h_path.setContentsMargins(0,0,0,0)
+             h_path.setContentsMargins(0,0,0,0) 
+             h_path.setSpacing(2) # Tighter spacing to push icon right
              le = QLineEdit(str(current_value) if current_value else "")
              le.setReadOnly(True)
+             le.setMinimumWidth(0) # Allow shrinking
              btn = QPushButton()
              
              # Yellow folder icon (Simple SVG)
@@ -461,8 +463,8 @@ class QuickSettingsPanel(QWidget):
                      self._update_setting(key, d)
              
              btn.clicked.connect(browse)
-             h_path.addWidget(le)
-             h_path.addWidget(btn)
+             h_path.addWidget(le) # Path on the left
+             h_path.addWidget(btn) # Button on the right
              layout.addLayout(h_path)
 
         elif setting_type == 'model_selection':

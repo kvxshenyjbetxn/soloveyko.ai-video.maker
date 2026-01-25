@@ -481,5 +481,8 @@
     "type_text": "Текст",
     "type_rewrite": "Рерайт",
     "select_template": "Выбрать шаблон",
-    "languages_label": "Языки"
+    "languages_label": "Языки",
+    "retry_task": "Повторить",
+    "recent_tasks_footer": "Нажмите на задачу, чтобы быстро заполнить данные для повторного запуска.",
+    "recent_tasks_close_hint": "Чтобы закрыть, перетяните разделитель влево."
 }

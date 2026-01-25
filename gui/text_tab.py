@@ -89,7 +89,7 @@ class StageSelectionWidget(QWidget):
         self.user_audio = None
         self.selected_template = None  # New: Store selected template name
 
-        layout = QHBoxLayout(self)
+        layout = FlowLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(6)
 
@@ -176,7 +176,6 @@ class StageSelectionWidget(QWidget):
                 else:
                     add_button.clicked.connect(self.open_audio_dialog)
 
-        layout.addStretch()
         self.update_toggle_button_text()
 
         # Apply default template if set
@@ -375,12 +374,12 @@ class TextTab(QWidget):
         
         # Recent Tasks Panel (Left)
         self.recent_tasks_panel = RecentTasksPanel(main_window=getattr(self, 'main_window', None))
-        self.recent_tasks_panel.setMinimumWidth(280)
+        self.recent_tasks_panel.setMinimumWidth(250)
         self.recent_tasks_panel.task_selected.connect(self.restore_job)
         self.splitter.addWidget(self.recent_tasks_panel)
 
-        # Main Content Container
         self.content_container = QWidget()
+        self.content_container.setMinimumWidth(0)
         layout = QVBoxLayout(self.content_container)
         layout.setContentsMargins(10, 10, 10, 10)
         
@@ -401,6 +400,7 @@ class TextTab(QWidget):
 
         # Main text input
         self.text_edit = DroppableTextEdit()
+        self.text_edit.setMinimumWidth(0)
         self.text_edit.setObjectName("textEdit")
         self.text_edit.textChanged.connect(self.update_char_count)
         self.text_edit.textChanged.connect(self.check_queue_button_visibility)
@@ -442,10 +442,12 @@ class TextTab(QWidget):
         # Status bar
         self.status_bar_layout = QHBoxLayout()
         self.openrouter_balance_label = QLabel()
+        self.openrouter_balance_label.setMinimumWidth(0)
         
         self.googler_usage_layout = QHBoxLayout()
         self.googler_usage_layout.setSpacing(2)
         self.googler_usage_label = QLabel()
+        self.googler_usage_label.setMinimumWidth(0)
         self.googler_info_btn = QToolButton()
         self.googler_info_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxInformation))
         self.googler_info_btn.setFixedSize(16, 16)
@@ -455,9 +457,13 @@ class TextTab(QWidget):
         self.googler_usage_layout.addWidget(self.googler_info_btn)
         
         self.elevenlabs_balance_label = QLabel()
+        self.elevenlabs_balance_label.setMinimumWidth(0)
         self.elevenlabs_unlim_balance_label = QLabel()
+        self.elevenlabs_unlim_balance_label.setMinimumWidth(0)
         self.voicemaker_balance_label = QLabel()
+        self.voicemaker_balance_label.setMinimumWidth(0)
         self.gemini_tts_balance_label = QLabel()
+        self.gemini_tts_balance_label.setMinimumWidth(0)
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
         self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addLayout(self.googler_usage_layout)
@@ -488,7 +494,7 @@ class TextTab(QWidget):
         self.splitter.setStretchFactor(2, 0) # Quick Settings
 
         # Restore splitter state
-        saved_state = self.settings.get("text_tab_splitter_state")
+        saved_state = self.settings.get("unified_splitter_state")
         if saved_state:
             self.splitter.restoreState(QByteArray.fromHex(saved_state.encode()))
         else:
@@ -504,7 +510,20 @@ class TextTab(QWidget):
 
     def save_splitter_state(self):
         state = self.splitter.saveState().toHex().data().decode()
-        self.settings.set("text_tab_splitter_state", state)
+        self.settings.set("unified_splitter_state", state)
+        
+        # Sync other tabs if they exist
+        if self.main_window:
+            if hasattr(self.main_window, 'text_tab') and self.main_window.text_tab != self:
+                self.main_window.text_tab.sync_splitter(state)
+            if hasattr(self.main_window, 'rewrite_tab') and self.main_window.rewrite_tab != self:
+                self.main_window.rewrite_tab.sync_splitter(state)
+
+    def sync_splitter(self, state_hex):
+        """External sync without triggering double save"""
+        self.splitter.blockSignals(True)
+        self.splitter.restoreState(QByteArray.fromHex(state_hex.encode()))
+        self.splitter.blockSignals(False)
 
     def restore_job(self, job):
         if not job: return

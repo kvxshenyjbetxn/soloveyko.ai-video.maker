@@ -488,5 +488,8 @@
     "type_text": "Текст",
     "type_rewrite": "Рерайт",
     "select_template": "Обрати шаблон",
-    "languages_label": "Мови"
+    "languages_label": "Мови",
+    "retry_task": "Повторити",
+    "recent_tasks_footer": "Натисніть на завдання, щоб швидко заповнити дані для повторного запуску.",
+    "recent_tasks_close_hint": "Щоб закрити, перетягніть роздільник вліво."
 }
