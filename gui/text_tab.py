@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QMenu, QWidgetAction, QSplitter
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QColor, QAction
-from PySide6.QtCore import Qt, QMimeData, Signal
+from PySide6.QtCore import Qt, QMimeData, Signal, QByteArray
 from utils.flow_layout import FlowLayout
 from functools import partial
 from utils.translator import translator
@@ -473,9 +473,21 @@ class TextTab(QWidget):
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 0)
 
+        # Restore splitter state
+        saved_state = self.settings.get("text_tab_splitter_state")
+        if saved_state:
+            self.splitter.restoreState(QByteArray.fromHex(saved_state.encode()))
+        
+        # Connect signal to save state
+        self.splitter.splitterMoved.connect(self.save_splitter_state)
+
         self.update_char_count()
         self.update_char_count()
         self.retranslate_ui()
+
+    def save_splitter_state(self):
+        state = self.splitter.saveState().toHex().data().decode()
+        self.settings.set("text_tab_splitter_state", state)
 
     def get_lang_config(self, lang_code):
         return self.settings.get("languages_config", {}).get(lang_code, {})

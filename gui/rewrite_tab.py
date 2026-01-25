@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle, QInputDialog, QSplitter,
     QToolButton
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QByteArray
 from gui.text_tab import DroppableTextEdit, StageSelectionWidget
 from utils.translator import translator
 from utils.settings import settings_manager, template_manager
@@ -132,7 +132,19 @@ class RewriteTab(QWidget):
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 0)
 
+        # Restore splitter state
+        saved_state = self.settings.get("rewrite_tab_splitter_state")
+        if saved_state:
+            self.splitter.restoreState(QByteArray.fromHex(saved_state.encode()))
+        
+        # Connect signal to save state
+        self.splitter.splitterMoved.connect(self.save_splitter_state)
+
         self.load_languages_menu()
+
+    def save_splitter_state(self):
+        state = self.splitter.saveState().toHex().data().decode()
+        self.settings.set("rewrite_tab_splitter_state", state)
 
     def load_languages_menu(self):
         # Clear all previous widgets (language buttons)
