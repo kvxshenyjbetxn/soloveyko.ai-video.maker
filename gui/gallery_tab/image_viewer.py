@@ -42,6 +42,8 @@ class ImageViewer(QWidget):
         # Video Widget
         from PySide6.QtMultimediaWidgets import QVideoWidget
         self.video_widget = QVideoWidget()
+        # Install event filter on video widget so it doesn't steal focus/keys
+        self.video_widget.installEventFilter(self)
         self.media_stack.addWidget(self.video_widget)
         
         # Image Widget
@@ -50,6 +52,25 @@ class ImageViewer(QWidget):
         self.media_stack.addWidget(self.image_label)
         
         self.layout.addWidget(self.media_stack, 0, 0, 1, 3) # Span all columns in the first row
+
+        # Navigation Buttons
+        self.prev_button = QPushButton("‹")
+        self.prev_button.setFixedSize(60, 120)
+        self.prev_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.prev_button.setStyleSheet(self._button_style())
+        self.prev_button.clicked.connect(self.show_prev)
+        self.layout.addWidget(self.prev_button, 0, 0, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+
+        self.next_button = QPushButton("›")
+        self.next_button.setFixedSize(60, 120)
+        self.next_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.next_button.setStyleSheet(self._button_style())
+        self.next_button.clicked.connect(self.show_next)
+        self.layout.addWidget(self.next_button, 0, 2, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+
+        # Explicitly raise buttons to the top of the stacking order
+        self.prev_button.raise_()
+        self.next_button.raise_()
 
         # Action Panel (Bottom)
         self.action_panel = QFrame()
@@ -105,21 +126,6 @@ class ImageViewer(QWidget):
 
         self.layout.addWidget(self.action_panel, 1, 0, 1, 3) # Bottom row, span all columns
 
-        # Navigation Buttons
-        self.prev_button = QPushButton("‹")
-        self.prev_button.setFixedSize(60, 120)
-        self.prev_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.prev_button.setStyleSheet(self._button_style())
-        self.prev_button.clicked.connect(self.show_prev)
-        self.layout.addWidget(self.prev_button, 0, 0, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-
-        self.next_button = QPushButton("›")
-        self.next_button.setFixedSize(60, 120)
-        self.next_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.next_button.setStyleSheet(self._button_style())
-        self.next_button.clicked.connect(self.show_next)
-        self.layout.addWidget(self.next_button, 0, 2, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
     def _button_style(self):
         return """
             QPushButton {
@@ -160,6 +166,10 @@ class ImageViewer(QWidget):
                 self.regen_button.show()
             
             self.update_buttons()
+            
+            # Ensure navigation buttons are always on top of the newly loaded media
+            self.prev_button.raise_()
+            self.next_button.raise_()
 
     def load_video(self, video_path):
         from PySide6.QtMultimedia import QMediaPlayer
@@ -221,6 +231,14 @@ class ImageViewer(QWidget):
                 return
             self.close()
 
+    def eventFilter(self, obj, event):
+        from PySide6.QtCore import QEvent
+        if obj == self.video_widget and event.type() == QEvent.Type.KeyPress:
+            # Forward keyboard event to this viewer
+            self.keyPressEvent(event)
+            return True
+        return super().eventFilter(obj, event)
+
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Escape:
             self.close()
@@ -228,7 +246,8 @@ class ImageViewer(QWidget):
             self.show_prev()
         elif event.key() == Qt.Key.Key_Right:
             self.show_next()
-        elif event.key() == Qt.Key.Key_Delete:
+        elif event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            # Key_Backspace is the primary Delete key on macOS
             self._on_delete_clicked()
         else:
             super().keyPressEvent(event)
@@ -243,9 +262,14 @@ class ImageViewer(QWidget):
     def _on_delete_clicked(self):
         if 0 <= self.current_index < len(self.media_items):
             item = self.media_items[self.current_index]
+            
+            # 1. Stop player and clear source to release file lock
+            self._stop_player()
+            
+            # 2. Emit delete signal
             self.delete_requested.emit(item['path'])
             
-            # Remove from local list and update view
+            # 3. Remove from local list and update view
             self.media_items.pop(self.current_index)
             if not self.media_items:
                 self.close()
@@ -253,6 +277,14 @@ class ImageViewer(QWidget):
                 if self.current_index >= len(self.media_items):
                     self.current_index = len(self.media_items) - 1
                 self.load_media()
+
+    def _stop_player(self):
+        if self.player:
+            self.player.stop()
+            self.player.setSource(QUrl()) # Critical: release file lock
+            self.player.setVideoOutput(None)
+            self.player.deleteLater()
+            self.player = None
 
     def _on_regen_clicked(self):
         if 0 <= self.current_index < len(self.media_items):
@@ -263,9 +295,5 @@ class ImageViewer(QWidget):
             })
 
     def closeEvent(self, event):
-        if self.player:
-            self.player.stop()
-            self.player.setVideoOutput(None)
-            self.player.deleteLater()
-            self.player = None
+        self._stop_player()
         super().closeEvent(event)
