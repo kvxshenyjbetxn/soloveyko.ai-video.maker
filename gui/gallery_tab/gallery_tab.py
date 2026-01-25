@@ -394,6 +394,46 @@ class GalleryTab(QWidget):
                     logger.log(f"Failed to create new pixmap for {new_path}", level=LogLevel.WARNING)
                 return # Found and processed, so exit
 
+    def get_all_media_data(self):
+        """Returns a list of dictionaries with media info: path, prompt, is_video."""
+        data = []
+        for i in range(self.content_layout.count()):
+            item = self.content_layout.itemAt(i)
+            widget = item.widget()
+            if isinstance(widget, CollapsibleGroup):
+                self._collect_media_data(widget, data)
+        return data
+
+    def _collect_media_data(self, group, data):
+        """Recursively collects media data from groups."""
+        if group.use_flow_layout:
+            for i in range(group.content_layout.count()):
+                widget = group.content_layout.itemAt(i).widget()
+                if hasattr(widget, 'media_path'):
+                    data.append({
+                        'path': widget.media_path,
+                        'prompt': widget.prompt,
+                        'is_video': widget.is_video
+                    })
+        else:
+            for i in range(group.content_layout.count()):
+                widget = group.content_layout.itemAt(i).widget()
+                if isinstance(widget, CollapsibleGroup):
+                    self._collect_media_data(widget, data)
+
+    def delete_media_by_path(self, media_path):
+        """Finds a thumbnail by path and triggers its deletion."""
+        thumbnail = None
+        for group in self.task_groups.values():
+            thumbnail = group.find_thumbnail_by_path(media_path)
+            if thumbnail:
+                break
+        
+        if thumbnail:
+            self._on_delete_requested(thumbnail, thumbnail.parent_group)
+            return True
+        return False
+
     def get_all_media_paths(self):
         """Returns a list of all media paths in the gallery, in the order they appear."""
         paths = []
