@@ -386,10 +386,11 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
 
         started_count = 0
         for task_id, state in self.task_states.items():
-            # Find the first stage that is NOT 'success'
+            # Find the first stage that is NOT 'success' and NOT 'warning'
             first_incomplete_stage = None
             for stage in state.stages:
-                if state.status.get(stage) != 'success':
+                status = state.status.get(stage)
+                if status not in ['success', 'warning']:
                     first_incomplete_stage = stage
                     break
             
@@ -622,18 +623,21 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         for task_id, state in self.task_states.items():
             if state.job_id == job_id:
                 found = True
+                logger.log(f"[{task_id}] Resetting failed stages for retry...", level=LogLevel.INFO)
                 for stage_key in state.stages:
                     if state.status.get(stage_key) == 'error':
                         state.status[stage_key] = 'pending'
                         self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'pending')
                     
-                    # Also reset stage_metadata if needed? Usually not required as it will be overwritten.
-                
-                # If the task was completely stalled due to dependency error, 
-                # start_processing will find the first 'pending' stage.
+                # Reset montage failure state for this task
+                if task_id in self.failed_montage_tasks_ids:
+                    self.failed_montage_tasks_ids.discard(task_id)
+                    logger.log(f"[{task_id}] Removed from failed montage list.", level=LogLevel.INFO)
         
         if found:
             self.start_processing()
+        else:
+            logger.log(f"Job {job_id} not found in active task states.", level=LogLevel.WARNING)
 
     def check_if_all_finished(self):
         if self.is_finished:
