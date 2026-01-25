@@ -365,9 +365,14 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                 if 'stage_montage' in state.stages:
                     self.montage_tasks_ids.add(state.task_id)
 
-                # Announce initial status
+                # Announce initial status and sync state
+                pre_found = state.lang_data.get('pre_found_files', {})
                 for stage_key in state.stages:
-                   self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'pending')
+                   if stage_key in pre_found:
+                       state.status[stage_key] = 'success'
+                       self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'success')
+                   else:
+                       self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'pending')
 
         return new_tasks_count
 
@@ -381,23 +386,27 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
 
         started_count = 0
         for task_id, state in self.task_states.items():
-            # Check if task is completely untouched (all pending) to start it
-            # Or if it's partially done but stopped?
-            # Simplified: checking the FIRST stage.
+            # Find the first stage that is NOT 'success'
+            first_incomplete_stage = None
+            for stage in state.stages:
+                if state.status.get(stage) != 'success':
+                    first_incomplete_stage = stage
+                    break
             
-            first_stage_key = state.stages[0] if state.stages else None
-            if not first_stage_key: continue
+            if not first_incomplete_stage:
+                continue
 
-            # If the very first stage is pending, we assume we need to kickstart this task
-            if state.status.get(first_stage_key) == 'pending':
+            # If the first incomplete stage is 'pending', we start it
+            if state.status.get(first_incomplete_stage) == 'pending':
                 started_count += 1
-                if 'stage_download' in state.stages:
+                if first_incomplete_stage == 'stage_download':
                     self._start_download(task_id)
-                elif 'stage_translation' in state.stages:
+                elif first_incomplete_stage == 'stage_translation':
                     self._start_translation(task_id)
-                    time.sleep(0.1) # Small delay to stagger starts
+                    time.sleep(0.1)
                 else:
-                    state.text_for_processing = state.original_text
+                    if not state.text_for_processing:
+                        state.text_for_processing = state.original_text
                     self._on_text_ready(task_id)
         
         if started_count > 0:
@@ -407,79 +416,79 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         state = self.task_states[task_id]
         pre_found_files = state.lang_data.get('pre_found_files', {})
 
-        if stage_key in pre_found_files:
-            file_path = pre_found_files[stage_key]
+        if stage_key in pre_found_files or state.status.get(stage_key) in ['success', 'warning']:
+            file_path = pre_found_files.get(stage_key)
             
             should_skip = True
             result = None
             
+            # If we don't have a file path but have a successful status, we should still skip
+            # but we might need dummy results for some workers.
+            
             if worker_class.__name__ == 'VideoGenerationWorker':
-                # Do not skip VideoGenerationWorker automatically based on directory presence.
-                # VideoMixin handles skipping logic manually by checking for video extensions.
                 should_skip = False
             elif stage_key == 'stage_preview':
                 if worker_class.__name__ == 'PreviewWorker':
-                    # We need the prompt text file to skip
-                    prompts_file = os.path.join(file_path, "preview_prompts.txt") if os.path.isdir(file_path) else file_path
-                    if os.path.isfile(prompts_file):
+                    prompts_file = os.path.join(file_path, "preview_prompts.txt") if file_path and os.path.isdir(file_path) else file_path
+                    if prompts_file and os.path.isfile(prompts_file):
                         try:
                             with open(prompts_file, 'r', encoding='utf-8') as f:
                                 result = f.read()
-                                logger.log(f"[{task_id}] Skipping PreviewWorker using existing prompts: {os.path.basename(prompts_file)}", level=LogLevel.INFO)
-                        except Exception as e:
-                            logger.log(f"[{task_id}] Failed to read existing preview prompts at {prompts_file}: {e}", level=LogLevel.WARNING)
-                            should_skip = False
+                                logger.log(f"[{task_id}] Skipping PreviewWorker: Using existing data.", level=LogLevel.INFO)
+                                state.skipped_stages.add(stage_key)
+                        except:
+                            should_skip = False if state.status.get(stage_key) == 'pending' else True
                     else:
-                        should_skip = False
+                        # If status is warning/success but file missing, we still skip but with empty result
+                        should_skip = True if state.status.get(stage_key) in ['success', 'warning'] else False
+                        result = ""
+
                 elif worker_class.__name__ == 'ImageGenerationWorker':
-                    # Only skip if we have images in that directory
-                    if os.path.isdir(file_path):
+                    search_path = file_path
+                    if file_path and os.path.isdir(os.path.join(file_path, "images")):
+                        search_path = os.path.join(file_path, "images")
+                    
+                    if search_path and os.path.isdir(search_path):
                         image_exts = ('.png', '.jpg', '.jpeg', '.webp')
-                        images = sorted([os.path.join(file_path, f) for f in os.listdir(file_path) if f.lower().endswith(image_exts)])
+                        images = sorted([os.path.join(search_path, f) for f in os.listdir(search_path) if f.lower().endswith(image_exts)])
                         if images:
                             result = {'paths': images, 'total_prompts': len(images)}
-                            logger.log(f"[{task_id}] Skipping ImageGenerationWorker for preview using {len(images)} existing images in {os.path.basename(file_path)}", level=LogLevel.INFO)
+                            logger.log(f"[{task_id}] Skipping ImageGenerationWorker (Preview): Found {len(images)} images.", level=LogLevel.INFO)
+                            state.skipped_stages.add(stage_key)
                         else:
-                            should_skip = False
+                            should_skip = True if state.status.get(stage_key) in ['success', 'warning'] else False
                     else:
-                        should_skip = False
-                else:
-                    # Some other worker for stage_preview? (Should not happen)
-                    should_skip = False
+                        should_skip = True if state.status.get(stage_key) in ['success', 'warning'] else False
             
             else:
                 # Standard stage skipping
-                logger.log(f"[{task_id}] Skipping stage '{stage_key}' using existing file: {os.path.basename(file_path)}", level=LogLevel.INFO)
+                if file_path:
+                    logger.log(f"[{task_id}] Skipping stage '{stage_key}' using existing files.", level=LogLevel.INFO)
                 state.skipped_stages.add(stage_key)
+                
                 try:
                     is_custom = stage_key.startswith("custom_")
                     is_text_stage = is_custom or stage_key in ['stage_translation', 'stage_rewrite', 'stage_img_prompts', 'stage_transcription']
                     
-                    if is_text_stage:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            result = f.read()
-                    elif stage_key == 'stage_images':
-                        valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.mp4', '.mkv', '.mov', '.avi', '.webm')
-                        image_paths = sorted(
-                            [os.path.join(file_path, f) for f in os.listdir(file_path) 
-                             if os.path.isfile(os.path.join(file_path, f)) 
-                             and f.lower().endswith(valid_exts) 
-                             and not f.startswith('.')],
-                            key=lambda x: int(os.path.splitext(os.path.basename(x))[0]) if os.path.splitext(os.path.basename(x))[0].isdigit() else -1
-                        )
-                        result = {'paths': image_paths, 'total_prompts': len(image_paths)}
-                    else:
-                        result = file_path
+                    if file_path and os.path.exists(file_path):
+                        if is_text_stage:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                result = f.read()
+                        elif stage_key == 'stage_images':
+                            valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.mp4', '.mkv', '.mov', '.avi', '.webm')
+                            image_paths = sorted(
+                                [os.path.join(file_path, f) for f in os.listdir(file_path) if f.lower().endswith(valid_exts)],
+                                key=lambda x: int(os.path.splitext(os.path.basename(x))[0]) if os.path.splitext(os.path.basename(x))[0].isdigit() else -1
+                            )
+                            result = {'paths': image_paths, 'total_prompts': len(image_paths)}
+                        else:
+                            result = file_path
                     
-                    # For custom stages, the finish slot expects a dict with 'stage_name'
                     if is_custom:
                         sn = stage_key.replace("custom_", "")
                         result = {'path': file_path, 'stage_name': sn, 'content': result}
-
-                except Exception as e:
-                    error_msg = f"Failed to process existing file for stage '{stage_key}': {e}"
-                    on_error_slot(task_id, error_msg)
-                    return
+                except:
+                    pass # Keep result as None
 
             if should_skip:
                 on_finish_slot(task_id, result)
