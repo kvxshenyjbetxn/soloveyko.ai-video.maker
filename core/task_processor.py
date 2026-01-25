@@ -615,6 +615,26 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                 state.image_paths[index] = new_path
                 logger.log(f"Updated path in task {task_id}. New path: '{new_path}'", level=LogLevel.INFO)
 
+    def retry_job(self, job_id):
+        """Reset failed stages of a job to 'pending' and restart processing."""
+        logger.log(f"Received request to retry job: {job_id}", level=LogLevel.INFO)
+        found = False
+        for task_id, state in self.task_states.items():
+            if state.job_id == job_id:
+                found = True
+                for stage_key in state.stages:
+                    if state.status.get(stage_key) == 'error':
+                        state.status[stage_key] = 'pending'
+                        self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'pending')
+                    
+                    # Also reset stage_metadata if needed? Usually not required as it will be overwritten.
+                
+                # If the task was completely stalled due to dependency error, 
+                # start_processing will find the first 'pending' stage.
+        
+        if found:
+            self.start_processing()
+
     def check_if_all_finished(self):
         if self.is_finished:
             return

@@ -265,6 +265,7 @@ class TaskCard(QGroupBox):
     task_delete_requested = Signal(str) # job_id
     language_delete_requested = Signal(str, str) # job_id, lang_id
     stage_delete_requested = Signal(str, str, str) # job_id, lang_id, stage_key
+    retry_requested = Signal(str) # job_id
 
     def __init__(self, job, log_tab=None, parent=None):
         super().__init__("", parent)
@@ -376,6 +377,31 @@ class TaskCard(QGroupBox):
             idx += 1
 
         layout.addWidget(languages_container)
+        
+        # Retry Button (Small, dynamic)
+        self.retry_button = QPushButton(translator.translate("retry_task"))
+        self.retry_button.setVisible(False)
+        self.retry_button.setStyleSheet("""
+            QPushButton {
+                background-color: #f39c12;
+                color: white;
+                font-weight: bold;
+                border-radius: 4px;
+                font-size: 11px;
+                padding: 4px 12px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #e67e22;
+            }
+        """)
+        self.retry_button.clicked.connect(lambda: self.retry_requested.emit(self.job_id))
+        
+        retry_layout = QHBoxLayout()
+        retry_layout.addStretch()
+        retry_layout.addWidget(self.retry_button)
+        layout.addLayout(retry_layout)
+        
         layout.addStretch()
         
         # Add left content to main layout
@@ -446,6 +472,18 @@ class TaskCard(QGroupBox):
     def update_stage_status(self, lang_id, stage_key, status):
         if lang_id in self.language_sections:
             self.language_sections[lang_id].update_stage_status(stage_key, status)
+        self._update_retry_visibility()
+
+    def _update_retry_visibility(self):
+        """Shows retry button if any stage in any language is in 'error' state."""
+        has_error = False
+        for section in self.language_sections.values():
+            statuses = [w.get_status() for w in section.stage_map.values()]
+            if 'error' in statuses:
+                has_error = True
+                break
+        
+        self.retry_button.setVisible(has_error)
     
     def update_stage_metadata(self, lang_id, stage_key, metadata_text):
         """Update metadata display for a specific stage"""
@@ -718,6 +756,7 @@ class QueueTab(QWidget):
         task_card = TaskCard(job, log_tab=self.log_tab)
         task_card.task_delete_requested.connect(self.on_task_deleted)
         task_card.language_delete_requested.connect(self.on_partial_delete)
+        task_card.retry_requested.connect(self.on_retry_requested)
         
         # Respect current global toggled state
         task_card.set_all_languages_expanded(self.all_expanded)
@@ -725,6 +764,10 @@ class QueueTab(QWidget):
 
         self.tasks_layout.addWidget(task_card)
         self.task_cards[job['id']] = task_card
+
+    def on_retry_requested(self, job_id):
+        if hasattr(self.main_window, 'task_processor'):
+            self.main_window.task_processor.retry_job(job_id)
 
     def on_task_deleted(self, job_id):
         if self.main_window.queue_manager.delete_job(job_id):

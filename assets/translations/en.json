@@ -481,5 +481,8 @@
     "type_text": "Text",
     "type_rewrite": "Rewrite",
     "select_template": "Select Template",
-    "languages_label": "Languages"
+    "languages_label": "Languages",
+    "retry_task": "Retry",
+    "recent_tasks_footer": "Click on a task to quickly fill data for re-run/restoration.",
+    "recent_tasks_close_hint": "To close, drag the splitter to the left."
 }

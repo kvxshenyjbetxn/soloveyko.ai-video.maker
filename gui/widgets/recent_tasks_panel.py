@@ -130,6 +130,30 @@ class RecentTasksPanel(QWidget):
         # Default appearance
         self.setMinimumWidth(250)
 
+        # Footer
+        footer_frame = QFrame()
+        footer_layout = QVBoxLayout(footer_frame)
+        footer_layout.setContentsMargins(10, 10, 10, 10)
+        footer_layout.setSpacing(5)
+        
+        # Main Footer Text
+        footer_text = translator.translate('recent_tasks_footer', "Click on a task to quickly fill data for re-run.")
+        self.footer_label = QLabel(footer_text)
+        self.footer_label.setWordWrap(True)
+        self.footer_label.setStyleSheet("color: gray; font-size: 10px; font-style: italic;")
+        self.footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        footer_layout.addWidget(self.footer_label)
+
+        # Close Hint Text
+        close_hint_text = translator.translate('recent_tasks_close_hint', "To close, drag the splitter to the left.")
+        self.close_hint_label = QLabel(close_hint_text)
+        self.close_hint_label.setWordWrap(True)
+        self.close_hint_label.setStyleSheet("color: #666; font-size: 9px;")
+        self.close_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        footer_layout.addWidget(self.close_hint_label)
+
+        self.layout.addWidget(footer_frame)
+
     def refresh(self):
         # Clear existing
         while self.container_layout.count() > 1: # Keep the stretch
