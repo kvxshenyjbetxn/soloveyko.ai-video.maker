@@ -64,27 +64,43 @@ class FlowLayout(QLayout):
         x = effectiveRect.x()
         y = effectiveRect.y()
         lineHeight = 0
+        
+        line_items = [] # List of tuples: (item, x_pos)
+
+        def align_line_middle(items, current_y, current_line_h):
+            if testOnly: return
+            for item, item_x in items:
+                # Calculate y offset for vertical centering within the row
+                offset_y = (current_line_h - item.sizeHint().height()) // 2
+                item.setGeometry(QRect(QPoint(item_x, current_y + offset_y), item.sizeHint()))
 
         for item in self.itemList:
-            wid = item.widget()
-            spaceX = self.spacing()
-            if self.m_hSpace >= 0:
-                spaceX = self.m_hSpace
-            spaceY = self.spacing()
-            if self.m_vSpace >= 0:
-                spaceY = self.m_vSpace
+            spaceX = self.m_hSpace if self.m_hSpace >= 0 else self.spacing()
+            if spaceX < 0: spaceX = 10
+            
+            spaceY = self.m_vSpace if self.m_vSpace >= 0 else self.spacing()
+            if spaceY < 0: spaceY = 10
 
-            nextX = x + item.sizeHint().width() + spaceX
+            item_w = item.sizeHint().width()
+            item_h = item.sizeHint().height()
+
+            nextX = x + item_w + spaceX
             if nextX - spaceX > effectiveRect.right() and lineHeight > 0:
+                # Process the completed line
+                align_line_middle(line_items, y, lineHeight)
+                
+                # Reset for next line
                 x = effectiveRect.x()
                 y = y + lineHeight + spaceY
-                nextX = x + item.sizeHint().width() + spaceX
+                nextX = x + item_w + spaceX
                 lineHeight = 0
+                line_items = []
 
-            if not testOnly:
-                item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
-
+            line_items.append((item, x))
+            lineHeight = max(lineHeight, item_h)
             x = nextX
-            lineHeight = max(lineHeight, item.sizeHint().height())
+
+        # Align the last line
+        align_line_middle(line_items, y, lineHeight)
 
         return y + lineHeight - effectiveRect.y() + bottom
