@@ -159,4 +159,75 @@ class HistoryManager:
         except Exception as e:
             logger.log(f"Error during history cleanup: {e}", level=LogLevel.ERROR)
 
+    def register_recent_job(self, job):
+        """Saves a job to the recent jobs list for recovery."""
+        with self.lock:
+            try:
+                file_path = os.path.join(self.history_path, "recent_jobs.json")
+                recent_jobs = []
+                if os.path.exists(file_path):
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            recent_jobs = json.load(f)
+                    except:
+                        recent_jobs = []
+                
+                # Add timestamp if not present
+                if 'created_at' not in job:
+                    job['created_at'] = datetime.now().isoformat()
+                
+                # Prevent duplicates by name and created_at (or just name if very recent)
+                # For simplicity, just append and then clean up old ones
+                recent_jobs.append(job)
+                
+                # Keep only last 2 days or last 100 jobs
+                now = datetime.now()
+                two_days_ago = now - timedelta(days=2)
+                
+                filtered_jobs = []
+                for j in recent_jobs:
+                    try:
+                        created_at = datetime.fromisoformat(j.get('created_at', ''))
+                        if created_at >= two_days_ago:
+                            filtered_jobs.append(j)
+                    except:
+                        continue
+                
+                # Limit count
+                if len(filtered_jobs) > 100:
+                    filtered_jobs = filtered_jobs[-100:]
+                
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(filtered_jobs, f, indent=4, ensure_ascii=False)
+                
+            except Exception as e:
+                logger.log(f"Failed to register recent job: {e}", level=LogLevel.ERROR)
+
+    def get_recent_jobs(self, days=2):
+        """Returns recent jobs for recovery."""
+        with self.lock:
+            file_path = os.path.join(self.history_path, "recent_jobs.json")
+            if not os.path.exists(file_path):
+                return []
+            
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    jobs = json.load(f)
+                
+                now = datetime.now()
+                limit = now - timedelta(days=days)
+                
+                filtered = []
+                for j in reversed(jobs): # Newest first
+                    try:
+                        created_at = datetime.fromisoformat(j.get('created_at', ''))
+                        if created_at >= limit:
+                            filtered.append(j)
+                    except:
+                        continue
+                return filtered
+            except Exception as e:
+                logger.log(f"Failed to get recent jobs: {e}", level=LogLevel.ERROR)
+                return []
+
 history_manager = HistoryManager()
