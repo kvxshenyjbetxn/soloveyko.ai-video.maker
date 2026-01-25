@@ -18,6 +18,7 @@ import datetime
 import datetime
 from PySide6.QtWidgets import QSplitter
 from gui.widgets.quick_settings_panel import QuickSettingsPanel
+from gui.widgets.recent_tasks_panel import RecentTasksPanel
 
 class RewriteTab(QWidget):
     def __init__(self, main_window=None):
@@ -35,6 +36,12 @@ class RewriteTab(QWidget):
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         root_layout.addWidget(self.splitter)
         
+        # Recent Tasks Panel (Left)
+        self.recent_tasks_panel = RecentTasksPanel(main_window=getattr(self, 'main_window', None))
+        self.recent_tasks_panel.setMinimumWidth(280)
+        self.recent_tasks_panel.task_selected.connect(self.restore_job)
+        self.splitter.addWidget(self.recent_tasks_panel)
+
         # Main Content Container
         self.content_container = QWidget()
         layout = QVBoxLayout(self.content_container)
@@ -125,17 +132,24 @@ class RewriteTab(QWidget):
         
         # Quick Settings Panel
         self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
-        self.quick_settings_panel.setMinimumWidth(300)
+        self.quick_settings_panel.setMinimumWidth(280)
         self.splitter.addWidget(self.quick_settings_panel)
-        self.splitter.setCollapsible(1, True)
+        # Make side panels collapsible
+        self.splitter.setCollapsible(0, True)
+        self.splitter.setCollapsible(2, True)
         
-        self.splitter.setStretchFactor(0, 1)
-        self.splitter.setStretchFactor(1, 0)
+        # Stretch factors
+        self.splitter.setStretchFactor(0, 0) # Recent Tasks
+        self.splitter.setStretchFactor(1, 1) # Main Content
+        self.splitter.setStretchFactor(2, 0) # Quick Settings
 
         # Restore splitter state
         saved_state = self.settings.get("rewrite_tab_splitter_state")
         if saved_state:
             self.splitter.restoreState(QByteArray.fromHex(saved_state.encode()))
+        else:
+            # Default: set balanced widths for side panels
+            self.splitter.setSizes([280, 800, 280])
         
         # Connect signal to save state
         self.splitter.splitterMoved.connect(self.save_splitter_state)
@@ -145,6 +159,35 @@ class RewriteTab(QWidget):
     def save_splitter_state(self):
         state = self.splitter.saveState().toHex().data().decode()
         self.settings.set("rewrite_tab_splitter_state", state)
+
+    def restore_job(self, job):
+        if not job: return
+        
+        # Check job type
+        if job.get('type') != 'rewrite':
+             return
+
+        # Handle multiple links if saved as input_source or just text
+        input_data = job.get('input_source', '')
+        # If it was a list of links, it might be stored differently? 
+        # In RewriteTab.add_to_queue, it processes links in a loop.
+        # But RecentTasksPanel saves the job as it was added.
+        
+        self.input_edit.setText(input_data)
+        
+        langs_data = job.get('languages', {})
+        for lang_id, btn in self.language_buttons.items():
+            if lang_id in langs_data:
+                btn.setChecked(True)
+                stage_widget = self.stage_widgets.get(lang_id)
+                if stage_widget:
+                    config = langs_data[lang_id]
+                    stage_widget.apply_config(config.get('stages', []), config.get('template_name'))
+            else:
+                btn.setChecked(False)
+
+        # Automatically trigger add to queue
+        self.add_to_queue(task_name_input=job.get('name'), is_restored=True)
 
     def load_languages_menu(self):
         # Clear all previous widgets (language buttons)
@@ -244,25 +287,25 @@ class RewriteTab(QWidget):
 
         self.add_to_queue_button.setEnabled(text_present and lang_selected and stages_selected)
 
-    def add_to_queue(self):
-        text = self.input_edit.toPlainText().strip()
-        if not text:
-            return
-
-        links = [line.strip() for line in text.split('\n') if line.strip()]
+    def add_to_queue(self, task_name_input=None, is_restored=False):
+        links = self.input_edit.toPlainText().split('\n')
+        links = [link.strip() for link in links if link.strip()]
+        
         if not links:
             return
 
-        # Custom QInputDialog to make it wider
-        dialog = QInputDialog(self)
-        dialog.setWindowTitle(translator.translate('enter_task_name_title', 'Task Name'))
-        dialog.setLabelText(translator.translate('enter_task_name_label', 'Enter task name:'))
-        dialog.setInputMode(QInputDialog.InputMode.TextInput)
-        dialog.resize(600, 200) # Ensure it's wide enough
-        dialog.setMinimumWidth(600)
-        
-        ok = dialog.exec()
-        task_name_input = dialog.textValue()
+        ok = True
+        if task_name_input is None:
+            # Custom QInputDialog to make it wider
+            dialog = QInputDialog(self)
+            dialog.setWindowTitle(translator.translate('enter_task_name_title', 'Task Name'))
+            dialog.setLabelText(translator.translate('enter_task_name_label', 'Enter task name:'))
+            dialog.setInputMode(QInputDialog.InputMode.TextInput)
+            dialog.resize(600, 200) # Ensure it's wide enough
+            dialog.setMinimumWidth(600)
+            
+            ok = dialog.exec()
+            task_name_input = dialog.textValue()
         
         if not ok:
             return
@@ -458,7 +501,8 @@ class RewriteTab(QWidget):
                 'created_at': datetime.datetime.now().isoformat(),
                 'status': 'pending',
                 'input_source': link,
-                'languages': {}
+                'languages': {},
+                'is_restored': is_restored
             }
             
             for lang_id, btn in self.language_buttons.items():
@@ -485,8 +529,9 @@ class RewriteTab(QWidget):
             if job['languages']:
                 self.main_window.queue_manager.add_task(job)
                 added_count += 1
-
+        
         if added_count > 0:
+            self.recent_tasks_panel.refresh()
             self.input_edit.clear()
             self.check_queue_button_visibility()
 

@@ -475,5 +475,11 @@
     "aspect_ratio_landscape": "Landscape (16:9)",
     "aspect_ratio_portrait": "Portrait (9:16)",
     "initial_video_label": "💾 Initial Video:",
-    "select_initial_video_file": "Select Initial Video File"
+    "select_initial_video_file": "Select Initial Video File",
+    "recent_tasks_title": "Recent Tasks",
+    "no_recent_tasks": "No tasks in last 2 days",
+    "type_text": "Text",
+    "type_rewrite": "Rewrite",
+    "select_template": "Select Template",
+    "languages_label": "Languages"
 }

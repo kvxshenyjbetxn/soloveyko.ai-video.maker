@@ -1,4 +1,5 @@
 from PySide6.QtCore import QObject, Signal
+from core.history_manager import history_manager
 
 class QueueManager(QObject):
     task_added = Signal(dict)
@@ -16,6 +17,11 @@ class QueueManager(QObject):
         # Generate simple ID if not provided
         if 'id' not in task or not task['id']:
             task['id'] = self.generate_task_id()
+        
+        # Register in recent history for recovery (if not already restored from history)
+        if not task.get('is_restored'):
+            history_manager.register_recent_job(task)
+        
         self.tasks.append(task)
         self.task_added.emit(task)
 

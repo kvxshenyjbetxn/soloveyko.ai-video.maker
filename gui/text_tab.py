@@ -15,6 +15,7 @@ from utils.settings import settings_manager, template_manager
 from gui.file_dialog import FileDialog
 from utils.animator import Animator
 from gui.widgets.quick_settings_panel import QuickSettingsPanel
+from gui.widgets.recent_tasks_panel import RecentTasksPanel
 from PySide6.QtWidgets import QSplitter, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QPlainTextEdit, QProgressBar, QMessageBox, QApplication, QFrame, QSizePolicy
 
 def get_text_color_for_background(bg_color_hex):
@@ -338,6 +339,11 @@ class StageSelectionWidget(QWidget):
     def get_selected_stages(self):
         return [key for key, checkbox in self.checkboxes.items() if checkbox.isChecked()]
 
+    def apply_config(self, stages, template_name):
+        self.set_template(template_name)
+        for key, checkbox in self.checkboxes.items():
+            checkbox.setChecked(key in stages)
+
 
     def _save_state(self):
         """Saves current checkbox state to global settings."""
@@ -367,6 +373,12 @@ class TextTab(QWidget):
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         root_layout.addWidget(self.splitter)
         
+        # Recent Tasks Panel (Left)
+        self.recent_tasks_panel = RecentTasksPanel(main_window=getattr(self, 'main_window', None))
+        self.recent_tasks_panel.setMinimumWidth(280)
+        self.recent_tasks_panel.task_selected.connect(self.restore_job)
+        self.splitter.addWidget(self.recent_tasks_panel)
+
         # Main Content Container
         self.content_container = QWidget()
         layout = QVBoxLayout(self.content_container)
@@ -466,17 +478,22 @@ class TextTab(QWidget):
         self.quick_settings_panel.setMinimumWidth(300)
         self.splitter.addWidget(self.quick_settings_panel)
         
-        # Make QuickSettingsPanel collapsible (index 1)
-        self.splitter.setCollapsible(1, True)
+        # Make side panels collapsible
+        self.splitter.setCollapsible(0, True)
+        self.splitter.setCollapsible(2, True)
         
         # Stretch factors
-        self.splitter.setStretchFactor(0, 1)
-        self.splitter.setStretchFactor(1, 0)
+        self.splitter.setStretchFactor(0, 0) # Recent Tasks
+        self.splitter.setStretchFactor(1, 1) # Main Content
+        self.splitter.setStretchFactor(2, 0) # Quick Settings
 
         # Restore splitter state
         saved_state = self.settings.get("text_tab_splitter_state")
         if saved_state:
             self.splitter.restoreState(QByteArray.fromHex(saved_state.encode()))
+        else:
+            # Default: set balanced widths for side panels
+            self.splitter.setSizes([280, 800, 280])
         
         # Connect signal to save state
         self.splitter.splitterMoved.connect(self.save_splitter_state)
@@ -488,6 +505,31 @@ class TextTab(QWidget):
     def save_splitter_state(self):
         state = self.splitter.saveState().toHex().data().decode()
         self.settings.set("text_tab_splitter_state", state)
+
+    def restore_job(self, job):
+        if not job: return
+        
+        # Check job type
+        if job.get('type') != 'text' and job.get('type') is not None:
+             # If it's a rewrite job, maybe switch tab or ignore
+             return
+
+        self.text_edit.setText(job.get('text', ''))
+        
+        langs_data = job.get('languages', {})
+        for lang_id, btn in self.language_buttons.items():
+            if lang_id in langs_data:
+                btn.setChecked(True)
+                # StageSelectionWidget should be created by on_language_toggled
+                stage_widget = self.stage_widgets.get(lang_id)
+                if stage_widget:
+                    config = langs_data[lang_id]
+                    stage_widget.apply_config(config.get('stages', []), config.get('template_name'))
+            else:
+                btn.setChecked(False)
+
+        # Automatically trigger add to queue
+        self.add_to_queue(task_name=job.get('name'), is_restored=True)
 
     def get_lang_config(self, lang_code):
         return self.settings.get("languages_config", {}).get(lang_code, {})
@@ -565,18 +607,20 @@ class TextTab(QWidget):
 
         self.add_to_queue_button.setEnabled(lang_selected and stages_selected)
 
-    def add_to_queue(self):
-        # Custom QInputDialog to make it wider
-        dialog = QInputDialog(self)
-        dialog.setWindowTitle(translator.translate('enter_task_name_title'))
-        dialog.setLabelText(translator.translate('enter_task_name_label'))
-        dialog.setInputMode(QInputDialog.InputMode.TextInput)
-        dialog.resize(600, dialog.height()) # Set initial size
-        # Or force minimum width
-        dialog.setMinimumWidth(600)
-        
-        ok = dialog.exec()
-        task_name = dialog.textValue()
+    def add_to_queue(self, task_name=None, is_restored=False):
+        ok = True
+        if task_name is None:
+            # Custom QInputDialog to make it wider
+            dialog = QInputDialog(self)
+            dialog.setWindowTitle(translator.translate('enter_task_name_title'))
+            dialog.setLabelText(translator.translate('enter_task_name_label'))
+            dialog.setInputMode(QInputDialog.InputMode.TextInput)
+            dialog.resize(600, dialog.height()) # Set initial size
+            # Or force minimum width
+            dialog.setMinimumWidth(600)
+            
+            ok = dialog.exec()
+            task_name = dialog.textValue()
         
         if ok:
             if not task_name:
@@ -778,10 +822,13 @@ class TextTab(QWidget):
                 job = {
                     "id": None,
                     "name": task_name,
+                    "type": "text",
                     "text": text,
-                    "languages": languages_data
+                    "languages": languages_data,
+                    "is_restored": is_restored
                 }
                 self.main_window.queue_manager.add_task(job)
+                self.recent_tasks_panel.refresh()
 
 
     def update_char_count(self):
