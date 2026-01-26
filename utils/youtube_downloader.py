@@ -125,7 +125,17 @@ class YouTubeDownloader:
             )
             title = result.stdout.strip()
             if title:
-                return title
+                # Sanitize title immediately to prevent issues downstream
+                # Allow unicode letters (\w), numbers, spaces and hyphens
+                # This explicitly removes quotes, colons, dots, emojis etc.
+                clean_title = re.sub(r'[^\w\s\-]', '', title)
+                # Collapse multiple spaces and strip trailing spaces/dots (Windows safety)
+                clean_title = re.sub(r'\s+', ' ', clean_title).strip('. ')
+                if clean_title:
+                    return clean_title
+                # If sanitization removed everything (e.g. only emojis), return original or fallback?
+                # Best to fallback to None so it gets "Task N" name, rather than " " or empty.
+                return None
         except Exception as e:
             pass
             
