@@ -43,6 +43,8 @@ class SubtitleEngine:
         # --- Handle 'auto' language detection for AMD (doesn't support it natively) ---
         if language == 'auto' and engine_type == 'amd':
             logger.log("AMD fork doesn't support 'auto'. Detecting language via standard whisper library...", LogLevel.INFO)
+            import gc
+            model = None
             try:
                 import whisper
                 import torch
@@ -54,6 +56,7 @@ class SubtitleEngine:
                 elif self.model_path and "small" in self.model_path.lower():
                     model_type = "small"
                 
+                # Load model specifically on CPU to avoid allocating VRAM before the main heavy task
                 model = whisper.load_model(model_type, device="cpu") 
                 audio = whisper.load_audio(audio_path)
                 audio = whisper.pad_or_trim(audio)
@@ -62,9 +65,19 @@ class SubtitleEngine:
                 _, probs = model.detect_language(mel)
                 language = max(probs, key=probs.get)
                 logger.log(f"Detected language for AMD: {language}", LogLevel.SUCCESS)
+                
             except Exception as e:
                 logger.log(f"Language detection failed: {e}. Defaulting to 'en'", LogLevel.WARNING)
                 language = 'en'
+            finally:
+                # CRITICAL: Force cleanup of Heavy Whisper Model to prevent Heap Corruption (0xc0000374)
+                # and RPC errors in subsequent tasks.
+                if model: del model
+                if 'audio' in locals(): del audio
+                if 'mel' in locals(): del mel
+                if 'whisper' in locals(): del whisper
+                if 'torch' in locals(): del torch
+                gc.collect()
 
         # --- Main Engine Routing ---
         if engine_type == 'assemblyai':
