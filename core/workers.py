@@ -49,6 +49,15 @@ class BaseWorker(QRunnable):
         self.signals = WorkerSignals()
 
     def run(self):
+        com_initialized = False
+        if platform.system() == "Windows":
+            try:
+                import pythoncom
+                pythoncom.CoInitialize()
+                com_initialized = True
+            except ImportError:
+                pass
+
         try:
             # logger.log(f"[{self.task_id}] Starting worker", level=LogLevel.INFO)
             result = self.do_work()
@@ -59,6 +68,12 @@ class BaseWorker(QRunnable):
             logger.log(error_msg, level=LogLevel.ERROR)
             logger.log(f"[{self.task_id}] Traceback:\n{traceback.format_exc()}", level=LogLevel.ERROR)
             self.signals.error.emit(self.task_id, str(e))
+        finally:
+            if com_initialized:
+                try:
+                    pythoncom.CoUninitialize()
+                except:
+                    pass
 
     def do_work(self):
         raise NotImplementedError
