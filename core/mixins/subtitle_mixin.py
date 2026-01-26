@@ -330,10 +330,22 @@ class SubtitleMixin:
                 whisper_exe = os.path.join(whisper_base_path, "main.exe")
                 whisper_model_path = os.path.join(whisper_base_path, model_name)
 
+            # Determine language code: 
+            # 1. Forced source language (e.g. for AMD Whisper manual override)
+            # 2. 'auto' for rewrite jobs (standard behavior)
+            # 3. Target language code (default fallback)
+            forced_lang = state.lang_data.get('source_language')
+            if forced_lang:
+                lang_code = forced_lang
+            elif state.job_type == 'rewrite':
+                lang_code = 'auto'
+            else:
+                lang_code = state.lang_id.split('-')[0].lower()
+
             config = {
                 'audio_path': state.audio_path,
                 'sub_settings': sub_settings,
-                'lang_code': 'auto' if state.job_type == 'rewrite' else state.lang_id.split('-')[0].lower(),
+                'lang_code': lang_code,
                 'whisper_exe': whisper_exe,
                 'whisper_model_path': whisper_model_path
             }

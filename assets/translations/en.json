@@ -107,6 +107,8 @@
     "add_to_queue": "Add to Queue",
     "enter_task_name_title": "Enter task name",
     "enter_task_name_label": "Task name:",
+    "enter_source_lang_label": "Enter source language code (e.g. en, uk):",
+    "tasks_added_success": "Task(s) successfully added to queue.",
     "default_task_name": "Task",
     "task_header": "Tasks and Stages",
     "expand_jobs": "Expand Jobs",
