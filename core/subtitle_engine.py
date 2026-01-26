@@ -7,6 +7,12 @@ import platform
 from api.assemblyai import assembly_ai_api
 from utils.logger import logger, LogLevel
 
+# Global cache to prevent repeated loading/unloading of Torch.
+# Keeping the model in memory avoids Heap Corruption (0xc0000374) in Frozen Apps.
+import threading
+_SHARED_DETECTION_MODEL = None
+_DETECTION_LOCK = threading.Lock()
+
 class SubtitleEngine:
     def __init__(self, exe_path=None, model_path=None):
         self.exe_path = exe_path
@@ -41,43 +47,41 @@ class SubtitleEngine:
         segments = []
 
         # --- Handle 'auto' language detection for AMD (doesn't support it natively) ---
+        # --- Handle 'auto' language detection for AMD (doesn't support it natively via arg sometimes) ---
         if language == 'auto' and engine_type == 'amd':
             logger.log("AMD fork doesn't support 'auto'. Detecting language via standard whisper library...", LogLevel.INFO)
-            import gc
-            model = None
-            try:
-                import whisper
-                import torch
-                
-                # Use a fast model for detection.
-                model_type = "base"
-                if self.model_path and "medium" in self.model_path.lower():
-                    model_type = "medium"
-                elif self.model_path and "small" in self.model_path.lower():
-                    model_type = "small"
-                
-                # Load model specifically on CPU to avoid allocating VRAM before the main heavy task
-                model = whisper.load_model(model_type, device="cpu") 
-                audio = whisper.load_audio(audio_path)
-                audio = whisper.pad_or_trim(audio)
-                mel = whisper.log_mel_spectrogram(audio).to(model.device)
-                
-                _, probs = model.detect_language(mel)
-                language = max(probs, key=probs.get)
-                logger.log(f"Detected language for AMD: {language}", LogLevel.SUCCESS)
-                
-            except Exception as e:
-                logger.log(f"Language detection failed: {e}. Defaulting to 'en'", LogLevel.WARNING)
-                language = 'en'
-            finally:
-                # CRITICAL: Force cleanup of Heavy Whisper Model to prevent Heap Corruption (0xc0000374)
-                # and RPC errors in subsequent tasks.
-                if model: del model
-                if 'audio' in locals(): del audio
-                if 'mel' in locals(): del mel
-                if 'whisper' in locals(): del whisper
-                if 'torch' in locals(): del torch
-                gc.collect()
+            global _SHARED_DETECTION_MODEL, _DETECTION_LOCK
+            
+            with _DETECTION_LOCK:
+                try:
+                    import whisper
+                    import torch
+                    
+                    if _SHARED_DETECTION_MODEL is None:
+                        logger.log("Loading detection model into memory (cached)...", LogLevel.INFO)
+                        # Use a fast model for detection.
+                        model_type = "base"
+                        if self.model_path and "medium" in self.model_path.lower():
+                            model_type = "medium"
+                        elif self.model_path and "small" in self.model_path.lower():
+                            model_type = "small"
+                        
+                        # Load model specifically on CPU to avoid allocating VRAM before the main heavy task
+                        # We keep this model globally to avoid repeated init/destroy cycles that crash frozen apps
+                        _SHARED_DETECTION_MODEL = whisper.load_model(model_type, device="cpu")
+                    
+                    audio = whisper.load_audio(audio_path)
+                    audio = whisper.pad_or_trim(audio)
+                    mel = whisper.log_mel_spectrogram(audio).to(_SHARED_DETECTION_MODEL.device)
+                    
+                    _, probs = _SHARED_DETECTION_MODEL.detect_language(mel)
+                    language = max(probs, key=probs.get)
+                    logger.log(f"Detected language for AMD: {language}", LogLevel.SUCCESS)
+                    
+                except Exception as e:
+                    logger.log(f"Language detection failed: {e}. Defaulting to 'en'", LogLevel.WARNING)
+                    language = 'en'
+            # NO FINAL CLEANUP: We intentionally keep the model in memory.
 
         # --- Main Engine Routing ---
         if engine_type == 'assemblyai':
