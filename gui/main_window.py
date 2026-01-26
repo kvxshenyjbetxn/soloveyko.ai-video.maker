@@ -568,7 +568,7 @@ class MainWindow(QMainWindow):
             if not self.task_processor.is_finished and self.task_processor.task_states:
                  logger.log("Processing is already active. Checking for new tasks...", level=LogLevel.INFO)
             self.task_processor.start_processing()
-            self._googler_timer.start(15000) # Update Googler usage every 15s during execution
+            self._googler_timer.start(30000) # Update Googler usage every 30s during execution
         else:
             # The periodic validation will have already shown a dialog.
             # We show a specific one here for the action of starting processing.
