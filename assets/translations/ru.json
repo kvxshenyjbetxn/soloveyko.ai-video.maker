@@ -108,6 +108,8 @@
     "add_to_queue": "Добавить в очередь",
     "enter_task_name_title": "Введите название задачи",
     "enter_task_name_label": "Название задачи:",
+    "enter_source_lang_label": "Введите код языка оригинала (например: en, ru):",
+    "tasks_added_success": "Задачи успешно добавлены в очередь.",
     "default_task_name": "Задача",
     "task_header": "Задачи и этапы",
     "expand_jobs": "Развернуть задачи",

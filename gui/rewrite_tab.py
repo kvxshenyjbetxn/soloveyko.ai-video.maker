@@ -1,12 +1,13 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle, QInputDialog, QSplitter,
-    QToolButton
+    QToolButton, QApplication
 )
 from PySide6.QtCore import Qt, QByteArray
 from gui.text_tab import DroppableTextEdit, StageSelectionWidget
 from utils.translator import translator
 from utils.settings import settings_manager, template_manager
+from utils.youtube_downloader import YouTubeDownloader
 from utils.logger import logger, LogLevel
 from utils.flow_layout import FlowLayout
 from utils.animator import Animator
@@ -315,38 +316,49 @@ class RewriteTab(QWidget):
         if not links:
             return
 
-        ok = True
-        if task_name_input is None:
-            # Custom QInputDialog to make it wider
-            dialog = QInputDialog(self)
-            dialog.setWindowTitle(translator.translate('enter_task_name_title', 'Task Name'))
-            dialog.setLabelText(translator.translate('enter_task_name_label', 'Enter task name:'))
-            dialog.setInputMode(QInputDialog.InputMode.TextInput)
-            dialog.resize(600, 200) # Ensure it's wide enough
-            dialog.setMinimumWidth(600)
-            
-            ok = dialog.exec()
-            task_name_input = dialog.textValue()
+        # Check for AMD Whisper specific requirement
+        whisper_type = self.settings.get("subtitles", {}).get("whisper_type", "amd")
+        source_lang_code = None
         
-        if not ok:
-            return
-
+        if whisper_type == 'amd' and not is_restored:
+            dialog_label = translator.translate("enter_source_lang_label", "Enter Source Language Code (e.g. en, uk) for AMD Whisper:")
+            dialog_title = translator.translate("enter_source_lang_title", "Source Language")
+            
+            lang, ok = QInputDialog.getText(self, dialog_title, dialog_label)
+            if ok and lang.strip():
+                source_lang_code = lang.strip()
+            # If user cancels but AMD is required, we probably proceed without code and rely on default
+            
         added_count = 0
         languages_config = self.settings.get('languages_config', {})
         
         initial_task_count = self.main_window.queue_manager.get_task_count()
 
         for i, link in enumerate(links):
-            # Determine job name
-            if not task_name_input or not task_name_input.strip():
-                # Default: "Task N"
-                count = initial_task_count + 1 + i
-                job_name = f"{translator.translate('default_task_name', 'Task')} {count}"
-            else:
-                if len(links) > 1:
-                    job_name = f"{task_name_input.strip()} {i+1}"
+            QApplication.processEvents() # maintain UI responsiveness
+            
+            # Determine job name automatically
+            job_name = task_name_input 
+            
+            if not job_name or not job_name.strip():
+                # Try to fetch title
+                title = YouTubeDownloader.get_video_title(link)
+                if title:
+                    job_name = title
                 else:
-                    job_name = task_name_input.strip()
+                    count = initial_task_count + 1 + i
+                    job_name = f"{translator.translate('default_task_name', 'Task')} {count}"
+
+            # --- Sanitize Job Name (Copied logic for consistency) ---
+            # Remove ellipsis and invalid chars
+            clean_job_name = job_name.replace('…', '').replace('...', '')
+            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', clean_job_name)
+            safe_job_name = safe_job_name[:100].strip('. ')
+            if not safe_job_name: 
+                 safe_job_name = f"Task {initial_task_count + 1 + i}"
+            
+            # Use sanitized name as the actual displayed job name too, to avoid confusion
+            job_name = safe_job_name
 
             # Create a job for this link
             job_id = str(uuid.uuid4())
@@ -368,18 +380,11 @@ class RewriteTab(QWidget):
                             
                     if not base_save_path:
                         continue
-
+                    
                     lang_name = btn.text()
                     
-                    # --- Логіка очистки шляху (має збігатися з TaskState) ---
-                    clean_job_name = job_name.replace('…', '').replace('...', '')
-                    safe_job_name = re.sub(r'[<>:"/\\|?*]', '', clean_job_name)
-                    safe_job_name = safe_job_name[:100].strip('. ')
-                    if not safe_job_name: safe_job_name = "Untitled_Task"
-                    
+                    # Path logic same as TaskState
                     safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).strip('. ')
-                    
-                    # Прямий шлях без префіксів
                     dir_path = os.path.abspath(os.path.join(base_save_path, safe_job_name, safe_lang_name))
                     
                     if os.path.isdir(dir_path):
@@ -541,6 +546,10 @@ class RewriteTab(QWidget):
                         job_lang_settings = lang_config.copy()
                         job_lang_settings['stages'] = selected_stages
                         
+                        # INJECT SOURCE LANGUAGE FOR AMD FORK
+                        if source_lang_code:
+                            job_lang_settings['source_language'] = source_lang_code
+
                         if use_existing and btn.text() in found_files_details:
                             job_lang_settings["pre_found_files"] = found_files_details[btn.text()]
 
@@ -558,8 +567,12 @@ class RewriteTab(QWidget):
             self.recent_tasks_panel.refresh()
             self.input_edit.clear()
             self.check_queue_button_visibility()
-
-
+            
+            QMessageBox.information(
+                self, 
+                translator.translate("success", "Success"), 
+                translator.translate("tasks_added_success", "Task(s) successfully added to queue.") + f" ({added_count})"
+            )
 
     def retranslate_ui(self):
         self.input_label.setText(translator.translate("enter_links_label", "Enter YouTube Links (one per line):"))

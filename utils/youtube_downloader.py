@@ -83,3 +83,51 @@ class YouTubeDownloader:
         
         raise Exception("Download finished but file not found.")
 
+    @staticmethod
+    def get_video_title(url, yt_dlp_path=None):
+        """
+        Fetches the title of the video using yt-dlp.
+        """
+        # Determine paths
+        base_path = settings_manager.base_path
+        assets_path = os.path.join(base_path, "assets")
+        
+        if not yt_dlp_path or not os.path.exists(yt_dlp_path):
+             exe_name = "yt-dlp.exe" if os.name == 'nt' else "yt-dlp"
+             yt_dlp_path = os.path.join(assets_path, exe_name)
+        
+        env = os.environ.copy()
+        env["PATH"] = assets_path + os.pathsep + env["PATH"]
+        
+        cmd = [
+            yt_dlp_path,
+            "--get-title",
+            "--no-playlist",
+            "--skip-download",
+            # New Anti-Bot options
+            "--extractor-args", "youtube:player_client=android",
+            url
+        ]
+        
+        startupinfo = None
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+        try:
+            result = subprocess.run(
+                cmd,
+                startupinfo=startupinfo,
+                capture_output=True,
+                text=True,
+                env=env,
+                check=True
+            )
+            title = result.stdout.strip()
+            if title:
+                return title
+        except Exception as e:
+            pass
+            
+        return None
+
