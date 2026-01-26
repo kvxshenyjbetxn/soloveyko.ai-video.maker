@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 from PySide6.QtCore import Slot
 from utils.logger import logger, LogLevel
 from core.workers import VoiceoverWorker, SubtitleWorker, TranscriptionWorker
@@ -262,6 +263,7 @@ class SubtitleMixin:
             whisper_type = sub_settings.get('whisper_type', 'amd')
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
+                time.sleep(2.0)
                 self._process_whisper_queue()
         
         # Check if we can unblock montages now (if setting dependent)
@@ -283,6 +285,7 @@ class SubtitleMixin:
             whisper_type = sub_settings.get('whisper_type', 'amd')
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
+                time.sleep(2.0)
                 self._process_whisper_queue()
 
         # Check if we can unblock montages now
@@ -346,6 +349,7 @@ class SubtitleMixin:
             whisper_type = sub_settings.get('whisper_type', 'amd')
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
+                time.sleep(2.0)
                 self._process_whisper_queue()
         
         self._set_stage_status(task_id, 'stage_transcription', 'error', error)
@@ -366,6 +370,7 @@ class SubtitleMixin:
             whisper_type = sub_settings.get('whisper_type', 'amd')
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
+                time.sleep(2.0)
                 self._process_whisper_queue()
             
             # Update stage.text_for_processing or original_text depending on logic
