@@ -352,6 +352,9 @@ class RewriteTab(QWidget):
             job_id = str(uuid.uuid4())
             
             # --- Check for existing files ---
+            found_files_per_lang = {}
+            found_files_details = {}
+
             for lang_id, btn in self.language_buttons.items():
                 if btn.isChecked():
                     stage_widget = self.stage_widgets.get(lang_id)
