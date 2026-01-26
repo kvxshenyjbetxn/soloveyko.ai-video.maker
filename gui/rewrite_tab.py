@@ -349,11 +349,14 @@ class RewriteTab(QWidget):
                     count = initial_task_count + 1 + i
                     job_name = f"{translator.translate('default_task_name', 'Task')} {count}"
 
-            # --- Sanitize Job Name (Copied logic for consistency) ---
-            # Remove ellipsis and invalid chars
+            # --- Sanitize Job Name (Strict Unicode-safe sanitization) ---
+            # Remove ellipsis and strict character filtering
             clean_job_name = job_name.replace('…', '').replace('...', '')
-            safe_job_name = re.sub(r'[<>:"/\\|?*]', '', clean_job_name)
-            safe_job_name = safe_job_name[:100].strip('. ')
+            # Allow unicode letters, numbers, spaces, hyphens
+            safe_job_name = re.sub(r'[^\w\s\-]', '', clean_job_name)
+            # Collapse spaces and strip ALL trailing/leading dots and spaces (Windows safety)
+            safe_job_name = re.sub(r'\s+', ' ', safe_job_name).strip('. ')
+            
             if not safe_job_name: 
                  safe_job_name = f"Task {initial_task_count + 1 + i}"
             
@@ -384,7 +387,10 @@ class RewriteTab(QWidget):
                     lang_name = btn.text()
                     
                     # Path logic same as TaskState
-                    safe_lang_name = "".join(c for c in lang_name if c.isalnum() or c in (' ', '_')).strip('. ')
+                    # Path logic same as TaskState
+                    # Strict sanitization for lang name too
+                    safe_lang_name = re.sub(r'[^\w\s\-]', '', lang_name)
+                    safe_lang_name = re.sub(r'\s+', ' ', safe_lang_name).strip('. ')
                     dir_path = os.path.abspath(os.path.join(base_save_path, safe_job_name, safe_lang_name))
                     
                     if os.path.isdir(dir_path):
