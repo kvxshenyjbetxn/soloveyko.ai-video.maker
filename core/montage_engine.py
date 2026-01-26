@@ -306,7 +306,7 @@ class MontageEngine:
         # 5. SUBS & AUDIO
         output_v_stream = final_v 
         if ass_path and os.path.exists(ass_path):
-            ass_clean = ass_path.replace("\\", "/").replace(":", "\\:")
+            ass_clean = ass_path.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
             subs = f"{final_v}subtitles='{ass_clean}'[v_out]"
             filter_parts.append(subs)
             output_v_stream = "[v_out]"
