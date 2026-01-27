@@ -189,11 +189,9 @@ class RewriteTab(QWidget):
         job_type = job.get('type')
         if job_type == 'text' or job_type is None:
             if self.main_window:
-                text_idx = self.main_window.tabs.indexOf(self.main_window.text_tab)
-                if text_idx != -1:
-                    self.main_window.tabs.setCurrentIndex(text_idx)
-                    self.main_window.text_tab.restore_job(job)
-                    return
+                self.main_window.activate_tab(self.main_window.text_tab)
+                self.main_window.text_tab.restore_job(job)
+                return
         elif job_type != 'rewrite':
              return
 

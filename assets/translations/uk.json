@@ -11,6 +11,8 @@
     "notification_image_review_body": "Всі зображення згенеровано. Перейдіть до галереї для перегляду та продовження.",
     "notification_queue_finished_title": "✅ *Всі завдання завершено!*",
     "notification_queue_finished_body": "Час виконання: `{elapsed_time}`",
+    "text_group_title": "Текст",
+    "other_tab_title": "Інше",
     "notification_test_message": "🔔 Це тестове повідомлення від Soloveyko.AI Video Maker!",
     "notification_task_error_title": "❌ *Помилка виконання*",
     "notification_task_error_body": "Завдання: `{task_name}`\nМова: `{lang_id}`\nЕтап: `{stage_name}`\nПомилка: `{error_message}`",
