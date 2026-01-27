@@ -3,6 +3,7 @@ from core.history_manager import history_manager
 
 class QueueManager(QObject):
     task_added = Signal(dict)
+    queue_updated = Signal()
 
     def __init__(self):
         super().__init__()
@@ -24,6 +25,7 @@ class QueueManager(QObject):
         
         self.tasks.append(task)
         self.task_added.emit(task)
+        self.queue_updated.emit()
 
     def get_tasks(self):
         return self.tasks
@@ -31,6 +33,7 @@ class QueueManager(QObject):
     def clear_queue(self):
         self.tasks.clear()
         self.task_counter = 0
+        self.queue_updated.emit()
 
     def get_task_count(self):
         return len(self.tasks)
@@ -51,6 +54,7 @@ class QueueManager(QObject):
             self.tasks.remove(job_to_delete)
             if not self.tasks:
                 self.task_counter = 0
+            self.queue_updated.emit()
             return True
         return False
 

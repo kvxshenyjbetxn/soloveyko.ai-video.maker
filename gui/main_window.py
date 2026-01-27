@@ -38,6 +38,7 @@ from gui.gallery_tab.gallery_tab import GalleryTab
 from gui.rewrite_tab import RewriteTab
 from gui.gallery_tab.image_viewer import ImageViewer
 from gui.gallery_tab.video_viewer import VideoViewer
+from gui.other_tab.other_tab import OtherTab
 from core.queue_manager import QueueManager
 from core.task_processor import TaskProcessor
 from utils.logger import logger, LogLevel
@@ -328,21 +329,7 @@ class MainWindow(QMainWindow):
 
             if should_show_rewrite != self.SHOW_REWRITE_TAB:
                 self.SHOW_REWRITE_TAB = should_show_rewrite
-                if self.SHOW_REWRITE_TAB:
-                    # Add tab
-                    if not hasattr(self, 'rewrite_tab'):
-                         self.rewrite_tab = RewriteTab(main_window=self)
-                    
-                    # Insert after Text Translation tab (index 1)
-                    self.tabs.insertTab(1, self.rewrite_tab, self.translator.translate('rewrite_tab'))
-                    
-                else:
-                    # Remove tab
-                    # Check if rewrite_tab exists and is in tabs
-                    if hasattr(self, 'rewrite_tab'):
-                        idx = self.tabs.indexOf(self.rewrite_tab)
-                        if idx != -1:
-                            self.tabs.removeTab(idx)
+                self._rebuild_text_tabs()
             
             # Refresh balances for all valid users to ensure UI is up to date
             self.start_background_updates()
@@ -360,10 +347,7 @@ class MainWindow(QMainWindow):
             self.days_left_label.setText("!")
             self.user_icon_button.setToolTip(self.translator.translate('subscription_expired_message'))
             self.SHOW_REWRITE_TAB = False # Ensure rewrite tab is hidden if key is invalid
-            if hasattr(self, 'rewrite_tab'):
-                idx = self.tabs.indexOf(self.rewrite_tab)
-                if idx != -1:
-                    self.tabs.removeTab(idx)
+            self._rebuild_text_tabs()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -450,23 +434,40 @@ class MainWindow(QMainWindow):
         self.update_subscription_status()
 
         self.text_tab = TextTab(main_window=self)
-        if self.SHOW_REWRITE_TAB:
-            self.rewrite_tab = RewriteTab(main_window=self)
-
+        self.rewrite_tab = RewriteTab(main_window=self)
         self.settings_tab = SettingsTab(main_window=self)
+        self.other_tab = OtherTab(main_window=self)
         self.log_tab = LogTab()
         self.queue_tab = QueueTab(parent=self.tabs, main_window=self, log_tab=self.log_tab)
         self.gallery_tab = GalleryTab()
+        
         logger.log_message_signal.connect(self.log_tab.add_log_message)
         self.review_notification_shown = False
 
-        self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
-        if self.SHOW_REWRITE_TAB:
-            self.tabs.addTab(self.rewrite_tab, self.translator.translate('rewrite_tab'))
+        # Custom container for Text+Rewrite if both available
+        self.text_group_tab = QWidget()
+        self.text_group_layout = QVBoxLayout(self.text_group_tab)
+        self.text_group_layout.setContentsMargins(0, 10, 0, 0)
+        self.text_group_tabs = AnimatedTabWidget()
+        self.text_group_layout.addWidget(self.text_group_tabs)
+        
+        # Initial building of Text/Rewrite tabs
+        self._rebuild_text_tabs()
+
         self.tabs.addTab(self.queue_tab, self.translator.translate('queue_tab'))
         self.tabs.addTab(self.gallery_tab, self.translator.translate('gallery_tab_title'))
         self.tabs.addTab(self.settings_tab, self.translator.translate('settings_tab'))
+        self.tabs.addTab(self.other_tab, self.translator.translate('other_tab_title', 'Інше'))
         self.tabs.addTab(self.log_tab, self.translator.translate('log_tab'))
+
+        # Hide Queue and Gallery initially if empty
+        self._update_tab_visibility()
+
+        # Connect signals for dynamic visibility
+        self.queue_manager.queue_updated.connect(self._update_tab_visibility)
+        self.task_processor.image_generated.connect(self._update_tab_visibility)
+        self.gallery_tab.image_deleted.connect(lambda: QTimer.singleShot(100, self._update_tab_visibility)) # Slight delay to let gallery update its state
+        self.gallery_tab.image_regenerated.connect(self._update_tab_visibility)
 
         # Connect signals
         self.queue_manager.task_added.connect(self.queue_tab.add_task)
@@ -1062,19 +1063,116 @@ class MainWindow(QMainWindow):
     def retranslate_ui(self):
         hint_manager.load_hints()
         self.update_title()
-        self.tabs.setTabText(self.tabs.indexOf(self.text_tab), self.translator.translate('text_processing_tab'))
+        
+        # Text/Translation Tab
         if self.SHOW_REWRITE_TAB:
-            self.tabs.setTabText(self.tabs.indexOf(self.rewrite_tab), self.translator.translate('rewrite_tab'))
-            self.rewrite_tab.retranslate_ui()
+            # Translation is inside a group
+            idx = self.tabs.indexOf(self.text_group_tab)
+            if idx != -1:
+                self.tabs.setTabText(idx, self.translator.translate('text_group_title', 'Текст'))
+            self.text_group_tabs.setTabText(0, self.translator.translate('text_processing_tab'))
+            self.text_group_tabs.setTabText(1, self.translator.translate('rewrite_tab'))
+        else:
+            # Translation is top-level
+            idx = self.tabs.indexOf(self.text_tab)
+            if idx != -1:
+                self.tabs.setTabText(idx, self.translator.translate('text_processing_tab'))
+
         self.tabs.setTabText(self.tabs.indexOf(self.queue_tab), self.translator.translate('queue_tab'))
         self.tabs.setTabText(self.tabs.indexOf(self.gallery_tab), self.translator.translate('gallery_tab_title'))
         self.tabs.setTabText(self.tabs.indexOf(self.settings_tab), self.translator.translate('settings_tab'))
+        self.tabs.setTabText(self.tabs.indexOf(self.other_tab), self.translator.translate('other_tab_title', 'Інше'))
         self.tabs.setTabText(self.tabs.indexOf(self.log_tab), self.translator.translate('log_tab'))
         
         self.text_tab.retranslate_ui()
+        self.rewrite_tab.retranslate_ui()
         self.settings_tab.retranslate_ui()
+        self.other_tab.retranslate_ui()
         self.queue_tab.retranslate_ui()
         self.gallery_tab.retranslate_ui()
+
+    def _rebuild_text_tabs(self):
+        """Rebuilds the Text/Rewrite tab structure based on self.SHOW_REWRITE_TAB."""
+        # Save current active tab if it's one of the text tabs
+        current_widget = self.tabs.currentWidget()
+        
+        # Remove both from everywhere first
+        idx_main_text = self.tabs.indexOf(self.text_tab)
+        if idx_main_text != -1: self.tabs.removeTab(idx_main_text)
+        
+        idx_main_group = self.tabs.indexOf(self.text_group_tab)
+        if idx_main_group != -1: self.tabs.removeTab(idx_main_group)
+        
+        while self.text_group_tabs.count():
+            self.text_group_tabs.removeTab(0)
+            
+        if self.SHOW_REWRITE_TAB:
+            # Group them
+            self.text_group_tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
+            self.text_group_tabs.addTab(self.rewrite_tab, self.translator.translate('rewrite_tab'))
+            self.tabs.insertTab(0, self.text_group_tab, self.translator.translate('text_group_title', 'Текст'))
+            if current_widget in [self.text_tab, self.rewrite_tab, self.text_group_tab]:
+                self.tabs.setCurrentWidget(self.text_group_tab)
+        else:
+            # Just Translation
+            self.tabs.insertTab(0, self.text_tab, self.translator.translate('text_processing_tab'))
+            if current_widget in [self.text_tab, self.rewrite_tab, self.text_group_tab]:
+                self.tabs.setCurrentWidget(self.text_tab)
+
+    def _update_tab_visibility(self):
+        """Shows or hides Queue and Gallery tabs based on content."""
+        # Target order: Text/Translation (0), Queue (1), Gallery (2), Settings (3), Other (4), Log (5)
+        
+        # 1. Queue Tab
+        queue_count = self.queue_manager.get_task_count()
+        queue_idx = self.tabs.indexOf(self.queue_tab)
+        if queue_count > 0:
+            if queue_idx == -1:
+                # Insert at position 1 (after Text tabs)
+                self.tabs.insertTab(min(1, self.tabs.count()), self.queue_tab, self.translator.translate('queue_tab'))
+        else:
+            if queue_idx != -1:
+                self.tabs.removeTab(queue_idx)
+
+        # 2. Gallery Tab
+        gallery_has_items = len(self.gallery_tab.task_groups) > 0
+        gallery_idx = self.tabs.indexOf(self.gallery_tab)
+        if gallery_has_items:
+            if gallery_idx == -1:
+                # Insert after Queue (if exists) or Text
+                # Positions: Text(0), Queue(1). So pos is 2 or 1.
+                pos = 1
+                if self.tabs.indexOf(self.queue_tab) != -1: pos = 2
+                self.tabs.insertTab(min(pos, self.tabs.count()), self.gallery_tab, self.translator.translate('gallery_tab_title'))
+        else:
+            if gallery_idx != -1:
+                self.tabs.removeTab(gallery_idx)
+        
+        # Ensure Settings, Other, Log are at the end if they moved
+        # (Though they shouldn't move if we insert correctly, but just in case)
+        for tab in [self.settings_tab, self.other_tab, self.log_tab]:
+            idx = self.tabs.indexOf(tab)
+            if idx != -1:
+                # If it's not at the end, we might want to re-insert, 
+                # but insertTab generally handles this well if we use high indices.
+                pass
+
+    def activate_tab(self, widget):
+        """Switches to the specified tab, even if it's nested (e.g., Translation/Rewrite)."""
+        # Check if it's in the main tab widget
+        idx = self.tabs.indexOf(widget)
+        if idx != -1:
+            self.tabs.setCurrentIndex(idx)
+            return
+
+        # Check if it's in the text group
+        nested_idx = self.text_group_tabs.indexOf(widget)
+        if nested_idx != -1:
+            group_idx = self.tabs.indexOf(self.text_group_tab)
+            if group_idx != -1:
+                self.tabs.setCurrentIndex(group_idx)
+                self.text_group_tabs.setCurrentIndex(nested_idx)
+                return
 
     def closeEvent(self, event):
         # Save all settings globally
