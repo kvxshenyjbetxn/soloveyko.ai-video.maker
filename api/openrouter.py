@@ -88,8 +88,8 @@ class OpenRouterAPI:
 
 
 
-    @retry(tries=5, delay=10, backoff=1.5)
-    def get_chat_completion(self, model, messages, max_tokens=4096, temperature=None):
+    @retry(tries=2, delay=5, backoff=2)
+    def get_chat_completion(self, model, messages, max_tokens=None, temperature=None):
         if not self.api_key:
             error_msg = "API key is not configured."
             logger.log(error_msg, level=LogLevel.ERROR)
@@ -98,16 +98,18 @@ class OpenRouterAPI:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://soloveyko.ai", # Required for some free models/policies
+            "HTTP-Referer": "https://soloveyko-ai.kherson.ua", # Required for some free models/policies
             "X-Title": "Soloveyko.AI-Video.Maker"
         }
         
         # Prepare payload
         data = {
             "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens
+            "messages": messages
         }
+
+        if max_tokens and max_tokens > 0:
+            data["max_tokens"] = max_tokens
 
         # Add optional parameters if provided
         if temperature is not None:

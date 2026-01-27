@@ -67,7 +67,8 @@ class SubtitleEngine:
 
         elif engine_type == 'standard':
             # --- Standard Python Whisper ---
-            logger.log(f"Running Standard Whisper (Python): Model={self.model_path}, Lang={language}", LogLevel.INFO)
+            actual_model = self.model_path.replace(".bin", "") if self.model_path else "base"
+            logger.log(f"Running Standard Whisper (Python): Model={actual_model}, Lang={language}", LogLevel.INFO)
             try:
                 import whisper
             except ImportError:
@@ -75,12 +76,12 @@ class SubtitleEngine:
 
             # Check if model exists and log if it needs to be downloaded
             cache_path = os.path.join(os.path.expanduser("~"), ".cache", "whisper")
-            model_file = os.path.join(cache_path, f"{self.model_path}.pt")
+            model_file = os.path.join(cache_path, f"{actual_model}.pt")
             if not os.path.exists(model_file):
                 from utils.translator import translator
-                logger.log(translator.translate("whisper_model_download_info", "Whisper model '{model_name}' not found. Starting one-time download. This may take some time...").format(model_name=self.model_path), LogLevel.INFO)
+                logger.log(translator.translate("whisper_model_download_info", "Whisper model '{model_name}' not found. Starting one-time download. This may take some time...").format(model_name=actual_model), LogLevel.INFO)
 
-            model = whisper.load_model(self.model_path)
+            model = whisper.load_model(actual_model)
             
             # Pass language=None for auto-detection in standard whisper
             whisper_lang = language if language != 'auto' else None

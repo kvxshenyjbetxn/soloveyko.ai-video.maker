@@ -118,20 +118,20 @@ SETTINGS_METADATA = {
      'image_prompt_settings': {
         'prompt': {'type': 'text_edit_button'},
         'model': {'type': 'model_selection'},
-        'max_tokens': {'type': 'int', 'min': 1, 'max': 128000},
+        'max_tokens': {'type': 'int', 'min': 0, 'max': 128000},
         'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
     },
     'preview_settings': {
         'prompt': {'type': 'text_edit_button'},
         'model': {'type': 'model_selection'},
-        'max_tokens': {'type': 'int', 'min': 1, 'max': 128000},
+        'max_tokens': {'type': 'int', 'min': 0, 'max': 128000},
         'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
         'image_count': {'type': 'int', 'min': 1, 'max': 4},
     },
     'languages_config': {
         'prompt': {'type': 'text_edit_button'},
         'model': {'type': 'model_selection'},
-        'max_tokens': {'type': 'int', 'min': 1, 'max': 128000},
+        'max_tokens': {'type': 'int', 'min': 0, 'max': 128000},
         'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
         'background_music_path': {'type': 'file_path'},
         'background_music_volume': {'type': 'int', 'min': 0, 'max': 100},
@@ -146,7 +146,7 @@ SETTINGS_METADATA = {
         'default_template': {'type': 'str'}, 
         'rewrite_prompt': {'type': 'text_edit_button'}, # Added missing keys compared to TAB
         'rewrite_model': {'type': 'model_selection'},
-        'rewrite_max_tokens': {'type': 'int', 'min': 1, 'max': 128000},
+        'rewrite_max_tokens': {'type': 'int', 'min': 0, 'max': 128000},
         'rewrite_temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
         'watermark_size': {'type': 'int', 'min': 1, 'max': 100},
         'watermark_position': {'type': 'choice', 'options': ["Top Left", "Top Center", "Top Right", "Center Left", "Center", "Center Right", "Bottom Left", "Bottom Center", "Bottom Right"]},
