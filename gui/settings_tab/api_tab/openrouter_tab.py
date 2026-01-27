@@ -178,6 +178,8 @@ class OpenRouterTab(QWidget):
                 models.append(model_name)
                 self.settings.set("openrouter_models", models)
                 self.update_models_list()
+                if self.main_window:
+                    self.main_window.refresh_all_model_lists()
             self.add_model_input.clear()
 
     def remove_model(self):
@@ -192,6 +194,8 @@ class OpenRouterTab(QWidget):
         
         self.settings.set("openrouter_models", models)
         self.update_models_list()
+        if self.main_window:
+            self.main_window.refresh_all_model_lists()
 
     def update_models_list(self):
         self.models_list.clear()
