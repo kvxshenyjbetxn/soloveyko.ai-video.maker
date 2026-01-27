@@ -552,6 +552,10 @@ class MainWindow(QMainWindow):
             self.refresh_ui_from_settings()
         elif key in ['image_generation_provider', 'googler']:
             self.update_googler_usage()
+        elif key == 'openrouter_models':
+            self.refresh_all_model_lists()
+        elif key == 'languages_config':
+            self.refresh_language_menus()
         else:
              # Just update global UI elements that depend on settings if any (like tooltips?)
              # Most real-time things are read from settings_manager directly when used.
@@ -1312,6 +1316,34 @@ class MainWindow(QMainWindow):
                 self.tabs.setCurrentIndex(group_idx)
                 self.text_group_tabs.setCurrentIndex(nested_idx)
                 return
+
+    def refresh_all_model_lists(self):
+        """Refreshes LLM model selection comboboxes in all setting tabs."""
+        if hasattr(self, 'settings_tab'):
+            # 1. Languages Settings Tab
+            if hasattr(self.settings_tab, 'languages_tab'):
+                self.settings_tab.languages_tab.load_models()
+            
+            # 2. Prompts Settings Tab
+            if hasattr(self.settings_tab, 'prompts_tab'):
+                self.settings_tab.prompts_tab.load_models()
+                # Also update custom stages models
+                for stage in self.settings_tab.prompts_tab.stage_widgets:
+                    model_combo = stage["model_combo"]
+                    current = model_combo.currentText()
+                    model_combo.blockSignals(True)
+                    model_combo.clear()
+                    model_combo.addItems(self.settings_manager.get("openrouter_models", []))
+                    idx = model_combo.findText(current)
+                    if idx >= 0: model_combo.setCurrentIndex(idx)
+                    model_combo.blockSignals(False)
+
+    def refresh_language_menus(self):
+        """Refreshes language selection buttons in main tabs when a language is added/removed."""
+        if hasattr(self, 'text_tab'):
+            self.text_tab.load_languages_menu()
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.load_languages_menu()
 
     def closeEvent(self, event):
         # Save all settings globally

@@ -497,9 +497,25 @@ class PromptsTab(QWidget):
             self.add_new_stage(stage)
 
     def load_models(self):
-        self.model_combo.clear()
+        self.model_combo.blockSignals(True)
+        self.preview_model_combo.blockSignals(True)
+        
         models = self.settings.get("openrouter_models", [])
+        
+        current_model = self.model_combo.currentText()
+        self.model_combo.clear()
         self.model_combo.addItems(models)
+        idx = self.model_combo.findText(current_model)
+        if idx >= 0: self.model_combo.setCurrentIndex(idx)
+        
+        current_preview = self.preview_model_combo.currentText()
+        self.preview_model_combo.clear()
+        self.preview_model_combo.addItems(models)
+        p_idx = self.preview_model_combo.findText(current_preview)
+        if p_idx >= 0: self.preview_model_combo.setCurrentIndex(p_idx)
+        
+        self.model_combo.blockSignals(False)
+        self.preview_model_combo.blockSignals(False)
 
     def save_settings(self):
         config = {

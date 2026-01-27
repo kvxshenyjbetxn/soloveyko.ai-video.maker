@@ -22,8 +22,9 @@ else:
     BASE_PATH = os.path.abspath(".")
 
 class LanguagesTab(QWidget):
-    def __init__(self):
+    def __init__(self, main_window=None):
         super().__init__()
+        self.main_window = main_window
         self.settings = settings_manager
         self.elevenlabs_api = ElevenLabsAPI()
         self.edge_tts_api = EdgeTTSAPI()
@@ -716,11 +717,26 @@ class LanguagesTab(QWidget):
 
     def load_models(self):
         self.model_combo.blockSignals(True)
+        self.rewrite_model_combo.blockSignals(True)
+        
+        current_model = self.model_combo.currentText()
+        current_rewrite = self.rewrite_model_combo.currentText()
+        
         self.model_combo.clear()
+        self.rewrite_model_combo.clear()
+        
         models = self.settings.get("openrouter_models", [])
         self.model_combo.addItems(models)
         self.rewrite_model_combo.addItems(models)
+        
+        idx = self.model_combo.findText(current_model)
+        if idx >= 0: self.model_combo.setCurrentIndex(idx)
+        
+        ridx = self.rewrite_model_combo.findText(current_rewrite)
+        if ridx >= 0: self.rewrite_model_combo.setCurrentIndex(ridx)
+        
         self.model_combo.blockSignals(False)
+        self.rewrite_model_combo.blockSignals(False)
 
     def load_templates_combo(self):
         self.default_template_combo.blockSignals(True)
@@ -1107,6 +1123,9 @@ class LanguagesTab(QWidget):
         self.lang_name_input.clear()
         self.lang_id_input.clear()
         self.load_languages()
+        
+        if self.main_window:
+            self.main_window.refresh_language_menus()
 
     def remove_language(self):
         current_item = self.lang_list_widget.currentItem()
@@ -1125,6 +1144,9 @@ class LanguagesTab(QWidget):
             self.settings.set("languages_config", languages)
             self.load_languages()
             self.right_panel.setVisible(False)
+            
+            if self.main_window:
+                self.main_window.refresh_language_menus()
 
     def save_current_language_settings(self):
         if self._is_loading_lang_settings:
