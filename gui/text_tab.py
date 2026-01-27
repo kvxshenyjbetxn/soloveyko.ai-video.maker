@@ -917,6 +917,7 @@ class TextTab(QWidget):
 
     def update_googler_usage(self, usage_text):
         self.googler_usage_label.setText(usage_text)
+        self.googler_usage_container.setVisible(bool(usage_text))
 
     def update_googler_usage_detailed(self, usage_text, usage_data):
         self.update_googler_usage(usage_text)

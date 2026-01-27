@@ -550,6 +550,8 @@ class MainWindow(QMainWindow):
         settings_needing_full_refresh = ['language', 'theme', 'accent_color']
         if key in settings_needing_full_refresh:
             self.refresh_ui_from_settings()
+        elif key in ['image_generation_provider', 'googler']:
+            self.update_googler_usage()
         else:
              # Just update global UI elements that depend on settings if any (like tooltips?)
              # Most real-time things are read from settings_manager directly when used.
@@ -830,6 +832,18 @@ class MainWindow(QMainWindow):
         self.threadpool.start(worker)
 
     def update_googler_usage(self, *args):
+        googler_settings = self.settings_manager.get("googler", {})
+        api_key = googler_settings.get("api_key")
+        provider = self.settings_manager.get("image_generation_provider")
+        
+        # Only update if Googler is selected and has an API key
+        if not api_key or provider != 'googler':
+            self.text_tab.update_googler_usage("")
+            if hasattr(self, 'rewrite_tab'):
+                self.rewrite_tab.update_googler_usage("")
+            self.queue_tab.update_googler_usage("")
+            return
+
         worker = GooglerUsageWorker()
         self.active_workers.add(worker)
         worker.signals.finished.connect(lambda u, s: (self._on_googler_usage_updated(u, s), self.active_workers.discard(worker)))
