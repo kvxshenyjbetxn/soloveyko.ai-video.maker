@@ -88,7 +88,7 @@ class OpenRouterAPI:
 
 
 
-    @retry(tries=3, delay=5, backoff=2)
+    @retry(tries=5, delay=10, backoff=1.5)
     def get_chat_completion(self, model, messages, max_tokens=4096, temperature=None):
         if not self.api_key:
             error_msg = "API key is not configured."
@@ -128,13 +128,26 @@ class OpenRouterAPI:
             # Use thread-local session
             session = get_session()
             response = session.post(f"{self.base_url}/chat/completions", headers=headers, json=data)
-            response.raise_for_status() # Raises an HTTPError for bad responses (4xx or 5xx)
+            
+            if response.status_code != 200:
+                error_body = response.text
+                try:
+                    error_json = response.json()
+                    if "error" in error_json:
+                        error_body = error_json["error"].get("message", error_body)
+                except:
+                    pass
+                
+                error_msg = f"OpenRouter Error {response.status_code}: {error_body}"
+                # If we exhausted retries or it's a fatal error, the decorator will eventually let this bubble up
+                raise Exception(error_msg)
+
             logger.log(f"Chat completion from {model} successful.", level=LogLevel.SUCCESS)
             return response.json()
         except requests.exceptions.RequestException as e:
             error_msg = f"An error occurred during chat completion request: {e}"
             if hasattr(e, 'response') and e.response is not None:
                  error_msg += f"\nResponse status: {e.response.status_code}"
-                 error_msg += f"\nResponse body: {e.response.text}"
-            logger.log(f"{error_msg}. Retrying...", level=LogLevel.WARNING)
-            raise e
+                 error_msg += f"\nBody: {e.response.text}"
+            logger.log(error_msg, level=LogLevel.ERROR)
+            raise Exception(error_msg)

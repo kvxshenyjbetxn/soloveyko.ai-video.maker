@@ -336,7 +336,7 @@ class VoiceoverWorker(BaseWorker):
 
 class SubtitleWorker(BaseWorker):
     def do_work(self):
-        whisper_type = self.config['sub_settings'].get('whisper_type', 'amd')
+        whisper_type = self.config['sub_settings'].get('whisper_type', 'standard')
 
         if whisper_type == 'amd':
             whisper_label = 'amd-fork'

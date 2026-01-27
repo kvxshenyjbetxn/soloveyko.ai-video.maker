@@ -206,7 +206,7 @@ class SubtitleMixin:
             task_id, worker_type = self.whisper_queue.popleft()
             state = self.task_states[task_id]
             sub_settings = state.settings.get('subtitles', {})
-            whisper_type = sub_settings.get('whisper_type', 'amd')
+            whisper_type = sub_settings.get('whisper_type', 'standard')
 
             if whisper_type == 'assemblyai':
                 if worker_type == 'subtitles':
@@ -227,8 +227,8 @@ class SubtitleMixin:
         try:
             state = self.task_states[task_id]
             sub_settings = state.settings.get('subtitles', {})
-            whisper_type = sub_settings.get('whisper_type', 'amd')
-            model_name = sub_settings.get('whisper_model', 'base.bin')
+            whisper_type = sub_settings.get('whisper_type', 'standard')
+            model_name = sub_settings.get('whisper_model', 'base')
             
             whisper_exe = None; whisper_model_path = model_name
             if whisper_type == 'amd':
@@ -260,7 +260,7 @@ class SubtitleMixin:
         state = self.task_states.get(task_id)
         if state:
             sub_settings = state.settings.get('subtitles', {})
-            whisper_type = sub_settings.get('whisper_type', 'amd')
+            whisper_type = sub_settings.get('whisper_type', 'standard')
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
                 time.sleep(2.0)
@@ -282,7 +282,7 @@ class SubtitleMixin:
         state = self.task_states.get(task_id)
         if state:
             sub_settings = state.settings.get('subtitles', {})
-            whisper_type = sub_settings.get('whisper_type', 'amd')
+            whisper_type = sub_settings.get('whisper_type', 'standard')
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
                 time.sleep(2.0)
@@ -316,8 +316,8 @@ class SubtitleMixin:
             
             # Prepare helper for whisper path
             sub_settings = state.settings.get('subtitles', {})
-            whisper_type = sub_settings.get('whisper_type', 'amd')
-            model_name = sub_settings.get('whisper_model', 'base.bin')
+            whisper_type = sub_settings.get('whisper_type', 'standard')
+            model_name = sub_settings.get('whisper_model', 'base')
             
             whisper_exe = None; whisper_model_path = model_name
             if whisper_type == 'amd':
@@ -358,7 +358,7 @@ class SubtitleMixin:
         state = self.task_states.get(task_id)
         if state:
             sub_settings = state.settings.get('subtitles', {})
-            whisper_type = sub_settings.get('whisper_type', 'amd')
+            whisper_type = sub_settings.get('whisper_type', 'standard')
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
                 time.sleep(2.0)
@@ -379,7 +379,7 @@ class SubtitleMixin:
             
         if state:
             sub_settings = state.settings.get('subtitles', {})
-            whisper_type = sub_settings.get('whisper_type', 'amd')
+            whisper_type = sub_settings.get('whisper_type', 'standard')
             if whisper_type != 'assemblyai':
                 self.subtitle_semaphore.release()
                 time.sleep(2.0)
