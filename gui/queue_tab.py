@@ -655,7 +655,9 @@ class QueueTab(QWidget):
         top_layout.addWidget(self.balance_label)
         top_layout.addSpacing(20)
         
-        self.googler_usage_layout = QHBoxLayout()
+        self.googler_usage_container = QWidget()
+        self.googler_usage_layout = QHBoxLayout(self.googler_usage_container)
+        self.googler_usage_layout.setContentsMargins(0, 0, 0, 0)
         self.googler_usage_layout.setSpacing(2)
         self.googler_usage_label = QLabel()
         self.googler_info_btn = QToolButton()
@@ -667,7 +669,7 @@ class QueueTab(QWidget):
         self.googler_usage_layout.addWidget(self.googler_usage_label)
         self.googler_usage_layout.addWidget(self.googler_info_btn)
         
-        top_layout.addLayout(self.googler_usage_layout)
+        top_layout.addWidget(self.googler_usage_container)
         top_layout.addSpacing(20)
         top_layout.addWidget(self.elevenlabs_balance_label)
         top_layout.addSpacing(20)
@@ -849,6 +851,7 @@ class QueueTab(QWidget):
 
     def update_googler_usage(self, usage_text):
         self.googler_usage_label.setText(usage_text)
+        self.googler_usage_container.setVisible(bool(usage_text))
 
     def update_googler_usage_detailed(self, usage_text, usage_data):
         self.update_googler_usage(usage_text)

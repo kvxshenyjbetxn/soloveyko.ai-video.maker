@@ -13,9 +13,11 @@ class SettingsManager:
             'language': 'uk',
             'theme': 'dark',
             'results_path': '',
-            'image_review_enabled': False,
-            'image_prompt_count_check_enabled': True,
-            'image_prompt_count': 50,
+            'image_review_enabled': True,
+            'rewrite_review_enabled': True,
+            'translation_review_enabled': True,
+            'prompt_count_control_enabled': True,
+            'prompt_count': 50,
             'detailed_logging_enabled': True,
             'voicemaker_api_key': '',
             'voicemaker_char_limit': 2900,
@@ -103,7 +105,7 @@ STORY TEXT:
                 'negative_prompt': 'low quality, worst quality, low resolution, blurry, pixelated, jpeg artifacts, grainy, noise, distorted, deformation, bad anatomy, bad proportions, disconnected limbs, extra limbs, extra fingers, missing fingers, floating limbs, mutated hands, poorly drawn face, disfigured, ugly, asymmetry, text, watermark, signature, logo, username, artist name, copyright, timestamp, cropped, out of frame, cut off, bad composition, overexposed, underexposed, flat lighting, dull colors, oversaturated'
             },
             'pollinations': {
-                'model': 'flux',
+                'model': 'zimage',
                 'token': '',
                 'width': 1920,
                 'height': 1080,
@@ -113,12 +115,12 @@ STORY TEXT:
             'openrouter_models': ['z-ai/glm-4.5-air:free', 'google/gemini-2.5-flash'],
             'subtitles': {
                 'whisper_model': 'base',
-                'font': 'Arial',
-                'fontsize': 60,
+                'font': 'Impact',
+                'fontsize': 100,
                 'color': [255, 255, 255],
                 'fade_in': 150,
                 'fade_out': 150,
-                'margin_v': 50,
+                'margin_v': 100,
                 'max_words': 10
             },
             'montage': {
@@ -203,6 +205,408 @@ Original Source Text:
                     'edgetts_voice': 'uk-UA-OstapNeural',
                     'background_music_volume': 25,
                     'watermark_size': 5
+                },
+                'en': {
+                    'display_name': 'English',
+                    'prompt': """Role: You are an expert literary translator and cultural editor specializing in "transculturation" (total cultural adaptation).
+
+Task: Analyze the provided source text, retain the core plot, emotions, and character archetypes, but perform a deep localization to rewrite the story as if it is taking place entirely in an English-speaking Western context (e.g., USA, UK, or Canada, depending on the best fit for the atmosphere).
+
+Goal: The final text must read like an original English-language work, written for a Western audience, with NO foreign cultural markers remaining.
+
+ADAPTATION PROTOCOLS:
+
+1. TOTAL RELOCATION (Geography & Setting):
+
+Analyze the Setting: Identify the physical environment of the source (e.g., mountains, dense forest, metropolis, rural plains, steppe, coastal city).
+
+Map to the West: Relocate the action to a logical equivalent.
+
+Examples: High mountains → Rockies/Appalachians; Deep forests → Pacific Northwest/Maine; Industrial city → Rust Belt/Chicago/Manchester; Cultural capital → NYC/London; Seaside → California coast/Cornwall; Steppe/Fields → Midwest/Great Plains.
+
+Nature: Replace foreign flora/fauna with local equivalents (e.g., poplars → oaks/pines; vipers → rattlesnakes; local specific berries → blueberries/cranberries).
+
+2. NAMES & CHARACTERS:
+
+Westernize Names: Replace ALL foreign names with natural English-equivalent names that match the character's age, social status, and vibe (e.g., Ivan → John; Oksana → Jane/Claire; Pan Kovalenko → Mr. Smith).
+
+Forms of Address: Use "Mr./Ms.", "Sir", or first names depending on the social context. Remove any foreign honorifics (e.g., Pan, San, Monsieur).
+
+3. CULTURAL & SOCIAL ELEMENTS:
+
+Institutions: Replace foreign agencies with local realities (e.g., SBU → FBI/MI5; Police structures → Sheriff/Local PD).
+
+Daily Life: Replace food, drinks, clothing, and brands with those familiar to a Westerner (e.g., horilka → whiskey/bourbon; varenyky → pierogies/dumplings or simply replace with burgers/steak; local folk music → country/rock/jazz).
+
+Measurement: Convert all units to the Imperial system for US contexts (km → miles, Celsius → Fahrenheit) or keep Metric for UK/Canadian contexts if appropriate.
+
+4. LANGUAGE & STYLE:
+
+No Calques: Completely abandon the source language syntax and sentence structure.
+
+Idioms: Replace foreign metaphors and proverbs with authentic English idioms and colloquialisms.
+
+Flow: Ensure the text has a natural, "native" narrative rhythm.
+
+OUTPUT FORMAT REQUIREMENTS (STRICT):
+
+NO META-COMMENTARY: Do NOT write "Here is the translation," "I have adapted the text," or any introductory remarks.
+
+DIRECT OUTPUT: Begin immediately with the first sentence of the adapted story.
+
+TARGET LANGUAGE: English only.
+
+Original Source Text:
+
+""",
+                    'model': 'z-ai/glm-4.5-air:free',
+                    'max_tokens': 0,
+                    'temperature': 1.0,
+                    'rewrite_prompt': """Role: You are an expert documentary scriptwriter and historian (specializing in the style of high-quality narrative media like BBC, National Geographic, or the Vox "Explained" series).
+
+Task: Analyze the provided source text (input language may vary), extract the core facts, events, and atmosphere, and synthesize a completely new narrative script in English.
+
+Goal: Create an immersive, "edutainment" style narrative. Do not translate word-for-word. Instead, reimagine the content as if it were originally written by a world-class English-speaking screenwriter for a global audience.
+
+REWRITE PROTOCOLS:
+
+1. Analyze & Extract: * Deeply process the "What", "Where", "When", and "Why" of the source.
+
+Identify the key emotional beats and historical significance.
+
+2. Discard Source Syntax: * Completely ignore the original sentence structure.
+
+Avoid any phrasing that feels like a translation. The result must feel natively English in its rhythm, punchiness, and flow.
+
+3. Narrative Sophistication: * Use rich, evocative vocabulary and compelling rhetorical devices.
+
+Ensure the script is optimized for voiceover (it must sound natural and impactful when read aloud).
+
+4. Contextual Nuance: * Use precise historical and technical terminology recognized in the English-speaking academic and media world.
+
+STYLE GUIDELINES:
+
+Cinematic & Sensory: Vividly describe the setting, the atmosphere of the era, and the sensory details (architecture, sounds, weather).
+
+Engagement: Start with a strong "hook." Use narrative techniques to draw the audience in (e.g., "Imagine a world where...", "Few realize that...", "It was a moment that changed everything...").
+
+Tone: Authoritative yet captivating; professional yet accessible.
+
+OUTPUT FORMAT REQUIREMENTS (STRICT):
+
+NO META-COMMENTARY: Do NOT include introductory remarks like "Sure, here is the script" or "I have rewritten the text."
+
+IMMEDIATE START: Begin directly with the first sentence of the story or narrator's line.
+
+TARGET LANGUAGE: English only.
+
+Original Source Text:
+
+""",
+                    'rewrite_model': 'z-ai/glm-4.5-air:free',
+                    'rewrite_max_tokens': 0,
+                    'rewrite_temperature': 1.0,
+                    'tts_provider': 'EdgeTTS',
+                    'edgetts_voice': 'en-US-AndrewNeural',
+                    'background_music_volume': 25,
+                    'watermark_size': 5
+                },
+                'ru': {
+                    'display_name': 'Russian',
+                    'prompt': """Role: You are an expert literary translator and cultural editor specializing in "transculturation" (total cultural adaptation).
+
+Task: Analyze the provided source text (input language may vary), retain the core plot, emotions, and character archetypes, but perform a deep localization to rewrite the story as if it is taking place entirely in Russia.
+
+Goal: The final text must read like an original Russian work, written for Russians, with NO foreign cultural markers remaining.
+
+ADAPTATION PROTOCOLS:
+
+1. TOTAL RELOCATION (Geography & Setting):
+
+Analyze the Setting: Identify the physical environment of the source (e.g., mountains, dense forest, metropolis, rural plains, desert, coastal city).
+
+Map to Russia: Relocate the action to the closest equivalent Russian region.
+
+Examples: High mountains → Caucasus/Altai; Deep forests/swamps → Taiga/Siberia/Central Russia; Industrial city → Chelyabinsk/Norilsk/Ural context; Cultural capital → St. Petersburg/Moscow; Seaside → Sochi/Crimea/Black Sea coast; Steppe/Fields → Southern Russia/Kuban.
+
+Nature: Replace foreign flora/fauna with Russian equivalents (e.g., palm trees → birches/pines; rattlesnakes → vipers; moose → elk/bear).
+
+2. NAMES & CHARACTERS:
+
+Russianize Names: Replace ALL foreign names with natural Russian equivalents that match the character's age and vibe (e.g., John → Ivan; Jessica → Yulia/Oksana; Mr. Smith → Gospodin/Pan Kovalenko/Sidorov).
+
+Forms of Address: Use natural Russian address forms (Name + Patronymic for formal, or informal diminutives). Remove "Sir", "Monsieur", "Mister", etc.
+
+3. CULTURAL & SOCIAL ELEMENTS:
+
+Institutions: Replace foreign agencies (FBI, Scotland Yard, Sheriff) with Russian realities (FSB, MVD, Politsiya/Uchastkovyi).
+
+Daily Life: Replace food, drinks, clothing, and brands with those familiar to a Russian (e.g., whiskey → vodka/samogon; burger → pirozhok/pelmeni/kotleta; baseball → football/hockey).
+
+Measurement: Convert all units to Metric (miles → km, Fahrenheit → Celsius).
+
+4. LANGUAGE & STYLE:
+
+No Calques: Completely abandon the source language syntax.
+
+Idioms: Replace foreign metaphors with authentic Russian proverbs and sayings.
+
+Flow: Ensure the text has natural Russian "flavor" and linguistic richness.
+
+OUTPUT FORMAT REQUIREMENTS (STRICT):
+
+NO META-COMMENTARY: Do NOT write "Here is the translation," "I have adapted the text," or any introductory remarks.
+
+DIRECT OUTPUT: Begin immediately with the first sentence of the adapted story.
+
+TARGET LANGUAGE: Russian only.
+
+Original Source Text:
+
+""",
+                    'model': 'z-ai/glm-4.5-air:free',
+                    'max_tokens': 0,
+                    'temperature': 1.0,
+                    'rewrite_prompt': """Role: You are an expert Russian documentary scriptwriter and historian (similar to the style of high-quality channels like "Redaktsiya", "Minayev Live", or top-tier dubbed documentaries).
+
+Task: Analyze the provided source text (input language may vary), extract the core facts, events, and atmosphere, and synthesize a completely new narrative script in Russian.
+
+Goal: Create an immersive, "edutainment" style narrative. Do not translate word-for-word. Instead, reimagine the content as if it were originally written by a talented Russian narrator for a Russian audience.
+
+REWRITE PROTOCOLS (Universal Input):
+
+Analyze & Extract: Read the source text to understand the "What", "Where", "When", and "Why".
+
+Discard Source Syntax: Completely ignore the sentence structure of the original text. Do not mimic foreign phrasing (avoid English SVO structures or specific non-Russian syntax patterns).
+
+Authentic Russian: Use natural Russian idioms, rich vocabulary, and correct syntax. Ensure the text flows smoothly when read aloud (voiceover-ready).
+
+Terminology: Use correct Russian historical terminology and academic spelling.
+
+STYLE GUIDELINES:
+
+Cinematic & Sensory: Describe the atmosphere, architecture, and mood.
+
+Engagement: Use a "hook" at the beginning. Address the audience (e.g., "Представьте себе...", "Мало кто знает...").
+
+Tone: Fascinating, professional, yet accessible.
+
+OUTPUT FORMAT REQUIREMENTS (STRICT):
+
+NO META-COMMENTARY: Do not write "Here is the Russian version," or any intro.
+
+IMMEDIATE START: Begin directly with the first sentence of the story.
+
+TARGET LANGUAGE: Russian only.
+
+Original Source Text:
+
+""",
+                    'rewrite_model': 'z-ai/glm-4.5-air:free',
+                    'rewrite_max_tokens': 0,
+                    'rewrite_temperature': 1.0,
+                    'tts_provider': 'EdgeTTS',
+                    'edgetts_voice': 'ru-RU-DmitryNeural',
+                    'background_music_volume': 25,
+                    'watermark_size': 5
+                },
+                'pl': {
+                    'display_name': 'Poland',
+                    'prompt': """Role: You are an expert literary translator and cultural editor specializing in "transculturation" (total cultural adaptation).
+
+Task: Analyze the provided source text (input language may vary), retain the core plot, emotions, and character archetypes, but perform a deep localization to rewrite the story as if it is taking place entirely in Poland.
+
+Goal: The final text must read like an original Polish work, written for Poles, with NO foreign cultural markers remaining.
+
+ADAPTATION PROTOCOLS:
+
+1. TOTAL RELOCATION (Geography & Setting):
+
+Analyze the Setting: Identify the physical environment of the source (e.g., mountains, dense forest, metropolis, rural plains, desert, coastal city).
+
+Map to Poland: Relocate the action to the closest equivalent Polish region.
+
+Examples: High mountains → Tatry; Deep forests/swamps → Białowieża/Mazury; Industrial city → Śląsk (Katowice/Gliwice); Cultural capital → Kraków/Warszawa; Seaside → Gdańsk/Bałtyk; Rural plains → Mazowsze/Wielkopolska.
+
+Nature: Replace foreign flora/fauna with Polish equivalents (e.g., palm trees → wierzby/dęby; rattlesnakes → żmije; moose → łoś/żubr).
+
+2. NAMES & CHARACTERS:
+
+Polishize Names: Replace ALL foreign names with natural Polish equivalents that match the character's age and vibe (e.g., John → Jan/Janek; Jessica → Kasia/Małgorzata; Mr. Smith → Pan Kowalski).
+
+Forms of Address: Use "Pan/Pani" or natural Polish honorifics. Remove "Sir", "Monsieur", "Mister", etc.
+
+3. CULTURAL & SOCIAL ELEMENTS:
+
+Institutions: Replace foreign agencies (FBI, Scotland Yard, Sheriff) with Polish realities (ABW, Policja, Straż Miejska).
+
+Daily Life: Replace food, drinks, clothing, and brands with those familiar to a Pole (e.g., whiskey → wódka/nalewka; burger → pierogi/schabowy; baseball → piłka nożna/siatkówka).
+
+Measurement: Convert all units to Metric (miles → km, Fahrenheit → Celsius).
+
+4. LANGUAGE & STYLE:
+
+No Calques: Completely abandon the source language syntax.
+
+Idioms: Replace foreign metaphors with authentic Polish proverbs and sayings (e.g., "mądry Polak po szkodzie").
+
+Flow: Ensure the text has natural Polish flow and linguistic beauty.
+
+OUTPUT FORMAT REQUIREMENTS (STRICT):
+
+NO META-COMMENTARY: Do NOT write "Here is the translation," "I have adapted the text," or any introductory remarks.
+
+DIRECT OUTPUT: Begin immediately with the first sentence of the adapted story.
+
+TARGET LANGUAGE: Polish only.
+
+Original Source Text:
+
+""",
+                    'model': 'z-ai/glm-4.5-air:free',
+                    'max_tokens': 0,
+                    'temperature': 1.0,
+                    'rewrite_prompt': """Role: You are an expert Polish documentary scriptwriter and historian (similar to the style of high-quality narrative channels like "Historyczny Top", "Ciekawehistorie", or top-tier documentaries).
+
+Task: Analyze the provided source text (input language may vary), extract the core facts, events, and atmosphere, and synthesize a completely new narrative script in Polish.
+
+Goal: Create an immersive, "edutainment" style narrative. Do not translate word-for-word. Instead, reimagine the content as if it were originally written by a talented Polish narrator for a Polish audience.
+
+REWRITE PROTOCOLS (Universal Input):
+
+Analyze & Extract: Read the source text to understand the "What", "Where", "When", and "Why".
+
+Discard Source Syntax: Completely ignore the sentence structure of the original text. Do not mimic foreign phrasing (avoid English SVO structures or specific non-Polish syntax patterns).
+
+Authentic Polish: Use natural Polish idioms, rich vocabulary, and correct syntax. Ensure the text flows smoothly when read aloud (voiceover-ready).
+
+Terminology: Use correct Polish historical terminology and academic spelling.
+
+STYLE GUIDELINES:
+
+Cinematic & Sensory: Describe the atmosphere, architecture, and mood.
+
+Engagement: Use a "hook" at the beginning. Address the audience (e.g., "Wyobraźcie sobie...", "Mało kto wie, że...").
+
+Tone: Fascinating, professional, yet accessible.
+
+OUTPUT FORMAT REQUIREMENTS (STRICT):
+
+NO META-COMMENTARY: Do not write "Oto polska wersja," or any intro.
+
+IMMEDIATE START: Begin directly with the first sentence of the story.
+
+TARGET LANGUAGE: Polish only.
+
+Original Source Text:
+
+""",
+                    'rewrite_model': 'z-ai/glm-4.5-air:free',
+                    'rewrite_max_tokens': 0,
+                    'rewrite_temperature': 1.0,
+                    'tts_provider': 'EdgeTTS',
+                    'edgetts_voice': 'pl-PL-MarekNeural',
+                    'background_music_volume': 25,
+                    'watermark_size': 5
+                },
+                'ro': {
+                    'display_name': 'Romania',
+                    'prompt': """Role: You are an expert literary translator and cultural editor specializing in "transculturation" (total cultural adaptation).
+
+Task: Analyze the provided source text (input language may vary), retain the core plot, emotions, and character archetypes, but perform a deep localization to rewrite the story as if it is taking place entirely in Romania.
+
+Goal: The final text must read like an original Romanian work, written for Romanians, with NO foreign cultural markers remaining.
+
+ADAPTATION PROTOCOLS:
+
+1. TOTAL RELOCATION (Geography & Setting):
+
+Analyze the Setting: Identify the physical environment of the source (e.g., mountains, dense forest, metropolis, rural plains, desert, coastal city).
+
+Map to Romania: Relocate the action to the closest equivalent Romanian region.
+
+Examples: High mountains → Carpathians (Carpati); Deep forests → Transylvania/Maramureș; Industrial city → Ploiești/Galați/Reșița; Cultural capital → Bucharest/Cluj-Napoca/Iași; Seaside → Constanța/Black Sea coast; Steppe/Fields → Bărăgan/Dobrogea.
+
+Nature: Replace foreign flora/fauna with Romanian equivalents (e.g., palm trees → tei/salcâmi; rattlesnakes → vipere; moose → zimbru/urs).
+
+2. NAMES & CHARACTERS:
+
+Romanianize Names: Replace ALL foreign names with natural Romanian equivalents that match the character's age and vibe (e.g., John → Ion/Andrei; Jessica → Ioana/Elena; Mr. Smith → Domnul Popescu/Ionescu).
+
+Forms of Address: Use "Domnul/Doamna" or natural Romanian honorifics. Remove "Sir", "Monsieur", "Mister", etc.
+
+3. CULTURAL & SOCIAL ELEMENTS:
+
+Institutions: Replace foreign agencies (FBI, Scotland Yard, Sheriff) with Romanian realities (SRI, Poliția Română, Jandarmeria).
+
+Daily Life: Replace food, drinks, clothing, and brands with those familiar to a Romanian (e.g., whiskey → țuică/pălincă; burger → mici/sarmale/mămăligă; baseball → fotbal/oină).
+
+Measurement: Convert all units to Metric (miles → km, Fahrenheit → Celsius).
+
+4. LANGUAGE & STYLE:
+
+No Calques: Completely abandon the source language syntax.
+
+Idioms: Replace foreign metaphors with authentic Romanian proverbs and sayings (e.g., "cu o floare nu se face primăvară").
+
+Flow: Ensure the text has natural Romanian flow and linguistic richness.
+
+OUTPUT FORMAT REQUIREMENTS (STRICT):
+
+NO META-COMMENTARY: Do NOT write "Here is the translation," "I have adapted the text," or any introductory remarks.
+
+DIRECT OUTPUT: Begin immediately with the first sentence of the adapted story.
+
+TARGET LANGUAGE: Romanian only.
+
+Original Source Text:
+
+""",
+                    'model': 'z-ai/glm-4.5-air:free',
+                    'max_tokens': 0,
+                    'temperature': 1.0,
+                    'rewrite_prompt': """Role: You are an expert Romanian documentary scriptwriter and historian (similar to the style of high-quality narrative channels like "Zaiafet", "Istoria cu Virgil", or top-tier documentaries).
+
+Task: Analyze the provided source text (input language may vary), extract the core facts, events, and atmosphere, and synthesize a completely new narrative script in Romanian.
+
+Goal: Create an immersive, "edutainment" style narrative. Do not translate word-for-word. Instead, reimagine the content as if it were originally written by a talented Romanian narrator for a Romanian audience.
+
+REWRITE PROTOCOLS (Universal Input):
+
+Analyze & Extract: Read the source text to understand the "What", "Where", "When", and "Why".
+
+Discard Source Syntax: Completely ignore the sentence structure of the original text. Do not mimic foreign phrasing (avoid English SVO structures or specific non-Romanian syntax patterns).
+
+Authentic Romanian: Use natural Romanian idioms, rich vocabulary, and correct syntax. Ensure the text flows smoothly when read aloud (voiceover-ready).
+
+Terminology: Use correct Romanian historical terminology and academic spelling.
+
+STYLE GUIDELINES:
+
+Cinematic & Sensory: Describe the atmosphere, architecture, and mood.
+
+Engagement: Use a "hook" at the beginning. Address the audience (e.g., "Imaginați-vă...", "Puțini sunt cei care știu că...").
+
+Tone: Fascinating, professional, yet accessible.
+
+OUTPUT FORMAT REQUIREMENTS (STRICT):
+
+NO META-COMMENTARY: Do not write "Iată versiunea în română," or any intro.
+
+IMMEDIATE START: Begin directly with the first sentence of the story.
+
+TARGET LANGUAGE: Romanian only.
+
+Original Source Text:
+
+""",
+                    'rewrite_model': 'z-ai/glm-4.5-air:free',
+                    'rewrite_max_tokens': 0,
+                    'rewrite_temperature': 1.0,
+                    'tts_provider': 'EdgeTTS',
+                    'edgetts_voice': 'ro-RO-EmilNeural',
+                    'background_music_volume': 25,
+                    'watermark_size': 5
                 }
             },
             'custom_stages': [],
@@ -274,17 +678,21 @@ Original Source Text:
         self._deep_merge(self.defaults, current_settings)
         return current_settings
 
-    def _deep_merge(self, source, destination):
+    def _deep_merge(self, source, destination, is_languages_root=False):
         """
         Рекурсивно копіює ключі з source в destination, якщо їх там немає.
+        Спеціальна логіка для languages_config: не додаємо відсутні мови, якщо розділ існує,
+        щоб дозволити користувачеві видаляти стандартні мови.
         """
         for key, value in source.items():
             if isinstance(value, dict):
-                # Якщо ключа немає або він має Не-словниковий тип (стара версія конфігу)
                 if key not in destination or not isinstance(destination[key], dict):
+                    # Якщо ми всередині languages_config і цієї мови немає в налаштуваннях користувача - пропускаємо її
+                    if is_languages_root:
+                        continue
                     destination[key] = copy.deepcopy(value)
                 else:
-                    self._deep_merge(value, destination[key])
+                    self._deep_merge(value, destination[key], is_languages_root=(key == 'languages_config'))
             else:
                 if key not in destination:
                     destination[key] = value

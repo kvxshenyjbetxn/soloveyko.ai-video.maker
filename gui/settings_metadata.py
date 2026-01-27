@@ -103,7 +103,7 @@ SETTINGS_METADATA = {
         'max_video_threads': {'type': 'int', 'min': 1, 'max': 25, 'label': 'googler_max_video_threads_label'},
     },
     'pollinations': {
-        'model': {'type': 'choice', 'options': ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"], 'label': 'pollinations_model_label'},
+        'model': {'type': 'choice', 'options': ["zimage", "flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"], 'label': 'pollinations_model_label'},
         'token': {'type': 'str', 'label': 'pollinations_token_label'},
         'width': {'type': 'int', 'min': 64, 'max': 4096, 'label': 'image_size_label'},
         'height': {'type': 'int', 'min': 64, 'max': 4096, 'label': 'image_height_label'},
