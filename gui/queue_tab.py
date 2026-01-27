@@ -527,9 +527,14 @@ class TaskCard(QGroupBox):
             return
         
         self.log_browser.clear()
+        # Filter logs by job_id (task_id contains job_id)
+        # We use specific patterns to avoid matching IDs that are substrings of others (e.g. Task-1 vs Task-10)
+        # Generally logs from TaskProcessor/Workers look like: [Task-1_en] or [Task-1]
+        pattern1 = f"[{self.job_id}_"
+        pattern2 = f"[{self.job_id}]"
+        
         for log_data in self.log_tab.all_logs:
-            # Filter logs by job_id (task_id contains job_id)
-            if self.job_id in log_data["message"]:
+            if pattern1 in log_data["message"] or pattern2 in log_data["message"]:
                 self._append_log_message(log_data)
     
     def on_new_log(self, log_data):
@@ -538,7 +543,9 @@ class TaskCard(QGroupBox):
             return
         
         # Filter by job_id
-        if self.job_id in log_data["message"]:
+        pattern1 = f"[{self.job_id}_"
+        pattern2 = f"[{self.job_id}]"
+        if pattern1 in log_data["message"] or pattern2 in log_data["message"]:
             self._append_log_message(log_data)
             # Auto-scroll to bottom
             self.log_browser.verticalScrollBar().setValue(

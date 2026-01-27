@@ -14,10 +14,7 @@ from utils.animator import Animator
 from functools import partial
 import os
 import re
-import uuid
 import datetime
-import datetime
-from PySide6.QtWidgets import QSplitter
 from gui.widgets.quick_settings_panel import QuickSettingsPanel
 from gui.widgets.recent_tasks_panel import RecentTasksPanel
 
@@ -363,9 +360,6 @@ class RewriteTab(QWidget):
             # Use sanitized name as the actual displayed job name too, to avoid confusion
             job_name = safe_job_name
 
-            # Create a job for this link
-            job_id = str(uuid.uuid4())
-            
             # --- Check for existing files ---
             found_files_per_lang = {}
             found_files_details = {}
@@ -386,7 +380,6 @@ class RewriteTab(QWidget):
                     
                     lang_name = btn.text()
                     
-                    # Path logic same as TaskState
                     # Path logic same as TaskState
                     # Strict sanitization for lang name too
                     safe_lang_name = re.sub(r'[^\w\s\-]', '', lang_name)
@@ -529,8 +522,9 @@ class RewriteTab(QWidget):
                 if msg_box.exec() == QMessageBox.StandardButton.Yes:
                     use_existing = True
 
+            # Create a job for this link
             job = {
-                'id': job_id,
+                'id': None,
                 'name': job_name,
                 'type': 'rewrite',
                 'created_at': datetime.datetime.now().isoformat(),
