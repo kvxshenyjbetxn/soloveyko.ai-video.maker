@@ -4,12 +4,13 @@ from PySide6.QtWidgets import QApplication, QLayout, QLayoutItem, QPushButton, Q
 
 
 class FlowLayout(QLayout):
-    def __init__(self, parent=None, margin=-1, hSpacing=-1, vSpacing=-1):
+    def __init__(self, parent=None, margin=-1, hSpacing=-1, vSpacing=-1, v_align='middle'):
         super().__init__(parent)
 
         self.itemList = []
         self.m_hSpace = hSpacing
         self.m_vSpace = vSpacing
+        self.v_align = v_align
         self.setContentsMargins(margin, margin, margin, margin)
 
     def __del__(self):
@@ -67,11 +68,13 @@ class FlowLayout(QLayout):
         
         line_items = [] # List of tuples: (item, x_pos)
 
-        def align_line_middle(items, current_y, current_line_h):
+        def align_line_v(items, current_y, current_line_h):
             if testOnly: return
             for item, item_x in items:
-                # Calculate y offset for vertical centering within the row
-                offset_y = (current_line_h - item.sizeHint().height()) // 2
+                if self.v_align == 'top':
+                    offset_y = 0
+                else: # middle
+                    offset_y = (current_line_h - item.sizeHint().height()) // 2
                 item.setGeometry(QRect(QPoint(item_x, current_y + offset_y), item.sizeHint()))
 
         for item in self.itemList:
@@ -80,14 +83,14 @@ class FlowLayout(QLayout):
             
             spaceY = self.m_vSpace if self.m_vSpace >= 0 else self.spacing()
             if spaceY < 0: spaceY = 10
-
+ 
             item_w = item.sizeHint().width()
             item_h = item.sizeHint().height()
-
+ 
             nextX = x + item_w + spaceX
             if nextX - spaceX > effectiveRect.right() and lineHeight > 0:
                 # Process the completed line
-                align_line_middle(line_items, y, lineHeight)
+                align_line_v(line_items, y, lineHeight)
                 
                 # Reset for next line
                 x = effectiveRect.x()
@@ -95,12 +98,12 @@ class FlowLayout(QLayout):
                 nextX = x + item_w + spaceX
                 lineHeight = 0
                 line_items = []
-
+ 
             line_items.append((item, x))
             lineHeight = max(lineHeight, item_h)
             x = nextX
-
+ 
         # Align the last line
-        align_line_middle(line_items, y, lineHeight)
+        align_line_v(line_items, y, lineHeight)
 
         return y + lineHeight - effectiveRect.y() + bottom

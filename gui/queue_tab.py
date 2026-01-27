@@ -271,6 +271,7 @@ class TaskCard(QGroupBox):
         super().__init__("", parent)
         self.job_id = job['id']
         self.job_name = job['name']
+        self.job = job
         self.log_tab = log_tab
         self.is_expanded = False
         self.setStyleSheet("""
@@ -300,6 +301,23 @@ class TaskCard(QGroupBox):
         layout = QVBoxLayout(left_content)
         layout.setContentsMargins(0, 0, 0, 0)
         
+        # Task Type Badge (at the top)
+        type_badge_layout = QHBoxLayout()
+        job_type = self.job.get('type', 'text')
+        type_label = QLabel(translator.translate(f"type_{job_type}", job_type.capitalize()), self)
+        type_label.setStyleSheet(f"""
+            background-color: {'#4CAF50' if job_type == 'text' else '#2196F3'};
+            color: white;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+        """)
+        type_label.setFixedSize(type_label.sizeHint())
+        type_badge_layout.addWidget(type_label)
+        type_badge_layout.addStretch()
+        layout.addLayout(type_badge_layout)
+
         # Hint label
         hint_label = QLabel(translator.translate("click_for_logs_hint"), self)
         hint_label.setStyleSheet("color: #777; font-size: 10px; margin-bottom: 2px;")
@@ -712,7 +730,7 @@ class QueueTab(QWidget):
         scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         scroll_content = QWidget()
-        self.tasks_layout = FlowLayout(scroll_content)
+        self.tasks_layout = FlowLayout(scroll_content, v_align='top')
         
         scroll_area.setWidget(scroll_content)
         main_layout.addWidget(scroll_area)
