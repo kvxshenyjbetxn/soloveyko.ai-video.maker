@@ -967,6 +967,8 @@ class TextTab(QWidget):
     def update_gemini_tts_balance(self, balance_text):
         self.gemini_tts_balance_label.setText(balance_text)
 
+
+
     def apply_text_color_to_text_edit(self):
         current_theme = self.settings.get('theme', 'dark')
         if current_theme == 'light':

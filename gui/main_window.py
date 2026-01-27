@@ -848,7 +848,6 @@ class MainWindow(QMainWindow):
             self.active_workers.add(worker)
             worker.signals.finished.connect(lambda b, s: (self._on_elevenlabs_unlim_balance_updated(b, s), self.active_workers.discard(worker)))
             self.threadpool.start(worker)
-
     def update_voicemaker_balance(self, *args):
         worker = VoicemakerBalanceWorker()
         self.active_workers.add(worker)
@@ -860,6 +859,8 @@ class MainWindow(QMainWindow):
         self.active_workers.add(worker)
         worker.signals.finished.connect(lambda b, s: (self._on_gemini_tts_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
+
+
 
     def _on_balance_updated(self, balance, success):
         api_key = self.settings_manager.get("openrouter_api_key")
@@ -1022,6 +1023,9 @@ class MainWindow(QMainWindow):
             self.rewrite_tab.update_gemini_tts_balance(balance_text)
         self.queue_tab.update_gemini_tts_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.gemini_tts_tab.update_balance_label(balance_to_display_on_settings_tab)
+
+
+
 
     def update_user_icon(self):
         theme_name = self.settings_manager.get('theme', 'light')

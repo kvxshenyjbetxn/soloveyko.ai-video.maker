@@ -897,6 +897,8 @@ class QueueTab(QWidget):
     def update_gemini_tts_balance(self, balance_text):
         self.gemini_tts_balance_label.setText(balance_text)
 
+
+
     def retranslate_ui(self):
         self.start_processing_button.setText(translator.translate('start_processing'))
         self.clear_queue_button.setText(translator.translate('clear_queue'))

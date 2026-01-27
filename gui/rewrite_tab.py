@@ -654,6 +654,8 @@ class RewriteTab(QWidget):
     def update_gemini_tts_balance(self, balance_text):
         self.gemini_tts_balance_label.setText(balance_text)
 
+
+
     def update_link_count(self):
         text = self.input_edit.toPlainText().strip()
         if not text:
