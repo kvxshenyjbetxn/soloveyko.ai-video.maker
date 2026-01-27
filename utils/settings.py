@@ -82,13 +82,13 @@ Read the text below. Identify the hook. Create generic subject descriptions (rem
 STORY TEXT:
 
 """,
-                'model': 'openai/gpt-oss-120b:free',
-                'max_tokens': 10000,
+                'model': 'z-ai/glm-4.5-air:free',
+                'max_tokens': 0,
                 'temperature': 1.0
             },
             'preview_settings': {
-                'model': 'openai/gpt-oss-120b:free',
-                'max_tokens': 10000,
+                'model': 'z-ai/glm-4.5-air:free',
+                'max_tokens': 0,
                 'temperature': 1.0,
                 'image_count': 3,
                 'prompt': """Act as a professional Prompt Engineer and YouTube Thumbnail Expert. Analyze the VIDEO TITLE and STORY provided at the bottom of this message. Based on the text, generate 3 (three) highly detailed image generation prompts for Midjourney/DALL-E 3. STRICT GUIDELINES FOR THE OUTPUT PROMPTS: 1. LANGUAGE: Output prompts must be in English. 2. NO TEXT: The generated images must NOT contain any text, typography, letters, watermarks, or logos. 3. NO PROPER NAMES: Do not use names. Replace them with visual descriptions (e.g., "an astronaut," "a giant asteroid," "a detective"). 4. SAFETY: Ensure descriptions are PG-13 and safe, but keep them dramatic. 5. COMPOSITION: The image MUST show the interaction between the Protagonist and the Antagonist (or the main Object/Mystery/Entity) described in the story. They must be visually connected in the frame to create harmony and storytelling. 6. CLICKBAIT GRAPHICS: You MUST include specific instructions to overlay graphical elements. Use phrases like: - "Overlay a bright red arrow pointing at..." - "A thick red circle graphic drawn around..." 7. STYLE: Photorealistic, 8k, Cinematic lighting, Unreal Engine 5 render, dramatic atmosphere, YouTube thumbnail style. OUTPUT STRUCTURE (Provide 3 distinct options): Option 1: "Conflict & Emotion" (Focus on facial expressions and tension + Red Arrow pointing to the main reaction or threat). Option 2: "Mystery & Atmosphere" (Focus on the environment/silhouettes + Red Circle around a mysterious figure/object/anomaly). Option 3: "The Key Detail" (Focus on the specific hook mentioned in the title, e.g., a strange planet, artifact, or clue + Red Circle AND Arrow pointing to it).Do not write "I am ready" or any conversational text. Just output the 3 prompts. Write each prompt separately and numbered, nothing else, do not write anything like “Option 3:” --- INPUT DATA: VIDEO TITLE: {title} STORY: {story}"""
@@ -110,9 +110,9 @@ STORY TEXT:
                 'nologo': True,
                 'enhance': False
             },
-            'openrouter_models': ['openai/gpt-oss-120b:free', 'google/gemini-2.5-flash'],
+            'openrouter_models': ['z-ai/glm-4.5-air:free', 'google/gemini-2.5-flash'],
             'subtitles': {
-                'whisper_model': 'base.bin',
+                'whisper_model': 'base',
                 'font': 'Arial',
                 'fontsize': 60,
                 'color': [255, 255, 255],
@@ -168,8 +168,8 @@ Goal: The final text must read like an original Ukrainian work, written for Ukra
 Original Source Text:
 
 """,
-                    'model': 'openai/gpt-oss-120b:free',
-                    'max_tokens': 128000,
+                    'model': 'z-ai/glm-4.5-air:free',
+                    'max_tokens': 0,
                     'temperature': 1.0,
                     'rewrite_prompt': """Role: You are an expert Ukrainian documentary scriptwriter and historian (similar to the style of high-quality channels like "Історія без міфів" or top-tier dubbed documentaries).
 
@@ -196,8 +196,8 @@ Output Format Requirements (STRICT):
 Original Source Text:
 
 """,
-                    'rewrite_model': 'openai/gpt-oss-120b:free',
-                    'rewrite_max_tokens': 128000,
+                    'rewrite_model': 'z-ai/glm-4.5-air:free',
+                    'rewrite_max_tokens': 0,
                     'rewrite_temperature': 1.0,
                     'tts_provider': 'EdgeTTS',
                     'edgetts_voice': 'uk-UA-OstapNeural',

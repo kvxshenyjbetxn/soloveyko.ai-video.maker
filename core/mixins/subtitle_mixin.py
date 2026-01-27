@@ -231,6 +231,8 @@ class SubtitleMixin:
             model_name = sub_settings.get('whisper_model', 'base')
             
             whisper_exe = None; whisper_model_path = model_name
+            if whisper_type != 'amd':
+                whisper_model_path = model_name.replace(".bin", "")
             if whisper_type == 'amd':
                 base_path = self._get_base_path()
                 # Assuming whisper-cli-amd is in root dir.
@@ -320,6 +322,8 @@ class SubtitleMixin:
             model_name = sub_settings.get('whisper_model', 'base')
             
             whisper_exe = None; whisper_model_path = model_name
+            if whisper_type != 'amd':
+                whisper_model_path = model_name.replace(".bin", "")
             if whisper_type == 'amd':
                 base_path = self._get_base_path()
                 if getattr(sys, 'frozen', False):

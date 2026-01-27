@@ -196,6 +196,7 @@ class LanguagesTab(QWidget):
         
         self.tokens_spinbox = QSpinBox()
         self.tokens_spinbox.setRange(0, 128000)
+        self.tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
         self.tokens_spinbox.setValue(4096)
         self.tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
         trans_params.addRow(tokens_label_container, self.tokens_spinbox)
@@ -279,6 +280,7 @@ class LanguagesTab(QWidget):
         
         self.rewrite_tokens_spinbox = QSpinBox()
         self.rewrite_tokens_spinbox.setRange(0, 128000)
+        self.rewrite_tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
         self.rewrite_tokens_spinbox.setValue(4096)
         self.rewrite_tokens_spinbox.valueChanged.connect(self.save_current_language_settings)
         rewrite_params.addRow(rewrite_tokens_label_container, self.rewrite_tokens_spinbox)
@@ -1271,3 +1273,6 @@ class LanguagesTab(QWidget):
         
         self.watermark_size_label.setText(translator.translate("watermark_size_label", "Watermark Size:"))
         self.watermark_position_label.setText(translator.translate("watermark_position_label", "Watermark Position:"))
+
+        self.tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
+        self.rewrite_tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
