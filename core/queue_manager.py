@@ -30,6 +30,7 @@ class QueueManager(QObject):
 
     def clear_queue(self):
         self.tasks.clear()
+        self.task_counter = 0
 
     def get_task_count(self):
         return len(self.tasks)
@@ -48,6 +49,8 @@ class QueueManager(QObject):
                 break
         if job_to_delete:
             self.tasks.remove(job_to_delete)
+            if not self.tasks:
+                self.task_counter = 0
             return True
         return False
 
