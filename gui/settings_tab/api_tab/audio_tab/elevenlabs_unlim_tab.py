@@ -23,49 +23,45 @@ class BalanceCheckWorker(QThread):
             self.error.emit(str(e))
 
 class ElevenLabsUnlimTab(QWidget):
-    def __init__(self):
+    def __init__(self, main_window=None):
         super().__init__()
+        self.main_window = main_window
         self.layout = QVBoxLayout(self)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.init_ui()
+        self.update_fields()
+        self.retranslate_ui()
 
-        # Description / Title
-        title = QLabel(translator.translate("elevenlabs_unlim_settings_title", "ElevenLabs Unlimited Settings"))
-        title.setStyleSheet("font-weight: bold; font-size: 14px; margin-bottom: 10px;")
-        self.layout.addWidget(title)
-
-
-
+    def init_ui(self):
         # API Key Input
         self.api_key_label = QLabel(translator.translate("api_key_label"))
         
         self.api_key_input = QLineEdit()
         self.api_key_input.setEchoMode(QLineEdit.EchoMode.Normal)
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key_placeholder"))
-        self.api_key_input.setText(settings_manager.get("elevenlabs_unlim_api_key", ""))
         self.api_key_input.textChanged.connect(self.save_api_key)
 
         def refresh_quick_panel():
-            # Assuming main window access via parent chain if needed, 
-            # but usually tab is initialized with main_window passed or obtainable.
-            # However, this class init doesn't take main_window. 
-            # We can try to find window or just pass None if we rely on signaling later.
-            # But the requirement is to refresh the panel.
-            # Let's try to get top level window.
-            window = self.window()
-            if hasattr(window, 'refresh_quick_settings_panels'):
-                window.refresh_quick_settings_panels()
+            if self.main_window:
+                self.main_window.refresh_quick_settings_panels()
 
         add_setting_row(self.layout, self.api_key_label, self.api_key_input, "elevenlabs_unlim_api_key", refresh_quick_panel)
 
         # Balance Display
+        balance_layout = QHBoxLayout()
         self.balance_label = QLabel("")
-        self.balance_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
-        self.layout.addWidget(self.balance_label)
+        balance_layout.addWidget(self.balance_label)
+        balance_layout.addStretch()
+        self.layout.addLayout(balance_layout)
 
-        # Check Balance Button
+        # Connection Status & Check Button
+        connection_layout = QHBoxLayout()
+        self.connection_status_label = QLabel()
         self.check_btn = QPushButton(translator.translate("check_balance_button"))
         self.check_btn.clicked.connect(self.check_balance)
-        self.layout.addWidget(self.check_btn)
+        connection_layout.addWidget(self.connection_status_label)
+        connection_layout.addWidget(self.check_btn)
+        self.layout.addLayout(connection_layout)
         
         # Buy API Key Link
         self.buy_info_layout = QHBoxLayout()
@@ -79,19 +75,43 @@ class ElevenLabsUnlimTab(QWidget):
 
         self.layout.addStretch()
 
+    def retranslate_ui(self):
+        self.api_key_label.setText(translator.translate("api_key_label"))
+        self.api_key_input.setPlaceholderText(translator.translate("enter_api_key_placeholder"))
+        self.check_btn.setText(translator.translate("check_balance_button"))
+        self.buy_info_label.setText(translator.translate("elevenlabs_unlim_buy_info"))
+        self.update_connection_status_label()
+        # Initial balance label update is handled by update_fields/check_balance
+
+    def update_fields(self):
+        self.api_key_input.blockSignals(True)
+        self.api_key_input.setText(settings_manager.get("elevenlabs_unlim_api_key", ""))
+        self.api_key_input.blockSignals(False)
+        self.update_balance_label(None)
+        self.update_connection_status_label(None)
 
     def save_api_key(self):
         key = self.api_key_input.text().strip()
         settings_manager.set("elevenlabs_unlim_api_key", key)
         settings_manager.save_settings()
 
-
-
     def update_balance_label(self, balance):
         if balance is not None:
-             self.balance_label.setText(f"{translator.translate('balance_label')} {balance} chars")
+             self.balance_label.setText(f"{translator.translate('balance')}: {balance}")
         else:
-             self.balance_label.setText("")
+             self.balance_label.setText(translator.translate("balance_not_loaded"))
+
+    def update_connection_status_label(self, status=None):
+        if status == "checking":
+            self.connection_status_label.setText(translator.translate("connection_status_checking"))
+        elif status == "connected":
+            self.connection_status_label.setText(translator.translate("connection_status_connected"))
+        elif status == "error":
+            self.connection_status_label.setText(translator.translate("connection_status_error"))
+        elif status == "not_configured":
+            self.connection_status_label.setText(translator.translate("connection_status_not_configured"))
+        else:
+            self.connection_status_label.setText(translator.translate("connection_status_not_checked"))
 
     def check_balance(self, silent=False):
         api_key = settings_manager.get("elevenlabs_unlim_api_key")
@@ -101,11 +121,11 @@ class ElevenLabsUnlimTab(QWidget):
              
         self.check_btn.setEnabled(False)
         self.check_btn.setText(translator.translate("checking_status", "Checking..."))
+        self.update_connection_status_label("checking")
         
         self.worker = BalanceCheckWorker(api_key)
         self.worker.finished.connect(lambda b, s: self._on_check_finished(b, s, silent))
         self.worker.error.connect(lambda e: self._on_check_error(e, silent))
-        # Keep worker reference alive or ensure it deletes later
         self.worker.finished.connect(self.worker.deleteLater)
         self.worker.error.connect(self.worker.deleteLater)
         self.worker.start()
@@ -114,8 +134,11 @@ class ElevenLabsUnlimTab(QWidget):
         self.check_btn.setEnabled(True)
         self.check_btn.setText(translator.translate("check_balance_button"))
         self.update_balance_label(balance)
+        self.update_connection_status_label(status)
         
         if status == "connected":
+             if self.main_window:
+                 self.main_window.update_balance()
              if not silent:
                 QMessageBox.information(self, translator.translate("success_title"), translator.translate("connection_successful", "Connection Successful!"))
         else:
@@ -125,5 +148,6 @@ class ElevenLabsUnlimTab(QWidget):
     def _on_check_error(self, error_msg, silent):
         self.check_btn.setEnabled(True)
         self.check_btn.setText(translator.translate("check_balance_button"))
+        self.update_connection_status_label("error")
         if not silent:
             QMessageBox.critical(self, translator.translate("error_title"), error_msg)
