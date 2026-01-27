@@ -4,7 +4,7 @@ import uuid
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
     QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog, QGridLayout, QMessageBox, QStyle, QSlider,
-    QMenu, QWidgetAction, QSplitter
+    QMenu, QWidgetAction, QSplitter, QComboBox, QPlainTextEdit, QProgressBar, QApplication, QSizePolicy
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QColor, QAction
 from PySide6.QtCore import Qt, QMimeData, Signal, QByteArray
@@ -16,7 +16,6 @@ from gui.file_dialog import FileDialog
 from utils.animator import Animator
 from gui.widgets.quick_settings_panel import QuickSettingsPanel
 from gui.widgets.recent_tasks_panel import RecentTasksPanel
-from PySide6.QtWidgets import QSplitter, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QPlainTextEdit, QProgressBar, QMessageBox, QApplication, QFrame, QSizePolicy
 
 def get_text_color_for_background(bg_color_hex):
     """
@@ -440,11 +439,18 @@ class TextTab(QWidget):
         layout.addWidget(self.languages_menu_container)
 
         # Status bar
-        self.status_bar_layout = QHBoxLayout()
+        self.status_bar_container = QWidget()
+        self.status_bar_container.setMinimumWidth(0)
+        self.status_bar_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.status_bar_layout = FlowLayout(self.status_bar_container, margin=0, hSpacing=20, vSpacing=5)
+        
         self.openrouter_balance_label = QLabel()
         self.openrouter_balance_label.setMinimumWidth(0)
         
-        self.googler_usage_layout = QHBoxLayout()
+        # Googler usage needs to be a single widget to wrap correctly in FlowLayout
+        self.googler_usage_container = QWidget()
+        self.googler_usage_layout = QHBoxLayout(self.googler_usage_container)
+        self.googler_usage_layout.setContentsMargins(0, 0, 0, 0)
         self.googler_usage_layout.setSpacing(2)
         self.googler_usage_label = QLabel()
         self.googler_usage_label.setMinimumWidth(0)
@@ -464,19 +470,15 @@ class TextTab(QWidget):
         self.voicemaker_balance_label.setMinimumWidth(0)
         self.gemini_tts_balance_label = QLabel()
         self.gemini_tts_balance_label.setMinimumWidth(0)
+        
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
-        self.status_bar_layout.addSpacing(20)
-        self.status_bar_layout.addLayout(self.googler_usage_layout)
-        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.googler_usage_container)
         self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.elevenlabs_unlim_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.voicemaker_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.gemini_tts_balance_label)
-        self.status_bar_layout.addStretch()
-        layout.addLayout(self.status_bar_layout)
+        
+        layout.addWidget(self.status_bar_container)
 
         # Quick Settings Panel
         self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
