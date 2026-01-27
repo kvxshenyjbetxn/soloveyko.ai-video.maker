@@ -339,6 +339,7 @@ class RewriteTab(QWidget):
         languages_config = self.settings.get('languages_config', {})
         
         initial_task_count = self.main_window.queue_manager.get_task_count()
+        any_dialog_shown = False
 
         for i, link in enumerate(links):
             QApplication.processEvents() # maintain UI responsiveness
@@ -489,6 +490,7 @@ class RewriteTab(QWidget):
 
             use_existing = False
             if found_files_per_lang:
+                any_dialog_shown = True
                 standard_order = ["stage_download", "stage_transcription", "stage_rewrite", "stage_preview", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
                 
                 # Get all unique custom stage keys found
@@ -577,11 +579,14 @@ class RewriteTab(QWidget):
             self.input_edit.clear()
             self.check_queue_button_visibility()
             
-            QMessageBox.information(
-                self, 
-                translator.translate("success", "Success"), 
-                translator.translate("tasks_added_success", "Task(s) successfully added to queue.") + f" ({added_count})"
-            )
+            # User request: Only show if NO "found existing files" window was shown for any task
+            # Also remove numbering like (1)
+            if not any_dialog_shown:
+                QMessageBox.information(
+                    self, 
+                    translator.translate("success", "Success"), 
+                    translator.translate("tasks_added_success", "Task(s) successfully added to queue.")
+                )
 
     def retranslate_ui(self):
         self.input_label.setText(translator.translate("enter_links_label", "Enter YouTube Links (one per line):"))
