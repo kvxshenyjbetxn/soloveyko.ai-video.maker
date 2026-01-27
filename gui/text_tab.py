@@ -163,10 +163,25 @@ class StageSelectionWidget(QWidget):
 
             if key in ["stage_images", "stage_voiceover"]:
                 add_button = QToolButton()
-                add_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+                add_button.setText("+")
+                add_button.setToolTip(translator.translate("add_images_title" if key == "stage_images" else "add_audio_title"))
                 add_button.setObjectName(f"addButton_{key}")
                 add_button.setFixedSize(22, 22)
-                add_button.setStyleSheet("QToolButton { border: none; background-color: transparent; }")
+                # Bold '+' and hover effect
+                add_button.setStyleSheet("""
+                    QToolButton { 
+                        border: none; 
+                        background-color: transparent; 
+                        font-weight: bold; 
+                        font-size: 16px; 
+                        padding-bottom: 4px;
+                        margin-left: -8px;
+                    } 
+                    QToolButton:hover { 
+                        background-color: rgba(255, 255, 255, 0.1); 
+                        border-radius: 4px; 
+                    }
+                """)
                 layout.addWidget(add_button)
                 self.add_buttons[key] = add_button
 
@@ -260,10 +275,13 @@ class StageSelectionWidget(QWidget):
         if button:
             if self.user_images:
                 button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton))
+                button.setText("") # Remove plus when file is added
                 self.checkboxes["stage_img_prompts"].setChecked(False)
                 self.checkboxes["stage_img_prompts"].setEnabled(False)
             else:
-                button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+                from PySide6.QtGui import QIcon
+                button.setIcon(QIcon()) # Clear icon to show text
+                button.setText("+")
                 self.checkboxes["stage_img_prompts"].setEnabled(True)
 
     def set_user_audio(self, files):
@@ -274,11 +292,14 @@ class StageSelectionWidget(QWidget):
         if button:
             if self.user_audio:
                 button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton))
+                button.setText("") # Remove plus when file is added
                 if translation_checkbox:
                     translation_checkbox.setChecked(False)
                     translation_checkbox.setEnabled(False)
             else:
-                button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+                from PySide6.QtGui import QIcon
+                button.setIcon(QIcon()) # Clear icon to show text
+                button.setText("+")
                 if translation_checkbox:
                     translation_checkbox.setEnabled(True)
         
@@ -857,12 +878,13 @@ class TextTab(QWidget):
                 self.recent_tasks_panel.refresh()
 
             # --- Success Message ---
-            task_count = len(languages_data)
-            if task_count > 0:
+            # User request: Only show if NO "found existing files" window was shown
+            # Also remove numbering like (1)
+            if languages_data and not found_files_per_lang:
                 QMessageBox.information(
                     self, 
                     translator.translate("success", "Success"), 
-                    translator.translate("tasks_added_success", "Task(s) successfully added to queue.") + f" ({task_count})"
+                    translator.translate("tasks_added_success", "Task(s) successfully added to queue.")
                 )
 
 

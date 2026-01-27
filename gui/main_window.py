@@ -388,7 +388,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(icon_path))
 
         self.update_title()
-        self.setGeometry(100, 100, 1366, 768)
+        self.setGeometry(100, 100, 1600, 900)
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
