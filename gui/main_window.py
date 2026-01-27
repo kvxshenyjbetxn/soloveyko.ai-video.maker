@@ -472,6 +472,8 @@ class MainWindow(QMainWindow):
         # Connect signals
         self.queue_manager.task_added.connect(self.queue_tab.add_task)
         self.queue_tab.start_processing_button.clicked.connect(self._start_processing_checked)
+        self.task_processor.processing_started.connect(lambda: self._update_queue_tab_state('processing'))
+        self.task_processor.processing_finished.connect(self._handle_processing_finished)
         self.task_processor.processing_finished.connect(self.show_processing_finished_dialog)
         self.task_processor.processing_finished.connect(self._googler_timer.stop)
         self.task_processor.processing_finished.connect(self.update_balance)
@@ -480,6 +482,7 @@ class MainWindow(QMainWindow):
         self.task_processor.processing_finished.connect(self.update_elevenlabs_unlim_balance)
         self.task_processor.processing_finished.connect(self.update_voicemaker_balance)
         self.task_processor.processing_finished.connect(self.update_gemini_tts_balance)
+        self.task_processor.stage_status_changed.connect(self._on_stage_status_changed)
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
         self.task_processor.stage_metadata_updated.connect(self.queue_tab.update_stage_metadata)
         self.task_processor.image_generated.connect(self.gallery_tab.add_media)
@@ -553,6 +556,8 @@ class MainWindow(QMainWindow):
              pass
 
     def _start_processing_checked(self):
+        """Reset error tracking and validate API key before starting processing."""
+        self._has_processing_errors = False
         worker = ApiKeyCheckWorker(api_key=self.api_key, server_url=self.server_url)
         self.active_workers.add(worker)
         # Fix: the signal emits 3 arguments (bool, str, int)
@@ -576,6 +581,20 @@ class MainWindow(QMainWindow):
             title = self.translator.translate('subscription_expired_title')
             message = self.translator.translate('subscription_expired_message_start_processing')
             QMessageBox.warning(self, title, message)
+
+    def _on_stage_status_changed(self, job_id, lang_id, stage_key, status):
+        """Monitor errors during processing to update the Queue tab indicator."""
+        if status in ('failed', 'error'):
+            # Switch to red immediately if error occurs
+            self._update_queue_tab_state('error')
+            self._has_processing_errors = True
+
+    def _handle_processing_finished(self):
+        """Decide whether to show green or red indicator when all tasks are done."""
+        if getattr(self, '_has_processing_errors', False):
+            self._update_queue_tab_state('error')
+        else:
+            self._update_queue_tab_state('finished')
 
     def update_subscription_status(self):
         days_left_text = ""
@@ -1126,36 +1145,138 @@ class MainWindow(QMainWindow):
         # 1. Queue Tab
         queue_count = self.queue_manager.get_task_count()
         queue_idx = self.tabs.indexOf(self.queue_tab)
+        current_idx = self.tabs.currentIndex()
+        
         if queue_count > 0:
             if queue_idx == -1:
                 # Insert at position 1 (after Text tabs)
-                self.tabs.insertTab(min(1, self.tabs.count()), self.queue_tab, self.translator.translate('queue_tab'))
+                title = self.translator.translate('queue_tab')
+                self.tabs.insertTab(min(1, self.tabs.count()), self.queue_tab, title)
+                # Reset state for freshly added tab
+                self._update_queue_tab_state('default')
         else:
             if queue_idx != -1:
+                # If Queue tab was active, redirect to Text
+                was_active = (current_idx == queue_idx)
+                # Reset text to original before removing (just in case)
+                self.tabs.setTabText(queue_idx, self.translator.translate('queue_tab'))
                 self.tabs.removeTab(queue_idx)
+                self._update_queue_tab_state('default')
+                if was_active:
+                    self.activate_tab(self.text_tab)
 
         # 2. Gallery Tab
-        gallery_has_items = len(self.gallery_tab.task_groups) > 0
+        # Custom logic: hide gallery if queue is empty as per request
+        gallery_has_items = len(self.gallery_tab.task_groups) > 0 and queue_count > 0
         gallery_idx = self.tabs.indexOf(self.gallery_tab)
         if gallery_has_items:
             if gallery_idx == -1:
+                title = self.translator.translate('gallery_tab_title')
                 # Insert after Queue (if exists) or Text
-                # Positions: Text(0), Queue(1). So pos is 2 or 1.
                 pos = 1
                 if self.tabs.indexOf(self.queue_tab) != -1: pos = 2
-                self.tabs.insertTab(min(pos, self.tabs.count()), self.gallery_tab, self.translator.translate('gallery_tab_title'))
+                self.tabs.insertTab(min(pos, self.tabs.count()), self.gallery_tab, title)
         else:
             if gallery_idx != -1:
+                # If Gallery tab was active and is being removed, redirect to Text
+                was_active = (self.tabs.currentIndex() == gallery_idx)
                 self.tabs.removeTab(gallery_idx)
+                if was_active:
+                    self.activate_tab(self.text_tab)
         
         # Ensure Settings, Other, Log are at the end if they moved
-        # (Though they shouldn't move if we insert correctly, but just in case)
         for tab in [self.settings_tab, self.other_tab, self.log_tab]:
             idx = self.tabs.indexOf(tab)
             if idx != -1:
-                # If it's not at the end, we might want to re-insert, 
-                # but insertTab generally handles this well if we use high indices.
                 pass
+
+    def _update_queue_tab_state(self, state):
+        """Updates the Queue tab text color and button color based on processing state."""
+        idx = self.tabs.indexOf(self.queue_tab)
+        if idx == -1:
+            return
+
+        base_title = self.translator.translate('queue_tab')
+        
+        # Define colors for robust visibility
+        if state == 'processing':
+            # Yellow
+            color_hex = "#FFD700" 
+            hover_color = "#FFEA00"
+            btn_text_color = "black"
+        elif state == 'finished':
+            # Green (Success)
+            color_hex = "#28a745"
+            hover_color = "#218838"
+            btn_text_color = "white"
+        elif state == 'error':
+            # Red (Failure)
+            color_hex = "#dc3545"
+            hover_color = "#c82333"
+            btn_text_color = "white"
+        else:
+            # Default/Pending (Gray)
+            color_hex = "#808080"
+            hover_color = None
+            btn_text_color = "white"
+
+        # 1. Update Tab Bar with Icon instead of HTML (to avoid raw text error)
+        self.tabs.setTabText(idx, base_title)
+        
+        # Create a small circular icon
+        from PySide6.QtGui import QPixmap, QPainter, QColor, QBrush, QIcon
+        from PySide6.QtCore import Qt, QSize
+        
+        # Using a narrower pixmap to bring the dot closer to the text
+        pixmap = QPixmap(14, 16)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QBrush(QColor(color_hex)))
+        painter.setPen(Qt.NoPen)
+        # Draw 12x12 circle touching the right edge (x=2, width=12 -> right edge at 14)
+        painter.drawEllipse(2, 2, 12, 12)
+        painter.end()
+        
+        self.tabs.setIconSize(QSize(14, 16))
+        self.tabs.setTabIcon(idx, QIcon(pixmap))
+        
+        if state != 'default':
+            self.tabs.tabBar().setTabTextColor(idx, QColor(color_hex))
+        else:
+            self.tabs.tabBar().setTabTextColor(idx, QColor())
+
+        # 2. Update Button in Queue Tab
+        if hasattr(self.queue_tab, 'start_processing_button'):
+            if state != 'default':
+                self.queue_tab.start_processing_button.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {color_hex}; 
+                        color: {btn_text_color}; 
+                        font-weight: bold; 
+                        padding: 5px 15px;
+                        border-radius: 4px;
+                        border: none;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {hover_color};
+                    }}
+                """)
+            else:
+                # Revert to original green style if default
+                self.queue_tab.start_processing_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #28a745; 
+                        color: white; 
+                        font-weight: bold; 
+                        padding: 5px 15px;
+                        border-radius: 4px;
+                        border: none;
+                    }
+                    QPushButton:hover {
+                        background-color: #218838;
+                    }
+                """)
 
     def activate_tab(self, widget):
         """Switches to the specified tab, even if it's nested (e.g., Translation/Rewrite)."""
