@@ -529,8 +529,15 @@ class TextTab(QWidget):
         if not job: return
         
         # Check job type
-        if job.get('type') != 'text' and job.get('type') is not None:
-             # If it's a rewrite job, maybe switch tab or ignore
+        job_type = job.get('type')
+        if job_type == 'rewrite':
+            if self.main_window:
+                rewrite_idx = self.main_window.tabs.indexOf(self.main_window.rewrite_tab)
+                if rewrite_idx != -1:
+                    self.main_window.tabs.setCurrentIndex(rewrite_idx)
+                    self.main_window.rewrite_tab.restore_job(job)
+                    return
+        elif job_type != 'text' and job_type is not None:
              return
 
         self.text_edit.setText(job.get('text', ''))
@@ -848,6 +855,15 @@ class TextTab(QWidget):
                 }
                 self.main_window.queue_manager.add_task(job)
                 self.recent_tasks_panel.refresh()
+
+            # --- Success Message ---
+            task_count = len(languages_data)
+            if task_count > 0:
+                QMessageBox.information(
+                    self, 
+                    translator.translate("success", "Success"), 
+                    translator.translate("tasks_added_success", "Task(s) successfully added to queue.") + f" ({task_count})"
+                )
 
 
     def update_char_count(self):
