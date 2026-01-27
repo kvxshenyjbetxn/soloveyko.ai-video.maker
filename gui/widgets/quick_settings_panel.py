@@ -40,8 +40,9 @@ class QuickSettingsPanel(QWidget):
         
         self.settings_container_widget = QWidget()
         self.content_layout = QVBoxLayout(self.settings_container_widget)
-        self.content_layout.setContentsMargins(10, 5, 20, 5) # Margin to prevent clipping by scrollbar
-        self.content_layout.setSpacing(15)
+        self.content_layout.setContentsMargins(10, 5, 10, 5) 
+        self.content_layout.setSpacing(10) 
+        self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
         self.content_layout.addStretch()
         
         self.scroll_area.setWidget(self.settings_container_widget)
@@ -146,12 +147,27 @@ class QuickSettingsPanel(QWidget):
         return {}
 
     def _add_setting_widget(self, key, metadata):
-        # Container for the setting
-        container = QWidget()
+        # Container for the setting - now a Card-style Frame
+        container = QFrame()
+        container.setObjectName("QuickSettingCard")
+        container.setStyleSheet("""
+            QFrame#QuickSettingCard {
+                background-color: rgba(255, 255, 255, 0.02);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 12px;
+            }
+            QFrame#QuickSettingCard:hover {
+                background-color: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+        """)
+        
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(10, 10, 10, 10) # Matching RecentTaskCard padding
         layout.setSpacing(5)
-        self.content_layout.addWidget(container)
+        
+        container.setFixedWidth(270) # Permanent fixed width for all cards
+        self.content_layout.addWidget(container, alignment=Qt.AlignmentFlag.AlignHCenter)
         
         # Label
         label_key = metadata.get('label')
@@ -440,11 +456,12 @@ class QuickSettingsPanel(QWidget):
 
         elif setting_type == 'folder_path':
              h_path = QHBoxLayout()
-             h_path.setContentsMargins(0,0,0,0) 
-             h_path.setSpacing(2) # Tighter spacing to push icon right
+             h_path.setContentsMargins(0, 0, 0, 0) # Reset h_path margins
+             h_path.setSpacing(8) 
              le = QLineEdit(str(current_value) if current_value else "")
              le.setReadOnly(True)
-             le.setMinimumWidth(0) # Allow shrinking
+             le.setMinimumWidth(40) # Allow more shrinking
+             le.setStyleSheet("QLineEdit { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); padding: 4px; }")
              btn = QPushButton()
              
              # Yellow folder icon (Simple SVG)
@@ -472,11 +489,7 @@ class QuickSettingsPanel(QWidget):
              layout.addWidget(widget)
 
         # self.content_layout.addWidget(container) # Moved to top
-        
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
-        self.content_layout.addWidget(line)
+        pass
 
     def _update_setting(self, key, value):
         settings_manager.set(key, value)

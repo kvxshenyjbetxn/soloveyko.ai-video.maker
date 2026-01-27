@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle, QInputDialog, QSplitter,
-    QToolButton, QApplication
+    QToolButton, QApplication, QSizePolicy
 )
 from PySide6.QtCore import Qt, QByteArray
 from gui.text_tab import DroppableTextEdit, StageSelectionWidget
@@ -98,11 +98,18 @@ class RewriteTab(QWidget):
         
 
         # Status bar
-        self.status_bar_layout = QHBoxLayout()
+        self.status_bar_container = QWidget()
+        self.status_bar_container.setMinimumWidth(0)
+        self.status_bar_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.status_bar_layout = FlowLayout(self.status_bar_container, margin=0, hSpacing=20, vSpacing=5)
+        
         self.openrouter_balance_label = QLabel()
         self.openrouter_balance_label.setMinimumWidth(0)
 
-        self.googler_usage_layout = QHBoxLayout()
+        # Googler usage container for FlowLayout
+        self.googler_usage_container = QWidget()
+        self.googler_usage_layout = QHBoxLayout(self.googler_usage_container)
+        self.googler_usage_layout.setContentsMargins(0, 0, 0, 0)
         self.googler_usage_layout.setSpacing(2)
         self.googler_usage_label = QLabel()
         self.googler_usage_label.setMinimumWidth(0)
@@ -122,19 +129,15 @@ class RewriteTab(QWidget):
         self.voicemaker_balance_label.setMinimumWidth(0)
         self.gemini_tts_balance_label = QLabel()
         self.gemini_tts_balance_label.setMinimumWidth(0)
+        
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
-        self.status_bar_layout.addSpacing(20)
-        self.status_bar_layout.addLayout(self.googler_usage_layout)
-        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.googler_usage_container)
         self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.elevenlabs_unlim_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.voicemaker_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.gemini_tts_balance_label)
-        self.status_bar_layout.addStretch()
-        layout.addLayout(self.status_bar_layout)
+        
+        layout.addWidget(self.status_bar_container)
         
         # Quick Settings Panel
         self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
