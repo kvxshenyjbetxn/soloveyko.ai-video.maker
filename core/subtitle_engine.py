@@ -21,7 +21,7 @@ class SubtitleEngine:
             raise Exception("No subtitles generated (segments list empty).")
 
         # For AssemblyAI, splitting is already handled by `chars_per_caption`
-        engine_type = settings.get('whisper_type', 'amd')
+        engine_type = settings.get('whisper_type', 'standard')
         if engine_type != 'assemblyai':
             processed_segments = self._split_long_lines(segments, settings.get('max_words', 10))
         else:
@@ -37,7 +37,7 @@ class SubtitleEngine:
         return " ".join([seg['text'] for seg in segments])
 
     def _get_segments(self, audio_path, settings, language='en'):
-        engine_type = settings.get('whisper_type', 'amd')
+        engine_type = settings.get('whisper_type', 'standard')
         logger.log(f"SubtitleEngine: Generating segments using '{engine_type}' for {language}", LogLevel.DEBUG)
         
         segments = []
