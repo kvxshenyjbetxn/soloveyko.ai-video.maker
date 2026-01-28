@@ -12,7 +12,7 @@ class SettingsManager:
         self.defaults = {
             'language': 'uk',
             'theme': 'dark',
-            'results_path': '',
+            'results_path': self._get_default_results_path(),
             'image_review_enabled': True,
             'rewrite_review_enabled': True,
             'translation_review_enabled': True,
@@ -617,6 +617,32 @@ Original Source Text:
         }
         self.settings = self.load_settings()
 
+    def _get_default_results_path(self):
+        try:
+            # Спробуємо отримати стандартну папку для Відео/Фільмів через Qt
+            path = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.MoviesLocation)
+            
+            # Якщо Qt не повернув шлях (наприклад, викликано занадто рано), 
+            # спробуємо стандартні шляхи ОС
+            if not path:
+                home = os.path.expanduser("~")
+                if platform.system() == "Darwin":
+                    path = os.path.join(home, "Movies")
+                elif platform.system() == "Windows":
+                    # Спробуємо знайти папку Відео через змінну середовища або стандартний шлях
+                    path = os.path.join(os.environ.get('USERPROFILE', home), 'Videos')
+                else:
+                    path = os.path.join(home, "Videos")
+            
+            # Додаємо назву нашої програми
+            default_path = os.path.join(path, "Soloveyko.AI-Video.Maker")
+            
+            # Не створюємо папку тут, вона буде створена при запуску задачі (TaskState)
+            return default_path
+        except Exception as e:
+            print(f"DEBUG: Error calculating default results path: {e}")
+            return os.path.expanduser("~/Soloveyko.AI-Video.Maker-Results")
+
     def _get_base_path(self):
         if platform.system() == "Darwin":
             # На macOS використовуємо Application Support для уникнення PermissionError
@@ -676,6 +702,11 @@ Original Source Text:
 
         # РЕКУРСИВНО заповнюємо відсутні ключі з дефолтів
         self._deep_merge(self.defaults, current_settings)
+        
+        # Якщо результати порожні, ставимо дефолтний шлях
+        if not current_settings.get('results_path'):
+            current_settings['results_path'] = self.defaults.get('results_path')
+            
         return current_settings
 
     def _deep_merge(self, source, destination, is_languages_root=False):

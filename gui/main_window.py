@@ -803,7 +803,37 @@ class MainWindow(QMainWindow):
     def show_processing_finished_dialog(self, elapsed_time):
         title = self.translator.translate('processing_complete_title')
         message = self.translator.translate('processing_complete_message').format(elapsed_time)
-        QMessageBox.information(self, title, message)
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Information)
+        
+        open_folder_btn = msg_box.addButton(self.translator.translate('open_folder_button'), QMessageBox.ActionRole)
+        msg_box.addButton(QMessageBox.Ok)
+        
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == open_folder_btn:
+            self._open_results_folder()
+
+    def _open_results_folder(self):
+        path = settings_manager.get('results_path')
+        if not path or not os.path.exists(path):
+            logger.log(f"Cannot open results folder: path does not exist ({path})", level=LogLevel.WARNING)
+            return
+            
+        try:
+            if platform.system() == "Windows":
+                os.startfile(path)
+            elif platform.system() == "Darwin":
+                import subprocess
+                subprocess.Popen(["open", path])
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", path])
+        except Exception as e:
+            logger.log(f"Error opening folder: {e}", level=LogLevel.ERROR)
 
     def update_title(self):
         app_name = "Soloveyko.AI-Video.Maker"
