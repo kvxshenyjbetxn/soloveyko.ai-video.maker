@@ -1,8 +1,11 @@
 import ast
+import os
+import sys
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QFormLayout,
     QPushButton, QSpinBox, QFontComboBox, QColorDialog,
-    QGroupBox, QComboBox, QRadioButton, QButtonGroup, QHBoxLayout, QLabel
+    QGroupBox, QComboBox, QRadioButton, QButtonGroup, QHBoxLayout, QLabel,
+    QMessageBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -283,7 +286,33 @@ class SubtitlesTab(QWidget):
         if self.rb_standard.isChecked():
             models = ["tiny", "base", "small", "medium", "large"]
         else: # amd
-            models = ["base.bin", "small.bin", "medium.bin", "large.bin"]
+            # Path logic for finding whisper-cli-amd
+            if getattr(sys, 'frozen', False):
+                base_path = os.path.dirname(sys.executable)
+            else:
+                # SubtitlesTab is in gui/settings_tab/, so 3 levels up to root
+                base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+            amd_path = os.path.join(base_path, "whisper-cli-amd")
+            models = []
+            if os.path.exists(amd_path) and os.path.isdir(amd_path):
+                # Scan for .bin files
+                files = os.listdir(amd_path)
+                models = [f for f in files if f.endswith(".bin")]
+                models.sort()
+            
+            # Fallback if no models found
+            if not models:
+                msg = QMessageBox(self)
+                msg.setIcon(QMessageBox.Icon.Warning)
+                msg.setWindowTitle(translator.translate("amd_models_missing_title"))
+                msg.setText(translator.translate("amd_models_missing_message"))
+                msg.setTextFormat(Qt.TextFormat.RichText)
+                msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+                msg.exec()
+
+                models = ["base.bin", "small.bin", "medium.bin", "large.bin"]
+                self.model_combo.addItem("--- " + translator.translate("amd_models_missing_title") + " ---")
 
         self.model_combo.addItems(models)
         self.model_combo.blockSignals(False)

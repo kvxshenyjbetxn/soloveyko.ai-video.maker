@@ -112,6 +112,8 @@
     "enter_task_name_title": "Введите название задачи",
     "enter_task_name_label": "Название задачи:",
     "enter_source_lang_label": "Укажите код языка видео (напр. uk, en), которое вы рерайтите.\nЭтот движок не умеет автоматически определять язык для транскрипции:",
+    "amd_models_missing_title": "Модели не найдены",
+    "amd_models_missing_message": "В папке 'whisper-cli-amd' не найдено ни одной модели (.bin).<br><br>Загрузите необходимые модели по ссылке:<br><a href='https://drive.google.com/drive/folders/1ApNU-aZnBN31AHaZicyfUIF34CSidAoS'>Google Диск (Нажми сюда)</a><br><br>Положите их в папку whisper-cli-amd.",
     "tasks_added_success": "Задачи успешно добавлены в очередь.",
     "default_task_name": "Задача",
     "task_header": "Задачи и этапы",
