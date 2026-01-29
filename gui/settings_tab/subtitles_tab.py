@@ -5,14 +5,30 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QScrollArea, QFormLayout,
     QPushButton, QSpinBox, QFontComboBox, QColorDialog,
     QGroupBox, QComboBox, QRadioButton, QButtonGroup, QHBoxLayout, QLabel,
-    QMessageBox
+    QMessageBox, QProgressDialog
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
 from utils.settings import settings_manager
 from utils.translator import translator
 from gui.widgets.help_label import HelpLabel
 from gui.widgets.setting_row import add_setting_row, QuickSettingButton
+
+class ModelDownloadWorker(QThread):
+    finished = Signal(bool, str)
+    
+    def __init__(self, model_name):
+        super().__init__()
+        self.model_name = model_name
+        
+    def run(self):
+        try:
+            import whisper
+            # This will trigger the download if not present
+            whisper.load_model(self.model_name)
+            self.finished.emit(True, self.model_name)
+        except Exception as e:
+            self.finished.emit(False, str(e))
 
 class SubtitlesTab(QWidget):
     def __init__(self):
@@ -90,8 +106,17 @@ class SubtitlesTab(QWidget):
 
         self.model_label = QLabel()
         self.model_combo = QComboBox()
-        self.model_combo.currentTextChanged.connect(self.save_settings)
+        self.model_combo.currentTextChanged.connect(self._on_model_selected)
         
+        self.download_btn = QPushButton()
+        self.download_btn.clicked.connect(self.download_selected_model)
+        
+        model_container = QWidget()
+        model_h_layout = QHBoxLayout(model_container)
+        model_h_layout.setContentsMargins(0, 0, 0, 0)
+        model_h_layout.addWidget(self.model_combo, 1)
+        model_h_layout.addWidget(self.download_btn)
+
         self.model_help = HelpLabel("whisper_model_hint")
         model_label_container = QWidget()
         model_label_layout = QHBoxLayout(model_label_container)
@@ -100,7 +125,7 @@ class SubtitlesTab(QWidget):
         model_label_layout.addWidget(self.model_help)
         model_label_layout.addWidget(self.model_label)
 
-        add_setting_row(whisper_layout, model_label_container, self.model_combo, "subtitles.whisper_model", refresh_quick_panel)
+        add_setting_row(whisper_layout, model_label_container, model_container, "subtitles.whisper_model", refresh_quick_panel)
 
         self.whisper_group.setLayout(whisper_layout)
         layout.addWidget(self.whisper_group)
@@ -269,6 +294,7 @@ class SubtitlesTab(QWidget):
         self.fade_in_label.setText(translator.translate("fade_in_label"))
         self.fade_out_label.setText(translator.translate("fade_out_label"))
         self.max_words_label.setText(translator.translate("max_words_per_line_label"))
+        self.download_btn.setText(translator.translate("download_model_button"))
 
         self.standard_help.update_tooltip()
         self.amd_help.update_tooltip()
@@ -316,6 +342,69 @@ class SubtitlesTab(QWidget):
 
         self.model_combo.addItems(models)
         self.model_combo.blockSignals(False)
+        self._on_model_selected()
+
+    def _on_model_selected(self, *args):
+        """Update download button visibility and state."""
+        if getattr(self, 'is_loading', False):
+            return
+            
+        model_name = self.model_combo.currentText()
+        is_standard = self.rb_standard.isChecked()
+        
+        # AMD doesn't have internal downloader (it's files in folder)
+        self.download_btn.setVisible(is_standard)
+        
+        if is_standard and model_name:
+            if self.is_model_downloaded(model_name):
+                self.download_btn.setEnabled(False)
+                self.download_btn.setText(translator.translate("model_already_exists"))
+            else:
+                self.download_btn.setEnabled(True)
+                self.download_btn.setText(translator.translate("download_model_button"))
+        
+        self.save_settings()
+
+    def is_model_downloaded(self, model_name):
+        """Check if standard whisper model is already downloaded in local cache."""
+        try:
+            download_root = os.path.join(os.getenv("XDG_CACHE_HOME", os.path.join(os.path.expanduser("~"), ".cache")), "whisper")
+            model_path = os.path.join(download_root, f"{model_name}.pt")
+            return os.path.exists(model_path)
+        except:
+            return False
+
+    def download_selected_model(self):
+        model_name = self.model_combo.currentText()
+        if not model_name: return
+        
+        self.progress_dialog = QProgressDialog(
+            translator.translate("downloading_model_title") + f": {model_name}", 
+            None, 0, 0, self
+        )
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progress_dialog.show()
+        
+        self.download_worker = ModelDownloadWorker(model_name)
+        self.download_worker.finished.connect(self._on_download_finished)
+        self.download_worker.start()
+
+    def _on_download_finished(self, success, result):
+        if hasattr(self, 'progress_dialog'):
+            self.progress_dialog.close()
+        if success:
+            QMessageBox.information(
+                self, 
+                translator.translate("success"), 
+                translator.translate("download_success").format(model=result)
+            )
+            self._on_model_selected()
+        else:
+            QMessageBox.critical(
+                self, 
+                translator.translate("error"), 
+                translator.translate("download_error").format(error=result)
+            )
 
     def _update_engine_ui(self, update_model_list=False):
         """Updates the UI based on the selected engine, without saving."""
