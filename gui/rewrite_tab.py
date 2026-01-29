@@ -348,8 +348,10 @@ class RewriteTab(QWidget):
         # Check for AMD Whisper specific requirement
         whisper_type = self.settings.get("subtitles", {}).get("whisper_type", "amd")
         source_lang_code = None
+        amd_prompt_shown = False
         
         if whisper_type == 'amd' and not is_restored:
+            amd_prompt_shown = True
             dialog_label = translator.translate("enter_source_lang_label", "Enter Source Language Code (e.g. en, uk) for AMD Whisper:")
             dialog_title = translator.translate("enter_source_lang_title", "Source Language")
             
@@ -592,8 +594,8 @@ class RewriteTab(QWidget):
             self.input_edit.clear()
             self.check_queue_button_visibility()
             
-            # User request: Only show if NO "found existing files" window was shown for any task
-            if not any_dialog_shown:
+            # User request: Only show if NO dialogue was shown (AMD prompt or existing files)
+            if not any_dialog_shown and not amd_prompt_shown:
                 QMessageBox.information(
                     self, 
                     translator.translate("success", "Success"), 

@@ -656,7 +656,9 @@ class TextTab(QWidget):
 
     def add_to_queue(self, task_name=None, is_restored=False):
         ok = True
+        task_name_input_shown = False
         if task_name is None:
+            task_name_input_shown = True
             # Custom QInputDialog to make it wider
             dialog = QInputDialog(self)
             dialog.setWindowTitle(translator.translate('enter_task_name_title'))
@@ -879,9 +881,9 @@ class TextTab(QWidget):
                 self.recent_tasks_panel.refresh()
 
             # --- Success Message ---
-            # User request: Only show if NO "found existing files" window was shown
+            # User request: Only show if NO "found existing files" or name/lang prompt window was shown
             # Also remove numbering like (1)
-            if languages_data and not found_files_per_lang:
+            if languages_data and not found_files_per_lang and task_name_input_shown is False:
                 QMessageBox.information(
                     self, 
                     translator.translate("success", "Success"), 
