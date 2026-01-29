@@ -682,6 +682,7 @@ class TextTab(QWidget):
             # --- Check for existing files ---
             for lang_id, btn in self.language_buttons.items():
                 if btn.isChecked():
+
                     stage_widget = self.stage_widgets.get(lang_id)
                     
                     # Determine the correct base_save_path

@@ -154,6 +154,10 @@ class RecentTasksPanel(QWidget):
 
         self.layout.addWidget(footer_frame)
 
+        # Connect to name updates in queue (to refresh if we just got a YouTube title)
+        if self.main_window and hasattr(self.main_window, 'queue_manager'):
+            self.main_window.queue_manager.task_name_updated.connect(lambda: self.refresh())
+
     def refresh(self):
         # Clear existing
         while self.container_layout.count() > 1: # Keep the stretch

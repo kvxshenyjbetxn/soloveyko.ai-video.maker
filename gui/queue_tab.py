@@ -339,6 +339,7 @@ class TaskCard(QGroupBox):
         task_name_label.setFixedHeight(line_height * 3) 
         task_name_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         
+        self.task_name_label = task_name_label
         header_layout.addWidget(task_name_label)
         header_layout.addStretch()
 
@@ -491,6 +492,13 @@ class TaskCard(QGroupBox):
         if lang_id in self.language_sections:
             self.language_sections[lang_id].update_stage_status(stage_key, status)
         self._update_retry_visibility()
+
+    def update_name(self, new_name):
+        self.job_name = new_name
+        self.job['name'] = new_name
+        display_name = new_name[:100] + ("..." if len(new_name) > 100 else "")
+        self.task_name_label.setText(f"<b>{display_name}</b>")
+        self.task_name_label.setToolTip(new_name)
 
     def _update_retry_visibility(self):
         """Shows retry button if any stage in any language is in 'error' state."""
@@ -791,6 +799,13 @@ class QueueTab(QWidget):
 
         self.tasks_layout.addWidget(task_card)
         self.task_cards[job['id']] = task_card
+        
+        # Connect to name update signal
+        self.main_window.queue_manager.task_name_updated.connect(self.update_task_name)
+
+    def update_task_name(self, task_id, new_name):
+        if task_id in self.task_cards:
+            self.task_cards[task_id].update_name(new_name)
 
     def on_retry_requested(self, job_id):
         if hasattr(self.main_window, 'task_processor'):
