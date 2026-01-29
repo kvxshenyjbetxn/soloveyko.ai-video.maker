@@ -34,6 +34,7 @@ else:
     BASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, ImageMixin, VideoMixin, PreviewMixin):
+    processing_started = Signal()
     processing_finished = Signal(str)
     stage_status_changed = Signal(str, str, str, str) # job_id, lang_id, stage_key, status
     image_generated = Signal(str, str, str, str, str) # job_name, lang_name, image_path, prompt, thumbnail_path
@@ -159,6 +160,8 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
         return False
 
     def start_processing(self):
+        self.processing_started.emit()
+        self.start_time = time.time()
         # Reset finish state
         self.is_finished = False
         

@@ -311,7 +311,7 @@ class GeneralTab(QWidget):
         if hasattr(self, 'prompt_count_container'):
              self.prompt_count_container.setVisible(prompt_control_enabled)
              
-        self.prompt_count_spinbox.setValue(settings_manager.get('prompt_count', 10))
+        self.prompt_count_spinbox.setValue(settings_manager.get('prompt_count', 50))
         self.max_download_threads_spinbox.setValue(settings_manager.get('max_download_threads', 5))
 
         self.update_style() # Set button color and border

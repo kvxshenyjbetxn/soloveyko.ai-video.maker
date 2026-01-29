@@ -78,6 +78,7 @@ class PromptsTab(QWidget):
 
         self.tokens_spinbox = QSpinBox()
         self.tokens_spinbox.setRange(0, 128000)
+        self.tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
         self.tokens_spinbox.valueChanged.connect(self.save_settings)
         settings_form_layout.addRow(tokens_label_container, self.tokens_spinbox)
 
@@ -173,6 +174,7 @@ class PromptsTab(QWidget):
 
         self.preview_tokens_spinbox = QSpinBox()
         self.preview_tokens_spinbox.setRange(0, 128000)
+        self.preview_tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
         self.preview_tokens_spinbox.valueChanged.connect(self.save_settings)
         preview_settings_form_layout.addRow(preview_tokens_container, self.preview_tokens_spinbox)
 
@@ -325,6 +327,7 @@ class PromptsTab(QWidget):
         
         tokens_spinbox = QSpinBox()
         tokens_spinbox.setRange(0, 128000)
+        tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
         tokens_spinbox.setValue(stage_data.get("max_tokens", 4096) if stage_data else 4096)
         tokens_spinbox.valueChanged.connect(self.save_custom_stages)
 
@@ -494,9 +497,25 @@ class PromptsTab(QWidget):
             self.add_new_stage(stage)
 
     def load_models(self):
-        self.model_combo.clear()
+        self.model_combo.blockSignals(True)
+        self.preview_model_combo.blockSignals(True)
+        
         models = self.settings.get("openrouter_models", [])
+        
+        current_model = self.model_combo.currentText()
+        self.model_combo.clear()
         self.model_combo.addItems(models)
+        idx = self.model_combo.findText(current_model)
+        if idx >= 0: self.model_combo.setCurrentIndex(idx)
+        
+        current_preview = self.preview_model_combo.currentText()
+        self.preview_model_combo.clear()
+        self.preview_model_combo.addItems(models)
+        p_idx = self.preview_model_combo.findText(current_preview)
+        if p_idx >= 0: self.preview_model_combo.setCurrentIndex(p_idx)
+        
+        self.model_combo.blockSignals(False)
+        self.preview_model_combo.blockSignals(False)
 
     def save_settings(self):
         config = {
@@ -575,6 +594,11 @@ class PromptsTab(QWidget):
         self.custom_stages_label.setText(translator.translate("custom_stages_label") if translator.translate("custom_stages_label") != "custom_stages_label" else "Custom Stages")
         self.custom_stages_help.update_tooltip()
         self.add_stage_btn.setText(translator.translate("add_stage_btn") if translator.translate("add_stage_btn") != "add_stage_btn" else "Add Custom Stage")
+
+        self.tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
+        self.preview_tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
+        for stage in self.stage_widgets:
+            stage["tokens_spinbox"].setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
 
         for stage in self.stage_widgets:
             stage["labels"]["stage_name"].setText(translator.translate("parallel_stage_name_label"))

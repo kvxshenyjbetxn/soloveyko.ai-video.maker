@@ -48,9 +48,10 @@ class PromptSettingsDialog(QDialog):
 
         # Max Tokens
         self.tokens_spin = QSpinBox()
-        self.tokens_spin.setRange(1, 128000) # Large upper limit
+        self.tokens_spin.setRange(0, 128000) # 0 for Maximum
+        self.tokens_spin.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
         self.tokens_spin.setSingleStep(128)
-        self.tokens_spin.setValue(int(current_tokens) if current_tokens else 4096)
+        self.tokens_spin.setValue(int(current_tokens) if current_tokens is not None else 0)
         form_layout.addRow(translator.translate("tokens_label"), self.tokens_spin)
 
         layout.addLayout(form_layout)

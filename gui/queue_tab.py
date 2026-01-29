@@ -1,10 +1,20 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QLabel, QScrollArea, QGroupBox, QMenu, QToolButton, QMessageBox, QTextBrowser, QSizePolicy, QGridLayout
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QAction, QCursor
 from functools import partial
 from utils.translator import translator
 from utils.flow_layout import FlowLayout
 from utils.logger import logger, LogLevel
+import os
+import sys
+import subprocess
+import platform
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
+from utils.settings import settings_manager
 
 class StatusDot(QLabel):
     """A circular widget to indicate status."""
@@ -271,6 +281,7 @@ class TaskCard(QGroupBox):
         super().__init__("", parent)
         self.job_id = job['id']
         self.job_name = job['name']
+        self.job = job
         self.log_tab = log_tab
         self.is_expanded = False
         self.setStyleSheet("""
@@ -300,6 +311,23 @@ class TaskCard(QGroupBox):
         layout = QVBoxLayout(left_content)
         layout.setContentsMargins(0, 0, 0, 0)
         
+        # Task Type Badge (at the top)
+        type_badge_layout = QHBoxLayout()
+        job_type = self.job.get('type', 'text')
+        type_label = QLabel(translator.translate(f"type_{job_type}", job_type.capitalize()), self)
+        type_label.setStyleSheet(f"""
+            background-color: {'#4CAF50' if job_type == 'text' else '#2196F3'};
+            color: white;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+        """)
+        type_label.setFixedSize(type_label.sizeHint())
+        type_badge_layout.addWidget(type_label)
+        type_badge_layout.addStretch()
+        layout.addLayout(type_badge_layout)
+
         # Hint label
         hint_label = QLabel(translator.translate("click_for_logs_hint"), self)
         hint_label.setStyleSheet("color: #777; font-size: 10px; margin-bottom: 2px;")
@@ -321,6 +349,7 @@ class TaskCard(QGroupBox):
         task_name_label.setFixedHeight(line_height * 3) 
         task_name_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         
+        self.task_name_label = task_name_label
         header_layout.addWidget(task_name_label)
         header_layout.addStretch()
 
@@ -474,6 +503,13 @@ class TaskCard(QGroupBox):
             self.language_sections[lang_id].update_stage_status(stage_key, status)
         self._update_retry_visibility()
 
+    def update_name(self, new_name):
+        self.job_name = new_name
+        self.job['name'] = new_name
+        display_name = new_name[:100] + ("..." if len(new_name) > 100 else "")
+        self.task_name_label.setText(f"<b>{display_name}</b>")
+        self.task_name_label.setToolTip(new_name)
+
     def _update_retry_visibility(self):
         """Shows retry button if any stage in any language is in 'error' state."""
         has_error = False
@@ -527,9 +563,14 @@ class TaskCard(QGroupBox):
             return
         
         self.log_browser.clear()
+        # Filter logs by job_id (task_id contains job_id)
+        # We use specific patterns to avoid matching IDs that are substrings of others (e.g. Task-1 vs Task-10)
+        # Generally logs from TaskProcessor/Workers look like: [Task-1_en] or [Task-1]
+        pattern1 = f"[{self.job_id}_"
+        pattern2 = f"[{self.job_id}]"
+        
         for log_data in self.log_tab.all_logs:
-            # Filter logs by job_id (task_id contains job_id)
-            if self.job_id in log_data["message"]:
+            if pattern1 in log_data["message"] or pattern2 in log_data["message"]:
                 self._append_log_message(log_data)
     
     def on_new_log(self, log_data):
@@ -538,7 +579,9 @@ class TaskCard(QGroupBox):
             return
         
         # Filter by job_id
-        if self.job_id in log_data["message"]:
+        pattern1 = f"[{self.job_id}_"
+        pattern2 = f"[{self.job_id}]"
+        if pattern1 in log_data["message"] or pattern2 in log_data["message"]:
             self._append_log_message(log_data)
             # Auto-scroll to bottom
             self.log_browser.verticalScrollBar().setValue(
@@ -608,6 +651,126 @@ class TaskCard(QGroupBox):
             except:
                 pass
 
+class HardwareMonitorThread(QThread):
+    updated = Signal(dict)
+
+    def __init__(self, disk_path):
+        super().__init__()
+        self.disk_path = disk_path
+        self._run_flag = True
+
+    def run(self):
+        while self._run_flag:
+            stats = {
+                'cpu': self._get_cpu_usage(),
+                'ram': self._get_ram_usage(),
+                'gpu': self._get_gpu_usage(),
+                'disks': self._get_all_disks_free(),
+            }
+            self.updated.emit(stats)
+            self.msleep(3000) # Update every 3 seconds
+
+    def stop(self):
+        self._run_flag = False
+
+    def _get_cpu_usage(self):
+        if psutil:
+            return psutil.cpu_percent()
+        return 0
+
+    def _get_ram_usage(self):
+        if psutil:
+            return psutil.virtual_memory().percent
+        return 0
+
+    def _get_gpu_usage(self):
+        try:
+            if platform.system() == "Windows":
+                # Метод 1: NVIDIA SMI (найточніша для NVIDIA)
+                try:
+                    res = subprocess.run(
+                        ['nvidia-smi', '--query-gpu=utilization.gpu', '--format=csv,noheader,nounits'],
+                        capture_output=True, text=True, check=True, timeout=1,
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                    )
+                    nvidia_val = float(res.stdout.strip())
+                    if nvidia_val > 0: return nvidia_val
+                except:
+                    pass
+
+                # Метод 2: Універсальний через WMI/CIM (для AMD/Intel/NVIDIA)
+                # Збираємо навантаження з усіх двигунів (3D, Copy, Video тощо) і беремо максимум
+                try:
+                    # Отримуємо просто всі значення UtilizationPercentage
+                    ps_cmd = 'powershell -Command "(Get-CimInstance Win32_PerfFormattedData_GPUPerformanceAnalyzer_GPUEngine -ErrorAction SilentlyContinue).UtilizationPercentage"'
+                    res = subprocess.run(
+                        ps_cmd,
+                        capture_output=True, text=True, timeout=4,
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
+                    )
+                    # Парсимо вивід (це буде список чисел)
+                    lines = res.stdout.strip().splitlines()
+                    nums = []
+                    for line in lines:
+                        try:
+                            # Замінюємо розділювачі для різних локалей
+                            n = float(line.strip().replace(',', '.'))
+                            nums.append(n)
+                        except: continue
+                    
+                    if nums:
+                        total_max = max(nums)
+                        if total_max > 0:
+                            return round(total_max, 1)
+                except:
+                    pass
+            elif platform.system() == "Darwin":
+                return 0
+            return 0
+        except:
+            return 0
+
+    def _get_all_disks_free(self):
+        drives = {}
+        try:
+            if psutil:
+                partitions = psutil.disk_partitions(all=False)
+                for part in partitions:
+                    try:
+                        # Skip virtual/special drives
+                        if 'cdrom' in part.opts or part.fstype == '':
+                            continue
+                        
+                        usage = psutil.disk_usage(part.mountpoint)
+                        free_gb = round(usage.free / (1024**3), 1)
+                        
+                        # Format label (C: for Windows, Root/Mount for others)
+                        label = part.mountpoint
+                        if platform.system() == "Windows":
+                            label = label.split('\\')[0] # Get C:
+                        else:
+                            if label == '/': label = '/'
+                            else: label = os.path.basename(label) or label
+                        
+                        if label not in drives:
+                            drives[label] = free_gb
+                    except:
+                        continue
+            else:
+                # Basic fallback
+                path = self.disk_path
+                if platform.system() == "Windows":
+                    import ctypes
+                    free_bytes = ctypes.c_ulonglong(0)
+                    ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(path), None, None, ctypes.pointer(free_bytes))
+                    drives[path[:2]] = round(free_bytes.value / (1024**3), 1)
+                else:
+                    st = os.statvfs(path)
+                    drives["/"] = round(st.f_bavail * st.f_frsize / (1024**3), 1)
+        except:
+            pass
+        return drives
+
 class QueueTab(QWidget):
     def __init__(self, parent=None, main_window=None, log_tab=None):
         super().__init__(parent)
@@ -615,7 +778,23 @@ class QueueTab(QWidget):
         self.log_tab = log_tab
         self.task_cards = {}
         self.all_expanded = True # State for toggle button
+        
+        # Hardware Monitor
+        results_path = settings_manager.get('results_path', os.path.abspath(os.sep))
+        self.monitor_thread = HardwareMonitorThread(results_path)
+        self.monitor_thread.updated.connect(self.update_monitor_ui)
+        self.monitor_thread.start()
+        
         self.init_ui()
+
+    def __del__(self):
+        """Ensure thread stops when tab is destroyed."""
+        try:
+            if hasattr(self, 'monitor_thread') and self.monitor_thread.isRunning():
+                self.monitor_thread.stop()
+                self.monitor_thread.wait()
+        except:
+            pass
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -630,7 +809,9 @@ class QueueTab(QWidget):
         top_layout.addWidget(self.balance_label)
         top_layout.addSpacing(20)
         
-        self.googler_usage_layout = QHBoxLayout()
+        self.googler_usage_container = QWidget()
+        self.googler_usage_layout = QHBoxLayout(self.googler_usage_container)
+        self.googler_usage_layout.setContentsMargins(0, 0, 0, 0)
         self.googler_usage_layout.setSpacing(2)
         self.googler_usage_label = QLabel()
         self.googler_info_btn = QToolButton()
@@ -642,7 +823,7 @@ class QueueTab(QWidget):
         self.googler_usage_layout.addWidget(self.googler_usage_label)
         self.googler_usage_layout.addWidget(self.googler_info_btn)
         
-        top_layout.addLayout(self.googler_usage_layout)
+        top_layout.addWidget(self.googler_usage_container)
         top_layout.addSpacing(20)
         top_layout.addWidget(self.elevenlabs_balance_label)
         top_layout.addSpacing(20)
@@ -698,6 +879,24 @@ class QueueTab(QWidget):
         top_layout.addWidget(self.start_processing_button)
         main_layout.addLayout(top_layout)
 
+        # Monitoring Layout
+        monitor_layout = QHBoxLayout()
+        monitor_layout.setContentsMargins(5, 0, 5, 0)
+        
+        self.cpu_label = QLabel()
+        self.ram_label = QLabel()
+        self.gpu_label = QLabel()
+        self.disk_label = QLabel()
+        
+        for lbl in [self.cpu_label, self.ram_label, self.gpu_label, self.disk_label]:
+            lbl.setStyleSheet("color: #888; font-size: 11px; font-weight: bold;")
+            monitor_layout.addWidget(lbl)
+            if lbl != self.disk_label:
+                monitor_layout.addSpacing(15)
+        
+        monitor_layout.addStretch()
+        main_layout.addLayout(monitor_layout)
+        
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -705,7 +904,7 @@ class QueueTab(QWidget):
         scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         
         scroll_content = QWidget()
-        self.tasks_layout = FlowLayout(scroll_content)
+        self.tasks_layout = FlowLayout(scroll_content, v_align='top')
         
         scroll_area.setWidget(scroll_content)
         main_layout.addWidget(scroll_area)
@@ -764,6 +963,13 @@ class QueueTab(QWidget):
 
         self.tasks_layout.addWidget(task_card)
         self.task_cards[job['id']] = task_card
+        
+        # Connect to name update signal
+        self.main_window.queue_manager.task_name_updated.connect(self.update_task_name)
+
+    def update_task_name(self, task_id, new_name):
+        if task_id in self.task_cards:
+            self.task_cards[task_id].update_name(new_name)
 
     def on_retry_requested(self, job_id):
         if hasattr(self.main_window, 'task_processor'):
@@ -824,6 +1030,7 @@ class QueueTab(QWidget):
 
     def update_googler_usage(self, usage_text):
         self.googler_usage_label.setText(usage_text)
+        self.googler_usage_container.setVisible(bool(usage_text))
 
     def update_googler_usage_detailed(self, usage_text, usage_data):
         self.update_googler_usage(usage_text)
@@ -872,10 +1079,29 @@ class QueueTab(QWidget):
     def update_gemini_tts_balance(self, balance_text):
         self.gemini_tts_balance_label.setText(balance_text)
 
+    def update_monitor_ui(self, stats):
+        self.cpu_label.setText(f"{translator.translate('monitor_cpu')}: {stats['cpu']}%")
+        self.ram_label.setText(f"{translator.translate('monitor_ram')}: {stats['ram']}%")
+        self.gpu_label.setText(f"{translator.translate('monitor_gpu')}: {stats['gpu']}%")
+        
+        disks = stats.get('disks', {})
+        disk_parts = [f"{name} {free}GB" for name, free in disks.items()]
+        disk_str = " | ".join(disk_parts)
+        self.disk_label.setText(f"{translator.translate('monitor_disk_free')}: {disk_str}")
+
+
+
     def retranslate_ui(self):
         self.start_processing_button.setText(translator.translate('start_processing'))
         self.clear_queue_button.setText(translator.translate('clear_queue'))
         
+        # Update monitor labels initial text (if thread hasn't updated yet)
+        if ":" not in self.cpu_label.text():
+             self.cpu_label.setText(f"{translator.translate('monitor_cpu')}: --%")
+             self.ram_label.setText(f"{translator.translate('monitor_ram')}: --%")
+             self.gpu_label.setText(f"{translator.translate('monitor_gpu')}: --%")
+             self.disk_label.setText(f"{translator.translate('monitor_disk_free')}: -- GB")
+
         if self.all_expanded:
             self.toggle_all_button.setText(translator.translate('collapse_all'))
         else:
