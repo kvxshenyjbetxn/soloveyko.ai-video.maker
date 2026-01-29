@@ -49,7 +49,8 @@ class NotificationManager:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
             "chat_id": user_id,
-            "text": message
+            "text": message,
+            "parse_mode": "Markdown"
         }
 
         try:

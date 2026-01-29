@@ -38,6 +38,7 @@ from gui.gallery_tab.gallery_tab import GalleryTab
 from gui.rewrite_tab import RewriteTab
 from gui.gallery_tab.image_viewer import ImageViewer
 from gui.gallery_tab.video_viewer import VideoViewer
+from gui.other_tab.other_tab import OtherTab
 from core.queue_manager import QueueManager
 from core.task_processor import TaskProcessor
 from utils.logger import logger, LogLevel
@@ -328,21 +329,7 @@ class MainWindow(QMainWindow):
 
             if should_show_rewrite != self.SHOW_REWRITE_TAB:
                 self.SHOW_REWRITE_TAB = should_show_rewrite
-                if self.SHOW_REWRITE_TAB:
-                    # Add tab
-                    if not hasattr(self, 'rewrite_tab'):
-                         self.rewrite_tab = RewriteTab(main_window=self)
-                    
-                    # Insert after Text Translation tab (index 1)
-                    self.tabs.insertTab(1, self.rewrite_tab, self.translator.translate('rewrite_tab'))
-                    
-                else:
-                    # Remove tab
-                    # Check if rewrite_tab exists and is in tabs
-                    if hasattr(self, 'rewrite_tab'):
-                        idx = self.tabs.indexOf(self.rewrite_tab)
-                        if idx != -1:
-                            self.tabs.removeTab(idx)
+                self._rebuild_text_tabs()
             
             # Refresh balances for all valid users to ensure UI is up to date
             self.start_background_updates()
@@ -360,10 +347,7 @@ class MainWindow(QMainWindow):
             self.days_left_label.setText("!")
             self.user_icon_button.setToolTip(self.translator.translate('subscription_expired_message'))
             self.SHOW_REWRITE_TAB = False # Ensure rewrite tab is hidden if key is invalid
-            if hasattr(self, 'rewrite_tab'):
-                idx = self.tabs.indexOf(self.rewrite_tab)
-                if idx != -1:
-                    self.tabs.removeTab(idx)
+            self._rebuild_text_tabs()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -404,7 +388,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(icon_path))
 
         self.update_title()
-        self.setGeometry(100, 100, 1366, 768)
+        self.setGeometry(100, 100, 1600, 900)
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -450,27 +434,46 @@ class MainWindow(QMainWindow):
         self.update_subscription_status()
 
         self.text_tab = TextTab(main_window=self)
-        if self.SHOW_REWRITE_TAB:
-            self.rewrite_tab = RewriteTab(main_window=self)
-
+        self.rewrite_tab = RewriteTab(main_window=self)
         self.settings_tab = SettingsTab(main_window=self)
+        self.other_tab = OtherTab(main_window=self)
         self.log_tab = LogTab()
         self.queue_tab = QueueTab(parent=self.tabs, main_window=self, log_tab=self.log_tab)
         self.gallery_tab = GalleryTab()
+        
         logger.log_message_signal.connect(self.log_tab.add_log_message)
         self.review_notification_shown = False
 
-        self.tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
-        if self.SHOW_REWRITE_TAB:
-            self.tabs.addTab(self.rewrite_tab, self.translator.translate('rewrite_tab'))
+        # Custom container for Text+Rewrite if both available
+        self.text_group_tab = QWidget()
+        self.text_group_layout = QVBoxLayout(self.text_group_tab)
+        self.text_group_layout.setContentsMargins(0, 10, 0, 0)
+        self.text_group_tabs = AnimatedTabWidget()
+        self.text_group_layout.addWidget(self.text_group_tabs)
+        
+        # Initial building of Text/Rewrite tabs
+        self._rebuild_text_tabs()
+
         self.tabs.addTab(self.queue_tab, self.translator.translate('queue_tab'))
         self.tabs.addTab(self.gallery_tab, self.translator.translate('gallery_tab_title'))
         self.tabs.addTab(self.settings_tab, self.translator.translate('settings_tab'))
+        self.tabs.addTab(self.other_tab, self.translator.translate('other_tab_title', 'Інше'))
         self.tabs.addTab(self.log_tab, self.translator.translate('log_tab'))
+
+        # Hide Queue and Gallery initially if empty
+        self._update_tab_visibility()
+
+        # Connect signals for dynamic visibility
+        self.queue_manager.queue_updated.connect(self._update_tab_visibility)
+        self.task_processor.image_generated.connect(self._update_tab_visibility)
+        self.gallery_tab.image_deleted.connect(lambda: QTimer.singleShot(100, self._update_tab_visibility)) # Slight delay to let gallery update its state
+        self.gallery_tab.image_regenerated.connect(self._update_tab_visibility)
 
         # Connect signals
         self.queue_manager.task_added.connect(self.queue_tab.add_task)
         self.queue_tab.start_processing_button.clicked.connect(self._start_processing_checked)
+        self.task_processor.processing_started.connect(lambda: self._update_queue_tab_state('processing'))
+        self.task_processor.processing_finished.connect(self._handle_processing_finished)
         self.task_processor.processing_finished.connect(self.show_processing_finished_dialog)
         self.task_processor.processing_finished.connect(self._googler_timer.stop)
         self.task_processor.processing_finished.connect(self.update_balance)
@@ -479,6 +482,7 @@ class MainWindow(QMainWindow):
         self.task_processor.processing_finished.connect(self.update_elevenlabs_unlim_balance)
         self.task_processor.processing_finished.connect(self.update_voicemaker_balance)
         self.task_processor.processing_finished.connect(self.update_gemini_tts_balance)
+        self.task_processor.stage_status_changed.connect(self._on_stage_status_changed)
         self.task_processor.stage_status_changed.connect(self.queue_tab.update_stage_status)
         self.task_processor.stage_metadata_updated.connect(self.queue_tab.update_stage_metadata)
         self.task_processor.image_generated.connect(self.gallery_tab.add_media)
@@ -546,12 +550,20 @@ class MainWindow(QMainWindow):
         settings_needing_full_refresh = ['language', 'theme', 'accent_color']
         if key in settings_needing_full_refresh:
             self.refresh_ui_from_settings()
+        elif key in ['image_generation_provider', 'googler']:
+            self.update_googler_usage()
+        elif key == 'openrouter_models':
+            self.refresh_all_model_lists()
+        elif key == 'languages_config':
+            self.refresh_language_menus()
         else:
              # Just update global UI elements that depend on settings if any (like tooltips?)
              # Most real-time things are read from settings_manager directly when used.
              pass
 
     def _start_processing_checked(self):
+        """Reset error tracking and validate API key before starting processing."""
+        self._has_processing_errors = False
         worker = ApiKeyCheckWorker(api_key=self.api_key, server_url=self.server_url)
         self.active_workers.add(worker)
         # Fix: the signal emits 3 arguments (bool, str, int)
@@ -575,6 +587,20 @@ class MainWindow(QMainWindow):
             title = self.translator.translate('subscription_expired_title')
             message = self.translator.translate('subscription_expired_message_start_processing')
             QMessageBox.warning(self, title, message)
+
+    def _on_stage_status_changed(self, job_id, lang_id, stage_key, status):
+        """Monitor errors during processing to update the Queue tab indicator."""
+        if status in ('failed', 'error'):
+            # Switch to red immediately if error occurs
+            self._update_queue_tab_state('error')
+            self._has_processing_errors = True
+
+    def _handle_processing_finished(self):
+        """Decide whether to show green or red indicator when all tasks are done."""
+        if getattr(self, '_has_processing_errors', False):
+            self._update_queue_tab_state('error')
+        else:
+            self._update_queue_tab_state('finished')
 
     def update_subscription_status(self):
         days_left_text = ""
@@ -777,7 +803,37 @@ class MainWindow(QMainWindow):
     def show_processing_finished_dialog(self, elapsed_time):
         title = self.translator.translate('processing_complete_title')
         message = self.translator.translate('processing_complete_message').format(elapsed_time)
-        QMessageBox.information(self, title, message)
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Information)
+        
+        open_folder_btn = msg_box.addButton(self.translator.translate('open_folder_button'), QMessageBox.ActionRole)
+        msg_box.addButton(QMessageBox.Ok)
+        
+        msg_box.exec()
+        
+        if msg_box.clickedButton() == open_folder_btn:
+            self._open_results_folder()
+
+    def _open_results_folder(self):
+        path = settings_manager.get('results_path')
+        if not path or not os.path.exists(path):
+            logger.log(f"Cannot open results folder: path does not exist ({path})", level=LogLevel.WARNING)
+            return
+            
+        try:
+            if platform.system() == "Windows":
+                os.startfile(path)
+            elif platform.system() == "Darwin":
+                import subprocess
+                subprocess.Popen(["open", path])
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", path])
+        except Exception as e:
+            logger.log(f"Error opening folder: {e}", level=LogLevel.ERROR)
 
     def update_title(self):
         app_name = "Soloveyko.AI-Video.Maker"
@@ -810,6 +866,18 @@ class MainWindow(QMainWindow):
         self.threadpool.start(worker)
 
     def update_googler_usage(self, *args):
+        googler_settings = self.settings_manager.get("googler", {})
+        api_key = googler_settings.get("api_key")
+        provider = self.settings_manager.get("image_generation_provider")
+        
+        # Only update if Googler is selected and has an API key
+        if not api_key or provider != 'googler':
+            self.text_tab.update_googler_usage("")
+            if hasattr(self, 'rewrite_tab'):
+                self.rewrite_tab.update_googler_usage("")
+            self.queue_tab.update_googler_usage("")
+            return
+
         worker = GooglerUsageWorker()
         self.active_workers.add(worker)
         worker.signals.finished.connect(lambda u, s: (self._on_googler_usage_updated(u, s), self.active_workers.discard(worker)))
@@ -828,7 +896,6 @@ class MainWindow(QMainWindow):
             self.active_workers.add(worker)
             worker.signals.finished.connect(lambda b, s: (self._on_elevenlabs_unlim_balance_updated(b, s), self.active_workers.discard(worker)))
             self.threadpool.start(worker)
-
     def update_voicemaker_balance(self, *args):
         worker = VoicemakerBalanceWorker()
         self.active_workers.add(worker)
@@ -840,6 +907,8 @@ class MainWindow(QMainWindow):
         self.active_workers.add(worker)
         worker.signals.finished.connect(lambda b, s: (self._on_gemini_tts_balance_updated(b, s), self.active_workers.discard(worker)))
         self.threadpool.start(worker)
+
+
 
     def _on_balance_updated(self, balance, success):
         api_key = self.settings_manager.get("openrouter_api_key")
@@ -1003,6 +1072,9 @@ class MainWindow(QMainWindow):
         self.queue_tab.update_gemini_tts_balance(balance_text)
         self.settings_tab.api_tab.audio_tab.gemini_tts_tab.update_balance_label(balance_to_display_on_settings_tab)
 
+
+
+
     def update_user_icon(self):
         theme_name = self.settings_manager.get('theme', 'light')
         
@@ -1062,19 +1134,246 @@ class MainWindow(QMainWindow):
     def retranslate_ui(self):
         hint_manager.load_hints()
         self.update_title()
-        self.tabs.setTabText(self.tabs.indexOf(self.text_tab), self.translator.translate('text_processing_tab'))
+        
+        # Text/Translation Tab
         if self.SHOW_REWRITE_TAB:
-            self.tabs.setTabText(self.tabs.indexOf(self.rewrite_tab), self.translator.translate('rewrite_tab'))
-            self.rewrite_tab.retranslate_ui()
+            # Translation is inside a group
+            idx = self.tabs.indexOf(self.text_group_tab)
+            if idx != -1:
+                self.tabs.setTabText(idx, self.translator.translate('text_group_title', 'Текст'))
+            self.text_group_tabs.setTabText(0, self.translator.translate('text_processing_tab'))
+            self.text_group_tabs.setTabText(1, self.translator.translate('rewrite_tab'))
+        else:
+            # Translation is top-level
+            idx = self.tabs.indexOf(self.text_tab)
+            if idx != -1:
+                self.tabs.setTabText(idx, self.translator.translate('text_processing_tab'))
+
         self.tabs.setTabText(self.tabs.indexOf(self.queue_tab), self.translator.translate('queue_tab'))
         self.tabs.setTabText(self.tabs.indexOf(self.gallery_tab), self.translator.translate('gallery_tab_title'))
         self.tabs.setTabText(self.tabs.indexOf(self.settings_tab), self.translator.translate('settings_tab'))
+        self.tabs.setTabText(self.tabs.indexOf(self.other_tab), self.translator.translate('other_tab_title', 'Інше'))
         self.tabs.setTabText(self.tabs.indexOf(self.log_tab), self.translator.translate('log_tab'))
         
         self.text_tab.retranslate_ui()
+        self.rewrite_tab.retranslate_ui()
         self.settings_tab.retranslate_ui()
+        self.other_tab.retranslate_ui()
         self.queue_tab.retranslate_ui()
         self.gallery_tab.retranslate_ui()
+
+    def _rebuild_text_tabs(self):
+        """Rebuilds the Text/Rewrite tab structure based on self.SHOW_REWRITE_TAB."""
+        # Save current active tab if it's one of the text tabs
+        current_widget = self.tabs.currentWidget()
+        
+        # Remove both from everywhere first
+        idx_main_text = self.tabs.indexOf(self.text_tab)
+        if idx_main_text != -1: self.tabs.removeTab(idx_main_text)
+        
+        idx_main_group = self.tabs.indexOf(self.text_group_tab)
+        if idx_main_group != -1: self.tabs.removeTab(idx_main_group)
+        
+        while self.text_group_tabs.count():
+            self.text_group_tabs.removeTab(0)
+            
+        if self.SHOW_REWRITE_TAB:
+            # Group them
+            self.text_group_tabs.addTab(self.text_tab, self.translator.translate('text_processing_tab'))
+            self.text_group_tabs.addTab(self.rewrite_tab, self.translator.translate('rewrite_tab'))
+            self.tabs.insertTab(0, self.text_group_tab, self.translator.translate('text_group_title', 'Текст'))
+            if current_widget in [self.text_tab, self.rewrite_tab, self.text_group_tab]:
+                self.tabs.setCurrentWidget(self.text_group_tab)
+        else:
+            # Just Translation
+            self.tabs.insertTab(0, self.text_tab, self.translator.translate('text_processing_tab'))
+            if current_widget in [self.text_tab, self.rewrite_tab, self.text_group_tab]:
+                self.tabs.setCurrentWidget(self.text_tab)
+
+    def _update_tab_visibility(self):
+        """Shows or hides Queue and Gallery tabs based on content."""
+        # Target order: Text/Translation (0), Queue (1), Gallery (2), Settings (3), Other (4), Log (5)
+        
+        # 1. Queue Tab
+        queue_count = self.queue_manager.get_task_count()
+        queue_idx = self.tabs.indexOf(self.queue_tab)
+        current_idx = self.tabs.currentIndex()
+        
+        if queue_count > 0:
+            if queue_idx == -1:
+                # Insert at position 1 (after Text tabs)
+                title = self.translator.translate('queue_tab')
+                self.tabs.insertTab(min(1, self.tabs.count()), self.queue_tab, title)
+                # Reset state for freshly added tab
+                self._update_queue_tab_state('default')
+        else:
+            if queue_idx != -1:
+                # If Queue tab was active, redirect to Text
+                was_active = (current_idx == queue_idx)
+                # Reset text to original before removing (just in case)
+                self.tabs.setTabText(queue_idx, self.translator.translate('queue_tab'))
+                self.tabs.removeTab(queue_idx)
+                self._update_queue_tab_state('default')
+                if was_active:
+                    self.activate_tab(self.text_tab)
+
+        # 2. Gallery Tab
+        # Custom logic: hide gallery if queue is empty as per request
+        gallery_has_items = len(self.gallery_tab.task_groups) > 0 and queue_count > 0
+        gallery_idx = self.tabs.indexOf(self.gallery_tab)
+        if gallery_has_items:
+            if gallery_idx == -1:
+                title = self.translator.translate('gallery_tab_title')
+                # Insert after Queue (if exists) or Text
+                pos = 1
+                if self.tabs.indexOf(self.queue_tab) != -1: pos = 2
+                self.tabs.insertTab(min(pos, self.tabs.count()), self.gallery_tab, title)
+        else:
+            if gallery_idx != -1:
+                # If Gallery tab was active and is being removed, redirect to Text
+                was_active = (self.tabs.currentIndex() == gallery_idx)
+                self.tabs.removeTab(gallery_idx)
+                if was_active:
+                    self.activate_tab(self.text_tab)
+        
+        # Ensure Settings, Other, Log are at the end if they moved
+        for tab in [self.settings_tab, self.other_tab, self.log_tab]:
+            idx = self.tabs.indexOf(tab)
+            if idx != -1:
+                pass
+
+    def _update_queue_tab_state(self, state):
+        """Updates the Queue tab text color and button color based on processing state."""
+        idx = self.tabs.indexOf(self.queue_tab)
+        if idx == -1:
+            return
+
+        base_title = self.translator.translate('queue_tab')
+        
+        # Define colors for robust visibility
+        if state == 'processing':
+            # Yellow
+            color_hex = "#FFD700" 
+            hover_color = "#FFEA00"
+            btn_text_color = "black"
+        elif state == 'finished':
+            # Green (Success)
+            color_hex = "#28a745"
+            hover_color = "#218838"
+            btn_text_color = "white"
+        elif state == 'error':
+            # Red (Failure)
+            color_hex = "#dc3545"
+            hover_color = "#c82333"
+            btn_text_color = "white"
+        else:
+            # Default/Pending (Gray)
+            color_hex = "#808080"
+            hover_color = None
+            btn_text_color = "white"
+
+        # 1. Update Tab Bar with Icon instead of HTML (to avoid raw text error)
+        self.tabs.setTabText(idx, base_title)
+        
+        # Create a small circular icon
+        from PySide6.QtGui import QPixmap, QPainter, QColor, QBrush, QIcon
+        from PySide6.QtCore import Qt, QSize
+        
+        # Using a narrower pixmap to bring the dot closer to the text
+        pixmap = QPixmap(14, 16)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QBrush(QColor(color_hex)))
+        painter.setPen(Qt.NoPen)
+        # Draw 12x12 circle touching the right edge (x=2, width=12 -> right edge at 14)
+        painter.drawEllipse(2, 2, 12, 12)
+        painter.end()
+        
+        self.tabs.setIconSize(QSize(14, 16))
+        self.tabs.setTabIcon(idx, QIcon(pixmap))
+        
+        if state != 'default':
+            self.tabs.tabBar().setTabTextColor(idx, QColor(color_hex))
+        else:
+            self.tabs.tabBar().setTabTextColor(idx, QColor())
+
+        # 2. Update Button in Queue Tab
+        if hasattr(self.queue_tab, 'start_processing_button'):
+            if state != 'default':
+                self.queue_tab.start_processing_button.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {color_hex}; 
+                        color: {btn_text_color}; 
+                        font-weight: bold; 
+                        padding: 5px 15px;
+                        border-radius: 4px;
+                        border: none;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {hover_color};
+                    }}
+                """)
+            else:
+                # Revert to original green style if default
+                self.queue_tab.start_processing_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #28a745; 
+                        color: white; 
+                        font-weight: bold; 
+                        padding: 5px 15px;
+                        border-radius: 4px;
+                        border: none;
+                    }
+                    QPushButton:hover {
+                        background-color: #218838;
+                    }
+                """)
+
+    def activate_tab(self, widget):
+        """Switches to the specified tab, even if it's nested (e.g., Translation/Rewrite)."""
+        # Check if it's in the main tab widget
+        idx = self.tabs.indexOf(widget)
+        if idx != -1:
+            self.tabs.setCurrentIndex(idx)
+            return
+
+        # Check if it's in the text group
+        nested_idx = self.text_group_tabs.indexOf(widget)
+        if nested_idx != -1:
+            group_idx = self.tabs.indexOf(self.text_group_tab)
+            if group_idx != -1:
+                self.tabs.setCurrentIndex(group_idx)
+                self.text_group_tabs.setCurrentIndex(nested_idx)
+                return
+
+    def refresh_all_model_lists(self):
+        """Refreshes LLM model selection comboboxes in all setting tabs."""
+        if hasattr(self, 'settings_tab'):
+            # 1. Languages Settings Tab
+            if hasattr(self.settings_tab, 'languages_tab'):
+                self.settings_tab.languages_tab.load_models()
+            
+            # 2. Prompts Settings Tab
+            if hasattr(self.settings_tab, 'prompts_tab'):
+                self.settings_tab.prompts_tab.load_models()
+                # Also update custom stages models
+                for stage in self.settings_tab.prompts_tab.stage_widgets:
+                    model_combo = stage["model_combo"]
+                    current = model_combo.currentText()
+                    model_combo.blockSignals(True)
+                    model_combo.clear()
+                    model_combo.addItems(self.settings_manager.get("openrouter_models", []))
+                    idx = model_combo.findText(current)
+                    if idx >= 0: model_combo.setCurrentIndex(idx)
+                    model_combo.blockSignals(False)
+
+    def refresh_language_menus(self):
+        """Refreshes language selection buttons in main tabs when a language is added/removed."""
+        if hasattr(self, 'text_tab'):
+            self.text_tab.load_languages_menu()
+        if hasattr(self, 'rewrite_tab'):
+            self.rewrite_tab.load_languages_menu()
 
     def closeEvent(self, event):
         # Save all settings globally

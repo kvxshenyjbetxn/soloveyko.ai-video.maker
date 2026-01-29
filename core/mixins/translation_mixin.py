@@ -41,7 +41,8 @@ class TranslationMixin:
                 model = models[0] if models else 'unknown'
             
             # Extract overrides from extra_options
-            max_tokens = state.lang_data.get('rewrite_max_tokens') or 4096
+            max_tokens = state.lang_data.get('rewrite_max_tokens')
+            if max_tokens is None: max_tokens = 0
             temperature = state.lang_data.get('rewrite_temperature') if state.lang_data.get('rewrite_temperature') is not None else 0.7
             prompt = custom_prompt if custom_prompt else (state.lang_data.get('rewrite_prompt') or 'Rewrite this text:')
             
@@ -140,7 +141,8 @@ class TranslationMixin:
             # Extract overrides
             prompt = custom_prompt if custom_prompt else state.lang_data.get('prompt', '')
             temperature = state.lang_data.get('temperature') if state.lang_data.get('temperature') is not None else 0.7
-            max_tokens = state.lang_data.get('max_tokens') or 4096
+            max_tokens = state.lang_data.get('max_tokens')
+            if max_tokens is None: max_tokens = 0
 
             if extra_options:
                 if extra_options.get('prompt'): prompt = extra_options.get('prompt')
@@ -300,7 +302,7 @@ class TranslationMixin:
                 'stage_name': stage_name,
                 'prompt': prompt,
                 'model': model,
-                'max_tokens': int(max_tokens or 4096),
+                'max_tokens': int(max_tokens) if max_tokens is not None else 0,
                 'temperature': float(temperature) if temperature is not None else 0.7,
                 'openrouter_api_key': state.settings.get('openrouter_api_key')
             }

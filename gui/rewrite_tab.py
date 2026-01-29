@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QScrollArea, QMessageBox, QGroupBox, QCheckBox, QGridLayout, QStyle, QInputDialog, QSplitter,
-    QToolButton, QApplication
+    QToolButton, QApplication, QSizePolicy
 )
-from PySide6.QtCore import Qt, QByteArray
+from PySide6.QtCore import Qt, QByteArray, QThread, Signal
 from gui.text_tab import DroppableTextEdit, StageSelectionWidget
 from utils.translator import translator
 from utils.settings import settings_manager, template_manager
@@ -14,12 +14,31 @@ from utils.animator import Animator
 from functools import partial
 import os
 import re
-import uuid
 import datetime
-import datetime
-from PySide6.QtWidgets import QSplitter
 from gui.widgets.quick_settings_panel import QuickSettingsPanel
 from gui.widgets.recent_tasks_panel import RecentTasksPanel
+from core.history_manager import history_manager
+
+class TitleFetcherWorker(QThread):
+    title_updated = Signal(str, str) # task_id, new_name
+
+    def __init__(self, tasks_to_fetch):
+        super().__init__()
+        self.tasks_to_fetch = tasks_to_fetch # list of (task_id, link)
+
+    def run(self):
+        for task_id, link in self.tasks_to_fetch:
+            try:
+                title = YouTubeDownloader.get_video_title(link)
+                if title:
+                    # Sanitize immediately
+                    clean_title = title.replace('…', '').replace('...', '')
+                    safe_title = re.sub(r'[^\w\s\-]', '', clean_title)
+                    safe_title = re.sub(r'\s+', ' ', safe_title).strip('. ')
+                    if safe_title:
+                        self.title_updated.emit(task_id, safe_title)
+            except Exception as e:
+                logger.log(f"Error fetching title for {link}: {e}", level=LogLevel.ERROR)
 
 class RewriteTab(QWidget):
     def __init__(self, main_window=None):
@@ -28,6 +47,7 @@ class RewriteTab(QWidget):
         self.stage_widgets = {} # lang_id -> StageSelectionWidget
         self.language_buttons = {} # lang_id -> QPushButton (toggle)
         self.settings = settings_manager
+        self.title_fetcher = None
         self.init_ui()
 
     def init_ui(self):
@@ -101,11 +121,18 @@ class RewriteTab(QWidget):
         
 
         # Status bar
-        self.status_bar_layout = QHBoxLayout()
+        self.status_bar_container = QWidget()
+        self.status_bar_container.setMinimumWidth(0)
+        self.status_bar_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.status_bar_layout = FlowLayout(self.status_bar_container, margin=0, hSpacing=20, vSpacing=5)
+        
         self.openrouter_balance_label = QLabel()
         self.openrouter_balance_label.setMinimumWidth(0)
 
-        self.googler_usage_layout = QHBoxLayout()
+        # Googler usage container for FlowLayout
+        self.googler_usage_container = QWidget()
+        self.googler_usage_layout = QHBoxLayout(self.googler_usage_container)
+        self.googler_usage_layout.setContentsMargins(0, 0, 0, 0)
         self.googler_usage_layout.setSpacing(2)
         self.googler_usage_label = QLabel()
         self.googler_usage_label.setMinimumWidth(0)
@@ -125,19 +152,15 @@ class RewriteTab(QWidget):
         self.voicemaker_balance_label.setMinimumWidth(0)
         self.gemini_tts_balance_label = QLabel()
         self.gemini_tts_balance_label.setMinimumWidth(0)
+        
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
-        self.status_bar_layout.addSpacing(20)
-        self.status_bar_layout.addLayout(self.googler_usage_layout)
-        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.googler_usage_container)
         self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.elevenlabs_unlim_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.voicemaker_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.gemini_tts_balance_label)
-        self.status_bar_layout.addStretch()
-        layout.addLayout(self.status_bar_layout)
+        
+        layout.addWidget(self.status_bar_container)
         
         # Quick Settings Panel
         self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
@@ -186,7 +209,13 @@ class RewriteTab(QWidget):
         if not job: return
         
         # Check job type
-        if job.get('type') != 'rewrite':
+        job_type = job.get('type')
+        if job_type == 'text' or job_type is None:
+            if self.main_window:
+                self.main_window.activate_tab(self.main_window.text_tab)
+                self.main_window.text_tab.restore_job(job)
+                return
+        elif job_type != 'rewrite':
              return
 
         # Handle multiple links if saved as input_source or just text
@@ -319,8 +348,10 @@ class RewriteTab(QWidget):
         # Check for AMD Whisper specific requirement
         whisper_type = self.settings.get("subtitles", {}).get("whisper_type", "amd")
         source_lang_code = None
+        amd_prompt_shown = False
         
         if whisper_type == 'amd' and not is_restored:
+            amd_prompt_shown = True
             dialog_label = translator.translate("enter_source_lang_label", "Enter Source Language Code (e.g. en, uk) for AMD Whisper:")
             dialog_title = translator.translate("enter_source_lang_title", "Source Language")
             
@@ -333,39 +364,26 @@ class RewriteTab(QWidget):
         languages_config = self.settings.get('languages_config', {})
         
         initial_task_count = self.main_window.queue_manager.get_task_count()
+        any_dialog_shown = False
+        tasks_to_fetch = []
 
         for i, link in enumerate(links):
             QApplication.processEvents() # maintain UI responsiveness
             
-            # Determine job name automatically
-            job_name = task_name_input 
+            # Use link as temporary name to avoid blocking
+            job_name = link
+            if len(job_name) > 50:
+                job_name = job_name[:47] + "..."
             
-            if not job_name or not job_name.strip():
-                # Try to fetch title
-                title = YouTubeDownloader.get_video_title(link)
-                if title:
-                    job_name = title
-                else:
-                    count = initial_task_count + 1 + i
-                    job_name = f"{translator.translate('default_task_name', 'Task')} {count}"
+            # --- Check for existing files (will use default name first) ---
+            # We'll re-check existing files properly in the task worker itself if needed,
+            # or just skip this complex check for now to avoid freezing.
+            # For simplicity, we add tasks with unique placeholder names.
+            
+            # --- Sanitize for local path checks ---
+            safe_job_name = re.sub(r'[^\w\s\-]', '', job_name).strip('. ')
+            if not safe_job_name: safe_job_name = "Task"
 
-            # --- Sanitize Job Name (Strict Unicode-safe sanitization) ---
-            # Remove ellipsis and strict character filtering
-            clean_job_name = job_name.replace('…', '').replace('...', '')
-            # Allow unicode letters, numbers, spaces, hyphens
-            safe_job_name = re.sub(r'[^\w\s\-]', '', clean_job_name)
-            # Collapse spaces and strip ALL trailing/leading dots and spaces (Windows safety)
-            safe_job_name = re.sub(r'\s+', ' ', safe_job_name).strip('. ')
-            
-            if not safe_job_name: 
-                 safe_job_name = f"Task {initial_task_count + 1 + i}"
-            
-            # Use sanitized name as the actual displayed job name too, to avoid confusion
-            job_name = safe_job_name
-
-            # Create a job for this link
-            job_id = str(uuid.uuid4())
-            
             # --- Check for existing files ---
             found_files_per_lang = {}
             found_files_details = {}
@@ -373,27 +391,20 @@ class RewriteTab(QWidget):
             for lang_id, btn in self.language_buttons.items():
                 if btn.isChecked():
                     stage_widget = self.stage_widgets.get(lang_id)
-                    
-                    # Determine the correct base_save_path
                     base_save_path = self.settings.get('results_path')
                     if stage_widget and stage_widget.selected_template:
                         template_data = template_manager.load_template(stage_widget.selected_template)
                         if template_data and template_data.get('results_path'):
                             base_save_path = template_data['results_path']
                             
-                    if not base_save_path:
-                        continue
+                    if not base_save_path: continue
                     
                     lang_name = btn.text()
-                    
-                    # Path logic same as TaskState
-                    # Path logic same as TaskState
-                    # Strict sanitization for lang name too
-                    safe_lang_name = re.sub(r'[^\w\s\-]', '', lang_name)
-                    safe_lang_name = re.sub(r'\s+', ' ', safe_lang_name).strip('. ')
+                    safe_lang_name = re.sub(r'[^\w\s\-]', '', lang_name).strip('. ')
                     dir_path = os.path.abspath(os.path.join(base_save_path, safe_job_name, safe_lang_name))
                     
                     if os.path.isdir(dir_path):
+
                         found_files_for_lang = {}
                         details_for_lang = {}
                         
@@ -487,6 +498,7 @@ class RewriteTab(QWidget):
 
             use_existing = False
             if found_files_per_lang:
+                any_dialog_shown = True
                 standard_order = ["stage_download", "stage_transcription", "stage_rewrite", "stage_preview", "stage_img_prompts", "stage_images", "stage_voiceover", "stage_subtitles"]
                 
                 # Get all unique custom stage keys found
@@ -529,8 +541,9 @@ class RewriteTab(QWidget):
                 if msg_box.exec() == QMessageBox.StandardButton.Yes:
                     use_existing = True
 
+            # Create a job for this link
             job = {
-                'id': job_id,
+                'id': None, # Queue manager will generate this
                 'name': job_name,
                 'type': 'rewrite',
                 'created_at': datetime.datetime.now().isoformat(),
@@ -566,19 +579,46 @@ class RewriteTab(QWidget):
                         job['languages'][lang_id]['display_name'] = lang_config.get('display_name', lang_id)
 
             if job['languages']:
-                self.main_window.queue_manager.add_task(job)
+                # Skip registration in history until we have a real name
+                self.main_window.queue_manager.add_task(job, register_recent=False)
+                # After add_task, job object has an 'id'
+                if job.get('id'):
+                    tasks_to_fetch.append((job['id'], link))
                 added_count += 1
         
+        # Start background title fetching
+        if tasks_to_fetch:
+            self.start_title_fetcher(tasks_to_fetch)
+
         if added_count > 0:
-            self.recent_tasks_panel.refresh()
             self.input_edit.clear()
             self.check_queue_button_visibility()
             
-            QMessageBox.information(
-                self, 
-                translator.translate("success", "Success"), 
-                translator.translate("tasks_added_success", "Task(s) successfully added to queue.") + f" ({added_count})"
-            )
+            # User request: Only show if NO dialogue was shown (AMD prompt or existing files)
+            if not any_dialog_shown and not amd_prompt_shown:
+                QMessageBox.information(
+                    self, 
+                    translator.translate("success", "Success"), 
+                    translator.translate("tasks_added_success", "Task(s) successfully added to queue.")
+                )
+
+
+    def start_title_fetcher(self, tasks_to_fetch):
+        self.title_fetcher = TitleFetcherWorker(tasks_to_fetch)
+        self.title_fetcher.title_updated.connect(self.on_title_updated)
+        self.title_fetcher.start()
+
+    def on_title_updated(self, task_id, new_name):
+        job = self.main_window.queue_manager.get_job(task_id)
+        if job:
+            job['name'] = new_name
+            # Now that we have a real name, register it in the recent jobs history
+            if not job.get('is_restored'):
+                history_manager.register_recent_job(job)
+                self.recent_tasks_panel.refresh()
+
+            self.main_window.queue_manager.task_name_updated.emit(task_id, new_name)
+            self.main_window.queue_manager.queue_updated.emit()
 
     def retranslate_ui(self):
         self.input_label.setText(translator.translate("enter_links_label", "Enter YouTube Links (one per line):"))
@@ -598,6 +638,7 @@ class RewriteTab(QWidget):
 
     def update_googler_usage(self, usage_text):
         self.googler_usage_label.setText(usage_text)
+        self.googler_usage_container.setVisible(bool(usage_text))
 
     def update_googler_usage_detailed(self, usage_text, usage_data):
         self.update_googler_usage(usage_text)
@@ -645,6 +686,8 @@ class RewriteTab(QWidget):
 
     def update_gemini_tts_balance(self, balance_text):
         self.gemini_tts_balance_label.setText(balance_text)
+
+
 
     def update_link_count(self):
         text = self.input_edit.toPlainText().strip()

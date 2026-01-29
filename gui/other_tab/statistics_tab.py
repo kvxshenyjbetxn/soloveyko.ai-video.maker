@@ -22,30 +22,35 @@ class StatisticsTab(QWidget):
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
         
-        top_layout = QHBoxLayout()
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Left side with title and total count
+        # Left side with title and total count (nested)
         left_layout = QVBoxLayout()
         left_layout.setSpacing(0)
         self.title_label = QLabel()
         self.total_videos_label = QLabel()
         left_layout.addWidget(self.title_label)
         left_layout.addWidget(self.total_videos_label)
+        header_layout.addLayout(left_layout)
         
-        top_layout.addLayout(left_layout)
-        top_layout.addStretch()
+        header_layout.addStretch()
         
-        # Right side with clear button
+        # Clear button
         self.clear_button = QPushButton()
         self.clear_button.clicked.connect(self.clear_statistics)
-        top_layout.addWidget(self.clear_button)
+        header_layout.addWidget(self.clear_button)
         
-        main_layout.addLayout(top_layout)
+        main_layout.addLayout(header_layout)
 
         # Chart
-        self.figure = Figure(figsize=(5, 3))
+        self.figure = Figure()
         self.canvas = FigureCanvas(self.figure)
+        from PySide6.QtWidgets import QSizePolicy
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         main_layout.addWidget(self.canvas)
         
         self.setLayout(main_layout)
@@ -131,7 +136,8 @@ class StatisticsTab(QWidget):
 
         self.figure.canvas.mpl_connect("motion_notify_event", hover)
 
-        self.figure.tight_layout()
+        # ТУТ РЕГУЛЮВАТИ ВНУТРІШНІ ВІДСТУПИ ГРАФІКА
+        self.figure.subplots_adjust(left=0.02, right=0.98, top=0.96, bottom=0.14)
         self.canvas.draw()
 
     def update_statistics(self):

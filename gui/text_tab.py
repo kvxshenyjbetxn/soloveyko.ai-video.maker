@@ -4,7 +4,7 @@ import uuid
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QTextEdit, QHBoxLayout, QLabel,
     QPushButton, QFrame, QCheckBox, QToolButton, QInputDialog, QGridLayout, QMessageBox, QStyle, QSlider,
-    QMenu, QWidgetAction, QSplitter
+    QMenu, QWidgetAction, QSplitter, QComboBox, QPlainTextEdit, QProgressBar, QApplication, QSizePolicy
 )
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QColor, QAction
 from PySide6.QtCore import Qt, QMimeData, Signal, QByteArray
@@ -16,7 +16,6 @@ from gui.file_dialog import FileDialog
 from utils.animator import Animator
 from gui.widgets.quick_settings_panel import QuickSettingsPanel
 from gui.widgets.recent_tasks_panel import RecentTasksPanel
-from PySide6.QtWidgets import QSplitter, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QPlainTextEdit, QProgressBar, QMessageBox, QApplication, QFrame, QSizePolicy
 
 def get_text_color_for_background(bg_color_hex):
     """
@@ -164,10 +163,25 @@ class StageSelectionWidget(QWidget):
 
             if key in ["stage_images", "stage_voiceover"]:
                 add_button = QToolButton()
-                add_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+                add_button.setText("+")
+                add_button.setToolTip(translator.translate("add_images_title" if key == "stage_images" else "add_audio_title"))
                 add_button.setObjectName(f"addButton_{key}")
                 add_button.setFixedSize(22, 22)
-                add_button.setStyleSheet("QToolButton { border: none; background-color: transparent; }")
+                # Bold '+' and hover effect
+                add_button.setStyleSheet("""
+                    QToolButton { 
+                        border: none; 
+                        background-color: transparent; 
+                        font-weight: bold; 
+                        font-size: 16px; 
+                        padding-bottom: 4px;
+                        margin-left: -8px;
+                    } 
+                    QToolButton:hover { 
+                        background-color: rgba(255, 255, 255, 0.1); 
+                        border-radius: 4px; 
+                    }
+                """)
                 layout.addWidget(add_button)
                 self.add_buttons[key] = add_button
 
@@ -261,10 +275,13 @@ class StageSelectionWidget(QWidget):
         if button:
             if self.user_images:
                 button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton))
+                button.setText("") # Remove plus when file is added
                 self.checkboxes["stage_img_prompts"].setChecked(False)
                 self.checkboxes["stage_img_prompts"].setEnabled(False)
             else:
-                button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+                from PySide6.QtGui import QIcon
+                button.setIcon(QIcon()) # Clear icon to show text
+                button.setText("+")
                 self.checkboxes["stage_img_prompts"].setEnabled(True)
 
     def set_user_audio(self, files):
@@ -275,11 +292,14 @@ class StageSelectionWidget(QWidget):
         if button:
             if self.user_audio:
                 button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton))
+                button.setText("") # Remove plus when file is added
                 if translation_checkbox:
                     translation_checkbox.setChecked(False)
                     translation_checkbox.setEnabled(False)
             else:
-                button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ToolBarHorizontalExtensionButton))
+                from PySide6.QtGui import QIcon
+                button.setIcon(QIcon()) # Clear icon to show text
+                button.setText("+")
                 if translation_checkbox:
                     translation_checkbox.setEnabled(True)
         
@@ -440,11 +460,18 @@ class TextTab(QWidget):
         layout.addWidget(self.languages_menu_container)
 
         # Status bar
-        self.status_bar_layout = QHBoxLayout()
+        self.status_bar_container = QWidget()
+        self.status_bar_container.setMinimumWidth(0)
+        self.status_bar_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.status_bar_layout = FlowLayout(self.status_bar_container, margin=0, hSpacing=20, vSpacing=5)
+        
         self.openrouter_balance_label = QLabel()
         self.openrouter_balance_label.setMinimumWidth(0)
         
-        self.googler_usage_layout = QHBoxLayout()
+        # Googler usage needs to be a single widget to wrap correctly in FlowLayout
+        self.googler_usage_container = QWidget()
+        self.googler_usage_layout = QHBoxLayout(self.googler_usage_container)
+        self.googler_usage_layout.setContentsMargins(0, 0, 0, 0)
         self.googler_usage_layout.setSpacing(2)
         self.googler_usage_label = QLabel()
         self.googler_usage_label.setMinimumWidth(0)
@@ -464,19 +491,15 @@ class TextTab(QWidget):
         self.voicemaker_balance_label.setMinimumWidth(0)
         self.gemini_tts_balance_label = QLabel()
         self.gemini_tts_balance_label.setMinimumWidth(0)
+        
         self.status_bar_layout.addWidget(self.openrouter_balance_label)
-        self.status_bar_layout.addSpacing(20)
-        self.status_bar_layout.addLayout(self.googler_usage_layout)
-        self.status_bar_layout.addSpacing(20)
+        self.status_bar_layout.addWidget(self.googler_usage_container)
         self.status_bar_layout.addWidget(self.elevenlabs_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.elevenlabs_unlim_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.voicemaker_balance_label)
-        self.status_bar_layout.addSpacing(20)
         self.status_bar_layout.addWidget(self.gemini_tts_balance_label)
-        self.status_bar_layout.addStretch()
-        layout.addLayout(self.status_bar_layout)
+        
+        layout.addWidget(self.status_bar_container)
 
         # Quick Settings Panel
         self.quick_settings_panel = QuickSettingsPanel(main_window=getattr(self, 'main_window', None))
@@ -529,8 +552,13 @@ class TextTab(QWidget):
         if not job: return
         
         # Check job type
-        if job.get('type') != 'text' and job.get('type') is not None:
-             # If it's a rewrite job, maybe switch tab or ignore
+        job_type = job.get('type')
+        if job_type == 'rewrite':
+            if self.main_window:
+                self.main_window.activate_tab(self.main_window.rewrite_tab)
+                self.main_window.rewrite_tab.restore_job(job)
+                return
+        elif job_type != 'text' and job_type is not None:
              return
 
         self.text_edit.setText(job.get('text', ''))
@@ -628,7 +656,9 @@ class TextTab(QWidget):
 
     def add_to_queue(self, task_name=None, is_restored=False):
         ok = True
+        task_name_input_shown = False
         if task_name is None:
+            task_name_input_shown = True
             # Custom QInputDialog to make it wider
             dialog = QInputDialog(self)
             dialog.setWindowTitle(translator.translate('enter_task_name_title'))
@@ -654,6 +684,7 @@ class TextTab(QWidget):
             # --- Check for existing files ---
             for lang_id, btn in self.language_buttons.items():
                 if btn.isChecked():
+
                     stage_widget = self.stage_widgets.get(lang_id)
                     
                     # Determine the correct base_save_path
@@ -849,6 +880,16 @@ class TextTab(QWidget):
                 self.main_window.queue_manager.add_task(job)
                 self.recent_tasks_panel.refresh()
 
+            # --- Success Message ---
+            # User request: Only show if NO "found existing files" or name/lang prompt window was shown
+            # Also remove numbering like (1)
+            if languages_data and not found_files_per_lang and task_name_input_shown is False:
+                QMessageBox.information(
+                    self, 
+                    translator.translate("success", "Success"), 
+                    translator.translate("tasks_added_success", "Task(s) successfully added to queue.")
+                )
+
 
     def update_char_count(self):
         text = self.text_edit.toPlainText()
@@ -879,6 +920,7 @@ class TextTab(QWidget):
 
     def update_googler_usage(self, usage_text):
         self.googler_usage_label.setText(usage_text)
+        self.googler_usage_container.setVisible(bool(usage_text))
 
     def update_googler_usage_detailed(self, usage_text, usage_data):
         self.update_googler_usage(usage_text)
@@ -928,6 +970,8 @@ class TextTab(QWidget):
 
     def update_gemini_tts_balance(self, balance_text):
         self.gemini_tts_balance_label.setText(balance_text)
+
+
 
     def apply_text_color_to_text_edit(self):
         current_theme = self.settings.get('theme', 'dark')

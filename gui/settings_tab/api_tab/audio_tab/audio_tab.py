@@ -22,7 +22,7 @@ class AudioTab(QWidget):
         self.elevenlabs_tab = ElevenLabsTab(self.main_window)
         self.tab_widget.addTab(self.elevenlabs_tab, "ElevenLabs")
         
-        self.elevenlabs_unlim_tab = ElevenLabsUnlimTab()
+        self.elevenlabs_unlim_tab = ElevenLabsUnlimTab(main_window=self.main_window)
         self.tab_widget.addTab(self.elevenlabs_unlim_tab, "ElevenLabs Unlim")
         
         self.voicemaker_tab = VoicemakerTab(self.main_window)

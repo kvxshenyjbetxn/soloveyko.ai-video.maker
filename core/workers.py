@@ -87,19 +87,23 @@ class TranslationWorker(BaseWorker):
         lang_config = self.config['lang_config']
         model = lang_config.get('model', 'unknown')
         temp = lang_config.get('temperature', 0.7)
-        max_tokens = lang_config.get('max_tokens', 4096)
+        max_tokens = lang_config.get('max_tokens', 0)
+        text_to_translate = self.config.get('text', '')
+        text_len = len(text_to_translate)
         
-        logger.log(f"[{self.task_id}] [{model}] Starting translation (temp: {temp}, max_tokens: {max_tokens})", level=LogLevel.INFO)
+        logger.log(f"[{self.task_id}] [{model}] Starting translation (temp: {temp}, max_tokens: {max_tokens}, text_len: {text_len} chars)", level=LogLevel.INFO)
         
-        full_prompt = f"{lang_config.get('prompt', '')}\n\n{self.config['text']}"
+        full_prompt = f"{lang_config.get('prompt', '')}\n\n{text_to_translate}"
         response = api.get_chat_completion(
             model=model,
             messages=[{"role": "user", "content": full_prompt}],
             max_tokens=max_tokens,
             temperature=temp
         )
-        if response and response['choices'][0]['message']['content']:
-            result = response['choices'][0]['message']['content']
+        msg = response['choices'][0].get('message', {})
+        result = msg.get('content') or msg.get('reasoning')
+        if response and result:
+            result = result.strip()
             logger.log(f"[{self.task_id}] [{model}] Translation completed", level=LogLevel.SUCCESS)
             self.signals.balance_updated.emit('openrouter', None)
             return result
@@ -113,7 +117,7 @@ class ImagePromptWorker(BaseWorker):
         img_prompt_settings = self.config['img_prompt_settings']
         model = img_prompt_settings.get('model', 'unknown')
         temp = img_prompt_settings.get('temperature', 0.7)
-        max_tokens = img_prompt_settings.get('max_tokens', 4096)
+        max_tokens = img_prompt_settings.get('max_tokens', 0)
         
         logger.log(f"[{self.task_id}] [{model}] Starting image prompts generation (temp: {temp}, max_tokens: {max_tokens})", level=LogLevel.INFO)
         
@@ -124,8 +128,10 @@ class ImagePromptWorker(BaseWorker):
             max_tokens=max_tokens,
             temperature=temp
         )
-        if response and response.get('choices') and response['choices'][0]['message']['content']:
-            result = response['choices'][0]['message']['content']
+        msg = response['choices'][0].get('message', {})
+        result = msg.get('content') or msg.get('reasoning')
+        if response and result:
+            result = result.strip()
             # Count prompts
             prompts = re.findall(r"^\d+\.\s*(.*)", result, re.MULTILINE)
             prompts_count = len(prompts)
@@ -142,7 +148,7 @@ class PreviewWorker(BaseWorker):
         preview_settings = self.config['preview_settings']
         model = preview_settings.get('model', 'unknown')
         temp = preview_settings.get('temperature', 1.0)
-        max_tokens = preview_settings.get('max_tokens', 10000)
+        max_tokens = preview_settings.get('max_tokens', 0)
         
         logger.log(f"[{self.task_id}] [{model}] Starting preview prompts generation (temp: {temp}, max_tokens: {max_tokens})", level=LogLevel.INFO)
         
@@ -155,8 +161,10 @@ class PreviewWorker(BaseWorker):
             max_tokens=max_tokens,
             temperature=temp
         )
-        if response and response.get('choices') and response['choices'][0]['message']['content']:
-            result = response['choices'][0]['message']['content']
+        msg = response['choices'][0].get('message', {})
+        result = msg.get('content') or msg.get('reasoning')
+        if response and result:
+            result = result.strip()
             # Count prompts
             prompts = re.findall(r"^\d+\.\s*(.*)", result, re.MULTILINE)
             prompts_count = len(prompts)
@@ -336,7 +344,7 @@ class VoiceoverWorker(BaseWorker):
 
 class SubtitleWorker(BaseWorker):
     def do_work(self):
-        whisper_type = self.config['sub_settings'].get('whisper_type', 'amd')
+        whisper_type = self.config['sub_settings'].get('whisper_type', 'standard')
 
         if whisper_type == 'amd':
             whisper_label = 'amd-fork'
@@ -365,7 +373,7 @@ class CustomStageWorker(BaseWorker):
         prompt = self.config['prompt']
         text = self.config['text']
         model = self.config.get('model', 'unknown') 
-        max_tokens = self.config.get('max_tokens', 4096)
+        max_tokens = self.config.get('max_tokens', 0)
         temperature = self.config.get('temperature', 0.7)
         
         logger.log(f"[{self.task_id}] [Custom Stage: {stage_name}] Starting processing (model: {model}, tokens: {max_tokens}, temp: {temperature})...", level=LogLevel.INFO)
@@ -378,8 +386,10 @@ class CustomStageWorker(BaseWorker):
             temperature=temperature
         )
         
-        if response and response['choices'][0]['message']['content']:
-            result = response['choices'][0]['message']['content']
+        msg = response['choices'][0].get('message', {})
+        result = msg.get('content') or msg.get('reasoning')
+        if response and result:
+            result = result.strip()
             
             # Save to file
             safe_name = "".join(c for c in stage_name if c.isalnum() or c in (' ', '_')).rstrip()
@@ -779,7 +789,7 @@ class RewriteWorker(BaseWorker):
         prompt = self.config['prompt']
         text = self.config['text']
         model = self.config.get('model', 'unknown')
-        max_tokens = self.config.get('max_tokens', 4096)
+        max_tokens = self.config.get('max_tokens', 0)
         temperature = self.config.get('temperature', 0.7)
         
         logger.log(f"[{self.task_id}] [{model}] Starting rewrite (temp: {temperature}, tokens: {max_tokens})", level=LogLevel.INFO)
@@ -792,8 +802,10 @@ class RewriteWorker(BaseWorker):
             temperature=temperature
         )
         
-        if response and response['choices'][0]['message']['content']:
-            result = response['choices'][0]['message']['content']
+        msg = response['choices'][0].get('message', {})
+        result = msg.get('content') or msg.get('reasoning')
+        if response and result:
+            result = result.strip()
             logger.log(f"[{self.task_id}] [{model}] Rewrite completed", level=LogLevel.SUCCESS)
             return result
         else:

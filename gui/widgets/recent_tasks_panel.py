@@ -69,12 +69,12 @@ class RecentTaskCard(QFrame):
         # Styling
         self.setStyleSheet("""
             QFrame#RecentTaskCard {
-                background-color: rgba(255, 255, 255, 0.05);
+                background-color: transparent;
                 border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 12px;
             }
             QFrame#RecentTaskCard:hover {
-                background-color: rgba(255, 255, 255, 0.1);
+                background-color: rgba(255, 255, 255, 0.05);
                 border: 1px solid rgba(255, 255, 255, 0.2);
             }
         """)
@@ -153,6 +153,10 @@ class RecentTasksPanel(QWidget):
         footer_layout.addWidget(self.close_hint_label)
 
         self.layout.addWidget(footer_frame)
+
+        # Connect to name updates in queue (to refresh if we just got a YouTube title)
+        if self.main_window and hasattr(self.main_window, 'queue_manager'):
+            self.main_window.queue_manager.task_name_updated.connect(lambda: self.refresh())
 
     def refresh(self):
         # Clear existing
