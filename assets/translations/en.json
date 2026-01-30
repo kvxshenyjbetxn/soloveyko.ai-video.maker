@@ -61,6 +61,7 @@
     "balance": "Balance",
     "balance_error": "Balance: Error",
     "models": "💾 Models",
+    "ai_assistant_model": "💾 AI Assistant Model:",
     "enter_model_name": "Enter model name",
     "add_model": "Add",
     "remove_model": "Remove",

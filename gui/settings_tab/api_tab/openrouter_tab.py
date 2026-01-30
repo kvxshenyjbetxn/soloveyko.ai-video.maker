@@ -1,5 +1,5 @@
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QListWidget, QHBoxLayout, QScrollArea, QSpinBox
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QListWidget, QHBoxLayout, QScrollArea, QSpinBox, QComboBox
 from PySide6.QtCore import Signal, Qt
 from utils.translator import translator
 from utils.settings import settings_manager
@@ -45,6 +45,14 @@ class OpenRouterTab(QWidget):
                 self.main_window.refresh_quick_settings_panels()
 
         add_setting_row(layout, self.api_key_label, self.api_key_input, "openrouter_api_key", refresh_quick_panel)
+
+        # AI Assistant Model
+        self.agent_model_label = QLabel("AI Assistant Model")
+        self.agent_model_combo = QComboBox()
+        self.agent_model_combo.setEditable(True) # Allow custom input
+        self.agent_model_combo.currentTextChanged.connect(self.save_agent_model)
+        
+        add_setting_row(layout, self.agent_model_label, self.agent_model_combo, "ai_assistant_model", refresh_quick_panel)
 
         # Connection Status
         connection_layout = QHBoxLayout()
@@ -114,6 +122,7 @@ class OpenRouterTab(QWidget):
     def retranslate_ui(self):
         self.api_key_label.setText(translator.translate("openrouter_api_key"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
+        self.agent_model_label.setText(translator.translate("ai_assistant_model", "Модель AI Асистента"))
         self.check_connection_button.setText(translator.translate("check_connection"))
         self.max_threads_label.setText(translator.translate("max_concurrent_requests"))
         self.max_threads_help.update_tooltip()
@@ -138,12 +147,30 @@ class OpenRouterTab(QWidget):
 
         self.update_models_list()
         
+        # Update Agent Model Combo
+        self.agent_model_combo.blockSignals(True)
+        self.agent_model_combo.clear()
+        models = self.settings.get("openrouter_models", [])
+        self.agent_model_combo.addItems(models)
+        
+        current_agent_model = self.settings.get("ai_assistant_model", "openai/gpt-4o-mini")
+        
+        # Ensure the current model is in the list of items
+        if self.agent_model_combo.findText(current_agent_model) == -1:
+            self.agent_model_combo.addItem(current_agent_model)
+            
+        self.agent_model_combo.setCurrentText(current_agent_model)
+        self.agent_model_combo.blockSignals(False)
+        
     def save_api_key(self, key):
         self.settings.set("openrouter_api_key", key)
         self.api.api_key = key
 
     def save_max_threads(self, value):
         self.settings.set("openrouter_max_threads", value)
+
+    def save_agent_model(self, model_name):
+        self.settings.set("ai_assistant_model", model_name)
 
     def check_connection(self):
         self.update_connection_status_label("checking")
@@ -201,3 +228,12 @@ class OpenRouterTab(QWidget):
         self.models_list.clear()
         models = self.settings.get("openrouter_models", [])
         self.models_list.addItems(models)
+        
+        # Sync Combo
+        if hasattr(self, 'agent_model_combo'):
+            current = self.agent_model_combo.currentText()
+            self.agent_model_combo.blockSignals(True)
+            self.agent_model_combo.clear()
+            self.agent_model_combo.addItems(models)
+            self.agent_model_combo.setCurrentText(current)
+            self.agent_model_combo.blockSignals(False)

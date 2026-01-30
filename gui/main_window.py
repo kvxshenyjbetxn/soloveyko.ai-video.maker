@@ -4,7 +4,7 @@ import requests
 import collections
 import platform
 from datetime import datetime
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu, QInputDialog
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget, QComboBox, QAbstractSpinBox, QAbstractScrollArea, QSlider, QVBoxLayout, QMessageBox, QDialog, QTextEdit, QPushButton, QDialogButtonBox, QLabel, QHBoxLayout, QMenu, QInputDialog, QDockWidget
 from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal, QRunnable, QThreadPool, Qt, QSize, QByteArray, QTimer, Slot
 from PySide6.QtGui import QWheelEvent, QIcon, QAction, QPixmap
 from gui.widgets.animated_tab_widget import AnimatedTabWidget
@@ -13,6 +13,7 @@ from gui.dialogs.welcome_dialog import WelcomeDialog
 from gui.qt_material import apply_stylesheet
 from gui.api_workers import ApiKeyCheckWorker, ApiKeyCheckSignals, ElevenLabsUnlimBalanceWorker, VersionCheckWorker, VersionCheckSignals
 from gui.widgets.help_label import HelpLabel
+from gui.widgets.ai_chat_widget import AIChatWidget
 
 # Windows COM handling for threads
 try:
@@ -192,6 +193,10 @@ class MainWindow(QMainWindow):
         self.init_ui()
         logger.log('Application started.', level=LogLevel.INFO)
         self.app.installEventFilter(self)
+        
+        # Connect global signals
+        from core.signals import global_signals
+        global_signals.request_ui_refresh.connect(self.refresh_ui_from_settings)
         
         # Start version check
         self.check_app_version()
@@ -403,6 +408,37 @@ class MainWindow(QMainWindow):
         corner_layout.setContentsMargins(0, 0, 10, 0) # Add some margin to the right
         corner_layout.setSpacing(10)
 
+        # AI Assistant Button
+        self.ai_btn = QPushButton()
+        self.ai_btn.setFixedSize(32, 32)
+        self.ai_btn.setToolTip("AI Assistant")
+        
+        ai_icon_path = os.path.join(base_path, "assets", "ai_icon.png")
+        
+        if os.path.exists(ai_icon_path):
+            self.ai_btn.setIcon(QIcon(ai_icon_path))
+            self.ai_btn.setIconSize(QSize(24, 24))
+        else:
+            self.ai_btn.setText("🤖")
+            
+        self.ai_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                border-radius: 4px;
+                color: white;
+                font-size: 20px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+            QPushButton:pressed {
+                background-color: rgba(255, 255, 255, 0.2);
+            }
+        """)
+        self.ai_btn.clicked.connect(self.toggle_ai_dock)
+        corner_layout.addWidget(self.ai_btn)
+
         self.help_icon = HelpLabel("info_icon_hint")
         self.help_legend_label = QLabel()
         self.active_template_label = QLabel()
@@ -504,6 +540,24 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(200, lambda: self.settings_tab.languages_tab.load_elevenlabs_templates()) # Load templates in background to avoid blocking startup
         
         self.update_active_template_display()
+        
+        # Initialize AI Dock
+        self.init_ai_dock()
+
+    def init_ai_dock(self):
+        self.ai_dock = QDockWidget("AI Assistant", self)
+        self.ai_chat_widget = AIChatWidget(self)
+        self.ai_dock.setWidget(self.ai_chat_widget)
+        self.ai_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
+        self.ai_dock.setFloating(False)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.ai_dock)
+        self.ai_dock.hide() # Hidden by default
+    
+    def toggle_ai_dock(self):
+        if self.ai_dock.isVisible():
+            self.ai_dock.hide()
+        else:
+            self.ai_dock.show()
 
     def on_tab_changed(self, index):
         self.refresh_quick_settings_panels()
