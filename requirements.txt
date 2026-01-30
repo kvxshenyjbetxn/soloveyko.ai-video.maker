@@ -10,3 +10,5 @@ edge-tts
 pyinstaller
 pywin32; platform_system == "Windows"
 psutil
+openai
+markdown

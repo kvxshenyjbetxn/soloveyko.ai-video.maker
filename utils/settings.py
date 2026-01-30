@@ -112,7 +112,9 @@ STORY TEXT:
                 'nologo': True,
                 'enhance': False
             },
-            'openrouter_models': ['z-ai/glm-4.5-air:free', 'google/gemini-2.5-flash'],
+            'openrouter_api_key': '',
+            'ai_assistant_model': 'openai/gpt-4o-mini',
+            'openrouter_models': ['z-ai/glm-4.5-air:free', 'google/gemini-2.5-flash', 'openai/gpt-4o-mini'],
             'subtitles': {
                 'whisper_model': 'base',
                 'font': 'Impact',
