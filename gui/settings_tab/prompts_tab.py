@@ -98,6 +98,21 @@ class PromptsTab(QWidget):
         self.temperature_spinbox.valueChanged.connect(self.save_settings)
         settings_form_layout.addRow(temp_label_container, self.temperature_spinbox)
 
+        self.text_split_count_help = HelpLabel("text_split_count_label")
+        self.text_split_count_label = QLabel()
+        text_split_container = QWidget()
+        text_split_layout = QHBoxLayout(text_split_container)
+        text_split_layout.setContentsMargins(0,0,0,0)
+        text_split_layout.setSpacing(5)
+        text_split_layout.addWidget(self.text_split_count_help)
+        text_split_layout.addWidget(self.text_split_count_label)
+        
+        self.text_split_count_spinbox = QSpinBox()
+        self.text_split_count_spinbox.setRange(0, 1000) # 0 means disabled
+        self.text_split_count_spinbox.setSpecialValueText(translator.translate("text_split_count_disabled", "Disabled (Use Defaults)"))
+        self.text_split_count_spinbox.valueChanged.connect(self.save_settings)
+        settings_form_layout.addRow(text_split_container, self.text_split_count_spinbox)
+
         self.prompt_count_help = HelpLabel("prompt_count_label")
         self.prompt_count_label = QLabel()
         count_label_container = QWidget()
@@ -439,6 +454,7 @@ class PromptsTab(QWidget):
         self.model_combo.blockSignals(True)
         self.tokens_spinbox.blockSignals(True)
         self.temperature_spinbox.blockSignals(True)
+        self.text_split_count_spinbox.blockSignals(True)
         self.prompt_count_spinbox.blockSignals(True)
 
         self.prompt_edit.setPlainText(config.get("prompt", ""))
@@ -449,6 +465,8 @@ class PromptsTab(QWidget):
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
         self.temperature_spinbox.setValue(config.get("temperature", 0.7))
         
+        self.text_split_count_spinbox.setValue(self.settings.get('text_split_count', 0))
+        
         prompt_control_enabled = self.settings.get('prompt_count_control_enabled', False)
         self.prompt_count_help.parentWidget().setVisible(prompt_control_enabled)
         self.prompt_count_spinbox.setVisible(prompt_control_enabled)
@@ -458,6 +476,7 @@ class PromptsTab(QWidget):
         self.model_combo.blockSignals(False)
         self.tokens_spinbox.blockSignals(False)
         self.temperature_spinbox.blockSignals(False)
+        self.text_split_count_spinbox.blockSignals(False)
         self.prompt_count_spinbox.blockSignals(False)
 
         # --- Update Preview Fields ---
@@ -525,6 +544,7 @@ class PromptsTab(QWidget):
             "temperature": self.temperature_spinbox.value()
         }
         self.settings.set("image_prompt_settings", config)
+        self.settings.set('text_split_count', self.text_split_count_spinbox.value())
         self.settings.set('prompt_count', self.prompt_count_spinbox.value())
 
         preview_config = {
@@ -570,13 +590,17 @@ class PromptsTab(QWidget):
         self.model_label.setText(translator.translate("image_model_label"))
         self.tokens_label.setText(translator.translate("tokens_label"))
         self.temperature_label.setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
+        self.text_split_count_label.setText(translator.translate("text_split_count_label", "Sync: Text Segments/Images"))
         self.prompt_count_label.setText(translator.translate("prompt_count_label"))
         
         self.prompt_content_help.update_tooltip()
         self.model_help.update_tooltip()
         self.tokens_help.update_tooltip()
         self.temperature_help.update_tooltip()
+        self.text_split_count_help.update_tooltip()
         self.prompt_count_help.update_tooltip()
+        
+        self.text_split_count_spinbox.setSpecialValueText(translator.translate("text_split_count_disabled", "Disabled (Use Defaults)"))
 
         self.preview_group_layout.parentWidget().setTitle(translator.translate("preview_settings_group"))
         self.preview_prompt_label.setText(translator.translate("preview_prompt_label"))

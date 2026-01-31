@@ -184,9 +184,23 @@ class MontageEngine:
         if special_mode == "Quick show":
             start_index = min(num_images, special_count)
 
-        for i in range(start_index, num_images):
-            img_idx = image_indices[i]
-            final_clip_durations[img_idx] = img_duration
+        # Check for externally provided durations (e.g. from subtitle synchronization)
+        override_durations = kwargs.get('override_durations')
+        
+        if override_durations and len(override_durations) == (num_images - start_index):
+             logger.log(f"{prefix}[Montage] Using synchronized durations for {len(override_durations)} images.", level=LogLevel.INFO)
+             for i in range(start_index, num_images):
+                 img_idx = image_indices[i]
+                 # mapping: override_durations[0] corresponds to image_indices[start_index]
+                 final_clip_durations[img_idx] = override_durations[i - start_index]
+        else:
+             # Fallback to even distribution logic
+             if override_durations:
+                 logger.log(f"{prefix}[Montage] Warning: Override durations count ({len(override_durations)}) mismatch with images ({num_images-start_index}). Using even distribution.", level=LogLevel.WARNING)
+
+             for i in range(start_index, num_images):
+                 img_idx = image_indices[i]
+                 final_clip_durations[img_idx] = img_duration
         
         # Log compact montage info (single line)
         log_msg = f"{prefix}[FFmpeg] Starting montage | Audio: {audio_dur:.2f}s, Images: {num_images}"

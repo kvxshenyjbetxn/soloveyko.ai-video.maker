@@ -253,6 +253,17 @@ class TranslationMixin:
             metadata_text = f"{char_count} {translator.translate('characters_count')}"
             self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'original_text', metadata_text)
         
+        # --- Text Segmentation Logic ---
+        # Check if text splitting is requested (e.g. for precise image synchronization)
+        # We prioritize explicit 'text_split_count' if it ever exists in the future,
+        # otherwise we use the 'prompt_count' setting from the UI (Prompts & Stages tab).
+        split_count = state.settings.get('text_split_count') or state.lang_data.get('text_split_count')
+
+        if split_count and int(split_count) > 1:
+            chunks = self.split_text_into_chunks(state.text_for_processing, int(split_count))
+            state.lang_data['text_chunks'] = chunks
+            logger.log(f"[{task_id}] Text split into {len(chunks)} chunks for synchronized generation (based on prompt_count={split_count}).", level=LogLevel.INFO)
+        
         if 'stage_preview' in state.stages:
             self._start_preview(task_id)
         

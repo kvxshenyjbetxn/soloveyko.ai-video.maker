@@ -35,8 +35,13 @@ class ImageMixin:
             
             img_settings['model'] = model
             
+            # Use chunks if available, otherwise full text
+            text_input = state.lang_data.get('text_chunks')
+            if not text_input:
+                text_input = state.text_for_processing
+
             config = {
-                'text': state.text_for_processing,
+                'text': text_input,
                 'img_prompt_settings': img_settings,
                 'openrouter_api_key': state.settings.get('openrouter_api_key')
             }
@@ -56,10 +61,16 @@ class ImageMixin:
         prompts_count = len(prompts)
 
         # Check if prompt count control is enabled
+        # CRITICAL: If we used text segmentation (text_chunks), the number of prompts is determined
+        # by the text structure, not the 'prompt_count' setting. In this case, we SKIP the validation
+        # against 'prompt_count' to avoid unnecessary regeneration loops.
+        is_segmented = 'text_chunks' in state.lang_data
+        
         is_check_enabled = state.settings.get('prompt_count_control_enabled', False)
         desired_count = state.settings.get('prompt_count', 50)
 
-        if is_check_enabled and prompts_count != desired_count:
+        # Only enforce count if NOT segmented
+        if is_check_enabled and not is_segmented and prompts_count != desired_count:
             if state.prompt_regeneration_attempts < 3:
                 state.prompt_regeneration_attempts += 1
                 logger.log(

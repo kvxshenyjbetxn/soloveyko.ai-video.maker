@@ -119,27 +119,103 @@ class ImagePromptWorker(BaseWorker):
         temp = img_prompt_settings.get('temperature', 0.7)
         max_tokens = img_prompt_settings.get('max_tokens', 0)
         
-        logger.log(f"[{self.task_id}] [{model}] Starting image prompts generation (temp: {temp}, max_tokens: {max_tokens})", level=LogLevel.INFO)
+        input_text = self.config['text']
+        is_list = isinstance(input_text, list)
         
-        full_prompt = f"{img_prompt_settings.get('prompt', '')}\n\n{self.config['text']}"
-        response = api.get_chat_completion(
-            model=model,
-            messages=[{"role": "user", "content": full_prompt}],
-            max_tokens=max_tokens,
-            temperature=temp
-        )
-        msg = response['choices'][0].get('message', {})
-        result = msg.get('content') or msg.get('reasoning')
-        if response and result:
-            result = result.strip()
-            # Count prompts
-            prompts = re.findall(r"^\d+\.\s*(.*)", result, re.MULTILINE)
-            prompts_count = len(prompts)
-            logger.log(f"[{self.task_id}] [{model}] Image prompts generated ({prompts_count} prompts)", level=LogLevel.SUCCESS)
-            self.signals.balance_updated.emit('openrouter', None)
-            return result
+        # If it's a list (segmented text), we process each segment individually
+        # If it's a string, we process it as a whole (legacy/standard behavior)
+        
+        texts_to_process = input_text if is_list else [input_text]
+        generated_prompts = []
+        
+        logger.log(f"[{self.task_id}] [{model}] Starting image prompts generation (segments: {len(texts_to_process)}, temp: {temp})", level=LogLevel.INFO)
+        
+        # For list logic, we want *one* prompt per segment.
+        # For string logic, the prompt might ask for a list of prompts.
+        
+        for i, segment_text in enumerate(texts_to_process):
+            if not segment_text.strip():
+                continue
+
+            # Check if we should use a specific single-image prompt or the general one
+            # Ideally, the system prompt should adapt. 
+            # If we are in segmented mode, we append a specific instruction if not present.
+            
+            base_prompt = img_prompt_settings.get('prompt', '')
+            
+            if is_list:
+                # Modifying the system prompt slightly to ensure we get exactly one visual description
+                # per segment call. Or we rely on the user/system prompt to be "Describe an image for this text".
+                # We'll treat the response as the prompt for this segment.
+                 full_prompt = f"{base_prompt}\n\nSegment Text: \"{segment_text}\"\n\nTask: Write a detailed image generation prompt for this segment."
+            else:
+                 full_prompt = f"{base_prompt}\n\n{segment_text}"
+
+            # Retry logic for API calls
+            max_retries = 3
+            last_error = None
+            
+            import time
+            
+            for attempt in range(max_retries):
+                try:
+                    response = api.get_chat_completion(
+                        model=model,
+                        messages=[{"role": "user", "content": full_prompt}],
+                        max_tokens=max_tokens,
+                        temperature=temp
+                    )
+                    
+                    if 'error' in response:
+                        error_msg = response['error'].get('message', str(response['error']))
+                        raise Exception(f"OpenRouter API Error: {error_msg}")
+                    
+                    if 'choices' not in response or not response['choices']:
+                         raise Exception(f"Invalid API response: 'choices' missing. Full response: {response}")
+
+                    msg = response['choices'][0].get('message', {})
+                    result = msg.get('content') or msg.get('reasoning')
+                    
+                    # If successful, break the retry loop
+                    break
+                    
+                except Exception as e:
+                    last_error = e
+                    logger.log(f"[{self.task_id}] API call failed (attempt {attempt+1}/{max_retries}): {e}", level=LogLevel.WARNING)
+                    if attempt < max_retries - 1:
+                        time.sleep(2 * (attempt + 1)) # Exponential-ish backoff: 2s, 4s...
+                    else:
+                        # If all retries failed, re-raise the last error
+                        raise last_error
+            
+            if response and result:
+                result = result.strip()
+                generated_prompts.append(result)
+            else:
+                logger.log(f"[{self.task_id}] Warning: Empty response for segment {i+1}", level=LogLevel.WARNING)
+                generated_prompts.append("A scenic view related to the story.") # Fallback
+
+            # Balance update (approximate or after loop)
+            # We emit after loop to avoid spam, but calculating cost is hard without token usage data.
+            # We'll just emit once at the end.
+        
+        # Format the output
+        if is_list:
+            # We need to return a string that ImageGenerationWorker can parse.
+            # It expects numbered list: "1. Prompt...", "2. Prompt...", etc.
+            final_output = ""
+            for i, p in enumerate(generated_prompts):
+                # Clean up prompt if it has numbering already
+                p_clean = re.sub(r'^\d+[\.:\)]\s*', '', p).strip()
+                final_output += f"{i+1}. {p_clean}\n\n"
+            
+            result = final_output.strip()
         else:
-            raise Exception(f"Empty or invalid response from image prompt API. Response: {response}")
+            result = generated_prompts[0]
+
+        logger.log(f"[{self.task_id}] [{model}] Image prompts generated ({len(generated_prompts)} prompts)", level=LogLevel.SUCCESS)
+        self.signals.balance_updated.emit('openrouter', None)
+        return result
 
 class PreviewWorker(BaseWorker):
     def do_work(self):

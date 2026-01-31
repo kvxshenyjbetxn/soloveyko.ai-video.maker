@@ -215,17 +215,44 @@ class SubtitleEngine:
         return self._parse_srt_content(content)
 
     def _parse_srt_content(self, content):
-        pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.*?)(?=\n\n|\Z)', re.DOTALL)
         segments = []
-        for match in pattern.finditer(content):
-            start_str = match.group(2).replace(',', '.')
-            end_str = match.group(3).replace(',', '.')
-            text = match.group(4).replace('\n', ' ')
-            segments.append({
-                'start': self._time_to_seconds(start_str),
-                'end': self._time_to_seconds(end_str),
-                'text': text.strip()
-            })
+        # Normalize newlines
+        content = content.replace('\r\n', '\n').strip()
+        
+        # Split by double newlines (blocks)
+        blocks = re.split(r'\n\s*\n', content)
+        
+        for i, block in enumerate(blocks):
+            lines = [l.strip() for l in block.split('\n') if l.strip()]
+            if len(lines) >= 2: # At least index (maybe) and timestamp, or timestamp and text
+                # Logic to identify timestamp line
+                time_line_idx = -1
+                for j, line in enumerate(lines[:2]): # Check first 2 lines
+                    if '-->' in line:
+                        time_line_idx = j
+                        break
+                
+                if time_line_idx != -1:
+                    time_line = lines[time_line_idx]
+                    try:
+                        times = time_line.split('-->')
+                        start_str = times[0].strip().replace(',', '.')
+                        end_str = times[1].strip().replace(',', '.')
+                        
+                        start_sec = self._time_to_seconds(start_str)
+                        end_sec = self._time_to_seconds(end_str)
+                        
+                        text_lines = lines[time_line_idx+1:]
+                        text = " ".join(text_lines)
+                        
+                        segments.append({
+                            'start': start_sec,
+                            'end': end_sec,
+                            'text': text
+                        })
+                    except Exception as e:
+                        logger.log(f"Error parsing SRT block {i}: {block[:50]}... Error: {e}", LogLevel.DEBUG)
+                        continue
         return segments
 
     def _time_to_seconds(self, time_str):
