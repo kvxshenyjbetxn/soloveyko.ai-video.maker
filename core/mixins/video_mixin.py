@@ -371,6 +371,94 @@ class VideoMixin:
                 logger.log(f"[{task_id}] Fallback to 'Quick Show' mode for montage.", level=LogLevel.WARNING)
                 montage_settings['special_processing_mode'] = "Quick show"
                 
+            # --- Synchronization Logic ---
+            text_chunks = state.lang_data.get('text_chunks')
+            
+            # If we have text chunks, we engage the GAP-FILLING logic.
+            # This ensures that if image #2 is missing, we reuse image #1 for segment #2.
+            if text_chunks:
+                full_image_list = []
+                last_valid_image = None
+                
+                # We need to scan the directory for specific numbered files to know which ones are missing.
+                # state.image_paths is usually sorted, but doesn't tell us "who is who" if gaps exist.
+                # So we check for existence of 0001.png, 0002.png, etc. directly.
+                
+                # Check expected extension from existing files (prefer png)
+                ext = '.png'
+                if final_image_paths and final_image_paths[0].lower().endswith('.jpg'):
+                    ext = '.jpg'
+                elif final_image_paths and final_image_paths[0].lower().endswith('.jpeg'):
+                    ext = '.jpeg'
+                    
+                images_dir = os.path.dirname(final_image_paths[0]) if final_image_paths else state.dir_path
+                
+                for i in range(len(text_chunks)):
+                    # filename index is 1-based (0001.png for chunk 0)
+                    candidate_name = f"{i+1:04d}{ext}"
+                    candidate_path = os.path.join(images_dir, candidate_name)
+                    
+                    if os.path.exists(candidate_path):
+                        full_image_list.append(candidate_path)
+                        last_valid_image = candidate_path
+                    else:
+                        # Image missing! Fallback strategies.
+                        if last_valid_image:
+                            # Strategy 1: Extensions from START (Reuse previous)
+                            logger.log(f"[{task_id}] Image {candidate_name} missing. Extending previous image: {os.path.basename(last_valid_image)}", level=LogLevel.WARNING)
+                            full_image_list.append(last_valid_image)
+                        else:
+                            # Strategy 2: First image missing?
+                            # We can't extend backwards. We try to find the *next* available and use it?
+                            # Or just wait until we find one.
+                            # For now, let's append a placeholder or skip?
+                            # If we skip, the duration alignment will break index.
+                            # BETTER: Look ahead for the first valid image WITH RETRIES
+                            # Sometimes the file system is slow to update after generation.
+                            import time
+                            first_valid = None
+                            
+                            for retry_attempt in range(5):
+                                for k in range(len(text_chunks)):
+                                    fname = f"{k+1:04d}{ext}"
+                                    fpath = os.path.join(images_dir, fname)
+                                    if os.path.exists(fpath):
+                                        first_valid = fpath
+                                        break
+                                
+                                if first_valid:
+                                    break
+                                else:
+                                    if retry_attempt < 4:
+                                        logger.log(f"[{task_id}] Waiting for images to appear... (attempt {retry_attempt+1}/5)", level=LogLevel.INFO)
+                                        time.sleep(1.0)
+                            
+                            if first_valid:
+                                logger.log(f"[{task_id}] Image {candidate_name} (start) missing. Using first available: {os.path.basename(first_valid)}", level=LogLevel.WARNING)
+                                full_image_list.append(first_valid)
+                                last_valid_image = first_valid # Set as valid so subsequent gaps use it too
+                            else:
+                                # No images at all?
+                                logger.log(f"[{task_id}] No images found for synchronization! (Checked {len(text_chunks)} expected files)", level=LogLevel.ERROR)
+                                break
+                
+                # Update final_image_paths to our new gap-filled list
+                if full_image_list:
+                    final_image_paths = full_image_list
+                    
+                # Now verify subtitle alignment with this FULL list
+                if state.subtitle_path and os.path.exists(state.subtitle_path):
+                    segment_map = {}
+                    # We map 1-to-1 because we filled gaps
+                    for i in range(len(final_image_paths)):
+                        segment_map[i] = text_chunks[i]
+                    
+                    durations = self.align_images_to_subtitles(segment_map, state.subtitle_path)
+                    
+                    if durations:
+                        montage_settings['override_durations'] = durations
+                        logger.log(f"[{task_id}] Applied synchronized durations for {len(durations)} images (gap-filled).", level=LogLevel.INFO)
+
             config = {
                 'visual_files': final_image_paths, 'audio_path': state.audio_path,
                 'output_path': output_path, 'ass_path': state.subtitle_path,
