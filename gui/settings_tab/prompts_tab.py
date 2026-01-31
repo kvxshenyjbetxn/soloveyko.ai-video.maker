@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLineEdit,
+    QWidget, QVBoxLayout, QLineEdit, QCheckBox,
     QPushButton, QTextEdit, QComboBox, QLabel, QFormLayout, QSpinBox, QScrollArea, QHBoxLayout, QGroupBox, QMessageBox, QDoubleSpinBox
 )
 from PySide6.QtCore import Qt
@@ -14,9 +14,11 @@ class PromptsTab(QWidget):
         self.main_window = main_window
         self.settings = settings_manager
         self.stage_widgets = []
+        self.is_loading = True # Prevent saving during init
         self.init_ui()
         self.update_fields()
         self.retranslate_ui()
+        self.is_loading = False
 
     def init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -65,7 +67,6 @@ class PromptsTab(QWidget):
 
         self.model_combo = QComboBox()
         self.model_combo.currentIndexChanged.connect(self.save_settings)
-        settings_form_layout.addRow(model_label_container, self.model_combo)
 
         self.tokens_help = HelpLabel("tokens_label")
         self.tokens_label = QLabel()
@@ -80,7 +81,6 @@ class PromptsTab(QWidget):
         self.tokens_spinbox.setRange(0, 128000)
         self.tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
         self.tokens_spinbox.valueChanged.connect(self.save_settings)
-        settings_form_layout.addRow(tokens_label_container, self.tokens_spinbox)
 
         self.temperature_help = HelpLabel("temperature_label")
         self.temperature_label = QLabel()
@@ -96,9 +96,28 @@ class PromptsTab(QWidget):
         self.temperature_spinbox.setSingleStep(0.1)
         self.temperature_spinbox.setValue(0.7)
         self.temperature_spinbox.valueChanged.connect(self.save_settings)
-        settings_form_layout.addRow(temp_label_container, self.temperature_spinbox)
 
-        self.text_split_count_help = HelpLabel("text_split_count_label")
+        # --- Reordered Layout Construction ---
+        
+        # 1. Generation Mode & Counts (First)
+        
+        # Generation Mode Helper + Label
+        self.generation_mode_help = HelpLabel("generation_mode_help")
+        self.generation_mode_label = QLabel()
+        gen_mode_label_container = QWidget()
+        gen_mode_label_layout = QHBoxLayout(gen_mode_label_container)
+        gen_mode_label_layout.setContentsMargins(0,0,0,0)
+        gen_mode_label_layout.setSpacing(5)
+        gen_mode_label_layout.addWidget(self.generation_mode_help)
+        gen_mode_label_layout.addWidget(self.generation_mode_label)
+
+        self.generation_mode_combo = QComboBox()
+        self.generation_mode_combo.currentIndexChanged.connect(self.on_mode_changed)
+        self.generation_mode_combo.currentIndexChanged.connect(self.save_settings)
+        settings_form_layout.addRow(gen_mode_label_container, self.generation_mode_combo)
+
+        # Sync/Segments Count (Only for Sync Mode)
+        self.text_split_count_help = HelpLabel("text_split_count_help")
         self.text_split_count_label = QLabel()
         text_split_container = QWidget()
         text_split_layout = QHBoxLayout(text_split_container)
@@ -108,11 +127,17 @@ class PromptsTab(QWidget):
         text_split_layout.addWidget(self.text_split_count_label)
         
         self.text_split_count_spinbox = QSpinBox()
-        self.text_split_count_spinbox.setRange(0, 1000) # 0 means disabled
-        self.text_split_count_spinbox.setSpecialValueText(translator.translate("text_split_count_disabled", "Disabled (Use Defaults)"))
+        self.text_split_count_spinbox.setRange(1, 1000) # 1 minimum for segments
         self.text_split_count_spinbox.valueChanged.connect(self.save_settings)
+        self.text_split_row_widget = QWidget() 
         settings_form_layout.addRow(text_split_container, self.text_split_count_spinbox)
+        self.text_split_container_widget = text_split_container
 
+        # Prompt Count (Only for Standard Mode)
+        
+        # NOTE: We do NOT add a checkbox here. The control is enabled globally in General settings.
+        # We only show the prompt count input if that global setting is enabled.
+        
         self.prompt_count_help = HelpLabel("prompt_count_label")
         self.prompt_count_label = QLabel()
         count_label_container = QWidget()
@@ -126,6 +151,13 @@ class PromptsTab(QWidget):
         self.prompt_count_spinbox.setRange(1, 1000)
         self.prompt_count_spinbox.valueChanged.connect(self.save_settings)
         settings_form_layout.addRow(count_label_container, self.prompt_count_spinbox)
+        
+        self.prompt_count_container_widget = count_label_container
+
+        # 2. Technical Settings (Model, Tokens, Temp) - Moved below Generation Mode
+        settings_form_layout.addRow(model_label_container, self.model_combo)
+        settings_form_layout.addRow(tokens_label_container, self.tokens_spinbox)
+        settings_form_layout.addRow(temp_label_container, self.temperature_spinbox)
         
         main_prompt_layout = QHBoxLayout()
         main_prompt_layout.addWidget(self.prompt_edit)
@@ -435,8 +467,31 @@ class PromptsTab(QWidget):
             "input_source_combo": input_source_combo
         })
         
-        if not stage_data:
-            self.save_custom_stages()
+    def on_mode_changed(self):
+        is_sync = self.generation_mode_combo.currentIndex() == 1
+        
+        # Sync Mode: Show Segments Count, Hide Prompt Count
+        # Standard Mode: Hide Segments Count, Show Prompt Count
+        
+        self.text_split_container_widget.setVisible(is_sync)
+        self.text_split_count_spinbox.setVisible(is_sync)
+        
+        # Logic for Prompt Count visibility
+        # If Standard mode -> check 'prompt_count_control_enabled' setting too?
+        # User said: "standard feature... there will be possibility to show prompt count... sync feature... prompt count disabled"
+        
+        if is_sync:
+            # Sync Mode: Checkbox hidden, Count hidden
+            self.prompt_count_container_widget.setVisible(False)
+            self.prompt_count_spinbox.setVisible(False)
+        else:
+            # Standard Mode:
+            # Check global setting 'prompt_count_control_enabled'
+            is_checked = self.settings.get('prompt_count_control_enabled', False)
+            
+            # Count visible ONLY if global setting enabled
+            self.prompt_count_container_widget.setVisible(is_checked)
+            self.prompt_count_spinbox.setVisible(is_checked)
 
     def delete_stage(self, stage_widget):
         for i, stage in enumerate(self.stage_widgets):
@@ -453,7 +508,7 @@ class PromptsTab(QWidget):
         self.prompt_edit.blockSignals(True)
         self.model_combo.blockSignals(True)
         self.tokens_spinbox.blockSignals(True)
-        self.temperature_spinbox.blockSignals(True)
+        self.generation_mode_combo.blockSignals(True)
         self.text_split_count_spinbox.blockSignals(True)
         self.prompt_count_spinbox.blockSignals(True)
 
@@ -465,19 +520,35 @@ class PromptsTab(QWidget):
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
         self.temperature_spinbox.setValue(config.get("temperature", 0.7))
         
-        self.text_split_count_spinbox.setValue(self.settings.get('text_split_count', 0))
+        # Logic: If text_split_count > 0 -> Sync Mode (Index 1). Else Standard (Index 0)
+        split_count = self.settings.get('text_split_count', 0)
+        last_split_count = self.settings.get('last_text_split_count', 5)
         
-        prompt_control_enabled = self.settings.get('prompt_count_control_enabled', False)
-        self.prompt_count_help.parentWidget().setVisible(prompt_control_enabled)
-        self.prompt_count_spinbox.setVisible(prompt_control_enabled)
+        if split_count > 0:
+            self.generation_mode_combo.setCurrentIndex(1)
+            self.text_split_count_spinbox.setValue(split_count)
+        else:
+            self.generation_mode_combo.setCurrentIndex(0)
+            self.text_split_count_spinbox.setValue(last_split_count) # Restore last used value
+
+        # Apply visibility based on current mode
+        self.on_mode_changed()
+        
+        # Apply visibility based on current mode
+        self.on_mode_changed()
+        
         self.prompt_count_spinbox.setValue(self.settings.get('prompt_count', 10))
 
         self.prompt_edit.blockSignals(False)
         self.model_combo.blockSignals(False)
         self.tokens_spinbox.blockSignals(False)
         self.temperature_spinbox.blockSignals(False)
+        self.generation_mode_combo.blockSignals(False)
         self.text_split_count_spinbox.blockSignals(False)
         self.prompt_count_spinbox.blockSignals(False)
+        
+        # Apply visibility based on current mode (AGAIN, after loading checkbox)
+        self.on_mode_changed()
 
         # --- Update Preview Fields ---
         preview_config = self.settings.get("preview_settings", {})
@@ -537,6 +608,9 @@ class PromptsTab(QWidget):
         self.preview_model_combo.blockSignals(False)
 
     def save_settings(self):
+        if hasattr(self, 'is_loading') and self.is_loading:
+            return
+
         config = {
             "prompt": self.prompt_edit.toPlainText(),
             "model": self.model_combo.currentText(),
@@ -544,7 +618,21 @@ class PromptsTab(QWidget):
             "temperature": self.temperature_spinbox.value()
         }
         self.settings.set("image_prompt_settings", config)
-        self.settings.set('text_split_count', self.text_split_count_spinbox.value())
+        
+        # Save Logic:
+        # If Sync Mode (Index 1) -> save text_split_count value
+        # If Standard Mode (Index 0) -> save 0 (disabled)
+        # Save Logic:
+        # If Sync Mode (Index 1) -> save text_split_count value
+        # If Standard Mode (Index 0) -> save 0 (disabled)
+        if self.generation_mode_combo.currentIndex() == 1:
+            val = self.text_split_count_spinbox.value()
+            self.settings.set('text_split_count', val)
+            self.settings.set('last_text_split_count', val)
+        else:
+            self.settings.set('text_split_count', 0)
+
+        # self.settings.set('prompt_count_control_enabled', ...) # Controlled in General Tab
         self.settings.set('prompt_count', self.prompt_count_spinbox.value())
 
         preview_config = {
@@ -590,7 +678,22 @@ class PromptsTab(QWidget):
         self.model_label.setText(translator.translate("image_model_label"))
         self.tokens_label.setText(translator.translate("tokens_label"))
         self.temperature_label.setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
-        self.text_split_count_label.setText(translator.translate("text_split_count_label", "Sync: Text Segments/Images"))
+        self.generation_mode_label.setText(translator.translate("generation_mode_label"))
+        
+        self.generation_mode_combo.blockSignals(True)
+        self.generation_mode_combo.clear()
+        self.generation_mode_combo.addItem(translator.translate("gen_mode_standard"))
+        self.generation_mode_combo.addItem(translator.translate("gen_mode_sync"))
+        # Restore index? No, retranslate usually happens on lang change, we should preserve index? 
+        # Actually simplest to just set items. The index is preserved if count doesn't change?
+        # Let's re-read from settings or local state?
+        # Update_fields calls load logic.
+        split_count = self.settings.get('text_split_count', 0)
+        self.generation_mode_combo.setCurrentIndex(1 if split_count > 0 else 0)
+        self.generation_mode_combo.blockSignals(False)
+        self.on_mode_changed()
+
+        self.text_split_count_label.setText(translator.translate("segment_count_label"))
         self.prompt_count_label.setText(translator.translate("prompt_count_label"))
         
         self.prompt_content_help.update_tooltip()
@@ -599,8 +702,7 @@ class PromptsTab(QWidget):
         self.temperature_help.update_tooltip()
         self.text_split_count_help.update_tooltip()
         self.prompt_count_help.update_tooltip()
-        
-        self.text_split_count_spinbox.setSpecialValueText(translator.translate("text_split_count_disabled", "Disabled (Use Defaults)"))
+        self.generation_mode_help.update_tooltip()
 
         self.preview_group_layout.parentWidget().setTitle(translator.translate("preview_settings_group"))
         self.preview_prompt_label.setText(translator.translate("preview_prompt_label"))
