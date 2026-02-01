@@ -143,6 +143,20 @@ class MassEditTemplateDialog(QDialog):
                              path.insert(idx + 1, '*')
                     except ValueError:
                          pass
+
+                # --- Exclusion Logic for Mass Editing ---
+                full_path_str = ".".join(path)
+                # Exclusion patterns (mostly hardware/system)
+                EXCLUSIONS = {
+                    "accent_color", "detailed_logging_enabled", "max_download_threads", 
+                    "theme", "language", "last_applied_template",
+                    "elevenlabs_image.max_threads",
+                    "googler.max_threads", "googler.max_video_threads",
+                    "montage.max_concurrent_montages"
+                }
+                
+                if any(p in EXCLUSIONS for p in [key, full_path_str]):
+                    continue
                 
                 # Construct Label
                 label = self._build_friendly_label(path, value)
