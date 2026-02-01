@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout, QCombo
                                QLineEdit, QPushButton, QMessageBox, QInputDialog,
                                QSpacerItem, QSizePolicy, QDialog, QTreeView, QGroupBox, QTextEdit,
                                QStyledItemDelegate, QCheckBox, QSpinBox, QDoubleSpinBox, QStyleOptionViewItem,
-                               QApplication, QStyle, QColorDialog, QFontComboBox, QFileDialog, QAbstractItemView)
+                               QApplication, QStyle, QColorDialog, QFontComboBox, QFileDialog, QAbstractItemView, QStyleOptionButton)
 from PySide6.QtGui import QStandardItemModel, QStandardItem, QColor, QBrush
 from PySide6.QtCore import Qt, Signal, QTimer, QModelIndex, QEvent
 
@@ -15,6 +15,7 @@ from gui.widgets.prompt_editor_dialog import PromptEditorDialog
 from gui.widgets.help_label import HelpLabel
 from gui.dialogs.mass_edit_template_dialog import MassEditTemplateDialog
 from gui.dialogs.template_changes_dialog import TemplateChangesDialog
+from gui.widgets.overlay_triggers_editor_dialog import OverlayTriggersEditorDialog
 import json
 import os
 import sys
@@ -139,8 +140,8 @@ class SettingsDelegate(QStyledItemDelegate):
         if editor_type == 'bool' or editor_type == 'color':
             # For checkboxes and color pickers, we handle interaction in editorEvent
             return None
-        elif editor_type in ['text_edit', 'text_edit_button']:
-            # For text edit, we handle it via double-click in editorEvent to open dialog
+        elif editor_type in ['text_edit', 'text_edit_button', 'overlay_triggers_list']:
+            # For text edit and complex lists, we handle it via double-click in editorEvent to open dialog
             return None
         elif editor_type == 'choice':
             editor = QComboBox(parent)
@@ -255,6 +256,16 @@ class SettingsDelegate(QStyledItemDelegate):
                 style.drawControl(QStyle.CE_ItemViewItem, check_box_option, painter)
                 return
 
+            if metadata.get('type') == 'overlay_triggers_list':
+                # Draw a push button
+                btn_option = QStyleOptionButton()
+                btn_option.rect = option.rect.adjusted(2, 2, -2, -2)
+                btn_option.text = str(index.model().data(index, Qt.DisplayRole) or "")
+                btn_option.state = QStyle.State_Enabled | QStyle.State_Raised
+                
+                QApplication.style().drawControl(QStyle.CE_PushButton, btn_option, painter)
+                return
+
         super().paint(painter, option, index)
 
     def editorEvent(self, event, model, option, index):
@@ -288,6 +299,19 @@ class SettingsDelegate(QStyledItemDelegate):
                      dialog = PromptEditorDialog(parent_widget, str(current_value))
                      if dialog.exec():
                          model.setData(index, dialog.get_text(), Qt.EditRole)
+                     return True
+
+            if editor_type == 'overlay_triggers_list':
+                 if (event.type() == QEvent.MouseButtonRelease or event.type() == QEvent.MouseButtonDblClick) and event.button() == Qt.LeftButton:
+                     current_value = model.data(index, Qt.EditRole)
+                     # Ensure current_value is a list
+                     if not isinstance(current_value, list):
+                         current_value = []
+                     
+                     parent_widget = option.widget
+                     dialog = OverlayTriggersEditorDialog(current_value, parent_widget)
+                     if dialog.exec():
+                         model.setData(index, dialog.get_triggers(), Qt.EditRole)
                      return True
 
         return super().editorEvent(event, model, option, index)
@@ -371,7 +395,7 @@ class TemplateEditorDialog(QDialog):
             "general_tab": ["results_path", "image_review_enabled", "rewrite_review_enabled", "translation_review_enabled", "prompt_count_control_enabled", "prompt_count", "image_generation_provider"],
             "api_tab": ["openrouter_models", "openrouter_api_key", "elevenlabs_api_key", "elevenlabs_unlim_api_key", "voicemaker_api_key", "voicemaker_char_limit", "gemini_tts_api_key", "assemblyai_api_key", "googler", "pollinations", "elevenlabs_image"],
             "languages_tab": ["languages_config"],
-            "prompts_tab": ["image_prompt_settings", "preview_settings"],
+            "prompts_tab": ["image_prompt_settings", "preview_settings", "text_split_count"],
             "montage_tab": ["montage"],
             "subtitles_tab": ["subtitles"],
             "elevenlabs_unlim_settings_title": ["eleven_unlim_settings"] # If it appears at root
@@ -383,7 +407,14 @@ class TemplateEditorDialog(QDialog):
         self.FLATTEN_GROUPS = {
             "montage_tab": "montage",
             "subtitles_tab": "subtitles",
-            "languages_tab": "languages_config"
+            "languages_tab": "languages_config",
+            # We don't flatten prompts_tab because it has multiple keys: image_prompt_settings, preview_settings, text_split_count
+            # But we want image_prompt_settings to be flattened IF it was the only thing.
+            # Since it's not, we have to deal with nesting or special handling.
+            # User wants "promt, promt standard, promt sync" to appear nicely.
+            # Currently image_prompt_settings is a dict.
+            # If we don't flatten, it appears as "Image Prompt Settings" -> "Prompt", "Prompt Standard", etc.
+            # This is acceptable as long as labels are good.
         }
 
         layout = QVBoxLayout(self)
@@ -431,6 +462,34 @@ class TemplateEditorDialog(QDialog):
         layout.addLayout(buttons_layout)
 
     def _group_data(self, data):
+        # Recursively remove excluded keys
+        def recursive_filter(d, path=""):
+            if not isinstance(d, dict):
+                return d
+            
+            # Hardware/System exclusion list (API Keys are ALLOWED in templates)
+            EXCLUSIONS = {
+                "accent_color", "detailed_logging_enabled", "max_download_threads", 
+                "theme", "language", "last_applied_template",
+                "elevenlabs_image.max_threads",
+                "googler.max_threads", "googler.max_video_threads",
+                "montage.max_concurrent_montages"
+            }
+            
+            new_filtered = {}
+            for k, v in d.items():
+                full_path = f"{path}.{k}" if path else k
+                if k in EXCLUSIONS or full_path in EXCLUSIONS:
+                    continue
+                
+                if isinstance(v, dict):
+                    new_filtered[k] = recursive_filter(v, full_path)
+                else:
+                    new_filtered[k] = v
+            return new_filtered
+
+        data = recursive_filter(data)
+
         grouped = {}
         processed_keys = set()
         
@@ -565,6 +624,16 @@ class TemplateEditorDialog(QDialog):
             if isinstance(value, list):
                 return value # Already a list (unlikely if edited, but possible if untouched)
                 
+        if metadata and metadata.get('type') == 'overlay_triggers_list':
+            if isinstance(value, list):
+                return value
+            if isinstance(value, str):
+                try:
+                    return json.loads(value)
+                except:
+                    pass
+            return []
+
         if isinstance(value, str):
             # Checking valid boolean strings
             if value.lower() == 'true': return True
@@ -636,6 +705,13 @@ class TemplateEditorDialog(QDialog):
                 self.populate_tree(value, key_item, current_path)
             elif metadata.get('type') == 'string_list':
                 value_item.setText(", ".join(value) if isinstance(value, list) else "")
+                value_item.setEditable(True)
+                value_item.setData(current_path, Qt.UserRole + 1)
+                parent_item.appendRow([key_item, value_item])
+            elif metadata.get('type') == 'overlay_triggers_list':
+                count = len(value) if isinstance(value, list) else 0
+                value_item.setText(translator.translate("click_to_edit_triggers", f"Click to edit ({count} triggers)..."))
+                value_item.setData(value, Qt.EditRole) # Store list directly
                 value_item.setEditable(True)
                 value_item.setData(current_path, Qt.UserRole + 1)
                 parent_item.appendRow([key_item, value_item])
@@ -839,10 +915,11 @@ class TemplatesTab(QWidget):
             'prompt_count_control_enabled',
             'prompt_count',
             'image_generation_provider',
+            'text_split_count',
             
-            # API Tab
-            'openrouter_api_key',
+            # API Tab (Note: some might be excluded later if user wants no keys in templates, but for now we follow list)
             'openrouter_models',
+            'openrouter_api_key',
             'elevenlabs_api_key',
             'elevenlabs_unlim_api_key',
             'voicemaker_api_key',
@@ -852,6 +929,7 @@ class TemplatesTab(QWidget):
             'googler',       # This is a dictionary
             'elevenlabs_image', # Dictionary
             'assemblyai_api_key',
+            # Explicitly EXCLUDED following user request: 'detailed_logging_enabled', 'accent_color', 'max_download_threads'
             
             # Review Settings
             'translation_review_enabled',
@@ -958,6 +1036,19 @@ class TemplatesTab(QWidget):
                 else:
                     destination[key] = value
             return destination
+
+        # Backward compatibility: Default to Standard mode (0) if template doesn't specify text_split_count
+        if 'text_split_count' not in template_data:
+             settings_manager.settings['text_split_count'] = 0
+
+        # Backward compatibility: Handle missing triggers in old templates
+        if 'languages_config' in template_data:
+            for lang_id, lang_cfg in template_data['languages_config'].items():
+                if 'overlay_triggers' not in lang_cfg:
+                    # Ensure we don't carry over triggers if the template explicitly lacks them
+                    current_cfg = settings_manager.settings.get('languages_config', {}).get(lang_id, {})
+                    if isinstance(current_cfg, dict):
+                        current_cfg['overlay_triggers'] = []
 
         # Perform a deep merge
         deep_merge(template_data, settings_manager.settings)

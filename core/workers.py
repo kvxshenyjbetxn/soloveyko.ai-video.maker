@@ -141,7 +141,12 @@ class ImagePromptWorker(BaseWorker):
             # Ideally, the system prompt should adapt. 
             # If we are in segmented mode, we append a specific instruction if not present.
             
-            base_prompt = img_prompt_settings.get('prompt', '')
+            if is_list:
+                # Targeted sync prompt or fallback to legacy
+                base_prompt = img_prompt_settings.get('prompt_sync') or img_prompt_settings.get('prompt', '')
+            else:
+                # Targeted standard prompt or fallback to legacy
+                base_prompt = img_prompt_settings.get('prompt_standard') or img_prompt_settings.get('prompt', '')
             
             if is_list:
                 # Modifying the system prompt slightly to ensure we get exactly one visual description

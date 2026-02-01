@@ -116,7 +116,9 @@ SETTINGS_METADATA = {
         'max_threads': {'type': 'int', 'min': 1, 'max': 25, 'label': 'max_threads'}
     },
      'image_prompt_settings': {
-        'prompt': {'type': 'text_edit_button'},
+        'prompt': {'type': 'text_edit_button', 'label': 'prompt_fallback_label'},
+        'prompt_standard': {'type': 'text_edit_button', 'label': 'prompt_standard_label'},
+        'prompt_sync': {'type': 'text_edit_button', 'label': 'prompt_sync_label'},
         'model': {'type': 'model_selection'},
         'max_tokens': {'type': 'int', 'min': 0, 'max': 128000},
         'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
@@ -131,8 +133,8 @@ SETTINGS_METADATA = {
     'languages_config': {
         'prompt': {'type': 'text_edit_button'},
         'model': {'type': 'model_selection'},
-        'max_tokens': {'type': 'int', 'min': 0, 'max': 128000},
-        'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
+        'max_tokens': {'type': 'int', 'min': 0, 'max': 128000, 'label': 'tokens_translation_label'},
+        'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1, 'label': 'temperature_translation_label'},
         'background_music_path': {'type': 'file_path'},
         'background_music_volume': {'type': 'int', 'min': 0, 'max': 100},
         'tts_provider': {'type': 'choice', 'options': ["ElevenLabs", "VoiceMaker", "GeminiTTS", "EdgeTTS", "ElevenLabsUnlim"]},
@@ -146,8 +148,8 @@ SETTINGS_METADATA = {
         'default_template': {'type': 'str'}, 
         'rewrite_prompt': {'type': 'text_edit_button'}, # Added missing keys compared to TAB
         'rewrite_model': {'type': 'model_selection'},
-        'rewrite_max_tokens': {'type': 'int', 'min': 0, 'max': 128000},
-        'rewrite_temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
+        'rewrite_max_tokens': {'type': 'int', 'min': 0, 'max': 128000, 'label': 'tokens_rewrite_label'},
+        'rewrite_temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1, 'label': 'temperature_rewrite_label'},
         'watermark_size': {'type': 'int', 'min': 1, 'max': 100},
         'watermark_position': {'type': 'choice', 'options': ["Top Left", "Top Center", "Top Right", "Center Left", "Center", "Center Right", "Bottom Left", "Bottom Center", "Bottom Right"]},
         'eleven_unlim_settings': {
@@ -156,8 +158,10 @@ SETTINGS_METADATA = {
              'similarity_boost': {'type': 'float', 'min': 0.0, 'max': 1.0, 'step': 0.1},
              'style': {'type': 'float', 'min': 0.0, 'max': 1.0, 'step': 0.1},
              'use_speaker_boost': {'type': 'bool'}
-        }
-    }
+        },
+        'overlay_triggers': {'type': 'overlay_triggers_list', 'label': 'overlay_triggers_label'}, # Complex list, handled as string for now
+    },
+    'text_split_count': {'type': 'int', 'min': 0, 'max': 1000, 'label': 'segment_count_label'},
 }
 
 KEY_TO_TRANSLATION_MAP = {
@@ -247,6 +251,8 @@ KEY_TO_TRANSLATION_MAP = {
 
     # Languages Config keys
     'prompt': 'prompt_label', # "prompt_label": "Промт:",
+    'prompt_standard': 'prompt_standard_label', 
+    'prompt_sync': 'prompt_sync_label',
     
     'background_music_path': 'background_music_label', # "background_music_label": "Фонова музика:",
     'background_music_volume': 'music_volume_label', # "music_volume_label": "Гучність музики:",
@@ -261,8 +267,8 @@ KEY_TO_TRANSLATION_MAP = {
     'default_template': 'default_template_label',
     'rewrite_prompt': 'rewrite_prompt_label',
     'rewrite_model': 'rewrite_model_label',
-    'rewrite_max_tokens': 'tokens_label',
-    'rewrite_temperature': 'rewrite_temperature_label',
+    'rewrite_max_tokens': 'tokens_rewrite_label',
+    'rewrite_temperature': 'temperature_rewrite_label',
     'overlay_effect_path': 'effect_selection_title',
     'watermark_path': 'watermark_group',
     'watermark_size': 'watermark_size_label',
@@ -272,5 +278,8 @@ KEY_TO_TRANSLATION_MAP = {
     'rewrite_review_enabled': 'rewrite_review_label',
     'translation_review_enabled': 'translation_review_label',
     'elevenlabs_unlim_api_key': 'elevenlabs_unlim_api_key',
+
+    'overlay_triggers': 'overlay_triggers_label',
+    'text_split_count': 'segment_count_label',
 }
 
