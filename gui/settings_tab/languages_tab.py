@@ -5,7 +5,8 @@ import copy
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QLineEdit,
     QPushButton, QTextEdit, QComboBox, QLabel, QSplitter, QFormLayout, QGroupBox, QSpinBox, QDoubleSpinBox,
-    QFileDialog, QSlider, QScrollArea
+    QFileDialog, QSlider, QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QGridLayout,
+    QSizePolicy
 )
 from PySide6.QtCore import Qt
 from utils.translator import translator
@@ -20,6 +21,41 @@ if getattr(sys, 'frozen', False):
     BASE_PATH = sys._MEIPASS
 else:
     BASE_PATH = os.path.abspath(".")
+
+class OverlaySettingsDialog(QDialog):
+    def __init__(self, parent=None, x=0, y=0):
+        super().__init__(parent)
+        self.setWindowTitle(translator.translate("overlay_settings_title", "Position Settings"))
+        self.setFixedWidth(250)
+        layout = QVBoxLayout(self)
+
+        content_layout = QGridLayout()
+        
+        content_layout.addWidget(QLabel(translator.translate("trigger_horizontal", "Horizontal (X):")), 0, 0)
+        self.x_spin = QSpinBox()
+        self.x_spin.setRange(-5000, 5000)
+        self.x_spin.setValue(x)
+        content_layout.addWidget(self.x_spin, 0, 1)
+
+        content_layout.addWidget(QLabel(translator.translate("trigger_vertical", "Vertical (Y):")), 1, 0)
+        self.y_spin = QSpinBox()
+        self.y_spin.setRange(-5000, 5000)
+        self.y_spin.setValue(y)
+        content_layout.addWidget(self.y_spin, 1, 1)
+
+        layout.addLayout(content_layout)
+
+        btn_layout = QHBoxLayout()
+        save_btn = QPushButton(translator.translate("save_button", "Save"))
+        save_btn.clicked.connect(self.accept)
+        cancel_btn = QPushButton(translator.translate("cancel_button", "Cancel"))
+        cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(save_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+    def get_values(self):
+        return self.x_spin.value(), self.y_spin.value()
 
 class LanguagesTab(QWidget):
     def __init__(self, main_window=None):
@@ -616,6 +652,48 @@ class LanguagesTab(QWidget):
         
         settings_layout.addRow(effects_group)
 
+        # --- Dynamic Overlays (Triggers) ---
+        self.triggers_group = QGroupBox()
+        self.triggers_help = HelpLabel("overlay_triggers_group")
+        self.triggers_group_title = QLabel(translator.translate("overlay_triggers_group", "Dynamic Overlays (Triggers)"))
+        self.triggers_group_title.setStyleSheet("font-weight: bold;")
+        
+        triggers_title_container = QWidget()
+        triggers_title_layout = QHBoxLayout(triggers_title_container)
+        triggers_title_layout.setContentsMargins(0, 0, 0, 0)
+        triggers_title_layout.setSpacing(5)
+        triggers_title_layout.addWidget(self.triggers_help)
+        triggers_title_layout.addWidget(self.triggers_group_title)
+        
+        triggers_main_layout = QVBoxLayout(self.triggers_group)
+        triggers_main_layout.addWidget(triggers_title_container)
+
+        self.triggers_table = QTableWidget()
+        self.triggers_table.setColumnCount(4)
+        self.triggers_table.setHorizontalHeaderLabels([
+            translator.translate("trigger_column", "Trigger"),
+            translator.translate("type_column", "Type"),
+            translator.translate("file_column", "Effect File"),
+            translator.translate("actions_column", "Actions")
+        ])
+        self.triggers_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.triggers_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive) # Trigger (Interactive)
+        self.triggers_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents) # Type (Auto-fit)
+        self.triggers_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)     # File (Flexible)
+        self.triggers_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents) # Actions (Auto-fit)
+        
+        self.triggers_table.setColumnWidth(0, 200)
+        self.triggers_table.setMinimumHeight(200)
+        self.triggers_table.verticalHeader().setDefaultSectionSize(45)
+        
+        triggers_main_layout.addWidget(self.triggers_table)
+
+        self.add_trigger_button = QPushButton(translator.translate("add_trigger_button", "Add Trigger"))
+        self.add_trigger_button.clicked.connect(self.add_empty_trigger_row)
+        triggers_main_layout.addWidget(self.add_trigger_button)
+
+        settings_layout.addRow(self.triggers_group)
+
 
         scroll_area.setWidget(settings_container)
         right_layout.addWidget(scroll_area)
@@ -1042,6 +1120,9 @@ class LanguagesTab(QWidget):
                 self.watermark_position_combo.setCurrentIndex(pos_index)
             else:
                 self.watermark_position_combo.setCurrentIndex(8)  # Дефолт
+            
+            # Load Overlays Triggers
+            self.load_overlay_triggers(config.get("overlay_triggers", []))
 
 
             self.on_tts_provider_changed(self.tts_provider_combo.currentIndex())
@@ -1188,6 +1269,7 @@ class LanguagesTab(QWidget):
         lang_settings["watermark_path"] = self.watermark_path_input.text()
         lang_settings["watermark_size"] = self.watermark_size_slider.value()
         lang_settings["watermark_position"] = self.watermark_position_combo.currentData()
+        lang_settings["overlay_triggers"] = self.get_overlay_triggers_from_table()
 
 
         # Explicitly save the entire settings file
@@ -1211,6 +1293,14 @@ class LanguagesTab(QWidget):
         self.load_models()
         self.load_elevenlabs_templates()
         self.load_templates_combo()
+        
+        # Triggers column headers
+        self.triggers_table.setHorizontalHeaderLabels([
+            translator.translate("trigger_column", "Trigger"),
+            translator.translate("type_column", "Type"),
+            translator.translate("file_column", "Effect File"),
+            translator.translate("actions_column", "Actions")
+        ])
 
         # Try to restore selection
         if current_lang_text:
@@ -1298,3 +1388,177 @@ class LanguagesTab(QWidget):
 
         self.tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
         self.rewrite_tokens_spinbox.setSpecialValueText(translator.translate("maximum_tokens", "Maximum"))
+
+        self.triggers_group_title.setText(translator.translate("overlay_triggers_group", "Dynamic Overlays (Triggers)"))
+        self.add_trigger_button.setText(translator.translate("add_trigger_button", "Add Trigger"))
+        
+        # Force table to redraw header translations
+        self.triggers_table.setHorizontalHeaderLabels([
+            translator.translate("trigger_column", "Trigger"),
+            translator.translate("type_column", "Type"),
+            translator.translate("file_column", "Effect File"),
+            translator.translate("actions_column", "Actions")
+        ])
+
+    def add_empty_trigger_row(self):
+        self.add_trigger_to_table({
+            "type": "text",
+            "value": "",
+            "path": ""
+        })
+        self.save_current_language_settings()
+
+    def add_trigger_to_table(self, trigger_data):
+        row = self.triggers_table.rowCount()
+        self.triggers_table.insertRow(row)
+
+        # Trigger Value (Phrase or Time)
+        val_input = QLineEdit(trigger_data.get("value", ""))
+        val_input.textChanged.connect(self.save_current_language_settings)
+        self.triggers_table.setCellWidget(row, 0, val_input)
+
+        # Type ComboBox
+        type_combo = QComboBox()
+        type_combo.addItem(translator.translate("trigger_type_text", "Text Phrase"), "text")
+        type_combo.addItem(translator.translate("trigger_type_time", "Time (SS or MM:SS)"), "time")
+        
+        current_type = trigger_data.get("type", "text")
+        idx = type_combo.findData(current_type)
+        if idx >= 0: type_combo.setCurrentIndex(idx)
+        
+        type_combo.currentIndexChanged.connect(self.save_current_language_settings)
+        self.triggers_table.setCellWidget(row, 1, type_combo)
+
+        # Path Selection
+        path_container = QWidget()
+        path_layout = QHBoxLayout(path_container)
+        path_layout.setContentsMargins(2, 2, 2, 2)
+        
+        full_path = trigger_data.get("path", "")
+        path_input = QLineEdit()
+        path_input.setProperty("full_path", full_path)
+        if full_path:
+            path_input.setText(os.path.basename(full_path))
+        
+        path_input.setReadOnly(True)
+        path_input.setPlaceholderText(translator.translate("no_file_selected", "No file selected"))
+        path_input.setToolTip(full_path)
+        path_input.setFixedHeight(30)
+        path_input.setStyleSheet("color: #ffffff; background: #222222; border: 1px solid #555555; padding: 5px; font-size: 12px;")
+        
+        browse_btn = QPushButton(translator.translate("trigger_browse", "Browse"))
+        browse_btn.setFixedHeight(30)
+        browse_btn.setStyleSheet("padding-left: 10px; padding-right: 10px;")
+        browse_btn.clicked.connect(lambda: self.browse_trigger_file(path_input))
+        
+        path_layout.addWidget(path_input)
+        path_layout.addWidget(browse_btn)
+        self.triggers_table.setCellWidget(row, 2, path_container)
+
+        # Actions Layout (Delete + Settings)
+        actions_container = QWidget()
+        actions_layout = QHBoxLayout(actions_container)
+        actions_layout.setContentsMargins(5, 0, 5, 0)
+        actions_layout.setSpacing(10)
+        actions_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        # Settings Button
+        settings_btn = QPushButton(translator.translate("trigger_settings", "Position"))
+        settings_btn.setFixedHeight(30)
+        settings_btn.setStyleSheet("padding-left: 12px; padding-right: 12px;")
+        settings_btn.setToolTip(translator.translate("trigger_settings_tooltip", "Adjust Position"))
+        settings_btn.setProperty("x_offset", trigger_data.get("x", 0))
+        settings_btn.setProperty("y_offset", trigger_data.get("y", 0))
+        settings_btn.clicked.connect(self.open_trigger_settings)
+        
+        # Remove Button
+        remove_btn = QPushButton(translator.translate("trigger_delete", "Delete"))
+        remove_btn.setFixedHeight(30)
+        remove_btn.setStyleSheet("color: #ff4444; font-weight: bold; border: 1px solid #ff4444; background: transparent; padding-left: 12px; padding-right: 12px;")
+        remove_btn.clicked.connect(lambda: self.remove_trigger_row(row))
+        
+        actions_layout.addWidget(settings_btn)
+        actions_layout.addWidget(remove_btn)
+        actions_layout.addStretch() # Stability
+        self.triggers_table.setCellWidget(row, 3, actions_container)
+        
+        # Set trigger row height
+        self.triggers_table.setRowHeight(row, 45)
+
+    def open_trigger_settings(self):
+        button = self.sender()
+        if not button: return
+        
+        x = button.property("x_offset")
+        y = button.property("y_offset")
+        
+        dialog = OverlaySettingsDialog(self, x, y)
+        if dialog.exec():
+            new_x, new_y = dialog.get_values()
+            button.setProperty("x_offset", new_x)
+            button.setProperty("y_offset", new_y)
+            self.save_current_language_settings()
+
+    def browse_trigger_file(self, line_edit):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            translator.translate("effect_selection_title", "Select Overlay Effect"),
+            "",
+            "Media Files (*.mp4 *.mov *.webm *.png *.jpg *.jpeg)"
+        )
+        if file_path:
+            line_edit.setProperty("full_path", file_path)
+            line_edit.setText(os.path.basename(file_path))
+            line_edit.setToolTip(file_path)
+            self.save_current_language_settings()
+
+    def remove_trigger_row(self, row_idx):
+        # Since indexes change after removal, we need a safer way if multiple are deleted,
+        # but for single clicks it's fine.
+        # Actually sending row index to lambda is risky. Better to find row by sender.
+        button = self.sender()
+        if button:
+            # Find row of the button
+            for r in range(self.triggers_table.rowCount()):
+                if self.triggers_table.cellWidget(r, 3) == button:
+                    self.triggers_table.removeRow(r)
+                    self.save_current_language_settings()
+                    break
+
+    def load_overlay_triggers(self, triggers):
+        self.triggers_table.setRowCount(0)
+        for trigger in triggers:
+            self.add_trigger_to_table(trigger)
+
+    def get_overlay_triggers_from_table(self):
+        triggers = []
+        for row in range(self.triggers_table.rowCount()):
+            val_widget = self.triggers_table.cellWidget(row, 0)
+            type_widget = self.triggers_table.cellWidget(row, 1)
+            path_widget_container = self.triggers_table.cellWidget(row, 2)
+            
+                # Actions container is for offsets
+            actions_widget = self.triggers_table.cellWidget(row, 3)
+            settings_btn = actions_widget.findChild(QPushButton) if actions_widget else None
+            x_off = settings_btn.property("x_offset") if settings_btn else 0
+            y_off = settings_btn.property("y_offset") if settings_btn else 0
+            
+            if val_widget and type_widget and path_widget_container:
+                val = val_widget.text().strip()
+                trigger_type = type_widget.currentData()
+                
+                # Path input is first child of layout
+                path_input = path_widget_container.findChild(QLineEdit)
+                path = path_input.property("full_path") if path_input else ""
+                if not path and path_input:
+                    path = path_input.text()
+                
+                if val or path:
+                    triggers.append({
+                        "type": trigger_type,
+                        "value": val,
+                        "path": path,
+                        "x": x_off,
+                        "y": y_off
+                    })
+        return triggers

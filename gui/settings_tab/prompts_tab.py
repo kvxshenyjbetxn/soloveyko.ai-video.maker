@@ -470,6 +470,21 @@ class PromptsTab(QWidget):
     def on_mode_changed(self):
         is_sync = self.generation_mode_combo.currentIndex() == 1
         
+        # Switch prompt based on mode
+        if not self.is_loading:
+            self.prompt_edit.blockSignals(True)
+            if is_sync:
+                # Switching to Sync mode
+                prompt = self.settings.get("image_prompt_settings.prompt_sync")
+                self.prompt_edit.setPlainText(prompt)
+            else:
+                # Switching to Standard mode
+                prompt = self.settings.get("image_prompt_settings.prompt_standard")
+                if not prompt:
+                    prompt = self.settings.get("image_prompt_settings.prompt")
+                self.prompt_edit.setPlainText(prompt)
+            self.prompt_edit.blockSignals(False)
+        
         # Sync Mode: Show Segments Count, Hide Prompt Count
         # Standard Mode: Hide Segments Count, Show Prompt Count
         
@@ -512,7 +527,19 @@ class PromptsTab(QWidget):
         self.text_split_count_spinbox.blockSignals(True)
         self.prompt_count_spinbox.blockSignals(True)
 
-        self.prompt_edit.setPlainText(config.get("prompt", ""))
+        # Logic: Determine mode first to load correct prompt
+        split_count = self.settings.get('text_split_count', 0)
+        is_sync = split_count > 0
+        
+        if is_sync:
+            prompt = self.settings.get("image_prompt_settings.prompt_sync")
+        else:
+            prompt = self.settings.get("image_prompt_settings.prompt_standard")
+            if not prompt:
+                prompt = self.settings.get("image_prompt_settings.prompt")
+            
+        self.prompt_edit.setPlainText(prompt)
+        
         self.load_models()
         current_model = config.get("model", "")
         index = self.model_combo.findText(current_model)
@@ -611,12 +638,23 @@ class PromptsTab(QWidget):
         if hasattr(self, 'is_loading') and self.is_loading:
             return
 
-        config = {
-            "prompt": self.prompt_edit.toPlainText(),
-            "model": self.model_combo.currentText(),
-            "max_tokens": self.tokens_spinbox.value(),
-            "temperature": self.temperature_spinbox.value()
-        }
+        is_sync = self.generation_mode_combo.currentIndex() == 1
+        config = self.settings.get("image_prompt_settings", {})
+        
+        current_prompt = self.prompt_edit.toPlainText()
+        
+        # Save to specific mode slots
+        if is_sync:
+            config["prompt_sync"] = current_prompt
+        else:
+            config["prompt_standard"] = current_prompt
+            
+        # Keep main 'prompt' key updated for current behavior
+        config["prompt"] = current_prompt
+        
+        config["model"] = self.model_combo.currentText()
+        config["max_tokens"] = self.tokens_spinbox.value()
+        config["temperature"] = self.temperature_spinbox.value()
         self.settings.set("image_prompt_settings", config)
         
         # Save Logic:
