@@ -430,7 +430,7 @@ class VideoMixin:
                                     break
                                 else:
                                     if retry_attempt < 4:
-                                        logger.log(f"[{task_id}] Waiting for images to appear... (attempt {retry_attempt+1}/5)", level=LogLevel.INFO)
+                                        # logger.log(f"[{task_id}] Waiting for images to appear... (attempt {retry_attempt+1}/5)", level=LogLevel.INFO)
                                         time.sleep(1.0)
                             
                             if first_valid:
@@ -439,7 +439,7 @@ class VideoMixin:
                                 last_valid_image = first_valid # Set as valid so subsequent gaps use it too
                             else:
                                 # No images at all?
-                                logger.log(f"[{task_id}] No images found for synchronization! (Checked {len(text_chunks)} expected files)", level=LogLevel.ERROR)
+                                # logger.log(f"[{task_id}] No images found for synchronization! (Checked {len(text_chunks)} expected files)", level=LogLevel.ERROR)
                                 break
                 
                 # Update final_image_paths to our new gap-filled list
