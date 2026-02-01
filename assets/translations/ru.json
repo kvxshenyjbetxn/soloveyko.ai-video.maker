@@ -511,5 +511,22 @@
     "languages_label": "Языки",
     "retry_task": "Повторить",
     "recent_tasks_footer": "Нажмите на задачу, чтобы быстро заполнить данные для повторного запуска.",
-    "recent_tasks_close_hint": "Чтобы закрыть, перетяните разделитель влево."
+    "recent_tasks_close_hint": "Чтобы закрыть, перетяните разделитель влево.",
+    "overlay_triggers_group": "Триггеры эффектов (По событию)",
+    "trigger_column": "Триггер (Фраза или Время)",
+    "type_column": "Тип",
+    "file_column": "Файл эффекта",
+    "actions_column": "Действия",
+    "add_trigger_button": "+ Добавить триггер",
+    "trigger_type_text": "Фраза в тексте",
+    "trigger_type_time": "Время (SS или MM:SS)",
+    "trigger_browse": "Выбрать",
+    "trigger_delete": "Удалить",
+    "no_file_selected": "Файл не выбран",
+    "overlay_settings_title": "Настройка положения",
+    "trigger_settings": "Положение",
+    "trigger_settings_tooltip": "Сдвинуть эффект по осям",
+    "cancel_button": "Отмена",
+    "trigger_horizontal": "Горизонталь (X):",
+    "trigger_vertical": "Вертикаль (Y):"
 }

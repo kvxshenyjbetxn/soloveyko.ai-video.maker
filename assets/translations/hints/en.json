@@ -89,5 +89,6 @@
     "mass_edit_hint": "This button allows you to mass edit a single parameter across multiple templates simultaneously. For example, if you want to change the translation model to 'gpt-4o' in all your templates, simply select the 'Translation Model' parameter, specify the new value, and choose the templates to apply the changes to.",
     "preview_prompt_tooltip": "Template for generating image prompts. Use {story} for the text and {title} for the task name.",
     "preview_image_count_tooltip": "Number of images to generate (1-4).",
-    "initial_video_label": "Select a video file that will be played at the very beginning of the montage. After this video finishes, there will be a 1-second pause (freeze-frame) before the main audio and images start. Useful for intros or channel branding."
+    "initial_video_label": "Select a video file that will be played at the very beginning of the montage. After this video finishes, there will be a 1-second pause (freeze-frame) before the main audio and images start. Useful for intros or channel branding.",
+    "overlay_triggers_group": "📅 Dynamic Overlays (Triggers)\n\nAllows applying visual effects or images at specific moments in the video.\n\nTrigger Types:\n- Text Phrase: Effect appears when the narrator says the phrase (detected via subtitles).\n- Time: Effect appears at a specific second (e.g., '15' or '01:30').\n\nEffect file must be a video (preferably with alpha channel) or an image. Duration is determined by the file length (or 5s for images)."
 }

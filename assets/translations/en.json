@@ -510,5 +510,22 @@
     "languages_label": "Languages",
     "retry_task": "Retry",
     "recent_tasks_footer": "Click on a task to quickly fill data for re-run/restoration.",
-    "recent_tasks_close_hint": "To close, drag the splitter to the left."
+    "recent_tasks_close_hint": "To close, drag the splitter to the left.",
+    "overlay_triggers_group": "Overlay Triggers",
+    "trigger_column": "Trigger (Phrase or Time)",
+    "type_column": "Type",
+    "file_column": "Effect File",
+    "actions_column": "Actions",
+    "add_trigger_button": "+ Add Trigger",
+    "trigger_type_text": "Text Phrase",
+    "trigger_type_time": "Time (SS or MM:SS)",
+    "trigger_browse": "Browse",
+    "trigger_delete": "Delete",
+    "no_file_selected": "No file selected",
+    "overlay_settings_title": "Position Settings",
+    "trigger_settings": "Position",
+    "trigger_settings_tooltip": "Shift effect along axes",
+    "cancel_button": "Cancel",
+    "trigger_horizontal": "Horizontal (X):",
+    "trigger_vertical": "Vertical (Y):"
 }

@@ -516,5 +516,22 @@
     "languages_label": "Мови",
     "retry_task": "Повторити",
     "recent_tasks_footer": "Натисніть на завдання, щоб швидко заповнити дані для повторного запуску.",
-    "recent_tasks_close_hint": "Щоб закрити, перетягніть роздільник вліво."
+    "recent_tasks_close_hint": "Щоб закрити, перетягніть роздільник вліво.",
+    "overlay_triggers_group": "Тригери ефектів (По події)",
+    "trigger_column": "Тригер (Фраза або Час)",
+    "type_column": "Тип",
+    "file_column": "Файл ефекту",
+    "actions_column": "Дії",
+    "add_trigger_button": "+ Додати тригер",
+    "trigger_type_text": "Фраза в тексті",
+    "trigger_type_time": "Час (SS або MM:SS)",
+    "trigger_browse": "Вибрати",
+    "trigger_delete": "Видалити",
+    "no_file_selected": "Файл не обрано",
+    "overlay_settings_title": "Налаштування положення",
+    "trigger_settings": "Положення",
+    "trigger_settings_tooltip": "Зсунути ефект по осях",
+    "cancel_button": "Скасувати",
+    "trigger_horizontal": "Горизонталь (X):",
+    "trigger_vertical": "Вертикаль (Y):"
 }

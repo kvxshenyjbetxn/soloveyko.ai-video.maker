@@ -235,6 +235,7 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                      current_settings['montage']['watermark_path'] = merged_lang_config.get('watermark_path')
                      current_settings['montage']['watermark_size'] = merged_lang_config.get('watermark_size', 20)
                      current_settings['montage']['watermark_position'] = merged_lang_config.get('watermark_position', 8)
+                     current_settings['montage']['overlay_triggers'] = merged_lang_config.get('overlay_triggers', [])
 
                 state = TaskState(job, lang_id, lang_data, base_save_path, current_settings)
                 state.start_time = datetime.now()
@@ -432,6 +433,11 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
             
             if worker_class.__name__ == 'VideoGenerationWorker':
                 should_skip = False
+                # Update montage configuration from the latest language settings before starting
+                # This ensures newer triggers are applied even when using existing files
+                if config and 'overlay_triggers' in config:
+                    state.settings['montage']['overlay_triggers'] = config.get('overlay_triggers', [])
+                    logger.log(f"[{task_id}] Injected {len(state.settings['montage']['overlay_triggers'])} triggers into Montage settings.", level=LogLevel.INFO)
             elif stage_key == 'stage_preview':
                 if worker_class.__name__ == 'PreviewWorker':
                     prompts_file = os.path.join(file_path, "preview_prompts.txt") if file_path and os.path.isdir(file_path) else file_path
@@ -500,6 +506,12 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                 return
             else:
                  logger.log(f"[{task_id}] Found partial data for '{stage_key}', but proceeding with {worker_class.__name__} to ensure completeness.", level=LogLevel.INFO)
+
+        if worker_class.__name__ == 'VideoGenerationWorker':
+            # Always ensure montage configuration has the latest triggers from current language settings
+            if config and 'overlay_triggers' in config:
+                state.settings['montage']['overlay_triggers'] = config.get('overlay_triggers', [])
+                logger.log(f"[{task_id}] Updated Montage settings with {len(state.settings['montage']['overlay_triggers'])} triggers from language config.", level=LogLevel.INFO)
 
         self.stage_status_changed.emit(self.task_states[task_id].job_id, self.task_states[task_id].lang_id, stage_key, 'processing')
         worker = worker_class(task_id, config)

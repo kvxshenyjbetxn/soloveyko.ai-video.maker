@@ -355,6 +355,66 @@ class MontageEngine:
             filter_parts.append(overlay_cmd)
             final_v = v_overlaid
 
+        # 6.5. DYNAMIC TRIGGER OVERLAYS
+        overlay_triggers = settings.get('overlay_triggers', [])
+        if overlay_triggers:
+            logger.log(f"{prefix}[FFmpeg] Processing {len(overlay_triggers)} potential overlay triggers.", level=LogLevel.INFO)
+            for i, trigger in enumerate(overlay_triggers):
+                t_type = trigger.get('type', 'text')
+                t_val = trigger.get('value', '')
+                t_path = trigger.get('path', '')
+                
+                if not t_path or not os.path.exists(t_path):
+                    continue
+                
+                start_time = None
+                if t_type == 'time':
+                    start_time = self._parse_time(t_val)
+                else: # text
+                    start_time = self._get_text_timing(ass_path, t_val, prefix)
+                
+                if start_time is None:
+                    logger.log(f"{prefix}[FFmpeg] Trigger '{t_val}' NOT applied: Could not determine start time.", level=LogLevel.WARNING)
+                    continue
+
+                logger.log(f"{prefix}[FFmpeg] Trigger '{t_val}' found/set at {start_time:.2f}s. Applying effect: {os.path.basename(t_path)}", level=LogLevel.INFO)
+
+                # Add input
+                abs_t_path = os.path.abspath(t_path).replace("\\", "/")
+                inputs.extend(["-thread_queue_size", "4096", "-i", abs_t_path])
+                trig_index = current_input_count
+                current_input_count += 1
+                
+                # Get extension to decide behavior
+                ext = os.path.splitext(t_path)[1].lower()
+                is_image = ext in IMAGE_EXTS
+                
+                trig_v_ready = f"[v_trig_{i}_ready]"
+                s_str = fmt(start_time)
+                
+                # Apply format, scale and pts
+                scale_trig = (
+                    f"[{trig_index}:v]format=yuva420p,scale={base_w}:{base_h}:force_original_aspect_ratio=increase,"
+                    f"crop={base_w}:{base_h},setpts=PTS-STARTPTS+{s_str}/TB{trig_v_ready}"
+                )
+                filter_parts.append(scale_trig)
+                
+                v_trig_out = f"[v_trig_{i}_out]"
+                off_x = trigger.get('x', 0)
+                off_y = trigger.get('y', 0)
+                
+                if is_image:
+                    # For images, we use a fixed 5s duration
+                    e_str = fmt(start_time + 5.0)
+                    overlay_trig = f"{final_v}{trig_v_ready}overlay={off_x}:{off_y}:enable='between(t,{s_str},{e_str})'{v_trig_out}"
+                else:
+                    # For videos, play until end of file (natural duration)
+                    # eof_action=pass ensures it disappears when animation ends
+                    overlay_trig = f"{final_v}{trig_v_ready}overlay={off_x}:{off_y}:eof_action=pass:enable='gte(t,{s_str})'{v_trig_out}"
+                
+                filter_parts.append(overlay_trig)
+                final_v = v_trig_out
+
         # 7. WATERMARK
         if watermark_path and os.path.exists(watermark_path):
             logger.log(f"{prefix}[FFmpeg] Adding watermark: {os.path.basename(watermark_path)}", level=LogLevel.INFO)
@@ -710,3 +770,70 @@ class MontageEngine:
             return 0
         except:
             return 0
+            
+    def _get_text_timing(self, ass_path, phrase, prefix=""):
+        if not ass_path or not os.path.exists(ass_path) or not phrase:
+            logger.log(f"{prefix}[FFmpeg] Cannot search for phrase: ASS path missing or empty phrase.", level=LogLevel.WARNING)
+            return None
+        
+        # Normalize search phrase: lower case and remove punctuation
+        search_phrase = re.sub(r'[^\w\s]', '', phrase.lower()).strip()
+        if not search_phrase:
+            return None
+
+        try:
+            with open(ass_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            for line in lines:
+                if line.startswith('Dialogue:'):
+                    parts = line.split(',', 9)
+                    if len(parts) >= 10:
+                        start_str = parts[1].strip()
+                        text = parts[9].lower()
+                        
+                        # Clean ASS tags
+                        clean_text = re.sub(r'\{.*?\}', '', text).strip()
+                        # Normalize line text for comparison
+                        norm_line = re.sub(r'[^\w\s]', '', clean_text).strip()
+                        
+                        if not norm_line:
+                            continue
+                            
+                        # If the subtitle line is part of the trigger phrase (or vice-versa)
+                        # We use a 10-char minimum to avoid false positives on short words
+                        if (norm_line in search_phrase or search_phrase in norm_line) and len(norm_line) > 8:
+                            t = self._parse_ass_time(start_str)
+                            logger.log(f"{prefix}[FFmpeg] Match found! Subtitle line '{clean_text}' matches trigger part. Timing: {t}s", level=LogLevel.INFO)
+                            return t
+        except Exception as e:
+            logger.log(f"Error parsing ASS timing: {e}", level=LogLevel.ERROR)
+            
+        return None
+
+    def _parse_ass_time(self, time_str):
+        # Format usually H:MM:SS.cc
+        try:
+            parts = time_str.split(':')
+            if len(parts) == 3:
+                h, m, s = parts
+                return int(h) * 3600 + int(m) * 60 + float(s)
+            return 0.0
+        except:
+            return 0.0
+
+    def _parse_time(self, time_str):
+        if not time_str: return 0.0
+        try:
+            # Handle float seconds
+            if ':' not in str(time_str):
+                return float(time_str)
+            
+            parts = str(time_str).split(':')
+            if len(parts) == 2: # MM:SS
+                return int(parts[0]) * 60 + float(parts[1])
+            elif len(parts) == 3: # HH:MM:SS
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+            return 0.0
+        except:
+            return 0.0

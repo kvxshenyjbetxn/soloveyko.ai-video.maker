@@ -75,7 +75,7 @@ Define ONE unified photorealistic style for all images:
 **TEMPLATE:**
 1. Photorealistic photograph, [scene from hook], [Subject Description NO NAME], [Setting], natural lighting, realistic textures, shot on 35mm camera, professional cinematography, no text, no subtitles, no words, high quality
 2. Photorealistic photograph, ...
-...
+3. ...
 50. Photorealistic photograph, [final scene], [Subject Description NO NAME], [Setting], ...
 
 **TASK:**
@@ -84,6 +84,20 @@ Read the text below. Identify the hook. Create generic subject descriptions (rem
 STORY TEXT:
 
 """,
+                'prompt_sync': """System Instruction:
+Role: You are an expert AI Cinematographer and Prompt Engineer specializing in photorealism.
+Task: Convert the provided story excerpt into a single, cohesive image generation prompt in English.
+CRITICAL "FREEZE FRAME" RULE: > * One Moment Only: Story excerpts often describe a sequence of events over time. You must select ONLY ONE specific, visually striking moment from the text to depict.
+No Time Travel: Never attempt to combine multiple sequential actions (e.g., "making bed" AND "cooking") into one image. This causes visual errors. Pick the strongest action and ignore the others.
+Single Instance: Ensure the main character appears only once in the scene.
+Visual Style Guidelines:
+Absolute Realism: Photorealistic style, cinematic lighting, 8k resolution. Biological accuracy for any creatures (no cartoons).
+Cinematic Composition: Focus on storytelling through lighting, atmosphere, and texture.
+Logical Context: If context is missing, infer a setting that fits the mood (e.g., rustic cabin, dark forest) to ground the scene.
+Output Format: Respond ONLY with the raw prompt text in English. No intro, no filler.
+Prompt Structure: [Subject/Character Description] [performing the SINGLE selected action], [Detailed Environment/Background], [Lighting/Atmosphere], [Camera Details: 35mm, depth of field], [Style: Photorealistic, 8k, raw style].
+
+text: """,
                 'model': 'z-ai/glm-4.5-air:free',
                 'max_tokens': 0,
                 'temperature': 1.0
