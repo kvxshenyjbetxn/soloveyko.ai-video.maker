@@ -37,6 +37,18 @@ def retry(tries=3, delay=5, backoff=2):
     return deco_retry
 
 class OpenRouterAPI:
+    _semaphore = None
+    _max_threads_cached = -1
+
+    @classmethod
+    def get_semaphore(cls):
+        max_threads = settings_manager.get("openrouter_max_threads", 5)
+        if cls._semaphore is None or max_threads != cls._max_threads_cached:
+            cls._semaphore = threading.Semaphore(max_threads)
+            cls._max_threads_cached = max_threads
+            logger.log(f"OpenRouter global semaphore initialized with {max_threads} threads.", level=LogLevel.DEBUG)
+        return cls._semaphore
+
     def __init__(self, api_key=None):
         self.api_key = api_key or settings_manager.get("openrouter_api_key")
         self.base_url = "https://openrouter.ai/api/v1"
@@ -49,14 +61,15 @@ class OpenRouterAPI:
         kwargs["headers"] = headers
         
         try:
-            # Use thread-local session
-            session = get_session()
-            response = session.request(method, f"{self.base_url}/{endpoint}", **kwargs)
-            if response.status_code == 200:
-                return response.json(), "connected"
-            else:
-                logger.log(f"API request to {endpoint} failed with status {response.status_code}: {response.text}", level=LogLevel.ERROR)
-                return None, "error"
+            with self.get_semaphore():
+                # Use thread-local session
+                session = get_session()
+                response = session.request(method, f"{self.base_url}/{endpoint}", **kwargs)
+                if response.status_code == 200:
+                    return response.json(), "connected"
+                else:
+                    logger.log(f"API request to {endpoint} failed with status {response.status_code}: {response.text}", level=LogLevel.ERROR)
+                    return None, "error"
         except requests.exceptions.RequestException as e:
             logger.log(f"API request to {endpoint} failed: {e}", level=LogLevel.ERROR)
             return None, "error"
@@ -124,32 +137,33 @@ class OpenRouterAPI:
                 {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
             ]
 
-        logger.log(f"Requesting chat completion from model: {model}", level=LogLevel.INFO)
-        
-        try:
-            # Use thread-local session
-            session = get_session()
-            response = session.post(f"{self.base_url}/chat/completions", headers=headers, json=data)
-            
-            if response.status_code != 200:
-                error_body = response.text
-                try:
-                    error_json = response.json()
-                    if "error" in error_json:
-                        error_body = error_json["error"].get("message", error_body)
-                except:
-                    pass
+        with self.get_semaphore():
+            time.sleep(0.5)
+            logger.log(f"Requesting chat completion from model: {model}", level=LogLevel.INFO)
+            try:
+                # Use thread-local session
+                session = get_session()
+                response = session.post(f"{self.base_url}/chat/completions", headers=headers, json=data)
                 
-                error_msg = f"OpenRouter Error {response.status_code}: {error_body}"
-                # If we exhausted retries or it's a fatal error, the decorator will eventually let this bubble up
-                raise Exception(error_msg)
+                if response.status_code != 200:
+                    error_body = response.text
+                    try:
+                        error_json = response.json()
+                        if "error" in error_json:
+                            error_body = error_json["error"].get("message", error_body)
+                    except:
+                        pass
+                    
+                    error_msg = f"OpenRouter Error {response.status_code}: {error_body}"
+                    # If we exhausted retries or it's a fatal error, the decorator will eventually let this bubble up
+                    raise Exception(error_msg)
 
-            logger.log(f"Chat completion from {model} successful.", level=LogLevel.SUCCESS)
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            error_msg = f"An error occurred during chat completion request: {e}"
-            if hasattr(e, 'response') and e.response is not None:
-                 error_msg += f"\nResponse status: {e.response.status_code}"
-                 error_msg += f"\nBody: {e.response.text}"
-            logger.log(error_msg, level=LogLevel.ERROR)
-            raise Exception(error_msg)
+                logger.log(f"Chat completion from {model} successful.", level=LogLevel.SUCCESS)
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                error_msg = f"An error occurred during chat completion request: {e}"
+                if hasattr(e, 'response') and e.response is not None:
+                     error_msg += f"\nResponse status: {e.response.status_code}"
+                     error_msg += f"\nBody: {e.response.text}"
+                logger.log(error_msg, level=LogLevel.ERROR)
+                raise Exception(error_msg)
