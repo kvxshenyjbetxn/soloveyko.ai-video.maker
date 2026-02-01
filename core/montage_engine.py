@@ -6,6 +6,7 @@ import tempfile
 import re
 import platform
 import random
+import difflib
 from utils.logger import logger, LogLevel
 
 class MontageEngine:
@@ -776,36 +777,89 @@ class MontageEngine:
             logger.log(f"{prefix}[FFmpeg] Cannot search for phrase: ASS path missing or empty phrase.", level=LogLevel.WARNING)
             return None
         
-        # Normalize search phrase: lower case and remove punctuation
-        search_phrase = re.sub(r'[^\w\s]', '', phrase.lower()).strip()
-        if not search_phrase:
+        # Helper for cleaning text
+        def clean(s):
+            # Lowercase, remove punctuation, keep spaces to separate words
+            s = s.lower()
+            s = s.replace('ё', 'е')
+            s = re.sub(r'[^\w\s]', '', s)
+            return re.sub(r'\s+', ' ', s).strip()
+
+        cleaned_phrase = clean(phrase)
+        if not cleaned_phrase:
             return None
+
+        # Optimization: Focus on the "Anchor" (beginning of the trigger) to find the start time.
+        # If the trigger is long, we only care about when it STARTS.
+        # We take first 4 words. 8 words was too long and often spanned across subtitle lines.
+        words = cleaned_phrase.split()
+        anchor_len = min(len(words), 4)
+        anchor_text = " ".join(words[:anchor_len])
+        
+        # Fallback if specific anchor is too short (less than 4 chars total)
+        if len(anchor_text) < 4: 
+            anchor_text = cleaned_phrase
+
+        logger.log(f"{prefix}[FFmpeg] Searching for anchor: '{anchor_text}' (fuzzy)", level=LogLevel.DEBUG)
 
         try:
             with open(ass_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
+            
+            best_match_time = None
+            best_match_ratio = 0.0
             
             for line in lines:
                 if line.startswith('Dialogue:'):
                     parts = line.split(',', 9)
                     if len(parts) >= 10:
                         start_str = parts[1].strip()
-                        text = parts[9].lower()
+                        raw_text = parts[9]
                         
-                        # Clean ASS tags
-                        clean_text = re.sub(r'\{.*?\}', '', text).strip()
-                        # Normalize line text for comparison
-                        norm_line = re.sub(r'[^\w\s]', '', clean_text).strip()
+                        # Clean subtitle content
+                        sub_text = re.sub(r'\{.*?\}', '', raw_text) # remove tags
+                        cleaned_sub = clean(sub_text)
                         
-                        if not norm_line:
-                            continue
+                        if not cleaned_sub: continue
+                        
+                        # Fuzzy Check: Is Anchor in Subtitle?
+                        # 1. Quick substring check (if exact match)
+                        if anchor_text in cleaned_sub:
+                            logger.log(f"{prefix}[FFmpeg] Exact match for anchor in: '{cleaned_sub}'", level=LogLevel.DEBUG)
+                            return self._parse_ass_time(start_str)
+
+                        # 2. Fuzzy match using SequenceMatcher
+                        # We verify if the cleaned_sub contains the anchor with high similarity
+                        s = difflib.SequenceMatcher(None, cleaned_sub, anchor_text)
+                        match = s.find_longest_match(0, len(cleaned_sub), 0, len(anchor_text))
+                        
+                        if match.size > 0:
+                            # Check the ratio of the matched block vs the anchor length
+                            # Lower threshold to 0.6 to capture matches with typos (e.g. 15/20 chars matched = 0.75)
+                            coverage = match.size / len(anchor_text)
                             
-                        # If the subtitle line is part of the trigger phrase (or vice-versa)
-                        # We use a 10-char minimum to avoid false positives on short words
-                        if (norm_line in search_phrase or search_phrase in norm_line) and len(norm_line) > 8:
-                            t = self._parse_ass_time(start_str)
-                            logger.log(f"{prefix}[FFmpeg] Match found! Subtitle line '{clean_text}' matches trigger part. Timing: {t}s", level=LogLevel.INFO)
-                            return t
+                            if coverage >= 0.6: 
+                                # Double check with ratio on the specific window to handle typos inside the block
+                                # Correctly offset back if we matched a suffix of the anchor
+                                start_idx = max(0, match.a - match.b)
+                                end_idx = min(start_idx + len(anchor_text) + 5, len(cleaned_sub))
+                                sub_window = cleaned_sub[start_idx:end_idx]
+                                
+                                ratio = difflib.SequenceMatcher(None, sub_window, anchor_text).ratio()
+                                
+                                if ratio > 0.75: # Slightly lower ratio requirement for the window
+                                    # If this match is better than previous best, keep it
+                                    if ratio > best_match_ratio:
+                                        best_match_ratio = ratio
+                                        best_match_time = self._parse_ass_time(start_str)
+                                        # If very high confidence, stop early
+                                        if ratio > 0.95:
+                                            break
+            
+            if best_match_time is not None:
+                logger.log(f"{prefix}[FFmpeg] Fuzzy match found! Ratio: {best_match_ratio:.2f}. Timing: {best_match_time}s", level=LogLevel.INFO)
+                return best_match_time
+
         except Exception as e:
             logger.log(f"Error parsing ASS timing: {e}", level=LogLevel.ERROR)
             
