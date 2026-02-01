@@ -127,6 +127,7 @@ text: """,
                 'enhance': False
             },
             'openrouter_api_key': '',
+            'openrouter_max_threads': 5,
             'ai_assistant_model': 'openai/gpt-4o-mini',
             'openrouter_models': ['z-ai/glm-4.5-air:free', 'google/gemini-2.5-flash', 'openai/gpt-4o-mini'],
             'subtitles': {
