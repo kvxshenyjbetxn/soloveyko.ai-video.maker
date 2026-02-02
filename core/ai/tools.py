@@ -58,48 +58,17 @@ class ToolRegistry:
         """Повертає список інструментів у форматі OpenAI API."""
         return [tool.to_schema() for tool in self._tools.values()]
 
-class SetImageProviderTool(BaseTool):
-    """Інструмент для зміни провайдера генерації зображень."""
-    name = "set_image_provider"
-    description = "Змінює сервіс (провайдера) для генерації зображень. Використовуйте це ТІЛЬКИ після явного погодження з користувачем."
 
-    def run(self, provider: str) -> str:
-        valid_providers = ['pollinations', 'googler', 'elevenlabs_image']
-        if provider not in valid_providers:
-             return f"Помилка: Невідомий провайдер '{provider}'. Доступні: {', '.join(valid_providers)}"
-        
-        from utils.settings import settings_manager
-        settings_manager.set('image_generation_provider', provider)
-        
-        # Сповіщаємо інтерфейс про необхідність оновлення
-        from core.signals import global_signals
-        global_signals.request_ui_refresh.emit()
-        
-        return f"Успішно змінено провайдер генерації зображень на '{provider}'. Будь ласка, перезавантажте сторінку або перевірте налаштування, щоб побачити зміни."
-
-    def get_parameters_schema(self) -> Dict[str, Any]:
-        return {
-            "type": "object", 
-            "properties": {
-                "provider": {
-                    "type": "string",
-                    "enum": ['pollinations', 'googler', 'elevenlabs_image'],
-                    "description": "Назва провайдера (pollinations, googler, або elevenlabs_image)"
-                }
-            }, 
-            "required": ["provider"]
-        }
 
 class SearchDocsTool(BaseTool):
     """Інструмент для пошуку в документації."""
     name = "search_docs"
-    description = "Шукає інформацію у внутрішній документації програми. Використовуй це, коли користувач питає деталі про функції (наприклад, Googler, Pollinations), а ти не знаєш відповіді."
+    description = "Шукає інформацію у внутрішній документації програми."
 
     def run(self, query: str) -> str:
         import os
         
         # Визначаємо шлях до папки з документами
-        # Припускаємо, що tools.py знаходиться в core/ai/
         base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         docs_path = os.path.join(base_path, "assets", "docs")
         
@@ -107,7 +76,8 @@ class SearchDocsTool(BaseTool):
             return "Помилка: Папка з документацією не знайдена."
             
         results = []
-        query = query.lower()
+        query_lower = query.lower().strip()
+        query_words = query_lower.split()
         
         try:
             for filename in os.listdir(docs_path):
@@ -116,15 +86,40 @@ class SearchDocsTool(BaseTool):
                     with open(filepath, 'r', encoding='utf-8') as f:
                         content = f.read()
                         
-                    # Дуже простий пошук: якщо запит є в тексті
-                    if query in content.lower():
-                        # Повертаємо назву файлу і частину контенту (або весь контент, якщо він малий)
-                        results.append(f"--- Знайдено у файлі {filename} ---\n{content}\n----------------")
+                    content_lower = content.lower()
+                    filename_lower = filename.lower()
+                    
+                    match_found = False
+                    reason = ""
+                    
+                    # 1. Пошук за назвою файлу
+                    if query_lower in filename_lower:
+                        match_found = True
+                        reason = "співпадіння в назві файлу"
+                    
+                    # 2. Точний пошук фрази в контенті
+                    elif query_lower in content_lower:
+                        match_found = True
+                        reason = "знайдено фразу в тексті"
+                        
+                    # 3. Пошук всіх слів (якщо їх > 1)
+                    elif len(query_words) > 1 and all(word in content_lower for word in query_words):
+                        match_found = True
+                        reason = "знайдено всі ключові слова"
+                    
+                    # 4. Пошук за частиною слова (якщо запит короткий, e.g. "google")
+                    elif len(query_lower) > 3 and query_lower in content_lower:
+                         match_found = True
+                         reason = "часткове співпадіння"
+
+                    if match_found:
+                        results.append(f"--- Документ: {filename} ({reason}) ---\n{content}\n{'='*30}")
+                        
         except Exception as e:
             return f"Помилка при пошуку: {str(e)}"
             
         if not results:
-            return f"На жаль, я не знайшов інформації за запитом '{query}' у документації."
+            return f"На жаль, я не знайшов точної інформації за запитом '{query}' у документації. Спробуйте перефразувати або шукати ширші поняття (наприклад 'Googler', 'Налаштування')."
             
         return "\n\n".join(results)
 
@@ -143,5 +138,47 @@ class SearchDocsTool(BaseTool):
 # Глобальний екземпляр реєстру
 tool_registry = ToolRegistry()
 tool_registry.register(GetVersionTool())
-tool_registry.register(SetImageProviderTool())
+
+
+class SearchWebTool(BaseTool):
+    """Інструмент для пошуку в інтернеті."""
+    name = "search_web"
+    description = "Шукає інформацію в інтернеті..."
+
+    def run(self, query: str) -> str:
+        try:
+            from duckduckgo_search import DDGS
+        except ImportError:
+            return "Помилка, сервіс не працюе"
+        
+        try:
+            results = []
+            with DDGS() as ddgs:
+                # Отримуємо перші 3 результати для швидкості
+                for r in ddgs.text(query, max_results=3):
+                    title = r.get('title', '')
+                    href = r.get('href', '')
+                    body = r.get('body', '')
+                    results.append(f"Заголовок: {title}\nПосилання: {href}\nОпис: {body}\n")
+            
+            if not results:
+                return "На жаль, пошук не дав результатів."
+                
+            return "\n---\n".join(results)
+        except Exception as e:
+            return f"Помилка при виконанні пошуку: {str(e)}"
+
+    def get_parameters_schema(self) -> Dict[str, Any]:
+        return {
+            "type": "object", 
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Запит для пошуку в Google/DuckDuckGo"
+                }
+            }, 
+            "required": ["query"]
+        }
+
 tool_registry.register(SearchDocsTool())
+tool_registry.register(SearchWebTool())
