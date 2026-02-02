@@ -153,7 +153,7 @@ class OpenRouterTab(QWidget):
         models = self.settings.get("openrouter_models", [])
         self.agent_model_combo.addItems(models)
         
-        current_agent_model = self.settings.get("ai_assistant_model", "openai/gpt-4o-mini")
+        current_agent_model = self.settings.get("ai_assistant_model", "z-ai/glm-4.5-air:free")
         
         # Ensure the current model is in the list of items
         if self.agent_model_combo.findText(current_agent_model) == -1:
