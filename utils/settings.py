@@ -131,7 +131,7 @@ text: """,
             },
             'openrouter_api_key': '',
             'openrouter_max_threads': 5,
-            'ai_assistant_model': 'google/gemini-2.5-flash',
+            'ai_assistant_model': 'z-ai/glm-4.5-air:free',
             'openrouter_models': ['z-ai/glm-4.5-air:free', 'google/gemini-2.5-flash'],
             'subtitles': {
                 'whisper_model': 'base',
