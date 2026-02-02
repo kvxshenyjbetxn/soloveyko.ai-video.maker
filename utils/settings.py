@@ -13,6 +13,7 @@ class SettingsManager:
             'language': 'uk',
             'theme': 'dark',
             'results_path': self._get_default_results_path(),
+            'simulation_target': 'DaVinci Resolve Studio',
             'image_review_enabled': True,
             'rewrite_review_enabled': True,
             'translation_review_enabled': True,

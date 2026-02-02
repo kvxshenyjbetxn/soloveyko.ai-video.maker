@@ -10,6 +10,7 @@ import difflib
 import shutil
 from datetime import datetime, timezone
 from utils.logger import logger, LogLevel
+from utils.settings import settings_manager
 
 class MontageEngine:
     def create_video(self, visual_files, audio_path, output_path, ass_path, settings, task_id=None, progress_callback=None, start_time=None, background_music_path=None, background_music_volume=None, **kwargs):
@@ -773,33 +774,39 @@ class MontageEngine:
                 raise Exception("FFmpeg failed.")
             
             # ==================== ПОСТОБРОБКА МЕТАДАНИХ (MUTAGEN) ====================
-            logger.log(f"{prefix}[Metadata] Застосування професійних метаданих...", level=LogLevel.INFO)
+            # ==================== METADATA POST-PROCESSING (MUTAGEN) ====================
+            sim_target = settings_manager.get('simulation_target', 'DaVinci Resolve Studio')
             
-            try:
-                from mutagen.mp4 import MP4, MP4FreeForm, MP4Tags
+            if sim_target == 'DaVinci Resolve Studio':
+                logger.log(f"{prefix}[Metadata] Applying metadata...", level=LogLevel.INFO)
                 
-                # Відкриваємо щойно створений файл
-                video = MP4(clean_out_path)
-                
-                # ТІЛЬКИ format-level теги (як у DaVinci Resolve)
-                video["\xa9enc"] = "Blackmagic Design DaVinci Resolve Studio"  # Encoder (основний тег)
-                video["----:com.apple.iTunes:encoder"] = MP4FreeForm("Blackmagic Design DaVinci Resolve Studio".encode('utf-8'))
-                
-                # Brands (як у DaVinci)
-                video["----:com.apple.iTunes:major_brand"] = MP4FreeForm(b"isom")
-                video["----:com.apple.iTunes:minor_version"] = MP4FreeForm(b"512")
-                video["----:com.apple.iTunes:compatible_brands"] = MP4FreeForm(b"isomiso2avc1mp41")
-                
-                # Зберігаємо зміни
-                video.save()
-                
-                logger.log(f"{prefix}[Metadata] ✅ Метадані застосовано!", level=LogLevel.INFO)
-                
-            except ImportError:
-                logger.log(f"{prefix}[Metadata] ⚠️ Встановіть mutagen: pip install mutagen", level=LogLevel.WARNING)
-            except Exception as e:
-                logger.log(f"{prefix}[Metadata] ⚠️ Помилка запису метаданих: {str(e)}", level=LogLevel.WARNING)
-            # ==================== КІНЕЦЬ ПОСТОБРОБКИ ====================
+                try:
+                    from mutagen.mp4 import MP4, MP4FreeForm, MP4Tags
+                    
+                    # Open the newly created file
+                    video = MP4(clean_out_path)
+                    
+                    # Format-level tags ONLY (like DaVinci Resolve)
+                    video["\xa9enc"] = "Blackmagic Design DaVinci Resolve Studio"  # Encoder (main tag)
+                    video["----:com.apple.iTunes:encoder"] = MP4FreeForm("Blackmagic Design DaVinci Resolve Studio".encode('utf-8'))
+                    
+                    # Brands (like DaVinci)
+                    video["----:com.apple.iTunes:major_brand"] = MP4FreeForm(b"isom")
+                    video["----:com.apple.iTunes:minor_version"] = MP4FreeForm(b"512")
+                    video["----:com.apple.iTunes:compatible_brands"] = MP4FreeForm(b"isomiso2avc1mp41")
+                    
+                    # Save changes
+                    video.save()
+                    
+                    logger.log(f"{prefix}[Metadata] ✅ Metadata applied successfully!", level=LogLevel.INFO)
+                    
+                except ImportError:
+                    logger.log(f"{prefix}[Metadata] ⚠️ Please install mutagen: pip install mutagen", level=LogLevel.WARNING)
+                except Exception as e:
+                    logger.log(f"{prefix}[Metadata] ⚠️ Metadata application failed: {str(e)}", level=LogLevel.WARNING)
+            else:
+                logger.log(f"{prefix}[Metadata] Metadata simulation disabled or other profile selected ({sim_target}).", level=LogLevel.INFO)
+            # ==================== END METADATA POST-PROCESSING ====================
             
         finally:
             if filter_script_path and os.path.exists(filter_script_path):

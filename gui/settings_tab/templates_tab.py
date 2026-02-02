@@ -392,7 +392,7 @@ class TemplateEditorDialog(QDialog):
         
         # Define Layout
         self.GROUPS = {
-            "general_tab": ["results_path", "image_review_enabled", "rewrite_review_enabled", "translation_review_enabled", "prompt_count_control_enabled", "prompt_count", "image_generation_provider"],
+            "general_tab": ["results_path", "image_review_enabled", "rewrite_review_enabled", "translation_review_enabled", "prompt_count_control_enabled", "prompt_count", "image_generation_provider", "simulation_target"],
             "api_tab": ["openrouter_models", "openrouter_api_key", "elevenlabs_api_key", "elevenlabs_unlim_api_key", "voicemaker_api_key", "voicemaker_char_limit", "gemini_tts_api_key", "assemblyai_api_key", "googler", "pollinations", "elevenlabs_image"],
             "languages_tab": ["languages_config"],
             "prompts_tab": ["image_prompt_settings", "preview_settings", "text_split_count"],
