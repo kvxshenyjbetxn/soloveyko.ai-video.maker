@@ -256,6 +256,50 @@ class PromptsTab(QWidget):
         self.preview_image_count_spinbox.valueChanged.connect(self.save_settings)
         preview_settings_form_layout.addRow(preview_image_count_container, self.preview_image_count_spinbox)
 
+        # Image Provider
+        self.preview_provider_help = HelpLabel("image_generation_provider_label")
+        self.preview_provider_label = QLabel()
+        preview_provider_container = QWidget()
+        preview_provider_layout = QHBoxLayout(preview_provider_container)
+        preview_provider_layout.setContentsMargins(0,0,0,0)
+        preview_provider_layout.setSpacing(5)
+        preview_provider_layout.addWidget(self.preview_provider_help)
+        preview_provider_layout.addWidget(self.preview_provider_label)
+
+        self.preview_provider_combo = QComboBox()
+        self.preview_provider_combo.addItem("Pollinations", "pollinations")
+        self.preview_provider_combo.addItem("Googler", "googler")
+        self.preview_provider_combo.addItem("ElevenLabsImage", "elevenlabs_image")
+        self.preview_provider_combo.currentIndexChanged.connect(self.on_preview_provider_changed)
+        self.preview_provider_combo.currentIndexChanged.connect(self.save_settings)
+        preview_settings_form_layout.addRow(preview_provider_container, self.preview_provider_combo)
+
+        # Pollinations Model (Only if Pollinations selected)
+        self.preview_poll_model_help = HelpLabel("pollinations_model_label")
+        self.preview_poll_model_label = QLabel()
+        preview_poll_model_container = QWidget()
+        preview_poll_model_layout = QHBoxLayout(preview_poll_model_container)
+        preview_poll_model_layout.setContentsMargins(0,0,0,0)
+        preview_poll_model_layout.setSpacing(5)
+        preview_poll_model_layout.addWidget(self.preview_poll_model_help)
+        preview_poll_model_layout.addWidget(self.preview_poll_model_label)
+
+        self.preview_poll_model_combo = QComboBox()
+        # Initial models, same as in pollinations_tab.py
+        self.preview_pollinary_models = ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal", "zimage"] 
+        # Add cached models if exist
+        cached_models = self.settings.get("pollinations_models_cache", [])
+        if cached_models:
+            for m in cached_models:
+                if m not in self.preview_pollinary_models:
+                    self.preview_pollinary_models.append(m)
+        self.preview_poll_model_combo.addItems(self.preview_pollinary_models)
+        self.preview_poll_model_combo.currentIndexChanged.connect(self.save_settings)
+        
+        preview_settings_form_layout.addRow(preview_poll_model_container, self.preview_poll_model_combo)
+        self.preview_poll_model_row_widget = preview_poll_model_container
+        self.preview_poll_model_field_widget = self.preview_poll_model_combo
+
         preview_main_prompt_layout = QHBoxLayout()
         preview_main_prompt_layout.addWidget(self.preview_prompt_edit)
 
@@ -508,6 +552,11 @@ class PromptsTab(QWidget):
             self.prompt_count_container_widget.setVisible(is_checked)
             self.prompt_count_spinbox.setVisible(is_checked)
 
+    def on_preview_provider_changed(self):
+        is_pollinations = self.preview_provider_combo.currentData() == "pollinations"
+        self.preview_poll_model_row_widget.setVisible(is_pollinations)
+        self.preview_poll_model_field_widget.setVisible(is_pollinations)
+
     def delete_stage(self, stage_widget):
         for i, stage in enumerate(self.stage_widgets):
             if stage["widget"] == stage_widget:
@@ -597,11 +646,27 @@ class PromptsTab(QWidget):
         self.preview_temperature_spinbox.setValue(preview_config.get("temperature", 1.0))
         self.preview_image_count_spinbox.setValue(preview_config.get("image_count", 3))
 
+        provider = preview_config.get("image_provider", "pollinations")
+        idx = self.preview_provider_combo.findData(provider)
+        if idx >= 0: self.preview_provider_combo.setCurrentIndex(idx)
+        
+        poll_model = preview_config.get("pollinations_model", "zimage")
+        p_idx = self.preview_poll_model_combo.findText(poll_model)
+        if p_idx >= 0:
+            self.preview_poll_model_combo.setCurrentIndex(p_idx)
+        else:
+            self.preview_poll_model_combo.addItem(poll_model)
+            self.preview_poll_model_combo.setCurrentText(poll_model)
+
+        self.on_preview_provider_changed()
+
         self.preview_prompt_edit.blockSignals(False)
         self.preview_model_combo.blockSignals(False)
         self.preview_tokens_spinbox.blockSignals(False)
         self.preview_temperature_spinbox.blockSignals(False)
         self.preview_image_count_spinbox.blockSignals(False)
+        self.preview_provider_combo.blockSignals(False)
+        self.preview_poll_model_combo.blockSignals(False)
 
         while self.stages_container.count():
             item = self.stages_container.takeAt(0)
@@ -678,7 +743,9 @@ class PromptsTab(QWidget):
             "model": self.preview_model_combo.currentText(),
             "max_tokens": self.preview_tokens_spinbox.value(),
             "temperature": self.preview_temperature_spinbox.value(),
-            "image_count": self.preview_image_count_spinbox.value()
+            "image_count": self.preview_image_count_spinbox.value(),
+            "image_provider": self.preview_provider_combo.currentData(),
+            "pollinations_model": self.preview_poll_model_combo.currentText()
         }
         self.settings.set("preview_settings", preview_config)
 
@@ -754,6 +821,10 @@ class PromptsTab(QWidget):
         self.preview_tokens_help.update_tooltip()
         self.preview_temp_help.update_tooltip()
         self.preview_image_count_help.update_tooltip()
+        self.preview_provider_label.setText(translator.translate("image_generation_provider_label"))
+        self.preview_provider_help.update_tooltip()
+        self.preview_poll_model_label.setText(translator.translate("pollinations_model_label"))
+        self.preview_poll_model_help.update_tooltip()
 
         self.custom_stages_label.setText(translator.translate("custom_stages_label") if translator.translate("custom_stages_label") != "custom_stages_label" else "Custom Stages")
         self.custom_stages_help.update_tooltip()

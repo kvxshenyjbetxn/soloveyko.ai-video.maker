@@ -288,14 +288,9 @@ class RewriteTab(QWidget):
                 self.stages_container_layout.addWidget(stage_widget)
                 self.stage_widgets[lang_id] = stage_widget
             
-            # Animate appearance
-            if not self.stage_widgets[lang_id].isVisible():
-                Animator.slide_in_down(self.stage_widgets[lang_id])
-            else:
-                self.stage_widgets[lang_id].setVisible(True)
+            Animator.slide_in_down(self.stage_widgets[lang_id])
         else:
             if lang_id in self.stage_widgets:
-                # Animate disappearance
                 Animator.slide_out_up(self.stage_widgets[lang_id])
         
         self.update_stage_label_widths()

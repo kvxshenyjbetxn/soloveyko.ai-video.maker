@@ -1196,7 +1196,8 @@ class LanguagesTab(QWidget):
             "overlay_effect_path": "",
             "watermark_path": "",
             "watermark_size": 5,
-            "watermark_position": 8
+            "watermark_position": 8,
+            "stage_preview": False
         }
 
         self.settings.set("languages_config", languages)

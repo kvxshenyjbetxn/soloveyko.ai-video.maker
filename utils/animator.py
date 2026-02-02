@@ -3,12 +3,29 @@ from PySide6.QtWidgets import QWidget, QGraphicsOpacityEffect
 
 class Animator:
     @staticmethod
+    def _stop_animations(widget: QWidget):
+        """Stops any existing animations on the widget to prevent conflicts."""
+        for attr in ["_slide_animation", "_slide_out_animation", "_fade_animation"]:
+            if hasattr(widget, attr):
+                anim = getattr(widget, attr)
+                if anim:
+                    try:
+                        if anim.state() == QAbstractAnimation.State.Running:
+                            anim.stop()
+                    except RuntimeError:
+                        # Internal C++ object already deleted
+                        pass
+                setattr(widget, attr, None)
+
+    @staticmethod
     def fade_in(widget: QWidget, duration: int = 300):
         """
         Fades in a widget by animating its opacity from 0 to 1.
         """
         if not widget:
             return
+
+        Animator._stop_animations(widget)
 
         # Ensure widget is visible
         widget.setVisible(True)
@@ -22,14 +39,11 @@ class Animator:
         animation.setDuration(duration)
         animation.setStartValue(0.0)
         animation.setEndValue(1.0)
-        animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         
-        # Cleanup effect after animation (optional, but good for performance)
-        # Note: Keeping the effect might be needed if we want to fade out later. 
-        # For simple fade-in, we typically leave it or remove it. 
-        # Removing it resets opacity to 1.0 (widget default), which is what we want.
         def on_finished():
             widget.setGraphicsEffect(None)
+            setattr(widget, "_fade_animation", None)
             
         animation.finished.connect(on_finished)
         animation.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
@@ -38,89 +52,105 @@ class Animator:
         setattr(widget, "_fade_animation", animation)
 
     @staticmethod
-    def slide_in_down(widget: QWidget, duration: int = 300):
+    def slide_in_down(widget: QWidget, duration: int = 400):
         """
-        Animates a widget sliding down (expanding height).
-        Note: The widget must be in a layout that allows expansion.
+        Combined slide and fade-in animation.
         """
         if not widget:
             return
 
+        Animator._stop_animations(widget)
+        
         widget.setVisible(True)
-        # Force layout to calculate size hint
         widget.updateGeometry()
-        target_height = widget.sizeHint().height()
         
-        # If sizeHint is 0 (it happens), try to measure
-        if target_height <= 0:
-             # Fallback: let it be visible and measure, but that might flicker.
-             # Better approach: Start with 0 height property, animate to detected height.
-             # This assumes widget uses minimumHeight/maximumHeight or fixedHeight.
-             pass
-
-        # We will animate maximumHeight
-        # First, set current max height to 0
-        widget.setMaximumHeight(0)
-        
-        animation = QPropertyAnimation(widget, b"maximumHeight")
-        animation.setDuration(duration)
-        animation.setStartValue(0)
-        # We want it to be unrestricted at the end, or a specific height.
-        # Since we don't know the exact height it *should* be (dynamic content),
-        # we can animate to a large enough number, or better:
-        # 1. Animate to sizeHint().height()
-        # 2. On finish, set maximumHeight to QWIDGETSIZE_MAX
-        
-        # Let's try to get a reasonable target height.
-        # Temporarily set unrestricted to measure
-        widget.setMaximumHeight(16777215) # QWIDGETSIZE_MAX
+        # Force a measure of the target height
+        widget.setMaximumHeight(16777215)
         widget.adjustSize()
         target_height = widget.sizeHint().height()
-        # Reset to 0
-        widget.setMaximumHeight(0)
+        
+        # If still 0, the layout might need more info, but we proceed
+        if target_height <= 0:
+            target_height = 40 # Typical minimal height for a row
 
-        animation.setEndValue(target_height)
-        animation.setEasingCurve(QEasingCurve.Type.OutQuad)
+        # Set up opacity effect
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        
+        # Opacity Animation
+        fade_anim = QPropertyAnimation(effect, b"opacity")
+        fade_anim.setDuration(duration)
+        fade_anim.setStartValue(0.0)
+        fade_anim.setEndValue(1.0)
+        fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        # Height Animation
+        widget.setMaximumHeight(0)
+        height_anim = QPropertyAnimation(widget, b"maximumHeight")
+        height_anim.setDuration(duration)
+        height_anim.setStartValue(0)
+        height_anim.setEndValue(target_height)
+        height_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         def on_finished():
-            # Release the constraint so it can resize if content changes
-            widget.setMaximumHeight(16777215) 
+            widget.setMaximumHeight(16777215)
+            widget.setGraphicsEffect(None)
+            setattr(widget, "_fade_animation", None)
+            setattr(widget, "_slide_animation", None)
 
-        animation.finished.connect(on_finished)
-        animation.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+        height_anim.finished.connect(on_finished)
+        
+        fade_anim.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+        height_anim.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
-        setattr(widget, "_slide_animation", animation)
+        setattr(widget, "_fade_animation", fade_anim)
+        setattr(widget, "_slide_animation", height_anim)
 
     @staticmethod
-    def slide_out_up(widget: QWidget, duration: int = 300, on_complete=None):
+    def slide_out_up(widget: QWidget, duration: int = 400, on_complete=None):
         """
-        Animates a widget sliding up (collapsing height) and then hides it.
+        Combined slide and fade-out animation.
         """
         if not widget or not widget.isVisible():
-            if on_complete:
-                on_complete()
+            if on_complete: on_complete()
             return
 
-        # Start from current height
+        Animator._stop_animations(widget)
+
         current_height = widget.height()
         
-        # We animate maximumHeight to 0
-        widget.setMaximumHeight(current_height)
+        # Set up opacity effect
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
         
-        animation = QPropertyAnimation(widget, b"maximumHeight")
-        animation.setDuration(duration)
-        animation.setStartValue(current_height)
-        animation.setEndValue(0)
-        animation.setEasingCurve(QEasingCurve.Type.OutQuad)
+        # Opacity Animation
+        fade_anim = QPropertyAnimation(effect, b"opacity")
+        fade_anim.setDuration(duration)
+        fade_anim.setStartValue(1.0)
+        fade_anim.setEndValue(0.0)
+        fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        # Height Animation
+        widget.setMaximumHeight(current_height)
+        height_anim = QPropertyAnimation(widget, b"maximumHeight")
+        height_anim.setDuration(duration)
+        height_anim.setStartValue(current_height)
+        height_anim.setEndValue(0)
+        height_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         def on_finished():
             widget.setVisible(False)
-            # Reset maximumHeight so it can be shown again later
-            widget.setMaximumHeight(16777215) # QWIDGETSIZE_MAX
+            widget.setMaximumHeight(16777215) 
+            widget.setGraphicsEffect(None)
+            setattr(widget, "_fade_animation", None)
+            setattr(widget, "_slide_out_animation", None)
             if on_complete:
                 on_complete()
 
-        animation.finished.connect(on_finished)
-        animation.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+        height_anim.finished.connect(on_finished)
+        
+        fade_anim.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+        height_anim.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
-        setattr(widget, "_slide_out_animation", animation)
+        setattr(widget, "_fade_animation", fade_anim)
+        setattr(widget, "_slide_out_animation", height_anim)
