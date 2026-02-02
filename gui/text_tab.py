@@ -157,7 +157,9 @@ class StageSelectionWidget(QWidget):
 
             # Load initial state for standard checkboxes
             lang_config = self.parent_tab.get_lang_config(self.lang_code)
-            is_checked = lang_config.get(key, True)
+            # User request: Preview stage should be disabled by default until user enables it.
+            default_val = False if key == "stage_preview" else True
+            is_checked = lang_config.get(key, default_val)
             checkbox.setChecked(is_checked)
             checkbox.stateChanged.connect(self._save_state) # Save on change
 
@@ -615,14 +617,9 @@ class TextTab(QWidget):
                 self.stages_container_layout.addWidget(stage_widget)
                 self.stage_widgets[lang_id] = stage_widget
             
-            # Animate appearance
-            if not self.stage_widgets[lang_id].isVisible():
-                Animator.slide_in_down(self.stage_widgets[lang_id])
-            else:
-                self.stage_widgets[lang_id].setVisible(True)
+            Animator.slide_in_down(self.stage_widgets[lang_id])
         else:
             if lang_id in self.stage_widgets:
-                # Animate disappearance
                 Animator.slide_out_up(self.stage_widgets[lang_id])
         
         self.update_stage_label_widths()

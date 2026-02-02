@@ -71,8 +71,13 @@ class PreviewMixin:
         # We need to setup config for ImageGenerationWorker
         # It expects 'prompts_text', 'dir_path', 'provider', etc.
         
+        preview_settings = state.settings.get("preview_settings", {})
+        # Provider selection logic: prioritize preview settings, fallback to global, default to pollinations
+        provider = preview_settings.get('image_provider')
+        if not provider:
+            provider = state.settings.get('image_generation_provider', 'pollinations')
+        
         googler_settings = state.settings.get('googler', {})
-        provider = state.settings.get('image_generation_provider', 'pollinations')
         
         api_kwargs = {}
         if provider == 'googler':
@@ -88,7 +93,16 @@ class PreviewMixin:
             }
             
         elif provider == 'pollinations':
-            pollinations_settings = state.settings.get('pollinations', {})
+            pollinations_settings = state.settings.get('pollinations', {}).copy()
+            
+            # Override model for preview specifically
+            preview_poll_model = preview_settings.get('pollinations_model')
+            if preview_poll_model:
+                pollinations_settings['model'] = preview_poll_model
+            elif 'image_provider' not in preview_settings:
+                # Old template fallback as requested
+                pollinations_settings['model'] = 'zimage'
+            
             valid_keys = ['model', 'width', 'height', 'nologo', 'enhance']
             api_kwargs = {k: v for k, v in pollinations_settings.items() if k in valid_keys}
 
@@ -109,7 +123,6 @@ class PreviewMixin:
              executor = self.image_gen_executor
              current_semaphore = None
 
-        preview_settings = state.settings.get("preview_settings", {})
         image_count = preview_settings.get('image_count', 1)
 
         config = {
