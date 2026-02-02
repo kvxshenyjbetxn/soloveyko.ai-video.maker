@@ -7,6 +7,8 @@ import re
 import platform
 import random
 import difflib
+import shutil
+from datetime import datetime, timezone
 from utils.logger import logger, LogLevel
 
 class MontageEngine:
@@ -626,10 +628,40 @@ class MontageEngine:
 
             cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-stats"]
             cmd.extend(inputs)
-            cmd.extend(["-filter_complex_script", filter_script_path.replace("\\", "/"), "-map", output_v_stream, "-map", final_audio_map, "-c:v", codec])
+            
+            # Для libx264 НЕ додаємо -c:v тут, бо додамо його пізніше разом з професійними параметрами
+            if codec == "libx264":
+                cmd.extend(["-filter_complex_script", filter_script_path.replace("\\", "/"), "-map", output_v_stream, "-map", final_audio_map])
+            else:
+                cmd.extend(["-filter_complex_script", filter_script_path.replace("\\", "/"), "-map", output_v_stream, "-map", final_audio_map, "-c:v", codec])
 
             bitrate_str = f"{bitrate}M"
-            if codec == "h264_amf":
+            
+            # ==================== ПРОФЕСІЙНІ ПАРАМЕТРИ КОДЕКА (DAVINCI RESOLVE) ====================
+            if codec == "libx264":
+                # ТОЧНІ технічні параметри як у DaVinci Resolve
+                cmd.extend([
+                    '-c:v', 'libx264',
+                    '-profile:v', 'main',
+                    '-level', '5.0',
+                    '-pix_fmt', 'yuvj420p',
+                    '-color_range', 'pc',
+                    '-colorspace', 'bt709',
+                    '-color_trc', 'bt709',
+                    '-color_primaries', 'bt709',
+                    # Примушуємо libx264 записати color metadata в bitstream
+                    '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709:fullrange=1',
+                    '-r', '60',
+                    '-c:a', 'aac',
+                    '-ar', '48000',
+                    '-ac', '2',
+                    '-preset', preset,
+                    '-b:v', bitrate_str,
+                    '-maxrate', bitrate_str,
+                    '-bufsize', f"{bitrate*2}M",
+                    '-shortest'
+                ])
+            elif codec == "h264_amf":
                 if preset in ["ultrafast", "superfast", "veryfast", "faster", "fast"]: u="speed"
                 elif preset == "medium": u="balanced"
                 else: u="quality"
@@ -638,11 +670,44 @@ class MontageEngine:
                 cmd.extend(["-preset", "p4", "-b:v", bitrate_str, "-pix_fmt", "yuv420p"])
             else:
                 cmd.extend(["-preset", preset, "-b:v", bitrate_str, "-maxrate", bitrate_str, "-bufsize", f"{bitrate*2}M", "-pix_fmt", "yuv420p"])
+            # ==================== КІНЕЦЬ ПАРАМЕТРІВ КОДЕКА ====================
             
-            # Clean output path for FFmpeg (remove \\?\ prefix which can break when slashes are flipped)
+            # Генеруємо timestamp для метаданих (додамо пізніше)
+            current_time = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+            
+            # Метадані будуть застосовані частково через FFmpeg (stream tags) та mutagen (format tags)
+            
+            # КРИТИЧНО: Глобальний creation_time (для format.tags.creation_time)
+            cmd.extend(['-metadata', f'creation_time={current_time}'])
+            
+            # Stream-specific metadata (FFmpeg під час рендерингу)
+            cmd.extend(['-metadata:s:v:0', f'creation_time={current_time}'])
+            cmd.extend(['-metadata:s:v:0', 'handler_name=VideoHandler'])
+            cmd.extend(['-metadata:s:v:0', 'timecode=01:00:00:00'])
+            cmd.extend(['-metadata:s:v:0', 'encoder=H.264 AMD'])
+            cmd.extend(['-metadata:s:v:0', 'vendor_id=[0][0][0][0]'])
+            cmd.extend(['-metadata:s:v:0', 'language=und'])
+            
+            cmd.extend(['-metadata:s:a:0', f'creation_time={current_time}'])
+            cmd.extend(['-metadata:s:a:0', 'handler_name=SoundHandler'])
+            cmd.extend(['-metadata:s:a:0', 'vendor_id=[0][0][0][0]'])
+            cmd.extend(['-metadata:s:a:0', 'language=und'])
+            
+            # КРИТИЧНО: Timecode data stream (як у DaVinci)
+            # -write_tmcd створює streams.2, але треба задати метадані окремо
+            cmd.extend(['-write_tmcd', '1'])
+            cmd.extend(['-metadata:s:d:0', f'creation_time={current_time}'])  # d = data stream (timecode)
+            cmd.extend(['-metadata:s:d:0', 'handler_name=TimeCodeHandler'])  # ВАЖЛИВО: TimeCodeHandler
+            cmd.extend(['-metadata:s:d:0', 'language=eng'])  # ВАЖЛИВО: eng для timecode
+            
+            # Clean output path for FFmpeg (remove \\?\\ prefix which can break when slashes are flipped)
             clean_out_path = output_path.replace("\\\\?\\", "").replace("//?/", "")
-            cmd.extend(["-shortest", "-max_muxing_queue_size", "9999", clean_out_path.replace("\\", "/")])
-
+            # Для libx264 -shortest вже додано в секції кодека, для інших додаємо тут
+            if codec == "libx264":
+                cmd.extend(["-max_muxing_queue_size", "9999", clean_out_path.replace("\\", "/")])
+            else:
+                cmd.extend(["-shortest", "-max_muxing_queue_size", "9999", clean_out_path.replace("\\", "/")])
+            
             startupinfo = None
             if platform.system() == "Windows":
                 startupinfo = subprocess.STARTUPINFO()
@@ -706,6 +771,36 @@ class MontageEngine:
                 err = "\n".join(full_log[-20:])
                 logger.log(f"{prefix}[FFmpeg] Rendering failed:\n{err}", level=LogLevel.ERROR)
                 raise Exception("FFmpeg failed.")
+            
+            # ==================== ПОСТОБРОБКА МЕТАДАНИХ (MUTAGEN) ====================
+            logger.log(f"{prefix}[Metadata] Застосування професійних метаданих...", level=LogLevel.INFO)
+            
+            try:
+                from mutagen.mp4 import MP4, MP4FreeForm, MP4Tags
+                
+                # Відкриваємо щойно створений файл
+                video = MP4(clean_out_path)
+                
+                # ТІЛЬКИ format-level теги (як у DaVinci Resolve)
+                video["\xa9enc"] = "Blackmagic Design DaVinci Resolve Studio"  # Encoder (основний тег)
+                video["----:com.apple.iTunes:encoder"] = MP4FreeForm("Blackmagic Design DaVinci Resolve Studio".encode('utf-8'))
+                
+                # Brands (як у DaVinci)
+                video["----:com.apple.iTunes:major_brand"] = MP4FreeForm(b"isom")
+                video["----:com.apple.iTunes:minor_version"] = MP4FreeForm(b"512")
+                video["----:com.apple.iTunes:compatible_brands"] = MP4FreeForm(b"isomiso2avc1mp41")
+                
+                # Зберігаємо зміни
+                video.save()
+                
+                logger.log(f"{prefix}[Metadata] ✅ Метадані застосовано!", level=LogLevel.INFO)
+                
+            except ImportError:
+                logger.log(f"{prefix}[Metadata] ⚠️ Встановіть mutagen: pip install mutagen", level=LogLevel.WARNING)
+            except Exception as e:
+                logger.log(f"{prefix}[Metadata] ⚠️ Помилка запису метаданих: {str(e)}", level=LogLevel.WARNING)
+            # ==================== КІНЕЦЬ ПОСТОБРОБКИ ====================
+            
         finally:
             if filter_script_path and os.path.exists(filter_script_path):
                 os.remove(filter_script_path)
