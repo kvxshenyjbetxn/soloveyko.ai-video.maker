@@ -124,11 +124,13 @@ SETTINGS_METADATA = {
         'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
     },
     'preview_settings': {
-        'prompt': {'type': 'text_edit_button'},
-        'model': {'type': 'model_selection'},
-        'max_tokens': {'type': 'int', 'min': 0, 'max': 128000},
-        'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1},
-        'image_count': {'type': 'int', 'min': 1, 'max': 4},
+        'prompt': {'type': 'text_edit_button', 'label': 'preview_prompt_label'},
+        'model': {'type': 'model_selection', 'label': 'preview_model_label'},
+        'max_tokens': {'type': 'int', 'min': 0, 'max': 128000, 'label': 'preview_tokens_label'},
+        'temperature': {'type': 'float', 'min': 0.0, 'max': 2.0, 'step': 0.1, 'label': 'preview_temp_label'},
+        'image_count': {'type': 'int', 'min': 1, 'max': 4, 'label': 'preview_image_count_label'},
+        'image_provider': {'type': 'choice', 'options': ["pollinations", "googler", "elevenlabs_image"], 'label': 'preview_image_provider_label'},
+        'pollinations_model': {'type': 'choice', 'options': ["zimage", "flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"], 'label': 'preview_pollinations_model_label'},
     },
     'languages_config': {
         'prompt': {'type': 'text_edit_button'},
@@ -244,10 +246,17 @@ KEY_TO_TRANSLATION_MAP = {
     'elevenlabs_image': 'elevenlabs_image_tab_title',
     'api_key': 'elevenlabs_image_api_key',
 
-    'max_tokens': 'tokens_label', # "tokens_label": "Макс. токенів:",
+    'max_tokens': 'tokens_label',
     'temperature': 'temperature_label',
-    'image_count': 'preview_image_count_label',
+    'image_count': 'image_count_label',
     'preview_settings': 'preview_settings_group',
+    'preview_prompt_label': 'preview_prompt_label',
+    'preview_model_label': 'preview_model_label',
+    'preview_tokens_label': 'preview_tokens_label',
+    'preview_temp_label': 'preview_temp_label',
+    'preview_image_count_label': 'preview_image_count_label',
+    'preview_image_provider_label': 'preview_image_provider_label',
+    'preview_pollinations_model_label': 'preview_pollinations_model_label',
 
     # Languages Config keys
     'prompt': 'prompt_label', # "prompt_label": "Промт:",
