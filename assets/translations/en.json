@@ -540,5 +540,7 @@
     "trigger_settings_tooltip": "Shift effect along axes",
     "cancel_button": "Cancel",
     "trigger_horizontal": "Horizontal (X):",
-    "trigger_vertical": "Vertical (Y):"
+    "trigger_vertical": "Vertical (Y):",
+    "simulation_target_label": "💾 Editing Software Simulation:",
+    "simulation_target_help": "<b>Editing Software Simulation</b><br>Select the software to spoof file metadata for (e.g. for YouTube).<br>For example, <i>DaVinci Resolve Studio</i> will add Blackmagic tags, NCLX color, and TimeCode."
 }

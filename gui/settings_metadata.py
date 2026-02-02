@@ -48,9 +48,10 @@ SETTINGS_METADATA = {
     'prompt_count': {'type': 'int', 'min': 1, 'max': 100, 'label': 'prompt_count_label'},
     'max_download_threads': {'type': 'int', 'min': 1, 'max': 100, 'label': 'max_download_threads_label'},
     'detailed_logging_enabled': {'type': 'bool', 'label': 'detailed_logging_label'}, # Also missing explicitly in dict though hardcoded in panel as fallback
+    'simulation_target': {'type': 'choice', 'options': ["DaVinci Resolve Studio", "None"], 'label': 'simulation_target_label'},
     'montage': {
         # Render
-        'codec': {'type': 'choice', 'options': ["libx264", "libx265", "h264_nvenc", "h264_amf"], 'label': 'codec_label'},
+        'codec': {'type': 'choice', 'options': ["libx264", "libx265", "h264_nvenc", "h264_amf", "h264_videotoolbox"], 'label': 'codec_label'},
         'preset': {'type': 'choice', 'options': ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"], 'label': 'preset_label'},
         'bitrate_mbps': {'type': 'int', 'min': 1, 'max': 100, 'suffix': ' Mbps', 'label': 'bitrate_label'},
         'upscale_factor': {'type': 'float', 'min': 1.0, 'max': 5.0, 'step': 0.1, 'suffix': 'x', 'label': 'upscale_factor_label'},
@@ -173,6 +174,7 @@ KEY_TO_TRANSLATION_MAP = {
     'prompt_count_control_enabled': 'prompt_count_control_label',
     'prompt_count': 'prompt_count_label',
     'image_generation_provider': 'image_generation_provider_label',
+    'simulation_target': 'simulation_target_label',
     
     # API Tab
     # API Tab

@@ -116,6 +116,24 @@ class GeneralTab(QWidget):
         self.simultaneous_montage_checkbox.stateChanged.connect(self.simultaneous_montage_changed)
         add_setting_row(form_layout, simultaneous_label_widget, self.simultaneous_montage_checkbox, "simultaneous_montage_and_subs", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
+        # Simulation Target selection
+        self.simulation_target_help = HelpLabel("simulation_target_help")
+        self.simulation_target_label = QLabel()
+        
+        simulation_target_widget = QWidget()
+        simulation_target_layout = QHBoxLayout(simulation_target_widget)
+        simulation_target_layout.setContentsMargins(0, 0, 0, 0)
+        simulation_target_layout.setSpacing(5)
+        simulation_target_layout.addWidget(self.simulation_target_help)
+        simulation_target_layout.addWidget(self.simulation_target_label)
+
+        self.simulation_target_combo = QComboBox()
+        self.simulation_target_combo.addItem("DaVinci Resolve Studio", "DaVinci Resolve Studio")
+        # Можна додати інші пізніше: Adobe Premiere Pro, Final Cut Pro, None
+        self.simulation_target_combo.currentIndexChanged.connect(self.simulation_target_changed)
+        
+        add_setting_row(form_layout, simulation_target_widget, self.simulation_target_combo, "simulation_target", quick_panel_refresh_callback=refresh_cb)
+
         # Max download threads
         self.max_download_threads_help = HelpLabel("max_download_threads_label")
         self.max_download_threads_label = QLabel()
@@ -281,6 +299,7 @@ class GeneralTab(QWidget):
         self.translation_review_checkbox.blockSignals(True)
         self.image_review_checkbox.blockSignals(True)
         self.simultaneous_montage_checkbox.blockSignals(True)
+        self.simulation_target_combo.blockSignals(True)
         self.detailed_logging_checkbox.blockSignals(True)
         self.prompt_count_control_checkbox.blockSignals(True)
         self.prompt_count_spinbox.blockSignals(True)
@@ -301,6 +320,14 @@ class GeneralTab(QWidget):
         self.rewrite_review_checkbox.setChecked(settings_manager.get('rewrite_review_enabled', False))
         self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
         self.simultaneous_montage_checkbox.setChecked(settings_manager.get('simultaneous_montage_and_subs', False))
+        
+        current_sim_target = settings_manager.get('simulation_target', 'DaVinci Resolve Studio')
+        idx = self.simulation_target_combo.findData(current_sim_target)
+        if idx >= 0:
+            self.simulation_target_combo.setCurrentIndex(idx)
+        else:
+            self.simulation_target_combo.setCurrentIndex(0) # Default to DaVinci
+
         self.detailed_logging_checkbox.setChecked(settings_manager.get('detailed_logging_enabled', False))
         
         prompt_control_enabled = settings_manager.get('prompt_count_control_enabled', False)
@@ -322,7 +349,9 @@ class GeneralTab(QWidget):
         self.image_provider_combo.blockSignals(False)
         self.translation_review_checkbox.blockSignals(False)
         self.image_review_checkbox.blockSignals(False)
+        self.image_review_checkbox.blockSignals(False)
         self.simultaneous_montage_checkbox.blockSignals(False)
+        self.simulation_target_combo.blockSignals(False)
         self.detailed_logging_checkbox.blockSignals(False)
         self.prompt_count_control_checkbox.blockSignals(False)
         self.prompt_count_spinbox.blockSignals(False)
@@ -357,6 +386,10 @@ class GeneralTab(QWidget):
 
     def simultaneous_montage_changed(self, state):
         settings_manager.set('simultaneous_montage_and_subs', state == Qt.CheckState.Checked.value)
+
+    def simulation_target_changed(self, index):
+        target = self.simulation_target_combo.itemData(index)
+        settings_manager.set('simulation_target', target)
 
     def prompt_count_control_changed(self, state):
         is_checked = state == Qt.CheckState.Checked.value
@@ -434,6 +467,8 @@ class GeneralTab(QWidget):
         self.image_review_help.update_tooltip()
         self.simultaneous_montage_label.setText(translator.translate('simultaneous_montage_label'))
         self.simultaneous_montage_help.update_tooltip()
+        self.simulation_target_label.setText(translator.translate('simulation_target_label'))
+        self.simulation_target_help.update_tooltip()
         self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
         self.detailed_logging_help.update_tooltip()
         self.accent_color_label.setText(translator.translate('accent_color_label'))
