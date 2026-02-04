@@ -189,28 +189,41 @@ class MontageEngine:
             start_index = min(num_images, special_count)
 
         # Check for externally provided durations (e.g. from subtitle synchronization)
-        override_durations = kwargs.get('override_durations')
+        # NOTE: override_durations is passed inside 'settings' dict from video_mixin
+        override_durations = settings.get('override_durations') or kwargs.get('override_durations')
         
-        if override_durations and len(override_durations) == (num_images - start_index):
-             logger.log(f"{prefix}[Montage] Using synchronized durations for {len(override_durations)} images.", level=LogLevel.INFO)
-             for i in range(start_index, num_images):
-                 img_idx = image_indices[i]
-                 # mapping: override_durations[0] corresponds to image_indices[start_index]
-                 final_clip_durations[img_idx] = override_durations[i - start_index]
+        # NEW: override_durations now applies to ALL visual files (videos + images)
+        # This is important for sync mode where each segment has a specific duration
+        if override_durations:
+            if len(override_durations) == num_files:
+                # Perfect match - apply to all files
+                logger.log(f"{prefix}[Montage] Using synchronized durations for {len(override_durations)} visual files.", level=LogLevel.INFO)
+                for i in range(num_files):
+                    final_clip_durations[i] = override_durations[i]
+            elif len(override_durations) == (num_images - start_index):
+                # Legacy mode: only for images (excluding special mode images)
+                logger.log(f"{prefix}[Montage] Using synchronized durations for {len(override_durations)} images.", level=LogLevel.INFO)
+                for i in range(start_index, num_images):
+                    img_idx = image_indices[i]
+                    final_clip_durations[img_idx] = override_durations[i - start_index]
+            else:
+                logger.log(f"{prefix}[Montage] Warning: Override durations count ({len(override_durations)}) mismatch with files ({num_files}) or images ({num_images-start_index}). Using fallback.", level=LogLevel.WARNING)
+                # Fallback to even distribution for images
+                for i in range(start_index, num_images):
+                    img_idx = image_indices[i]
+                    final_clip_durations[img_idx] = img_duration
         else:
-             # Fallback to even distribution logic
-             if override_durations:
-                 logger.log(f"{prefix}[Montage] Warning: Override durations count ({len(override_durations)}) mismatch with images ({num_images-start_index}). Using even distribution.", level=LogLevel.WARNING)
-
-             for i in range(start_index, num_images):
-                 img_idx = image_indices[i]
-                 final_clip_durations[img_idx] = img_duration
+            # No override durations - use even distribution for images
+            for i in range(start_index, num_images):
+                img_idx = image_indices[i]
+                final_clip_durations[img_idx] = img_duration
         
         # Log compact montage info (single line)
-        log_msg = f"{prefix}[FFmpeg] Starting montage | Audio: {audio_dur:.2f}s, Images: {num_images}"
+        log_msg = f"{prefix}[FFmpeg] Starting montage | Audio: {audio_dur:.2f}s, Files: {num_files} (Videos: {num_files - num_images}, Images: {num_images})"
         if special_mode == "Quick show":
             log_msg += f" (Special: {min(num_images, special_count)}x{special_dur:.2f}s)"
-        log_msg += f", Other Images: {num_normal_images}x{img_duration:.2f}s"
+        if not override_durations:
+            log_msg += f", Img duration: {img_duration:.2f}s"
         logger.log(log_msg, level=LogLevel.INFO)
         
         # 3. ГЕНЕРАЦІЯ FFmpeg КОМАНДИ
@@ -231,19 +244,47 @@ class MontageEngine:
                  logger.log(f"{prefix}[Error] Input file not found: {abs_path}", level=LogLevel.ERROR)
                  raise Exception(f"Input file missing: {abs_path}")
 
+            # Check if this is a video that needs looping BEFORE adding to inputs
+            # Add inputs with optional stream_loop
             inputs.append("-thread_queue_size"); inputs.append("4096")
             inputs.append("-i"); inputs.append(abs_path)
             v_in = f"[{i}:v]"; v_out = f"v{i}_final"
             
             if is_video:
-                # Нативно прибираємо водяний знак для всіх відео в монтажі (Zoom 8% + Crop top-left)
-                # Також примусово масштабуємо до розміру проекту, щоб виправити можливе розтягування (Googler/Veo).
-                vf = (
-                    f"{v_in}scale={base_w}:{base_h},"
-                    f"scale=1.08*iw:-1,crop={base_w}:{base_h}:0:0,"
-                    f"format=yuv420p,setsar=1,fps={fps},"
-                    f"setpts=PTS-STARTPTS[{v_out}]"
-                )
+                # Target duration is set in final_clip_durations (could be from override_durations)
+                target_dur = this_dur
+                actual_dur = self._get_duration(abs_path) or 5.0
+                # Determine if we need to extend (freeze last frame) or trim
+                # We prioritize simple extension using tpad instead of complex looping
+                
+                if target_dur > actual_dur:
+                    # Video is shorter than target duration - USE AS IS (Sync will be fixed by extending the next image)
+                    logger.log(f"{prefix}[Montage] Video {i+1}: shorter than target ({actual_dur:.2f}s < {target_dur:.2f}s). Using full video length.", level=LogLevel.INFO)
+                    
+                    vf = (
+                        f"{v_in}scale={base_w}:{base_h},"
+                        f"scale=1.08*iw:-1,crop={base_w}:{base_h}:0:0,"
+                        f"format=yuv420p,setsar=1,fps={fps},"
+                        f"setpts=PTS-STARTPTS[{v_out}]"
+                    )
+                elif target_dur < actual_dur * 0.95:
+                    logger.log(f"{prefix}[Montage] Video {i+1}: trimming to {target_dur:.2f}s (original: {actual_dur:.2f}s)", level=LogLevel.DEBUG)
+                    # Trim video to target duration
+                    vf = (
+                        f"{v_in}trim=duration={this_dur_str},"
+                        f"scale={base_w}:{base_h},"
+                        f"scale=1.08*iw:-1,crop={base_w}:{base_h}:0:0,"
+                        f"format=yuv420p,setsar=1,fps={fps},"
+                        f"setpts=PTS-STARTPTS[{v_out}]"
+                    )
+                else:
+                    # Use video as-is (within tolerance)
+                    vf = (
+                        f"{v_in}scale={base_w}:{base_h},"
+                        f"scale=1.08*iw:-1,crop={base_w}:{base_h}:0:0,"
+                        f"format=yuv420p,setsar=1,fps={fps},"
+                        f"setpts=PTS-STARTPTS[{v_out}]"
+                    )
                 filter_parts.append(vf)
             else:
                 v_up = f"v{i}_up"
@@ -659,8 +700,7 @@ class MontageEngine:
                     '-preset', preset,
                     '-b:v', bitrate_str,
                     '-maxrate', bitrate_str,
-                    '-bufsize', f"{bitrate*2}M",
-                    '-shortest'
+                    '-bufsize', f"{bitrate*2}M"
                 ])
             elif codec == "h264_amf":
                 if preset in ["ultrafast", "superfast", "veryfast", "faster", "fast"]: u="speed"

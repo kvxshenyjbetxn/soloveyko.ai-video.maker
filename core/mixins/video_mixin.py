@@ -1,5 +1,7 @@
 import os
 import re
+import subprocess
+import json
 from PySide6.QtCore import Slot
 from utils.logger import logger, LogLevel
 from core.workers import VideoGenerationWorker, MontageWorker
@@ -127,6 +129,14 @@ class VideoMixin:
         
         # New merge logic: successful videos first, then rest (failed animations are discarded)
         success_videos = [p for p in generated_videos if p is not None]
+        
+        logger.log(
+            f"[{task_id}] Processing video results: {len(success_videos)} videos success. "
+            f"Total images present before merge: {len(state.image_paths)}. "
+            f"Animation count target: {video_count_animated}.",
+            level=LogLevel.DEBUG
+        )
+        
         remaining_images = state.image_paths[video_count_animated:]
         
         if success_videos:
@@ -371,20 +381,261 @@ class VideoMixin:
                 logger.log(f"[{task_id}] Fallback to 'Quick Show' mode for montage.", level=LogLevel.WARNING)
                 montage_settings['special_processing_mode'] = "Quick show"
                 
-            # --- Synchronization Logic ---
+            # --- IMPROVED SYNCHRONIZATION LOGIC ---
             text_chunks = state.lang_data.get('text_chunks')
             
-            # If we have text chunks, we engage the GAP-FILLING logic.
-            # This ensures that if image #2 is missing, we reuse image #1 for segment #2.
-            if text_chunks:
+            if text_chunks and state.subtitle_path and os.path.exists(state.subtitle_path):
+                logger.log(f"[{task_id}] Starting synchronized montage with {len(text_chunks)} segments.", level=LogLevel.INFO)
+                
+                # Step 1: Get segment timings from subtitles
+                segment_timings = self.align_segments_to_subtitles(
+                    text_chunks, 
+                    state.subtitle_path, 
+                    task_id=task_id
+                )
+                
+                if not segment_timings:
+                    logger.log(f"[{task_id}] Failed to align segments to subtitles. Using fallback.", level=LogLevel.WARNING)
+                else:
+                    # Step 2: Determine which images exist for each segment
+                    # Check expected extension from existing files
+                    ext = '.png'
+                    VIDEO_EXTS = ['.mp4', '.mkv', '.mov', '.avi', '.webm']
+                    
+                    if final_image_paths:
+                        first_ext = os.path.splitext(final_image_paths[0])[1].lower()
+                        if first_ext in ['.jpg', '.jpeg']:
+                            ext = first_ext
+                        elif first_ext in VIDEO_EXTS:
+                            ext = first_ext  # Could be video at beginning mode
+                    
+                    images_dir = os.path.dirname(final_image_paths[0]) if final_image_paths else state.dir_path
+                    
+                    # Step 3: Build final image list with gap-filling
+                    # Structure: [(image_path, accumulated_duration), ...]
+                    final_visuals = []
+                    final_durations = []
+                    accumulated_duration = 0.0
+                    last_valid_image = None
+                    pending_segments = []  # Segments waiting for an image
+                    sync_offset = 0.0      # Time debt from short videos
+                    
+                    for i, timing in enumerate(segment_timings):
+                        segment_duration = timing['duration']
+                        segment_index = timing['index']
+                        
+                        # Try to find the image for this segment
+                        # Check multiple possible formats: 0001.png, 1.png, 0001.jpg, 1.mp4, etc.
+                        candidate_paths = []
+                        
+                        # Always check standard image extensions
+                        for img_ext in ['.png', '.jpg', '.jpeg']:
+                            candidate_paths.append(os.path.join(images_dir, f"{segment_index + 1:04d}{img_ext}"))
+                            candidate_paths.append(os.path.join(images_dir, f"{segment_index + 1}{img_ext}"))
+                            
+                        # Also check for video versions
+                        for v_ext in VIDEO_EXTS:
+                            candidate_paths.append(os.path.join(images_dir, f"{segment_index + 1:04d}{v_ext}"))
+                            candidate_paths.append(os.path.join(images_dir, f"{segment_index + 1}{v_ext}"))
+                        
+                        # Check specific 'ext' from detection just in case (e.g. specialized format)
+                        if ext not in ['.png', '.jpg', '.jpeg'] and ext not in VIDEO_EXTS:
+                             candidate_paths.append(os.path.join(images_dir, f"{segment_index + 1:04d}{ext}"))
+                             candidate_paths.append(os.path.join(images_dir, f"{segment_index + 1}{ext}"))
+
+                        found_image = None
+                        for cp in candidate_paths:
+                            if os.path.exists(cp):
+                                found_image = cp
+                                break
+                        
+                        if found_image:
+                            # Image/Video exists for this segment
+                            
+                            # --- GAP FILLING LOGIC ---
+                            if pending_segments:
+                                # We had pending segments waiting for an image
+                                # Apply accumulated duration to the LAST valid image
+                                if last_valid_image and final_durations:
+                                    # Add pending duration to last image
+                                    final_durations[-1] += accumulated_duration
+                                    logger.log(
+                                        f"[{task_id}] Extended {os.path.basename(last_valid_image)} "
+                                        f"to cover {len(pending_segments)} missing segment(s) "
+                                        f"(+{accumulated_duration:.2f}s)",
+                                        level=LogLevel.INFO
+                                    )
+                                elif not last_valid_image:
+                                    # First image(s) were missing, this found_image covers them
+                                    segment_duration += accumulated_duration
+                                    logger.log(
+                                        f"[{task_id}] First {len(pending_segments)} segment(s) had no images. "
+                                        f"Using {os.path.basename(found_image)} from start "
+                                        f"(duration: {segment_duration:.2f}s)",
+                                        level=LogLevel.INFO
+                                    )
+                                
+                                pending_segments = []
+                                accumulated_duration = 0.0
+                            
+                            
+                            # --- VIDEO SYNC RIPPLE LOGIC (RESTORED) ---
+                            is_video_file = os.path.splitext(found_image)[1].lower() in VIDEO_EXTS
+                            
+                            if is_video_file:
+                                try:
+                                    real_dur = self._get_video_file_duration(found_image)
+                                    if real_dur > 0:
+                                        if real_dur < segment_duration:
+                                            # Video is shorter: create time debt
+                                            diff = segment_duration - real_dur
+                                            sync_offset += diff
+                                            logger.log(f"[{task_id}] Video shorter ({real_dur}s < {segment_duration:.2f}s). Accumulated sync offset: {sync_offset:.2f}s", level=LogLevel.DEBUG)
+                                            segment_duration = real_dur # Commit to short duration
+                                        else:
+                                            # Video is longer: let MontageEngine trim it.
+                                            pass
+                                except Exception as e:
+                                    logger.log(f"[{task_id}] Failed to get duration for {os.path.basename(found_image)}: {e}", level=LogLevel.WARNING)
+                            
+                            elif sync_offset > 0:
+                                # This is an image, and we have time debt
+                                segment_duration += sync_offset
+                                logger.log(f"[{task_id}] Sync Correction: Extended image {os.path.basename(found_image)} by {sync_offset:.2f}s to restore sync.", level=LogLevel.INFO)
+                                sync_offset = 0.0
+
+                            final_visuals.append(found_image)
+                            final_durations.append(segment_duration)
+                            last_valid_image = found_image
+                            
+                        else:
+                            # Image missing for this segment
+                            pending_segments.append(segment_index)
+                            accumulated_duration += segment_duration
+                            logger.log(
+                                f"[{task_id}] Segment {segment_index + 1} image missing. "
+                                f"Accumulating {segment_duration:.2f}s for gap-fill.",
+                                level=LogLevel.DEBUG
+                            )
+                    
+                    # Handle any remaining pending segments at the end
+                    if pending_segments and last_valid_image and final_durations:
+                        final_durations[-1] += accumulated_duration
+                        logger.log(
+                            f"[{task_id}] Extended last image to cover {len(pending_segments)} "
+                            f"trailing missing segment(s) (+{accumulated_duration:.2f}s)",
+                            level=LogLevel.INFO
+                        )
+                    
+                    
+                    # --- FINAL DURATION CHECK ---
+                    # Ensure total visual duration matches total audio duration strictly.
+                    # This prevents the last image from freezing if audio has trailing silence/music.
+                    audio_path = state.audio_path
+                    
+                    
+                    # Fallback lookup for audio path if not directly in state
+                    audio_candidates = []
+                    if audio_path and os.path.exists(audio_path):
+                        audio_candidates.append(audio_path)
+                    
+                    # Add standard voiceover path
+                    audio_candidates.append(os.path.join(state.dir_path, f"voice_{state.lang_id}.mp3"))
+                    # Add generic audio paths
+                    audio_candidates.append(os.path.join(state.dir_path, "audio.mp3"))
+                    audio_candidates.append(os.path.join(state.dir_path, "voice.mp3"))
+                    
+                    # Find first valid audio
+                    valid_audio_path = None
+                    for cand in audio_candidates:
+                        if os.path.exists(cand):
+                            valid_audio_path = cand
+                            break
+                    
+                    # Last resort: find ANY audio file in folder
+                    if not valid_audio_path:
+                        try:
+                            files = os.listdir(state.dir_path)
+                            for f in files:
+                                if f.lower().endswith(('.mp3', '.wav', '.m4a')):
+                                    valid_audio_path = os.path.join(state.dir_path, f)
+                                    logger.log(f"[{task_id}] Sync: Guessing audio path: {valid_audio_path}", level=LogLevel.WARNING)
+                                    break
+                        except: pass
+
+                    if valid_audio_path and final_durations:
+                         try:
+                             total_audio_dur = self._get_video_file_duration(valid_audio_path)
+                             
+                             # Calculate effective visual duration accounting for transitions
+                             # Each transition overlaps and consumes 'trans_dur' of time from the total sequence length
+                             montage_settings = state.settings.get("montage", {})
+                             trans_dur = float(montage_settings.get("transition_duration", 1.0))
+                             enable_trans = montage_settings.get("enable_transitions", True)
+                             num_files = len(final_durations)
+                             
+                             total_visual_dur_raw = sum(final_durations)
+                             loss_per_trans = trans_dur
+                             
+                             # Total loss = (N-1) * trans_dur
+                             # IF transitions are enabled and we have > 1 file
+                             total_loss = 0.0
+                             if enable_trans and num_files > 1:
+                                 total_loss = (num_files - 1) * loss_per_trans
+                                 
+                             effective_visual_dur = total_visual_dur_raw - total_loss
+                             
+                             logger.log(f"[{task_id}] Sync Check (Audio: {os.path.basename(valid_audio_path)}): Audio={total_audio_dur:.2f}s, Visuals(Eff)={effective_visual_dur:.2f}s (Loss: {total_loss:.2f}s)", level=LogLevel.DEBUG)
+                             
+                             if total_audio_dur > effective_visual_dur:
+                                 diff = total_audio_dur - effective_visual_dur
+                                 # Allow a tiny tolerance, but generally extend
+                                 if diff > 0.05:
+                                     final_durations[-1] += diff
+                                     logger.log(f"[{task_id}] FIXED: Extended last visual by {diff:.2f}s (incl. transition compensation) to match total audio duration.", level=LogLevel.INFO)
+                                 else:
+                                     logger.log(f"[{task_id}] Sync Perfect (diff {diff:.3f}s)", level=LogLevel.DEBUG)
+                         except Exception as e:
+                             logger.log(f"[{task_id}] Warning: Could not sync total duration: {e}", level=LogLevel.WARNING)
+                    
+                    # Step 4: Update paths and durations
+                    if final_visuals:
+                        final_image_paths = final_visuals
+                        montage_settings['override_durations'] = final_durations
+                        
+                        # Log summary
+                        total_duration = sum(final_durations)
+                        avg_confidence = sum(t['confidence'] for t in segment_timings) / len(segment_timings) if segment_timings else 0
+                        logger.log(
+                            f"[{task_id}] Synchronized montage ready: "
+                            f"{len(final_visuals)} visuals, "
+                            f"total {total_duration:.2f}s, "
+                            f"avg confidence: {avg_confidence:.0%}",
+                            level=LogLevel.INFO
+                        )
+                        
+                        # === GENERATE DEBUG FILE ===
+                        try:
+                            self._generate_sync_debug_file(
+                                state.dir_path,
+                                text_chunks,
+                                segment_timings,
+                                final_visuals,
+                                final_durations,
+                                task_id
+                            )
+                        except Exception as e:
+                            logger.log(f"[{task_id}] Failed to generate sync debug file: {e}", level=LogLevel.WARNING)
+                        
+                    else:
+                        logger.log(f"[{task_id}] No valid images found after gap-filling!", level=LogLevel.ERROR)
+            
+            # --- Legacy gap-filling for non-sync mode (preserve old behavior) ---
+            elif text_chunks:
+                # Old logic for backward compatibility
                 full_image_list = []
                 last_valid_image = None
                 
-                # We need to scan the directory for specific numbered files to know which ones are missing.
-                # state.image_paths is usually sorted, but doesn't tell us "who is who" if gaps exist.
-                # So we check for existence of 0001.png, 0002.png, etc. directly.
-                
-                # Check expected extension from existing files (prefer png)
                 ext = '.png'
                 if final_image_paths and final_image_paths[0].lower().endswith('.jpg'):
                     ext = '.jpg'
@@ -394,7 +645,6 @@ class VideoMixin:
                 images_dir = os.path.dirname(final_image_paths[0]) if final_image_paths else state.dir_path
                 
                 for i in range(len(text_chunks)):
-                    # filename index is 1-based (0001.png for chunk 0)
                     candidate_name = f"{i+1:04d}{ext}"
                     candidate_path = os.path.join(images_dir, candidate_name)
                     
@@ -402,62 +652,19 @@ class VideoMixin:
                         full_image_list.append(candidate_path)
                         last_valid_image = candidate_path
                     else:
-                        # Image missing! Fallback strategies.
                         if last_valid_image:
-                            # Strategy 1: Extensions from START (Reuse previous)
-                            logger.log(f"[{task_id}] Image {candidate_name} missing. Extending previous image: {os.path.basename(last_valid_image)}", level=LogLevel.WARNING)
                             full_image_list.append(last_valid_image)
                         else:
-                            # Strategy 2: First image missing?
-                            # We can't extend backwards. We try to find the *next* available and use it?
-                            # Or just wait until we find one.
-                            # For now, let's append a placeholder or skip?
-                            # If we skip, the duration alignment will break index.
-                            # BETTER: Look ahead for the first valid image WITH RETRIES
-                            # Sometimes the file system is slow to update after generation.
-                            import time
-                            first_valid = None
-                            
-                            for retry_attempt in range(5):
-                                for k in range(len(text_chunks)):
-                                    fname = f"{k+1:04d}{ext}"
-                                    fpath = os.path.join(images_dir, fname)
-                                    if os.path.exists(fpath):
-                                        first_valid = fpath
-                                        break
-                                
-                                if first_valid:
+                            # Look for first valid
+                            for k in range(len(text_chunks)):
+                                fpath = os.path.join(images_dir, f"{k+1:04d}{ext}")
+                                if os.path.exists(fpath):
+                                    full_image_list.append(fpath)
+                                    last_valid_image = fpath
                                     break
-                                else:
-                                    if retry_attempt < 4:
-                                        # logger.log(f"[{task_id}] Waiting for images to appear... (attempt {retry_attempt+1}/5)", level=LogLevel.INFO)
-                                        time.sleep(1.0)
-                            
-                            if first_valid:
-                                logger.log(f"[{task_id}] Image {candidate_name} (start) missing. Using first available: {os.path.basename(first_valid)}", level=LogLevel.WARNING)
-                                full_image_list.append(first_valid)
-                                last_valid_image = first_valid # Set as valid so subsequent gaps use it too
-                            else:
-                                # No images at all?
-                                # logger.log(f"[{task_id}] No images found for synchronization! (Checked {len(text_chunks)} expected files)", level=LogLevel.ERROR)
-                                break
                 
-                # Update final_image_paths to our new gap-filled list
                 if full_image_list:
                     final_image_paths = full_image_list
-                    
-                # Now verify subtitle alignment with this FULL list
-                if state.subtitle_path and os.path.exists(state.subtitle_path):
-                    segment_map = {}
-                    # We map 1-to-1 because we filled gaps
-                    for i in range(len(final_image_paths)):
-                        segment_map[i] = text_chunks[i]
-                    
-                    durations = self.align_images_to_subtitles(segment_map, state.subtitle_path)
-                    
-                    if durations:
-                        montage_settings['override_durations'] = durations
-                        logger.log(f"[{task_id}] Applied synchronized durations for {len(durations)} images (gap-filled).", level=LogLevel.INFO)
 
             config = {
                 'visual_files': final_image_paths, 'audio_path': state.audio_path,
@@ -560,3 +767,143 @@ class VideoMixin:
                     self.stage_metadata_updated.emit(state.job_id, state.lang_id, 'stage_montage', progress_str)
             except Exception:
                 pass
+    
+    def _generate_sync_debug_file(self, dir_path, text_chunks, segment_timings, final_visuals, final_durations, task_id):
+        """
+        Generates a debug file with synchronization details.
+        
+        Creates sync_debug.txt with a table showing:
+        - Image number
+        - Text segment assigned to this image
+        - Display time range
+        - Matched subtitle time range
+        - Confidence score
+        """
+        from datetime import datetime
+        
+        debug_path = os.path.join(dir_path, "sync_debug.txt")
+        
+        def format_time(seconds):
+            """Convert seconds to MM:SS.ms format"""
+            mins = int(seconds // 60)
+            secs = seconds % 60
+            return f"{mins:02d}:{secs:05.2f}"
+        
+        with open(debug_path, 'w', encoding='utf-8') as f:
+            # Header
+            f.write("=" * 100 + "\n")
+            f.write(f"SYNCHRONIZATION DEBUG REPORT\n")
+            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Task: {task_id}\n")
+            f.write("=" * 100 + "\n\n")
+            
+            # Summary
+            total_duration = sum(final_durations) if final_durations else 0
+            avg_confidence = sum(t['confidence'] for t in segment_timings) / len(segment_timings) if segment_timings else 0
+            
+            f.write("SUMMARY\n")
+            f.write("-" * 50 + "\n")
+            f.write(f"Total Segments: {len(text_chunks)}\n")
+            f.write(f"Final Visuals:  {len(final_visuals)}\n")
+            f.write(f"Total Duration: {format_time(total_duration)} ({total_duration:.2f}s)\n")
+            f.write(f"Avg Confidence: {avg_confidence:.0%}\n")
+            f.write("\n")
+            
+            # Detailed table
+            f.write("DETAILED SYNCHRONIZATION TABLE\n")
+            f.write("=" * 100 + "\n")
+            f.write(f"{'#':<4} {'Image':<20} {'Display Time':<20} {'Subtitle Match':<20} {'Conf':<8} {'Text Segment'}\n")
+            f.write("-" * 100 + "\n")
+            
+            # Track cumulative display time
+            current_display_time = 0.0
+            visual_index = 0
+            
+            for i, timing in enumerate(segment_timings):
+                segment_index = timing['index']
+                segment_text = text_chunks[segment_index] if segment_index < len(text_chunks) else "[N/A]"
+                
+                # Truncate text for display
+                text_preview = segment_text[:60] + "..." if len(segment_text) > 60 else segment_text
+                text_preview = text_preview.replace('\n', ' ').replace('\r', '')
+                
+                # Subtitle match time
+                sub_start = timing['start']
+                sub_end = timing['end']
+                sub_range = f"{format_time(sub_start)} - {format_time(sub_end)}"
+                
+                # Confidence
+                confidence = timing['confidence']
+                conf_str = f"{confidence:.0%}" if confidence > 0 else "EST"
+                
+                # Check if this segment has an image
+                # (we need to match segment to visual)
+                if visual_index < len(final_visuals):
+                    image_name = os.path.basename(final_visuals[visual_index])
+                    display_duration = final_durations[visual_index] if visual_index < len(final_durations) else timing['duration']
+                    display_end = current_display_time + display_duration
+                    display_range = f"{format_time(current_display_time)} - {format_time(display_end)}"
+                    
+                    # Write row
+                    f.write(f"{segment_index + 1:<4} {image_name:<20} {display_range:<20} {sub_range:<20} {conf_str:<8} {text_preview}\n")
+                    
+                    current_display_time = display_end
+                    visual_index += 1
+                else:
+                    # No image for this segment (was gap-filled)
+                    f.write(f"{segment_index + 1:<4} {'[GAP-FILLED]':<20} {'(merged)':<20} {sub_range:<20} {conf_str:<8} {text_preview}\n")
+            
+            f.write("-" * 100 + "\n")
+            f.write(f"\nLEGEND:\n")
+            f.write(f"  #           - Segment number\n")
+            f.write(f"  Image       - Image/video file used\n")
+            f.write(f"  Display Time - When image is shown in final video\n")
+            f.write(f"  Subtitle Match - Time range in subtitles where text was found\n")
+            f.write(f"  Conf        - Confidence of text match (EST = estimated, no match found)\n")
+            f.write(f"  Text Segment - Original text assigned to this segment\n")
+            f.write("\n")
+            
+            # Full text segments
+            f.write("\n" + "=" * 100 + "\n")
+            f.write("FULL TEXT SEGMENTS\n")
+            f.write("=" * 100 + "\n\n")
+            
+            for i, chunk in enumerate(text_chunks):
+                timing = segment_timings[i] if i < len(segment_timings) else None
+                if timing:
+                    f.write(f"[Segment {i + 1}] ({format_time(timing['start'])} - {format_time(timing['end'])}, confidence: {timing['confidence']:.0%})\n")
+                else:
+                    f.write(f"[Segment {i + 1}]\n")
+                f.write(f"{chunk}\n")
+                f.write("-" * 50 + "\n\n")
+        
+        logger.log(f"[{task_id}] Sync debug file saved: {debug_path}", level=LogLevel.DEBUG)
+
+    def _get_video_file_duration(self, file_path):
+        """
+        Helper to get video duration using ffprobe.
+        """
+        try:
+            # Try getting json metadata
+            cmd = [
+                'ffprobe', 
+                '-v', 'error', 
+                '-show_entries', 'format=duration', 
+                '-of', 'default=noprint_wrappers=1:nokey=1', 
+                file_path
+            ]
+            
+            # Start process without opening window on Windows
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, startupinfo=startupinfo, text=True)
+            
+            if result.returncode == 0:
+                duration = float(result.stdout.strip())
+                return duration
+        except Exception as e:
+            logger.log(f"Error checking video duration for {os.path.basename(file_path)}: {e}", level=LogLevel.WARNING)
+        return 0.0
