@@ -186,19 +186,43 @@ class ImagePromptWorker(BaseWorker):
                     
                 except Exception as e:
                     last_error = e
+                    error_str = str(e)
+                    
+                    # Check if this is a non-retryable error (content moderation, etc.)
+                    non_retryable_errors = ['PROHIBITED_CONTENT', 'CONTENT_POLICY', 'content_filter', 'moderation']
+                    is_non_retryable = any(err in error_str for err in non_retryable_errors)
+                    
+                    if is_non_retryable:
+                        # Skip this segment entirely - gap-filling will handle missing images
+                        logger.log(
+                            f"[{self.task_id}] Segment {i+1} skipped due to content policy. "
+                            f"Gap-filling will cover this segment.",
+                            level=LogLevel.WARNING
+                        )
+                        result = None  # Mark as skipped
+                        break  # Exit retry loop
+                    
                     logger.log(f"[{self.task_id}] API call failed (attempt {attempt+1}/{max_retries}): {e}", level=LogLevel.WARNING)
                     if attempt < max_retries - 1:
                         time.sleep(2 * (attempt + 1)) # Exponential-ish backoff: 2s, 4s...
                     else:
-                        # If all retries failed, re-raise the last error
-                        raise last_error
+                        # After all retries failed, skip this segment instead of failing
+                        logger.log(
+                            f"[{self.task_id}] Segment {i+1} failed after {max_retries} retries. "
+                            f"Skipping - gap-filling will handle this.",
+                            level=LogLevel.WARNING
+                        )
+                        result = None  # Mark as skipped
             
-            if response and result:
+            if result:
                 result = result.strip()
                 generated_prompts.append(result)
             else:
-                logger.log(f"[{self.task_id}] Warning: Empty response for segment {i+1}", level=LogLevel.WARNING)
-                generated_prompts.append("A scenic view related to the story.") # Fallback
+                # Segment was skipped or failed - DON'T append fallback
+                # This creates a "gap" that gap-filling logic will handle
+                logger.log(f"[{self.task_id}] Segment {i+1} has no prompt (skipped)", level=LogLevel.WARNING)
+                # Append a special marker that image generation will recognize as "skip"
+                generated_prompts.append("[SKIP]")
 
             # Balance update (approximate or after loop)
             # We emit after loop to avoid spam, but calculating cost is hard without token usage data.
@@ -218,7 +242,14 @@ class ImagePromptWorker(BaseWorker):
         else:
             result = generated_prompts[0]
 
-        logger.log(f"[{self.task_id}] [{model}] Image prompts generated ({len(generated_prompts)} prompts)", level=LogLevel.SUCCESS)
+        # Count actual vs skipped prompts
+        actual_prompts = [p for p in generated_prompts if p != '[SKIP]']
+        skipped_count = len(generated_prompts) - len(actual_prompts)
+        
+        if skipped_count > 0:
+            logger.log(f"[{self.task_id}] [{model}] Image prompts generated ({len(actual_prompts)} prompts, {skipped_count} skipped)", level=LogLevel.SUCCESS)
+        else:
+            logger.log(f"[{self.task_id}] [{model}] Image prompts generated ({len(actual_prompts)} prompts)", level=LogLevel.SUCCESS)
         self.signals.balance_updated.emit('openrouter', None)
         return result
 
@@ -524,6 +555,11 @@ class ImageGenerationWorker(BaseWorker):
         for p in prompts:
             p_clean = p.strip()
             if not p_clean:
+                continue
+            
+            # Skip segments that were marked as skipped due to content policy
+            if p_clean == '[SKIP]' or p_clean.startswith('[SKIP]'):
+                logger.log(f"[{self.task_id}] Skipping segment (content policy)", level=LogLevel.DEBUG)
                 continue
             
             # Apply strip patterns with re.IGNORECASE flag

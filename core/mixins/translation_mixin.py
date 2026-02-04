@@ -260,7 +260,16 @@ class TranslationMixin:
         split_count = state.settings.get('text_split_count') or state.lang_data.get('text_split_count')
 
         if split_count and int(split_count) > 1:
-            chunks = self.split_text_into_chunks(state.text_for_processing, int(split_count))
+            # Check for Video at the beginning mode
+            montage_settings = state.settings.get("montage", {})
+            special_mode = montage_settings.get("special_processing_mode", "Disabled")
+            special_count = 0
+            
+            if special_mode == "Video at the beginning":
+                special_count = montage_settings.get("special_processing_video_count", 0)
+                logger.log(f"[{task_id}] Hybrid text splitting enabled: First {special_count} chunks will be short (Video Mode).", level=LogLevel.INFO)
+            
+            chunks = self.split_text_into_chunks(state.text_for_processing, int(split_count), special_count=int(special_count))
             state.lang_data['text_chunks'] = chunks
             logger.log(f"[{task_id}] Text split into {len(chunks)} chunks for synchronized generation (based on prompt_count={split_count}).", level=LogLevel.INFO)
         
