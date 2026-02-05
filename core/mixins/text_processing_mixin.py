@@ -55,49 +55,62 @@ class TextProcessingMixin:
             # Remove used sentences
             remaining_sentences = remaining_sentences[count:]
             
-            # Calculate remaining chunks needed
-            remaining_chunks_target = max(1, num_chunks - len(chunks))
-            
-            logger.log(f"[TextProcessing] Special split: {len(chunks)} video segments created. Distributing rest into {remaining_chunks_target} chunks.", level=LogLevel.DEBUG)
-        else:
-            remaining_chunks_target = num_chunks
-            
+            logger.log(f"[TextProcessing] Special split: Created {count} short segments. Remaining sentences: {len(remaining_sentences)}", level=LogLevel.DEBUG)
+        
         if not remaining_sentences:
             return chunks
 
         # --- PHASE 2: Even Distribution of Remaining Text ---
+        # Calculate how many chunks we have left to fill
+        # We must ensure we don't exceed num_chunks if possible, but also don't clump everything if num_chunks is used up
+        
+        remaining_slots = max(1, num_chunks - len(chunks))
+        
         # Calculate target length per chunk for remaining text
         total_len = sum(len(s) for s in remaining_sentences)
-        target_chunk_len = total_len / remaining_chunks_target
+        target_chunk_len = total_len / remaining_slots
         
         current_chunk = []
         current_len = 0
         
-        chunks_added_in_phase2 = 0
+        # Track how many chunks we've created in this phase
+        chunks_created = 0
         
-        for sentence in remaining_sentences:
+        for i, sentence in enumerate(remaining_sentences):
             sentence_len = len(sentence)
             
-            # Decision: should we start a new chunk?
-            if current_chunk and chunks_added_in_phase2 < remaining_chunks_target - 1:
-                # Check if adding this sentence exceeds target by more than 30%
-                if current_len + sentence_len > target_chunk_len * 1.3:
-                    # Close current chunk and start new one
-                    chunks.append(" ".join(current_chunk))
-                    chunks_added_in_phase2 += 1
-                    current_chunk = [sentence]
-                    current_len = sentence_len
-                    continue
+            # If we are filling the LAST slot, we must put everything remaining into it
+            if chunks_created >= remaining_slots - 1:
+                current_chunk.append(sentence)
+                continue
+
+            # Otherwise, check if adding this sentence makes us closer to target
+            # or if we exceed it significantly
+            will_exceed = (current_len + sentence_len) > target_chunk_len
             
+            # Heuristic: if current is empty, take it.
+            if not current_chunk:
+                current_chunk.append(sentence)
+                current_len += sentence_len
+                continue
+            
+            # If adding this makes us exceed target significantly, split NOW
+            if will_exceed and (current_len + sentence_len) > (target_chunk_len * 1.1):
+                 chunks.append(" ".join(current_chunk))
+                 chunks_created += 1
+                 current_chunk = [sentence]
+                 current_len = sentence_len
+                 continue
+            
+            # If adding this keeps us under or close to target, add it
             current_chunk.append(sentence)
             current_len += sentence_len
         
-        # Add remaining sentences as the last chunk
+        # Add the final accumulated chunk
         if current_chunk:
             chunks.append(" ".join(current_chunk))
         
-        logger.log(f"[TextProcessing] Split text into {len(chunks)} chunks (requested: {num_chunks}, special: {special_count})", level=LogLevel.DEBUG)
-        
+        logger.log(f"[TextProcessing] Split text into {len(chunks)} chunks (requested: {num_chunks}, special: {special_count})", level=LogLevel.INFO)
         return chunks
     
     def _split_into_sentences(self, text: str) -> List[str]:
@@ -151,20 +164,8 @@ class TextProcessingMixin:
         task_id: str = ""
     ) -> List[Dict[str, Any]]:
         """
-        Aligns text segments to subtitle timings.
-        
-        Args:
-            segments: List of text segments (from split_text_into_chunks).
-            subtitles_path: Path to .ass or .srt subtitle file.
-            task_id: For logging.
-            
-        Returns:
-            List of dicts with timing info for each segment:
-            [
-                {"index": 0, "start": 0.0, "end": 5.2, "duration": 5.2, "confidence": 0.85},
-                {"index": 1, "start": 5.2, "end": 12.1, "duration": 6.9, "confidence": 0.72},
-                ...
-            ]
+        Aligns text segments to subtitle timings using an 'Anchor & Interpolate' strategy.
+        This ensures that a single missing segment does not break synchronization for subsequent segments.
         """
         import os
         
@@ -184,150 +185,163 @@ class TextProcessingMixin:
             logger.log(f"{prefix}[Sync] No subtitle events found", level=LogLevel.WARNING)
             return []
         
-        # Build a continuous text stream with time mappings
+        # Build text stream
         text_stream, char_to_time = self._build_text_stream(subs)
+        if not text_stream: return []
         
-        if not text_stream:
-            logger.log(f"{prefix}[Sync] Empty text stream from subtitles", level=LogLevel.WARNING)
-            return []
+        # CRITICAL FIX: Normalize while keeping map to original indices
+        # This ensures that when we find a match in normalized text (shorter),
+        # we can look up the correct time in the original text (longer).
+        stream_normalized, stream_map = self._normalize_text_with_mapping(text_stream)
         
-        # Normalize the stream for matching
-        stream_normalized = self._normalize_text(text_stream)
-        
-        # Find each segment in the stream
-        timings = []
-        last_end_char = 0  # Track position to ensure segments are sequential
-        last_end_time = 0.0  # Track time to ensure sequential timing
+        # --- PHASE 1: IDENTIFY ANCHORS ---
+        # Find matches, but ONLY accept them as anchors if confidence is high (> 65%)
+        matches = [None] * len(segments)
+        last_search_start = 0
+        ANCHOR_THRESHOLD = 0.65
         
         for i, segment in enumerate(segments):
             seg_normalized = self._normalize_text(segment)
+            if not seg_normalized: continue
             
-            if not seg_normalized:
-                # Empty segment - give it minimal duration
-                timings.append({
-                    "index": i,
-                    "start": last_end_time,
-                    "end": last_end_time + 0.5,
-                    "duration": 0.5,
-                    "confidence": 0.0
-                })
-                last_end_time += 0.5
-                continue
-            
-            # Find best match for this segment
-            match_result = self._find_segment_in_stream(
+            # Start searching from the end of the last KNOWN STRONG ANCHOR
+            match = self._find_segment_in_stream(
                 seg_normalized, 
                 stream_normalized, 
-                start_from=last_end_char
+                start_from=last_search_start
             )
             
-            # FALLBACK: If no match found, try searching from earlier position
-            # This handles cases where previous estimate pushed start_from too far
-            if match_result is None and last_end_char > 0:
-                # Try from 80% of last_end_char (go back a bit)
-                fallback_start = max(0, int(last_end_char * 0.8))
-                match_result = self._find_segment_in_stream(
-                    seg_normalized,
-                    stream_normalized,
-                    start_from=fallback_start
-                )
+            if match:
+                norm_start_char, norm_end_char, confidence = match
                 
-                # If still not found, try from even earlier
-                if match_result is None:
-                    fallback_start = max(0, int(last_end_char * 0.5))
-                    match_result = self._find_segment_in_stream(
-                        seg_normalized,
-                        stream_normalized,
-                        start_from=fallback_start
-                    )
-            
-            # If match found but starts BEFORE last_end_time, try searching further
-            if match_result:
-                start_char, end_char, confidence = match_result
-                start_time = self._char_to_time(start_char, char_to_time, 'start')
+                # CRITICAL FIX: Map normalized indices back to original indices
+                # handle out of bounds (though unlikely if specific logic is correct)
+                if norm_start_char >= len(stream_map): norm_start_char = len(stream_map) - 1
+                if norm_end_char >= len(stream_map): norm_end_char = len(stream_map) - 1
                 
-                # If this match overlaps with previous segment, search further
-                if start_time < last_end_time - 0.5:  # Allow 0.5s tolerance
-                    # Try searching from a later position
-                    retry_start = last_end_char + len(seg_normalized) // 2
-                    retry_result = self._find_segment_in_stream(
-                        seg_normalized,
-                        stream_normalized,
-                        start_from=retry_start
-                    )
-                    if retry_result:
-                        new_start_char, new_end_char, new_confidence = retry_result
-                        new_start_time = self._char_to_time(new_start_char, char_to_time, 'start')
-                        if new_start_time >= last_end_time - 0.5:
-                            # Use the new match
-                            start_char, end_char, confidence = new_start_char, new_end_char, new_confidence
-                            start_time = new_start_time
-            
-            if match_result:
-                start_char, end_char, confidence = match_result
+                orig_start_char = stream_map[norm_start_char]
+                orig_end_char = stream_map[norm_end_char]
                 
-                # Map character positions to times
-                start_time = self._char_to_time(start_char, char_to_time, 'start')
-                end_time = self._char_to_time(end_char, char_to_time, 'end')
+                if confidence < ANCHOR_THRESHOLD:
+                    logger.log(f"{prefix}[Sync] Seg {i+1} weak match: {confidence:.0%} (Ignored as anchor)", level=LogLevel.WARNING)
+                    continue
                 
-                # Enforce sequential timing - start time cannot be before previous end
-                if start_time < last_end_time:
-                    start_time = last_end_time
+                start_time = self._char_to_time(orig_start_char, char_to_time, 'start')
+                end_time = self._char_to_time(orig_end_char, char_to_time, 'end')
                 
-                # Sanity check
-                if end_time <= start_time:
-                    end_time = start_time + 1.0
+                # Sanity: Ensure positive duration
+                if end_time <= start_time: end_time = start_time + 0.5
                 
-                timings.append({
+                matches[i] = {
                     "index": i,
                     "start": start_time,
                     "end": end_time,
                     "duration": end_time - start_time,
-                    "confidence": confidence
-                })
+                    "confidence": confidence,
+                    "char_end": norm_end_char # Use normalized index for search cursor!
+                }
                 
-                last_end_char = end_char
-                last_end_time = end_time
-                
-                logger.log(
-                    f"{prefix}[Sync] Segment {i+1}/{len(segments)}: "
-                    f"{start_time:.2f}s - {end_time:.2f}s (confidence: {confidence:.0%})",
-                    level=LogLevel.DEBUG
-                )
+                # Update search cursor ONLY for strong anchors (use normalized index)
+                last_search_start = norm_end_char
             else:
-                # Fallback: estimate based on remaining time
-                total_duration = subs[-1]['end'] if subs else 60.0
-                remaining_segments = len(segments) - i
-                remaining_time = total_duration - last_end_time
-                
-                estimated_duration = max(1.0, remaining_time / remaining_segments)
-                
-                timings.append({
-                    "index": i,
-                    "start": last_end_time,
-                    "end": last_end_time + estimated_duration,
-                    "duration": estimated_duration,
-                    "confidence": 0.0
-                })
-                
-                last_end_time += estimated_duration
-                
-                logger.log(
-                    f"{prefix}[Sync] Segment {i+1}/{len(segments)}: "
-                    f"No match found, using estimate: {last_end_time - estimated_duration:.2f}s - {last_end_time:.2f}s",
-                    level=LogLevel.WARNING
-                )
+                pass
+
+        # --- PHASE 2: INTERPOLATION (GAP FILLING) ---
+        final_timings = []
         
-        # Final validation pass - ensure no overlaps and no gaps
-        timings = self._fix_timing_overlaps(timings)
+        # Track the valid end time of the previous processed block
+        # Start at 0.0 or the start of the first subtitle
+        prev_valid_end = subs[0]['start'] if subs else 0.0
         
+        i = 0
+        while i < len(segments):
+            if matches[i]:
+                # === CASE: VALID MATCH ===
+                current = matches[i]
+                
+                # Correction: Check if this match overlaps with previous end
+                # (Can happen if normalization matches overlapped text or tight timings)
+                if current['start'] < prev_valid_end:
+                    current['start'] = prev_valid_end
+                    if current['end'] <= current['start']:
+                        current['end'] = current['start'] + max(0.5, current['duration'])
+                    current['duration'] = current['end'] - current['start']
+                
+                final_timings.append(current)
+                prev_valid_end = current['end']
+                
+                logger.log(f"{prefix}[Sync] Seg {i+1} matched: {current['start']:.2f}-{current['end']:.2f} (Conf: {current['confidence']:.0%})", level=LogLevel.DEBUG)
+                i += 1
+            else:
+                # === CASE: GAP DETECTED ===
+                gap_start_idx = i
+                
+                # Find how long this gap is (how many consecutive missing segments)
+                gap_end_idx = i
+                while gap_end_idx < len(segments) and matches[gap_end_idx] is None:
+                    gap_end_idx += 1
+                
+                # The gap is segments [gap_start_idx ... gap_end_idx-1]
+                num_missing = gap_end_idx - gap_start_idx
+                
+                # Identify the Time Boundary for this gap
+                # Start: prev_valid_end (End of last anchor)
+                # End: Start of NEXT anchor (or end of subtitles if no more anchors)
+                
+                next_valid_start = 0.0
+                if gap_end_idx < len(segments):
+                    # We found a future anchor
+                    next_valid_start = matches[gap_end_idx]['start']
+                else:
+                    # No more anchors, use total duration of subtitles
+                    total_dur = subs[-1]['end'] if subs else (prev_valid_end + num_missing * 5.0)
+                    next_valid_start = total_dur
+                
+                # Calculate Time Budget
+                time_budget = max(0.0, next_valid_start - prev_valid_end)
+                
+                logger.log(f"{prefix}[Sync] Gap detected: Segments {gap_start_idx+1}-{gap_end_idx}. Budget: {time_budget:.2f}s (From {prev_valid_end:.2f} to {next_valid_start:.2f})", level=LogLevel.WARNING)
+                
+                # Heuristic: Distribute budget based on text length
+                missing_segments_text = [segments[k] for k in range(gap_start_idx, gap_end_idx)]
+                total_text_len = sum(len(self._normalize_text(s)) for s in missing_segments_text) or 1
+                
+                current_time_cursor = prev_valid_end
+                
+                for k in range(gap_start_idx, gap_end_idx):
+                    seg_text = self._normalize_text(segments[k])
+                    seg_len = len(seg_text) if seg_text else 1
+                    
+                    weight = seg_len / total_text_len
+                    allocated_dur = time_budget * weight
+                    
+                    # Log if we are squeezing too tight
+                    if allocated_dur < 0.2:
+                        logger.log(f"{prefix}[Sync] Warning: Very short duration allocated for seg {k+1}: {allocated_dur:.2f}s", level=LogLevel.DEBUG)
+                    
+                    timing = {
+                        "index": k,
+                        "start": current_time_cursor,
+                        "end": current_time_cursor + allocated_dur,
+                        "duration": allocated_dur,
+                        "confidence": 0.0 # Interpolated
+                    }
+                    final_timings.append(timing)
+                    current_time_cursor += allocated_dur
+                
+                # Update boundary for next loop
+                prev_valid_end = current_time_cursor
+                
+                # Advance iterator past the gap
+                i = gap_end_idx
+
         logger.log(
-            f"{prefix}[Sync] Aligned {len(timings)} segments. "
-            f"Avg confidence: {sum(t['confidence'] for t in timings) / len(timings):.0%}",
+            f"{prefix}[Sync] Aligned {len(final_timings)} segments. "
+            f"Anchors found: {sum(1 for m in matches if m is not None)}/{len(segments)}",
             level=LogLevel.INFO
         )
         
-        return timings
+        return final_timings
     
     def _build_text_stream(self, subs: List[Dict]) -> Tuple[str, List[Dict]]:
         """
@@ -618,10 +632,22 @@ class TextProcessingMixin:
             # Case 2: Gap - current starts after previous ends
             elif current['start'] > prev['end'] + 0.1:  # 0.1s tolerance for small gaps
                 gap = current['start'] - prev['end']
-                # Close the gap by extending the previous segment
-                # (alternatively could split the gap, but extending is more natural)
-                prev['end'] = current['start']
-                prev['duration'] = prev['end'] - prev['start']
+                
+                # Only close small gaps (< 5.0s) by extending previous static image.
+                # If gap is huge (e.g. lost segment), do NOT stretch the previous image indefinitely.
+                if gap < 5.0:
+                    prev['end'] = current['start']
+                    prev['duration'] = prev['end'] - prev['start']
+                else:
+                    # For large gaps, just set current start to prev end to maintain continuity visually
+                    # BUT update duration to be realistic for the text length
+                    # This effectively pulls the current segment back time-wise, desyncing it slightly
+                    # but preventing the "frozen image" effect.
+                    # BETTER: Leave the gap as is? No, black screen is bad.
+                    # Best: Extend prev end halfway, pull current start halfway.
+                    # For now: Drag current start back.
+                    current['start'] = prev['end']
+                    current['duration'] = current['end'] - current['start']
             
             # Ensure valid duration
             if current['end'] <= current['start']:
@@ -648,16 +674,16 @@ class TextProcessingMixin:
         # Unicode normalization (canonical decomposition + composition)
         text = unicodedata.normalize('NFKC', text)
         
+        # Replace hyphens with space to handle "Сахар-то" -> "Сахар то" match
+        text = text.replace('-', ' ').replace('—', ' ')
+        
         # Remove all punctuation and symbols (Unicode-aware)
-        # \p{P} = punctuation, \p{S} = symbols
-        # Since we can't use regex module, use a character class approach
-        # Remove common punctuation
         punctuation = (
-            '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'  # ASCII punctuation
-            '。！？、，；：""''【】（）…—·'  # Chinese/Japanese punctuation
-            '؟،؛'  # Arabic punctuation
-            '।॥'  # Devanagari punctuation
-            '「」『』〈〉《》〔〕'  # More CJK brackets
+            '!"#$%&\'()*+,./:;<=>?@[\\]^_`{|}~'  # ASCII (removed -)
+            '。！？、，；：""''【】（）…·'  # CJK (removed —)
+            '؟،؛'  # Arabic
+            '।॥'  # Devanagari
+            '「」『』〈〉《》〔〕'  # Brackets
         )
         
         for char in punctuation:
@@ -670,6 +696,79 @@ class TextProcessingMixin:
         text = ' '.join(text.split())
         
         return text.strip()
+
+    def _normalize_text_with_mapping(self, text: str) -> Tuple[str, List[int]]:
+        """
+        Normalizes text and returns the valid text plus a mapping 
+        from normalized_index -> original_index.
+        """
+        if not text:
+            return "", []
+            
+        normalized_chars = []
+        mapping = []
+        
+        # Punctuation set (same as in _normalize_text)
+        punctuation = set(
+            '!"#$%&\'()*+,./:;<=>?@[\\]^_`{|}~'
+            '。！？、，；：""''【】（）…·'
+            '؟،؛'
+            '।॥'
+            '「」『』〈〉《》〔〕'
+        )
+        
+        # Use unicodedata for consistency
+        # Note: mapping logic is simpler if we iterate original characters
+        # But NFKC can change length (e.g. separate accents).
+        # For simplicity and robustness given we map char-to-time,
+        # we will iterate the ORIGINAL string and decide if we keep the char.
+        # This avoids complex NFKC mapping issues, but means strict Unicode composition
+        # might be slightly less robust if the subtitle file mixes forms. 
+        # Typically subtitle files are consistent.
+        
+        # Step 1: Lowercase and replace hyphens in ORIGINAL (preserves 1:1)
+        # Replacing hyphen with space effectively keeps the char count same (len('-')==1, len(' ')==1)
+        # But we must be careful with 'replace'.
+        
+        # Let's iterate manually.
+        
+        for i, char in enumerate(text):
+            c = char
+            
+            # Hyphen handling
+            if c in ('-', '—'):
+                c = ' '
+            
+            # Punctuation handling
+            if c in punctuation:
+                c = ' '
+                
+            # Whitespace handling later - for now turn to space
+            if c.isspace():
+                c = ' '
+                
+            # Lowercase
+            c = c.lower()
+            
+            # If it's a space
+            if c == ' ':
+                # Only add if previous wasn't a space (collapse)
+                if normalized_chars and normalized_chars[-1] == ' ':
+                    continue
+                # If it is leading space, skip
+                if not normalized_chars:
+                    continue
+            
+            # Add to result
+            normalized_chars.append(c)
+            mapping.append(i)
+            
+        # Trim trailing space
+        if normalized_chars and normalized_chars[-1] == ' ':
+             normalized_chars.pop()
+             mapping.pop()
+             
+        return "".join(normalized_chars), mapping
     
     # ==================== SUBTITLE PARSING ====================
     
