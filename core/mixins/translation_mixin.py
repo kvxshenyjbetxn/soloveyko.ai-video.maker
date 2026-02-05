@@ -268,6 +268,9 @@ class TranslationMixin:
             if special_mode == "Video at the beginning":
                 special_count = montage_settings.get("special_processing_video_count", 0)
                 logger.log(f"[{task_id}] Hybrid text splitting enabled: First {special_count} chunks will be short (Video Mode).", level=LogLevel.INFO)
+            elif special_mode == "Quick show":
+                special_count = montage_settings.get("special_processing_image_count", 0)
+                logger.log(f"[{task_id}] Hybrid text splitting enabled: First {special_count} chunks will be short (Quick Show Mode).", level=LogLevel.INFO)
             
             chunks = self.split_text_into_chunks(state.text_for_processing, int(split_count), special_count=int(special_count))
             state.lang_data['text_chunks'] = chunks

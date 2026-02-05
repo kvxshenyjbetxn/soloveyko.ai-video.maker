@@ -193,30 +193,69 @@ class MontageEngine:
         override_durations = settings.get('override_durations') or kwargs.get('override_durations')
         
         # NEW: override_durations now applies to ALL visual files (videos + images)
-        # This is important for sync mode where each segment has a specific duration
         if override_durations:
-            if len(override_durations) == num_files:
-                # Perfect match - apply to all files
-                logger.log(f"{prefix}[Montage] Using synchronized durations for {len(override_durations)} visual files.", level=LogLevel.INFO)
+            # Determine how many items we are overriding
+            override_count = len(override_durations)
+            
+            logger.log(f"{prefix}[Montage] Applying synchronized timings. Transitions enabled: {enable_trans} ({trans_dur}s)", level=LogLevel.INFO)
+
+            if override_count == num_files:
+                # Scenario A: We have timings for EVERY file (Images + Videos)
                 for i in range(num_files):
-                    final_clip_durations[i] = override_durations[i]
-            elif len(override_durations) == (num_images - start_index):
-                # Legacy mode: only for images (excluding special mode images)
-                logger.log(f"{prefix}[Montage] Using synchronized durations for {len(override_durations)} images.", level=LogLevel.INFO)
+                    base_dur = override_durations[i]
+                    # COMPENSATION FOR TRANSITIONS:
+                    # If transitions are on, every clip (except maybe the last) loses 'trans_dur' to the overlap.
+                    # To insure the clip is visible for 'base_dur' amount of timeline, we must ADD trans_dur.
+                    if enable_trans:
+                        base_dur += trans_dur
+                    
+                    final_clip_durations[i] = base_dur
+                    
+            elif override_count == (num_images - start_index):
+                # Scenario B: We have timings strictly for the "Normal Images" part
+                # (e.g. video files kept their natural duration, or Quick Show took first N images)
+                
+                # 1. First, handle the ones found in valid_files/visual_files that are NOT covered by override
+                # (This loop might be redundant if we initialized correctly, but let's be safe)
+                # Video files and special-mode images ALREADY have durations set above (lines 136 and 169).
+                # However, they ALSO need transition compensation if they participate in the montage!
+                
+                if enable_trans:
+                    for i in range(num_files):
+                        # If it's already set (video or special img), add compensation
+                        if final_clip_durations[i] > 0:
+                            final_clip_durations[i] += trans_dur
+
+                # 2. Now apply overrides to the specific images
                 for i in range(start_index, num_images):
                     img_idx = image_indices[i]
-                    final_clip_durations[img_idx] = override_durations[i - start_index]
+                    # i - start_index gives the 0-based index in the overrides list
+                    base_dur = override_durations[i - start_index]
+                    
+                    if enable_trans:
+                        base_dur += trans_dur
+                        
+                    final_clip_durations[img_idx] = base_dur
             else:
-                logger.log(f"{prefix}[Montage] Warning: Override durations count ({len(override_durations)}) mismatch with files ({num_files}) or images ({num_images-start_index}). Using fallback.", level=LogLevel.WARNING)
-                # Fallback to even distribution for images
+                logger.log(f"{prefix}[Montage] Warning: Override count ({override_count}) mismatch. Fallback to even.", level=LogLevel.WARNING)
+                # Fallback
                 for i in range(start_index, num_images):
                     img_idx = image_indices[i]
-                    final_clip_durations[img_idx] = img_duration
+                    final_clip_durations[img_idx] = img_duration 
+                    if enable_trans: final_clip_durations[img_idx] += trans_dur
         else:
-            # No override durations - use even distribution for images
+            # No overrides - Standard Even Distribution
+            # Apply calculated duration + transition compensation
             for i in range(start_index, num_images):
                 img_idx = image_indices[i]
                 final_clip_durations[img_idx] = img_duration
+            
+            # If standard mode, we should also compensation for transitions for consistency?
+            # Yes, because 'time_for_normal_images' calculation (line 144) ALREADY accounted for lost time:
+            # required_raw_time = audio_dur + total_trans_loss
+            # So 'img_duration' calculated there is ALREADY the "Raw Duration including Transition".
+            # So we DO NOT add it again here for the standard even.
+            pass
         
         # Log compact montage info (single line)
         log_msg = f"{prefix}[FFmpeg] Starting montage | Audio: {audio_dur:.2f}s, Files: {num_files} (Videos: {num_files - num_images}, Images: {num_images})"
@@ -681,7 +720,6 @@ class MontageEngine:
             
             # ==================== ПРОФЕСІЙНІ ПАРАМЕТРИ КОДЕКА (DAVINCI RESOLVE) ====================
             if codec == "libx264":
-                # ТОЧНІ технічні параметри як у DaVinci Resolve
                 cmd.extend([
                     '-c:v', 'libx264',
                     '-profile:v', 'main',
@@ -691,7 +729,6 @@ class MontageEngine:
                     '-colorspace', 'bt709',
                     '-color_trc', 'bt709',
                     '-color_primaries', 'bt709',
-                    # Примушуємо libx264 записати color metadata в bitstream
                     '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709:fullrange=1',
                     '-r', '60',
                     '-c:a', 'aac',
@@ -706,11 +743,14 @@ class MontageEngine:
                 if preset in ["ultrafast", "superfast", "veryfast", "faster", "fast"]: u="speed"
                 elif preset == "medium": u="balanced"
                 else: u="quality"
-                cmd.extend(["-quality", u, "-b:v", bitrate_str, "-pix_fmt", "yuv420p"])
+                # FORCE -r 30 to match filter graph generation rate (prevent slow motion sync drift)
+                cmd.extend(["-quality", u, "-b:v", bitrate_str, "-pix_fmt", "yuv420p", "-r", "30"])
             elif codec == "h264_nvenc":
-                cmd.extend(["-preset", "p4", "-b:v", bitrate_str, "-pix_fmt", "yuv420p"])
+                # FORCE -r 30 to match filter graph generation rate (prevent slow motion sync drift)
+                cmd.extend(["-preset", "p4", "-b:v", bitrate_str, "-pix_fmt", "yuv420p", "-r", "30"])
             else:
-                cmd.extend(["-preset", preset, "-b:v", bitrate_str, "-maxrate", bitrate_str, "-bufsize", f"{bitrate*2}M", "-pix_fmt", "yuv420p"])
+                # FORCE -r 30 to match filter graph generation rate (prevent slow motion sync drift)
+                cmd.extend(["-preset", preset, "-b:v", bitrate_str, "-maxrate", bitrate_str, "-bufsize", f"{bitrate*2}M", "-pix_fmt", "yuv420p", "-r", "30"])
             # ==================== КІНЕЦЬ ПАРАМЕТРІВ КОДЕКА ====================
             
             # Генеруємо timestamp для метаданих (додамо пізніше)
