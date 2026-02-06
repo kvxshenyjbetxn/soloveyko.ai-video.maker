@@ -508,17 +508,20 @@ class VideoMixin:
                                 try:
                                     real_dur = self._get_video_file_duration(found_image)
                                     if real_dur > 0:
-                                        # FORCE REAL DURATION (User requirement: no freezing, no trimming)
-                                        # Calculate diff relative to the PLANNED duration
-                                        # If Video (8s) > Text (2s) -> diff = 2 - 8 = -6s (Negative Offset)
-                                        # If Video (5s) < Text (10s) -> diff = 10 - 5 = +5s (Positive Offset)
-                                        
-                                        diff = segment_duration - real_dur
-                                        sync_offset += diff
-                                        
-                                        logger.log(f"[{task_id}] Video {os.path.basename(found_image)}: {real_dur:.2f}s (Text was {segment_duration:.2f}s). Offset change: {diff:+.2f}s. Accum Offset: {sync_offset:.2f}s", level=LogLevel.INFO)
-                                        
-                                        segment_duration = real_dur
+                                        if real_dur < segment_duration:
+                                            # Case A: Video is SHORTER than Text.
+                                            # We cannot stretch it (user rule).
+                                            # We must play it FULLY and accumulate debt.
+                                            diff = segment_duration - real_dur
+                                            sync_offset += diff
+                                            logger.log(f"[{task_id}] Video shorter ({real_dur:.2f}s < {segment_duration:.2f}s). Playing full. Accumulated debt: {sync_offset:.2f}s", level=LogLevel.INFO)
+                                            segment_duration = real_dur 
+                                        else:
+                                            # Case B: Video is LONGER than Text.
+                                            # We trim it to match the text (User: "if segment smaller than video, all ok" -> Trim).
+                                            # segment_duration remains as is (from subtitles).
+                                            logger.log(f"[{task_id}] Video longer ({real_dur:.2f}s > {segment_duration:.2f}s). Will be trimmed to sync.", level=LogLevel.DEBUG)
+                                            pass
                                 except Exception as e:
                                     logger.log(f"[{task_id}] Failed to get duration for {os.path.basename(found_image)}: {e}", level=LogLevel.WARNING)
                             
