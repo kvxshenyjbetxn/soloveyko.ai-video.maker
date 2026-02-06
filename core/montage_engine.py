@@ -296,12 +296,15 @@ class MontageEngine:
                 # Determine if we need to extend (freeze last frame) or trim
                 # We prioritize simple extension using tpad instead of complex looping
                 
-                if target_dur > actual_dur:
-                    # Video is shorter than target duration - USE AS IS (Sync will be fixed by extending the next image)
-                    logger.log(f"{prefix}[Montage] Video {i+1}: shorter than target ({actual_dur:.2f}s < {target_dur:.2f}s). Using full video length.", level=LogLevel.INFO)
+                if target_dur > actual_dur + 0.02: # Allow small tolerance
+                    # Video is shorter than target. We MUST pad it (freeze last frame) 
+                    # so that transitions (xfade) have enough material to overlap.
+                    pad_dur = target_dur - actual_dur
+                    logger.log(f"{prefix}[Montage] Video {i+1}: extending by {pad_dur:.2f}s (tpad) to match target {target_dur:.2f}s", level=LogLevel.INFO)
                     
                     vf = (
-                        f"{v_in}scale={base_w}:{base_h},"
+                        f"{v_in}tpad=stop_mode=clone:stop_duration={pad_dur:.3f},"
+                        f"scale={base_w}:{base_h},"
                         f"scale=1.08*iw:-1,crop={base_w}:{base_h}:0:0,"
                         f"format=yuv420p,setsar=1,fps={fps},"
                         f"setpts=PTS-STARTPTS[{v_out}]"
@@ -715,6 +718,10 @@ class MontageEngine:
                 cmd.extend(["-filter_complex_script", filter_script_path.replace("\\", "/"), "-map", output_v_stream, "-map", final_audio_map])
             else:
                 cmd.extend(["-filter_complex_script", filter_script_path.replace("\\", "/"), "-map", output_v_stream, "-map", final_audio_map, "-c:v", codec])
+
+
+            # Prevent silent video tail if visual stream drifts
+            cmd.append("-shortest")
 
             bitrate_str = f"{bitrate}M"
             

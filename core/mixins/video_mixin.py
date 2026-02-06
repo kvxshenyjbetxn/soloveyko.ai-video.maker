@@ -455,18 +455,40 @@ class VideoMixin:
                             # --- GAP FILLING LOGIC ---
                             if pending_segments:
                                 # We had pending segments waiting for an image
-                                # Apply accumulated duration to the LAST valid image
+                                
+                                # Check if the last item was a video or image
+                                last_was_video = False
+                                if last_valid_image:
+                                    ext_last = os.path.splitext(last_valid_image)[1].lower()
+                                    if ext_last in VIDEO_EXTS:
+                                        last_was_video = True
+                                
                                 if last_valid_image and final_durations:
-                                    # Add pending duration to last image
-                                    final_durations[-1] += accumulated_duration
-                                    logger.log(
-                                        f"[{task_id}] Extended {os.path.basename(last_valid_image)} "
-                                        f"to cover {len(pending_segments)} missing segment(s) "
-                                        f"(+{accumulated_duration:.2f}s)",
-                                        level=LogLevel.INFO
-                                    )
+                                    if last_was_video:
+                                        # USER REQUIREMENT: Do NOT freeze/extend video files to fill gaps.
+                                        # Instead, accumulate this time as "debt" (sync_offset) 
+                                        # which will be paid by the next static image.
+                                        sync_offset += accumulated_duration
+                                        logger.log(
+                                            f"[{task_id}] Missing segments after video {os.path.basename(last_valid_image)}. "
+                                            f"Adding {accumulated_duration:.2f}s to sync debt (Total: {sync_offset:.2f}s) to avoid freezing video.",
+                                            level=LogLevel.DEBUG
+                                        )
+                                    else:
+                                        # Last item was an image - safe to extend (freeze)
+                                        final_durations[-1] += accumulated_duration
+                                        logger.log(
+                                            f"[{task_id}] Extended {os.path.basename(last_valid_image)} "
+                                            f"to cover {len(pending_segments)} missing segment(s) "
+                                            f"(+{accumulated_duration:.2f}s)",
+                                            level=LogLevel.INFO
+                                        )
                                 elif not last_valid_image:
                                     # First image(s) were missing, this found_image covers them
+                                    # If found_image is video, we might have issue if we try to stretch it.
+                                    # But here we are setting 'segment_duration' for the CURRENT image.
+                                    # We just add it to the current segment duration.
+                                    # If current is video, logic below will handle debt calculation.
                                     segment_duration += accumulated_duration
                                     logger.log(
                                         f"[{task_id}] First {len(pending_segments)} segment(s) had no images. "
@@ -486,23 +508,37 @@ class VideoMixin:
                                 try:
                                     real_dur = self._get_video_file_duration(found_image)
                                     if real_dur > 0:
-                                        if real_dur < segment_duration:
-                                            # Video is shorter: create time debt
-                                            diff = segment_duration - real_dur
-                                            sync_offset += diff
-                                            logger.log(f"[{task_id}] Video shorter ({real_dur}s < {segment_duration:.2f}s). Accumulated sync offset: {sync_offset:.2f}s", level=LogLevel.DEBUG)
-                                            segment_duration = real_dur # Commit to short duration
-                                        else:
-                                            # Video is longer: let MontageEngine trim it.
-                                            pass
+                                        # FORCE REAL DURATION (User requirement: no freezing, no trimming)
+                                        # Calculate diff relative to the PLANNED duration
+                                        # If Video (8s) > Text (2s) -> diff = 2 - 8 = -6s (Negative Offset)
+                                        # If Video (5s) < Text (10s) -> diff = 10 - 5 = +5s (Positive Offset)
+                                        
+                                        diff = segment_duration - real_dur
+                                        sync_offset += diff
+                                        
+                                        logger.log(f"[{task_id}] Video {os.path.basename(found_image)}: {real_dur:.2f}s (Text was {segment_duration:.2f}s). Offset change: {diff:+.2f}s. Accum Offset: {sync_offset:.2f}s", level=LogLevel.INFO)
+                                        
+                                        segment_duration = real_dur
                                 except Exception as e:
                                     logger.log(f"[{task_id}] Failed to get duration for {os.path.basename(found_image)}: {e}", level=LogLevel.WARNING)
                             
-                            elif sync_offset > 0:
-                                # This is an image, and we have time debt
+                            elif sync_offset != 0:
+                                # This is an image, and we have sync offset (positive or negative)
+                                original = segment_duration
                                 segment_duration += sync_offset
-                                logger.log(f"[{task_id}] Sync Correction: Extended image {os.path.basename(found_image)} by {sync_offset:.2f}s to restore sync.", level=LogLevel.INFO)
-                                sync_offset = 0.0
+                                
+                                # Protect against negative duration if we are trying to catch up too fast
+                                if segment_duration < 0.1:
+                                    # We can't speed up enough here. Swallow this image (min duration)
+                                    # and carry over the remaining negative debt.
+                                    remainder = segment_duration - 0.1 # e.g. -5 - 0.1 = -5.1
+                                    segment_duration = 0.1
+                                    sync_offset = remainder
+                                    logger.log(f"[{task_id}] Image compressed to min 0.1s to catch up. Remaining debt: {sync_offset:.2f}s", level=LogLevel.WARNING)
+                                else:
+                                    # Debt fully paid (or surplus consumed)
+                                    logger.log(f"[{task_id}] Sync Correction: Adjusted image {os.path.basename(found_image)} by {sync_offset:+.2f}s ({original:.2f}->{segment_duration:.2f}) to restore sync.", level=LogLevel.INFO)
+                                    sync_offset = 0.0
 
                             final_visuals.append(found_image)
                             final_durations.append(segment_duration)
