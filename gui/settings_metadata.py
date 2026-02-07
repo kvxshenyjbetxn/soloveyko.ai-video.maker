@@ -165,6 +165,7 @@ SETTINGS_METADATA = {
         'overlay_triggers': {'type': 'overlay_triggers_list', 'label': 'overlay_triggers_label'}, # Complex list, handled as string for now
     },
     'text_split_count': {'type': 'int', 'min': 0, 'max': 1000, 'label': 'segment_count_label'},
+    'generation_mode': {'type': 'choice', 'options': ['Standard', 'Sync'], 'label': 'generation_mode_label'},
 }
 
 KEY_TO_TRANSLATION_MAP = {
@@ -177,21 +178,11 @@ KEY_TO_TRANSLATION_MAP = {
     'simulation_target': 'simulation_target_label',
     
     # API Tab
-    # API Tab
-    'openrouter_api_key': 'openrouter_api_key', # No label? defined in json as key itself maybe?
-    # Let's check json files for "openrouter_api_key". Yes it exists: "openrouter_api_key": "Ключ API OpenRouter:",
-    # but map usually points to key ending in _label if not exact match.
-    # In json 'openrouter_api_key' is the key.
-    # So map should be: 'openrouter_api_key': 'openrouter_api_key' OR if key matches, map not needed?
-    # Code says: trans_key = KEY_TO_TRANSLATION_MAP.get(key) -> if trans_key: translator.translate(trans_key)
-    # So if I want 'openrouter_models' to translate as "Openrouter Models", I need a key in json.
-    
     'openrouter_api_key': 'openrouter_api_key', 
-    'openrouter_models': 'models', # "models": "Моделі" ? Or specific?
+    'openrouter_models': 'models', 
     'elevenlabs_api_key': 'elevenlabs_api_key',
-    'voicemaker_api_key': 'voicemaker_api_key_label', # Check if this exists. 
-    # Actually, let's map to existing known keys.
-    'voicemaker_char_limit': 'char_limit', # "char_limit": "Ліміт символів:",
+    'voicemaker_api_key': 'voicemaker_api_key_label', 
+    'voicemaker_char_limit': 'char_limit', 
     'gemini_tts_api_key': 'gemini_tts_api_key',
     'assemblyai_api_key': 'assemblyai_api_key',
     
@@ -237,17 +228,16 @@ KEY_TO_TRANSLATION_MAP = {
     # Pollinations
     'model': 'pollinations_model_label',
     'token': 'pollinations_token_label',
-    'width': 'image_size_label', # Reusing size label? "image_size_label": "Розмір (Ширина x Висота):"
-    'height': 'image_height_label', # Maybe not needed if width label covers context? But individual inputs?
+    'width': 'image_size_label', 
+    'height': 'image_height_label', 
     'nologo': 'nologo_label',
     'enhance': 'enhance_prompt_label',
 
-    'image_prompt_settings': 'stage_img_prompts',
+    'image_prompt_settings': 'prompts_tab',
 
     # ElevenLabsImage
     'elevenlabs_image': 'elevenlabs_image_tab_title',
-    'api_key': 'elevenlabs_image_api_key',
-
+    
     'max_tokens': 'tokens_label',
     'temperature': 'temperature_label',
     'image_count': 'image_count_label',
@@ -261,12 +251,12 @@ KEY_TO_TRANSLATION_MAP = {
     'preview_pollinations_model_label': 'preview_pollinations_model_label',
 
     # Languages Config keys
-    'prompt': 'prompt_label', # "prompt_label": "Промт:",
+    'prompt': 'prompt_label',
     'prompt_standard': 'prompt_standard_label', 
     'prompt_sync': 'prompt_sync_label',
     
-    'background_music_path': 'background_music_label', # "background_music_label": "Фонова музика:",
-    'background_music_volume': 'music_volume_label', # "music_volume_label": "Гучність музики:",
+    'background_music_path': 'background_music_label',
+    'background_music_volume': 'music_volume_label',
     'tts_provider': 'tts_provider_label',
     'voicemaker_voice_id': 'voicemaker_voice_label',
     'gemini_voice': 'gemini_voice_label',
@@ -292,5 +282,6 @@ KEY_TO_TRANSLATION_MAP = {
 
     'overlay_triggers': 'overlay_triggers_label',
     'text_split_count': 'segment_count_label',
+    'generation_mode': 'generation_mode_label',
 }
 

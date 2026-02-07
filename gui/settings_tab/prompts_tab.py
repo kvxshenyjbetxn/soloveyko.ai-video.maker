@@ -9,10 +9,12 @@ from gui.widgets.prompt_editor_dialog import PromptEditorDialog
 from gui.widgets.help_label import HelpLabel
 
 class PromptsTab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
         self.main_window = main_window
-        self.settings = settings_manager
+        self.settings_manager = settings_mgr or settings_manager
+        self.settings = self.settings_manager # Alias for compatibility
+        self.is_template_mode = is_template_mode
         self.stage_widgets = []
         self.is_loading = True # Prevent saving during init
         self.init_ui()
@@ -448,7 +450,7 @@ class PromptsTab(QWidget):
         settings_form_layout = QFormLayout()
         
         model_combo = QComboBox()
-        models = self.settings.get("openrouter_models", [])
+        models = settings_manager.get("openrouter_models", [])
         model_combo.addItems(models)
         if stage_data and stage_data.get("model"):
             index = model_combo.findText(stage_data.get("model"))
@@ -623,12 +625,30 @@ class PromptsTab(QWidget):
         self.char_prompt_edit.blockSignals(True)
 
         # Logic: Determine mode first to load correct prompt
-        split_count = self.settings.get('text_split_count', 0)
-        is_sync = split_count > 0
+        gen_mode = self.settings.get("generation_mode")
+        current_split_count = self.settings.get('text_split_count', 0)
+        
+        if gen_mode == "Sync":
+            is_sync = True
+        elif gen_mode == "Standard":
+            is_sync = False
+        else:
+            # Fallback for old settings
+            is_sync = current_split_count > 0
+            
+        # Enforce consistency: if mode says Sync but split_count is 0,
+        # we must use a value > 0 (e.g. last known good value or default 5)
+        # If mode says Standard but split_count > 0, we treat it as 0.
         
         if is_sync:
+            if current_split_count == 0:
+                current_split_count = self.settings.get('last_text_split_count', 5)
+            self.generation_mode_combo.setCurrentIndex(1)
+            self.text_split_count_spinbox.setValue(current_split_count)
             prompt = self.settings.get("image_prompt_settings.prompt_sync")
         else:
+            self.generation_mode_combo.setCurrentIndex(0)
+            self.text_split_count_spinbox.setValue(self.settings.get('last_text_split_count', 5))
             prompt = self.settings.get("image_prompt_settings.prompt_standard")
             if not prompt:
                 prompt = self.settings.get("image_prompt_settings.prompt")
@@ -641,17 +661,6 @@ class PromptsTab(QWidget):
         self.model_combo.setCurrentIndex(index if index >= 0 else 0)
         self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
         self.temperature_spinbox.setValue(config.get("temperature", 0.7))
-        
-        # Logic: If text_split_count > 0 -> Sync Mode (Index 1). Else Standard (Index 0)
-        split_count = self.settings.get('text_split_count', 0)
-        last_split_count = self.settings.get('last_text_split_count', 5)
-        
-        if split_count > 0:
-            self.generation_mode_combo.setCurrentIndex(1)
-            self.text_split_count_spinbox.setValue(split_count)
-        else:
-            self.generation_mode_combo.setCurrentIndex(0)
-            self.text_split_count_spinbox.setValue(last_split_count) # Restore last used value
 
         self.char_prompt_edit.setPlainText(config.get("character_prompt", ""))
 
@@ -686,7 +695,7 @@ class PromptsTab(QWidget):
 
         self.preview_prompt_edit.setPlainText(preview_config.get("prompt", ""))
         self.preview_model_combo.clear()
-        self.preview_model_combo.addItems(self.settings.get("openrouter_models", []))
+        self.preview_model_combo.addItems(settings_manager.get("openrouter_models", []))
         
         preview_model = preview_config.get("model", "")
         p_index = self.preview_model_combo.findText(preview_model)
@@ -732,7 +741,7 @@ class PromptsTab(QWidget):
         self.model_combo.blockSignals(True)
         self.preview_model_combo.blockSignals(True)
         
-        models = self.settings.get("openrouter_models", [])
+        models = settings_manager.get("openrouter_models", [])
         
         current_model = self.model_combo.currentText()
         self.model_combo.clear()
@@ -772,6 +781,9 @@ class PromptsTab(QWidget):
         config["temperature"] = self.temperature_spinbox.value()
         config["character_prompt"] = self.char_prompt_edit.toPlainText()
         self.settings.set("image_prompt_settings", config)
+        
+        # Save generation_mode explicitly for templates
+        self.settings.set("generation_mode", "Sync" if is_sync else "Standard")
         
         # Save Logic:
         # If Sync Mode (Index 1) -> save text_split_count value

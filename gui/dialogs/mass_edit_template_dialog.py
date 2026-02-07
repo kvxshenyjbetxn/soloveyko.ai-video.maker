@@ -114,8 +114,20 @@ class MassEditTemplateDialog(QDialog):
         items = []
         self._flatten_metadata_recursive(SETTINGS_METADATA, [], items)
         
-        # Sort by label for better UX
-        items.sort(key=lambda x: x[0])
+        # Sort by label but force General items to top
+        def sort_key_func(item):
+            label, path, _ = item
+            general_keys = {
+                'simulation_target', 'image_review_enabled', 
+                'prompt_count_control_enabled', 'translation_review_enabled', 
+                'rewrite_review_enabled', 'prompt_count', 
+                'image_generation_provider', 'results_path'
+            }
+            if path and path[0] in general_keys:
+                return (0, label)
+            return (1, label)
+
+        items.sort(key=sort_key_func)
         
         for label, path, metadata in items:
             self.param_combo.addItem(label, (path, metadata))
@@ -152,7 +164,8 @@ class MassEditTemplateDialog(QDialog):
                     "theme", "language", "last_applied_template",
                     "elevenlabs_image.max_threads",
                     "googler.max_threads", "googler.max_video_threads",
-                    "montage.max_concurrent_montages"
+                    "montage.max_concurrent_montages",
+                    "openrouter_models"
                 }
                 
                 if any(p in EXCLUSIONS for p in [key, full_path_str]):
@@ -166,6 +179,64 @@ class MassEditTemplateDialog(QDialog):
                 self._flatten_metadata_recursive(value, current_path + [key], items)
 
     def _build_friendly_label(self, path, leaf_metadata=None):
+        path_str = ".".join(path)
+        
+        # Custom overrides for better organization (User Request)
+        # We construct a path of translation keys or string literals
+        overrides = {
+            'openrouter_api_key': ['api_tab', 'openrouter_tab', 'api_key_label'],
+            
+            # General Tab Settings
+            'simulation_target': ['general_tab', 'simulation_target_label'],
+            'image_review_enabled': ['general_tab', 'image_review_label'],
+            'prompt_count_control_enabled': ['general_tab', 'prompt_count_control_label'],
+            'translation_review_enabled': ['general_tab', 'translation_review_label'],
+            'rewrite_review_enabled': ['general_tab', 'rewrite_review_label'],
+            'prompt_count': ['general_tab', 'prompt_count_label'],
+            'image_generation_provider': ['general_tab', 'image_generation_provider_label'],
+            'results_path': ['general_tab', 'results_path_label'],
+
+            # Voice / TTS API Keys
+            'gemini_tts_api_key': ['api_tab', 'stage_voiceover', 'Gemini TTS', 'api_key_label'],
+            'elevenlabs_api_key': ['api_tab', 'stage_voiceover', 'ElevenLabs', 'api_key_label'],
+            'elevenlabs_unlim_api_key': ['api_tab', 'stage_voiceover', 'ElevenLabs Unlimited', 'api_key_label'],
+            'voicemaker_api_key': ['api_tab', 'stage_voiceover', 'VoiceMaker', 'api_key_label'],
+            'voicemaker_char_limit': ['api_tab', 'stage_voiceover', 'VoiceMaker', 'char_limit'],
+            
+            # Transcription
+            'assemblyai_api_key': ['api_tab', 'AssemblyAI', 'api_key_label'],
+
+            'text_split_count': ['prompts_tab', 'segment_count_label'],
+            'generation_mode': ['prompts_tab', 'generation_mode_label'],
+        }
+        
+        if path_str in overrides:
+            custom_path = overrides[path_str]
+            parts = []
+            for p in custom_path:
+                # Translate if possible, otherwise use as is
+                parts.append(translator.translate(p))
+            return " -> ".join(parts)
+
+        # Dynamic grouping for Image Providers
+        if path and path[0] in ['googler', 'pollinations', 'elevenlabs_image']:
+            provider_map = {
+                'googler': 'Googler', 
+                'pollinations': 'Pollinations', 
+                'elevenlabs_image': 'ElevenLabsImage'
+            }
+            provider = provider_map[path[0]]
+            
+            # Determine leaf label
+            if leaf_metadata and 'label' in leaf_metadata:
+                leaf_label = translator.translate(leaf_metadata['label'])
+            elif path[-1] in KEY_TO_TRANSLATION_MAP:
+                leaf_label = translator.translate(KEY_TO_TRANSLATION_MAP[path[-1]])
+            else:
+                leaf_label = path[-1].replace('_', ' ').title()
+                
+            return f"{translator.translate('api_tab')} -> {translator.translate('image_tab')} -> {provider} -> {leaf_label}"
+
         parts = []
         for i, p in enumerate(path):
             if p == '*':

@@ -798,43 +798,114 @@ class TemplateManager:
     def __init__(self, template_dir='config/templates'):
         self.base_path = self._get_base_path()
         self.template_dir = os.path.join(self.base_path, template_dir)
-        os.makedirs(self.template_dir, exist_ok=True)
+        try:
+             os.makedirs(self.template_dir, exist_ok=True)
+        except Exception:
+             pass
 
     def _get_base_path(self):
+        # Reusing the logic from SettingsManager
         if platform.system() == "Darwin":
-            return os.path.expanduser("~/Library/Application Support/Soloveyko.AI-Video.Maker")
-
+             return os.path.expanduser("~/Library/Application Support/Soloveyko.AI-Video.Maker")
         if getattr(sys, 'frozen', False):
             return os.path.dirname(sys.executable)
-        else:
-            return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     def get_templates(self):
-        templates = [f.split('.')[0] for f in os.listdir(self.template_dir) if f.endswith('.json')]
+        templates = []
+        if os.path.exists(self.template_dir):
+            for f in os.listdir(self.template_dir):
+                if f.endswith('.json'):
+                    name = f[:-5]
+                    templates.append(name)
         return sorted(templates)
 
     def load_template(self, name):
-        file_path = os.path.join(self.template_dir, f"{name}.json")
-        if os.path.exists(file_path):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+        path = os.path.join(self.template_dir, f"{name}.json")
+        if os.path.exists(path):
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading template {name}: {e}")
+                return {}
         return {}
 
     def save_template(self, name, data):
-        file_path = os.path.join(self.template_dir, f"{name}.json")
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
+        path = os.path.join(self.template_dir, f"{name}.json")
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving template {name}: {e}")
 
     def delete_template(self, name):
-        file_path = os.path.join(self.template_dir, f"{name}.json")
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        path = os.path.join(self.template_dir, f"{name}.json")
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
 
     def rename_template(self, old_name, new_name):
         old_path = os.path.join(self.template_dir, f"{old_name}.json")
         new_path = os.path.join(self.template_dir, f"{new_name}.json")
         if os.path.exists(old_path) and not os.path.exists(new_path):
-            os.rename(old_path, new_path)
+            try:
+                os.rename(old_path, new_path)
+            except Exception:
+                pass
 
+class ScopedSettingsManager:
+    def __init__(self, data_context, defaults=None):
+        self.settings = data_context
+        # Defaults can be passed or we can refer to global defaults 
+        self.defaults = defaults or settings_manager.defaults
+
+    def get(self, key, default=None):
+        # Quick fallback - if key has dots, traverse
+        if "." in key:
+            parts = key.split(".")
+            val = self.settings
+            try:
+                for p in parts:
+                    if isinstance(val, dict):
+                        val = val.get(p)
+                    else:
+                        raise TypeError
+                if val is None: raise KeyError
+                return val
+            except (KeyError, TypeError, AttributeError):
+                 # Fallback to defaults
+                 val = self.defaults
+                 try:
+                    for p in parts:
+                        val = val[p]
+                    return val
+                 except (KeyError, TypeError):
+                    return default
+
+        val = self.settings.get(key)
+        if val is None:
+             default = self.defaults.get(key)
+             return default
+        return val
+
+    def set(self, key, value):
+        if "." in key:
+            parts = key.split(".")
+            target = self.settings
+            for p in parts[:-1]:
+                if p not in target or not isinstance(target[p], dict):
+                    target[p] = {}
+                target = target[p]
+            target[parts[-1]] = value
+        else:
+            self.settings[key] = value
+
+    def save_settings(self):
+        pass
+
+# Global instances
 settings_manager = SettingsManager()
 template_manager = TemplateManager()

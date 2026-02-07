@@ -7,10 +7,10 @@ from .elevenlabs_image_tab import ElevenLabsImageTab
 
 class ImageTab(QWidget):
 
-    def __init__(self):
-
+    def __init__(self, settings_mgr=None, is_template_mode=False):
         super().__init__()
-
+        self.settings_manager = settings_mgr
+        self.is_template_mode = is_template_mode
         self.init_ui()
 
         self.retranslate_ui()
@@ -33,20 +33,17 @@ class ImageTab(QWidget):
 
         # Add Pollinations Tab
 
-        self.pollinations_tab = PollinationsTab()
-
+        # Add Pollinations Tab
+        # Add Pollinations Tab
+        self.pollinations_tab = PollinationsTab(settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
         self.tabs.addTab(self.pollinations_tab, "Pollinations")
 
-
-
         # Add Googler Tab
-
-        self.googler_tab = GooglerTab()
-
+        self.googler_tab = GooglerTab(settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
         self.tabs.addTab(self.googler_tab, "Googler")
         
         # Add ElevenLabsImage Tab
-        self.elevenlabs_image_tab = ElevenLabsImageTab()
+        self.elevenlabs_image_tab = ElevenLabsImageTab(settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
         self.tabs.addTab(self.elevenlabs_image_tab, "ElevenLabsImage")
 
 

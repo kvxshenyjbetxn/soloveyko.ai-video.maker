@@ -7,10 +7,11 @@ from gui.widgets.help_label import HelpLabel
 from gui.widgets.setting_row import add_setting_row
 
 class ElevenLabsTab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
         self.main_window = main_window
-        self.settings = settings_manager
+        self.settings = settings_mgr or settings_manager
+        self.is_template_mode = is_template_mode
         self.api = ElevenLabsAPI()
         self.init_ui()
         self.update_fields()
@@ -29,23 +30,24 @@ class ElevenLabsTab(QWidget):
             if self.main_window:
                 self.main_window.refresh_quick_settings_panels()
 
-        add_setting_row(layout, self.api_key_label, self.api_key_input, "elevenlabs_api_key", refresh_quick_panel)
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "elevenlabs_api_key", refresh_quick_panel, show_star=not self.is_template_mode)
 
         # Balance
-        balance_layout = QHBoxLayout()
-        self.balance_label = QLabel()
-        balance_layout.addWidget(self.balance_label)
-        balance_layout.addStretch()
-        layout.addLayout(balance_layout)
+        if not self.is_template_mode:
+            balance_layout = QHBoxLayout()
+            self.balance_label = QLabel()
+            balance_layout.addWidget(self.balance_label)
+            balance_layout.addStretch()
+            layout.addLayout(balance_layout)
 
-        # Connection Status
-        connection_layout = QHBoxLayout()
-        self.connection_status_label = QLabel()
-        self.check_connection_button = QPushButton()
-        self.check_connection_button.clicked.connect(self.check_connection)
-        connection_layout.addWidget(self.connection_status_label)
-        connection_layout.addWidget(self.check_connection_button)
-        layout.addLayout(connection_layout)
+            # Connection Status
+            connection_layout = QHBoxLayout()
+            self.connection_status_label = QLabel()
+            self.check_connection_button = QPushButton()
+            self.check_connection_button.clicked.connect(self.check_connection)
+            connection_layout.addWidget(self.connection_status_label)
+            connection_layout.addWidget(self.check_connection_button)
+            layout.addLayout(connection_layout)
 
         # Buy API Key Link
         self.buy_info_layout = QHBoxLayout()
@@ -102,14 +104,15 @@ class ElevenLabsTab(QWidget):
     def retranslate_ui(self):
         self.api_key_label.setText(translator.translate("elevenlabs_api_key"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
-        self.check_connection_button.setText(translator.translate("check_connection"))
+        if hasattr(self, 'check_connection_button'):
+             self.check_connection_button.setText(translator.translate("check_connection"))
         self.buy_info_label.setText(translator.translate("elevenlabs_buy_info"))
         self.proxy_checkbox.setText(translator.translate("enable_proxy", "Enable Proxy"))
         self.proxy_input.setPlaceholderText(translator.translate("proxy_placeholder", "http://user:pass@127.0.0.1:8080"))
         self.proxy_recommendation_label.setText(translator.translate("proxy_recommendation"))
         self.proxy_hint_label.update_tooltip()
-        self.update_connection_status_label()
-        self.update_balance_label()
+        if hasattr(self, 'connection_status_label'): self.update_connection_status_label()
+        if hasattr(self, 'balance_label'): self.update_balance_label()
 
     def update_fields(self):
         self.api_key_input.blockSignals(True)
@@ -124,9 +127,9 @@ class ElevenLabsTab(QWidget):
         proxy_enabled = self.settings.get("elevenlabs_proxy_enabled", False)
         proxy_url = self.settings.get("elevenlabs_proxy_url", "")
         
-        self.proxy_checkbox.setChecked(proxy_enabled)
+        self.proxy_checkbox.setChecked(bool(proxy_enabled))
         self.proxy_input.setText(proxy_url)
-        self.toggle_proxy_input(proxy_enabled)
+        self.toggle_proxy_input(bool(proxy_enabled))
         
         self.proxy_checkbox.blockSignals(False)
         self.proxy_input.blockSignals(False)
@@ -150,8 +153,9 @@ class ElevenLabsTab(QWidget):
         self.update_connection_status_label(status)
         
         if status == "connected":
-            self.main_window.update_balance()
-            self.update_balance_label(balance)
+            if hasattr(self.main_window, 'update_balance'):
+                self.main_window.update_balance()
+            if hasattr(self, 'balance_label'): self.update_balance_label(balance)
 
     def update_connection_status_label(self, status=None):
         if status == "checking":

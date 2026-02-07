@@ -7,8 +7,10 @@ from gui.widgets.help_label import HelpLabel
 from gui.widgets.setting_row import add_setting_row
 
 class ElevenLabsImageTab(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings_mgr=None, is_template_mode=False):
         super().__init__(parent)
+        self.settings = settings_mgr or settings_manager
+        self.is_template_mode = is_template_mode
         self.aspect_ratios = ["16:9", "9:16"] # Common aspects
         self.initUI()
         self.update_fields()
@@ -21,12 +23,15 @@ class ElevenLabsImageTab(QWidget):
         self.api_key_label = QLabel()
         self.api_key_input = QLineEdit()
         
+        # Determine if we show stars
+        show_stars = not self.is_template_mode
+
         def refresh_quick_panel():
             if self.window():
                  if hasattr(self.window(), 'refresh_quick_settings_panels'):
                       self.window().refresh_quick_settings_panels()
 
-        add_setting_row(layout, self.api_key_label, self.api_key_input, "elevenlabs_image.api_key", refresh_quick_panel)
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "elevenlabs_image.api_key", refresh_quick_panel, show_star=show_stars)
 
         # Aspect Ratio
         self.aspect_ratio_help = HelpLabel("elevenlabs_image_aspect_ratio")
@@ -40,21 +45,22 @@ class ElevenLabsImageTab(QWidget):
         
         self.aspect_ratio_combo = QComboBox()
         self.aspect_ratio_combo.addItems(self.aspect_ratios)
-        add_setting_row(layout, aspect_label_container, self.aspect_ratio_combo, "elevenlabs_image.aspect_ratio", refresh_quick_panel)
+        add_setting_row(layout, aspect_label_container, self.aspect_ratio_combo, "elevenlabs_image.aspect_ratio", refresh_quick_panel, show_star=show_stars)
 
         # Max Threads
-        self.max_threads_help = HelpLabel("elevenlabs_image_max_threads")
-        self.max_threads_label = QLabel()
-        max_threads_label_container = QWidget()
-        max_threads_label_layout = QHBoxLayout(max_threads_label_container)
-        max_threads_label_layout.setContentsMargins(0, 0, 0, 0)
-        max_threads_label_layout.setSpacing(5)
-        max_threads_label_layout.addWidget(self.max_threads_help)
-        max_threads_label_layout.addWidget(self.max_threads_label)
-        
-        self.max_threads_spinbox = QSpinBox()
-        self.max_threads_spinbox.setRange(1, 25)
-        add_setting_row(layout, max_threads_label_container, self.max_threads_spinbox, "elevenlabs_image.max_threads", refresh_quick_panel)
+        if not self.is_template_mode:
+            self.max_threads_help = HelpLabel("elevenlabs_image_max_threads")
+            self.max_threads_label = QLabel()
+            max_threads_label_container = QWidget()
+            max_threads_label_layout = QHBoxLayout(max_threads_label_container)
+            max_threads_label_layout.setContentsMargins(0, 0, 0, 0)
+            max_threads_label_layout.setSpacing(5)
+            max_threads_label_layout.addWidget(self.max_threads_help)
+            max_threads_label_layout.addWidget(self.max_threads_label)
+            
+            self.max_threads_spinbox = QSpinBox()
+            self.max_threads_spinbox.setRange(1, 25)
+            add_setting_row(layout, max_threads_label_container, self.max_threads_spinbox, "elevenlabs_image.max_threads", refresh_quick_panel, show_star=show_stars)
 
         # layout.addRow(self.max_threads_label, self.max_threads_spinbox) # Already added above
 
@@ -111,7 +117,7 @@ class ElevenLabsImageTab(QWidget):
     def connect_signals(self):
         self.api_key_input.textChanged.connect(self.save_settings)
         self.aspect_ratio_combo.currentIndexChanged.connect(self.save_settings)
-        self.max_threads_spinbox.valueChanged.connect(self.save_settings)
+        if hasattr(self, 'max_threads_spinbox'): self.max_threads_spinbox.valueChanged.connect(self.save_settings)
 
     def toggle_proxy_input(self, checked):
         self.proxy_details_widget.setVisible(checked)
@@ -120,7 +126,8 @@ class ElevenLabsImageTab(QWidget):
         self.api_key_label.setText(translator.translate("elevenlabs_image_api_key"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.aspect_ratio_label.setText(translator.translate("aspect_ratio"))
-        self.max_threads_label.setText(translator.translate("max_threads"))
+        if hasattr(self, 'max_threads_label'):
+             self.max_threads_label.setText(translator.translate("max_threads"))
         self.buy_info_label.setText(translator.translate("elevenlabs_buy_info"))
         self.proxy_checkbox.setText(translator.translate("enable_proxy", "Enable Proxy"))
         self.proxy_input.setPlaceholderText(translator.translate("proxy_placeholder", "http://user:pass@127.0.0.1:8080"))
@@ -128,40 +135,44 @@ class ElevenLabsImageTab(QWidget):
         
         # Update hints
         self.aspect_ratio_help.update_tooltip()
-        self.max_threads_help.update_tooltip()
+        if hasattr(self, 'max_threads_help'): self.max_threads_help.update_tooltip()
         self.proxy_hint_label.update_tooltip()
 
     def update_fields(self):
         self.api_key_input.blockSignals(True)
         self.aspect_ratio_combo.blockSignals(True)
-        self.max_threads_spinbox.blockSignals(True)
+        if hasattr(self, 'max_threads_spinbox'): self.max_threads_spinbox.blockSignals(True)
         self.proxy_checkbox.blockSignals(True)
         self.proxy_input.blockSignals(True)
 
-        elevenlabs_image_settings = settings_manager.get("elevenlabs_image", {})
+        elevenlabs_image_settings = self.settings.get("elevenlabs_image", {})
         self.api_key_input.setText(elevenlabs_image_settings.get("api_key", ""))
         self.aspect_ratio_combo.setCurrentText(elevenlabs_image_settings.get("aspect_ratio", "16:9"))
-        self.max_threads_spinbox.setValue(elevenlabs_image_settings.get("max_threads", 5))
+        if hasattr(self, 'max_threads_spinbox'):
+            self.max_threads_spinbox.setValue(elevenlabs_image_settings.get("max_threads", 5))
 
         proxy_enabled = elevenlabs_image_settings.get("proxy_enabled", False)
         proxy_url = elevenlabs_image_settings.get("proxy_url", "")
         
-        self.proxy_checkbox.setChecked(proxy_enabled)
+        self.proxy_checkbox.setChecked(bool(proxy_enabled))
         self.proxy_input.setText(proxy_url)
-        self.toggle_proxy_input(proxy_enabled)
+        self.toggle_proxy_input(bool(proxy_enabled))
 
         self.api_key_input.blockSignals(False)
         self.aspect_ratio_combo.blockSignals(False)
-        self.max_threads_spinbox.blockSignals(False)
+        if hasattr(self, 'max_threads_spinbox'): self.max_threads_spinbox.blockSignals(False)
         self.proxy_checkbox.blockSignals(False)
         self.proxy_input.blockSignals(False)
 
     def save_settings(self):
+        current_settings = self.settings.get("elevenlabs_image", {})
+        max_threads = self.max_threads_spinbox.value() if hasattr(self, 'max_threads_spinbox') else current_settings.get("max_threads", 5)
+
         elevenlabs_image_settings = {
             "api_key": self.api_key_input.text(),
             "aspect_ratio": self.aspect_ratio_combo.currentText(),
-            "max_threads": self.max_threads_spinbox.value(),
+            "max_threads": max_threads,
             "proxy_enabled": self.proxy_checkbox.isChecked(),
             "proxy_url": self.proxy_input.text().strip(),
         }
-        settings_manager.set("elevenlabs_image", elevenlabs_image_settings)
+        self.settings.set("elevenlabs_image", elevenlabs_image_settings)
