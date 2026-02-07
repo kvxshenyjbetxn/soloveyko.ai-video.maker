@@ -478,6 +478,7 @@
     "select_setting_hint": "Select the parameter you want to change in all selected templates. Note: some complex parameters (e.g., trigger lists) may be unavailable for mass editing.",
     "prompt_standard_label": "💾 Prompt (Standard):",
     "prompt_sync_label": "💾 Prompt (Sync):",
+    "character_prompt_label": "💾 Character Definition Prompt:",
     "prompt_fallback_label": "💾 Prompt (Fallback):",
     "overlay_triggers_label": "💾 Effect Triggers:",
     "mass_edit_success": "Successfully updated {count} templates.",

@@ -128,6 +128,44 @@ class ImagePromptWorker(BaseWorker):
         texts_to_process = input_text if is_list else [input_text]
         generated_prompts = []
         
+        # --- Character Definition Logic (Sync Mode Only) ---
+        character_description = ""
+        char_prompt = img_prompt_settings.get('character_prompt')
+        
+        if is_list and char_prompt and char_prompt.strip():
+            try:
+                logger.log(f"[{self.task_id}] Starting character definition analysis...", level=LogLevel.INFO)
+                
+                # Reconstruct full text for context
+                full_story = "\n".join(texts_to_process)
+                
+                char_analysis_prompt = f"{char_prompt}\n\nSTORY TEXT:\n{full_story}"
+                
+                # Use same model settings as image prompts or default? 
+                # safer to use same settings to avoid config bloat, but maybe a bit less max_tokens?
+                # We'll use the same settings.
+                
+                response = api.get_chat_completion(
+                    model=model,
+                    messages=[{"role": "user", "content": char_analysis_prompt}],
+                    max_tokens=max_tokens,
+                    temperature=temp
+                )
+                
+                msg = response['choices'][0].get('message', {})
+                result = msg.get('content') or msg.get('reasoning')
+                
+                if result:
+                    character_description = result.strip()
+                    logger.log(f"[{self.task_id}] Character definition generated ({len(character_description)} chars)", level=LogLevel.SUCCESS)
+                    # logger.log(f"[{self.task_id}] Char Desc Preview: {character_description[:100]}...", level=LogLevel.DEBUG)
+                else:
+                    logger.log(f"[{self.task_id}] Character definition returned empty result.", level=LogLevel.WARNING)
+                    
+            except Exception as e:
+                logger.log(f"[{self.task_id}] Error generating character definition: {e}", level=LogLevel.ERROR)
+                # Continue without character description
+        
         logger.log(f"[{self.task_id}] [{model}] Starting image prompts generation (segments: {len(texts_to_process)}, temp: {temp})", level=LogLevel.INFO)
         
         # For list logic, we want *one* prompt per segment.
@@ -144,6 +182,21 @@ class ImagePromptWorker(BaseWorker):
             if is_list:
                 # Targeted sync prompt or fallback to legacy
                 base_prompt = img_prompt_settings.get('prompt_sync') or img_prompt_settings.get('prompt', '')
+                
+                # Inject character description if available
+                if character_description:
+                    if "{characters}" in base_prompt:
+                        base_prompt = base_prompt.replace("{characters}", character_description)
+                    else:
+                        # Optional: Auto-append if placeholder missing? 
+                        # The user explicitly asked for a placeholder, so we might respect that strictly.
+                        # However, for better UX, we can append it if the user forgot.
+                        # "Describe an image... \n\nContext: {desc}"
+                        # Let's check if the user asked ONLY for placeholder. 
+                        # "потрібно зробити плейсхолдер який я вставлю...  щоб программа знала куди саме в промт підставити"
+                        # This implies strict placement. But if they forget, the feature is useless.
+                        # I'll stick to strict replacement for now to respect the "instruction" nature of the prompt.
+                        pass
             else:
                 # Targeted standard prompt or fallback to legacy
                 base_prompt = img_prompt_settings.get('prompt_standard') or img_prompt_settings.get('prompt', '')

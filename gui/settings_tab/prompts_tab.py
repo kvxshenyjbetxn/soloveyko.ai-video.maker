@@ -167,8 +167,43 @@ class PromptsTab(QWidget):
         editor_button_layout.addStretch()
         main_prompt_layout.addLayout(editor_button_layout)
         
+        # --- Character Definition Prompt (Sync Mode Only) ---
+        self.char_prompt_container = QWidget()
+        self.char_prompt_layout = QVBoxLayout(self.char_prompt_container)
+        self.char_prompt_layout.setContentsMargins(0,10,0,10)
+
+        self.char_prompt_help = HelpLabel("character_prompt_help")
+        self.char_prompt_label = QLabel()
+        char_prompt_label_container = QWidget()
+        char_prompt_label_layout = QHBoxLayout(char_prompt_label_container)
+        char_prompt_label_layout.setContentsMargins(0,0,0,0)
+        char_prompt_label_layout.setSpacing(5)
+        char_prompt_label_layout.addWidget(self.char_prompt_help)
+        char_prompt_label_layout.addWidget(self.char_prompt_label)
+        
+        self.char_prompt_edit = QTextEdit()
+        self.char_prompt_edit.setMinimumHeight(100)
+        self.char_prompt_edit.textChanged.connect(self.save_settings)
+
+        self.open_char_editor_button = QPushButton(translator.translate("open_editor_button", "Open Editor"))
+        self.open_char_editor_button.clicked.connect(self.open_char_prompt_editor)
+        
+        char_prompt_main_layout = QHBoxLayout()
+        char_prompt_main_layout.addWidget(self.char_prompt_edit)
+        
+        char_editor_button_layout = QVBoxLayout()
+        char_editor_button_layout.addWidget(self.open_char_editor_button)
+        char_editor_button_layout.addStretch()
+        char_prompt_main_layout.addLayout(char_editor_button_layout)
+        
+        self.char_prompt_layout.addWidget(char_prompt_label_container)
+        self.char_prompt_layout.addLayout(char_prompt_main_layout)
+        
+        self.img_group_layout.addWidget(self.char_prompt_container)
+
         self.img_group_layout.addWidget(prompt_label_container)
         self.img_group_layout.addLayout(main_prompt_layout)
+        
         self.img_group_layout.addLayout(settings_form_layout)
         
         self.content_layout.addWidget(img_group)
@@ -342,6 +377,11 @@ class PromptsTab(QWidget):
         dialog = PromptEditorDialog(self, self.preview_prompt_edit.toPlainText())
         if dialog.exec():
             self.preview_prompt_edit.setPlainText(dialog.get_text())
+
+    def open_char_prompt_editor(self):
+        dialog = PromptEditorDialog(self, self.char_prompt_edit.toPlainText())
+        if dialog.exec():
+            self.char_prompt_edit.setPlainText(dialog.get_text())
 
     def open_custom_stage_prompt_editor(self, prompt_edit_widget):
         dialog = PromptEditorDialog(self, prompt_edit_widget.toPlainText())
@@ -551,6 +591,9 @@ class PromptsTab(QWidget):
             # Count visible ONLY if global setting enabled
             self.prompt_count_container_widget.setVisible(is_checked)
             self.prompt_count_spinbox.setVisible(is_checked)
+            
+        # Character Prompt Visibility (Only in Sync Mode)
+        self.char_prompt_container.setVisible(is_sync)
 
     def on_preview_provider_changed(self):
         is_pollinations = self.preview_provider_combo.currentData() == "pollinations"
@@ -574,7 +617,10 @@ class PromptsTab(QWidget):
         self.tokens_spinbox.blockSignals(True)
         self.generation_mode_combo.blockSignals(True)
         self.text_split_count_spinbox.blockSignals(True)
+        self.generation_mode_combo.blockSignals(True)
+        self.text_split_count_spinbox.blockSignals(True)
         self.prompt_count_spinbox.blockSignals(True)
+        self.char_prompt_edit.blockSignals(True)
 
         # Logic: Determine mode first to load correct prompt
         split_count = self.settings.get('text_split_count', 0)
@@ -607,6 +653,8 @@ class PromptsTab(QWidget):
             self.generation_mode_combo.setCurrentIndex(0)
             self.text_split_count_spinbox.setValue(last_split_count) # Restore last used value
 
+        self.char_prompt_edit.setPlainText(config.get("character_prompt", ""))
+
         # Apply visibility based on current mode
         self.on_mode_changed()
         
@@ -621,7 +669,9 @@ class PromptsTab(QWidget):
         self.temperature_spinbox.blockSignals(False)
         self.generation_mode_combo.blockSignals(False)
         self.text_split_count_spinbox.blockSignals(False)
+        self.text_split_count_spinbox.blockSignals(False)
         self.prompt_count_spinbox.blockSignals(False)
+        self.char_prompt_edit.blockSignals(False)
         
         # Apply visibility based on current mode (AGAIN, after loading checkbox)
         self.on_mode_changed()
@@ -720,6 +770,7 @@ class PromptsTab(QWidget):
         config["model"] = self.model_combo.currentText()
         config["max_tokens"] = self.tokens_spinbox.value()
         config["temperature"] = self.temperature_spinbox.value()
+        config["character_prompt"] = self.char_prompt_edit.toPlainText()
         self.settings.set("image_prompt_settings", config)
         
         # Save Logic:
@@ -783,6 +834,10 @@ class PromptsTab(QWidget):
         self.model_label.setText(translator.translate("image_model_label"))
         self.tokens_label.setText(translator.translate("tokens_label"))
         self.temperature_label.setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
+        self.model_label.setText(translator.translate("image_model_label"))
+        self.tokens_label.setText(translator.translate("tokens_label"))
+        self.temperature_label.setText(translator.translate("temperature_label") if translator.translate("temperature_label") != "temperature_label" else "Temperature")
+        self.char_prompt_label.setText(translator.translate("character_prompt_label", "Character Definition Prompt"))
         self.generation_mode_label.setText(translator.translate("generation_mode_label"))
         
         self.generation_mode_combo.blockSignals(True)

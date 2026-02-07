@@ -61,9 +61,9 @@ class SubtitleEngine:
                 if srt_content:
                     segments = self._parse_srt_content(srt_content)
                 else:
-                    logger.log("AssemblyAI get_srt returned empty content.", LogLevel.WARNING)
+                    raise Exception("AssemblyAI get_srt returned empty or invalid content.")
             else:
-                logger.log("AssemblyAI transcription returned a None object.", LogLevel.WARNING)
+                raise Exception("AssemblyAI transcription failed (returned None). Check API key and logs.")
 
         elif engine_type == 'standard':
             # --- Standard Python Whisper ---
