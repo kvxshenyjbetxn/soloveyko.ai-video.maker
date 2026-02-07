@@ -31,8 +31,8 @@ class AssemblyAIAPI:
             else:
                 config = aai.TranscriptionConfig(language_code=lang)
             
-            transcriber = aai.Transcriber(config=config)
-            transcript = transcriber.transcribe(audio_path)
+            transcriber = aai.Transcriber()
+            transcript = transcriber.transcribe(audio_path, config=config)
 
             if transcript.status == aai.TranscriptStatus.error:
                 logger.log(f"AssemblyAI transcription failed: {transcript.error}", LogLevel.ERROR)

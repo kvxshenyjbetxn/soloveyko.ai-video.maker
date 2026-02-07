@@ -968,7 +968,6 @@ class MontageEngine:
         
         # Helper for cleaning text
         def clean(s):
-            # Lowercase, remove punctuation, keep spaces to separate words
             s = s.lower()
             s = s.replace('ё', 'е')
             s = re.sub(r'[^\w\s]', '', s)
@@ -978,82 +977,103 @@ class MontageEngine:
         if not cleaned_phrase:
             return None
 
-        # Optimization: Focus on the "Anchor" (beginning of the trigger) to find the start time.
-        # If the trigger is long, we only care about when it STARTS.
-        # We take first 4 words. 8 words was too long and often spanned across subtitle lines.
-        words = cleaned_phrase.split()
-        anchor_len = min(len(words), 4)
-        anchor_text = " ".join(words[:anchor_len])
-        
-        # Fallback if specific anchor is too short (less than 4 chars total)
-        if len(anchor_text) < 4: 
-            anchor_text = cleaned_phrase
+        # Just verify length to not search for "a"
+        if len(cleaned_phrase) < 3:
+            logger.log(f"{prefix}[FFmpeg] Phrase too short to search.", level=LogLevel.WARNING)
+            return None
 
-        logger.log(f"{prefix}[FFmpeg] Searching for anchor: '{anchor_text}' (fuzzy)", level=LogLevel.DEBUG)
+        logger.log(f"{prefix}[FFmpeg] Searching for full phrase: '{cleaned_phrase}'", level=LogLevel.DEBUG)
 
         try:
             with open(ass_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
             
-            best_match_time = None
-            best_match_ratio = 0.0
+            # 1. Parse all subtitle events strictly
+            # We store: start_time (seconds), clean_text, original_line_index
+            parsed_segments = []
             
+            full_text_buffer = ""
+            # Map character index in full_text_buffer to the segment it belongs to
+            # We'll use this to trace back the start time
+            char_to_segment_map = [] 
+
             for line in lines:
                 if line.startswith('Dialogue:'):
                     parts = line.split(',', 9)
                     if len(parts) >= 10:
                         start_str = parts[1].strip()
                         raw_text = parts[9]
-                        
-                        # Clean subtitle content
                         sub_text = re.sub(r'\{.*?\}', '', raw_text) # remove tags
                         cleaned_sub = clean(sub_text)
                         
-                        if not cleaned_sub: continue
-                        
-                        # Fuzzy Check: Is Anchor in Subtitle?
-                        # 1. Quick substring check (if exact match)
-                        if anchor_text in cleaned_sub:
-                            logger.log(f"{prefix}[FFmpeg] Exact match for anchor in: '{cleaned_sub}'", level=LogLevel.DEBUG)
-                            return self._parse_ass_time(start_str)
-
-                        # 2. Fuzzy match using SequenceMatcher
-                        # We verify if the cleaned_sub contains the anchor with high similarity
-                        s = difflib.SequenceMatcher(None, cleaned_sub, anchor_text)
-                        match = s.find_longest_match(0, len(cleaned_sub), 0, len(anchor_text))
-                        
-                        if match.size > 0:
-                            # Check the ratio of the matched block vs the anchor length
-                            # Lower threshold to 0.6 to capture matches with typos (e.g. 15/20 chars matched = 0.75)
-                            coverage = match.size / len(anchor_text)
+                        if cleaned_sub:
+                            start_time = self._parse_ass_time(start_str)
                             
-                            if coverage >= 0.6: 
-                                # Double check with ratio on the specific window to handle typos inside the block
-                                # Correctly offset back if we matched a suffix of the anchor
-                                start_idx = max(0, match.a - match.b)
-                                end_idx = min(start_idx + len(anchor_text) + 5, len(cleaned_sub))
-                                sub_window = cleaned_sub[start_idx:end_idx]
-                                
-                                ratio = difflib.SequenceMatcher(None, sub_window, anchor_text).ratio()
-                                
-                                if ratio > 0.75: # Slightly lower ratio requirement for the window
-                                    # If this match is better than previous best, keep it
-                                    if ratio > best_match_ratio:
-                                        best_match_ratio = ratio
-                                        best_match_time = self._parse_ass_time(start_str)
-                                        # If very high confidence, stop early
-                                        if ratio > 0.95:
-                                            break
+                            current_buffer_len = len(full_text_buffer)
+                            
+                            # Add space if not start
+                            prefix_space = " " if full_text_buffer else ""
+                            full_text_buffer += prefix_space + cleaned_sub
+                            
+                            # Map the new characters to this segment
+                            # Because we added a space, the first char maps to "prev" segment conceptually? 
+                            # Or we can just map all new chars to this segment index
+                            # Let's map strictly.
+                            
+                            # If we added a space, that space technically bridges previous and current.
+                            # Let's assign it to current for simplicity of "start of phrase".
+                            
+                            segment_idx = len(parsed_segments)
+                            added_len = len(prefix_space) + len(cleaned_sub)
+                            
+                            char_to_segment_map.extend([segment_idx] * added_len)
+                            
+                            parsed_segments.append({
+                                'start': start_time,
+                                'text': cleaned_sub,
+                                'buffer_start_idx': current_buffer_len
+                            })
+
+            if not full_text_buffer:
+                return None
+
+            # 2. Search in the full content
+            # Try exact search first
+            start_index = full_text_buffer.find(cleaned_phrase)
             
-            if best_match_time is not None:
-                logger.log(f"{prefix}[FFmpeg] Fuzzy match found! Ratio: {best_match_ratio:.2f}. Timing: {best_match_time}s", level=LogLevel.INFO)
-                return best_match_time
+            if start_index == -1:
+                # 3. Fuzzy search if exact failed
+                # Use SequenceMatcher on the WHOLE buffer vs phrase
+                # Note: This might be slow if buffer is huge (hour long video), but for standard clips it's fine.
+                matcher = difflib.SequenceMatcher(None, full_text_buffer, cleaned_phrase)
+                match = matcher.find_longest_match(0, len(full_text_buffer), 0, len(cleaned_phrase))
+                
+                # We want the match to cover significantly the phrase
+                if match.size > len(cleaned_phrase) * 0.6: # 60% coverage
+                     logger.log(f"{prefix}[FFmpeg] Fuzzy match found! Ratio: {match.size/len(cleaned_phrase):.2f}", level=LogLevel.INFO)
+                     start_index = match.a
+                else: 
+                    # Try finding "anchor" (just the start)
+                    # If the phrase is super long, maybe we only matched the beginning?
+                    pass
+
+            if start_index != -1:
+                # We found the start char index. Map it back to segment.
+                # start_index matches the index in full_text_buffer
+                if start_index < len(char_to_segment_map):
+                    seg_idx = char_to_segment_map[start_index]
+                    found_segment = parsed_segments[seg_idx]
+                    
+                    found_time = found_segment['start']
+                    logger.log(f"{prefix}[FFmpeg] Trigger found at char {start_index} -> Segment {seg_idx} -> Time {found_time}s", level=LogLevel.INFO)
+                    return found_time
+            
+            logger.log(f"{prefix}[FFmpeg] Phrase not found in subtitles.", level=LogLevel.WARNING)
+            return None
 
         except Exception as e:
-            logger.log(f"Error parsing ASS timing: {e}", level=LogLevel.ERROR)
-            
-        return None
-
+            logger.log(f"Error searching text timing: {e}", level=LogLevel.ERROR)
+            return None       
     def _parse_ass_time(self, time_str):
         # Format usually H:MM:SS.cc
         try:
