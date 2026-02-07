@@ -15,8 +15,10 @@ class ModelFetcher(QThread):
         self.models_fetched.emit(models)
 
 class PollinationsTab(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings_mgr=None, is_template_mode=False):
         super().__init__(parent)
+        self.settings = settings_mgr or settings_manager
+        self.is_template_mode = is_template_mode
         # Default fallback models
         self.models = ["flux", "flux-realism", "flux-3d", "flux-cablyai", "dall-e-3", "midjourney", "boreal"] 
         self.initUI()
@@ -34,7 +36,7 @@ class PollinationsTab(QWidget):
     def update_models_list(self, models):
         if models:
             self.models = models
-            settings_manager.set("pollinations_models_cache", models)
+            self.settings.set("pollinations_models_cache", models)
             current_model = self.model_combo.currentText()
             
             self.model_combo.blockSignals(True)
@@ -69,12 +71,15 @@ class PollinationsTab(QWidget):
         self.model_combo = QComboBox()
         self.model_combo.addItems(self.models)
         
+        # Determine if we show stars
+        show_stars = not self.is_template_mode
+
         def refresh_quick_panel():
             if self.window():
                  if hasattr(self.window(), 'refresh_quick_settings_panels'):
                       self.window().refresh_quick_settings_panels()
 
-        add_setting_row(layout, model_label_container, self.model_combo, "pollinations.model", refresh_quick_panel)
+        add_setting_row(layout, model_label_container, self.model_combo, "pollinations.model", refresh_quick_panel, show_star=show_stars)
 
         # Token (API)
         self.token_help = HelpLabel("pollinations_token_label")
@@ -87,7 +92,7 @@ class PollinationsTab(QWidget):
         token_label_layout.addWidget(self.token_label)
         
         self.token_input = QLineEdit()
-        add_setting_row(layout, token_label_container, self.token_input, "pollinations.token", refresh_quick_panel)
+        add_setting_row(layout, token_label_container, self.token_input, "pollinations.token", refresh_quick_panel, show_star=show_stars)
 
         # Aspect Ratio
         self.aspect_ratio_help = HelpLabel("googler_aspect_ratio_label")
@@ -124,7 +129,7 @@ class PollinationsTab(QWidget):
         enhance_layout.setSpacing(5)
         enhance_layout.addWidget(self.enhance_help)
         enhance_layout.addWidget(self.enhance_checkbox)
-        add_setting_row(layout, None, enhance_container, "pollinations.enhance", refresh_quick_panel)
+        add_setting_row(layout, None, enhance_container, "pollinations.enhance", refresh_quick_panel, show_star=show_stars)
 
         # Info Link
         self.info_layout = QHBoxLayout()
@@ -181,7 +186,7 @@ class PollinationsTab(QWidget):
         self.nologo_checkbox.blockSignals(True)
         self.enhance_checkbox.blockSignals(True)
 
-        pollinations_settings = settings_manager.get("pollinations", {})
+        pollinations_settings = self.settings.get("pollinations", {})
         
         # If model is not in current list (which might be just defaults initially), 
         # add it temporarily so it shows up, or just select it if we can
@@ -199,7 +204,10 @@ class PollinationsTab(QWidget):
              self.model_combo.addItem(saved_model)
              
         self.model_combo.setCurrentText(saved_model)
-        self.token_input.setText(pollinations_settings.get("token", ""))
+        if hasattr(self, 'token_input'):
+             token = pollinations_settings.get("token")
+             self.token_input.setText(token if token else "")
+
         width = pollinations_settings.get("width", 1920)
         height = pollinations_settings.get("height", 1080)
         
@@ -207,8 +215,9 @@ class PollinationsTab(QWidget):
             self.aspect_ratio_combo.setCurrentIndex(1) # portrait
         else:
             self.aspect_ratio_combo.setCurrentIndex(0) # landscape
-        self.nologo_checkbox.setChecked(pollinations_settings.get("nologo", True))
-        self.enhance_checkbox.setChecked(pollinations_settings.get("enhance", False))
+        
+        self.nologo_checkbox.setChecked(bool(pollinations_settings.get("nologo", True)))
+        self.enhance_checkbox.setChecked(bool(pollinations_settings.get("enhance", False)))
 
         self.model_combo.blockSignals(False)
         self.token_input.blockSignals(False)
@@ -225,4 +234,4 @@ class PollinationsTab(QWidget):
             "nologo": self.nologo_checkbox.isChecked(),
             "enhance": self.enhance_checkbox.isChecked(),
         }
-        settings_manager.set("pollinations", pollinations_settings)
+        self.settings.set("pollinations", pollinations_settings)

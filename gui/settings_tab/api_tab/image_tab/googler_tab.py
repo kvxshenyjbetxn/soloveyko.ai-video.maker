@@ -7,8 +7,10 @@ from gui.widgets.setting_row import add_setting_row
 from PySide6.QtWidgets import QWidget, QFormLayout, QLabel, QComboBox, QLineEdit, QSpinBox, QPushButton, QHBoxLayout, QWidget
 
 class GooglerTab(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings_mgr=None, is_template_mode=False):
         super().__init__(parent)
+        self.settings = settings_mgr or settings_manager
+        self.is_template_mode = is_template_mode
         self.aspect_ratios = ["IMAGE_ASPECT_RATIO_LANDSCAPE", "IMAGE_ASPECT_RATIO_PORTRAIT"]
         self.initUI()
         self.update_fields()
@@ -21,22 +23,26 @@ class GooglerTab(QWidget):
         self.api_key_label = QLabel()
         self.api_key_input = QLineEdit()
         
+        # Determine if we show stars
+        show_stars = not self.is_template_mode
+
         def refresh_quick_panel():
             if self.window():
                  if hasattr(self.window(), 'refresh_quick_settings_panels'):
                       self.window().refresh_quick_settings_panels()
 
-        add_setting_row(layout, self.api_key_label, self.api_key_input, "googler.api_key", refresh_quick_panel)
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "googler.api_key", refresh_quick_panel, show_star=show_stars)
 
-        # Usage
-        self.usage_label = QLabel()
-        usage_layout = QHBoxLayout()
-        self.check_usage_button = QPushButton()
-        self.usage_display_label = QLabel("N/A")
-        usage_layout.addWidget(self.check_usage_button)
-        usage_layout.addWidget(self.usage_display_label)
-        self.check_usage_button.clicked.connect(self.check_usage)
-        layout.addRow(self.usage_label, usage_layout)
+        if not self.is_template_mode:
+            # Usage
+            self.usage_label = QLabel()
+            usage_layout = QHBoxLayout()
+            self.check_usage_button = QPushButton()
+            self.usage_display_label = QLabel("N/A")
+            usage_layout.addWidget(self.check_usage_button)
+            usage_layout.addWidget(self.usage_display_label)
+            self.check_usage_button.clicked.connect(self.check_usage)
+            layout.addRow(self.usage_label, usage_layout)
 
         # Aspect Ratio
         self.aspect_ratio_help = HelpLabel("googler_aspect_ratio_label")
@@ -51,7 +57,7 @@ class GooglerTab(QWidget):
         self.aspect_ratio_combo = QComboBox()
         for ratio in self.aspect_ratios:
              self.aspect_ratio_combo.addItem(ratio, ratio)
-        add_setting_row(layout, aspect_label_container, self.aspect_ratio_combo, "googler.aspect_ratio", refresh_quick_panel)
+        add_setting_row(layout, aspect_label_container, self.aspect_ratio_combo, "googler.aspect_ratio", refresh_quick_panel, show_star=show_stars)
 
         # Max Threads
         self.max_threads_help = HelpLabel("googler_max_threads_label")
@@ -92,7 +98,7 @@ class GooglerTab(QWidget):
         video_prompt_label_layout.addWidget(self.video_prompt_label)
         
         self.video_prompt_input = QLineEdit()
-        add_setting_row(layout, video_prompt_label_container, self.video_prompt_input, "googler.video_prompt", refresh_quick_panel)
+        add_setting_row(layout, video_prompt_label_container, self.video_prompt_input, "googler.video_prompt", refresh_quick_panel, show_star=show_stars)
 
         # Seed
         self.seed_help = HelpLabel("googler_seed_label")
@@ -105,7 +111,7 @@ class GooglerTab(QWidget):
         seed_label_layout.addWidget(self.seed_label)
         
         self.seed_input = QLineEdit()
-        add_setting_row(layout, seed_label_container, self.seed_input, "googler.seed", refresh_quick_panel)
+        add_setting_row(layout, seed_label_container, self.seed_input, "googler.seed", refresh_quick_panel, show_star=show_stars)
 
         # Negative Prompt
         self.negative_prompt_help = HelpLabel("googler_negative_prompt_label")
@@ -118,7 +124,7 @@ class GooglerTab(QWidget):
         negative_prompt_label_layout.addWidget(self.negative_prompt_label)
         
         self.negative_prompt_input = QLineEdit()
-        add_setting_row(layout, negative_prompt_label_container, self.negative_prompt_input, "googler.negative_prompt", refresh_quick_panel)
+        add_setting_row(layout, negative_prompt_label_container, self.negative_prompt_input, "googler.negative_prompt", refresh_quick_panel, show_star=show_stars)
 
         # Buy API Key Link
         self.buy_info_layout = QHBoxLayout()
@@ -145,8 +151,10 @@ class GooglerTab(QWidget):
         self.api_key_label.setText(translator.translate("googler_api_key_label"))
         self.api_key_input.setPlaceholderText(translator.translate("googler_api_key_placeholder"))
         self.buy_info_label.setText(translator.translate("googler_buy_info"))
-        self.usage_label.setText(translator.translate("googler_usage_label"))
-        self.check_usage_button.setText(translator.translate("googler_check_usage_button"))
+        if hasattr(self, 'usage_label'):
+             self.usage_label.setText(translator.translate("googler_usage_label"))
+        if hasattr(self, 'check_usage_button'):
+             self.check_usage_button.setText(translator.translate("googler_check_usage_button"))
         self.aspect_ratio_label.setText(translator.translate("googler_aspect_ratio_label"))
         self.aspect_ratio_combo.setItemText(0, translator.translate("aspect_ratio_landscape"))
         self.aspect_ratio_combo.setItemText(1, translator.translate("aspect_ratio_portrait"))
@@ -175,13 +183,13 @@ class GooglerTab(QWidget):
         self.seed_input.blockSignals(True)
         self.negative_prompt_input.blockSignals(True)
 
-        googler_settings = settings_manager.get("googler", {})
+        googler_settings = self.settings.get("googler", {})
         self.api_key_input.setText(googler_settings.get("api_key", ""))
         idx = self.aspect_ratio_combo.findData(googler_settings.get("aspect_ratio", "IMAGE_ASPECT_RATIO_LANDSCAPE"))
         if idx >= 0:
             self.aspect_ratio_combo.setCurrentIndex(idx)
-        self.max_threads_spinbox.setValue(googler_settings.get("max_threads", 25))
-        self.max_video_threads_spinbox.setValue(googler_settings.get("max_video_threads", 10))
+        self.max_threads_spinbox.setValue(int(googler_settings.get("max_threads", 25) or 25))
+        self.max_video_threads_spinbox.setValue(int(googler_settings.get("max_video_threads", 10) or 10))
         self.video_prompt_input.setText(googler_settings.get("video_prompt", "Animate this scene, cinematic movement, 4k"))
         self.seed_input.setText(str(googler_settings.get("seed", "")))
         self.negative_prompt_input.setText(googler_settings.get("negative_prompt", "blood"))
@@ -204,7 +212,7 @@ class GooglerTab(QWidget):
             "seed": self.seed_input.text(),
             "negative_prompt": self.negative_prompt_input.text(),
         }
-        settings_manager.set("googler", googler_settings)
+        self.settings.set("googler", googler_settings)
 
     def check_usage(self):
         self.save_settings()

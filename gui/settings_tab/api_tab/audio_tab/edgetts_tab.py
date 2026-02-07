@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt
 from utils.translator import translator
 
 class EdgeTTSTab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
         self.main_window = main_window
         self.init_ui()

@@ -58,10 +58,12 @@ class OverlaySettingsDialog(QDialog):
         return self.x_spin.value(), self.y_spin.value()
 
 class LanguagesTab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
         self.main_window = main_window
-        self.settings = settings_manager
+        self.settings_manager = settings_mgr or settings_manager
+        self.settings = self.settings_manager # Alias for compatibility
+        self.is_template_mode = is_template_mode
         self.elevenlabs_api = ElevenLabsAPI()
         self.edge_tts_api = EdgeTTSAPI()
         self.elevenlabs_templates = []
@@ -803,7 +805,7 @@ class LanguagesTab(QWidget):
         self.model_combo.clear()
         self.rewrite_model_combo.clear()
         
-        models = self.settings.get("openrouter_models", [])
+        models = settings_manager.get("openrouter_models", [])
         self.model_combo.addItems(models)
         self.rewrite_model_combo.addItems(models)
         
@@ -1206,7 +1208,7 @@ class LanguagesTab(QWidget):
         self.lang_id_input.clear()
         self.load_languages()
         
-        if self.main_window:
+        if self.main_window and hasattr(self.main_window, 'refresh_language_menus'):
             self.main_window.refresh_language_menus()
 
     def remove_language(self):
@@ -1227,7 +1229,7 @@ class LanguagesTab(QWidget):
             self.load_languages()
             self.right_panel.setVisible(False)
             
-            if self.main_window:
+            if self.main_window and hasattr(self.main_window, 'refresh_language_menus'):
                 self.main_window.refresh_language_menus()
 
     def save_current_language_settings(self):

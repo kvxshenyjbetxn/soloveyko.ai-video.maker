@@ -6,9 +6,10 @@ from api.assemblyai import assembly_ai_api
 from gui.widgets.setting_row import add_setting_row
 
 class AssemblyAITab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
-        self.settings = settings_manager
+        self.settings = settings_mgr or settings_manager
+        self.is_template_mode = is_template_mode
         self.init_ui()
         self.update_fields()
         self.retranslate_ui()
@@ -29,25 +30,26 @@ class AssemblyAITab(QWidget):
                  if hasattr(self.window(), 'refresh_quick_settings_panels'):
                       self.window().refresh_quick_settings_panels()
 
-        add_setting_row(layout, self.api_key_label, self.api_key_input, "assemblyai_api_key", refresh_quick_panel)
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "assemblyai_api_key", refresh_quick_panel, show_star=not self.is_template_mode)
 
         # Max Threads
-        self.max_threads_help = HelpLabel("assemblyai_max_threads")
-        max_threads_layout = QHBoxLayout()
-        self.max_threads_label = QLabel()
-        max_label_container = QWidget()
-        max_label_layout = QHBoxLayout(max_label_container)
-        max_label_layout.setContentsMargins(0, 0, 0, 0)
-        max_label_layout.setSpacing(5)
-        max_label_layout.addWidget(self.max_threads_help)
-        max_label_layout.addWidget(self.max_threads_label)
+        if not self.is_template_mode:
+            self.max_threads_help = HelpLabel("assemblyai_max_threads")
+            max_threads_layout = QHBoxLayout()
+            self.max_threads_label = QLabel()
+            max_label_container = QWidget()
+            max_label_layout = QHBoxLayout(max_label_container)
+            max_label_layout.setContentsMargins(0, 0, 0, 0)
+            max_label_layout.setSpacing(5)
+            max_label_layout.addWidget(self.max_threads_help)
+            max_label_layout.addWidget(self.max_threads_label)
 
-        self.max_threads_input = QComboBox()
-        self.max_threads_input.addItems(["5", "100"])
-        self.max_threads_input.currentIndexChanged.connect(self.save_max_threads)
-        max_threads_layout.addWidget(max_label_container)
-        max_threads_layout.addWidget(self.max_threads_input)
-        layout.addLayout(max_threads_layout)
+            self.max_threads_input = QComboBox()
+            self.max_threads_input.addItems(["5", "100"])
+            self.max_threads_input.currentIndexChanged.connect(self.save_max_threads)
+            max_threads_layout.addWidget(max_label_container)
+            max_threads_layout.addWidget(self.max_threads_input)
+            layout.addLayout(max_threads_layout)
 
         # Info Link
         self.info_layout = QHBoxLayout()
@@ -63,12 +65,13 @@ class AssemblyAITab(QWidget):
 
     def retranslate_ui(self):
         self.api_key_label.setText(translator.translate("assemblyai_api_key"))
-        self.max_threads_label.setText(translator.translate("assemblyai_max_threads"))
+        if hasattr(self, 'max_threads_label'):
+             self.max_threads_label.setText(translator.translate("assemblyai_max_threads"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
         self.info_label.setText(translator.translate("assemblyai_info"))
         
         # Update hints
-        self.max_threads_help.update_tooltip()
+        if hasattr(self, 'max_threads_help'): self.max_threads_help.update_tooltip()
 
     def update_fields(self):
         self.api_key_input.blockSignals(True)
@@ -76,10 +79,11 @@ class AssemblyAITab(QWidget):
         self.api_key_input.setText(api_key)
         self.api_key_input.blockSignals(False)
 
-        self.max_threads_input.blockSignals(True)
-        max_threads = self.settings.get("assemblyai_max_threads", "5")
-        self.max_threads_input.setCurrentText(max_threads)
-        self.max_threads_input.blockSignals(False)
+        if hasattr(self, 'max_threads_input'):
+            self.max_threads_input.blockSignals(True)
+            max_threads = self.settings.get("assemblyai_max_threads", "5")
+            self.max_threads_input.setCurrentText(max_threads)
+            self.max_threads_input.blockSignals(False)
         
     def save_api_key(self, key):
         self.settings.set("assemblyai_api_key", key)

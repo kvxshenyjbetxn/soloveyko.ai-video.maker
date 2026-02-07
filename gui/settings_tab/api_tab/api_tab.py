@@ -8,19 +8,21 @@ from .image_tab.image_tab import ImageTab
 from .assemblyai_tab import AssemblyAITab
 
 class ApiTab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
         self.main_window = main_window # Keep for now for sub-tabs that might need it
+        self.settings_manager = settings_mgr
+        self.is_template_mode = is_template_mode
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
         self.tabs = AnimatedTabWidget()
         
-        self.openrouter_tab = OpenRouterTab(main_window=self.main_window)
-        self.audio_tab = AudioTab(main_window=self.main_window)
-        self.image_tab = ImageTab()
-        self.assemblyai_tab = AssemblyAITab()
+        self.openrouter_tab = OpenRouterTab(main_window=self.main_window, settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
+        self.audio_tab = AudioTab(main_window=self.main_window, settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
+        self.image_tab = ImageTab(settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
+        self.assemblyai_tab = AssemblyAITab(settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
 
         self.tabs.addTab(self.openrouter_tab, translator.translate('openrouter_tab'))
         self.tabs.addTab(self.audio_tab, translator.translate('audio_tab'))

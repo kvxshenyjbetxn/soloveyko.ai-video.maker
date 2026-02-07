@@ -8,9 +8,11 @@ from .elevenlabs_unlim_tab import ElevenLabsUnlimTab
 from .edgetts_tab import EdgeTTSTab
 
 class AudioTab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
         self.main_window = main_window
+        self.settings_manager = settings_mgr
+        self.is_template_mode = is_template_mode
         self.init_ui()
         self.retranslate_ui()
 
@@ -19,19 +21,19 @@ class AudioTab(QWidget):
         layout.setContentsMargins(0, 10, 0, 0)
         self.tab_widget = AnimatedTabWidget()
         
-        self.elevenlabs_tab = ElevenLabsTab(self.main_window)
+        self.elevenlabs_tab = ElevenLabsTab(self.main_window, settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
         self.tab_widget.addTab(self.elevenlabs_tab, "ElevenLabs")
         
-        self.elevenlabs_unlim_tab = ElevenLabsUnlimTab(main_window=self.main_window)
+        self.elevenlabs_unlim_tab = ElevenLabsUnlimTab(main_window=self.main_window, settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
         self.tab_widget.addTab(self.elevenlabs_unlim_tab, "ElevenLabs Unlim")
         
-        self.voicemaker_tab = VoicemakerTab(self.main_window)
+        self.voicemaker_tab = VoicemakerTab(self.main_window, settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
         self.tab_widget.addTab(self.voicemaker_tab, "Voicemaker")
 
-        self.gemini_tts_tab = GeminiTTSTab(self.main_window)
+        self.gemini_tts_tab = GeminiTTSTab(self.main_window, settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
         self.tab_widget.addTab(self.gemini_tts_tab, "GeminiTTS")
         
-        self.edgetts_tab = EdgeTTSTab(self.main_window)
+        self.edgetts_tab = EdgeTTSTab(self.main_window, settings_mgr=self.settings_manager, is_template_mode=self.is_template_mode)
         self.tab_widget.addTab(self.edgetts_tab, "EdgeTTS")
         
         layout.addWidget(self.tab_widget)

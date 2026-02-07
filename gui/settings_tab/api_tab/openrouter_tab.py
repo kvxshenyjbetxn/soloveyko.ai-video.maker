@@ -10,10 +10,11 @@ from gui.widgets.help_label import HelpLabel
 from gui.widgets.setting_row import add_setting_row
 
 class OpenRouterTab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
         self.main_window = main_window # Still needed for balance update
-        self.settings = settings_manager
+        self.settings = settings_mgr or settings_manager
+        self.is_template_mode = is_template_mode
         self.api = OpenRouterAPI()
         self.init_ui()
         self.update_fields()
@@ -44,70 +45,76 @@ class OpenRouterTab(QWidget):
             if self.main_window:
                 self.main_window.refresh_quick_settings_panels()
 
-        add_setting_row(layout, self.api_key_label, self.api_key_input, "openrouter_api_key", refresh_quick_panel)
+        show_stars = not self.is_template_mode
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "openrouter_api_key", refresh_quick_panel, show_star=show_stars)
 
         # AI Assistant Model
-        self.agent_model_label = QLabel("AI Assistant Model")
-        self.agent_model_combo = QComboBox()
-        self.agent_model_combo.setEditable(True) # Allow custom input
-        self.agent_model_combo.currentTextChanged.connect(self.save_agent_model)
-        
-        add_setting_row(layout, self.agent_model_label, self.agent_model_combo, "ai_assistant_model", refresh_quick_panel)
+        if not self.is_template_mode:
+            self.agent_model_label = QLabel("AI Assistant Model")
+            self.agent_model_combo = QComboBox()
+            self.agent_model_combo.setEditable(True) # Allow custom input
+            self.agent_model_combo.currentTextChanged.connect(self.save_agent_model)
+            
+            add_setting_row(layout, self.agent_model_label, self.agent_model_combo, "ai_assistant_model", refresh_quick_panel, show_star=show_stars)
 
         # Connection Status
-        connection_layout = QHBoxLayout()
-        self.connection_status_label = QLabel(translator.translate("connection_status_not_checked"))
-        self.check_connection_button = QPushButton(translator.translate("check_connection"))
-        self.check_connection_button.clicked.connect(self.check_connection)
-        connection_layout.addWidget(self.connection_status_label)
-        connection_layout.addWidget(self.check_connection_button)
-        layout.addLayout(connection_layout)
+        if not self.is_template_mode:
+            connection_layout = QHBoxLayout()
+            self.connection_status_label = QLabel(translator.translate("connection_status_not_checked"))
+            self.check_connection_button = QPushButton(translator.translate("check_connection"))
+            self.check_connection_button.clicked.connect(self.check_connection)
+            connection_layout.addWidget(self.connection_status_label)
+            connection_layout.addWidget(self.check_connection_button)
+            layout.addLayout(connection_layout)
 
         # Max Threads
-        max_threads_layout = QHBoxLayout()
-        self.max_threads_help = HelpLabel("max_concurrent_requests")
-        self.max_threads_label = QLabel(translator.translate("max_concurrent_requests"))
-        
-        threads_label_container = QWidget()
-        threads_label_layout = QHBoxLayout(threads_label_container)
-        threads_label_layout.setContentsMargins(0, 0, 0, 0)
-        threads_label_layout.setSpacing(5)
-        threads_label_layout.addWidget(self.max_threads_help)
-        threads_label_layout.addWidget(self.max_threads_label)
-        
-        self.max_threads_input = QSpinBox()
-        self.max_threads_input.setRange(1, 50)
-        self.max_threads_input.setValue(settings_manager.get("openrouter_max_threads", 5))
-        self.max_threads_input.valueChanged.connect(self.save_max_threads)
-        max_threads_layout.addWidget(threads_label_container)
-        max_threads_layout.addWidget(self.max_threads_input)
-        layout.addLayout(max_threads_layout)
+        if not self.is_template_mode:
+            max_threads_layout = QHBoxLayout()
+            self.max_threads_help = HelpLabel("max_concurrent_requests")
+            self.max_threads_label = QLabel(translator.translate("max_concurrent_requests"))
+            
+            threads_label_container = QWidget()
+            threads_label_layout = QHBoxLayout(threads_label_container)
+            threads_label_layout.setContentsMargins(0, 0, 0, 0)
+            threads_label_layout.setSpacing(5)
+            threads_label_layout.addWidget(self.max_threads_help)
+            threads_label_layout.addWidget(self.max_threads_label)
+            
+            self.max_threads_input = QSpinBox()
+            self.max_threads_input.setRange(1, 50)
+            self.max_threads_input.setValue(self.settings.get("openrouter_max_threads", 5))
+            self.max_threads_input.valueChanged.connect(self.save_max_threads)
+            max_threads_layout.addWidget(threads_label_container)
+            max_threads_layout.addWidget(self.max_threads_input)
+            layout.addLayout(max_threads_layout)
 
         # Balance
-        self.balance_label = QLabel(translator.translate("balance_loading"))
-        layout.addWidget(self.balance_label)
+        if not self.is_template_mode:
+            self.balance_label = QLabel(translator.translate("balance_loading"))
+            layout.addWidget(self.balance_label)
 
-        # Model Management
-        self.models_label = QLabel(translator.translate("models"))
-        layout.addWidget(self.models_label)
-        
-        self.models_list = QListWidget()
-        layout.addWidget(self.models_list)
+        if not self.is_template_mode:
+            # Model Management
+            self.models_label = QLabel(translator.translate("models"))
+            layout.addWidget(self.models_label)
+            
+            self.models_list = QListWidget()
+            layout.addWidget(self.models_list)
 
-        model_management_layout = QHBoxLayout()
-        self.add_model_help = HelpLabel("openrouter_add_model_hint")
-        self.add_model_input = QLineEdit()
-        self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
-        self.add_model_button = QPushButton(translator.translate("add_model"))
-        self.add_model_button.clicked.connect(self.add_model)
-        self.remove_model_button = QPushButton(translator.translate("remove_model"))
-        self.remove_model_button.clicked.connect(self.remove_model)
-        
-        model_management_layout.addWidget(self.add_model_help)
-        model_management_layout.addWidget(self.add_model_input)
-        model_management_layout.addWidget(self.add_model_button)
-        model_management_layout.addWidget(self.remove_model_button)
-        layout.addLayout(model_management_layout)
+            model_management_layout = QHBoxLayout()
+            self.add_model_help = HelpLabel("openrouter_add_model_hint")
+            self.add_model_input = QLineEdit()
+            self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
+            self.add_model_button = QPushButton(translator.translate("add_model"))
+            self.add_model_button.clicked.connect(self.add_model)
+            self.remove_model_button = QPushButton(translator.translate("remove_model"))
+            self.remove_model_button.clicked.connect(self.remove_model)
+            
+            model_management_layout.addWidget(self.add_model_help)
+            model_management_layout.addWidget(self.add_model_input)
+            model_management_layout.addWidget(self.add_model_button)
+            model_management_layout.addWidget(self.remove_model_button)
+            layout.addLayout(model_management_layout)
 
         # Info Link
         self.info_layout = QHBoxLayout()
@@ -122,16 +129,20 @@ class OpenRouterTab(QWidget):
     def retranslate_ui(self):
         self.api_key_label.setText(translator.translate("openrouter_api_key"))
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
-        self.agent_model_label.setText(translator.translate("ai_assistant_model", "Модель AI Асистента"))
-        self.check_connection_button.setText(translator.translate("check_connection"))
-        self.max_threads_label.setText(translator.translate("max_concurrent_requests"))
-        self.max_threads_help.update_tooltip()
-        self.update_connection_status_label()
-        self.models_label.setText(translator.translate("models"))
-        self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
-        self.add_model_button.setText(translator.translate("add_model"))
-        self.remove_model_button.setText(translator.translate("remove_model"))
-        self.add_model_help.update_tooltip()
+        if hasattr(self, 'agent_model_label'):
+             self.agent_model_label.setText(translator.translate("ai_assistant_model", "Модель AI Асистента"))
+        if hasattr(self, 'check_connection_button'):
+            self.check_connection_button.setText(translator.translate("check_connection"))
+        if hasattr(self, 'max_threads_label'):
+            self.max_threads_label.setText(translator.translate("max_concurrent_requests"))
+            self.max_threads_help.update_tooltip()
+        if hasattr(self, 'connection_status_label'): self.update_connection_status_label()
+        if hasattr(self, 'models_label'):
+            self.models_label.setText(translator.translate("models"))
+            self.add_model_input.setPlaceholderText(translator.translate("enter_model_name"))
+            self.add_model_button.setText(translator.translate("add_model"))
+            self.remove_model_button.setText(translator.translate("remove_model"))
+            self.add_model_help.update_tooltip()
         self.info_label.setText(translator.translate("openrouter_info"))
 
     def update_fields(self):
@@ -141,26 +152,29 @@ class OpenRouterTab(QWidget):
         self.api.api_key = api_key
         self.api_key_input.blockSignals(False)
         
-        self.max_threads_input.blockSignals(True)
-        self.max_threads_input.setValue(self.settings.get("openrouter_max_threads", 5))
-        self.max_threads_input.blockSignals(False)
+        if hasattr(self, 'max_threads_input'):
+            self.max_threads_input.blockSignals(True)
+            self.max_threads_input.setValue(int(self.settings.get("openrouter_max_threads", 5) or 5))
+            self.max_threads_input.blockSignals(False)
 
         self.update_models_list()
         
         # Update Agent Model Combo
-        self.agent_model_combo.blockSignals(True)
-        self.agent_model_combo.clear()
-        models = self.settings.get("openrouter_models", [])
-        self.agent_model_combo.addItems(models)
-        
-        current_agent_model = self.settings.get("ai_assistant_model", "z-ai/glm-4.5-air:free")
-        
-        # Ensure the current model is in the list of items
-        if self.agent_model_combo.findText(current_agent_model) == -1:
-            self.agent_model_combo.addItem(current_agent_model)
+        if hasattr(self, 'agent_model_combo'):
+            self.agent_model_combo.blockSignals(True)
+            self.agent_model_combo.clear()
+            settings_source = settings_manager if self.is_template_mode else self.settings
+            models = settings_source.get("openrouter_models", [])
+            self.agent_model_combo.addItems(models)
             
-        self.agent_model_combo.setCurrentText(current_agent_model)
-        self.agent_model_combo.blockSignals(False)
+            current_agent_model = self.settings.get("ai_assistant_model", "z-ai/glm-4.5-air:free")
+            
+            # Ensure the current model is in the list of items
+            if self.agent_model_combo.findText(current_agent_model) == -1:
+                self.agent_model_combo.addItem(current_agent_model)
+                
+            self.agent_model_combo.setCurrentText(current_agent_model)
+            self.agent_model_combo.blockSignals(False)
         
     def save_api_key(self, key):
         self.settings.set("openrouter_api_key", key)
@@ -180,7 +194,8 @@ class OpenRouterTab(QWidget):
         self.update_connection_status_label(status)
         
         if status == "connected":
-            self.main_window.update_balance()
+            if hasattr(self.main_window, 'update_balance'):
+                self.main_window.update_balance()
 
     def update_connection_status_label(self, status=None):
         if status == "checking":
@@ -225,9 +240,14 @@ class OpenRouterTab(QWidget):
             self.main_window.refresh_all_model_lists()
 
     def update_models_list(self):
-        self.models_list.clear()
-        models = self.settings.get("openrouter_models", [])
-        self.models_list.addItems(models)
+        if hasattr(self, 'models_list'):
+            self.models_list.clear() # Only if exists
+            
+        settings_source = settings_manager if self.is_template_mode else self.settings
+        models = settings_source.get("openrouter_models", [])
+        
+        if hasattr(self, 'models_list'):
+            self.models_list.addItems(models)
         
         # Sync Combo
         if hasattr(self, 'agent_model_combo'):

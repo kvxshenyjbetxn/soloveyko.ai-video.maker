@@ -31,8 +31,10 @@ class ModelDownloadWorker(QThread):
             self.finished.emit(False, str(e))
 
 class SubtitlesTab(QWidget):
-    def __init__(self):
+    def __init__(self, settings_mgr=None, is_template_mode=False):
         super().__init__()
+        self.settings = settings_mgr or settings_manager
+        self.is_template_mode = is_template_mode
         self.is_loading = True
         self.current_color = [255, 255, 255] # Default to prevent AttributeError
         self.init_ui()
@@ -62,6 +64,9 @@ class SubtitlesTab(QWidget):
             if self.window():
                  if hasattr(self.window(), 'refresh_quick_settings_panels'):
                       self.window().refresh_quick_settings_panels()
+        
+        # Determine if we show stars
+        show_stars = not self.is_template_mode
 
         self.engine_group_btn = QButtonGroup(self)
         self.rb_amd = QRadioButton()
@@ -94,8 +99,10 @@ class SubtitlesTab(QWidget):
         engine_layout.addStretch()
         
         # Add star button manually to be inside the group
-        self.engine_star = QuickSettingButton("subtitles.whisper_type", refresh_quick_panel)
-        engine_layout.addWidget(self.engine_star)
+        # Add star button manually to be inside the group
+        if show_stars:
+            self.engine_star = QuickSettingButton("subtitles.whisper_type", refresh_quick_panel)
+            engine_layout.addWidget(self.engine_star)
 
         self.engine_group.setLayout(engine_layout)
         layout.addWidget(self.engine_group)
@@ -124,8 +131,9 @@ class SubtitlesTab(QWidget):
         model_label_layout.setSpacing(5)
         model_label_layout.addWidget(self.model_help)
         model_label_layout.addWidget(self.model_label)
+        
+        add_setting_row(whisper_layout, model_label_container, model_container, "subtitles.whisper_model", refresh_quick_panel, show_star=show_stars)
 
-        add_setting_row(whisper_layout, model_label_container, model_container, "subtitles.whisper_model", refresh_quick_panel)
 
         self.whisper_group.setLayout(whisper_layout)
         layout.addWidget(self.whisper_group)
@@ -137,18 +145,21 @@ class SubtitlesTab(QWidget):
         self.font_label = QLabel()
         self.font_combo = QFontComboBox()
         self.font_combo.currentFontChanged.connect(self.save_settings)
-        add_setting_row(style_layout, self.font_label, self.font_combo, "subtitles.font", refresh_quick_panel)
+        add_setting_row(style_layout, self.font_label, self.font_combo, "subtitles.font", refresh_quick_panel, show_star=show_stars)
+
 
         self.fontsize_label = QLabel()
         self.fontsize_spin = QSpinBox()
         self.fontsize_spin.setRange(10, 200)
         self.fontsize_spin.valueChanged.connect(self.save_settings)
-        add_setting_row(style_layout, self.fontsize_label, self.fontsize_spin, "subtitles.fontsize", refresh_quick_panel)
+        add_setting_row(style_layout, self.fontsize_label, self.fontsize_spin, "subtitles.fontsize", refresh_quick_panel, show_star=show_stars)
+
 
         self.color_label = QLabel()
         self.color_btn = QPushButton()
         self.color_btn.clicked.connect(self.choose_color)
-        add_setting_row(style_layout, self.color_label, self.color_btn, "subtitles.color", refresh_quick_panel)
+        add_setting_row(style_layout, self.color_label, self.color_btn, "subtitles.color", refresh_quick_panel, show_star=show_stars)
+
 
         self.margin_v_label = QLabel()
         self.margin_v_spin = QSpinBox()
@@ -163,7 +174,8 @@ class SubtitlesTab(QWidget):
         margin_v_layout.addWidget(self.margin_v_help)
         margin_v_layout.addWidget(self.margin_v_label)
 
-        add_setting_row(style_layout, margin_v_container, self.margin_v_spin, "subtitles.margin_v", refresh_quick_panel)
+        add_setting_row(style_layout, margin_v_container, self.margin_v_spin, "subtitles.margin_v", refresh_quick_panel, show_star=show_stars)
+
 
         self.style_group.setLayout(style_layout)
         layout.addWidget(self.style_group)
@@ -185,7 +197,8 @@ class SubtitlesTab(QWidget):
         fade_in_layout.setSpacing(5)
         fade_in_layout.addWidget(self.fade_in_help)
         fade_in_layout.addWidget(self.fade_in_label)
-        add_setting_row(logic_layout, fade_in_container, self.fade_in_spin, "subtitles.fade_in", refresh_quick_panel)
+        add_setting_row(logic_layout, fade_in_container, self.fade_in_spin, "subtitles.fade_in", refresh_quick_panel, show_star=show_stars)
+
 
         self.fade_out_label = QLabel()
         self.fade_out_spin = QSpinBox()
@@ -200,7 +213,8 @@ class SubtitlesTab(QWidget):
         fade_out_layout.setSpacing(5)
         fade_out_layout.addWidget(self.fade_out_help)
         fade_out_layout.addWidget(self.fade_out_label)
-        add_setting_row(logic_layout, fade_out_container, self.fade_out_spin, "subtitles.fade_out", refresh_quick_panel)
+        add_setting_row(logic_layout, fade_out_container, self.fade_out_spin, "subtitles.fade_out", refresh_quick_panel, show_star=show_stars)
+
 
         self.max_words_label = QLabel()
         self.max_words_spin = QSpinBox()
@@ -214,7 +228,8 @@ class SubtitlesTab(QWidget):
         max_words_layout.setSpacing(5)
         max_words_layout.addWidget(self.max_words_help)
         max_words_layout.addWidget(self.max_words_label)
-        add_setting_row(logic_layout, max_words_container, self.max_words_spin, "subtitles.max_words", refresh_quick_panel)
+        add_setting_row(logic_layout, max_words_container, self.max_words_spin, "subtitles.max_words", refresh_quick_panel, show_star=show_stars)
+
 
         self.logic_group.setLayout(logic_layout)
         layout.addWidget(self.logic_group)
@@ -223,10 +238,9 @@ class SubtitlesTab(QWidget):
         
     def update_fields(self):
         self.is_loading = True
-        self.settings = settings_manager.get('subtitles', {})
         
         # --- Populate fields from settings ---
-        saved_type = self.settings.get('whisper_type', 'standard')
+        saved_type = self.settings.get('subtitles', {}).get('whisper_type', 'standard')
         if saved_type == 'standard':
             self.rb_standard.setChecked(True)
         elif saved_type == 'amd':
@@ -236,7 +250,7 @@ class SubtitlesTab(QWidget):
         
         self._update_engine_ui(update_model_list=True)
 
-        saved_model = self.settings.get('whisper_model', 'base')
+        saved_model = self.settings.get('subtitles', {}).get('whisper_model', 'base')
         index = self.model_combo.findText(saved_model)
         if index != -1:
             self.model_combo.setCurrentIndex(index)
@@ -248,12 +262,12 @@ class SubtitlesTab(QWidget):
             if index != -1:
                 self.model_combo.setCurrentIndex(index)
 
-        current_font = self.settings.get('font', 'Arial')
+        current_font = self.settings.get('subtitles', {}).get('font', 'Arial')
         self.font_combo.setCurrentFont(current_font)
-        self.fontsize_spin.setValue(self.settings.get('fontsize', 60))
+        self.fontsize_spin.setValue(self.settings.get('subtitles', {}).get('fontsize', 60))
         
         # Get color, with defensive parsing for corrupted settings
-        color_val = self.settings.get('color', [255, 255, 255])
+        color_val = self.settings.get('subtitles', {}).get('color', [255, 255, 255])
         if isinstance(color_val, str):
             try:
                 parsed_val = ast.literal_eval(color_val)
@@ -270,10 +284,10 @@ class SubtitlesTab(QWidget):
 
         self.update_color_btn_style()
 
-        self.margin_v_spin.setValue(self.settings.get('margin_v', 50))
-        self.fade_in_spin.setValue(self.settings.get('fade_in', 0))
-        self.fade_out_spin.setValue(self.settings.get('fade_out', 0))
-        self.max_words_spin.setValue(self.settings.get('max_words', 10))
+        self.margin_v_spin.setValue(self.settings.get('subtitles', {}).get('margin_v', 50))
+        self.fade_in_spin.setValue(self.settings.get('subtitles', {}).get('fade_in', 0))
+        self.fade_out_spin.setValue(self.settings.get('subtitles', {}).get('fade_out', 0))
+        self.max_words_spin.setValue(self.settings.get('subtitles', {}).get('max_words', 10))
         
         self.is_loading = False
 
@@ -452,7 +466,7 @@ class SubtitlesTab(QWidget):
 
         # Start with the existing settings to avoid overwriting keys
         # for invisible fields or having defaults from UI overwrite good settings.
-        new_settings = settings_manager.get('subtitles', {})
+        new_settings = self.settings.get('subtitles', {})
 
         if self.rb_standard.isChecked():
             new_settings['whisper_type'] = 'standard'
@@ -472,4 +486,4 @@ class SubtitlesTab(QWidget):
         new_settings['fade_out'] = self.fade_out_spin.value()
         new_settings['max_words'] = self.max_words_spin.value()
         
-        settings_manager.set('subtitles', new_settings)
+        self.settings.set('subtitles', new_settings)

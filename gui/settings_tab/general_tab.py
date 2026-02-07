@@ -8,10 +8,12 @@ from gui.widgets.setting_row import add_setting_row
 import os
 
 class GeneralTab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
         # main_window is still needed for language/theme change callbacks
         self.main_window = main_window 
+        self.settings_manager = settings_mgr or settings_manager
+        self.is_template_mode = is_template_mode
         self.init_ui()
         self.update_fields()
         self.update_style()
@@ -32,31 +34,41 @@ class GeneralTab(QWidget):
         form_layout = QFormLayout()
 
         # Callback for refreshing quick settings panels
-        refresh_cb = self.main_window.refresh_quick_settings_panels if self.main_window else None
+        # In template mode, we don't have a quick settings panel to refresh
+        if self.is_template_mode:
+            refresh_cb = None
+        else:
+            refresh_cb = self.main_window.refresh_quick_settings_panels if self.main_window and hasattr(self.main_window, 'refresh_quick_settings_panels') else None
 
-        # Language selection
-        self.language_label = QLabel()
-        self.language_combo = QComboBox()
-        self.language_combo.addItems(["Українська", "English", "Русский"])
-        self.language_combo.currentIndexChanged.connect(self.language_changed)
-        add_setting_row(form_layout, self.language_label, self.language_combo, "language", quick_panel_refresh_callback=refresh_cb, show_star=False)
+        # Determine if we show stars (only in global mode)
+        show_stars = not self.is_template_mode
 
-        # Theme selection
-        self.theme_label = QLabel()
-        self.theme_combo = QComboBox()
-        self.theme_combo.addItem(translator.translate('light_theme'), 'light')
-        self.theme_combo.addItem(translator.translate('dark_theme'), 'dark')
-        self.theme_combo.addItem(translator.translate('black_theme'), 'black')
-        self.theme_combo.currentIndexChanged.connect(self.theme_changed)
-        add_setting_row(form_layout, self.theme_label, self.theme_combo, "theme", quick_panel_refresh_callback=refresh_cb, show_star=False)
+        # Language selection - Global Only
+        if not self.is_template_mode:
+            self.language_label = QLabel()
+            self.language_combo = QComboBox()
+            self.language_combo.addItems(["Українська", "English", "Русский"])
+            self.language_combo.currentIndexChanged.connect(self.language_changed)
+            add_setting_row(form_layout, self.language_label, self.language_combo, "language", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
-        # Accent color selection
-        self.accent_color_label = QLabel()
-        self.accent_color_button = QPushButton()
-        self.accent_color_button.setFixedSize(100, 25)
-        self.accent_color_button.setAutoFillBackground(True)
-        self.accent_color_button.clicked.connect(self.open_color_dialog)
-        add_setting_row(form_layout, self.accent_color_label, self.accent_color_button, "accent_color", quick_panel_refresh_callback=refresh_cb, show_star=False)
+        # Theme selection - Global Only
+        if not self.is_template_mode:
+            self.theme_label = QLabel()
+            self.theme_combo = QComboBox()
+            self.theme_combo.addItem(translator.translate('light_theme'), 'light')
+            self.theme_combo.addItem(translator.translate('dark_theme'), 'dark')
+            self.theme_combo.addItem(translator.translate('black_theme'), 'black')
+            self.theme_combo.currentIndexChanged.connect(self.theme_changed)
+            add_setting_row(form_layout, self.theme_label, self.theme_combo, "theme", quick_panel_refresh_callback=refresh_cb, show_star=False)
+
+        # Accent color selection - Global Only
+        if not self.is_template_mode:
+            self.accent_color_label = QLabel()
+            self.accent_color_button = QPushButton()
+            self.accent_color_button.setFixedSize(100, 25)
+            self.accent_color_button.setAutoFillBackground(True)
+            self.accent_color_button.clicked.connect(self.open_color_dialog)
+            add_setting_row(form_layout, self.accent_color_label, self.accent_color_button, "accent_color", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
         # Image generation provider selection
         from gui.widgets.help_label import HelpLabel
@@ -75,7 +87,7 @@ class GeneralTab(QWidget):
         self.image_provider_combo.addItem("Googler", "googler")
         self.image_provider_combo.addItem("ElevenLabsImage", "elevenlabs_image")
         self.image_provider_combo.currentIndexChanged.connect(self.image_provider_changed)
-        add_setting_row(form_layout, provider_label_widget, self.image_provider_combo, "image_generation_provider", quick_panel_refresh_callback=refresh_cb)
+        add_setting_row(form_layout, provider_label_widget, self.image_provider_combo, "image_generation_provider", quick_panel_refresh_callback=refresh_cb, show_star=show_stars)
 
         # Results path selection
         self.results_path_help = HelpLabel("results_path_label")
@@ -99,22 +111,23 @@ class GeneralTab(QWidget):
         path_layout.addWidget(self.results_path_edit)
         path_layout.addWidget(self.browse_button)
         
-        add_setting_row(form_layout, results_label_widget, path_container, "results_path", quick_panel_refresh_callback=refresh_cb)
+        add_setting_row(form_layout, results_label_widget, path_container, "results_path", quick_panel_refresh_callback=refresh_cb, show_star=show_stars)
 
-        # Simultaneous Montage and Subtitles
-        self.simultaneous_montage_help = HelpLabel("simultaneous_montage_label")
-        self.simultaneous_montage_label = QLabel()
+        if not self.is_template_mode:
+            # Simultaneous Montage and Subtitles
+            self.simultaneous_montage_help = HelpLabel("simultaneous_montage_label")
+            self.simultaneous_montage_label = QLabel()
 
-        simultaneous_label_widget = QWidget()
-        simultaneous_label_layout = QHBoxLayout(simultaneous_label_widget)
-        simultaneous_label_layout.setContentsMargins(0, 0, 0, 0)
-        simultaneous_label_layout.setSpacing(5)
-        simultaneous_label_layout.addWidget(self.simultaneous_montage_help)
-        simultaneous_label_layout.addWidget(self.simultaneous_montage_label)
+            simultaneous_label_widget = QWidget()
+            simultaneous_label_layout = QHBoxLayout(simultaneous_label_widget)
+            simultaneous_label_layout.setContentsMargins(0, 0, 0, 0)
+            simultaneous_label_layout.setSpacing(5)
+            simultaneous_label_layout.addWidget(self.simultaneous_montage_help)
+            simultaneous_label_layout.addWidget(self.simultaneous_montage_label)
 
-        self.simultaneous_montage_checkbox = QCheckBox()
-        self.simultaneous_montage_checkbox.stateChanged.connect(self.simultaneous_montage_changed)
-        add_setting_row(form_layout, simultaneous_label_widget, self.simultaneous_montage_checkbox, "simultaneous_montage_and_subs", quick_panel_refresh_callback=refresh_cb, show_star=False)
+            self.simultaneous_montage_checkbox = QCheckBox()
+            self.simultaneous_montage_checkbox.stateChanged.connect(self.simultaneous_montage_changed)
+            add_setting_row(form_layout, simultaneous_label_widget, self.simultaneous_montage_checkbox, "simultaneous_montage_and_subs", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
         # Simulation Target selection
         self.simulation_target_help = HelpLabel("simulation_target_help")
@@ -132,38 +145,41 @@ class GeneralTab(QWidget):
         # Можна додати інші пізніше: Adobe Premiere Pro, Final Cut Pro, None
         self.simulation_target_combo.currentIndexChanged.connect(self.simulation_target_changed)
         
-        add_setting_row(form_layout, simulation_target_widget, self.simulation_target_combo, "simulation_target", quick_panel_refresh_callback=refresh_cb)
+        add_setting_row(form_layout, simulation_target_widget, self.simulation_target_combo, "simulation_target", quick_panel_refresh_callback=refresh_cb, show_star=show_stars)
 
         # Max download threads
-        self.max_download_threads_help = HelpLabel("max_download_threads_label")
-        self.max_download_threads_label = QLabel()
-        
-        threads_label_widget = QWidget()
-        threads_label_layout = QHBoxLayout(threads_label_widget)
-        threads_label_layout.setContentsMargins(0, 0, 0, 0)
-        threads_label_layout.setSpacing(5)
-        threads_label_layout.addWidget(self.max_download_threads_help)
-        threads_label_layout.addWidget(self.max_download_threads_label)
-        
-        self.max_download_threads_spinbox = QSpinBox()
-        self.max_download_threads_spinbox.setRange(1, 100)
-        self.max_download_threads_spinbox.valueChanged.connect(self.max_download_threads_changed)
-        add_setting_row(form_layout, threads_label_widget, self.max_download_threads_spinbox, "max_download_threads", quick_panel_refresh_callback=refresh_cb, show_star=False)
+        if not self.is_template_mode:
+            self.max_download_threads_help = HelpLabel("max_download_threads_label")
+            self.max_download_threads_label = QLabel()
+            
+            threads_label_widget = QWidget()
+            threads_label_layout = QHBoxLayout(threads_label_widget)
+            threads_label_layout.setContentsMargins(0, 0, 0, 0)
+            threads_label_layout.setSpacing(5)
+            threads_label_layout.addWidget(self.max_download_threads_help)
+            threads_label_layout.addWidget(self.max_download_threads_label)
+            
+            self.max_download_threads_spinbox = QSpinBox()
+            self.max_download_threads_spinbox.setRange(1, 100)
+            self.max_download_threads_spinbox.valueChanged.connect(self.max_download_threads_changed)
+            add_setting_row(form_layout, threads_label_widget, self.max_download_threads_spinbox, "max_download_threads", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
-        # Detailed logging checkbox
-        self.detailed_logging_help = HelpLabel("detailed_logging_label")
-        self.detailed_logging_label = QLabel()
-        
-        logging_label_widget = QWidget()
-        logging_label_layout = QHBoxLayout(logging_label_widget)
-        logging_label_layout.setContentsMargins(0, 0, 0, 0)
-        logging_label_layout.setSpacing(5)
-        logging_label_layout.addWidget(self.detailed_logging_help)
-        logging_label_layout.addWidget(self.detailed_logging_label)
-        
-        self.detailed_logging_checkbox = QCheckBox()
-        self.detailed_logging_checkbox.stateChanged.connect(self.detailed_logging_changed)
-        add_setting_row(form_layout, logging_label_widget, self.detailed_logging_checkbox, "detailed_logging_enabled", quick_panel_refresh_callback=refresh_cb, show_star=False)
+        # Detailed logging checkbox - Global Only or Template?
+        # Logging usually global. Let's hide in template mode.
+        if not self.is_template_mode:
+            self.detailed_logging_help = HelpLabel("detailed_logging_label")
+            self.detailed_logging_label = QLabel()
+            
+            logging_label_widget = QWidget()
+            logging_label_layout = QHBoxLayout(logging_label_widget)
+            logging_label_layout.setContentsMargins(0, 0, 0, 0)
+            logging_label_layout.setSpacing(5)
+            logging_label_layout.addWidget(self.detailed_logging_help)
+            logging_label_layout.addWidget(self.detailed_logging_label)
+            
+            self.detailed_logging_checkbox = QCheckBox()
+            self.detailed_logging_checkbox.stateChanged.connect(self.detailed_logging_changed)
+            add_setting_row(form_layout, logging_label_widget, self.detailed_logging_checkbox, "detailed_logging_enabled", quick_panel_refresh_callback=refresh_cb, show_star=False)
 
         # --- Controls Group ---
         self.controls_group = QGroupBox()
@@ -182,7 +198,7 @@ class GeneralTab(QWidget):
         
         self.translation_review_checkbox = QCheckBox()
         self.translation_review_checkbox.stateChanged.connect(self.translation_review_changed)
-        add_setting_row(self.controls_layout, translation_label_widget, self.translation_review_checkbox, "translation_review_enabled", quick_panel_refresh_callback=refresh_cb)
+        add_setting_row(self.controls_layout, translation_label_widget, self.translation_review_checkbox, "translation_review_enabled", quick_panel_refresh_callback=refresh_cb, show_star=show_stars)
 
         # Rewrite review checkbox
         self.rewrite_review_help = HelpLabel("rewrite_review_label")
@@ -197,7 +213,7 @@ class GeneralTab(QWidget):
         
         self.rewrite_review_checkbox = QCheckBox()
         self.rewrite_review_checkbox.stateChanged.connect(self.rewrite_review_changed)
-        add_setting_row(self.controls_layout, rewrite_label_widget, self.rewrite_review_checkbox, "rewrite_review_enabled", quick_panel_refresh_callback=refresh_cb)
+        add_setting_row(self.controls_layout, rewrite_label_widget, self.rewrite_review_checkbox, "rewrite_review_enabled", quick_panel_refresh_callback=refresh_cb, show_star=show_stars)
 
 
         # Image review checkbox
@@ -213,7 +229,7 @@ class GeneralTab(QWidget):
         
         self.image_review_checkbox = QCheckBox()
         self.image_review_checkbox.stateChanged.connect(self.image_review_changed)
-        add_setting_row(self.controls_layout, image_label_widget, self.image_review_checkbox, "image_review_enabled", quick_panel_refresh_callback=refresh_cb)
+        add_setting_row(self.controls_layout, image_label_widget, self.image_review_checkbox, "image_review_enabled", quick_panel_refresh_callback=refresh_cb, show_star=show_stars)
         
         # Prompt count control checkbox
         self.prompt_count_control_help = HelpLabel("prompt_count_control_label")
@@ -228,7 +244,7 @@ class GeneralTab(QWidget):
         
         self.prompt_count_control_checkbox = QCheckBox()
         self.prompt_count_control_checkbox.stateChanged.connect(self.prompt_count_control_changed)
-        add_setting_row(self.controls_layout, prompt_control_label_widget, self.prompt_count_control_checkbox, "prompt_count_control_enabled", quick_panel_refresh_callback=refresh_cb)
+        add_setting_row(self.controls_layout, prompt_control_label_widget, self.prompt_count_control_checkbox, "prompt_count_control_enabled", quick_panel_refresh_callback=refresh_cb, show_star=show_stars)
         
         # Prompt count spinbox
         self.prompt_count_label = QLabel()
@@ -237,15 +253,12 @@ class GeneralTab(QWidget):
         self.prompt_count_spinbox.valueChanged.connect(self.prompt_count_changed)
         
         # Widget for the field side (spinbox only)
-        # We wrap in a widget to ensure alignment if needed, or just pass spinbox?
-        # QSpinBox doesn't take full width usually, but let's wrap to be safe and add stretch
         self.prompt_count_field_widget = QWidget()
         pc_layout = QHBoxLayout(self.prompt_count_field_widget)
         pc_layout.setContentsMargins(0, 0, 0, 0)
         pc_layout.addWidget(self.prompt_count_spinbox)
         pc_layout.addStretch()
         
-        # Capture the container returned by add_setting_row so we can hide/show the star group too
         self.prompt_count_container = add_setting_row(
             self.controls_layout, 
             self.prompt_count_label, 
@@ -254,83 +267,74 @@ class GeneralTab(QWidget):
             quick_panel_refresh_callback=refresh_cb,
             show_star=False 
         )
-        # Note: USER said "remove star ... from prompt count" ? 
-        # "прибери зірку ... [list]". List was "Accent", "Logging", "Max threads".
-        # Prompt count was NOT in the list.
-        # But in the screenshot provided by user, Prompt count HAS a star.
-        # User complained about ALIGNMENT.
-        # "Кількість промтів так само зїхала в цент треба виправити"
-        # "ну подвинь кажу блять параметр Кількість промтів в ліво!"
-        
-        # IMPORTANT: Logic for removing star for those 3 items was handled in previous step.
-        # This item (prompt_count) functionality implies it SHOULD be in quick settings? 
-        # Actually, "Prompt Count" is a detail of "Prompt Count Control".
-        # If "Control" is enabled, "Count" is visible.
-        # If user adds "Prompt Count" to Quick Settings, it might be weird if the toggle isn't there.
-        # But let's stick to default: `show_star=True` (default).
-        # WAIT. `add_setting_row` return value is NOT currently supported. I need to modify `setting_row.py` first.
-        
-        # Also, check `self.prompt_count_control_changed`:
-        # It currently toggles `self.prompt_count_widget`.
-        # I need to update it to toggle `self.prompt_count_label` and `self.prompt_count_container`.
-
         
         form_layout.addRow(self.controls_group)
 
         content_layout.addLayout(form_layout)
         content_layout.addStretch()
+        
+        # Do not call retranslate_ui here automatically if it depends on global translator which might need refreshing?
+        # Actually it's fine.
         self.retranslate_ui()
 
     def update_style(self):
         border_color = os.environ.get('QTMATERIAL_SECONDARYLIGHTCOLOR', '#e0e0e0')
-        accent_color = settings_manager.get('accent_color', '#3f51b5')
-        self.accent_color_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {accent_color};
-                border: 1px solid {border_color};
-            }}
-        """)
+        accent_color = self.settings_manager.get('accent_color', '#3f51b5')
+        if hasattr(self, 'accent_color_button'): # Might not exist in template mode
+             self.accent_color_button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {accent_color};
+                    border: 1px solid {border_color};
+                }}
+            """)
 
     def update_fields(self):
         # Block signals to prevent triggering save on programmatic changes
-        self.language_combo.blockSignals(True)
-        self.theme_combo.blockSignals(True)
+        if hasattr(self, 'language_combo'): self.language_combo.blockSignals(True)
+        if hasattr(self, 'theme_combo'): self.theme_combo.blockSignals(True)
         self.image_provider_combo.blockSignals(True)
         self.translation_review_checkbox.blockSignals(True)
         self.image_review_checkbox.blockSignals(True)
-        self.simultaneous_montage_checkbox.blockSignals(True)
+        if hasattr(self, 'simultaneous_montage_checkbox'): self.simultaneous_montage_checkbox.blockSignals(True)
         self.simulation_target_combo.blockSignals(True)
-        self.detailed_logging_checkbox.blockSignals(True)
+        if hasattr(self, 'detailed_logging_checkbox'): self.detailed_logging_checkbox.blockSignals(True)
         self.prompt_count_control_checkbox.blockSignals(True)
         self.prompt_count_spinbox.blockSignals(True)
-        self.max_download_threads_spinbox.blockSignals(True)
+        if hasattr(self, 'max_download_threads_spinbox'): self.max_download_threads_spinbox.blockSignals(True)
 
-        lang_map = {"uk": 0, "en": 1, "ru": 2}
-        current_lang = settings_manager.get('language')
-        self.language_combo.setCurrentIndex(lang_map.get(current_lang, 0))
+        if hasattr(self, 'language_combo'):
+            lang_map = {"uk": 0, "en": 1, "ru": 2}
+            current_lang = self.settings_manager.get('language')
+            self.language_combo.setCurrentIndex(lang_map.get(current_lang, 0))
 
-        current_theme = settings_manager.get('theme', 'light')
-        self.theme_combo.setCurrentIndex(self.theme_combo.findData(current_theme))
+        if hasattr(self, 'theme_combo'):
+            current_theme = self.settings_manager.get('theme', 'light')
+            self.theme_combo.setCurrentIndex(self.theme_combo.findData(current_theme))
 
-        current_provider = settings_manager.get('image_generation_provider', 'pollinations')
+        current_provider = self.settings_manager.get('image_generation_provider', 'pollinations')
         self.image_provider_combo.setCurrentIndex(self.image_provider_combo.findData(current_provider))
 
-        self.results_path_edit.setText(settings_manager.get('results_path'))
-        self.translation_review_checkbox.setChecked(settings_manager.get('translation_review_enabled', False))
-        self.rewrite_review_checkbox.setChecked(settings_manager.get('rewrite_review_enabled', False))
-        self.image_review_checkbox.setChecked(settings_manager.get('image_review_enabled', False))
-        self.simultaneous_montage_checkbox.setChecked(settings_manager.get('simultaneous_montage_and_subs', False))
+        # Handle path - if None, use empty string for display
+        res_path = self.settings_manager.get('results_path') or ""
+        self.results_path_edit.setText(res_path)
+
+        self.translation_review_checkbox.setChecked(self.settings_manager.get('translation_review_enabled', False))
+        self.rewrite_review_checkbox.setChecked(self.settings_manager.get('rewrite_review_enabled', False))
+        self.image_review_checkbox.setChecked(self.settings_manager.get('image_review_enabled', False))
+        if hasattr(self, 'simultaneous_montage_checkbox'):
+            self.simultaneous_montage_checkbox.setChecked(bool(self.settings_manager.get('simultaneous_montage_and_subs', False)))
         
-        current_sim_target = settings_manager.get('simulation_target', 'DaVinci Resolve Studio')
+        current_sim_target = self.settings_manager.get('simulation_target', 'DaVinci Resolve Studio')
         idx = self.simulation_target_combo.findData(current_sim_target)
         if idx >= 0:
             self.simulation_target_combo.setCurrentIndex(idx)
         else:
-            self.simulation_target_combo.setCurrentIndex(0) # Default to DaVinci
+            self.simulation_target_combo.setCurrentIndex(0)
 
-        self.detailed_logging_checkbox.setChecked(settings_manager.get('detailed_logging_enabled', False))
+        if hasattr(self, 'detailed_logging_checkbox'):
+            self.detailed_logging_checkbox.setChecked(self.settings_manager.get('detailed_logging_enabled', False))
         
-        prompt_control_enabled = settings_manager.get('prompt_count_control_enabled', False)
+        prompt_control_enabled = self.settings_manager.get('prompt_count_control_enabled', False)
         self.prompt_count_control_checkbox.setChecked(prompt_control_enabled)
         
         if hasattr(self, 'prompt_count_label'):
@@ -338,121 +342,123 @@ class GeneralTab(QWidget):
         if hasattr(self, 'prompt_count_container'):
              self.prompt_count_container.setVisible(prompt_control_enabled)
              
-        self.prompt_count_spinbox.setValue(settings_manager.get('prompt_count', 50))
-        self.max_download_threads_spinbox.setValue(settings_manager.get('max_download_threads', 5))
+        self.prompt_count_spinbox.setValue(int(self.settings_manager.get('prompt_count', 50) or 50))
+        if hasattr(self, 'max_download_threads_spinbox'):
+            self.max_download_threads_spinbox.setValue(int(self.settings_manager.get('max_download_threads', 5) or 5))
 
-        self.update_style() # Set button color and border
+        self.update_style() 
 
         # Unblock signals
-        self.language_combo.blockSignals(False)
-        self.theme_combo.blockSignals(False)
+        if hasattr(self, 'language_combo'): self.language_combo.blockSignals(False)
+        if hasattr(self, 'theme_combo'): self.theme_combo.blockSignals(False)
         self.image_provider_combo.blockSignals(False)
         self.translation_review_checkbox.blockSignals(False)
         self.image_review_checkbox.blockSignals(False)
-        self.image_review_checkbox.blockSignals(False)
-        self.simultaneous_montage_checkbox.blockSignals(False)
+        if hasattr(self, 'simultaneous_montage_checkbox'): self.simultaneous_montage_checkbox.blockSignals(False)
         self.simulation_target_combo.blockSignals(False)
-        self.detailed_logging_checkbox.blockSignals(False)
+        if hasattr(self, 'detailed_logging_checkbox'): self.detailed_logging_checkbox.blockSignals(False)
         self.prompt_count_control_checkbox.blockSignals(False)
         self.prompt_count_spinbox.blockSignals(False)
-        self.max_download_threads_spinbox.blockSignals(False)
+        if hasattr(self, 'max_download_threads_spinbox'): self.max_download_threads_spinbox.blockSignals(False)
 
 
     def open_color_dialog(self):
-        current_color = settings_manager.get('accent_color', '#3f51b5')
+        current_color = self.settings_manager.get('accent_color', '#3f51b5')
         color = QColorDialog.getColor(QColor(current_color), self, translator.translate("pick_accent_color"))
 
         if color.isValid():
             color_hex = color.name()
-            settings_manager.set('accent_color', color_hex)
+            self.settings_manager.set('accent_color', color_hex)
             self.update_style()
-            if self.main_window:
+            if self.main_window and hasattr(self.main_window, 'change_accent_color'):
                 self.main_window.change_accent_color(color_hex)
 
     def translation_review_changed(self, state):
-        settings_manager.set('translation_review_enabled', state == Qt.CheckState.Checked.value)
-        if self.main_window:
+        self.settings_manager.set('translation_review_enabled', state == Qt.CheckState.Checked.value)
+        if self.main_window and hasattr(self.main_window, 'refresh_quick_settings_panels'):
             self.main_window.refresh_quick_settings_panels()
 
     def rewrite_review_changed(self, state):
-        settings_manager.set('rewrite_review_enabled', state == Qt.CheckState.Checked.value)
-        if self.main_window:
+        self.settings_manager.set('rewrite_review_enabled', state == Qt.CheckState.Checked.value)
+        if self.main_window and hasattr(self.main_window, 'refresh_quick_settings_panels'):
             self.main_window.refresh_quick_settings_panels()
 
     def image_review_changed(self, state):
-        settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
-        if self.main_window:
+        self.settings_manager.set('image_review_enabled', state == Qt.CheckState.Checked.value)
+        if self.main_window and hasattr(self.main_window, 'refresh_quick_settings_panels'):
             self.main_window.refresh_quick_settings_panels()
 
     def simultaneous_montage_changed(self, state):
-        settings_manager.set('simultaneous_montage_and_subs', state == Qt.CheckState.Checked.value)
+        self.settings_manager.set('simultaneous_montage_and_subs', state == Qt.CheckState.Checked.value)
 
     def simulation_target_changed(self, index):
         target = self.simulation_target_combo.itemData(index)
-        settings_manager.set('simulation_target', target)
+        self.settings_manager.set('simulation_target', target)
 
     def prompt_count_control_changed(self, state):
         is_checked = state == Qt.CheckState.Checked.value
-        settings_manager.set('prompt_count_control_enabled', is_checked)
+        self.settings_manager.set('prompt_count_control_enabled', is_checked)
         
-        # Toggle visibility of the label and the field container (field + star)
+        # Toggle visibility
         if hasattr(self, 'prompt_count_label'):
              self.prompt_count_label.setVisible(is_checked)
         if hasattr(self, 'prompt_count_container'):
              self.prompt_count_container.setVisible(is_checked)
              
-        # We might need to inform other tabs about this change.
-        # A signal from settings_manager or a direct call could work.
-        if self.main_window:
-            if hasattr(self.main_window, 'settings_tab') and hasattr(self.main_window.settings_tab, 'prompts_tab'):
-                self.main_window.settings_tab.prompts_tab.update_fields()
+        # Notify other tabs or refresh logic
+        # For template mode, maybe just local update is enough as tabs aren't interconnected the same way?
+        # But prompts_tab might be present.
+        if self.main_window and hasattr(self.main_window, 'settings_tab') and hasattr(self.main_window.settings_tab, 'prompts_tab'):
+             self.main_window.settings_tab.prompts_tab.update_fields()
 
 
     def prompt_count_changed(self, value):
-        settings_manager.set('prompt_count', value)
+        self.settings_manager.set('prompt_count', value)
         if self.main_window:
             if hasattr(self.main_window, 'settings_tab') and hasattr(self.main_window.settings_tab, 'prompts_tab'):
                 self.main_window.settings_tab.prompts_tab.update_fields()
-            self.main_window.refresh_quick_settings_panels()
+            if hasattr(self.main_window, 'refresh_quick_settings_panels'):
+                self.main_window.refresh_quick_settings_panels()
 
     def detailed_logging_changed(self, state):
-        settings_manager.set('detailed_logging_enabled', state == Qt.CheckState.Checked.value)
+        self.settings_manager.set('detailed_logging_enabled', state == Qt.CheckState.Checked.value)
         logger.reconfigure()
 
     def max_download_threads_changed(self, value):
-        settings_manager.set('max_download_threads', value)
+        self.settings_manager.set('max_download_threads', value)
 
     def language_changed(self, index):
         lang_map = {0: "uk", 1: "en", 2: "ru"}
         lang_code = lang_map.get(index, "uk")
-        if self.main_window:
+        if self.main_window and hasattr(self.main_window, 'change_language'):
             self.main_window.change_language(lang_code)
 
     def theme_changed(self, index):
         theme_name = self.theme_combo.itemData(index)
-        if self.main_window:
+        if self.main_window and hasattr(self.main_window, 'change_theme'):
             self.main_window.change_theme(theme_name)
     
     def image_provider_changed(self, index):
         provider_name = self.image_provider_combo.itemData(index)
-        settings_manager.set('image_generation_provider', provider_name)
-        if self.main_window:
+        self.settings_manager.set('image_generation_provider', provider_name)
+        if self.main_window and hasattr(self.main_window, 'refresh_quick_settings_panels'):
             self.main_window.refresh_quick_settings_panels()
 
     def browse_results_path(self):
         directory = QFileDialog.getExistingDirectory(self, translator.translate('select_directory'))
         if directory:
             self.results_path_edit.setText(directory)
-            settings_manager.set('results_path', directory)
-            if self.main_window:
+            self.settings_manager.set('results_path', directory)
+            if self.main_window and hasattr(self.main_window, 'refresh_quick_settings_panels'):
                 self.main_window.refresh_quick_settings_panels()
 
     def retranslate_ui(self):
-        self.language_label.setText(translator.translate('language_label'))
-        self.theme_label.setText(translator.translate('theme_label'))
-        self.theme_combo.setItemText(0, translator.translate('light_theme'))
-        self.theme_combo.setItemText(1, translator.translate('dark_theme'))
-        self.theme_combo.setItemText(2, translator.translate('black_theme'))
+        if hasattr(self, 'language_label'): self.language_label.setText(translator.translate('language_label'))
+        if hasattr(self, 'theme_label'): self.theme_label.setText(translator.translate('theme_label'))
+        if hasattr(self, 'theme_combo'):
+            self.theme_combo.setItemText(0, translator.translate('light_theme'))
+            self.theme_combo.setItemText(1, translator.translate('dark_theme'))
+            self.theme_combo.setItemText(2, translator.translate('black_theme'))
         self.image_provider_label.setText(translator.translate('image_generation_provider_label'))
         self.image_provider_help.update_tooltip()
         self.results_path_label.setText(translator.translate('results_path_label'))
@@ -465,15 +471,18 @@ class GeneralTab(QWidget):
         self.rewrite_review_help.update_tooltip()
         self.image_review_label.setText(translator.translate('image_review_label'))
         self.image_review_help.update_tooltip()
-        self.simultaneous_montage_label.setText(translator.translate('simultaneous_montage_label'))
-        self.simultaneous_montage_help.update_tooltip()
+        if hasattr(self, 'simultaneous_montage_label'):
+            self.simultaneous_montage_label.setText(translator.translate('simultaneous_montage_label'))
+            self.simultaneous_montage_help.update_tooltip()
         self.simulation_target_label.setText(translator.translate('simulation_target_label'))
         self.simulation_target_help.update_tooltip()
-        self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
-        self.detailed_logging_help.update_tooltip()
-        self.accent_color_label.setText(translator.translate('accent_color_label'))
+        if hasattr(self, 'detailed_logging_label'):
+             self.detailed_logging_label.setText(translator.translate('detailed_logging_label'))
+             self.detailed_logging_help.update_tooltip()
+        if hasattr(self, 'accent_color_label'): self.accent_color_label.setText(translator.translate('accent_color_label'))
         self.prompt_count_control_label.setText(translator.translate('prompt_count_control_label'))
         self.prompt_count_control_help.update_tooltip()
         self.prompt_count_label.setText(translator.translate('prompt_count_label'))
-        self.max_download_threads_label.setText(translator.translate('max_download_threads_label'))
-        self.max_download_threads_help.update_tooltip()
+        if hasattr(self, 'max_download_threads_label'):
+            self.max_download_threads_label.setText(translator.translate('max_download_threads_label'))
+            self.max_download_threads_help.update_tooltip()

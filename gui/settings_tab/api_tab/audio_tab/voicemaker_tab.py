@@ -6,10 +6,11 @@ from utils.settings import settings_manager
 from gui.widgets.setting_row import add_setting_row
 
 class VoicemakerTab(QWidget):
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, settings_mgr=None, is_template_mode=False):
         super().__init__()
         self.main_window = main_window
-        self.settings = settings_manager
+        self.settings = settings_mgr or settings_manager
+        self.is_template_mode = is_template_mode
         self.api = VoicemakerAPI()
         self.init_ui()
         self.update_fields()
@@ -28,7 +29,7 @@ class VoicemakerTab(QWidget):
             if self.main_window:
                 self.main_window.refresh_quick_settings_panels()
 
-        add_setting_row(layout, self.api_key_label, self.api_key_input, "voicemaker_api_key", refresh_quick_panel)
+        add_setting_row(layout, self.api_key_label, self.api_key_input, "voicemaker_api_key", refresh_quick_panel, show_star=not self.is_template_mode)
 
         # Character Limit
         self.limit_help = HelpLabel("char_limit")
@@ -47,23 +48,25 @@ class VoicemakerTab(QWidget):
         self.limit_input.setValue(2900) # Default
         self.limit_input.valueChanged.connect(self.save_char_limit)
 
-        add_setting_row(layout, limit_label_container, self.limit_input, "voicemaker_char_limit", refresh_quick_panel)
+        add_setting_row(layout, limit_label_container, self.limit_input, "voicemaker_char_limit", refresh_quick_panel, show_star=not self.is_template_mode)
 
-        # Connection Status
-        connection_layout = QHBoxLayout()
-        self.connection_status_label = QLabel()
-        self.check_connection_button = QPushButton()
-        self.check_connection_button.clicked.connect(self.check_connection)
-        connection_layout.addWidget(self.connection_status_label)
-        connection_layout.addWidget(self.check_connection_button)
-        layout.addLayout(connection_layout)
+        if not self.is_template_mode:
+            # Connection Status
+            connection_layout = QHBoxLayout()
+            self.connection_status_label = QLabel()
+            self.check_connection_button = QPushButton()
+            self.check_connection_button.clicked.connect(self.check_connection)
+            connection_layout.addWidget(self.connection_status_label)
+            connection_layout.addWidget(self.check_connection_button)
+            layout.addLayout(connection_layout)
 
-        # Balance Label
-        balance_layout = QHBoxLayout()
-        self.balance_label = QLabel(translator.translate("balance_label"))
-        balance_layout.addWidget(self.balance_label)
-        balance_layout.addStretch()
-        layout.addLayout(balance_layout)
+        if not self.is_template_mode:
+            # Balance Label
+            balance_layout = QHBoxLayout()
+            self.balance_label = QLabel(translator.translate("balance_label"))
+            balance_layout.addWidget(self.balance_label)
+            balance_layout.addStretch()
+            layout.addLayout(balance_layout)
 
         # Info Link
         self.info_layout = QHBoxLayout()
@@ -80,19 +83,21 @@ class VoicemakerTab(QWidget):
     def retranslate_ui(self):
         # Використовуємо існуючі ключі перекладу де це можливо, або хардкод для нових елементів поки що
         self.api_key_input.setPlaceholderText(translator.translate("enter_api_key"))
-        self.check_connection_button.setText(translator.translate("check_connection"))
+        if hasattr(self, 'check_connection_button'):
+             self.check_connection_button.setText(translator.translate("check_connection"))
         self.limit_label.setText(translator.translate("char_limit"))
         self.limit_help.update_tooltip()
         self.info_label.setText(translator.translate("voicemaker_info"))
-        self.update_connection_status_label()
+        if hasattr(self, 'connection_status_label'): self.update_connection_status_label()
         
         # Preserve current balance text if it has a value, otherwise reset to default
-        current_text = self.balance_label.text()
-        if ":" in current_text:
-             # Just update the prefix "Balance" part if needed, but keeping it simple for now
-             pass
-        else:
-             self.balance_label.setText(translator.translate("balance_label"))
+        if hasattr(self, 'balance_label'):
+            current_text = self.balance_label.text()
+            if ":" in current_text:
+                 # Just update the prefix "Balance" part if needed, but keeping it simple for now
+                 pass
+            else:
+                 self.balance_label.setText(translator.translate("balance_label"))
 
 
     def update_fields(self):
