@@ -183,20 +183,9 @@ class ImagePromptWorker(BaseWorker):
                 # Targeted sync prompt or fallback to legacy
                 base_prompt = img_prompt_settings.get('prompt_sync') or img_prompt_settings.get('prompt', '')
                 
-                # Inject character description if available
-                if character_description:
-                    if "{characters}" in base_prompt:
-                        base_prompt = base_prompt.replace("{characters}", character_description)
-                    else:
-                        # Optional: Auto-append if placeholder missing? 
-                        # The user explicitly asked for a placeholder, so we might respect that strictly.
-                        # However, for better UX, we can append it if the user forgot.
-                        # "Describe an image... \n\nContext: {desc}"
-                        # Let's check if the user asked ONLY for placeholder. 
-                        # "потрібно зробити плейсхолдер який я вставлю...  щоб программа знала куди саме в промт підставити"
-                        # This implies strict placement. But if they forget, the feature is useless.
-                        # I'll stick to strict replacement for now to respect the "instruction" nature of the prompt.
-                        pass
+                # Inject character description if available, or remove placeholder if not
+                if "{characters}" in base_prompt:
+                    base_prompt = base_prompt.replace("{characters}", character_description if character_description else "")
             else:
                 # Targeted standard prompt or fallback to legacy
                 base_prompt = img_prompt_settings.get('prompt_standard') or img_prompt_settings.get('prompt', '')
