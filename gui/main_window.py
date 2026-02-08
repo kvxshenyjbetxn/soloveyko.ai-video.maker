@@ -855,6 +855,24 @@ class MainWindow(QMainWindow):
         self.viewer.setFocus()
 
     def show_processing_finished_dialog(self, elapsed_time):
+        # Check for shutdown/hibernate/sleep request
+        if settings_manager.get('shutdown_after_processing', False):
+            action = settings_manager.get('shutdown_action', 'sleep')
+            
+            # Show AutoShutdownDialog
+            from gui.dialogs.auto_shutdown_dialog import AutoShutdownDialog
+            dialog = AutoShutdownDialog(action, timeout=10, parent=self)
+            
+            if dialog.exec() == QDialog.Accepted:
+                 # User confirmed or timeout
+                 logger.log(f"Processing finished. Performing power action: {action}", level=LogLevel.INFO)
+                 from utils.system_power import perform_power_action
+                 perform_power_action(action)
+            else:
+                 # User cancelled
+                 logger.log("Auto-shutdown cancelled by user.", level=LogLevel.INFO)
+            return
+
         title = self.translator.translate('processing_complete_title')
         message = self.translator.translate('processing_complete_message').format(elapsed_time)
         

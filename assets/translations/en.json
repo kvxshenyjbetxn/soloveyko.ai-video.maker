@@ -544,5 +544,14 @@
     "trigger_horizontal": "Horizontal (X):",
     "trigger_vertical": "Vertical (Y):",
     "simulation_target_label": "💾 Editing Software Simulation:",
-    "simulation_target_help": "<b>Editing Software Simulation</b><br>Select the software to spoof file metadata for (e.g. for YouTube).<br>For example, <i>DaVinci Resolve Studio</i> will add Blackmagic tags, NCLX color, and TimeCode."
+    "simulation_target_help": "<b>Editing Software Simulation</b><br>Select the software to spoof file metadata for (e.g. for YouTube).<br>For example, <i>DaVinci Resolve Studio</i> will add Blackmagic tags, NCLX color, and TimeCode.",
+    "shutdown_after_processing": "Shutdown PC after completion",
+    "action_shutdown": "Shutdown",
+    "action_hibernate": "Hibernate",
+    "action_sleep": "Sleep",
+    "power_action_label": "Action:",
+    "auto_shutdown_title": "Automatic Shutdown",
+    "auto_shutdown_info": "Computer will perform action '{action}' in {seconds} sec.",
+    "cancel_action_button": "Cancel",
+    "perform_now_button": "Perform Now"
 }

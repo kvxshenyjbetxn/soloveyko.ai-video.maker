@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QLabel, QScrollArea, QGroupBox, QMenu, QToolButton, QMessageBox, QTextBrowser, QSizePolicy, QGridLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QHBoxLayout, QLabel, QScrollArea, QGroupBox, QMenu, QToolButton, QMessageBox, QTextBrowser, QSizePolicy, QGridLayout, QCheckBox, QComboBox
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QAction, QCursor
 from functools import partial
@@ -779,13 +779,13 @@ class QueueTab(QWidget):
         self.task_cards = {}
         self.all_expanded = True # State for toggle button
         
-        # Hardware Monitor
+        self.init_ui()
+        
+        # Hardware Monitor - Start AFTER UI init to prevent race condition
         results_path = settings_manager.get('results_path', os.path.abspath(os.sep))
         self.monitor_thread = HardwareMonitorThread(results_path)
         self.monitor_thread.updated.connect(self.update_monitor_ui)
         self.monitor_thread.start()
-        
-        self.init_ui()
 
     def __del__(self):
         """Ensure thread stops when tab is destroyed."""
@@ -799,15 +799,24 @@ class QueueTab(QWidget):
     def init_ui(self):
         main_layout = QVBoxLayout(self)
 
-        top_layout = QHBoxLayout()
+        # Main Header Layout (Horizontal)
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Left side: Balances (FlowLayout to allow wrapping)
+        balances_widget = QWidget()
+        # Use global FlowLayout from utils.flow_layout
+        balances_layout = FlowLayout(balances_widget, hSpacing=20, vSpacing=10)
+        balances_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.balance_label = QLabel()
         self.googler_usage_label = QLabel()
         self.elevenlabs_balance_label = QLabel()
         self.elevenlabs_unlim_balance_label = QLabel()
         self.voicemaker_balance_label = QLabel()
         self.gemini_tts_balance_label = QLabel()
-        top_layout.addWidget(self.balance_label)
-        top_layout.addSpacing(20)
+        
+        balances_layout.addWidget(self.balance_label)
         
         self.googler_usage_container = QWidget()
         self.googler_usage_layout = QHBoxLayout(self.googler_usage_container)
@@ -823,21 +832,60 @@ class QueueTab(QWidget):
         self.googler_usage_layout.addWidget(self.googler_usage_label)
         self.googler_usage_layout.addWidget(self.googler_info_btn)
         
-        top_layout.addWidget(self.googler_usage_container)
-        top_layout.addSpacing(20)
-        top_layout.addWidget(self.elevenlabs_balance_label)
-        top_layout.addSpacing(20)
-        top_layout.addWidget(self.elevenlabs_unlim_balance_label)
-        top_layout.addSpacing(20)
-        top_layout.addWidget(self.voicemaker_balance_label)
-        top_layout.addSpacing(20)
-        top_layout.addWidget(self.gemini_tts_balance_label)
-        top_layout.addStretch()
+        balances_layout.addWidget(self.googler_usage_container)
+        balances_layout.addWidget(self.elevenlabs_balance_label)
+        balances_layout.addWidget(self.elevenlabs_unlim_balance_label)
+        balances_layout.addWidget(self.voicemaker_balance_label)
+        balances_layout.addWidget(self.gemini_tts_balance_label)
+        
+        # Right side: Controls (Fixed HBoxLayout)
+        controls_widget = QWidget()
+        controls_layout = QHBoxLayout(controls_widget)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(10)
+        
+        # Shutdown After Processing Controls
+        self.shutdown_container = QWidget()
+        self.shutdown_layout = QHBoxLayout(self.shutdown_container)
+        self.shutdown_layout.setContentsMargins(0, 0, 0, 0)
+        self.shutdown_layout.setSpacing(5)
+
+        self.shutdown_checkbox = QCheckBox(translator.translate('shutdown_after_processing'))
+        # Always start unchecked (reset setting for this session)
+        self.shutdown_checkbox.setChecked(False)
+        settings_manager.set('shutdown_after_processing', False)
+        self.shutdown_checkbox.stateChanged.connect(self.on_shutdown_toggled)
+
+        self.shutdown_action_combo = QComboBox()
+        self.shutdown_action_combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.shutdown_action_combo.setMinimumWidth(150)
+        self.shutdown_action_combo.addItems([
+            translator.translate('action_sleep'),
+            translator.translate('action_hibernate'),
+            translator.translate('action_shutdown')
+        ])
+        # Map localized text back to internal keys or just use index logic
+        self.shutdown_action_combo.setItemData(0, 'sleep')
+        self.shutdown_action_combo.setItemData(1, 'hibernate')
+        self.shutdown_action_combo.setItemData(2, 'shutdown')
+
+        saved_action = settings_manager.get('shutdown_action', 'sleep')
+        index = self.shutdown_action_combo.findData(saved_action)
+        if index >= 0:
+            self.shutdown_action_combo.setCurrentIndex(index)
+        
+        self.shutdown_action_combo.currentIndexChanged.connect(self.on_shutdown_action_changed)
+        self.shutdown_action_combo.setVisible(self.shutdown_checkbox.isChecked())
+
+        self.shutdown_layout.addWidget(self.shutdown_checkbox)
+        self.shutdown_layout.addWidget(self.shutdown_action_combo)
+        
+        controls_layout.addWidget(self.shutdown_container)
 
         # Toggle All Button
         self.toggle_all_button = QPushButton()
         self.toggle_all_button.clicked.connect(self.on_toggle_all_clicked)
-        top_layout.addWidget(self.toggle_all_button)
+        controls_layout.addWidget(self.toggle_all_button)
 
         self.clear_queue_button = QPushButton()
         self.clear_queue_button.clicked.connect(self.on_clear_queue_clicked)
@@ -857,7 +905,7 @@ class QueueTab(QWidget):
                 background-color: #6c757d;
             }
         """)
-        top_layout.addWidget(self.clear_queue_button)
+        controls_layout.addWidget(self.clear_queue_button)
         
         self.start_processing_button = QPushButton()
         self.start_processing_button.setStyleSheet("""
@@ -876,8 +924,19 @@ class QueueTab(QWidget):
                 background-color: #6c757d;
             }
         """)
-        top_layout.addWidget(self.start_processing_button)
-        main_layout.addLayout(top_layout)
+        controls_layout.addWidget(self.start_processing_button)
+        
+        # Add widgets to header layout
+        # Balances need to expand to fill space and wrap
+        header_layout.addWidget(balances_widget, 1) # Stretch factor 1
+        
+        # Controls stay compacted to the right
+        header_layout.addWidget(controls_widget, 0)
+        
+        # Align controls to top so they don't float in middle if balances wrap
+        header_layout.setAlignment(controls_widget, Qt.AlignTop)
+
+        main_layout.addLayout(header_layout)
 
         # Monitoring Layout
         monitor_layout = QHBoxLayout()
@@ -1107,5 +1166,26 @@ class QueueTab(QWidget):
         else:
             self.toggle_all_button.setText(translator.translate('expand_all'))
             
+        # Update shutdown controls
+        if hasattr(self, 'shutdown_checkbox'):
+            self.shutdown_checkbox.setText(translator.translate('shutdown_after_processing'))
+            
+        if hasattr(self, 'shutdown_action_combo'):
+            self.shutdown_action_combo.setItemText(0, translator.translate('action_sleep'))
+            self.shutdown_action_combo.setItemText(1, translator.translate('action_hibernate'))
+            self.shutdown_action_combo.setItemText(2, translator.translate('action_shutdown'))
+
         # Retranslating cards would be complex. For now, this is omitted.
         pass
+
+    def on_shutdown_toggled(self, state):
+        is_checked = (state == Qt.CheckState.Checked.value)
+        self.shutdown_action_combo.setVisible(is_checked)
+        settings_manager.set('shutdown_after_processing', is_checked)
+        settings_manager.save_settings()
+
+    def on_shutdown_action_changed(self, index):
+        action = self.shutdown_action_combo.itemData(index)
+        if action:
+            settings_manager.set('shutdown_action', action)
+            settings_manager.save_settings()
