@@ -1,3 +1,3 @@
 # config/version.py
-__version__ = "2.5.1"
+__version__ = "2.5.3"
 APP_VERSION = __version__

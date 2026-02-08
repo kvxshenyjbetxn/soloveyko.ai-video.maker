@@ -412,7 +412,40 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                     time.sleep(0.1)
                 else:
                     if not state.text_for_processing:
-                        state.text_for_processing = state.original_text
+                        # Attempt to restore text from file if stage is already successful (e.g. resumed task)
+                        text_restored = False
+                        
+                        # Check Translation
+                        if 'stage_translation' in state.stages and state.status.get('stage_translation') == 'success':
+                            t_path = os.path.join(state.dir_path, "translation.txt")
+                            try:
+                                if os.path.exists(t_path):
+                                    with open(t_path, 'r', encoding='utf-8') as f:
+                                        state.text_for_processing = f.read()
+                                        state.translated_text_preview = state.text_for_processing
+                                        text_restored = True
+                                        logger.log(f"[{task_id}] Restored translated text from file.", level=LogLevel.INFO)
+                            except Exception as e:
+                                logger.log(f"[{task_id}] Failed to restore translation file: {e}", level=LogLevel.WARNING)
+
+                        # Check Rewrite (if translation wasn't the source)
+                        if not text_restored and 'stage_rewrite' in state.stages and state.status.get('stage_rewrite') == 'success':
+                             # Rewrite usually overwrites translation.txt if it's the main text, but let's check standard names
+                             # TranslationMixin saves rewrite to "translation.txt" too! (See line 79 in translation_mixin.py)
+                             t_path = os.path.join(state.dir_path, "translation.txt")
+                             try:
+                                if os.path.exists(t_path):
+                                    with open(t_path, 'r', encoding='utf-8') as f:
+                                        state.text_for_processing = f.read()
+                                        state.translated_text_preview = state.text_for_processing
+                                        text_restored = True
+                                        logger.log(f"[{task_id}] Restored rewritten text from file.", level=LogLevel.INFO)
+                             except Exception as e:
+                                pass
+
+                        if not state.text_for_processing:
+                            state.text_for_processing = state.original_text
+
                     self._on_text_ready(task_id)
         
         if started_count > 0:
