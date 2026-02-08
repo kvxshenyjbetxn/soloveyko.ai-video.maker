@@ -46,6 +46,35 @@ class MontageEngine:
         
         visual_files = valid_files
         
+        # --- PATH OPTIMIZATION ---
+        # Determine a common root directory to set as CWD for FFmpeg
+        # This allows using relative paths for inputs, significantly shortening the command line
+        base_cwd = None
+        if visual_files:
+            # Use directory of the first file as the base
+            base_cwd = os.path.dirname(os.path.abspath(visual_files[0]))
+            # On Windows, path casing might vary, so we rely on what OS gives us
+            logger.log(f"{prefix}[Montage] Optimization: base CWD set to: {base_cwd}", level=LogLevel.DEBUG)
+
+        def get_opt_path(p):
+            """Returns relative path if inside base_cwd, else absolute."""
+            if not p: return p
+            abs_p = os.path.abspath(p)
+            if base_cwd:
+                try:
+                    # Check if file is on same drive (Windows)
+                    if platform.system() == "Windows" and os.path.splitdrive(abs_p)[0].lower() != os.path.splitdrive(base_cwd)[0].lower():
+                        return abs_p.replace("\\", "/")
+                    
+                    rel = os.path.relpath(abs_p, base_cwd)
+                    # If relative path does not start with .. (meaning it is inside), use it
+                    if not rel.startswith(".."):
+                        return rel.replace("\\", "/")
+                except ValueError:
+                    pass
+            return abs_p.replace("\\", "/")
+        # -------------------------
+        
         audio_dur = self._get_duration(audio_path)
         if audio_dur == 0: raise Exception("Аудіо пусте або не читається.")
         if not visual_files: raise Exception("Немає файлів (або жоден файл не знайдено).")
@@ -286,7 +315,7 @@ class MontageEngine:
             # Check if this is a video that needs looping BEFORE adding to inputs
             # Add inputs with optional stream_loop
             inputs.append("-thread_queue_size"); inputs.append("4096")
-            inputs.append("-i"); inputs.append(abs_path)
+            inputs.append("-i"); inputs.append(get_opt_path(f))
             v_in = f"[{i}:v]"; v_out = f"v{i}_final"
             
             if is_video:
@@ -425,7 +454,7 @@ class MontageEngine:
         
         if overlay_effect_path and os.path.exists(overlay_effect_path):
             logger.log(f"{prefix}[FFmpeg] Adding overlay effect: {os.path.basename(overlay_effect_path)}", level=LogLevel.INFO)
-            inputs.extend(["-stream_loop", "-1", "-thread_queue_size", "4096", "-i", overlay_effect_path.replace("\\", "/")])
+            inputs.extend(["-stream_loop", "-1", "-thread_queue_size", "4096", "-i", get_opt_path(overlay_effect_path)])
             effect_index = current_input_count
             current_input_count += 1
             
@@ -467,8 +496,8 @@ class MontageEngine:
                 logger.log(f"{prefix}[FFmpeg] Trigger '{t_val}' found/set at {start_time:.2f}s. Applying effect: {os.path.basename(t_path)}", level=LogLevel.INFO)
 
                 # Add input
-                abs_t_path = os.path.abspath(t_path).replace("\\", "/")
-                inputs.extend(["-thread_queue_size", "4096", "-i", abs_t_path])
+                # abs_t_path is for Python checks, get_opt_path(t_path) is for ffmpeg arg
+                inputs.extend(["-thread_queue_size", "4096", "-i", get_opt_path(t_path)])
                 trig_index = current_input_count
                 current_input_count += 1
                 
@@ -505,7 +534,7 @@ class MontageEngine:
         # 7. WATERMARK
         if watermark_path and os.path.exists(watermark_path):
             logger.log(f"{prefix}[FFmpeg] Adding watermark: {os.path.basename(watermark_path)}", level=LogLevel.INFO)
-            inputs.extend(["-thread_queue_size", "4096", "-i", watermark_path.replace("\\", "/")])
+            inputs.extend(["-thread_queue_size", "4096", "-i", get_opt_path(watermark_path)])
             wm_index = current_input_count
             current_input_count += 1
             
@@ -551,7 +580,7 @@ class MontageEngine:
         
         # --- AUDIO INPUTS AND FILTERS ---
         inputs.append("-thread_queue_size"); inputs.append("4096")
-        inputs.append("-i"); inputs.append(audio_path.replace("\\", "/"))
+        inputs.append("-i"); inputs.append(get_opt_path(audio_path))
         voiceover_input_index = audio_input_index # Use the tracked index
 
 
@@ -561,7 +590,7 @@ class MontageEngine:
         if background_music_path and os.path.exists(background_music_path):
             logger.log(f"{prefix}[FFmpeg] Adding background music.", level=LogLevel.INFO)
             # Use -stream_loop on the input
-            inputs.extend(["-stream_loop", "-1", "-thread_queue_size", "4096", "-i", background_music_path.replace("\\", "/")])
+            inputs.extend(["-stream_loop", "-1", "-thread_queue_size", "4096", "-i", get_opt_path(background_music_path)])
             
             bg_music_input_index = voiceover_input_index + 1
 
@@ -600,7 +629,7 @@ class MontageEngine:
         if initial_video_path and os.path.exists(initial_video_path):
             logger.log(f"{prefix}[FFmpeg] Prepending initial video: {os.path.basename(initial_video_path)}", level=LogLevel.INFO)
             
-            inputs.extend(["-thread_queue_size", "4096", "-i", initial_video_path.replace("\\", "/")])
+            inputs.extend(["-thread_queue_size", "4096", "-i", get_opt_path(initial_video_path)])
             # Correctly calculate index based on actual number of inputs added so far
             # (Audio/Music inputs might have been added without updating current_input_count)
             intro_index = inputs.count("-i") - 1
@@ -803,7 +832,7 @@ class MontageEngine:
             
             process = subprocess.Popen(
                 cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, 
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL, cwd=base_cwd, # PASS CWD HERE
                 text=True, encoding='utf-8', errors='replace', startupinfo=startupinfo
             )
 
