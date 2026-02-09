@@ -375,6 +375,7 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                 for stage_key in state.stages:
                    if stage_key in pre_found:
                        state.status[stage_key] = 'success'
+                       state.skipped_stages.add(stage_key)
                        self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'success')
                    else:
                        self.stage_status_changed.emit(state.job_id, state.lang_id, stage_key, 'pending')
@@ -457,6 +458,26 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
 
         if stage_key in pre_found_files or state.status.get(stage_key) in ['success', 'warning']:
             file_path = pre_found_files.get(stage_key)
+            
+            # Fallback: Deduce file path for standard stages if not in pre_found_files but status is success
+            if not file_path and state.dir_path:
+                if stage_key == 'stage_img_prompts':
+                    file_path = os.path.join(state.dir_path, "image_prompts.txt")
+                elif stage_key == 'stage_translation':
+                    file_path = os.path.join(state.dir_path, "translation.txt")
+                elif stage_key == 'stage_rewrite':
+                    file_path = os.path.join(state.dir_path, "translation.txt")
+                elif stage_key == 'stage_subtitles':
+                    # Assuming standard naming voice.ass, but checking if audio path suggests otherwise could be complex. 
+                    # Usually subtitles are named after audio. Default to voice.ass as safest guess for retry.
+                    file_path = os.path.join(state.dir_path, "voice.ass") 
+                elif stage_key == 'stage_voiceover':
+                     # Check common extensions
+                     for ext in ['.mp3', '.wav']:
+                         p = os.path.join(state.dir_path, f"voice{ext}")
+                         if os.path.exists(p):
+                             file_path = p
+                             break
             
             should_skip = True
             result = None
