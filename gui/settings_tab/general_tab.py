@@ -270,6 +270,64 @@ class GeneralTab(QWidget):
         
         form_layout.addRow(self.controls_group)
 
+        # --- Cleanup Group ---
+        self.cleanup_group = QGroupBox()
+        self.cleanup_layout = QFormLayout(self.cleanup_group)
+
+        # Master toggle
+        self.auto_cleanup_label = QLabel()
+        self.auto_cleanup_help = HelpLabel("auto_cleanup_help")
+        
+        cleanup_label_widget = QWidget()
+        cleanup_label_layout = QHBoxLayout(cleanup_label_widget)
+        cleanup_label_layout.setContentsMargins(0, 0, 0, 0)
+        cleanup_label_layout.setSpacing(5)
+        cleanup_label_layout.addWidget(self.auto_cleanup_help)
+        cleanup_label_layout.addWidget(self.auto_cleanup_label)
+
+        self.auto_cleanup_checkbox = QCheckBox()
+        self.auto_cleanup_checkbox.stateChanged.connect(self.auto_cleanup_changed)
+        add_setting_row(self.cleanup_layout, cleanup_label_widget, self.auto_cleanup_checkbox, "auto_cleanup_enabled", quick_panel_refresh_callback=refresh_cb, show_star=show_stars)
+
+        # Individual files checkboxes
+        self.cleanup_files_layout = QVBoxLayout() # Sub-layout for files
+        
+        self.cleanup_images_cb = QCheckBox("images folder")
+        self.cleanup_images_cb.stateChanged.connect(lambda s: self.settings_manager.set('cleanup_images', s == Qt.CheckState.Checked.value))
+        self.cleanup_files_layout.addWidget(self.cleanup_images_cb)
+
+        self.cleanup_prompts_cb = QCheckBox("image_prompts.txt")
+        self.cleanup_prompts_cb.stateChanged.connect(lambda s: self.settings_manager.set('cleanup_image_prompts', s == Qt.CheckState.Checked.value))
+        self.cleanup_files_layout.addWidget(self.cleanup_prompts_cb)
+
+        self.cleanup_translation_cb = QCheckBox("translation.txt")
+        self.cleanup_translation_cb.stateChanged.connect(lambda s: self.settings_manager.set('cleanup_translation', s == Qt.CheckState.Checked.value))
+        self.cleanup_files_layout.addWidget(self.cleanup_translation_cb)
+
+        self.cleanup_translation_orig_cb = QCheckBox("translation_orig.txt")
+        self.cleanup_translation_orig_cb.stateChanged.connect(lambda s: self.settings_manager.set('cleanup_translation_orig', s == Qt.CheckState.Checked.value))
+        self.cleanup_files_layout.addWidget(self.cleanup_translation_orig_cb)
+
+        self.cleanup_voice_ass_cb = QCheckBox("voice.ass")
+        self.cleanup_voice_ass_cb.stateChanged.connect(lambda s: self.settings_manager.set('cleanup_voice_ass', s == Qt.CheckState.Checked.value))
+        self.cleanup_files_layout.addWidget(self.cleanup_voice_ass_cb)
+
+        self.cleanup_voice_mp3_cb = QCheckBox("voice.mp3")
+        self.cleanup_voice_mp3_cb.stateChanged.connect(lambda s: self.settings_manager.set('cleanup_voice_audio', s == Qt.CheckState.Checked.value))
+        self.cleanup_files_layout.addWidget(self.cleanup_voice_mp3_cb)
+
+        # Wrap sub-layout in a widget to add to form layout
+        self.cleanup_files_widget = QWidget()
+        self.cleanup_files_widget.setLayout(self.cleanup_files_layout)
+        
+        # We add it as a full row or under the master toggle? 
+        # Better: add it as a row with empty label to indent, or just add to layout.
+        # But `add_setting_row` works with FormLayout rows. 
+        # Let's just add it to the cleanup_layout directly.
+        self.cleanup_layout.addRow(self.cleanup_files_widget)
+
+        form_layout.addRow(self.cleanup_group)
+
         content_layout.addLayout(form_layout)
         content_layout.addStretch()
         
@@ -361,6 +419,37 @@ class GeneralTab(QWidget):
         self.prompt_count_spinbox.blockSignals(False)
         if hasattr(self, 'max_download_threads_spinbox'): self.max_download_threads_spinbox.blockSignals(False)
 
+        # Cleanup settings update
+        self.auto_cleanup_checkbox.blockSignals(True)
+        auto_cleanup_enabled = self.settings_manager.get('auto_cleanup_enabled', False)
+        self.auto_cleanup_checkbox.setChecked(auto_cleanup_enabled)
+        self.cleanup_files_widget.setVisible(auto_cleanup_enabled)
+        self.auto_cleanup_checkbox.blockSignals(False)
+        
+        self.cleanup_images_cb.blockSignals(True)
+        self.cleanup_images_cb.setChecked(self.settings_manager.get('cleanup_images', False))
+        self.cleanup_images_cb.blockSignals(False)
+
+        self.cleanup_prompts_cb.blockSignals(True)
+        self.cleanup_prompts_cb.setChecked(self.settings_manager.get('cleanup_image_prompts', False))
+        self.cleanup_prompts_cb.blockSignals(False)
+
+        self.cleanup_translation_cb.blockSignals(True)
+        self.cleanup_translation_cb.setChecked(self.settings_manager.get('cleanup_translation', False))
+        self.cleanup_translation_cb.blockSignals(False)
+
+        self.cleanup_translation_orig_cb.blockSignals(True)
+        self.cleanup_translation_orig_cb.setChecked(self.settings_manager.get('cleanup_translation_orig', False))
+        self.cleanup_translation_orig_cb.blockSignals(False)
+
+        self.cleanup_voice_ass_cb.blockSignals(True)
+        self.cleanup_voice_ass_cb.setChecked(self.settings_manager.get('cleanup_voice_ass', False))
+        self.cleanup_voice_ass_cb.blockSignals(False)
+
+        self.cleanup_voice_mp3_cb.blockSignals(True)
+        self.cleanup_voice_mp3_cb.setChecked(self.settings_manager.get('cleanup_voice_audio', False))
+        self.cleanup_voice_mp3_cb.blockSignals(False)
+
 
     def open_color_dialog(self):
         current_color = self.settings_manager.get('accent_color', '#3f51b5')
@@ -394,6 +483,11 @@ class GeneralTab(QWidget):
     def simulation_target_changed(self, index):
         target = self.simulation_target_combo.itemData(index)
         self.settings_manager.set('simulation_target', target)
+
+    def auto_cleanup_changed(self, state):
+        is_checked = state == Qt.CheckState.Checked.value
+        self.settings_manager.set('auto_cleanup_enabled', is_checked)
+        self.cleanup_files_widget.setVisible(is_checked)
 
     def prompt_count_control_changed(self, state):
         is_checked = state == Qt.CheckState.Checked.value
@@ -464,6 +558,7 @@ class GeneralTab(QWidget):
         self.results_path_label.setText(translator.translate('results_path_label'))
         self.results_path_help.update_tooltip()
         self.browse_button.setText(translator.translate('browse_button'))
+        
         self.controls_group.setTitle(translator.translate('controls_group_title'))
         self.translation_review_label.setText(translator.translate('translation_review_label'))
         self.translation_review_help.update_tooltip()
@@ -471,6 +566,17 @@ class GeneralTab(QWidget):
         self.rewrite_review_help.update_tooltip()
         self.image_review_label.setText(translator.translate('image_review_label'))
         self.image_review_help.update_tooltip()
+        
+        self.cleanup_group.setTitle(translator.translate('cleanup_group_title'))
+        self.auto_cleanup_label.setText(translator.translate('auto_cleanup_label'))
+        self.auto_cleanup_help.update_tooltip()
+        self.cleanup_images_cb.setText(translator.translate('cleanup_images_label'))
+        self.cleanup_prompts_cb.setText(translator.translate('cleanup_image_prompts_label'))
+        self.cleanup_translation_cb.setText(translator.translate('cleanup_translation_label'))
+        self.cleanup_translation_orig_cb.setText(translator.translate('cleanup_translation_orig_label'))
+        self.cleanup_voice_ass_cb.setText(translator.translate('cleanup_voice_ass_label'))
+        self.cleanup_voice_mp3_cb.setText(translator.translate('cleanup_voice_mp3_label'))
+
         if hasattr(self, 'simultaneous_montage_label'):
             self.simultaneous_montage_label.setText(translator.translate('simultaneous_montage_label'))
             self.simultaneous_montage_help.update_tooltip()

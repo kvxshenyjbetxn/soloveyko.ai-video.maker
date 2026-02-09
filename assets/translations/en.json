@@ -553,5 +553,14 @@
     "auto_shutdown_title": "Automatic Shutdown",
     "auto_shutdown_info": "Computer will perform action '{action}' in {seconds} sec.",
     "cancel_action_button": "Cancel",
-    "perform_now_button": "Perform Now"
+    "perform_now_button": "Perform Now",
+    "cleanup_group_title": "Temporary Files Cleanup",
+    "auto_cleanup_label": "💾 Enable Auto-cleanup",
+    "cleanup_images_label": "images (images folder)",
+    "cleanup_image_prompts_label": "image_prompts.txt (image generation prompts)",
+    "cleanup_translation_label": "translation.txt (edited translation)",
+    "cleanup_translation_orig_label": "translation_orig.txt (original translation)",
+    "cleanup_voice_ass_label": "voice.ass (subtitles file)",
+    "cleanup_voice_mp3_label": "voice.mp3 (audio file)",
+    "auto_cleanup_help": "<b>Auto-Cleanup</b><br>After successful video creation, the program will automatically delete selected temporary files to save disk space."
 }

@@ -830,64 +830,64 @@ class MontageEngine:
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             
-            process = subprocess.Popen(
+            with subprocess.Popen(
                 cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, 
                 stdin=subprocess.DEVNULL, cwd=base_cwd, # PASS CWD HERE
                 text=True, encoding='utf-8', errors='replace', startupinfo=startupinfo
-            )
+            ) as process:
 
-            full_log = []
-            
-            # Calculate total expected duration for progress bar
-            # Total = (Intro Video) + (Main Audio + Pause) - (Overlap if transition used)
-            total_expected_duration = audio_dur + intro_dur + pause_dur
-            if enable_trans and intro_dur > 0:
-                 total_expected_duration -= trans_dur
-
-            while True:
-                line = process.stderr.readline()
-                if not line and process.poll() is not None: break
-                if line:
-                    c = line.strip()
-                    full_log.append(c)
-                    
-                    if "frame=" in c or "time=" in c:
-                        parts = dict(re.findall(r'(\w+)=\s*([^ ]+)', c))
-                        time_str = parts.get('time', '00:00:00.00')
+                full_log = []
+                
+                # Calculate total expected duration for progress bar
+                # Total = (Intro Video) + (Main Audio + Pause) - (Overlap if transition used)
+                total_expected_duration = audio_dur + intro_dur + pause_dur
+                if enable_trans and intro_dur > 0:
+                     total_expected_duration -= trans_dur
+    
+                while True:
+                    line = process.stderr.readline()
+                    if not line and process.poll() is not None: break
+                    if line:
+                        c = line.strip()
+                        full_log.append(c)
                         
-                        try:
-                            # Конвертація часу в секунди
-                            time_parts = time_str.split(':')
-                            h = int(time_parts[0])
-                            m = int(time_parts[1])
-                            s = float(time_parts[2])
-                            time_sec = h * 3600 + m * 60 + s
-                        except (ValueError, IndexError):
-                            time_sec = 0.0
-
-                        # Calculate progress based on NEW total duration
-                        denom = total_expected_duration if total_expected_duration > 0.1 else 1.0
-                        progress = min(max((time_sec / denom) * 100, 0.0), 100.0)
-                        
-                        fps = parts.get('fps', '0')
-                        bitrate = parts.get('bitrate', 'N/A')
-                        
-                        log_line = (
-                            f"time={time_str} | "
-                            f"fps={fps} | "
-                            f"bit={bitrate} | "
-                            f"progress={progress:.2f}%"
-                        )
-                        log_progress(log_line)
-                        
-                    elif "Error" in c and "Error submitting packet to decoder" not in c:
-                        logger.log(f"{prefix}[FFmpeg] {c}", level=LogLevel.ERROR)
-                        log_progress(f"[FFmpeg] Error: {c}")
-
-            if process.returncode != 0:
-                err = "\n".join(full_log[-20:])
-                logger.log(f"{prefix}[FFmpeg] Rendering failed:\n{err}", level=LogLevel.ERROR)
-                raise Exception("FFmpeg failed.")
+                        if "frame=" in c or "time=" in c:
+                            parts = dict(re.findall(r'(\w+)=\s*([^ ]+)', c))
+                            time_str = parts.get('time', '00:00:00.00')
+                            
+                            try:
+                                # Конвертація часу в секунди
+                                time_parts = time_str.split(':')
+                                h = int(time_parts[0])
+                                m = int(time_parts[1])
+                                s = float(time_parts[2])
+                                time_sec = h * 3600 + m * 60 + s
+                            except (ValueError, IndexError):
+                                time_sec = 0.0
+    
+                            # Calculate progress based on NEW total duration
+                            denom = total_expected_duration if total_expected_duration > 0.1 else 1.0
+                            progress = min(max((time_sec / denom) * 100, 0.0), 100.0)
+                            
+                            fps = parts.get('fps', '0')
+                            bitrate = parts.get('bitrate', 'N/A')
+                            
+                            log_line = (
+                                f"time={time_str} | "
+                                f"fps={fps} | "
+                                f"bit={bitrate} | "
+                                f"progress={progress:.2f}%"
+                            )
+                            log_progress(log_line)
+                            
+                        elif "Error" in c and "Error submitting packet to decoder" not in c:
+                            logger.log(f"{prefix}[FFmpeg] {c}", level=LogLevel.ERROR)
+                            log_progress(f"[FFmpeg] Error: {c}")
+    
+                if process.returncode != 0:
+                    err = "\n".join(full_log[-20:])
+                    logger.log(f"{prefix}[FFmpeg] Rendering failed:\n{err}", level=LogLevel.ERROR)
+                    raise Exception("FFmpeg failed.")
             
             # ==================== ПОСТОБРОБКА МЕТАДАНИХ (MUTAGEN) ====================
             # ==================== METADATA POST-PROCESSING (MUTAGEN) ====================

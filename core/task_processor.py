@@ -666,8 +666,53 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
             if stage_key == state.stages[-1]:
                 state.end_time = datetime.now()
                 history_manager.add_entry(state)
+                
+                if status == 'success':
+                    self._cleanup_task_files(task_id)
 
         self.check_if_all_finished()
+
+    def _cleanup_task_files(self, task_id):
+        state = self.task_states.get(task_id)
+        if not state: return
+
+        if not state.settings.get('auto_cleanup_enabled', False):
+            return
+
+        logger.log(f"[{task_id}] Starting automatic cleanup of temporary files...", level=LogLevel.INFO)
+        
+        # Safety delay to allow OS/Subprocesses to fully release file handles and threads (fixes 0x8001010d)
+        time.sleep(2.0) 
+
+        dir_path = state.dir_path
+        if not dir_path or not os.path.exists(dir_path):
+            return
+
+        # Define cleanup rules: setting_key -> [(filename, is_dir)]
+        # Note: logical "voice audio" might map to multiple files
+        cleanup_rules = {
+            'cleanup_images': [('images', True)],
+            'cleanup_image_prompts': [('image_prompts.txt', False)],
+            'cleanup_translation': [('translation.txt', False)],
+            'cleanup_translation_orig': [('translation_orig.txt', False)],
+            'cleanup_voice_ass': [('voice.ass', False)],
+            'cleanup_voice_audio': [('voice.mp3', False), (f"voice_{state.lang_id}.mp3", False)]
+        }
+
+        for setting_key, files_to_clean in cleanup_rules.items():
+            if state.settings.get(setting_key, False):
+                for filename, is_dir in files_to_clean:
+                    path = os.path.join(dir_path, filename)
+                    try:
+                        if os.path.exists(path):
+                            if is_dir:
+                                shutil.rmtree(path)
+                                logger.log(f"[{task_id}] Cleaned up directory: {filename}", level=LogLevel.INFO)
+                            else:
+                                os.remove(path)
+                                logger.log(f"[{task_id}] Cleaned up file: {filename}", level=LogLevel.INFO)
+                    except Exception as e:
+                        logger.log(f"[{task_id}] Failed to cleanup {filename}: {e}", level=LogLevel.WARNING)
 
     @Slot(str)
     def _on_image_deleted(self, image_path):
