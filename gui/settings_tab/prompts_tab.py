@@ -588,7 +588,7 @@ class PromptsTab(QWidget):
         else:
             # Standard Mode:
             # Check global setting 'prompt_count_control_enabled'
-            is_checked = self.settings.get('prompt_count_control_enabled', False)
+            is_checked = bool(self.settings.get('prompt_count_control_enabled', False))
             
             # Count visible ONLY if global setting enabled
             self.prompt_count_container_widget.setVisible(is_checked)
@@ -626,7 +626,7 @@ class PromptsTab(QWidget):
 
         # Logic: Determine mode first to load correct prompt
         gen_mode = self.settings.get("generation_mode")
-        current_split_count = self.settings.get('text_split_count', 0)
+        current_split_count = int(self.settings.get('text_split_count', 0) or 0)
         
         if gen_mode == "Sync":
             is_sync = True
@@ -642,13 +642,13 @@ class PromptsTab(QWidget):
         
         if is_sync:
             if current_split_count == 0:
-                current_split_count = self.settings.get('last_text_split_count', 5)
+                current_split_count = int(self.settings.get('last_text_split_count', 5) or 5)
             self.generation_mode_combo.setCurrentIndex(1)
             self.text_split_count_spinbox.setValue(current_split_count)
             prompt = self.settings.get("image_prompt_settings.prompt_sync")
         else:
             self.generation_mode_combo.setCurrentIndex(0)
-            self.text_split_count_spinbox.setValue(self.settings.get('last_text_split_count', 5))
+            self.text_split_count_spinbox.setValue(int(self.settings.get('last_text_split_count', 5) or 5))
             prompt = self.settings.get("image_prompt_settings.prompt_standard")
             if not prompt:
                 prompt = self.settings.get("image_prompt_settings.prompt")
@@ -659,7 +659,7 @@ class PromptsTab(QWidget):
         current_model = config.get("model", "")
         index = self.model_combo.findText(current_model)
         self.model_combo.setCurrentIndex(index if index >= 0 else 0)
-        self.tokens_spinbox.setValue(config.get("max_tokens", 4096))
+        self.tokens_spinbox.setValue(int(config.get("max_tokens", 4096) or 4096))
         self.temperature_spinbox.setValue(config.get("temperature", 0.7))
 
         self.char_prompt_edit.setPlainText(config.get("character_prompt", ""))
@@ -670,7 +670,7 @@ class PromptsTab(QWidget):
         # Apply visibility based on current mode
         self.on_mode_changed()
         
-        self.prompt_count_spinbox.setValue(self.settings.get('prompt_count', 10))
+        self.prompt_count_spinbox.setValue(int(self.settings.get('prompt_count', 10) or 10))
 
         self.prompt_edit.blockSignals(False)
         self.model_combo.blockSignals(False)
@@ -860,7 +860,7 @@ class PromptsTab(QWidget):
         # Actually simplest to just set items. The index is preserved if count doesn't change?
         # Let's re-read from settings or local state?
         # Update_fields calls load logic.
-        split_count = self.settings.get('text_split_count', 0)
+        split_count = int(self.settings.get('text_split_count', 0) or 0)
         self.generation_mode_combo.setCurrentIndex(1 if split_count > 0 else 0)
         self.generation_mode_combo.blockSignals(False)
         self.on_mode_changed()

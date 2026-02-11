@@ -376,9 +376,9 @@ class GeneralTab(QWidget):
         res_path = self.settings_manager.get('results_path') or ""
         self.results_path_edit.setText(res_path)
 
-        self.translation_review_checkbox.setChecked(self.settings_manager.get('translation_review_enabled', False))
-        self.rewrite_review_checkbox.setChecked(self.settings_manager.get('rewrite_review_enabled', False))
-        self.image_review_checkbox.setChecked(self.settings_manager.get('image_review_enabled', False))
+        self.translation_review_checkbox.setChecked(bool(self.settings_manager.get('translation_review_enabled', False)))
+        self.rewrite_review_checkbox.setChecked(bool(self.settings_manager.get('rewrite_review_enabled', False)))
+        self.image_review_checkbox.setChecked(bool(self.settings_manager.get('image_review_enabled', False)))
         if hasattr(self, 'simultaneous_montage_checkbox'):
             self.simultaneous_montage_checkbox.setChecked(bool(self.settings_manager.get('simultaneous_montage_and_subs', False)))
         
@@ -390,9 +390,9 @@ class GeneralTab(QWidget):
             self.simulation_target_combo.setCurrentIndex(0)
 
         if hasattr(self, 'detailed_logging_checkbox'):
-            self.detailed_logging_checkbox.setChecked(self.settings_manager.get('detailed_logging_enabled', False))
+            self.detailed_logging_checkbox.setChecked(bool(self.settings_manager.get('detailed_logging_enabled', False)))
         
-        prompt_control_enabled = self.settings_manager.get('prompt_count_control_enabled', False)
+        prompt_control_enabled = bool(self.settings_manager.get('prompt_count_control_enabled', False))
         self.prompt_count_control_checkbox.setChecked(prompt_control_enabled)
         
         if hasattr(self, 'prompt_count_label'):
@@ -421,33 +421,33 @@ class GeneralTab(QWidget):
 
         # Cleanup settings update
         self.auto_cleanup_checkbox.blockSignals(True)
-        auto_cleanup_enabled = self.settings_manager.get('auto_cleanup_enabled', False)
+        auto_cleanup_enabled = bool(self.settings_manager.get('auto_cleanup_enabled', False))
         self.auto_cleanup_checkbox.setChecked(auto_cleanup_enabled)
         self.cleanup_files_widget.setVisible(auto_cleanup_enabled)
         self.auto_cleanup_checkbox.blockSignals(False)
         
         self.cleanup_images_cb.blockSignals(True)
-        self.cleanup_images_cb.setChecked(self.settings_manager.get('cleanup_images', False))
+        self.cleanup_images_cb.setChecked(bool(self.settings_manager.get('cleanup_images', False)))
         self.cleanup_images_cb.blockSignals(False)
 
         self.cleanup_prompts_cb.blockSignals(True)
-        self.cleanup_prompts_cb.setChecked(self.settings_manager.get('cleanup_image_prompts', False))
+        self.cleanup_prompts_cb.setChecked(bool(self.settings_manager.get('cleanup_image_prompts', False)))
         self.cleanup_prompts_cb.blockSignals(False)
 
         self.cleanup_translation_cb.blockSignals(True)
-        self.cleanup_translation_cb.setChecked(self.settings_manager.get('cleanup_translation', False))
+        self.cleanup_translation_cb.setChecked(bool(self.settings_manager.get('cleanup_translation', False)))
         self.cleanup_translation_cb.blockSignals(False)
 
         self.cleanup_translation_orig_cb.blockSignals(True)
-        self.cleanup_translation_orig_cb.setChecked(self.settings_manager.get('cleanup_translation_orig', False))
+        self.cleanup_translation_orig_cb.setChecked(bool(self.settings_manager.get('cleanup_translation_orig', False)))
         self.cleanup_translation_orig_cb.blockSignals(False)
 
         self.cleanup_voice_ass_cb.blockSignals(True)
-        self.cleanup_voice_ass_cb.setChecked(self.settings_manager.get('cleanup_voice_ass', False))
+        self.cleanup_voice_ass_cb.setChecked(bool(self.settings_manager.get('cleanup_voice_ass', False)))
         self.cleanup_voice_ass_cb.blockSignals(False)
 
         self.cleanup_voice_mp3_cb.blockSignals(True)
-        self.cleanup_voice_mp3_cb.setChecked(self.settings_manager.get('cleanup_voice_audio', False))
+        self.cleanup_voice_mp3_cb.setChecked(bool(self.settings_manager.get('cleanup_voice_audio', False)))
         self.cleanup_voice_mp3_cb.blockSignals(False)
 
 
