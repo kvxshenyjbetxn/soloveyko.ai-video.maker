@@ -149,7 +149,8 @@ text: """,
                 'upscale_factor': 2,
                 'transition_duration': 2,
                 'enable_sway': True,
-                'max_concurrent_montages': 1
+                'max_concurrent_montages': 1,
+                'ffmpeg_threads': 0
             },
             'languages_config': {
                 'uk': {

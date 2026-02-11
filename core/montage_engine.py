@@ -766,7 +766,7 @@ class MontageEngine:
                     '-color_trc', 'bt709',
                     '-color_primaries', 'bt709',
                     '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709:fullrange=1',
-                    '-r', '60',
+                    '-r', '30',
                     '-c:a', 'aac',
                     '-ar', '48000',
                     '-ac', '2',

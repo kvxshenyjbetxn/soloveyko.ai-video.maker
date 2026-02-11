@@ -388,132 +388,69 @@ class TextProcessingMixin:
         start_from: int = 0
     ) -> Optional[Tuple[int, int, float]]:
         """
-        Finds the best match for a segment in the text stream.
-        Uses multiple anchor-based matching for better accuracy.
-        
-        This handles cases where:
-        - Numbers are transcribed differently (70 vs Семьдесят)
-        - Start of segment differs from whisper transcription
-        
-        Returns:
-            (start_char, end_char, confidence) or None if no good match.
+        Finds the best match for a segment in the text stream using difflib.
+        Uses longest common substring to find anchor, then expands to check full segment.
         """
         if not segment or not stream:
             return None
         
-        # Limit search area to start_from onwards
+        # Limit search area
         search_area = stream[start_from:]
-        
         if not search_area:
             return None
-        
-        # Strategy 1: Try exact substring match first
-        exact_pos = search_area.find(segment)
-        if exact_pos != -1:
-            abs_start = start_from + exact_pos
-            abs_end = abs_start + len(segment)
-            return (abs_start, abs_end, 1.0)
-        
-        # Strategy 2: Multi-anchor matching
-        # Try to find matches from different parts of the segment
-        # This helps when numbers are transcribed differently (70 vs Семьдесят)
-        
-        segment_words = segment.split()
-        seg_len = len(segment)
-        
-        best_match = None
-        best_confidence = 0.0
-        
-        # Special handling for SHORT segments (< 50 chars)
-        # These need lower thresholds and simpler matching
-        is_short_segment = seg_len < 50
-        base_threshold = 0.4 if is_short_segment else 0.5
-        
-        # Define multiple anchor positions to try
-        anchors_to_try = []
-        
-        # Anchor 1: Start of segment (first 20-40 chars)
-        anchor_len = min(seg_len, 40)
-        anchors_to_try.append(('start', segment[:anchor_len], 0))
-        
-        # Anchor 2: Middle of segment
-        if seg_len > 60:
-            mid_start = seg_len // 3
-            mid_anchor = segment[mid_start:mid_start + 40]
-            anchors_to_try.append(('middle', mid_anchor, mid_start))
-        
-        # Anchor 3: End of segment (last 20-40 chars) 
-        if seg_len > 40:
-            end_anchor = segment[-40:]
-            anchors_to_try.append(('end', end_anchor, seg_len - 40))
-        
-        # Anchor 4: Try to find distinctive phrases (words 3-6)
-        if len(segment_words) > 5:
-            phrase_start = len(' '.join(segment_words[:2])) + 1
-            phrase = ' '.join(segment_words[2:6])
-            if len(phrase) >= 15:
-                anchors_to_try.append(('phrase', phrase, phrase_start))
-        
-        # For short segments, also try first 2-3 words as anchor
-        if is_short_segment and len(segment_words) >= 2:
-            first_words = ' '.join(segment_words[:min(3, len(segment_words))])
-            if len(first_words) >= 8:
-                anchors_to_try.append(('first_words', first_words, 0))
-        
-        for anchor_name, anchor_text, anchor_offset in anchors_to_try:
-            # Try to find this anchor in the search area
-            match = self._fuzzy_find(anchor_text, search_area, threshold=base_threshold)
             
-            if match is None:
-                # Try with shorter version and lower threshold
-                short_anchor = anchor_text[:min(len(anchor_text), 25)]
-                match = self._fuzzy_find(short_anchor, search_area, threshold=base_threshold - 0.1)
+        import difflib
+        
+        # Thresholds
+        # For very short segments, we require high confidence
+        base_threshold = 0.5
+        if len(segment) < 20:
+             base_threshold = 0.65
+        
+        # 1. Exact Match (Fastest)
+        pos = search_area.find(segment)
+        if pos != -1:
+            return (start_from + pos, start_from + pos + len(segment), 1.0)
             
-            if match:
-                match_pos, confidence = match
-                
-                # Calculate estimated segment boundaries based on where this anchor was found
-                if anchor_name == 'start':
-                    est_start = match_pos
-                    est_end = match_pos + int(seg_len * 1.1)
-                elif anchor_name == 'end':
-                    est_end = match_pos + len(anchor_text)
-                    est_start = max(0, match_pos - (seg_len - len(anchor_text)))
-                else:  # middle or phrase
-                    est_start = max(0, match_pos - anchor_offset)
-                    est_end = est_start + int(seg_len * 1.1)
-                
-                # Validate: est_end should be after est_start
-                if est_end <= est_start:
-                    est_end = est_start + int(seg_len * 1.1)
-                
-                # Keep track of best match
-                if confidence > best_confidence:
-                    best_confidence = confidence
-                    abs_start = start_from + est_start
-                    abs_end = start_from + min(est_end, len(search_area))
-                    best_match = (abs_start, abs_end, confidence)
+        # 2. Fuzzy Match (Smart)
+        matcher = difflib.SequenceMatcher(None, segment, search_area)
         
-        if best_match:
-            return best_match
+        # Find the best "anchor" (longest common substring)
+        # This is efficient and robust to shifts/garbled text ends
+        match = matcher.find_longest_match(0, len(segment), 0, len(search_area))
         
-        # Strategy 3: Last resort - try very short distinctive words
-        # Find any word longer than 6 characters that might be unique
-        for word in segment_words:
-            if len(word) >= 7:  # Only try distinctive longer words
-                word_lower = word.lower()
-                pos = search_area.lower().find(word_lower)
-                if pos != -1:
-                    # Found a distinctive word, estimate segment position
-                    word_offset = segment.lower().find(word_lower)
-                    est_start = max(0, pos - word_offset)
-                    est_end = est_start + int(seg_len * 1.1)
-                    
-                    abs_start = start_from + est_start
-                    abs_end = start_from + min(est_end, len(search_area))
-                    
-                    return (abs_start, abs_end, 0.5)  # Lower confidence for word-only match
+        # match.a = start in segment
+        # match.b = start in search_area
+        # match.size = length of match
         
+        if match.size == 0:
+            return None
+            
+        # Validation: Anchor must be significant
+        # either cover >30% of segment, or be >15 chars long.
+        coverage = match.size / len(segment)
+        if coverage < 0.3 and match.size < 15:
+            return None
+            
+        # Extrapolate full segment boundaries
+        # We know where the match is in the segment (match.a) and in search_area (match.b)
+        
+        rel_start = match.b - match.a
+        rel_end = rel_start + len(segment)
+        
+        # Clamp to bounds
+        rel_start = max(0, rel_start)
+        rel_end = min(len(search_area), rel_end)
+        
+        # Extract candidate text
+        candidate = search_area[rel_start:rel_end]
+        
+        # Calculate full similarity ratio
+        confidence = difflib.SequenceMatcher(None, segment, candidate).ratio()
+        
+        if confidence >= base_threshold:
+            return (start_from + rel_start, start_from + rel_end, confidence)
+            
         return None
     
     def _fuzzy_find(
@@ -555,20 +492,8 @@ class TextProcessingMixin:
         
         return None
     
-    def _similarity(self, s1: str, s2: str) -> float:
-        """
-        Computes similarity ratio between two strings.
-        Uses a simple character-matching approach for speed.
-        """
-        if not s1 or not s2:
-            return 0.0
-        
-        if s1 == s2:
-            return 1.0
-        
-        # Simple matching characters count
-        matches = sum(c1 == c2 for c1, c2 in zip(s1, s2))
-        return matches / max(len(s1), len(s2))
+        import difflib
+        return difflib.SequenceMatcher(None, s1, s2).ratio()
     
     def _char_to_time(
         self, 
@@ -863,7 +788,7 @@ class TextProcessingMixin:
                     
                     # Parse timestamp: 00:00:01,234 --> 00:00:04,567
                     match = re.match(
-                        r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})',
+                        r'(\d+):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d+):(\d{2}):(\d{2})[,.](\d{3})',
                         timestamp_line
                     )
                     
