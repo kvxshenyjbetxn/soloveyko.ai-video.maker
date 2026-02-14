@@ -105,7 +105,13 @@ class MontageEngine:
         z_int = settings.get('zoom_intensity', 0.15)
 
         enable_sway = settings.get('enable_sway', False)
+        enable_sway = settings.get('enable_sway', False)
+        enable_sway = settings.get('enable_sway', False)
         s_spd = settings.get('sway_speed_factor', 1.0)
+        
+        # New: GPU Acceleration for Effects
+        # Re-enabled: Trying 'libplacebo' filter instead of 'glsl'
+        use_gpu_shaders = settings.get('use_gpu_shaders', True)
 
         # 1.1 Detection of Aspect Ratio
         is_portrait = False
@@ -233,9 +239,9 @@ class MontageEngine:
                 for i in range(num_files):
                     base_dur = override_durations[i]
                     # COMPENSATION FOR TRANSITIONS:
-                    # If transitions are on, every clip (except maybe the last) loses 'trans_dur' to the overlap.
-                    # To insure the clip is visible for 'base_dur' amount of timeline, we must ADD trans_dur.
-                    if enable_trans:
+                    # If transitions are on (CPU MODE), every clip loses 'trans_dur' to the overlap.
+                    # In GPU mode (Concat), clips are sequential, so NO overlap compensation is needed.
+                    if enable_trans and not use_gpu_shaders:
                         base_dur += trans_dur
                     
                     final_clip_durations[i] = base_dur
@@ -251,8 +257,8 @@ class MontageEngine:
                 
                 if enable_trans:
                     for i in range(num_files):
-                        # If it's already set (video or special img), add compensation
-                        if final_clip_durations[i] > 0:
+                        # If it's already set (video or special img), add compensation ONLY if CPU mode
+                        if final_clip_durations[i] > 0 and not use_gpu_shaders:
                             final_clip_durations[i] += trans_dur
 
                 # 2. Now apply overrides to the specific images
@@ -261,7 +267,7 @@ class MontageEngine:
                     # i - start_index gives the 0-based index in the overrides list
                     base_dur = override_durations[i - start_index]
                     
-                    if enable_trans:
+                    if enable_trans and not use_gpu_shaders:
                         base_dur += trans_dur
                         
                     final_clip_durations[img_idx] = base_dur
@@ -271,7 +277,7 @@ class MontageEngine:
                 for i in range(start_index, num_images):
                     img_idx = image_indices[i]
                     final_clip_durations[img_idx] = img_duration 
-                    if enable_trans: final_clip_durations[img_idx] += trans_dur
+                    if enable_trans and not use_gpu_shaders: final_clip_durations[img_idx] += trans_dur
         else:
             # No overrides - Standard Even Distribution
             # Apply calculated duration + transition compensation
@@ -299,15 +305,508 @@ class MontageEngine:
         filter_parts = []
         fps = 30
         
+        # LOG FFmpeg PATH for debugging
+        ffmpeg_path = shutil.which("ffmpeg")
+        logger.log(f"{prefix}[Debug] Using FFmpeg binary from: {ffmpeg_path}", level=LogLevel.INFO)
+        # Check if assets ffmpeg is prioritized or system
+        
         def fmt(val): return f"{val:.6f}".replace(",", ".")
         
+        ffmpeg_cmd = [ffmpeg_path, "-y", "-hide_banner", "-loglevel", "error"]
+        
+        # --- NEW GPU PIPELINE (Sequential Clip Rendering) ---
+        if use_gpu_shaders:
+            logger.log(f"{prefix}[Montage] Using GPU Pipeline (Sequential Render + Concat)", level=LogLevel.INFO)
+
+            startupinfo = None
+            if platform.system() == "Windows":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+            # Save clips near the output file for easier debugging
+            output_dir = os.path.dirname(output_path)
+            gpu_temp_dir = os.path.join(output_dir, "clips", f"task_{task_id}")
+            os.makedirs(gpu_temp_dir, exist_ok=True)
+            logger.log(f"{prefix}[Montage] GPU Clips Dir: {gpu_temp_dir}", level=LogLevel.INFO)
+            
+            rendered_clips = []
+            
+            # 1. Render each clip individually
+            for i, f in enumerate(visual_files):
+                clip_out = os.path.join(gpu_temp_dir, f"clip_{i:04d}.mp4")
+                
+                # Setup duration and params
+                this_dur = final_clip_durations[i]
+                
+                # Shader generation (Local relative to GPU temp dir)
+                # Store shaders in a subfolder of gpu_temp_dir to keep things organized and clean project root
+                shader_dir = os.path.join(gpu_temp_dir, 'shaders')
+                os.makedirs(shader_dir, exist_ok=True)
+                shader_filename = f"shader_{task_id}_{i}.frag"
+                shader_abs_path = os.path.join(shader_dir, shader_filename)
+                
+                # Params matching CPU logic
+                # FORCE ZOOM slightly only if EFFECTS are enabled to ensure it's visible even if sway is small
+                # If both disabled -> 1.0 (no crop)
+                if not enable_zoom and not enable_sway:
+                    base_zoom_val = 1.0
+                else:
+                    base_zoom_val = 1.1 if enable_sway else 1.05
+                z_amp_val = z_int if enable_zoom else 0.0
+                z_spd_val = z_spd if enable_zoom else 0.0
+                dur_val = this_dur if this_dur > 0 else 0.1
+                s_spd_val = s_spd if enable_sway else 0.0
+                
+                amp_x = 0.026 * (up_factor / 2.0)
+                if amp_x < 0.02: amp_x = 0.02
+                amp_y = amp_x * 0.5
+                
+                # Check settings
+                c_zoom = "1.0" if enable_zoom else "0.0"
+                c_sway = "1.0" if enable_sway else "0.0"
+
+                # Log params for first clip
+                if i == 0:
+                     logger.log(f"{prefix}[Debug] Shader Params: Zoom={enable_zoom} (Base={base_zoom_val}, Amp={z_amp_val}), Sway={enable_sway}, Dur={dur_val}", level=LogLevel.DEBUG)
+
+                # FFmpeg Command for ONE CLIP
+                # Check if input is image or video
+                ext = os.path.splitext(f)[1].lower()
+                is_vid = ext in VIDEO_EXTS
+                
+                # SHADER PARAMS CORRECTION FOR VIDEOS
+                # If it's a video, we DO NOT want it to sway or breathe (zoom in/out).
+                # We typically just want it static or slightly cropped.
+                if is_vid:
+                    # Force disable dynamic effects in shader
+                    c_zoom = "0.0"
+                    c_sway = "0.0"
+                    # We can keep base_zoom_val (1.05 or 1.1) to ensure edge coverage
+                else:
+                    # Normal logic for images
+                    c_zoom = "1.0" if enable_zoom else "0.0"
+                    c_sway = "1.0" if enable_sway else "0.0"
+
+                # Update the shader file with specific params for this clip
+                # (We already generated the file above with potentially generic params, 
+                #  but we passed params via Format String. Wait, the shader code WAS generated above at line 403.
+                #  We need to Regenerate or Move the generation down.
+                #  Actually, let's just move the Shader Generation code DOWN here, or update variables before generating.)
+                
+                # BUG PREVIOUSLY: Shader was generated BEFORE checking is_vid for params override.
+                # RE-GENERATING SHADER CODE WITH CORRECT PARAMS
+
+                shader_code = f"""//!HOOK MAIN
+//!BIND HOOKED
+//!DESC AI_Montage_Clip_{i}
+
+vec4 hook() {{
+    vec2 pos = HOOKED_pos;
+    float FPS = {fmt(fps)};
+    float DURATION = {fmt(dur_val)};
+    
+    // Use raw frame count. 
+    float time = float(frame) / FPS;
+    
+    // Zoom
+    float zoom_val = {fmt(base_zoom_val)};
+    if ({c_zoom} > 0.5) {{
+        float cycle = (time / DURATION) * {fmt(z_spd_val)};
+        zoom_val = {fmt(base_zoom_val)} + {fmt(z_amp_val)} * (1.0 - cos(6.28318 * cycle)) / 2.0;
+    }}
+    
+    // Sway
+    vec2 offset = vec2(0.0);
+    if ({c_sway} > 0.5) {{
+        float sa = {fmt(s_spd_val)};
+        float ax = {fmt(amp_x)}; 
+        float ay = {fmt(amp_y)};
+        offset.x = sin(time * 2.0 * sa) * ax + cos(time * 1.3 * sa) * (ax * 0.5);
+        offset.y = cos(time * 1.7 * sa) * ay + sin(time * 0.9 * sa) * (ay * 0.5);
+    }}
+    
+    vec2 center = vec2(0.5);
+    pos = (pos - center) / zoom_val + center;
+    pos = pos - offset;
+    return HOOKED_tex(pos);
+}}
+"""
+                with open(shader_abs_path, 'w', encoding='utf-8') as sf:
+                    sf.write(shader_code)
+
+
+                input_args = ["-i", f]
+                pre_filters = [] # Filters before the shader
+                
+                if not is_vid:
+                    input_args = ["-loop", "1"] + input_args
+                
+                # Filter chain construction
+                # fade=t=in:st=0:d=0.5,fade=t=out:st={dur-0.5}:d=0.5
+                fade_in = "fade=t=in:st=0:d=0.5"
+                # Need to calculate fade out start
+                fade_out_st = this_dur - 0.5
+                if fade_out_st < 0: fade_out_st = 0
+                fade_out = f"fade=t=out:st={fmt(fade_out_st)}:d=0.5"
+                
+                # Combine filters
+                # [Input] -> [PreFilters (tpad)] -> [Format] -> [Libplacebo] -> [Fades] -> [Out]
+                
+                vf_chain = ["format=yuv420p"]
+                if pre_filters:
+                    vf_chain.extend(pre_filters)
+                
+                vf_chain.append(f"libplacebo=w={base_w}:h={base_h}:custom_shader_path='{shader_abs_path.replace(os.sep, '/').replace(':', '\\:')}'")
+                vf_chain.append(fade_in)
+                vf_chain.append(fade_out)
+                
+                vf = ",".join(vf_chain)
+                
+                clip_cmd = [ffmpeg_path, "-y", "-hide_banner", "-loglevel", "error"] + input_args + [
+                    "-t", fmt(this_dur),
+                    "-vf", vf,
+                    "-c:v", "h264_amf", "-usage", "transcoding", "-rc", "cqp", "-qp_p", "23", "-qp_i", "23", "-quality", "speed",
+                    "-r", str(fps), "-pix_fmt", "yuv420p",
+                    clip_out
+                ]
+                
+                # Optimization: Skip rendering if clip exists and has size
+                if os.path.exists(clip_out) and os.path.getsize(clip_out) > 0:
+                    logger.log(f"{prefix}[Montage] Clip {i} exists in cache, skipping render.", level=LogLevel.INFO)
+                    rendered_clips.append(clip_out)
+                    if progress_callback:
+                        progress = int((i / len(visual_files)) * 80)
+                        progress_callback(f"Skipping Clip {i+1}/{len(visual_files)} (Cached)...", progress)
+                    continue
+
+                # Run clip render
+                try:
+                    subprocess.run(clip_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, startupinfo=startupinfo)
+                    rendered_clips.append(clip_out)
+                    if progress_callback:
+                         # 0-80% for clip rendering
+                         progress = int((i / len(visual_files)) * 80)
+                         progress_callback(f"Rendering Clip {i+1}/{len(visual_files)}...", progress)
+                except subprocess.CalledProcessError as e:
+                    logger.log(f"{prefix}[Error] Failed to render clip {i}: {e.stderr}", level=LogLevel.ERROR)
+                    # Use fallback? Or just fail? Let's fail for now as user wants shaders.
+                    raise e
+
+            # 2. Concat
+            concat_list = os.path.join(gpu_temp_dir, "concat.txt")
+            with open(concat_list, 'w', encoding='utf-8') as cf:
+                for c in rendered_clips:
+                    cf.write(f"file '{c.replace(os.sep, '/')}'\n")
+            
+            temp_joined = os.path.join(gpu_temp_dir, "joined.mp4")
+            concat_cmd = [ffmpeg_path, "-y", "-f", "concat", "-safe", "0", "-i", concat_list, "-c", "copy", temp_joined]
+            subprocess.run(concat_cmd, check=True, startupinfo=startupinfo)
+            
+            # 3. Final Assembly (Audio + Subs + Overlay)
+            
+            # Copy subs to temp folder to avoid path problems (Cyrillic etc)
+            temp_ass_path = None
+            if ass_path and os.path.exists(ass_path):
+                temp_ass_path = os.path.join(gpu_temp_dir, "temp_subs.ass")
+                try:
+                    shutil.copy2(ass_path, temp_ass_path)
+                    logger.log(f"{prefix}[Montage] Copied subtitles to temp (safe path): {temp_ass_path}", level=LogLevel.INFO)
+                except Exception as e:
+                    logger.log(f"{prefix}[Error] Failed to copy subs: {e}", level=LogLevel.ERROR)
+                    temp_ass_path = ass_path # Fallback
+
+            # Construct final command based on temp_joined
+            # Use safer queue size (512) for inputs to prevent memory issues
+            final_inp_args = ["-thread_queue_size", "512", "-i", temp_joined]
+            
+            # Audio with improved settings
+            # Force stereo/44100 to avoid "Reconfiguring filter graph" spam which eats resources
+            final_inp_args.extend(["-thread_queue_size", "512", "-i", audio_path])
+            
+            # Filters (Subs + Overlay)
+            final_filters = []
+            
+            # --- OVERLAY TRIGGERS LOGIC ---
+            # Retrieve triggers from settings
+            triggers = settings.get('overlay_triggers', [])
+            if isinstance(triggers, str):
+                try:
+                    import json
+                    triggers = json.loads(triggers)
+                except:
+                    triggers = []
+
+            # Current video stream label to chain filters
+            # Initially it is [0:v] (the joined video)
+            # But we are building a filtergraph string, so we will use implicit input [0:v] for first filter
+            # or explicit if needed. Let's use chaining naming.
+            current_v_label = "[0:v]" 
+            
+            overlay_index = 2 # 0 is video, 1 is audio. Next inputs start from 2.
+            
+            if triggers and isinstance(triggers, list):
+                for trig in triggers:
+                    if not isinstance(trig, dict): continue
+                    
+                    phrase = trig.get('value', '')
+                    path = trig.get('path', '')
+                    if not phrase or not path or not os.path.exists(path):
+                        continue
+                        
+                    # Find timing
+                    timing = self._get_text_timing(ass_path, phrase, prefix=prefix)
+                    if not timing:
+                        continue
+                        
+                    start_t = timing[0]
+                    
+                    # USER REQUEST: Overlay duration must depend on the FILE duration, not the phrase duration!
+                    # Calculate duration of the trigger file
+                    trigger_duration = 5.0 # Default for images
+                    try:
+                        f_dur = self._get_duration(path)
+                        if f_dur and f_dur > 0:
+                            trigger_duration = f_dur
+                    except:
+                        pass
+                        
+                    end_t = start_t + trigger_duration
+                    logger.log(f"{prefix}[Montage] Trigger '{phrase}' starts at {start_t}s, file duration {trigger_duration}s -> ends at {end_t}s", level=LogLevel.INFO)
+                    
+                    # Add input with LOOPING to ensure it exists at the trigger time
+                    trig_ext = os.path.splitext(path)[1].lower()
+                    if trig_ext in IMAGE_EXTS:
+                        final_inp_args.extend(["-thread_queue_size", "512", "-loop", "1", "-i", path])
+                    else:
+                        # Video/GIF - loop it so it's playing when enabled
+                        # Note: If we just loop, it plays continuously. 'enable' visibility handles the show/hide.
+                        # Ideally for video we'd want it to restart at start_t, but overlay filter doesn't support seeking the overlay input easily without complex setpts.
+                        # Looping ensures frames exist.
+                        final_inp_args.extend(["-thread_queue_size", "512", "-stream_loop", "-1", "-i", path])
+                    
+                    # Prepare overlay filter
+                    # Position logic (default center) with optional offsets
+                    off_x = int(trig.get('x', 0))
+                    off_y = int(trig.get('y', 0))
+                    
+                    # (main_w-overlay_w)/2 + offset
+                    # Ensure we handle negative/positive offsets correctly in the string
+                    # FFmpeg expressions: X and Y
+                    pos_x = f"(main_w-overlay_w)/2+{off_x}"
+                    pos_y = f"(main_h-overlay_h)/2+{off_y}"
+                    
+                    # Define unique label for this step
+                    next_v_label = f"[v_ov{overlay_index}]"
+                    
+                    # Filter string: [prev][new_input] overlay=... [next]
+                    # REMOVED shortest=1 because it kills the main video if trigger is short!
+                    ov_cmd = f"{current_v_label}[{overlay_index}:v]overlay=x={pos_x}:y={pos_y}:enable='between(t,{start_t},{end_t})'{next_v_label}"
+                    
+                    final_filters.append(ov_cmd)
+                    
+                    # Update current label for next filter
+                    current_v_label = next_v_label
+                    overlay_index += 1
+
+            # If we added overlays, the last label is the input for subtitles.
+            # If not, current_v_label is [0:v]. 
+            # FFmpeg filtergraph: if first filter starts with [0:v], it consumes it.
+            # If no filters, we map 0:v direct.
+            
+            # --- END OVERLAY TRIGGERS ---
+            
+            # Force audio format stabilization
+            # aformat=channel_layouts=stereo:sample_rates=44100
+            final_audio_filter = "aformat=channel_layouts=stereo:sample_rates=44100"
+            
+            # Subs
+            if temp_ass_path:
+                 # Ensure forward slashes and escaped colon even for temp path
+                 # For filter_complex, we need consistent escaping.
+                 # If we used overlay, we must use current_v_label as input
+                 
+                 # Escape path for subtitles filter:
+                 # Windows: D\:/path -> D\\:/path
+                 # And for filter string: 'filename'
+                 
+                 # Simple slash replacement
+                 ass_path_fwd = temp_ass_path.replace("\\", "/")
+                 # Escape colon in drive letter
+                 ass_path_esc = ass_path_fwd.replace(":", "\\:")
+                 
+                 # Subtitles filter
+                 # subtitles='path'
+                 subs_filter = f"subtitles='{ass_path_esc}'"
+                 
+                 if current_v_label != "[0:v]":
+                     # We have a chain from overlays
+                     # [last_ov]subtitles=...[v_out]
+                     final_filters.append(f"{current_v_label}{subs_filter}[v_final]")
+                     current_v_label = "[v_final]"
+                 else:
+                     # No overlays, direct subs on input
+                     # subtitles=...
+                     # We MUST use explicit naming to map it correctly
+                     # [0:v]subtitles=...[v_final]
+                     final_filters.append(f"[0:v]{subs_filter}[v_final]")
+                     current_v_label = "[v_final]"
+            else:
+                # No subs. If we had overlays, current_v_label is [v_ovN] or similar.
+                pass
+
+            # (Removed redundant re-definition of inputs)
+
+            final_cmd = [ffmpeg_path, "-y", "-hide_banner"] + final_inp_args
+
+            # Join filters
+            if final_filters:
+                # If we have a chain, join with semicolon
+                vf_string = ";".join(final_filters)
+                final_cmd.extend(["-filter_complex", vf_string])
+                
+                # If we used valid labels, we need to map the RESULT.
+                if current_v_label != "[0:v]" and current_v_label != "":
+                     # Map the final label WITH BRACKETS to avoid parsing errors
+                     final_cmd.extend(["-map", current_v_label])
+                else:
+                     pass 
+            else:
+                 # No filters at all
+                 final_cmd.extend(["-map", "0:v"])
+
+            # Map audio (always 1:a)
+            final_cmd.extend(["-map", "1:a"])
+            
+            # Encoding props for final output
+            # User wants FULL GPU PIPELINE. Reverting to h264_amf but with SAFER buffer settings.
+            
+            # Allow user to override bitrate and quality via settings
+            bitrate_val = settings.get('bitrate_mbps', 5)
+            bitrate = f"{bitrate_val}M"
+            
+            # For AMF, buffer size should be ~2x bitrate for safety
+            buf_size = f"{bitrate_val * 2}M"
+
+            # UI key is 'video_quality' (choice: speed, balanced, quality)
+            quality = settings.get('video_quality', 'speed') 
+            
+            logger.log(f"{prefix}[Montage] Final Encode: {bitrate} (buf: {buf_size}), Quality: {quality}", level=LogLevel.INFO)
+
+            # Add -stats to show progress line (frame=... speed=...)
+            new_args = ["-stats", "-max_interleave_delta", "0"]
+            
+            # Use COPY for audio to reduce CPU/buffer usage
+            audio_codec = ["-c:a", "copy"] 
+
+            # --- DYNAMIC CODEC SELECTION ---
+            codec_choice = settings.get('codec', 'h264_amf')
+            preset_choice = settings.get('preset', 'medium')
+            
+            video_args = []
+            
+            if codec_choice == 'h264_amf':
+                # AMD AMF
+                amf_quality = settings.get('video_quality', 'speed')
+                video_args = [
+                    "-c:v", "h264_amf",
+                    "-usage", "transcoding",
+                    "-b:v", bitrate, "-maxrate", bitrate, "-bufsize", buf_size,
+                    "-quality", amf_quality,
+                    "-pix_fmt", "yuv420p",
+                ]
+                
+            elif codec_choice == 'h264_nvenc':
+                # NVIDIA NVENC
+                # Map standard presets to NVENC p-presets
+                nvenc_preset_map = {
+                    'ultrafast': 'p1', 'superfast': 'p1', 'veryfast': 'p2',
+                    'faster': 'p3', 'fast': 'p3', 'medium': 'p4',
+                    'slow': 'p5', 'slower': 'p6', 'veryslow': 'p7'
+                }
+                nv_preset = nvenc_preset_map.get(preset_choice, 'p4')
+                video_args = [
+                    "-c:v", "h264_nvenc",
+                    "-preset", nv_preset,
+                    "-b:v", bitrate, "-maxrate", bitrate, "-bufsize", buf_size,
+                    "-pix_fmt", "yuv420p",
+                ]
+                
+            elif codec_choice == 'libx264':
+                # CPU H.264
+                video_args = [
+                    "-c:v", "libx264",
+                    "-preset", preset_choice,
+                    "-b:v", bitrate, "-maxrate", bitrate, "-bufsize", buf_size,
+                    "-pix_fmt", "yuv420p",
+                ]
+                
+            elif codec_choice == 'libx265':
+                # CPU H.265
+                video_args = [
+                    "-c:v", "libx265",
+                    "-preset", preset_choice,
+                    "-b:v", bitrate, "-maxrate", bitrate, "-bufsize", buf_size,
+                    "-pix_fmt", "yuv420p",
+                    "-tag:v", "hvc1"
+                ]
+                
+            elif codec_choice == 'h264_videotoolbox':
+                # Mac Hardware
+                video_args = [
+                    "-c:v", "h264_videotoolbox",
+                    "-b:v", bitrate, 
+                    "-pix_fmt", "yuv420p",
+                ]
+                
+            else:
+                # Fallback
+                logger.log(f"{prefix}[Montage] Unknown codec '{codec_choice}', using libx264 fallback.", level=LogLevel.WARNING)
+                video_args = [
+                    "-c:v", "libx264",
+                    "-preset", "superfast",
+                    "-b:v", bitrate, "-maxrate", bitrate, "-bufsize", buf_size,
+                    "-pix_fmt", "yuv420p",
+                ]
+
+            final_cmd.extend(new_args)
+            final_cmd.extend(video_args)
+            final_cmd.extend(audio_codec)
+            final_cmd.extend([
+                "-max_muxing_queue_size", "2048",
+                "-shortest",
+                output_path
+            ])
+            
+            logger.log(f"{prefix}[Montage] Assembling final video on GPU...", level=LogLevel.INFO)
+            
+            # NO CPU FALLBACK - RAW EXECUTION AS REQUESTED
+            subprocess.run(final_cmd, check=True, startupinfo=startupinfo)
+            
+            if progress_callback: progress_callback("Done!", 100)
+            
+            logger.log(f"{prefix}[Montage] GPU Pipeline Complete: {output_path}", level=LogLevel.INFO)
+            
+            # Cleanup temporary clips and shaders AFTER successful render
+            try:
+                if os.path.exists(gpu_temp_dir):
+                    shutil.rmtree(gpu_temp_dir, ignore_errors=True)
+                    logger.log(f"{prefix}[Montage] Cleaned up temp clips: {gpu_temp_dir}", level=LogLevel.DEBUG)
+            except Exception as e:
+                 logger.log(f"{prefix}[Montage] Cleanup warning: {e}", level=LogLevel.WARNING)
+
+            return output_path
+
+        # --- END GPU PIPELINE ---
+        
+        # --- OLD CPU/FILTER GRAPH PIPELINE (Fallback) ---
         for i, f in enumerate(visual_files):
+            # Initialize loop variables
+            abs_path = os.path.abspath(f)
             ext = os.path.splitext(f)[1].lower()
             is_video = ext in VIDEO_EXTS
             this_dur = final_clip_durations[i]
             this_dur_str = fmt(this_dur)
-            
-            abs_path = os.path.abspath(f).replace("\\", "/")
+
             if not os.path.exists(abs_path):
                  logger.log(f"{prefix}[Error] Input file not found: {abs_path}", level=LogLevel.ERROR)
                  raise Exception(f"Input file missing: {abs_path}")
@@ -359,47 +858,176 @@ class MontageEngine:
                 filter_parts.append(vf)
             else:
                 v_up = f"v{i}_up"
-                scale_cmd = (
-                    f"{v_in}scale={up_w}:{up_h}:force_original_aspect_ratio=increase,"
-                    f"crop={up_w}:{up_h},"
-                    f"format=yuv420p,setsar=1[{v_up}]"
-                )
-                filter_parts.append(scale_cmd)
+                # For GPU shaders, we want a stream, so we'll handle scaling/looping differently below if enabled
+                if not use_gpu_shaders:
+                    # ORIGINAL CPU (Zoompan) PATH
+                    scale_cmd = (
+                        f"{v_in}scale={up_w}:{up_h}:force_original_aspect_ratio=increase,"
+                        f"crop={up_w}:{up_h},"
+                        f"format=yuv420p,setsar=1[{v_up}]"
+                    )
+                    filter_parts.append(scale_cmd)
 
-                # --- МАТЕМАТИКА ЕФЕКТІВ ---
-                base_zoom = 1.1 if enable_sway else 1.0
-                
-                if enable_zoom:
-                    z_amp = z_int 
-                    cycle = f"((on/{fps})/{this_dur_str}) * {fmt(z_spd)}"
-                    z_expr = f"{fmt(base_zoom)}+{fmt(z_amp)}*(1-cos(6.283*{cycle}))/2"
-                else:
-                    z_expr = fmt(base_zoom)
-
-                if enable_sway:
-                    base_amp_x = 50 * up_factor
-                    base_amp_y = 25 * up_factor
+                    # --- МАТЕМАТИКА ЕФЕКТІВ (CPU) ---
+                    base_zoom = 1.1 if enable_sway else 1.0
                     
-                    freq_x1 = fmt(0.02 * s_spd)
-                    freq_x2 = fmt(0.05 * s_spd)
-                    freq_y1 = fmt(0.025 * s_spd)
-                    freq_y2 = fmt(0.06 * s_spd)
+                    if enable_zoom:
+                        z_amp = z_int 
+                        cycle = f"((on/{fps})/{this_dur_str}) * {fmt(z_spd)}"
+                        z_expr = f"{fmt(base_zoom)}+{fmt(z_amp)}*(1-cos(6.283*{cycle}))/2"
+                    else:
+                        z_expr = fmt(base_zoom)
 
-                    val_x = f"sin(on*{freq_x1})*{base_amp_x} + cos(on*{freq_x2})*{base_amp_x/2}"
-                    val_y = f"cos(on*{freq_y1})*{base_amp_y} + sin(on*{freq_y2})*{base_amp_y/2}"
-                    x_expr = f"iw/2-(iw/zoom/2)+{val_x}"
-                    y_expr = f"ih/2-(ih/zoom/2)+{val_y}"
+                    if enable_sway:
+                        base_amp_x = 50 * up_factor
+                        base_amp_y = 25 * up_factor
+                        
+                        freq_x1 = fmt(0.02 * s_spd)
+                        freq_x2 = fmt(0.05 * s_spd)
+                        freq_y1 = fmt(0.025 * s_spd)
+                        freq_y2 = fmt(0.06 * s_spd)
+
+                        val_x = f"sin(on*{freq_x1})*{base_amp_x} + cos(on*{freq_x2})*{base_amp_x/2}"
+                        val_y = f"cos(on*{freq_y1})*{base_amp_y} + sin(on*{freq_y2})*{base_amp_y/2}"
+                        x_expr = f"iw/2-(iw/zoom/2)+{val_x}"
+                        y_expr = f"ih/2-(ih/zoom/2)+{val_y}"
+                    else:
+                        x_expr = "iw/2-(iw/zoom/2)"
+                        y_expr = "ih/2-(ih/zoom/2)"
+
+                    d_frames = int(this_dur * fps) + 5
+                    zoom_cmd = (
+                        f"[{v_up}]zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':"
+                        f"d={d_frames}:s={base_w}x{base_h}:fps={fps},"
+                        f"setpts=PTS-STARTPTS[{v_out}]"
+                    )
+                    filter_parts.append(zoom_cmd)
+                
                 else:
-                    x_expr = "iw/2-(iw/zoom/2)"
-                    y_expr = "ih/2-(ih/zoom/2)"
+                    # NEW GPU (GLSL) PATH
+                    # 1. Scale input to upscaled resolution
+                    v_scaled = f"v{i}_scaled"
+                    scale_cmd = (
+                        f"{v_in}scale={up_w}:{up_h}:force_original_aspect_ratio=increase,"
+                        f"crop={up_w}:{up_h},"
+                        f"format=yuv420p,setsar=1[{v_scaled}]"
+                    )
+                    filter_parts.append(scale_cmd)
+                    
+                    # 2. Loop and Trim to create a video stream of correct duration
+                    v_looped = f"v{i}_looped"
+                    # loop=-1 makes it infinite, trim cuts it to duration. 
+                    # setpts=PTS-STARTPTS makes timestamps start at 0 for the shader 'time' variable.
+                    loop_trim_cmd = (
+                        f"[{v_scaled}]loop=loop=-1:size=1:start=0,"
+                        f"trim=duration={this_dur_str},"
+                        f"setpts=PTS-STARTPTS[{v_looped}]"
+                    )
+                    filter_parts.append(loop_trim_cmd)
+                    
+                    # 3. Apply GLSL Shader
+                    try:
+                        # Direct shader generation (matching user's working example perfectly)
+                        
+                        # Prepare values
+                        base_zoom_val = 1.1 if enable_sway else 1.0
+                        z_amp_val = z_int if enable_zoom else 0.0
+                        z_spd_val = z_spd if enable_zoom else 0.0
+                        dur_val = this_dur if this_dur > 0 else 0.1
+                        s_spd_val = s_spd if enable_sway else 0.0
+                        
+                        # Sway amplitudes
+                        amp_x = 0.026 * (up_factor / 2.0)
+                        if amp_x < 0.02: amp_x = 0.02
+                        amp_y = amp_x * 0.5
+                        
+                        # Conditions for shader
+                        c_zoom = "1.0" if enable_zoom else "0.0"
+                        c_sway = "1.0" if enable_sway else "0.0"
 
-                d_frames = int(this_dur * fps) + 5
-                zoom_cmd = (
-                    f"[{v_up}]zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':"
-                    f"d={d_frames}:s={base_w}x{base_h}:fps={fps},"
-                    f"setpts=PTS-STARTPTS[{v_out}]"
-                )
-                filter_parts.append(zoom_cmd)
+                        # EXACT SHADER FROM USER EXAMPLE (with dynamic values inserted)
+                        shader_code = f"""//!HOOK MAIN
+//!BIND HOOKED
+//!DESC AI_Montage_Clip_{i}
+
+vec4 hook() {{
+    vec2 pos = HOOKED_pos;
+    
+    float FPS = {fmt(fps)};
+    float DURATION = {fmt(dur_val)};
+    
+    float time = float(frame) / FPS;
+    
+    // Zoom
+    float zoom_val = {fmt(base_zoom_val)};
+    if ({c_zoom} > 0.5) {{
+        float cycle = (time / DURATION) * {fmt(z_spd_val)};
+        zoom_val = {fmt(base_zoom_val)} + {fmt(z_amp_val)} * (1.0 - cos(6.28318 * cycle)) / 2.0;
+    }}
+    
+    // Sway
+    vec2 offset = vec2(0.0);
+    if ({c_sway} > 0.5) {{
+        float sa = {fmt(s_spd_val)};
+        float ax = {fmt(amp_x)}; 
+        float ay = {fmt(amp_y)};
+        offset.x = sin(time * 2.0 * sa) * ax + cos(time * 1.3 * sa) * (ax * 0.5);
+        offset.y = cos(time * 1.7 * sa) * ay + sin(time * 0.9 * sa) * (ay * 0.5);
+    }}
+    
+    // Transform
+    vec2 center = vec2(0.5);
+    pos = (pos - center) / zoom_val + center;
+    pos = pos - offset;
+    
+    return HOOKED_tex(pos);
+}}
+"""
+                        # Save temp shader file LOCAL (to be safer with windows paths)
+                        # We use a folder 'temp_shaders' inside the current working directory or execution dir
+                        shader_dir = os.path.join(os.getcwd(), 'temp_shaders')
+                        if not os.path.exists(shader_dir):
+                            os.makedirs(shader_dir, exist_ok=True)
+
+                        shader_filename = f"shader_{task_id}_{i}.frag"
+                        shader_abs_path = os.path.join(shader_dir, shader_filename)
+                        
+                        with open(shader_abs_path, 'w', encoding='utf-8') as f:
+                            f.write(shader_code)
+                            
+                        # Apply GPU filter (libplacebo)
+                        v_shaded = f"v{i}_shaded"
+                        
+                        # Use ABSOLUTE PATH with specific escaping for Windows FFmpeg filters
+                        # Colon is a separator in filters, so C:\path becomes C\:/path
+                        # Backslashes are escape chars, so we use forward slashes.
+                        # Single quotes around the path handle spaces properly.
+                        
+                        # 1. Absolute path
+                        shader_arg = os.path.abspath(shader_abs_path)
+                        # 2. Normalize slashes
+                        shader_arg = shader_arg.replace('\\', '/')
+                        # 3. Escape the drive colon (e.g. C: -> C\:)
+                        # CRITICAL: Colon is a filter option separator, even in quotes sometimes on Windows ffmpeg builds
+                        shader_arg = shader_arg.replace(':', '\\:')
+                        
+                        # We enclose in single quotes just in case
+                        glsl_cmd = f"[{v_looped}]libplacebo=w={base_w}:h={base_h}:custom_shader_path='{shader_arg}'[{v_shaded}]"
+                        filter_parts.append(glsl_cmd)
+                        
+                        # 4. Final format conversion back to YUV
+                        # Convert to yuv420p and set PTS again to be safe
+                        conv_cmd = f"[{v_shaded}]format=yuv420p,setpts=PTS-STARTPTS[{v_out}]"
+                        filter_parts.append(conv_cmd)
+                        
+                    except Exception as e:
+                        logger.log(f"{prefix}[Error] Failed to apply GPU shader: {e}. Falling back to standard scaling.", level=LogLevel.ERROR)
+                        # Fallback: Just scale to base resolution (no zoom/sway)
+                        fallback_cmd = (
+                            f"[{v_looped}]scale={base_w}:{base_h},"
+                            f"format=yuv420p,setpts=PTS-STARTPTS[{v_out}]"
+                        )
+                        filter_parts.append(fallback_cmd)
 
         # 4. TRANSITIONS
         if enable_trans and num_files > 1:
@@ -575,6 +1203,8 @@ class MontageEngine:
         # Audio is next input
         audio_input_index = current_input_count
 
+        full_graph = ";".join(filter_parts)
+
 
         full_graph = ";".join(filter_parts)
         
@@ -739,7 +1369,8 @@ class MontageEngine:
                 filter_file.write(full_graph)
                 filter_script_path = filter_file.name
 
-            cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-stats"]
+            # Add buffer settings to prevent overflow
+            cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-stats", "-max_interleave_delta", "0"]
             cmd.extend(inputs)
             
             # Для libx264 НЕ додаємо -c:v тут, бо додамо його пізніше разом з професійними параметрами
@@ -1094,8 +1725,33 @@ class MontageEngine:
                     found_segment = parsed_segments[seg_idx]
                     
                     found_time = found_segment['start']
-                    logger.log(f"{prefix}[FFmpeg] Trigger found at char {start_index} -> Segment {seg_idx} -> Time {found_time}s", level=LogLevel.INFO)
-                    return found_time
+                    
+                    # Calculate reasonable end time
+                    # We can try to finding where the phrase ends in the buffer
+                    end_char_index = start_index + len(cleaned_phrase)
+                    if end_char_index < len(char_to_segment_map):
+                         end_seg_idx = char_to_segment_map[end_char_index]
+                         if end_seg_idx < len(parsed_segments):
+                             # Use the start time of the NEXT segment as the end of this current phrase block?
+                             # Or just add some duration. 
+                             # Let's try to find the start time of the segment corresponding to the END of the phrase.
+                             # But segments only have start times.
+                             
+                             # Let's estimate:
+                             # If phrase spans multiple segments, end time is start of segment AFTER the last one spanned.
+                             
+                             if end_seg_idx + 1 < len(parsed_segments):
+                                 end_time = parsed_segments[end_seg_idx + 1]['start']
+                             else:
+                                 # Last segment. Add 5s?
+                                 end_time = found_time + 5.0
+                         else:
+                             end_time = found_time + 5.0
+                    else:
+                         end_time = found_time + 5.0
+
+                    logger.log(f"{prefix}[FFmpeg] Trigger found at char {start_index} -> Segment {seg_idx} -> Time {found_time}s - {end_time}s", level=LogLevel.INFO)
+                    return (found_time, end_time)
             
             logger.log(f"{prefix}[FFmpeg] Phrase not found in subtitles.", level=LogLevel.WARNING)
             return None

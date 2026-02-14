@@ -67,6 +67,18 @@ class VideoMixin:
             
         # --- Skip check: If all target files are already videos, we don't need the worker ---
         VIDEO_EXTS = ['.mp4', '.mkv', '.mov', '.avi', '.webm']
+        
+        # Check for partial existence if stage was skipped (User pressed "Skip" on resume)
+        if 'stage_images' in state.skipped_stages:
+            existing_videos = [p for p in paths_to_animate if os.path.splitext(p)[1].lower() in VIDEO_EXTS]
+            if len(existing_videos) > 0 and len(existing_videos) < len(paths_to_animate):
+                logger.log(f"[{task_id}] Stage skipped by user and partial videos found ({len(existing_videos)}/{len(paths_to_animate)}). Skipping remaining animation.", level=LogLevel.INFO)
+                state.video_animation_count = len(existing_videos) # Tracking what we HAVE, not what we wanted
+                state.videos_total_count = len(paths_to_animate) # Total intended
+                # We return the paths AS IS (mixed)
+                self._on_video_generation_finished(task_id, {'paths': paths_to_animate})
+                return
+
         if all(os.path.splitext(p)[1].lower() in VIDEO_EXTS for p in paths_to_animate):
             logger.log(f"[{task_id}] All requested animations already exist as videos. Skipping worker.", level=LogLevel.INFO)
             state.video_animation_count = len(paths_to_animate)

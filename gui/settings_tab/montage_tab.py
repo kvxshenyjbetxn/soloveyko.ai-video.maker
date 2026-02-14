@@ -103,6 +103,40 @@ class MontageTab(QWidget):
         self.bitrate_spin.setSuffix(" Mbps")
         self.bitrate_spin.valueChanged.connect(self.save_settings)
         add_setting_row(render_layout, bitrate_label_container, self.bitrate_spin, "montage.bitrate_mbps", refresh_quick_panel, show_star=show_stars)
+        
+        # --- NEW GPU SHADERS & QUALITY ---
+        
+        self.use_gpu_help = HelpLabel("use_gpu_shaders_label")
+        self.use_gpu_cb = QCheckBox()
+        self.use_gpu_label = QLabel()
+        use_gpu_container = QWidget()
+        use_gpu_layout = QHBoxLayout(use_gpu_container)
+        use_gpu_layout.setContentsMargins(0,0,0,0)
+        use_gpu_layout.setSpacing(5)
+        use_gpu_layout.addWidget(self.use_gpu_help)
+        use_gpu_layout.addWidget(self.use_gpu_label)
+        use_gpu_layout.addWidget(self.use_gpu_cb)
+        use_gpu_layout.addStretch()
+        
+        self.use_gpu_cb.toggled.connect(self.save_settings)
+        add_setting_row(render_layout, None, use_gpu_container, "montage.use_gpu_shaders", refresh_quick_panel, show_star=show_stars)
+
+
+        self.quality_help = HelpLabel("video_quality_label")
+        self.quality_label = QLabel()
+        quality_label_container = QWidget()
+        quality_label_layout = QHBoxLayout(quality_label_container)
+        quality_label_layout.setContentsMargins(0,0,0,0)
+        quality_label_layout.setSpacing(5)
+        quality_label_layout.addWidget(self.quality_help)
+        quality_label_layout.addWidget(self.quality_label)
+
+        self.quality_combo = QComboBox()
+        self.quality_combo.addItems(["speed", "balanced", "quality"])
+        self.quality_combo.currentTextChanged.connect(self.save_settings)
+        add_setting_row(render_layout, quality_label_container, self.quality_combo, "montage.video_quality", refresh_quick_panel, show_star=show_stars)
+
+        # ---------------------------------
 
 
         self.upscale_help = HelpLabel("upscale_factor_label")
@@ -385,6 +419,10 @@ class MontageTab(QWidget):
 
         self.preset_combo.setCurrentText(m_settings.get("preset", "medium"))
         self.bitrate_spin.setValue(m_settings.get("bitrate_mbps", 15))
+        
+        self.use_gpu_cb.setChecked(m_settings.get("use_gpu_shaders", True))
+        self.quality_combo.setCurrentText(m_settings.get("video_quality", "speed"))
+
         self.upscale_spin.setValue(m_settings.get("upscale_factor", 3.0))
 
         self.enable_trans_cb.setChecked(m_settings.get("enable_transitions", True))
@@ -430,6 +468,8 @@ class MontageTab(QWidget):
             "codec": self.codec_combo.currentData(),
             "preset": self.preset_combo.currentText(),
             "bitrate_mbps": self.bitrate_spin.value(),
+            "video_quality": self.quality_combo.currentText(),
+            "use_gpu_shaders": self.use_gpu_cb.isChecked(),
             "upscale_factor": self.upscale_spin.value(),
             "enable_transitions": self.enable_trans_cb.isChecked(),
             "transition_effect": self.trans_effect_combo.currentData(),
@@ -453,6 +493,8 @@ class MontageTab(QWidget):
         self.codec_label.setText(translator.translate("codec_label"))
         self.preset_label.setText(translator.translate("preset_label"))
         self.bitrate_label.setText(translator.translate("bitrate_label"))
+        self.use_gpu_label.setText(translator.translate("use_gpu_shaders_label"))
+        self.quality_label.setText(translator.translate("video_quality_label"))
         self.upscale_label.setText(translator.translate("upscale_factor_label"))
 
         self.trans_group.setTitle(translator.translate("transitions_settings"))
@@ -494,6 +536,8 @@ class MontageTab(QWidget):
         self.codec_help.update_tooltip()
         self.preset_help.update_tooltip()
         self.bitrate_help.update_tooltip()
+        self.use_gpu_help.update_tooltip()
+        self.quality_help.update_tooltip()
         self.upscale_help.update_tooltip()
         self.enable_trans_help.update_tooltip()
         self.trans_dur_help.update_tooltip()

@@ -478,6 +478,11 @@ class TaskProcessor(QObject, DownloadMixin, TranslationMixin, SubtitleMixin, Ima
                          if os.path.exists(p):
                              file_path = p
                              break
+                elif stage_key == 'stage_images':
+                    # Check for images directory
+                    p = os.path.join(state.dir_path, "images")
+                    if os.path.exists(p) and os.path.isdir(p):
+                        file_path = p
             
             should_skip = True
             result = None

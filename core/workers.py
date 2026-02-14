@@ -684,6 +684,29 @@ class ImageGenerationWorker(BaseWorker):
         if provider == 'pollinations':
             # Sequential processing for Pollinations to avoid rate limits and 429 errors
             for i, prompt in enumerate(prompts):
+                # Check for existing file (Video or Image)
+                base_filename = f"{i + 1}"
+                found_path = None
+                
+                # Check videos first (in case it was already animated and image deleted)
+                for vext in ['.mp4', '.mkv', '.mov', '.avi', '.webm']:
+                    vpath = os.path.join(images_dir, f"{base_filename}{vext}")
+                    if os.path.exists(vpath) and os.path.getsize(vpath) > 0:
+                        found_path = vpath
+                        break
+                
+                # Check image
+                if not found_path:
+                    ipath = os.path.join(images_dir, f"{base_filename}.{file_extension}")
+                    if os.path.exists(ipath) and os.path.getsize(ipath) > 0:
+                        found_path = ipath
+
+                if found_path:
+                    logger.log(f"[{self.task_id}] [{service_name}] Segment {i+1} found existing file: {os.path.basename(found_path)}", level=LogLevel.INFO)
+                    generated_paths[i] = found_path
+                    self.signals.status_changed.emit(self.task_id, found_path, prompt, found_path)
+                    continue
+
                 result = generate_single_image(i, prompt)
                 if result:
                     index_from_result, image_data, prompt_from_result = result
@@ -746,6 +769,30 @@ class ImageGenerationWorker(BaseWorker):
                 if len(futures) < max_workers and not prompts_exhausted:
                     try:
                         i, prompt = next(prompts_iterator)
+                        
+                        # Check for existing file (Video or Image)
+                        base_filename = f"{i + 1}"
+                        found_path = None
+                        
+                        # Check videos first
+                        for vext in ['.mp4', '.mkv', '.mov', '.avi', '.webm']:
+                            vpath = os.path.join(images_dir, f"{base_filename}{vext}")
+                            if os.path.exists(vpath) and os.path.getsize(vpath) > 0:
+                                found_path = vpath
+                                break
+                        
+                        # Check image
+                        if not found_path:
+                            ipath = os.path.join(images_dir, f"{base_filename}.{file_extension}")
+                            if os.path.exists(ipath) and os.path.getsize(ipath) > 0:
+                                found_path = ipath
+
+                        if found_path:
+                            logger.log(f"[{self.task_id}] [{service_name}] Segment {i+1} found existing file: {os.path.basename(found_path)}", level=LogLevel.INFO)
+                            generated_paths[i] = found_path
+                            self.signals.status_changed.emit(self.task_id, found_path, prompt, found_path)
+                            continue
+
                         future = executor.submit(generate_single_image, i, prompt)
                         futures[future] = i
                         time.sleep(0.5)
@@ -891,7 +938,7 @@ class MontageWorker(BaseWorker):
         engine = MontageEngine()
         # Pass task_id and progress callback to the engine
         self.config['task_id'] = self.task_id
-        self.config['progress_callback'] = lambda msg: self.signals.progress_log.emit(self.task_id, msg)
+        self.config['progress_callback'] = lambda msg, progress=None: self.signals.progress_log.emit(self.task_id, msg)
         self.config['start_time'] = start_time  # Pass start time for logging
         engine.create_video(**self.config)
         

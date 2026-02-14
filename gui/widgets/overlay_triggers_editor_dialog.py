@@ -137,7 +137,8 @@ class OverlayTriggersEditorDialog(QDialog):
         self.triggers_table.insertRow(row)
 
         # Trigger Value (Phrase or Time)
-        val_input = QLineEdit(str(trigger_data.get("value", "")))
+        val_text = trigger_data.get("value") or trigger_data.get("phrase") or trigger_data.get("keyword") or trigger_data.get("text") or ""
+        val_input = QLineEdit(str(val_text))
         val_input.textChanged.connect(lambda text, r=row: self.update_data(r, "value", text))
         self.triggers_table.setCellWidget(row, 0, val_input)
 

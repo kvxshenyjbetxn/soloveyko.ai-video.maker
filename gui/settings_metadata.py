@@ -54,6 +54,8 @@ SETTINGS_METADATA = {
         'codec': {'type': 'choice', 'options': ["libx264", "libx265", "h264_nvenc", "h264_amf", "h264_videotoolbox"], 'label': 'codec_label'},
         'preset': {'type': 'choice', 'options': ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow"], 'label': 'preset_label'},
         'bitrate_mbps': {'type': 'int', 'min': 1, 'max': 100, 'suffix': ' Mbps', 'label': 'bitrate_label'},
+        'video_quality': {'type': 'choice', 'options': ["speed", "balanced", "quality"], 'label': 'video_quality_label'},
+        'use_gpu_shaders': {'type': 'bool', 'label': 'use_gpu_shaders_label'},
         'upscale_factor': {'type': 'float', 'min': 1.0, 'max': 5.0, 'step': 0.1, 'suffix': 'x', 'label': 'upscale_factor_label'},
         # Transitions
         'enable_transitions': {'type': 'bool', 'label': 'enable_transitions_label'},
@@ -190,6 +192,8 @@ KEY_TO_TRANSLATION_MAP = {
     'codec': 'codec_label',
     'preset': 'preset_label',
     'bitrate_mbps': 'bitrate_label',
+    'video_quality': 'video_quality_label',
+    'use_gpu_shaders': 'use_gpu_shaders_label',
     'upscale_factor': 'upscale_factor_label',
     'enable_transitions': 'enable_transitions_label',
     'transition_effect': 'transition_effect_label',
