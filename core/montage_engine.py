@@ -174,7 +174,19 @@ class MontageEngine:
                 image_indices.append(i)
 
         num_images = len(image_indices)
-        total_trans_loss = (num_files - 1) * trans_dur
+        num_images = len(image_indices)
+        
+        # Correct logic for GPU (Concat) vs CPU (Mix)
+        if use_gpu_shaders:
+             # In GPU mode, clips are concatenated sequentially WITHOUT overlap.
+             # Transitions happen internally within the clip duration.
+             # So the total duration is just the sum of clip durations.
+             total_trans_loss = 0
+        else:
+             # In CPU mode, clips overlapp by trans_dur.
+             # So we need extra raw material to cover the overlaps.
+             total_trans_loss = (num_files - 1) * trans_dur
+             
         required_raw_time = audio_dur + total_trans_loss
         time_for_all_images = required_raw_time - total_video_time
 
@@ -236,8 +248,27 @@ class MontageEngine:
 
             if override_count == num_files:
                 # Scenario A: We have timings for EVERY file (Images + Videos)
+                carry_over = 0.0
+                
                 for i in range(num_files):
-                    base_dur = override_durations[i]
+                    base_dur = override_durations[i] + carry_over
+                    carry_over = 0.0 # Reset
+                    
+                    # Check if it's a video file to handle duration mismatch
+                    is_video_file = i not in image_indices # image_indices stores indices of images
+                    
+                    if is_video_file:
+                         try:
+                             act_d = self._get_duration(visual_files[i])
+                             # If actual video is SHORTER than assigned slot
+                             if act_d > 0 and act_d < base_dur - 0.05:
+                                 diff = base_dur - act_d
+                                 logger.log(f"{prefix}[Montage] Video {i} is shorter ({act_d}s) than slot ({base_dur}s). Passing {diff:.2f}s to next clip.", level=LogLevel.INFO)
+                                 base_dur = act_d
+                                 carry_over = diff
+                         except:
+                             pass
+
                     # COMPENSATION FOR TRANSITIONS:
                     # If transitions are on (CPU MODE), every clip loses 'trans_dur' to the overlap.
                     # In GPU mode (Concat), clips are sequential, so NO overlap compensation is needed.
@@ -332,6 +363,7 @@ class MontageEngine:
             rendered_clips = []
             
             # 1. Render each clip individually
+            logger.log(f"{prefix}[Montage] GPU Pipeline Debug: Final Clip Durations (first 10): {final_clip_durations[:10]}...", level=LogLevel.DEBUG)
             for i, f in enumerate(visual_files):
                 clip_out = os.path.join(gpu_temp_dir, f"clip_{i:04d}.mp4")
                 
@@ -440,6 +472,8 @@ vec4 hook() {{
                 
                 if not is_vid:
                     input_args = ["-loop", "1"] + input_args
+                if not is_vid:
+                    input_args = ["-loop", "1"] + input_args
                 
                 # Filter chain construction
                 # fade=t=in:st=0:d=0.5,fade=t=out:st={dur-0.5}:d=0.5
@@ -465,8 +499,11 @@ vec4 hook() {{
                 clip_cmd = [ffmpeg_path, "-y", "-hide_banner", "-loglevel", "error"] + input_args + [
                     "-t", fmt(this_dur),
                     "-vf", vf,
-                    "-c:v", "h264_amf", "-usage", "transcoding", "-rc", "cqp", "-qp_p", "23", "-qp_i", "23", "-quality", "speed",
-                    "-r", str(fps), "-pix_fmt", "yuv420p",
+                    "-c:v", "h264_amf", "-usage", "transcoding", 
+                    "-rc", "cqp", "-qp_p", "23", "-qp_i", "23", "-quality", "speed",
+                    "-r", str(fps), 
+                    "-fps_mode", "cfr", # FORCE CONSTANT FRAME RATE TO PREVENT DRIFT
+                    "-pix_fmt", "yuv420p",
                     clip_out
                 ]
                 
@@ -495,8 +532,15 @@ vec4 hook() {{
             # 2. Concat
             concat_list = os.path.join(gpu_temp_dir, "concat.txt")
             with open(concat_list, 'w', encoding='utf-8') as cf:
-                for c in rendered_clips:
-                    cf.write(f"file '{c.replace(os.sep, '/')}'\n")
+                for i, c in enumerate(rendered_clips):
+                    # Escape path
+                    safe_path = c.replace(os.sep, '/')
+                    cf.write(f"file '{safe_path}'\n")
+                    # STRICT SYNC: Force the duration of the clip to match exactly what we calculated for audio.
+                    # This prevents accumulation of small frame-rounding errors (drift).
+                    # 'duration' directive applies to the file PRECEDING it.
+                    if i < len(final_clip_durations):
+                        cf.write(f"duration {fmt(final_clip_durations[i])}\n")
             
             temp_joined = os.path.join(gpu_temp_dir, "joined.mp4")
             concat_cmd = [ffmpeg_path, "-y", "-f", "concat", "-safe", "0", "-i", concat_list, "-c", "copy", temp_joined]
@@ -1629,8 +1673,9 @@ vec4 hook() {{
         # Helper for cleaning text
         def clean(s):
             s = s.lower()
-            s = s.replace('ё', 'е')
-            s = re.sub(r'[^\w\s]', '', s)
+            s = s.replace('ё', 'е').replace('\n', ' ').replace('\\n', ' ')
+            # Replace punctuation with SPACE, not empty string, to avoid merging words
+            s = re.sub(r'[^\w\s]', ' ', s)
             return re.sub(r'\s+', ' ', s).strip()
 
         cleaned_phrase = clean(phrase)
