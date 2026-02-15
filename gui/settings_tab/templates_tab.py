@@ -291,9 +291,9 @@ class TemplatesTab(QWidget):
             if key in all_settings:
                 value = all_settings[key]
                 
-                # Filter montage settings to exclude codec and preset (hardware-specific)
+                # Filter montage settings to exclude codec and preset (hardware-specific), and now GPU/Quality settings (global)
                 if key == 'montage' and isinstance(value, dict):
-                    value = {k: v for k, v in value.items() if k not in ['codec', 'preset']}
+                    value = {k: v for k, v in value.items() if k not in ['codec', 'preset', 'use_gpu_shaders', 'video_quality', 'max_concurrent_montages']}
                 
                 # Filter subtitles settings to exclude hardware-specific keys
                 # Exclude whisper_type (engine). Keep model? User said "transcription engine". 
@@ -378,6 +378,12 @@ class TemplatesTab(QWidget):
         
         if 'ai_assistant_model' in template_data:
             del template_data['ai_assistant_model']
+
+        # Remove global montage settings from template if present
+        if 'montage' in template_data and isinstance(template_data['montage'], dict):
+            for key in ['use_gpu_shaders', 'video_quality', 'max_concurrent_montages']:
+                if key in template_data['montage']:
+                    del template_data['montage'][key]
 
         def deep_merge(source, destination):
             for key, value in source.items():

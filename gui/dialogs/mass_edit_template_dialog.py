@@ -164,7 +164,7 @@ class MassEditTemplateDialog(QDialog):
                     "theme", "language", "last_applied_template",
                     "elevenlabs_image.max_threads",
                     "googler.max_threads", "googler.max_video_threads",
-                    "montage.max_concurrent_montages",
+                    "montage.max_concurrent_montages", "montage.use_gpu_shaders", "montage.video_quality",
                     "openrouter_models"
                 }
                 

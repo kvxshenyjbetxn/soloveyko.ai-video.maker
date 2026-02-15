@@ -106,35 +106,36 @@ class MontageTab(QWidget):
         
         # --- NEW GPU SHADERS & QUALITY ---
         
-        self.use_gpu_help = HelpLabel("use_gpu_shaders_label")
-        self.use_gpu_cb = QCheckBox()
-        self.use_gpu_label = QLabel()
-        use_gpu_container = QWidget()
-        use_gpu_layout = QHBoxLayout(use_gpu_container)
-        use_gpu_layout.setContentsMargins(0,0,0,0)
-        use_gpu_layout.setSpacing(5)
-        use_gpu_layout.addWidget(self.use_gpu_help)
-        use_gpu_layout.addWidget(self.use_gpu_label)
-        use_gpu_layout.addWidget(self.use_gpu_cb)
-        use_gpu_layout.addStretch()
-        
-        self.use_gpu_cb.toggled.connect(self.save_settings)
-        add_setting_row(render_layout, None, use_gpu_container, "montage.use_gpu_shaders", refresh_quick_panel, show_star=show_stars)
+        if not self.is_template_mode:
+            self.use_gpu_help = HelpLabel("use_gpu_shaders_label")
+            self.use_gpu_cb = QCheckBox()
+            self.use_gpu_label = QLabel()
+            use_gpu_container = QWidget()
+            use_gpu_layout = QHBoxLayout(use_gpu_container)
+            use_gpu_layout.setContentsMargins(0,0,0,0)
+            use_gpu_layout.setSpacing(5)
+            use_gpu_layout.addWidget(self.use_gpu_help)
+            use_gpu_layout.addWidget(self.use_gpu_label)
+            use_gpu_layout.addWidget(self.use_gpu_cb)
+            use_gpu_layout.addStretch()
+            
+            self.use_gpu_cb.toggled.connect(self.save_settings)
+            add_setting_row(render_layout, None, use_gpu_container, "montage.use_gpu_shaders", refresh_quick_panel, show_star=show_stars)
 
 
-        self.quality_help = HelpLabel("video_quality_label")
-        self.quality_label = QLabel()
-        quality_label_container = QWidget()
-        quality_label_layout = QHBoxLayout(quality_label_container)
-        quality_label_layout.setContentsMargins(0,0,0,0)
-        quality_label_layout.setSpacing(5)
-        quality_label_layout.addWidget(self.quality_help)
-        quality_label_layout.addWidget(self.quality_label)
+            self.quality_help = HelpLabel("video_quality_label")
+            self.quality_label = QLabel()
+            quality_label_container = QWidget()
+            quality_label_layout = QHBoxLayout(quality_label_container)
+            quality_label_layout.setContentsMargins(0,0,0,0)
+            quality_label_layout.setSpacing(5)
+            quality_label_layout.addWidget(self.quality_help)
+            quality_label_layout.addWidget(self.quality_label)
 
-        self.quality_combo = QComboBox()
-        self.quality_combo.addItems(["speed", "balanced", "quality"])
-        self.quality_combo.currentTextChanged.connect(self.save_settings)
-        add_setting_row(render_layout, quality_label_container, self.quality_combo, "montage.video_quality", refresh_quick_panel, show_star=show_stars)
+            self.quality_combo = QComboBox()
+            self.quality_combo.addItems(["speed", "balanced", "quality"])
+            self.quality_combo.currentTextChanged.connect(self.save_settings)
+            add_setting_row(render_layout, quality_label_container, self.quality_combo, "montage.video_quality", refresh_quick_panel, show_star=show_stars)
 
         # ---------------------------------
 
@@ -382,20 +383,21 @@ class MontageTab(QWidget):
         # --- Performance Settings ---
         self.perf_group = QGroupBox()
         perf_layout = QFormLayout()
+        
+        if not self.is_template_mode:
+            self.max_concurrent_montages_help = HelpLabel("max_concurrent_montages_label")
+            self.max_concurrent_montages_label = QLabel()
+            max_montages_container = QWidget()
+            max_montages_layout = QHBoxLayout(max_montages_container)
+            max_montages_layout.setContentsMargins(0,0,0,0)
+            max_montages_layout.setSpacing(5)
+            max_montages_layout.addWidget(self.max_concurrent_montages_help)
+            max_montages_layout.addWidget(self.max_concurrent_montages_label)
 
-        self.max_concurrent_montages_help = HelpLabel("max_concurrent_montages_label")
-        self.max_concurrent_montages_label = QLabel()
-        max_montages_container = QWidget()
-        max_montages_layout = QHBoxLayout(max_montages_container)
-        max_montages_layout.setContentsMargins(0,0,0,0)
-        max_montages_layout.setSpacing(5)
-        max_montages_layout.addWidget(self.max_concurrent_montages_help)
-        max_montages_layout.addWidget(self.max_concurrent_montages_label)
-
-        self.max_concurrent_montages_spin = QSpinBox()
-        self.max_concurrent_montages_spin.setRange(1, 10)
-        self.max_concurrent_montages_spin.valueChanged.connect(self.save_settings)
-        add_setting_row(perf_layout, max_montages_container, self.max_concurrent_montages_spin, "montage.max_concurrent_montages", refresh_quick_panel, show_star=show_stars)
+            self.max_concurrent_montages_spin = QSpinBox()
+            self.max_concurrent_montages_spin.setRange(1, 10)
+            self.max_concurrent_montages_spin.valueChanged.connect(self.save_settings)
+            add_setting_row(perf_layout, max_montages_container, self.max_concurrent_montages_spin, "montage.max_concurrent_montages", refresh_quick_panel, show_star=show_stars)
 
 
         self.perf_group.setLayout(perf_layout)
@@ -420,8 +422,9 @@ class MontageTab(QWidget):
         self.preset_combo.setCurrentText(m_settings.get("preset", "medium"))
         self.bitrate_spin.setValue(m_settings.get("bitrate_mbps", 15))
         
-        self.use_gpu_cb.setChecked(m_settings.get("use_gpu_shaders", True))
-        self.quality_combo.setCurrentText(m_settings.get("video_quality", "speed"))
+        if not self.is_template_mode:
+            self.use_gpu_cb.setChecked(m_settings.get("use_gpu_shaders", True))
+            self.quality_combo.setCurrentText(m_settings.get("video_quality", "speed"))
 
         self.upscale_spin.setValue(m_settings.get("upscale_factor", 3.0))
 
@@ -455,7 +458,8 @@ class MontageTab(QWidget):
         self.special_proc_video_count_spin.setValue(m_settings.get("special_processing_video_count", 1))
         self.special_proc_check_sequence_cb.setChecked(m_settings.get("special_processing_check_sequence", False))
 
-        self.max_concurrent_montages_spin.setValue(m_settings.get("max_concurrent_montages", 1))
+        if not self.is_template_mode:
+            self.max_concurrent_montages_spin.setValue(m_settings.get("max_concurrent_montages", 1))
 
         for widget in self.findChildren(QWidget):
             if isinstance(widget, (QComboBox, QSpinBox, QDoubleSpinBox, QCheckBox, SliderWithSpinBox)):
@@ -468,8 +472,6 @@ class MontageTab(QWidget):
             "codec": self.codec_combo.currentData(),
             "preset": self.preset_combo.currentText(),
             "bitrate_mbps": self.bitrate_spin.value(),
-            "video_quality": self.quality_combo.currentText(),
-            "use_gpu_shaders": self.use_gpu_cb.isChecked(),
             "upscale_factor": self.upscale_spin.value(),
             "enable_transitions": self.enable_trans_cb.isChecked(),
             "transition_effect": self.trans_effect_combo.currentData(),
@@ -484,8 +486,13 @@ class MontageTab(QWidget):
             "special_processing_duration_per_image": self.special_proc_dur_spin.value(),
             "special_processing_video_count": self.special_proc_video_count_spin.value(),
             "special_processing_check_sequence": self.special_proc_check_sequence_cb.isChecked(),
-            "max_concurrent_montages": self.max_concurrent_montages_spin.value()
         }
+        
+        if not self.is_template_mode:
+            m_settings["video_quality"] = self.quality_combo.currentText()
+            m_settings["use_gpu_shaders"] = self.use_gpu_cb.isChecked()
+            m_settings["max_concurrent_montages"] = self.max_concurrent_montages_spin.value()
+            
         self.settings.set("montage", m_settings)
 
     def retranslate_ui(self):
@@ -493,8 +500,9 @@ class MontageTab(QWidget):
         self.codec_label.setText(translator.translate("codec_label"))
         self.preset_label.setText(translator.translate("preset_label"))
         self.bitrate_label.setText(translator.translate("bitrate_label"))
-        self.use_gpu_label.setText(translator.translate("use_gpu_shaders_label"))
-        self.quality_label.setText(translator.translate("video_quality_label"))
+        if not self.is_template_mode:
+            self.use_gpu_label.setText(translator.translate("use_gpu_shaders_label"))
+            self.quality_label.setText(translator.translate("video_quality_label"))
         self.upscale_label.setText(translator.translate("upscale_factor_label"))
 
         self.trans_group.setTitle(translator.translate("transitions_settings"))
@@ -529,15 +537,17 @@ class MontageTab(QWidget):
         self.special_proc_video_count_label.setText(translator.translate("special_proc_video_count_label"))
         self.special_proc_check_sequence_label.setText(translator.translate("special_proc_check_sequence_label"))
 
-        self.perf_group.setTitle(translator.translate("performance_group"))
-        self.max_concurrent_montages_label.setText(translator.translate("max_concurrent_montages_label"))
+        if not self.is_template_mode:
+            self.perf_group.setTitle(translator.translate("performance_group"))
+            self.max_concurrent_montages_label.setText(translator.translate("max_concurrent_montages_label"))
 
         # Update all hints
         self.codec_help.update_tooltip()
         self.preset_help.update_tooltip()
         self.bitrate_help.update_tooltip()
-        self.use_gpu_help.update_tooltip()
-        self.quality_help.update_tooltip()
+        if not self.is_template_mode:
+            self.use_gpu_help.update_tooltip()
+            self.quality_help.update_tooltip()
         self.upscale_help.update_tooltip()
         self.enable_trans_help.update_tooltip()
         self.trans_dur_help.update_tooltip()
@@ -549,7 +559,8 @@ class MontageTab(QWidget):
         self.special_proc_mode_help.update_tooltip()
         self.special_proc_check_sequence_help.update_tooltip()
         self.trans_effect_help.update_tooltip()
-        self.max_concurrent_montages_help.update_tooltip()
+        if not self.is_template_mode:
+            self.max_concurrent_montages_help.update_tooltip()
 
     def update_trans_description(self):
         effect = self.trans_effect_combo.currentData()
