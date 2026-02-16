@@ -37,7 +37,18 @@
         "openrouter": "OpenRouter",
         "voice": "Voice",
         "image": "Image",
-        "assemblyai": "AssemblyAI"
+        "assemblyai": "AssemblyAI",
+        "openrouterSettings": {
+            "apikey": "OpenRouter API Key",
+            "balance": "Balance:",
+            "checkbalance": "Check Balance",
+            "save": "Save",
+            "models": "Models",
+            "modelname": "Model ID (e.g. openai/gpt-4)",
+            "add": "Add Model",
+            "savedmodels": "Saved Models",
+            "nomodels": "No saved models"
+        }
     },
     "voice": {
         "elevenlabsbot": "ElevenLabs Bot",
@@ -76,5 +87,10 @@
         "disks": "Disks",
         "free": "free",
         "of": "of"
+    },
+    "balanceMonitor": {
+        "title": "Service Balances",
+        "openrouter": "OpenRouter",
+        "total": "Total"
     }
 }

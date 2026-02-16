@@ -14,6 +14,22 @@ export function GetLanguage() {
   return window['go']['main']['App']['GetLanguage']();
 }
 
+export function GetOpenRouterAPIKey() {
+  return window['go']['main']['App']['GetOpenRouterAPIKey']();
+}
+
+export function GetOpenRouterAvailableModels() {
+  return window['go']['main']['App']['GetOpenRouterAvailableModels']();
+}
+
+export function GetOpenRouterCredits(arg1) {
+  return window['go']['main']['App']['GetOpenRouterCredits'](arg1);
+}
+
+export function GetOpenRouterSavedModels() {
+  return window['go']['main']['App']['GetOpenRouterSavedModels']();
+}
+
 export function GetSystemStats() {
   return window['go']['main']['App']['GetSystemStats']();
 }
@@ -24,6 +40,14 @@ export function GetTheme() {
 
 export function OpenConfigDir() {
   return window['go']['main']['App']['OpenConfigDir']();
+}
+
+export function SaveOpenRouterAPIKey(arg1) {
+  return window['go']['main']['App']['SaveOpenRouterAPIKey'](arg1);
+}
+
+export function SaveOpenRouterModels(arg1) {
+  return window['go']['main']['App']['SaveOpenRouterModels'](arg1);
 }
 
 export function SetAccentColor(arg1) {

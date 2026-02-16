@@ -1,0 +1,172 @@
+.service-balance-monitor {
+    position: relative;
+    z-index: 10000;
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    pointer-events: none;
+
+    /* Animation container width */
+    width: 48px;
+    height: 48px;
+    transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    flex-shrink: 0;
+}
+
+.service-balance-monitor.expanded {
+    width: 280px;
+}
+
+.balance-monitor-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    /* display: flex; flex-direction: column; align-items: flex-end; */
+}
+
+/* Кнопка перемикання */
+.balance-monitor-toggle {
+    width: 48px;
+    height: 48px;
+    background: var(--accent-secondary, #4caf50);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    pointer-events: auto;
+    z-index: 20;
+    margin: 0;
+}
+
+.balance-monitor-toggle:hover {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 0 20px var(--accent-secondary, #4caf50);
+}
+
+.service-balance-monitor.expanded .balance-monitor-toggle {
+    transform: scale(0) rotate(-90deg);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.balance-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* Панель */
+.balance-monitor-panel {
+    width: 280px;
+    background: rgba(20, 20, 25, 0.90);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+    color: var(--text-primary);
+
+    position: absolute;
+    bottom: 0;
+    right: 0;
+
+    pointer-events: auto;
+    margin-bottom: 0;
+
+    visibility: hidden;
+    opacity: 0;
+    transform: scale(0.8) translateY(40px);
+    transform-origin: bottom right;
+
+    /* Smooth Pop Animation */
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.service-balance-monitor.expanded .balance-monitor-panel {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    visibility: visible;
+}
+
+.balance-monitor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.balance-monitor-header h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-secondary, #4caf50);
+}
+
+.balance-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 24px;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.balance-close-btn:hover {
+    color: #ff4d4d;
+}
+
+.balance-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.balance-item:last-child {
+    border-bottom: none;
+}
+
+.service-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.service-balance {
+    font-size: 14px;
+    font-weight: 600;
+    color: #4caf50;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.service-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4caf50;
+}
+
+.service-status-dot.error {
+    background: #ff5252;
+}
+
+.service-status-dot.loading {
+    background: #FFC107;
+}

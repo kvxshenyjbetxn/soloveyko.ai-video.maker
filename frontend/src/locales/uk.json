@@ -37,7 +37,18 @@
     "openrouter": "OpenRouter",
     "voice": "Озвучка",
     "image": "Зображення",
-    "assemblyai": "AssemblyAI"
+    "assemblyai": "AssemblyAI",
+    "openrouterSettings": {
+      "apikey": "API Ключ OpenRouter",
+      "balance": "Баланс:",
+      "checkbalance": "Перевірити баланс",
+      "save": "Зберегти",
+      "models": "Моделі",
+      "modelname": "ID моделі (наприклад: openai/gpt-4)",
+      "add": "Додати модель",
+      "savedmodels": "Збережені моделі",
+      "nomodels": "Немає збережених моделей"
+    }
   },
   "voice": {
     "elevenlabsbot": "ElevenLabs Bot",
@@ -76,5 +87,10 @@
     "disks": "Диски",
     "free": "вільно",
     "of": "з"
+  },
+  "balanceMonitor": {
+    "title": "Баланс сервісів",
+    "openrouter": "OpenRouter",
+    "total": "Всього"
   }
 }

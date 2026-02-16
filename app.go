@@ -4,21 +4,25 @@ import (
 	"context"
 	"os/exec"
 	"runtime"
+	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
 )
 
 // App struct
 type App struct {
-	ctx      context.Context
-	settings *utils.SettingsService
-	stats    *utils.StatsService
+	ctx        context.Context
+	settings   *utils.SettingsService
+	stats      *utils.StatsService
+	openRouter *api.OpenRouterService
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	settings := utils.NewSettingsService()
 	return &App{
-		settings: utils.NewSettingsService(),
-		stats:    utils.NewStatsService(),
+		settings:   settings,
+		stats:      utils.NewStatsService(),
+		openRouter: api.NewOpenRouterService(settings),
 	}
 }
 
@@ -86,4 +90,36 @@ func (a *App) OpenConfigDir() {
 // GetConfigPath повертає шлях до файлу налаштувань (для дебагу)
 func (a *App) GetConfigPath() string {
 	return a.settings.GetConfigPath()
+}
+
+// OpenRouter Methods
+
+// GetOpenRouterCredits returns the user's credits balance from OpenRouter
+func (a *App) GetOpenRouterCredits(apiKey string) (float64, error) {
+	return a.openRouter.GetOpenRouterCredits(apiKey)
+}
+
+// GetOpenRouterAvailableModels returns the list of available models from OpenRouter
+func (a *App) GetOpenRouterAvailableModels() ([]api.OpenRouterModel, error) {
+	return a.openRouter.GetOpenRouterAvailableModels()
+}
+
+// SaveOpenRouterAPIKey saves API key
+func (a *App) SaveOpenRouterAPIKey(apiKey string) error {
+	return a.openRouter.SaveOpenRouterAPIKey(apiKey)
+}
+
+// GetOpenRouterAPIKey gets API key
+func (a *App) GetOpenRouterAPIKey() string {
+	return a.openRouter.GetOpenRouterAPIKey()
+}
+
+// SaveOpenRouterModels saves list of model IDs
+func (a *App) SaveOpenRouterModels(models []string) error {
+	return a.openRouter.SaveOpenRouterModels(models)
+}
+
+// GetOpenRouterSavedModels gets list of saved model IDs
+func (a *App) GetOpenRouterSavedModels() []string {
+	return a.openRouter.GetOpenRouterSavedModels()
 }

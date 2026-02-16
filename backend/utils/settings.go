@@ -7,9 +7,11 @@ import (
 )
 
 type Settings struct {
-	Language    string `json:"language"`
-	Theme       string `json:"theme"`
-	AccentColor string `json:"accentColor"`
+	Language         string   `json:"language"`
+	Theme            string   `json:"theme"`
+	AccentColor      string   `json:"accentColor"`
+	OpenRouterAPIKey string   `json:"openRouterAPIKey"`
+	OpenRouterModels []string `json:"openRouterModels"`
 }
 
 type SettingsService struct {
@@ -145,4 +147,44 @@ func (s *SettingsService) GetConfigPath() string {
 // GetConfigDir повертає шлях до папки конфігурації
 func (s *SettingsService) GetConfigDir() string {
 	return filepath.Dir(s.configPath)
+}
+
+// GetOpenRouterAPIKey повертає API ключ OpenRouter
+func (s *SettingsService) GetOpenRouterAPIKey() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.OpenRouterAPIKey
+}
+
+// SetOpenRouterAPIKey зберігає API ключ OpenRouter
+func (s *SettingsService) SetOpenRouterAPIKey(apiKey string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.OpenRouterAPIKey = apiKey
+	return s.SaveSettings(settings)
+}
+
+// GetOpenRouterModels повертає список збережених моделей OpenRouter
+func (s *SettingsService) GetOpenRouterModels() []string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []string{}
+	}
+	return settings.OpenRouterModels
+}
+
+// SetOpenRouterModels зберігає список моделей OpenRouter
+func (s *SettingsService) SetOpenRouterModels(models []string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.OpenRouterModels = models
+	return s.SaveSettings(settings)
 }

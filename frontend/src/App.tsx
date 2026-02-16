@@ -11,6 +11,7 @@ import { Gallery } from './tabs/gallery';
 import { General } from './tabs/settings/general';
 import { SystemMonitor } from './components/SystemMonitor';
 import { OpenRouter } from './tabs/settings/api/openrouter';
+import { ServiceBalanceMonitor } from './components/ServiceBalanceMonitor';
 import { ElevenLabsBot } from './tabs/settings/api/voice/elevenlabsbot';
 import { ElevenLabsUnlim } from './tabs/settings/api/voice/elevenlabsunlim';
 import { VoiceMaker } from './tabs/settings/api/voice/voicemaker';
@@ -348,7 +349,20 @@ function App() {
                     {renderContent()}
                 </main>
             </div>
-            <SystemMonitor />
+            <div className="monitors-container" style={{
+                position: 'fixed',
+                bottom: '15px',
+                right: '15px',
+                display: 'flex',
+                flexDirection: 'row-reverse',
+                gap: '15px',
+                alignItems: 'flex-end',
+                zIndex: 10000,
+                pointerEvents: 'none'
+            }}>
+                <SystemMonitor />
+                <ServiceBalanceMonitor />
+            </div>
         </div>
     )
 }
