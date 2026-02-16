@@ -9,6 +9,7 @@ import { Rewrite } from './tabs/text/rewrite';
 import { Queue } from './tabs/queue';
 import { Gallery } from './tabs/gallery';
 import { General } from './tabs/settings/general';
+import { SystemMonitor } from './components/SystemMonitor';
 import { OpenRouter } from './tabs/settings/api/openrouter';
 import { ElevenLabsBot } from './tabs/settings/api/voice/elevenlabsbot';
 import { ElevenLabsUnlim } from './tabs/settings/api/voice/elevenlabsunlim';
@@ -347,6 +348,7 @@ function App() {
                     {renderContent()}
                 </main>
             </div>
+            <SystemMonitor />
         </div>
     )
 }

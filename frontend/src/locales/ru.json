@@ -68,5 +68,13 @@
         "themeDark": "Тёмная",
         "themeAmoled": "Чёрная AMOLED",
         "accentColor": "Цвет акцента"
+    },
+    "systemMonitor": {
+        "cpu": "Процессор",
+        "ram": "ОЗУ",
+        "gpu": "Видеокарта",
+        "disks": "Диски",
+        "free": "свободно",
+        "of": "из"
     }
 }

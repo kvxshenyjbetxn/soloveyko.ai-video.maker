@@ -68,5 +68,13 @@
         "themeDark": "Dark",
         "themeAmoled": "Black AMOLED",
         "accentColor": "Accent Color"
+    },
+    "systemMonitor": {
+        "cpu": "CPU",
+        "ram": "RAM",
+        "gpu": "GPU",
+        "disks": "Disks",
+        "free": "free",
+        "of": "of"
     }
 }

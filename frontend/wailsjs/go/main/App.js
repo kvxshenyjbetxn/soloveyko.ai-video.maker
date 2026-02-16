@@ -14,6 +14,10 @@ export function GetLanguage() {
   return window['go']['main']['App']['GetLanguage']();
 }
 
+export function GetSystemStats() {
+  return window['go']['main']['App']['GetSystemStats']();
+}
+
 export function GetTheme() {
   return window['go']['main']['App']['GetTheme']();
 }

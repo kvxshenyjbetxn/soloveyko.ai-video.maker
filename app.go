@@ -11,13 +11,20 @@ import (
 type App struct {
 	ctx      context.Context
 	settings *utils.SettingsService
+	stats    *utils.StatsService
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{
 		settings: utils.NewSettingsService(),
+		stats:    utils.NewStatsService(),
 	}
+}
+
+// GetSystemStats повертає поточну статистику системи
+func (a *App) GetSystemStats() (*utils.SystemStats, error) {
+	return a.stats.GetSystemStats()
 }
 
 // startup is called when the app starts. The context is saved
