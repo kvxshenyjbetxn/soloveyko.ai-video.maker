@@ -17,9 +17,9 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:  "soloveyko",
-		Width:  1280,
-		Height: 720,
+		Title:  "soloveyko.ai-video.maker",
+		Width:  1366,
+		Height: 768,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

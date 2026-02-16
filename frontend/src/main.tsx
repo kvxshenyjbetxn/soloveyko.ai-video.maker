@@ -4,6 +4,7 @@ import './style.css'
 import App from './App'
 import { I18nProvider } from './contexts/I18nContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { LoggerProvider } from './contexts/LoggerContext';
 import { ServiceProvider } from './contexts/ServiceContext';
 
 const container = document.getElementById('root');
@@ -14,9 +15,11 @@ root.render(
     <React.StrictMode>
         <I18nProvider>
             <ThemeProvider>
-                <ServiceProvider>
-                    <App />
-                </ServiceProvider>
+                <LoggerProvider>
+                    <ServiceProvider>
+                        <App />
+                    </ServiceProvider>
+                </LoggerProvider>
             </ThemeProvider>
         </I18nProvider>
     </React.StrictMode>

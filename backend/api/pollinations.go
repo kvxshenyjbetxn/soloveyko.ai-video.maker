@@ -23,7 +23,6 @@ func NewPollinationsService(settings *utils.SettingsService) *PollinationsServic
 func (s *PollinationsService) GetPollinationsImageModels() ([]string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	url := "https://gen.pollinations.ai/image/models"
-	fmt.Println("Fetching models from:", url)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

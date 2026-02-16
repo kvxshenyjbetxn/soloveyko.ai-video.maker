@@ -10,6 +10,14 @@
         "other": "Прочее",
         "logs": "Лог"
     },
+    "logsTab": {
+        "clear": "Очистить",
+        "allLevels": "Все уровни",
+        "newestFirst": "Сначала новые",
+        "oldestFirst": "Сначала старые",
+        "searchPlaceholder": "Поиск...",
+        "empty": "Логов нет"
+    },
     "queue": {
         "title": "Очередь задач",
         "empty": "Очередь пуста",

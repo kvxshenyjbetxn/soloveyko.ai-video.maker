@@ -234,6 +234,8 @@
 
 .stat-label {
     color: var(--text-secondary);
+    position: relative;
+    top: 3px;
 }
 
 .stat-value {

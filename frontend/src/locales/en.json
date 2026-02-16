@@ -8,7 +8,15 @@
         "gallery": "Gallery",
         "settings": "Settings",
         "other": "Other",
-        "logs": "Log"
+        "logs": "Logs"
+    },
+    "logsTab": {
+        "clear": "Clear",
+        "allLevels": "All Levels",
+        "newestFirst": "Newest First",
+        "oldestFirst": "Oldest First",
+        "searchPlaceholder": "Search...",
+        "empty": "No logs to display"
     },
     "queue": {
         "title": "Task Queue",

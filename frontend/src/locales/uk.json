@@ -10,6 +10,14 @@
     "other": "Інше",
     "logs": "Лог"
   },
+  "logsTab": {
+    "clear": "Очистити",
+    "allLevels": "Всі рівні",
+    "newestFirst": "Нові спочатку",
+    "oldestFirst": "Старі спочатку",
+    "searchPlaceholder": "Пошук...",
+    "empty": "Логів немає"
+  },
   "queue": {
     "title": "Черга завдань",
     "empty": "Черга порожня",

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { useI18n } from './contexts/I18nContext';
+import { useLogger } from './contexts/LoggerContext';
 import logo from './assets/logo.png';
 
 // Import all tab components
@@ -56,7 +57,17 @@ type TabPath = string;
 
 function App() {
     const { t } = useI18n();
+    const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');
+    const initLogRef = useRef(false);
+
+    useEffect(() => {
+        if (!initLogRef.current) {
+            initLogRef.current = true;
+            addLog('INFO', 'Application initialized');
+        }
+    }, []);
+
     const [expandedMenus, setExpandedMenus] = useState<{ [key: string]: boolean }>({
         'api': false,
         'voice': false,
