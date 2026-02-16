@@ -1,0 +1,98 @@
+name: Wails Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+
+env:
+  # Necessary for most environments (https://github.com/wailsapp/wails/issues/1402)
+  GO111MODULE: on
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          check-latest: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install Linux Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev build-essential pkg-config
+
+      - name: Build Wails App
+        run: |
+          wails build
+
+      # --- Mac Specific ---
+      # For Mac, we want to upload the .app bundle (zipped)
+      - name: Rename Mac App
+        if: matrix.os == 'macos-latest'
+        run: mv build/bin/soloveyko.app build/bin/Soloveyko-macOS.app
+
+      - name: Zip Mac App
+        if: matrix.os == 'macos-latest'
+        run: |
+          cd build/bin
+          zip -r Soloveyko-macOS.zip Soloveyko-macOS.app
+
+      # --- Linux Specific ---
+      - name: Rename Linux App
+        if: matrix.os == 'ubuntu-latest'
+        run: mv build/bin/soloveyko build/bin/Soloveyko-Linux-amd64
+
+      # --- Windows Specific ---
+      - name: Rename Windows App
+        if: matrix.os == 'windows-latest'
+        run: mv build/bin/soloveyko.exe build/bin/Soloveyko-Windows-amd64.exe
+
+      # --- Upload Artifacts ---
+      
+      - name: Upload Mac Artifact
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Soloveyko-macOS
+          path: build/bin/Soloveyko-macOS.zip
+
+      - name: Upload Windows Artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Soloveyko-Windows
+          path: build/bin/Soloveyko-Windows-amd64.exe
+
+      - name: Upload Linux Artifact
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Soloveyko-Linux
+          path: build/bin/Soloveyko-Linux-amd64

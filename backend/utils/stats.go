@@ -1,10 +1,13 @@
 package utils
 
 import (
+	"context"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
@@ -57,7 +60,6 @@ func (s *StatsService) GetSystemStats() (*SystemStats, error) {
 	partitions, err := disk.Partitions(false)
 	if err == nil {
 		for _, partition := range partitions {
-			// Skip special partitions
 			if strings.HasPrefix(partition.Mountpoint, "/dev") || strings.HasPrefix(partition.Mountpoint, "/sys") || strings.HasPrefix(partition.Mountpoint, "/proc") {
 				continue
 			}
@@ -89,9 +91,24 @@ func (s *StatsService) GetSystemStats() (*SystemStats, error) {
 	return stats, nil
 }
 
+// runHiddenCommand виконує команду без створення вікна консолі на Windows
+func runHiddenCommand(name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			HideWindow:    true,
+			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+		}
+	}
+	return cmd.Output()
+}
+
 func getWindowsGPULoad() float64 {
-	// 1. Try NVIDIA SMI (Fastest & most accurate for NVIDIA)
-	out, err := exec.Command("nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits").Output()
+	// 1. Try NVIDIA SMI
+	out, err := runHiddenCommand("nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits")
 	if err == nil {
 		val, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 		if err == nil {
@@ -99,10 +116,9 @@ func getWindowsGPULoad() float64 {
 		}
 	}
 
-	// 2. Try PowerShell approach for generic GPU load
-	// We use the "Utilization Percentage" counter which is most common
+	// 2. Try PowerShell
 	psCmd := "$v = Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue; if ($v) { ($v.CounterSamples | Measure-Object -Property CookedValue -Max).Maximum } else { 0 }"
-	out, err = exec.Command("powershell", "-Command", psCmd).Output()
+	out, err = runHiddenCommand("powershell", "-Command", psCmd)
 	if err == nil {
 		val, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 		if err == nil {
@@ -110,9 +126,8 @@ func getWindowsGPULoad() float64 {
 		}
 	}
 
-	// 3. Try WMIC (Very robust, works on almost all Windows)
-	wmicCmd := "path Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine get UtilizationPercentage"
-	out, err = exec.Command("wmic", strings.Split(wmicCmd, " ")...).Output()
+	// 3. Try WMIC
+	out, err = runHiddenCommand("wmic", "path", "Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine", "get", "UtilizationPercentage")
 	if err == nil {
 		lines := strings.Split(string(out), "\n")
 		var maxLoad float64
@@ -131,8 +146,7 @@ func getWindowsGPULoad() float64 {
 }
 
 func getWindowsGPUInfo() string {
-	// Get GPU Name using WMIC
-	out, err := exec.Command("wmic", "path", "win32_VideoController", "get", "name").Output()
+	out, err := runHiddenCommand("wmic", "path", "win32_VideoController", "get", "name")
 	if err == nil {
 		lines := strings.Split(string(out), "\n")
 		for _, line := range lines {
@@ -146,7 +160,7 @@ func getWindowsGPUInfo() string {
 }
 
 func getMacGPUInfo() string {
-	out, err := exec.Command("system_profiler", "SPDisplaysDataType").Output()
+	out, err := runHiddenCommand("system_profiler", "SPDisplaysDataType")
 	if err == nil {
 		strOut := string(out)
 		if strings.Contains(strOut, "Chipset Model:") {
