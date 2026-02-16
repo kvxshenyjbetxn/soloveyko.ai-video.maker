@@ -48,6 +48,15 @@
       "add": "Додати модель",
       "savedmodels": "Збережені моделі",
       "nomodels": "Немає збережених моделей"
+    },
+    "pollinationsSettings": {
+      "apikey": "API Ключ (Необов'язково)",
+      "models": "Моделі",
+      "fetchModels": "Отримати моделі",
+      "availableModels": "Доступні моделі",
+      "savedModels": "Вибрані моделі",
+      "nomodels": "Список порожній",
+      "add": "Додати"
     }
   },
   "voice": {

@@ -7,11 +7,13 @@ import (
 )
 
 type Settings struct {
-	Language         string   `json:"language"`
-	Theme            string   `json:"theme"`
-	AccentColor      string   `json:"accentColor"`
-	OpenRouterAPIKey string   `json:"openRouterAPIKey"`
-	OpenRouterModels []string `json:"openRouterModels"`
+	Language           string   `json:"language"`
+	Theme              string   `json:"theme"`
+	AccentColor        string   `json:"accentColor"`
+	OpenRouterAPIKey   string   `json:"openRouterAPIKey"`
+	OpenRouterModels   []string `json:"openRouterModels"`
+	PollinationsAPIKey string   `json:"pollinationsAPIKey"`
+	PollinationsModels []string `json:"pollinationsModels"`
 }
 
 type SettingsService struct {
@@ -186,5 +188,45 @@ func (s *SettingsService) SetOpenRouterModels(models []string) error {
 	}
 
 	settings.OpenRouterModels = models
+	return s.SaveSettings(settings)
+}
+
+// GetPollinationsAPIKey повертає API ключ Pollinations
+func (s *SettingsService) GetPollinationsAPIKey() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.PollinationsAPIKey
+}
+
+// SetPollinationsAPIKey зберігає API ключ Pollinations
+func (s *SettingsService) SetPollinationsAPIKey(apiKey string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.PollinationsAPIKey = apiKey
+	return s.SaveSettings(settings)
+}
+
+// GetPollinationsModels повертає список моделей Pollinations
+func (s *SettingsService) GetPollinationsModels() []string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []string{}
+	}
+	return settings.PollinationsModels
+}
+
+// SetPollinationsModels зберігає список моделей Pollinations
+func (s *SettingsService) SetPollinationsModels(models []string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.PollinationsModels = models
 	return s.SaveSettings(settings)
 }

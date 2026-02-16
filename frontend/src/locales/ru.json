@@ -48,6 +48,15 @@
             "add": "Добавить модель",
             "savedmodels": "Сохраненные модели",
             "nomodels": "Нет сохраненных моделей"
+        },
+        "pollinationsSettings": {
+            "apikey": "API Ключ (Необязательно)",
+            "models": "Модели",
+            "fetchModels": "Получить модели",
+            "availableModels": "Доступные модели",
+            "savedModels": "Выбранные модели",
+            "nomodels": "Список пуст",
+            "add": "Добавить"
         }
     },
     "voice": {

@@ -48,6 +48,15 @@
             "add": "Add Model",
             "savedmodels": "Saved Models",
             "nomodels": "No saved models"
+        },
+        "pollinationsSettings": {
+            "apikey": "API Key (Optional)",
+            "models": "Models",
+            "fetchModels": "Fetch Models",
+            "availableModels": "Available Models",
+            "savedModels": "Selected Models",
+            "nomodels": "List is empty",
+            "add": "Add"
         }
     },
     "voice": {

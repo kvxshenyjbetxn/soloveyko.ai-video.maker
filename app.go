@@ -10,19 +10,21 @@ import (
 
 // App struct
 type App struct {
-	ctx        context.Context
-	settings   *utils.SettingsService
-	stats      *utils.StatsService
-	openRouter *api.OpenRouterService
+	ctx          context.Context
+	settings     *utils.SettingsService
+	stats        *utils.StatsService
+	openRouter   *api.OpenRouterService
+	pollinations *api.PollinationsService
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	settings := utils.NewSettingsService()
 	return &App{
-		settings:   settings,
-		stats:      utils.NewStatsService(),
-		openRouter: api.NewOpenRouterService(settings),
+		settings:     settings,
+		stats:        utils.NewStatsService(),
+		openRouter:   api.NewOpenRouterService(settings),
+		pollinations: api.NewPollinationsService(settings),
 	}
 }
 
@@ -122,4 +124,31 @@ func (a *App) SaveOpenRouterModels(models []string) error {
 // GetOpenRouterSavedModels gets list of saved model IDs
 func (a *App) GetOpenRouterSavedModels() []string {
 	return a.openRouter.GetOpenRouterSavedModels()
+}
+
+// Pollinations Methods
+
+// GetPollinationsImageModels fetches available image models from Pollinations.ai
+func (a *App) GetPollinationsImageModels() ([]string, error) {
+	return a.pollinations.GetPollinationsImageModels()
+}
+
+// SavePollinationsAPIKey saves API key
+func (a *App) SavePollinationsAPIKey(apiKey string) error {
+	return a.pollinations.SavePollinationsAPIKey(apiKey)
+}
+
+// GetPollinationsAPIKey gets API key
+func (a *App) GetPollinationsAPIKey() string {
+	return a.pollinations.GetPollinationsAPIKey()
+}
+
+// SavePollinationsModels saves list of model IDs
+func (a *App) SavePollinationsModels(models []string) error {
+	return a.pollinations.SavePollinationsModels(models)
+}
+
+// GetPollinationsSavedModels gets list of saved model IDs
+func (a *App) GetPollinationsSavedModels() []string {
+	return a.pollinations.GetPollinationsSavedModels()
 }
