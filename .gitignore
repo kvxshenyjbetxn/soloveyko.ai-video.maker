@@ -27,3 +27,5 @@ Thumbs.db
 # Go
 go.work
 go.work.sum
+assets/demo/test_image.jpg
+assets/demo/test_video.mp4

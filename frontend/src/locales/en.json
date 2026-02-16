@@ -4,9 +4,22 @@
     },
     "tabs": {
         "text": "Text",
+        "queue": "Queue",
+        "gallery": "Gallery",
         "settings": "Settings",
         "other": "Other",
         "logs": "Log"
+    },
+    "queue": {
+        "title": "Task Queue",
+        "empty": "Queue is empty",
+        "status": "Status",
+        "progress": "Progress"
+    },
+    "gallery": {
+        "title": "Media Gallery",
+        "loadDemo": "Load Demo Files",
+        "empty": "Gallery is empty"
     },
     "text": {
         "translate": "Translate",

@@ -4,13 +4,26 @@
   },
   "tabs": {
     "text": "Текст",
+    "queue": "Черга",
+    "gallery": "Галерея",
     "settings": "Налаштування",
     "other": "Інше",
     "logs": "Лог"
   },
+  "queue": {
+    "title": "Черга завдань",
+    "empty": "Черга порожня",
+    "status": "Статус",
+    "progress": "Прогрес"
+  },
+  "gallery": {
+    "title": "Медіа Галерея",
+    "loadDemo": "Завантажити демо-файли",
+    "empty": "Галерея порожня"
+  },
   "text": {
     "translate": "Переклад",
-    "rewrite": "Переписати",
+    "rewrite": "Рерайт",
     "placeholder": "Почніть писати ваш текст тут..."
   },
   "settings": {
@@ -22,7 +35,7 @@
   },
   "api": {
     "openrouter": "OpenRouter",
-    "voice": "Голос",
+    "voice": "Озвучка",
     "image": "Зображення",
     "assemblyai": "AssemblyAI"
   },
