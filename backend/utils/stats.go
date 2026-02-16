@@ -1,13 +1,9 @@
 package utils
 
 import (
-	"context"
-	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
-	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
@@ -78,32 +74,18 @@ func (s *StatsService) GetSystemStats() (*SystemStats, error) {
 	}
 
 	// GPU
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		stats.GPUInfo = getWindowsGPUInfo()
 		stats.GPUPercent = getWindowsGPULoad()
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		stats.GPUInfo = getMacGPUInfo()
 		stats.GPUPercent = 0
-	} else {
+	default:
 		stats.GPUInfo = "N/A"
 	}
 
 	return stats, nil
-}
-
-// runHiddenCommand виконує команду без створення вікна консолі на Windows
-func runHiddenCommand(name string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, name, args...)
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
-		}
-	}
-	return cmd.Output()
 }
 
 func getWindowsGPULoad() float64 {
