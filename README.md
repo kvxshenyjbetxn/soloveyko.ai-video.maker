@@ -1,19 +1,63 @@
-# README
+# Soloveyko.AI Video Maker
 
-## About
+## Структура проекту
 
-This is the official Wails React-TS template.
+### Система перекладів (i18n)
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+Файли перекладів знаходяться в `frontend/src/locales/`:
+- `uk.json` - Українська мова (за замовчуванням)
+- `en.json` - Англійська мова
+- `ru.json` - Російська мова
 
-## Live Development
+Використання в компонентах:
+```tsx
+import { useI18n } from './contexts/I18nContext';
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+const MyComponent = () => {
+    const { t } = useI18n();
+    return <div>{t('tabs.text')}</div>;
+};
+```
 
-## Building
+### Структура вкладок
 
-To build a redistributable, production mode package, use `wails build`.
+```
+frontend/src/tabs/
+├── text/
+│   ├── translate.tsx   - Переклад тексту
+│   └── rewrite.tsx     - Переписування тексту
+│
+├── settings/
+│   ├── general.tsx     - Загальні налаштування
+│   ├── api/
+│   │   ├── openrouter.tsx
+│   │   ├── voice/
+│   │   │   ├── elevenlabsbot.tsx
+│   │   │   ├── elevenlabsunlim.tsx
+│   │   │   └── voicemaker.tsx
+│   │   ├── image/
+│   │   │   ├── pollinationsai.tsx
+│   │   │   ├── googler.tsx
+│   │   │   └── elevenlabsimage.tsx
+│   │   └── assemblyai.tsx
+│   ├── montage.tsx     - Налаштування монтажу
+│   ├── subtitle.tsx    - Налаштування субтитрів
+│   └── templates.tsx   - Шаблони
+│
+└── other/
+    ├── statistic.tsx   - Статистика
+    └── history.tsx     - Історія
+```
+
+## Додавання нової вкладки
+
+1. Створіть компонент у відповідній папці `tabs/`
+2. Додайте переклади в `locales/*.json`
+3. Імпортуйте та додайте рендеринг в `App.tsx`
+
+## Технології
+
+- **Frontend**: React + TypeScript
+- **Framework**: Wails v2 (Go + Web)
+- **Стилі**: Vanilla CSS
+- **i18n**: Custom context-based solution

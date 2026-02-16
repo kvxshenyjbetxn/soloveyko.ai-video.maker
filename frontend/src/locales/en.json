@@ -1,0 +1,55 @@
+{
+    "app": {
+        "title": "Soloveyko.AI"
+    },
+    "tabs": {
+        "text": "Text",
+        "settings": "Settings",
+        "other": "Other",
+        "logs": "Log"
+    },
+    "text": {
+        "translate": "Translate",
+        "rewrite": "Rewrite",
+        "placeholder": "Start writing your text here..."
+    },
+    "settings": {
+        "general": "General",
+        "api": "API",
+        "montage": "Montage",
+        "subtitle": "Subtitles",
+        "templates": "Templates"
+    },
+    "api": {
+        "openrouter": "OpenRouter",
+        "voice": "Voice",
+        "image": "Image",
+        "assemblyai": "AssemblyAI"
+    },
+    "voice": {
+        "elevenlabsbot": "ElevenLabs Bot",
+        "elevenlabsunlim": "ElevenLabs Unlim",
+        "voicemaker": "VoiceMaker"
+    },
+    "image": {
+        "pollinationsai": "Pollinations AI",
+        "googler": "Googler",
+        "elevenlabsimage": "ElevenLabs Image"
+    },
+    "other": {
+        "statistic": "Statistics",
+        "history": "History"
+    },
+    "stats": {
+        "characters": "Characters:",
+        "words": "Words:",
+        "paragraphs": "Paragraphs:"
+    },
+    "general": {
+        "language": "Interface Language",
+        "ukrainian": "Українська",
+        "english": "English",
+        "russian": "Русский",
+        "openConfigDir": "Open Settings Folder"
+    }
+}

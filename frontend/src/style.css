@@ -1,16 +1,23 @@
 :root {
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-tertiary: #334155;
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --accent-primary: #8b5cf6;
-    --accent-hover: #7c3aed;
-    --border-color: #334155;
-    --glass-bg: rgba(30, 41, 59, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --font-heading: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
-    --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+    /* Strict grayscale color scheme */
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #242424;
+    --bg-tertiary: #2a2a2a;
+
+    --text-primary: #e0e0e0;
+    --text-secondary: #9a9a9a;
+    --text-muted: #666666;
+    --text-placeholder: #555555;
+
+    --accent-primary: #4a4a4a;
+    --accent-hover: #5a5a5a;
+
+    --border-color: #333333;
+    --border-focus: #4a4a4a;
+
+    /* Typography */
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 
 * {
@@ -29,8 +36,8 @@ body {
     color: var(--text-primary);
     font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
-    /* App-like feel, handle scrolling inside components */
 }
 
 #root {
@@ -39,7 +46,7 @@ body {
     flex-direction: column;
 }
 
-/* Custom Scrollbar */
+/* Simple Scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -50,10 +57,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--bg-tertiary);
-    border-radius: 4px;
+    background: var(--border-color);
+    border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--text-secondary);
+    background: var(--text-muted);
 }

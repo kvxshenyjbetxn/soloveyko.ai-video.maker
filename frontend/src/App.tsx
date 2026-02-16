@@ -1,5 +1,25 @@
 import { useState } from 'react';
 import './App.css';
+import { useI18n } from './contexts/I18nContext';
+
+// Import all tab components
+import { Translate } from './tabs/text/translate';
+import { Rewrite } from './tabs/text/rewrite';
+import { General } from './tabs/settings/general';
+import { OpenRouter } from './tabs/settings/api/openrouter';
+import { ElevenLabsBot } from './tabs/settings/api/voice/elevenlabsbot';
+import { ElevenLabsUnlim } from './tabs/settings/api/voice/elevenlabsunlim';
+import { VoiceMaker } from './tabs/settings/api/voice/voicemaker';
+import { PollinationsAI } from './tabs/settings/api/image/pollinationsai';
+import { Googler } from './tabs/settings/api/image/googler';
+import { ElevenLabsImage } from './tabs/settings/api/image/elevenlabsimage';
+import { AssemblyAI } from './tabs/settings/api/assemblyai';
+import { Montage } from './tabs/settings/montage';
+import { Subtitle } from './tabs/settings/subtitle';
+import { Templates } from './tabs/settings/templates';
+import { Statistic } from './tabs/other/statistic';
+import { History } from './tabs/other/history';
+import { Logs } from './tabs/logs';
 
 // Simple Icons (SVG)
 const ScriptIcon = () => (
@@ -11,76 +31,295 @@ const SettingsIcon = () => (
 const AIIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z" /><path d="M12 12 2.1 12a10.05 10.05 0 0 1 9.9-10v10z" /><path d="m9 16.5 3-3" /></svg>
 );
+const OtherIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+);
+const TerminalIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+);
+const ChevronRight = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+);
+
+type TabPath = string;
 
 function App() {
-    const [text, setText] = useState("");
-    const [activeTab, setActiveTab] = useState('script');
+    const { t } = useI18n();
+    const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');
+    const [expandedMenus, setExpandedMenus] = useState<{ [key: string]: boolean }>({
+        'api': false,
+        'voice': false,
+        'image': false
+    });
 
-    const updateText = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setText(e.target.value);
+    const toggleMenu = (menu: string) => {
+        setExpandedMenus(prev => ({
+            ...prev,
+            [menu]: !prev[menu]
+        }));
     };
 
-    const characterCount = text.length;
-    const wordCount = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
-    const paragraphCount = text.trim() === "" ? 0 : text.trim().split(/\n+/).length;
+    const renderContent = () => {
+        switch (currentPath) {
+            // Text tabs
+            case 'text.translate': return <Translate />;
+            case 'text.rewrite': return <Rewrite />;
+
+            // Settings tabs
+            case 'settings.general': return <General />;
+            case 'settings.api.openrouter': return <OpenRouter />;
+            case 'settings.api.voice.elevenlabsbot': return <ElevenLabsBot />;
+            case 'settings.api.voice.elevenlabsunlim': return <ElevenLabsUnlim />;
+            case 'settings.api.voice.voicemaker': return <VoiceMaker />;
+            case 'settings.api.image.pollinationsai': return <PollinationsAI />;
+            case 'settings.api.image.googler': return <Googler />;
+            case 'settings.api.image.elevenlabsimage': return <ElevenLabsImage />;
+            case 'settings.api.assemblyai': return <AssemblyAI />;
+            case 'settings.montage': return <Montage />;
+            case 'settings.subtitle': return <Subtitle />;
+            case 'settings.templates': return <Templates />;
+
+            // Other tabs
+            case 'other.statistic': return <Statistic />;
+            case 'other.history': return <History />;
+
+            // Logs tab
+            case 'logs': return <Logs />;
+
+            default: return <Translate />;
+        }
+    };
+
+    const getMainTab = (path: string) => path.split('.')[0];
+
+    const renderSidebar = () => {
+        const mainTab = getMainTab(currentPath);
+
+        if (mainTab === 'logs') return null;
+
+        if (mainTab === 'text') {
+            return (
+                <aside className="sidebar">
+                    <div
+                        className={`sidebar-item ${currentPath === 'text.translate' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('text.translate')}
+                    >
+                        {t('text.translate')}
+                    </div>
+                    <div
+                        className={`sidebar-item ${currentPath === 'text.rewrite' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('text.rewrite')}
+                    >
+                        {t('text.rewrite')}
+                    </div>
+                </aside>
+            );
+        }
+
+        if (mainTab === 'settings') {
+            return (
+                <aside className="sidebar">
+                    <div
+                        className={`sidebar-item ${currentPath === 'settings.general' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('settings.general')}
+                    >
+                        {t('settings.general')}
+                    </div>
+
+                    {/* API Section */}
+                    <div className="sidebar-group">
+                        <div
+                            className="sidebar-item sidebar-parent"
+                            onClick={() => toggleMenu('api')}
+                        >
+                            <span>{t('settings.api')}</span>
+                            <span className={`chevron ${expandedMenus.api ? 'expanded' : ''}`}>
+                                <ChevronRight />
+                            </span>
+                        </div>
+                        {expandedMenus.api && (
+                            <div className="sidebar-submenu">
+                                <div
+                                    className={`sidebar-item ${currentPath === 'settings.api.openrouter' ? 'active' : ''}`}
+                                    onClick={() => setCurrentPath('settings.api.openrouter')}
+                                >
+                                    {t('api.openrouter')}
+                                </div>
+
+                                {/* Voice submenu */}
+                                <div className="sidebar-group">
+                                    <div
+                                        className="sidebar-item sidebar-parent"
+                                        onClick={() => toggleMenu('voice')}
+                                    >
+                                        <span>{t('api.voice')}</span>
+                                        <span className={`chevron ${expandedMenus.voice ? 'expanded' : ''}`}>
+                                            <ChevronRight />
+                                        </span>
+                                    </div>
+                                    {expandedMenus.voice && (
+                                        <div className="sidebar-submenu">
+                                            <div
+                                                className={`sidebar-item ${currentPath === 'settings.api.voice.elevenlabsbot' ? 'active' : ''}`}
+                                                onClick={() => setCurrentPath('settings.api.voice.elevenlabsbot')}
+                                            >
+                                                {t('voice.elevenlabsbot')}
+                                            </div>
+                                            <div
+                                                className={`sidebar-item ${currentPath === 'settings.api.voice.elevenlabsunlim' ? 'active' : ''}`}
+                                                onClick={() => setCurrentPath('settings.api.voice.elevenlabsunlim')}
+                                            >
+                                                {t('voice.elevenlabsunlim')}
+                                            </div>
+                                            <div
+                                                className={`sidebar-item ${currentPath === 'settings.api.voice.voicemaker' ? 'active' : ''}`}
+                                                onClick={() => setCurrentPath('settings.api.voice.voicemaker')}
+                                            >
+                                                {t('voice.voicemaker')}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Image submenu */}
+                                <div className="sidebar-group">
+                                    <div
+                                        className="sidebar-item sidebar-parent"
+                                        onClick={() => toggleMenu('image')}
+                                    >
+                                        <span>{t('api.image')}</span>
+                                        <span className={`chevron ${expandedMenus.image ? 'expanded' : ''}`}>
+                                            <ChevronRight />
+                                        </span>
+                                    </div>
+                                    {expandedMenus.image && (
+                                        <div className="sidebar-submenu">
+                                            <div
+                                                className={`sidebar-item ${currentPath === 'settings.api.image.pollinationsai' ? 'active' : ''}`}
+                                                onClick={() => setCurrentPath('settings.api.image.pollinationsai')}
+                                            >
+                                                {t('image.pollinationsai')}
+                                            </div>
+                                            <div
+                                                className={`sidebar-item ${currentPath === 'settings.api.image.googler' ? 'active' : ''}`}
+                                                onClick={() => setCurrentPath('settings.api.image.googler')}
+                                            >
+                                                {t('image.googler')}
+                                            </div>
+                                            <div
+                                                className={`sidebar-item ${currentPath === 'settings.api.image.elevenlabsimage' ? 'active' : ''}`}
+                                                onClick={() => setCurrentPath('settings.api.image.elevenlabsimage')}
+                                            >
+                                                {t('image.elevenlabsimage')}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div
+                                    className={`sidebar-item ${currentPath === 'settings.api.assemblyai' ? 'active' : ''}`}
+                                    onClick={() => setCurrentPath('settings.api.assemblyai')}
+                                >
+                                    {t('api.assemblyai')}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div
+                        className={`sidebar-item ${currentPath === 'settings.montage' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('settings.montage')}
+                    >
+                        {t('settings.montage')}
+                    </div>
+                    <div
+                        className={`sidebar-item ${currentPath === 'settings.subtitle' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('settings.subtitle')}
+                    >
+                        {t('settings.subtitle')}
+                    </div>
+                    <div
+                        className={`sidebar-item ${currentPath === 'settings.templates' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('settings.templates')}
+                    >
+                        {t('settings.templates')}
+                    </div>
+                </aside>
+            );
+        }
+
+        if (mainTab === 'other') {
+            return (
+                <aside className="sidebar">
+                    <div
+                        className={`sidebar-item ${currentPath === 'other.statistic' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('other.statistic')}
+                    >
+                        {t('other.statistic')}
+                    </div>
+                    <div
+                        className={`sidebar-item ${currentPath === 'other.history' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('other.history')}
+                    >
+                        {t('other.history')}
+                    </div>
+                </aside>
+            );
+        }
+
+        return null;
+    };
 
     return (
         <div className="app-container">
-            {/* Sidebar */}
-            <aside className="sidebar">
-                <div className="logo-area">
-                    <div className="logo-icon"><AIIcon /></div>
-                    <span className="logo-text">Soloveyko</span>
-                </div>
-                <nav className="nav-menu">
-                    <div className={`nav-item ${activeTab === 'script' ? 'active' : ''}`} onClick={() => setActiveTab('script')}>
-                        <ScriptIcon />
-                        <span>Сценарій</span>
+            {/* Top Header with Tabs */}
+            <header className="app-header">
+                <div className="header-content">
+                    <div className="logo-section">
+                        <div className="logo-icon"><AIIcon /></div>
+                        <span className="app-title">{t('app.title')}</span>
                     </div>
-                    <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-                        <SettingsIcon />
-                        <span>Налаштування</span>
-                    </div>
-                </nav>
-            </aside>
 
-            {/* Main Content */}
-            <main className="main-content">
-                <header className="top-bar">
-                    <h2>Редактор Сценарію</h2>
-                    <div className="actions">
-                        <button className="btn-primary">Згенерувати Відео</button>
-                    </div>
-                </header>
-
-                <div className="content-area">
-                    <div className="script-editor-container">
-                        <textarea
-                            className="script-input"
-                            value={text}
-                            onChange={updateText}
-                            placeholder="Почніть писати ваш сценарій тут..."
-                            spellCheck={false}
-                        />
-                        <div className="stats-bar">
-                            <div className="stat-group">
-                                <span className="stat-label">Символи:</span>
-                                <span className="stat-value">{characterCount}</span>
-                            </div>
-                            <div className="stat-separator">|</div>
-                            <div className="stat-group">
-                                <span className="stat-label">Слова:</span>
-                                <span className="stat-value">{wordCount}</span>
-                            </div>
-                            <div className="stat-separator">|</div>
-                            <div className="stat-group">
-                                <span className="stat-label">Абзаци:</span>
-                                <span className="stat-value">{paragraphCount}</span>
-                            </div>
+                    <nav className="tabs-nav">
+                        <div
+                            className={`tab-item ${getMainTab(currentPath) === 'text' ? 'active' : ''}`}
+                            onClick={() => setCurrentPath('text.translate')}
+                        >
+                            <ScriptIcon />
+                            <span>{t('tabs.text')}</span>
                         </div>
-                    </div>
+                        <div
+                            className={`tab-item ${getMainTab(currentPath) === 'settings' ? 'active' : ''}`}
+                            onClick={() => setCurrentPath('settings.general')}
+                        >
+                            <SettingsIcon />
+                            <span>{t('tabs.settings')}</span>
+                        </div>
+                        <div
+                            className={`tab-item ${getMainTab(currentPath) === 'other' ? 'active' : ''}`}
+                            onClick={() => setCurrentPath('other.statistic')}
+                        >
+                            <OtherIcon />
+                            <span>{t('tabs.other')}</span>
+                        </div>
+                        <div
+                            className={`tab-item ${currentPath === 'logs' ? 'active' : ''}`}
+                            onClick={() => setCurrentPath('logs')}
+                        >
+                            <TerminalIcon />
+                            <span>{t('tabs.logs')}</span>
+                        </div>
+                    </nav>
                 </div>
-            </main>
+            </header>
+
+            {/* Content Area with Sidebar */}
+            <div className="content-with-sidebar">
+                {renderSidebar()}
+                <main className="main-content">
+                    {renderContent()}
+                </main>
+            </div>
         </div>
     )
 }
