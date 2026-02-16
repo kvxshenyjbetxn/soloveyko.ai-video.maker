@@ -50,6 +50,10 @@
         "ukrainian": "Українська",
         "english": "English",
         "russian": "Русский",
-        "openConfigDir": "Open Settings Folder"
+        "openConfigDir": "Open Settings Folder",
+        "theme": "Interface Theme",
+        "themeDark": "Dark",
+        "themeAmoled": "Black AMOLED",
+        "accentColor": "Accent Color"
     }
 }

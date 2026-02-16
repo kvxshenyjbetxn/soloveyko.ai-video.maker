@@ -75,3 +75,47 @@
 .btn-secondary:active {
     transform: translateY(1px);
 }
+
+.accent-palette {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 10px 0;
+}
+
+.accent-color-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.accent-color-circle:hover {
+    transform: scale(1.15);
+}
+
+.accent-color-circle.active {
+    border-color: var(--text-primary);
+    transform: scale(1.1);
+    box-shadow: 0 0 10px var(--accent-primary);
+}
+
+.custom-picker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--border-color) !important;
+    background: transparent;
+}
+
+.custom-picker.active {
+    border-style: solid !important;
+}
+
+.custom-picker .plus {
+    font-size: 18px;
+    font-weight: 300;
+    color: var(--text-secondary);
+}

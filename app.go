@@ -36,6 +36,26 @@ func (a *App) SetLanguage(language string) error {
 	return a.settings.SetLanguage(language)
 }
 
+// GetTheme повертає поточну тему з налаштувань
+func (a *App) GetTheme() string {
+	return a.settings.GetTheme()
+}
+
+// SetTheme встановлює тему та зберігає у файл
+func (a *App) SetTheme(theme string) error {
+	return a.settings.SetTheme(theme)
+}
+
+// GetAccentColor повертає поточний колір акценту
+func (a *App) GetAccentColor() string {
+	return a.settings.GetAccentColor()
+}
+
+// SetAccentColor встановлює колір акценту та зберігає у файл
+func (a *App) SetAccentColor(color string) error {
+	return a.settings.SetAccentColor(color)
+}
+
 // OpenConfigDir відкриває папку з конфігурацією в системному провіднику
 func (a *App) OpenConfigDir() {
 	path := a.settings.GetConfigDir()

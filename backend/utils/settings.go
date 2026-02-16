@@ -7,7 +7,9 @@ import (
 )
 
 type Settings struct {
-	Language string `json:"language"`
+	Language    string `json:"language"`
+	Theme       string `json:"theme"`
+	AccentColor string `json:"accentColor"`
 }
 
 type SettingsService struct {
@@ -54,6 +56,14 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 		return nil, err
 	}
 
+	// Дефолтні значення, якщо порожньо
+	if settings.Theme == "" {
+		settings.Theme = "dark"
+	}
+	if settings.AccentColor == "" {
+		settings.AccentColor = "#0078d4"
+	}
+
 	return &settings, nil
 }
 
@@ -84,6 +94,46 @@ func (s *SettingsService) SetLanguage(language string) error {
 	}
 
 	settings.Language = language
+	return s.SaveSettings(settings)
+}
+
+// GetTheme повертає поточну тему
+func (s *SettingsService) GetTheme() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return "dark"
+	}
+	return settings.Theme
+}
+
+// SetTheme встановлює тему та зберігає налаштування
+func (s *SettingsService) SetTheme(theme string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.Theme = theme
+	return s.SaveSettings(settings)
+}
+
+// GetAccentColor повертає поточний акцентний колір
+func (s *SettingsService) GetAccentColor() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return "#0078d4"
+	}
+	return settings.AccentColor
+}
+
+// SetAccentColor встановлює колір та зберігає налаштування
+func (s *SettingsService) SetAccentColor(color string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.AccentColor = color
 	return s.SaveSettings(settings)
 }
 

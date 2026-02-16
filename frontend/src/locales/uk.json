@@ -50,6 +50,10 @@
     "ukrainian": "Українська",
     "english": "English",
     "russian": "Русский",
-    "openConfigDir": "Відкрити папку налаштувань"
+    "openConfigDir": "Відкрити папку налаштувань",
+    "theme": "Тема інтерфейсу",
+    "themeDark": "Темна",
+    "themeAmoled": "Чорна AMOLED",
+    "accentColor": "Колір акценту"
   }
 }

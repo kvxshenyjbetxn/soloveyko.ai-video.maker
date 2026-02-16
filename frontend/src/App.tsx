@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import './App.css';
 import { useI18n } from './contexts/I18nContext';
+import logo from './assets/logo.png';
 
 // Import all tab components
 import { Translate } from './tabs/text/translate';
@@ -99,15 +100,15 @@ function App() {
 
         if (mainTab === 'text') {
             return (
-                <aside className="sidebar">
+                <aside className="sidebar" key="text-sidebar">
                     <div
-                        className={`sidebar-item ${currentPath === 'text.translate' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-1 ${currentPath === 'text.translate' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('text.translate')}
                     >
                         {t('text.translate')}
                     </div>
                     <div
-                        className={`sidebar-item ${currentPath === 'text.rewrite' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'text.rewrite' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('text.rewrite')}
                     >
                         {t('text.rewrite')}
@@ -118,9 +119,9 @@ function App() {
 
         if (mainTab === 'settings') {
             return (
-                <aside className="sidebar">
+                <aside className="sidebar" key="settings-sidebar">
                     <div
-                        className={`sidebar-item ${currentPath === 'settings.general' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-1 ${currentPath === 'settings.general' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('settings.general')}
                     >
                         {t('settings.general')}
@@ -129,7 +130,7 @@ function App() {
                     {/* API Section */}
                     <div className="sidebar-group">
                         <div
-                            className="sidebar-item sidebar-parent"
+                            className="sidebar-item animate-sidebar-item stagger-2 sidebar-parent"
                             onClick={() => toggleMenu('api')}
                         >
                             <span>{t('settings.api')}</span>
@@ -140,7 +141,7 @@ function App() {
                         {expandedMenus.api && (
                             <div className="sidebar-submenu">
                                 <div
-                                    className={`sidebar-item ${currentPath === 'settings.api.openrouter' ? 'active' : ''}`}
+                                    className={`sidebar-item animate-sidebar-item stagger-1 ${currentPath === 'settings.api.openrouter' ? 'active' : ''}`}
                                     onClick={() => setCurrentPath('settings.api.openrouter')}
                                 >
                                     {t('api.openrouter')}
@@ -149,7 +150,7 @@ function App() {
                                 {/* Voice submenu */}
                                 <div className="sidebar-group">
                                     <div
-                                        className="sidebar-item sidebar-parent"
+                                        className="sidebar-item animate-sidebar-item stagger-2 sidebar-parent"
                                         onClick={() => toggleMenu('voice')}
                                     >
                                         <span>{t('api.voice')}</span>
@@ -160,19 +161,19 @@ function App() {
                                     {expandedMenus.voice && (
                                         <div className="sidebar-submenu">
                                             <div
-                                                className={`sidebar-item ${currentPath === 'settings.api.voice.elevenlabsbot' ? 'active' : ''}`}
+                                                className={`sidebar-item animate-sidebar-item stagger-1 ${currentPath === 'settings.api.voice.elevenlabsbot' ? 'active' : ''}`}
                                                 onClick={() => setCurrentPath('settings.api.voice.elevenlabsbot')}
                                             >
                                                 {t('voice.elevenlabsbot')}
                                             </div>
                                             <div
-                                                className={`sidebar-item ${currentPath === 'settings.api.voice.elevenlabsunlim' ? 'active' : ''}`}
+                                                className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'settings.api.voice.elevenlabsunlim' ? 'active' : ''}`}
                                                 onClick={() => setCurrentPath('settings.api.voice.elevenlabsunlim')}
                                             >
                                                 {t('voice.elevenlabsunlim')}
                                             </div>
                                             <div
-                                                className={`sidebar-item ${currentPath === 'settings.api.voice.voicemaker' ? 'active' : ''}`}
+                                                className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'settings.api.voice.voicemaker' ? 'active' : ''}`}
                                                 onClick={() => setCurrentPath('settings.api.voice.voicemaker')}
                                             >
                                                 {t('voice.voicemaker')}
@@ -184,7 +185,7 @@ function App() {
                                 {/* Image submenu */}
                                 <div className="sidebar-group">
                                     <div
-                                        className="sidebar-item sidebar-parent"
+                                        className="sidebar-item animate-sidebar-item stagger-3 sidebar-parent"
                                         onClick={() => toggleMenu('image')}
                                     >
                                         <span>{t('api.image')}</span>
@@ -195,19 +196,19 @@ function App() {
                                     {expandedMenus.image && (
                                         <div className="sidebar-submenu">
                                             <div
-                                                className={`sidebar-item ${currentPath === 'settings.api.image.pollinationsai' ? 'active' : ''}`}
+                                                className={`sidebar-item animate-sidebar-item stagger-1 ${currentPath === 'settings.api.image.pollinationsai' ? 'active' : ''}`}
                                                 onClick={() => setCurrentPath('settings.api.image.pollinationsai')}
                                             >
                                                 {t('image.pollinationsai')}
                                             </div>
                                             <div
-                                                className={`sidebar-item ${currentPath === 'settings.api.image.googler' ? 'active' : ''}`}
+                                                className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'settings.api.image.googler' ? 'active' : ''}`}
                                                 onClick={() => setCurrentPath('settings.api.image.googler')}
                                             >
                                                 {t('image.googler')}
                                             </div>
                                             <div
-                                                className={`sidebar-item ${currentPath === 'settings.api.image.elevenlabsimage' ? 'active' : ''}`}
+                                                className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'settings.api.image.elevenlabsimage' ? 'active' : ''}`}
                                                 onClick={() => setCurrentPath('settings.api.image.elevenlabsimage')}
                                             >
                                                 {t('image.elevenlabsimage')}
@@ -217,7 +218,7 @@ function App() {
                                 </div>
 
                                 <div
-                                    className={`sidebar-item ${currentPath === 'settings.api.assemblyai' ? 'active' : ''}`}
+                                    className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'settings.api.assemblyai' ? 'active' : ''}`}
                                     onClick={() => setCurrentPath('settings.api.assemblyai')}
                                 >
                                     {t('api.assemblyai')}
@@ -227,19 +228,19 @@ function App() {
                     </div>
 
                     <div
-                        className={`sidebar-item ${currentPath === 'settings.montage' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'settings.montage' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('settings.montage')}
                     >
                         {t('settings.montage')}
                     </div>
                     <div
-                        className={`sidebar-item ${currentPath === 'settings.subtitle' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'settings.subtitle' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('settings.subtitle')}
                     >
                         {t('settings.subtitle')}
                     </div>
                     <div
-                        className={`sidebar-item ${currentPath === 'settings.templates' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-5 ${currentPath === 'settings.templates' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('settings.templates')}
                     >
                         {t('settings.templates')}
@@ -250,15 +251,15 @@ function App() {
 
         if (mainTab === 'other') {
             return (
-                <aside className="sidebar">
+                <aside className="sidebar" key="other-sidebar">
                     <div
-                        className={`sidebar-item ${currentPath === 'other.statistic' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-1 ${currentPath === 'other.statistic' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('other.statistic')}
                     >
                         {t('other.statistic')}
                     </div>
                     <div
-                        className={`sidebar-item ${currentPath === 'other.history' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'other.history' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('other.history')}
                     >
                         {t('other.history')}
@@ -276,7 +277,9 @@ function App() {
             <header className="app-header">
                 <div className="header-content">
                     <div className="logo-section">
-                        <div className="logo-icon"><AIIcon /></div>
+                        <div className="logo-icon">
+                            <img src={logo} alt="Soloveyko" className="app-logo-img" />
+                        </div>
                         <span className="app-title">{t('app.title')}</span>
                     </div>
 
@@ -316,7 +319,7 @@ function App() {
             {/* Content Area with Sidebar */}
             <div className="content-with-sidebar">
                 {renderSidebar()}
-                <main className="main-content">
+                <main className="main-content animate-fade" key={currentPath}>
                     {renderContent()}
                 </main>
             </div>

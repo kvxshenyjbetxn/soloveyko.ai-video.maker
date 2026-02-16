@@ -23,21 +23,6 @@ interface I18nContextType {
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
-// Імпортуємо методи з Go
-declare global {
-    interface Window {
-        go: {
-            main: {
-                App: {
-                    GetLanguage: () => Promise<string>;
-                    SetLanguage: (language: string) => Promise<void>;
-                    OpenConfigDir: () => Promise<void>;
-                };
-            };
-        };
-    }
-}
-
 export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [locale, setLocaleState] = useState<Locale>('uk');
 
