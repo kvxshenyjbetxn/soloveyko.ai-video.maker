@@ -9,9 +9,13 @@ import '../general.css';
 export const OpenRouter = () => {
     const { t } = useI18n();
     const { accentColor } = useTheme();
-    const { openRouterBalance, loadingOpenRouter, refreshOpenRouterBalance } = useServices();
+    const { openRouterBalance, loadingOpenRouter, refreshOpenRouterBalance, openRouterThreshold, setOpenRouterThreshold } = useServices();
+
+    // @ts-ignore
+    const { SaveOpenRouterAlertThreshold } = window.go.main.App;
 
     const [apiKey, setApiKey] = useState('');
+    const [threshold, setThreshold] = useState<string>('0');
     const [savedModels, setSavedModels] = useState<string[]>([]);
     const [newModel, setNewModel] = useState('');
     const [isLoaded, setIsLoaded] = useState(false);
@@ -21,20 +25,26 @@ export const OpenRouter = () => {
         const loadKey = async () => {
             const key = await GetOpenRouterAPIKey();
             setApiKey(key || '');
+            setThreshold(openRouterThreshold.toString());
             const models = await GetOpenRouterSavedModels();
             setSavedModels(models || []);
             setIsLoaded(true);
         };
         loadKey();
-    }, []);
+    }, [openRouterThreshold]);
 
     useEffect(() => {
         if (!isLoaded) return;
         const timer = setTimeout(() => {
             SaveOpenRouterAPIKey(apiKey);
+            const numThreshold = parseFloat(threshold) || 0;
+            if (numThreshold !== openRouterThreshold) {
+                SaveOpenRouterAlertThreshold(numThreshold);
+                setOpenRouterThreshold(numThreshold);
+            }
         }, 1000);
         return () => clearTimeout(timer);
-    }, [apiKey, isLoaded]);
+    }, [apiKey, threshold, isLoaded]);
 
     const handleCheckBalance = async () => {
         setStatusMsg(null);
@@ -69,8 +79,13 @@ export const OpenRouter = () => {
     };
 
     return (
-        <div className="content-wrapper animate-fade">
-            <div className="settings-container" style={{ maxWidth: '1000px' }}>
+        <div className="content-wrapper animate-fade" style={{
+            height: '100%',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            paddingRight: '10px' // Space for scrollbar
+        }}>
+            <div className="settings-container" style={{ maxWidth: '1000px', paddingBottom: '40px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
                     <h2 className="settings-title" style={{ margin: 0 }}>OpenRouter</h2>
                     {openRouterBalance !== null && (
@@ -140,6 +155,30 @@ export const OpenRouter = () => {
                             {statusMsg.text}
                         </div>
                     )}
+                </div>
+
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '30px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('api.openrouterSettings.alertThreshold')}</h3>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <input
+                            type="number"
+                            step="0.01"
+                            className="premium-input"
+                            style={{
+                                flex: 1,
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                background: 'rgba(0, 0, 0, 0.3)',
+                                color: '#fff',
+                                outline: 'none',
+                                fontSize: '0.95em'
+                            }}
+                            value={threshold}
+                            onChange={(e) => setThreshold(e.target.value)}
+                            placeholder={t('api.openrouterSettings.alertThresholdPlaceholder')}
+                        />
+                    </div>
                 </div>
 
                 <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
@@ -218,6 +257,21 @@ export const OpenRouter = () => {
             <style>{`
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .spinner-small { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+                
+                /* Custom Scrollbar for OpenRouter tab */
+                .content-wrapper::-webkit-scrollbar {
+                    width: 6px;
+                }
+                .content-wrapper::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .content-wrapper::-webkit-scrollbar-thumb {
+                    background: rgba(255, 255, 255, 0.1);
+                    border-radius: 10px;
+                }
+                .content-wrapper::-webkit-scrollbar-thumb:hover {
+                    background: rgba(255, 255, 255, 0.2);
+                }
             `}</style>
         </div>
     );

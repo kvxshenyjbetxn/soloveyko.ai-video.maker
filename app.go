@@ -285,3 +285,65 @@ func (a *App) SaveAssemblyAIAPIKey(apiKey string) error {
 func (a *App) GetAssemblyAIAPIKey() string {
 	return a.assemblyAI.GetAPIKey()
 }
+
+// Threshold Methods
+
+// GetElevenLabsBotAlertThreshold gets alert threshold
+func (a *App) GetElevenLabsBotAlertThreshold() float64 {
+	return a.settings.GetElevenLabsBotAlertThreshold()
+}
+
+// SaveElevenLabsBotAlertThreshold saves alert threshold
+func (a *App) SaveElevenLabsBotAlertThreshold(threshold float64) error {
+	return a.settings.SetElevenLabsBotAlertThreshold(threshold)
+}
+
+// GetElevenLabsUnlimAlertThreshold gets alert threshold
+func (a *App) GetElevenLabsUnlimAlertThreshold() float64 {
+	return a.settings.GetElevenLabsUnlimAlertThreshold()
+}
+
+// SaveElevenLabsUnlimAlertThreshold saves alert threshold
+func (a *App) SaveElevenLabsUnlimAlertThreshold(threshold float64) error {
+	return a.settings.SetElevenLabsUnlimAlertThreshold(threshold)
+}
+
+// GetVoiceMakerAlertThreshold gets alert threshold
+func (a *App) GetVoiceMakerAlertThreshold() float64 {
+	return a.settings.GetVoiceMakerAlertThreshold()
+}
+
+// SaveVoiceMakerAlertThreshold saves alert threshold
+func (a *App) SaveVoiceMakerAlertThreshold(threshold float64) error {
+	return a.settings.SetVoiceMakerAlertThreshold(threshold)
+}
+
+// GetOpenRouterAlertThreshold gets alert threshold
+func (a *App) GetOpenRouterAlertThreshold() float64 {
+	return a.settings.GetOpenRouterAlertThreshold()
+}
+
+// SaveOpenRouterAlertThreshold saves alert threshold
+func (a *App) SaveOpenRouterAlertThreshold(threshold float64) error {
+	return a.settings.SetOpenRouterAlertThreshold(threshold)
+}
+
+// GetGooglerVideoAlertThreshold gets alert threshold
+func (a *App) GetGooglerVideoAlertThreshold() float64 {
+	return a.settings.GetGooglerVideoAlertThreshold()
+}
+
+// SaveGooglerVideoAlertThreshold saves alert threshold
+func (a *App) SaveGooglerVideoAlertThreshold(threshold float64) error {
+	return a.settings.SetGooglerVideoAlertThreshold(threshold)
+}
+
+// GetGooglerImageAlertThreshold gets alert threshold
+func (a *App) GetGooglerImageAlertThreshold() float64 {
+	return a.settings.GetGooglerImageAlertThreshold()
+}
+
+// SaveGooglerImageAlertThreshold saves alert threshold
+func (a *App) SaveGooglerImageAlertThreshold(threshold float64) error {
+	return a.settings.SetGooglerImageAlertThreshold(threshold)
+}

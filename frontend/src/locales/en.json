@@ -45,7 +45,9 @@
             "apiKeyPlaceholder": "Enter your X-API-Key...",
             "fetchBalance": "Refresh Balance",
             "balance": "Balance:",
-            "saveSuccess": "ElevenLabsBot settings saved"
+            "saveSuccess": "ElevenLabsBot settings saved",
+            "alertThreshold": "Alert Threshold (chars)",
+            "alertThresholdPlaceholder": "e.g. 5000"
         }
     },
     "api": {
@@ -53,6 +55,13 @@
         "voice": "Voice",
         "image": "Image",
         "assemblyai": "AssemblyAI",
+        "googlerSettings": {
+            "apikey": "Googler API Key",
+            "videoAlertThreshold": "Video Threshold (per hour)",
+            "imageAlertThreshold": "Image Threshold (per hour)",
+            "videoThresholdPlaceholder": "e.g. 10",
+            "imageThresholdPlaceholder": "e.g. 1000"
+        },
         "openrouterSettings": {
             "apikey": "OpenRouter API Key",
             "balance": "Balance:",
@@ -62,7 +71,9 @@
             "modelname": "Model ID (e.g. openai/gpt-4)",
             "add": "Add Model",
             "savedmodels": "Saved Models",
-            "nomodels": "No saved models"
+            "nomodels": "No saved models",
+            "alertThreshold": "Alert Threshold ($)",
+            "alertThresholdPlaceholder": "e.g. 5.0"
         },
         "pollinationsSettings": {
             "apikey": "API Key (Optional)",

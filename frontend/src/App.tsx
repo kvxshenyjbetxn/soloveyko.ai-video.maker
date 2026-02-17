@@ -380,7 +380,7 @@ function App() {
                 pointerEvents: 'none'
             }}>
                 <SystemMonitor />
-                <ServiceBalanceMonitor />
+                <ServiceBalanceMonitor navigateTo={setCurrentPath} />
             </div>
         </div>
     )

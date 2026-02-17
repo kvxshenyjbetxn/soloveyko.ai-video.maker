@@ -9,9 +9,13 @@ import '../../general.css';
 export const VoiceMaker = () => {
     const { t } = useI18n();
     const { accentColor } = useTheme();
-    const { voiceMakerBalance, refreshVoiceMakerBalance, loadingVoiceMaker } = useServices();
+    const { voiceMakerBalance, refreshVoiceMakerBalance, loadingVoiceMaker, voiceMakerThreshold, setVoiceMakerThreshold } = useServices();
+
+    // @ts-ignore
+    const { SaveVoiceMakerAlertThreshold } = window.go.main.App;
 
     const [apiKey, setApiKey] = useState('');
+    const [threshold, setThreshold] = useState<string>('0');
     const [isLoaded, setIsLoaded] = useState(false);
     const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -19,18 +23,24 @@ export const VoiceMaker = () => {
         const loadKey = async () => {
             const key = await GetVoiceMakerAPIKey();
             setApiKey(key || '');
+            setThreshold(voiceMakerThreshold.toString());
             setIsLoaded(true);
         };
         loadKey();
-    }, []);
+    }, [voiceMakerThreshold]);
 
     useEffect(() => {
         if (!isLoaded) return;
         const timer = setTimeout(() => {
             SaveVoiceMakerAPIKey(apiKey);
+            const numThreshold = parseFloat(threshold) || 0;
+            if (numThreshold !== voiceMakerThreshold) {
+                SaveVoiceMakerAlertThreshold(numThreshold);
+                setVoiceMakerThreshold(numThreshold);
+            }
         }, 1000);
         return () => clearTimeout(timer);
-    }, [apiKey, isLoaded]);
+    }, [apiKey, threshold, isLoaded, voiceMakerThreshold, setVoiceMakerThreshold]);
 
     const handleCheckBalance = async () => {
         setStatusMsg(null);
@@ -117,6 +127,29 @@ export const VoiceMaker = () => {
                             {statusMsg.text}
                         </div>
                     )}
+                </div>
+
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '30px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('settings.voice.alertThreshold')}</h3>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <input
+                            type="number"
+                            className="premium-input"
+                            style={{
+                                flex: 1,
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                background: 'rgba(0, 0, 0, 0.3)',
+                                color: '#fff',
+                                outline: 'none',
+                                fontSize: '0.95em'
+                            }}
+                            value={threshold}
+                            onChange={(e) => setThreshold(e.target.value)}
+                            placeholder={t('settings.voice.alertThresholdPlaceholder')}
+                        />
+                    </div>
                 </div>
 
                 <div className="stat-group glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>

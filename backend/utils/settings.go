@@ -4,28 +4,36 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type Settings struct {
-	Language              string   `json:"language"`
-	Theme                 string   `json:"theme"`
-	AccentColor           string   `json:"accentColor"`
-	OpenRouterAPIKey      string   `json:"openRouterAPIKey"`
-	OpenRouterModels      []string `json:"openRouterModels"`
-	PollinationsAPIKey    string   `json:"pollinationsAPIKey"`
-	PollinationsModels    []string `json:"pollinationsModels"`
-	ElevenLabsBotAPIKey   string   `json:"elevenLabsBotAPIKey"`
-	ElevenLabsUnlimAPIKey string   `json:"elevenLabsUnlimAPIKey"`
-	VoiceMakerAPIKey      string   `json:"voiceMakerAPIKey"`
-	VoiceMakerBalance     float64  `json:"voiceMakerBalance"`
-	GooglerAPIKey         string   `json:"googlerAPIKey"`
-	ElevenLabsImageAPIKey string   `json:"elevenLabsImageAPIKey"`
-	ElevenLabsUAAPIKey    string   `json:"elevenLabsUAAPIKey"`
-	AssemblyAIAPIKey      string   `json:"assemblyAIAPIKey"`
+	Language                      string   `json:"language"`
+	Theme                         string   `json:"theme"`
+	AccentColor                   string   `json:"accentColor"`
+	OpenRouterAPIKey              string   `json:"openRouterAPIKey"`
+	OpenRouterModels              []string `json:"openRouterModels"`
+	PollinationsAPIKey            string   `json:"pollinationsAPIKey"`
+	PollinationsModels            []string `json:"pollinationsModels"`
+	ElevenLabsBotAPIKey           string   `json:"elevenLabsBotAPIKey"`
+	ElevenLabsUnlimAPIKey         string   `json:"elevenLabsUnlimAPIKey"`
+	VoiceMakerAPIKey              string   `json:"voiceMakerAPIKey"`
+	VoiceMakerBalance             float64  `json:"voiceMakerBalance"`
+	GooglerAPIKey                 string   `json:"googlerAPIKey"`
+	ElevenLabsImageAPIKey         string   `json:"elevenLabsImageAPIKey"`
+	ElevenLabsUAAPIKey            string   `json:"elevenLabsUAAPIKey"`
+	AssemblyAIAPIKey              string   `json:"assemblyAIAPIKey"`
+	ElevenLabsBotAlertThreshold   float64  `json:"elevenLabsBotAlertThreshold"`
+	ElevenLabsUnlimAlertThreshold float64  `json:"elevenLabsUnlimAlertThreshold"`
+	VoiceMakerAlertThreshold      float64  `json:"voiceMakerAlertThreshold"`
+	OpenRouterAlertThreshold      float64  `json:"openRouterAlertThreshold"`
+	GooglerVideoAlertThreshold    float64  `json:"googlerVideoAlertThreshold"`
+	GooglerImageAlertThreshold    float64  `json:"googlerImageAlertThreshold"`
 }
 
 type SettingsService struct {
 	configPath string
+	mu         sync.RWMutex
 }
 
 func NewSettingsService() *SettingsService {
@@ -50,10 +58,14 @@ func NewSettingsService() *SettingsService {
 
 // LoadSettings завантажує налаштування з файлу
 func (s *SettingsService) LoadSettings() (*Settings, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	// Якщо файл не існує, повертаємо налаштування за замовчуванням
 	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
 		return &Settings{
 			Language: "uk",
+			Theme:    "dark",
 		}, nil
 	}
 
@@ -81,6 +93,9 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 
 // SaveSettings зберігає налаштування у файл
 func (s *SettingsService) SaveSettings(settings *Settings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
@@ -102,7 +117,7 @@ func (s *SettingsService) GetLanguage() string {
 func (s *SettingsService) SetLanguage(language string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.Language = language
@@ -122,7 +137,7 @@ func (s *SettingsService) GetTheme() string {
 func (s *SettingsService) SetTheme(theme string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.Theme = theme
@@ -142,10 +157,130 @@ func (s *SettingsService) GetAccentColor() string {
 func (s *SettingsService) SetAccentColor(color string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.AccentColor = color
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsBotAlertThreshold повертає поріг попередження для ElevenLabsBot
+func (s *SettingsService) GetElevenLabsBotAlertThreshold() float64 {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 0
+	}
+	return settings.ElevenLabsBotAlertThreshold
+}
+
+// SetElevenLabsBotAlertThreshold зберігає поріг попередження для ElevenLabsBot
+func (s *SettingsService) SetElevenLabsBotAlertThreshold(threshold float64) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.ElevenLabsBotAlertThreshold = threshold
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsUnlimAlertThreshold повертає поріг попередження для ElevenLabsUnlim
+func (s *SettingsService) GetElevenLabsUnlimAlertThreshold() float64 {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 0
+	}
+	return settings.ElevenLabsUnlimAlertThreshold
+}
+
+// SetElevenLabsUnlimAlertThreshold зберігає поріг попередження для ElevenLabsUnlim
+func (s *SettingsService) SetElevenLabsUnlimAlertThreshold(threshold float64) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.ElevenLabsUnlimAlertThreshold = threshold
+	return s.SaveSettings(settings)
+}
+
+// GetVoiceMakerAlertThreshold повертає поріг попередження для VoiceMaker
+func (s *SettingsService) GetVoiceMakerAlertThreshold() float64 {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 0
+	}
+	return settings.VoiceMakerAlertThreshold
+}
+
+// SetVoiceMakerAlertThreshold зберігає поріг попередження для VoiceMaker
+func (s *SettingsService) SetVoiceMakerAlertThreshold(threshold float64) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.VoiceMakerAlertThreshold = threshold
+	return s.SaveSettings(settings)
+}
+
+// GetOpenRouterAlertThreshold повертає поріг попередження для OpenRouter
+func (s *SettingsService) GetOpenRouterAlertThreshold() float64 {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 0
+	}
+	return settings.OpenRouterAlertThreshold
+}
+
+// SetOpenRouterAlertThreshold зберігає поріг попередження для OpenRouter
+func (s *SettingsService) SetOpenRouterAlertThreshold(threshold float64) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.OpenRouterAlertThreshold = threshold
+	return s.SaveSettings(settings)
+}
+
+// GetGooglerVideoAlertThreshold повертає поріг попередження для Googler (відео)
+func (s *SettingsService) GetGooglerVideoAlertThreshold() float64 {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 0
+	}
+	return settings.GooglerVideoAlertThreshold
+}
+
+// SetGooglerVideoAlertThreshold зберігає поріг попередження для Googler (відео)
+func (s *SettingsService) SetGooglerVideoAlertThreshold(threshold float64) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.GooglerVideoAlertThreshold = threshold
+	return s.SaveSettings(settings)
+}
+
+// GetGooglerImageAlertThreshold повертає поріг попередження для Googler (картинки)
+func (s *SettingsService) GetGooglerImageAlertThreshold() float64 {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 0
+	}
+	return settings.GooglerImageAlertThreshold
+}
+
+// SetGooglerImageAlertThreshold зберігає поріг попередження для Googler (картинки)
+func (s *SettingsService) SetGooglerImageAlertThreshold(threshold float64) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.GooglerImageAlertThreshold = threshold
 	return s.SaveSettings(settings)
 }
 
@@ -172,7 +307,7 @@ func (s *SettingsService) GetOpenRouterAPIKey() string {
 func (s *SettingsService) SetOpenRouterAPIKey(apiKey string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.OpenRouterAPIKey = apiKey
@@ -192,7 +327,7 @@ func (s *SettingsService) GetOpenRouterModels() []string {
 func (s *SettingsService) SetOpenRouterModels(models []string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.OpenRouterModels = models
@@ -212,7 +347,7 @@ func (s *SettingsService) GetPollinationsAPIKey() string {
 func (s *SettingsService) SetPollinationsAPIKey(apiKey string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.PollinationsAPIKey = apiKey
@@ -232,7 +367,7 @@ func (s *SettingsService) GetPollinationsModels() []string {
 func (s *SettingsService) SetPollinationsModels(models []string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.PollinationsModels = models
@@ -252,7 +387,7 @@ func (s *SettingsService) GetElevenLabsBotAPIKey() string {
 func (s *SettingsService) SetElevenLabsBotAPIKey(apiKey string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.ElevenLabsBotAPIKey = apiKey
@@ -272,7 +407,7 @@ func (s *SettingsService) GetElevenLabsUnlimAPIKey() string {
 func (s *SettingsService) SetElevenLabsUnlimAPIKey(apiKey string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.ElevenLabsUnlimAPIKey = apiKey
@@ -292,7 +427,7 @@ func (s *SettingsService) GetVoiceMakerAPIKey() string {
 func (s *SettingsService) SetVoiceMakerAPIKey(apiKey string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.VoiceMakerAPIKey = apiKey
@@ -312,7 +447,7 @@ func (s *SettingsService) GetVoiceMakerBalance() float64 {
 func (s *SettingsService) SetVoiceMakerBalance(balance float64) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.VoiceMakerBalance = balance
@@ -332,7 +467,7 @@ func (s *SettingsService) GetGooglerAPIKey() string {
 func (s *SettingsService) SetGooglerAPIKey(apiKey string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.GooglerAPIKey = apiKey
@@ -352,7 +487,7 @@ func (s *SettingsService) GetElevenLabsImageAPIKey() string {
 func (s *SettingsService) SetElevenLabsImageAPIKey(apiKey string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.ElevenLabsImageAPIKey = apiKey
@@ -372,7 +507,7 @@ func (s *SettingsService) GetElevenLabsUAAPIKey() string {
 func (s *SettingsService) SetElevenLabsUAAPIKey(apiKey string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.ElevenLabsUAAPIKey = apiKey
@@ -392,7 +527,7 @@ func (s *SettingsService) GetAssemblyAIAPIKey() string {
 func (s *SettingsService) SetAssemblyAIAPIKey(apiKey string) error {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		settings = &Settings{}
+		return err
 	}
 
 	settings.AssemblyAIAPIKey = apiKey

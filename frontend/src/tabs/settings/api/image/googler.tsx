@@ -3,15 +3,25 @@ import { useI18n } from '../../../../contexts/I18nContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { useServices } from '../../../../contexts/ServiceContext';
 // @ts-ignore
-import { GetGooglerAPIKey, SaveGooglerAPIKey } from '../../../../../wailsjs/go/main/App';
+import { GetGooglerAPIKey, SaveGooglerAPIKey, SaveGooglerVideoAlertThreshold, SaveGooglerImageAlertThreshold } from '../../../../../wailsjs/go/main/App';
 import '../../general.css';
 
 export const Googler = () => {
     const { t } = useI18n();
     const { accentColor } = useTheme();
-    const { googlerUsage, refreshGooglerUsage, loadingGoogler } = useServices();
+    const {
+        googlerUsage,
+        refreshGooglerUsage,
+        loadingGoogler,
+        googlerVideoThreshold,
+        setGooglerVideoThreshold,
+        googlerImageThreshold,
+        setGooglerImageThreshold
+    } = useServices();
 
     const [apiKey, setApiKey] = useState('');
+    const [videoThreshold, setVideoThreshold] = useState<string>('0');
+    const [imageThreshold, setImageThreshold] = useState<string>('0');
     const [isLoaded, setIsLoaded] = useState(false);
     const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -19,18 +29,32 @@ export const Googler = () => {
         const loadKey = async () => {
             const key = await GetGooglerAPIKey();
             setApiKey(key || '');
+            setVideoThreshold(googlerVideoThreshold.toString());
+            setImageThreshold(googlerImageThreshold.toString());
             setIsLoaded(true);
         };
         loadKey();
-    }, []);
+    }, [googlerVideoThreshold, googlerImageThreshold]);
 
     useEffect(() => {
         if (!isLoaded) return;
         const timer = setTimeout(() => {
             SaveGooglerAPIKey(apiKey);
+
+            const numVideoThreshold = parseFloat(videoThreshold) || 0;
+            if (numVideoThreshold !== googlerVideoThreshold) {
+                SaveGooglerVideoAlertThreshold(numVideoThreshold);
+                setGooglerVideoThreshold(numVideoThreshold);
+            }
+
+            const numImageThreshold = parseFloat(imageThreshold) || 0;
+            if (numImageThreshold !== googlerImageThreshold) {
+                SaveGooglerImageAlertThreshold(numImageThreshold);
+                setGooglerImageThreshold(numImageThreshold);
+            }
         }, 1000);
         return () => clearTimeout(timer);
-    }, [apiKey, isLoaded]);
+    }, [apiKey, videoThreshold, imageThreshold, isLoaded]);
 
     const handleCheckUsage = async () => {
         setStatusMsg(null);
@@ -51,7 +75,7 @@ export const Googler = () => {
     };
 
     return (
-        <div className="content-wrapper animate-fade">
+        <div className="content-wrapper animate-fade premium-scrollbar" style={{ overflowY: 'auto', paddingRight: '10px' }}>
             <div className="settings-container" style={{ maxWidth: '1000px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
                     <h2 className="settings-title" style={{ margin: 0 }}>{t('image.googler')}</h2>
@@ -187,6 +211,52 @@ export const Googler = () => {
                     </div>
                 </div>
 
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '25px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('api.googlerSettings.videoAlertThreshold')} & {t('api.googlerSettings.imageAlertThreshold')}</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                        <div>
+                            <span style={{ fontSize: '0.8em', opacity: 0.5, display: 'block', marginBottom: '8px' }}>{t('api.googlerSettings.videoAlertThreshold')}</span>
+                            <input
+                                type="number"
+                                className="premium-input"
+                                style={{
+                                    width: '100%',
+                                    padding: '12px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    background: 'rgba(0, 0, 0, 0.3)',
+                                    color: '#fff',
+                                    outline: 'none',
+                                    fontSize: '0.95em'
+                                }}
+                                value={videoThreshold}
+                                onChange={(e) => setVideoThreshold(e.target.value)}
+                                placeholder={t('api.googlerSettings.videoThresholdPlaceholder')}
+                            />
+                        </div>
+                        <div>
+                            <span style={{ fontSize: '0.8em', opacity: 0.5, display: 'block', marginBottom: '8px' }}>{t('api.googlerSettings.imageAlertThreshold')}</span>
+                            <input
+                                type="number"
+                                className="premium-input"
+                                style={{
+                                    width: '100%',
+                                    padding: '12px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    background: 'rgba(0, 0, 0, 0.3)',
+                                    color: '#fff',
+                                    outline: 'none',
+                                    fontSize: '0.95em'
+                                }}
+                                value={imageThreshold}
+                                onChange={(e) => setImageThreshold(e.target.value)}
+                                placeholder={t('api.googlerSettings.imageThresholdPlaceholder')}
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 <div className="glass-panel" style={{ marginTop: '25px', padding: '15px 25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', justifyContent: 'space-between', fontSize: '0.85em' }}>
                     <div style={{ display: 'flex', gap: '30px' }}>
                         <div><span style={{ opacity: 0.5 }}>Activated:</span> <span style={{ marginLeft: '8px' }}>{formatDate(googlerUsage.activation_date)}</span></div>
@@ -200,6 +270,10 @@ export const Googler = () => {
                 @keyframes spin { to { transform: rotate(360deg); } }
                 .glass-panel { backdrop-filter: blur(10px); }
                 .premium-input:focus { border-color: ${accentColor} !important; border-opacity: 0.3 !important; }
+                .premium-scrollbar::-webkit-scrollbar { width: 6px; }
+                .premium-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+                .premium-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+                .premium-scrollbar::-webkit-scrollbar-thumb:hover { background: ${accentColor}; }
             `}</style>
         </div>
     );

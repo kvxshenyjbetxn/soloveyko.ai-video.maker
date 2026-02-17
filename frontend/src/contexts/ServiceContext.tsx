@@ -19,6 +19,18 @@ interface ServiceContextType {
     googlerUsage: any;
     refreshGooglerUsage: () => Promise<void>;
     loadingGoogler: boolean;
+    elevenLabsBotThreshold: number;
+    setElevenLabsBotThreshold: (val: number) => void;
+    elevenLabsUnlimThreshold: number;
+    setElevenLabsUnlimThreshold: (val: number) => void;
+    voiceMakerThreshold: number;
+    setVoiceMakerThreshold: (val: number) => void;
+    openRouterThreshold: number;
+    setOpenRouterThreshold: (val: number) => void;
+    googlerVideoThreshold: number;
+    setGooglerVideoThreshold: (val: number) => void;
+    googlerImageThreshold: number;
+    setGooglerImageThreshold: (val: number) => void;
     refreshAllBalances: () => Promise<void>;
 }
 
@@ -44,6 +56,18 @@ const ServiceContext = createContext<ServiceContextType>({
     },
     refreshGooglerUsage: async () => { },
     loadingGoogler: false,
+    elevenLabsBotThreshold: 0,
+    setElevenLabsBotThreshold: () => { },
+    elevenLabsUnlimThreshold: 0,
+    setElevenLabsUnlimThreshold: () => { },
+    voiceMakerThreshold: 0,
+    setVoiceMakerThreshold: () => { },
+    openRouterThreshold: 0,
+    setOpenRouterThreshold: () => { },
+    googlerVideoThreshold: 0,
+    setGooglerVideoThreshold: () => { },
+    googlerImageThreshold: 0,
+    setGooglerImageThreshold: () => { },
     refreshAllBalances: async () => { },
 });
 
@@ -67,6 +91,12 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         expiration_date: 0
     });
     const [loadingGoogler, setLoadingGoogler] = useState(false);
+    const [elevenLabsBotThreshold, setElevenLabsBotThreshold] = useState(0);
+    const [elevenLabsUnlimThreshold, setElevenLabsUnlimThreshold] = useState(0);
+    const [voiceMakerThreshold, setVoiceMakerThreshold] = useState(0);
+    const [openRouterThreshold, setOpenRouterThreshold] = useState(0);
+    const [googlerVideoThreshold, setGooglerVideoThreshold] = useState(0);
+    const [googlerImageThreshold, setGooglerImageThreshold] = useState(0);
     const hasFetchedRef = useRef(false);
 
     const refreshOpenRouterBalance = async () => {
@@ -162,6 +192,19 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             };
             loadVoiceMakerBalance();
 
+            // Завантажуємо пороги попередження
+            // @ts-ignore
+            const { GetElevenLabsBotAlertThreshold, GetElevenLabsUnlimAlertThreshold, GetVoiceMakerAlertThreshold, GetOpenRouterAlertThreshold } = window.go.main.App;
+
+            if (GetElevenLabsBotAlertThreshold) GetElevenLabsBotAlertThreshold().then(setElevenLabsBotThreshold);
+            if (GetElevenLabsUnlimAlertThreshold) GetElevenLabsUnlimAlertThreshold().then(setElevenLabsUnlimThreshold);
+            if (GetVoiceMakerAlertThreshold) GetVoiceMakerAlertThreshold().then(setVoiceMakerThreshold);
+            if (GetOpenRouterAlertThreshold) GetOpenRouterAlertThreshold().then(setOpenRouterThreshold);
+
+            const { GetGooglerVideoAlertThreshold, GetGooglerImageAlertThreshold } = (window as any).go.main.App;
+            if (GetGooglerVideoAlertThreshold) GetGooglerVideoAlertThreshold().then(setGooglerVideoThreshold);
+            if (GetGooglerImageAlertThreshold) GetGooglerImageAlertThreshold().then(setGooglerImageThreshold);
+
             refreshAllBalances();
         }
     }, []);
@@ -231,6 +274,18 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             googlerUsage,
             refreshGooglerUsage,
             loadingGoogler,
+            elevenLabsBotThreshold,
+            setElevenLabsBotThreshold,
+            elevenLabsUnlimThreshold,
+            setElevenLabsUnlimThreshold,
+            voiceMakerThreshold,
+            setVoiceMakerThreshold,
+            openRouterThreshold,
+            setOpenRouterThreshold,
+            googlerVideoThreshold,
+            setGooglerVideoThreshold,
+            googlerImageThreshold,
+            setGooglerImageThreshold,
             refreshAllBalances
         }}>
             {children}

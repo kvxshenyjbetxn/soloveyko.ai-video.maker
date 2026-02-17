@@ -45,7 +45,9 @@
             "apiKeyPlaceholder": "Введите ваш X-API-Key...",
             "fetchBalance": "Обновить баланс",
             "balance": "Баланс:",
-            "saveSuccess": "Настройки ElevenLabsBot сохранены"
+            "saveSuccess": "Настройки ElevenLabsBot сохранены",
+            "alertThreshold": "Порог предупреждения (символов)",
+            "alertThresholdPlaceholder": "Например: 5000"
         }
     },
     "api": {
@@ -53,6 +55,13 @@
         "voice": "Озвучка",
         "image": "Изображение",
         "assemblyai": "AssemblyAI",
+        "googlerSettings": {
+            "apikey": "Googler API Key",
+            "videoAlertThreshold": "Порог видео (в час)",
+            "imageAlertThreshold": "Порог картинок (в час)",
+            "videoThresholdPlaceholder": "Например: 10",
+            "imageThresholdPlaceholder": "Например: 1000"
+        },
         "openrouterSettings": {
             "apikey": "API Ключ OpenRouter",
             "balance": "Баланс:",
@@ -62,7 +71,9 @@
             "modelname": "ID модели (например: openai/gpt-4)",
             "add": "Добавить модель",
             "savedmodels": "Сохраненные модели",
-            "nomodels": "Нет сохраненных моделей"
+            "nomodels": "Нет сохраненных моделей",
+            "alertThreshold": "Порог предупреждения ($)",
+            "alertThresholdPlaceholder": "Например: 5.0"
         },
         "pollinationsSettings": {
             "apikey": "API Ключ (Необязательно)",
