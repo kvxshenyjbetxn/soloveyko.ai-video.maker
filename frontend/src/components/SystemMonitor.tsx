@@ -57,7 +57,7 @@ export const SystemMonitor = () => {
     return (
         <div className={`system-monitor ${isExpanded ? 'expanded' : 'collapsed'}`}>
             <div className="monitor-container">
-                {/* Панель моніторингу */}
+                {/* Панель моніторигу */}
                 <div className="monitor-panel">
                     <div className="monitor-header">
                         <h3>{t('systemMonitor.cpu')} & {t('systemMonitor.ram')}</h3>
@@ -69,10 +69,10 @@ export const SystemMonitor = () => {
                         <div className="stat-group">
                             <div className="stat-label">
                                 <span>{t('systemMonitor.cpu')}</span>
-                                <span>{stats?.cpuPercent.toFixed(1)}%</span>
+                                <span>{(stats?.cpuPercent ?? 0).toFixed(1)}%</span>
                             </div>
                             <div className="stat-bar-bg">
-                                <div className="stat-bar-fill" style={{ width: `${stats?.cpuPercent}%` }}></div>
+                                <div className="stat-bar-fill" style={{ width: `${stats?.cpuPercent ?? 0}%` }}></div>
                             </div>
                         </div>
 
@@ -80,26 +80,26 @@ export const SystemMonitor = () => {
                         <div className="stat-group">
                             <div className="stat-label">
                                 <span>{t('systemMonitor.ram')}</span>
-                                <span>{stats?.ramPercent.toFixed(1)}%</span>
+                                <span>{(stats?.ramPercent ?? 0).toFixed(1)}%</span>
                             </div>
                             <div className="stat-bar-bg">
-                                <div className="stat-bar-fill" style={{ width: `${stats?.ramPercent}%` }}></div>
+                                <div className="stat-bar-fill" style={{ width: `${stats?.ramPercent ?? 0}%` }}></div>
                             </div>
                             <div className="stat-subtext">
-                                {formatBytes(stats?.ramUsed || 0)} / {formatBytes(stats?.ramTotal || 0)}
+                                {formatBytes(stats?.ramUsed ?? 0)} / {formatBytes(stats?.ramTotal ?? 0)}
                             </div>
                         </div>
 
                         {/* GPUs */}
                         <div className="gpus-list">
-                            {stats?.gpus.map((gpu, idx) => (
+                            {(stats?.gpus || []).map((gpu, idx) => (
                                 <div key={idx} className="stat-group gpu-item">
                                     <div className="stat-label">
-                                        <span>{t('systemMonitor.gpu')} {stats.gpus.length > 1 ? `#${idx + 1}` : ''}</span>
-                                        <span>{gpu.percent.toFixed(1)}%</span>
+                                        <span>{t('systemMonitor.gpu')} {(stats?.gpus?.length ?? 0) > 1 ? `#${idx + 1}` : ''}</span>
+                                        <span>{(gpu.percent ?? 0).toFixed(1)}%</span>
                                     </div>
                                     <div className="stat-bar-bg">
-                                        <div className="stat-bar-fill" style={{ width: `${gpu.percent}%` }}></div>
+                                        <div className="stat-bar-fill" style={{ width: `${gpu.percent ?? 0}%` }}></div>
                                     </div>
                                     <div className="gpu-name">{gpu.name}</div>
                                 </div>
@@ -108,7 +108,10 @@ export const SystemMonitor = () => {
                                 <div className="stat-group">
                                     <div className="stat-label">
                                         <span>{t('systemMonitor.gpu')}</span>
-                                        <span>0%</span>
+                                        <span>0.0%</span>
+                                    </div>
+                                    <div className="stat-bar-bg">
+                                        <div className="stat-bar-fill" style={{ width: '0%' }}></div>
                                     </div>
                                     <div className="gpu-name">Detecting...</div>
                                 </div>
@@ -121,17 +124,17 @@ export const SystemMonitor = () => {
                                 <span>{t('systemMonitor.disks')}</span>
                             </div>
                             <div className="disks-list">
-                                {stats?.disks.map((disk, idx) => (
+                                {(stats?.disks || []).map((disk, idx) => (
                                     <div key={idx} className="disk-item">
                                         <div className="disk-meta">
                                             <span>{disk.mountpoint} ({disk.device})</span>
-                                            <span>{disk.usedPercent.toFixed(0)}%</span>
+                                            <span>{(disk.usedPercent ?? 0).toFixed(0)}%</span>
                                         </div>
                                         <div className="stat-bar-bg small">
-                                            <div className="stat-bar-fill" style={{ width: `${disk.usedPercent}%` }}></div>
+                                            <div className="stat-bar-fill" style={{ width: `${disk.usedPercent ?? 0}%` }}></div>
                                         </div>
                                         <div className="disk-usage-text">
-                                            {t('systemMonitor.free')}: {formatBytes(disk.free)} / {formatBytes(disk.total)}
+                                            {t('systemMonitor.free')}: {formatBytes(disk.free ?? 0)} / {formatBytes(disk.total ?? 0)}
                                         </div>
                                     </div>
                                 ))}

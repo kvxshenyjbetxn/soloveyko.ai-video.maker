@@ -32,7 +32,7 @@
     "text": {
         "translate": "Translate",
         "rewrite": "Rewrite",
-        "placeholder": "Start writing your text here..."
+        "placeholder": "Start writing your text here... (or drag and drop a .txt file)"
     },
     "settings": {
         "general": "General",
