@@ -21,6 +21,7 @@ type Settings struct {
 	GooglerAPIKey         string   `json:"googlerAPIKey"`
 	ElevenLabsImageAPIKey string   `json:"elevenLabsImageAPIKey"`
 	ElevenLabsUAAPIKey    string   `json:"elevenLabsUAAPIKey"`
+	AssemblyAIAPIKey      string   `json:"assemblyAIAPIKey"`
 }
 
 type SettingsService struct {
@@ -375,5 +376,25 @@ func (s *SettingsService) SetElevenLabsUAAPIKey(apiKey string) error {
 	}
 
 	settings.ElevenLabsUAAPIKey = apiKey
+	return s.SaveSettings(settings)
+}
+
+// GetAssemblyAIAPIKey повертає API ключ AssemblyAI
+func (s *SettingsService) GetAssemblyAIAPIKey() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.AssemblyAIAPIKey
+}
+
+// SetAssemblyAIAPIKey зберігає API ключ AssemblyAI
+func (s *SettingsService) SetAssemblyAIAPIKey(apiKey string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.AssemblyAIAPIKey = apiKey
 	return s.SaveSettings(settings)
 }

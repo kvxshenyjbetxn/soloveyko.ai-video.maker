@@ -72,6 +72,17 @@
             "savedModels": "Выбранные модели",
             "nomodels": "Список пуст",
             "add": "Добавить"
+        },
+        "assemblyaiSettings": {
+            "apikey": "API Ключ AssemblyAI",
+            "checkConnection": "Проверить соединение",
+            "connectionSuccess": "Соединение успешно",
+            "connectionError": "Ошибка соединения",
+            "save": "Сохранить",
+            "saveSuccess": "Настройки AssemblyAI сохранены",
+            "serviceTitle": "Audio Transcription Service",
+            "configured": "Configured",
+            "notConfigured": "Not Configured"
         }
     },
     "voice": {

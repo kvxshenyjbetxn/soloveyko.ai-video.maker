@@ -72,6 +72,17 @@
       "savedModels": "Вибрані моделі",
       "nomodels": "Список порожній",
       "add": "Додати"
+    },
+    "assemblyaiSettings": {
+      "apikey": "API Ключ AssemblyAI",
+      "checkConnection": "Перевірити з'єднання",
+      "connectionSuccess": "З'єднання успішне",
+      "connectionError": "Помилка з'єднання",
+      "save": "Зберегти",
+      "saveSuccess": "Налаштування AssemblyAI збережено",
+      "serviceTitle": "Audio Transcription Service",
+      "configured": "Configured",
+      "notConfigured": "Not Configured"
     }
   },
   "voice": {

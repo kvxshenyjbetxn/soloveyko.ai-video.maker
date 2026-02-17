@@ -21,6 +21,7 @@ type App struct {
 	googler         *api.GooglerService
 	elevenLabsImage *api.ElevenLabsImageService
 	elevenLabsUA    *api.ElevenLabsUAService
+	assemblyAI      *api.AssemblyAIService
 }
 
 // NewApp creates a new App application struct
@@ -37,6 +38,7 @@ func NewApp() *App {
 		googler:         api.NewGooglerService(settings),
 		elevenLabsImage: api.NewElevenLabsImageService(settings),
 		elevenLabsUA:    api.NewElevenLabsUAService(settings),
+		assemblyAI:      api.NewAssemblyAIService(settings),
 	}
 }
 
@@ -265,4 +267,21 @@ func (a *App) SaveElevenLabsUAAPIKey(apiKey string) error {
 // GetElevenLabsUAAPIKey gets API key
 func (a *App) GetElevenLabsUAAPIKey() string {
 	return a.elevenLabsUA.GetAPIKey()
+}
+
+// AssemblyAI Methods
+
+// CheckAssemblyAIConnection checks if the API key is valid
+func (a *App) CheckAssemblyAIConnection(apiKey string) error {
+	return a.assemblyAI.CheckConnection(apiKey)
+}
+
+// SaveAssemblyAIAPIKey saves API key
+func (a *App) SaveAssemblyAIAPIKey(apiKey string) error {
+	return a.assemblyAI.SaveAPIKey(apiKey)
+}
+
+// GetAssemblyAIAPIKey gets API key
+func (a *App) GetAssemblyAIAPIKey() string {
+	return a.assemblyAI.GetAPIKey()
 }

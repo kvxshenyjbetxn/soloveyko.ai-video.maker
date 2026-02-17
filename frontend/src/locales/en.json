@@ -73,6 +73,17 @@
             "savedModels": "Selected Models",
             "nomodels": "List is empty",
             "add": "Add"
+        },
+        "assemblyaiSettings": {
+            "apikey": "AssemblyAI API Key",
+            "checkConnection": "Check Connection",
+            "connectionSuccess": "Connection successful",
+            "connectionError": "Connection error",
+            "save": "Save",
+            "saveSuccess": "AssemblyAI settings saved",
+            "serviceTitle": "Audio Transcription Service",
+            "configured": "Configured",
+            "notConfigured": "Not Configured"
         }
     },
     "voice": {
