@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import './PipelineSidebar.css';
 import { useI18n } from '../contexts/I18nContext';
+import { useQueue } from '../contexts/QueueContext';
 // @ts-ignore
 import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels } from '../../wailsjs/go/main/App';
 
@@ -8,10 +9,12 @@ interface PipelineSidebarProps {
     type: 'translate' | 'rewrite';
     isOpen: boolean;
     onToggle: () => void;
+    content: string;
 }
 
-export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, onToggle }) => {
+export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, onToggle, content }) => {
     const { t } = useI18n();
+    const { addTask } = useQueue();
     const [settings, setSettings] = useState<any>(null);
     const [models, setModels] = useState<string[]>([]);
     const [isResizing, setIsResizing] = useState(false);
@@ -70,6 +73,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     useEffect(() => {
         const width = isOpen ? (settings?.sidebarWidth || 320) : 0;
         document.documentElement.style.setProperty('--pipeline-sidebar-width', `${width}px`);
+        return () => {
+            document.documentElement.style.setProperty('--pipeline-sidebar-width', '0px');
+        };
     }, [settings?.sidebarWidth, isOpen]);
 
     const startResizing = useCallback((e: React.MouseEvent) => {
@@ -318,7 +324,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 <div className="pipeline-sidebar-footer">
                     <button
                         className="add-to-queue-btn"
-                        onClick={() => console.log("Add to queue clicked")}
+                        onClick={() => {
+                            if (content.trim()) {
+                                addTask(type, content, settings);
+                            }
+                        }}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="12" y1="5" x2="12" y2="19"></line>

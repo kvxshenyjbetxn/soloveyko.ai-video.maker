@@ -58,12 +58,6 @@ export const Translate = () => {
         }
     }, []);
 
-    useEffect(() => {
-        document.documentElement.style.setProperty('--sidebar-toggle-width', '40px');
-        return () => {
-            document.documentElement.style.setProperty('--sidebar-toggle-width', '0px');
-        };
-    }, []);
 
     const characterCount = text.length;
     const wordCount = text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
@@ -108,6 +102,7 @@ export const Translate = () => {
                 type="translate"
                 isOpen={showPipelineSettings}
                 onToggle={() => setShowPipelineSettings(!showPipelineSettings)}
+                content={text}
             />
         </div>
     );

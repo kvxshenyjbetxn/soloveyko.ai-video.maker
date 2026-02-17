@@ -9,12 +9,6 @@ export const Rewrite = () => {
     const [showPipelineSettings, setShowPipelineSettings] = useState(true);
     const dragCounter = useRef(0);
 
-    useEffect(() => {
-        document.documentElement.style.setProperty('--sidebar-toggle-width', '40px');
-        return () => {
-            document.documentElement.style.setProperty('--sidebar-toggle-width', '0px');
-        };
-    }, []);
 
     const updateText = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setText(e.target.value);
@@ -108,6 +102,7 @@ export const Rewrite = () => {
                 type="rewrite"
                 isOpen={showPipelineSettings}
                 onToggle={() => setShowPipelineSettings(!showPipelineSettings)}
+                content={text}
             />
         </div>
     );

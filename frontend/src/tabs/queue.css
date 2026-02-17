@@ -4,6 +4,23 @@
     border-bottom: 1px solid var(--border-color);
 }
 
+.clear-queue-btn {
+    background: rgba(255, 82, 82, 0.1);
+    color: #ff5252;
+    border: 1px solid rgba(255, 82, 82, 0.3);
+    padding: 6px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.clear-queue-btn:hover {
+    background: #ff5252;
+    color: white;
+}
+
 .queue-container {
     flex: 1;
     overflow-y: auto;

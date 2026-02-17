@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { useI18n } from './contexts/I18nContext';
+import { useQueue } from './contexts/QueueContext';
 import { useLogger } from './contexts/LoggerContext';
 import logo from './assets/logo.png';
 
@@ -13,6 +14,7 @@ import { General } from './tabs/settings/general';
 import { SystemMonitor } from './components/SystemMonitor';
 import { OpenRouter } from './tabs/settings/api/openrouter';
 import { ServiceBalanceMonitor } from './components/ServiceBalanceMonitor';
+import { QueueMonitor } from './components/QueueMonitor';
 import { ElevenLabsBot } from './tabs/settings/api/voice/elevenlabsbot';
 import { ElevenLabsUnlim } from './tabs/settings/api/voice/elevenlabsunlim';
 import { ElevenLabsUA } from './tabs/settings/api/voice/elevenlabsua';
@@ -58,6 +60,7 @@ type TabPath = string;
 
 function App() {
     const { t } = useI18n();
+    const { tasks } = useQueue();
     const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');
     const initLogRef = useRef(false);
@@ -87,7 +90,7 @@ function App() {
             // Text tabs
             case 'text.translate': return <Translate />;
             case 'text.rewrite': return <Rewrite />;
-            case 'queue': return <Queue />;
+            case 'queue': return <Queue setCurrentPath={setCurrentPath} />;
             case 'gallery': return <Gallery />;
 
             // Settings tabs
@@ -322,13 +325,15 @@ function App() {
                             <ScriptIcon />
                             <span>{t('tabs.text')}</span>
                         </div>
-                        <div
-                            className={`tab-item ${getMainTab(currentPath) === 'queue' ? 'active' : ''}`}
-                            onClick={() => setCurrentPath('queue')}
-                        >
-                            <QueueIcon />
-                            <span>{t('tabs.queue')}</span>
-                        </div>
+                        {tasks.length > 0 && (
+                            <div
+                                className={`tab-item ${getMainTab(currentPath) === 'queue' ? 'active' : ''}`}
+                                onClick={() => setCurrentPath('queue')}
+                            >
+                                <QueueIcon />
+                                <span>{t('tabs.queue')}</span>
+                            </div>
+                        )}
                         <div
                             className={`tab-item ${getMainTab(currentPath) === 'gallery' ? 'active' : ''}`}
                             onClick={() => setCurrentPath('gallery')}
@@ -382,6 +387,7 @@ function App() {
             }}>
                 <SystemMonitor />
                 <ServiceBalanceMonitor navigateTo={setCurrentPath} />
+                <QueueMonitor navigateTo={setCurrentPath} />
             </div>
         </div>
     )

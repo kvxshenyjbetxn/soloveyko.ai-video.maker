@@ -6,6 +6,7 @@ import { I18nProvider } from './contexts/I18nContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LoggerProvider } from './contexts/LoggerContext';
 import { ServiceProvider } from './contexts/ServiceContext';
+import { QueueProvider } from './contexts/QueueContext';
 
 const container = document.getElementById('root');
 
@@ -17,7 +18,9 @@ root.render(
             <ThemeProvider>
                 <LoggerProvider>
                     <ServiceProvider>
-                        <App />
+                        <QueueProvider>
+                            <App />
+                        </QueueProvider>
                     </ServiceProvider>
                 </LoggerProvider>
             </ThemeProvider>
