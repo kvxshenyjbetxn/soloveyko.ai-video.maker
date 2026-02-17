@@ -44,19 +44,27 @@ jobs:
 
       - name: Build Wails App
         run: |
-          # Збираємо саме для ARM64 (M1/M2/M3)
-          wails build -platform darwin/arm64 -o Soloveyko-macOS
+          # Збираємо для ARM64 (M1/M2/M3) з назвою за замовчуванням
+          wails build -platform darwin/arm64
 
       # --- Mac Specific ---
       - name: Code Sign and Zip
         if: matrix.os == 'macos-latest'
         run: |
+          # Перейменовуємо папку (в wails.json назва "soloveyko")
+          mv build/bin/soloveyko.app build/bin/Soloveyko-macOS.app
+          
           cd build/bin
-          # Надаємо права на запуск
-          chmod +x Soloveyko-macOS.app/Contents/MacOS/*
-          # Примусово підписуємо "ad-hoc" підписом (це критично для M-процесорів)
+          # Робимо всі файли в папці MacOS виконуваними (це надійніше за зірочку)
+          find Soloveyko-macOS.app/Contents/MacOS -type f -exec chmod +x {} +
+          
+          # Тимчасово прибираємо карантин (про всяк випадок для самого раннера)
+          xattr -rd com.apple.quarantine Soloveyko-macOS.app || true
+          
+          # Підписуємо локальним (ad-hoc) підписом
           codesign --force --deep --sign - Soloveyko-macOS.app
-          # Пакуємо за допомогою ditto (краще за zip для Mac)
+          
+          # Створюємо архів за допомогою ditto (зберігає всі аттрибути Mac)
           ditto -c -k --sequesterRsrc Soloveyko-macOS.app Soloveyko-macOS.zip
 
       # --- Upload Artifacts ---
