@@ -4,6 +4,7 @@ export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface QueueTask {
     id: string;
+    name: string;
     type: 'translate' | 'rewrite';
     content: string;
     status: TaskStatus;
@@ -14,7 +15,7 @@ export interface QueueTask {
 
 interface QueueContextType {
     tasks: QueueTask[];
-    addTask: (type: 'translate' | 'rewrite', content: string, settings: any) => void;
+    addTask: (type: 'translate' | 'rewrite', content: string, settings: any, name?: string) => void;
     removeTask: (id: string) => void;
     clearQueue: () => void;
     updateTaskStatus: (id: string, status: TaskStatus, progress?: number) => void;
@@ -24,10 +25,14 @@ const QueueContext = createContext<QueueContextType | undefined>(undefined);
 
 export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [tasks, setTasks] = useState<QueueTask[]>([]);
+    const [taskCounter, setTaskCounter] = useState(1);
 
-    const addTask = useCallback((type: 'translate' | 'rewrite', content: string, settings: any) => {
+    const addTask = useCallback((type: 'translate' | 'rewrite', content: string, settings: any, name?: string) => {
+        const finalName = name?.trim() || `Task ${taskCounter}`;
+
         const newTask: QueueTask = {
             id: Math.random().toString(36).substr(2, 9),
+            name: finalName,
             type,
             content,
             status: 'pending',
@@ -35,8 +40,12 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             timestamp: Date.now(),
             settings
         };
+
         setTasks(prev => [...prev, newTask]);
-    }, []);
+        if (!name?.trim()) {
+            setTaskCounter(prev => prev + 1);
+        }
+    }, [taskCounter]);
 
     const removeTask = useCallback((id: string) => {
         setTasks(prev => prev.filter(t => t.id !== id));

@@ -1,22 +1,145 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import './queue.css';
-
-import { useQueue } from '../contexts/QueueContext';
+import { useQueue, QueueTask } from '../contexts/QueueContext';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 interface QueueProps {
     setCurrentPath?: (path: string) => void;
 }
 
+const LightbulbIcon = () => (
+    <svg className="lightbulb-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12,2C8.14,2,5,5.14,5,9c0,2.38,1.19,4.47,3,5.74V17c0,0.55,0.45,1,1,1h6c0.55,0,1-0.45,1-1v-2.26 c1.81-1.27,3-3.36,3-5.74C19,5.14,15.86,2,12,2z M14,19c0,0.55-0.45,1-1,1h-2c-0.55,0-1-0.45-1-1v-1h4V19z" />
+    </svg>
+);
+
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
     const { tasks, removeTask, clearQueue } = useQueue();
+    const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
+
+    // Custom Modal State
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message?: string;
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        onConfirm: () => { }
+    });
+
+    // Redirect if last task is removed
+    useEffect(() => {
+        if (tasks.length === 0 && setCurrentPath) {
+            const timer = setTimeout(() => {
+                setCurrentPath('text.translate');
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [tasks.length, setCurrentPath]);
 
     const handleClearQueue = () => {
-        clearQueue();
-        if (setCurrentPath) {
-            setCurrentPath('text.translate');
-        }
+        setConfirmModal({
+            isOpen: true,
+            title: t('queue.clear_all'),
+            message: t('queue.delete_all_confirm'),
+            onConfirm: () => {
+                clearQueue();
+                if (setCurrentPath) setCurrentPath('text.translate');
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
+    };
+
+    const handleRemoveTask = (id: string) => {
+        setConfirmModal({
+            isOpen: true,
+            title: t('common.delete'),
+            message: t('queue.delete_confirm'),
+            onConfirm: () => {
+                removeTask(id);
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+        });
+    };
+
+    const toggleExpand = (id: string) => {
+        setExpandedTaskIds(prev =>
+            prev.includes(id) ? prev.filter(tid => tid !== id) : [...prev, id]
+        );
+    };
+
+    const renderTaskItem = (task: QueueTask) => {
+        const isExpanded = expandedTaskIds.includes(task.id);
+
+        return (
+            <div key={task.id} className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
+                <div
+                    className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''}`}
+                    onClick={() => toggleExpand(task.id)}
+                >
+                    <div className="task-card-header">
+                        <span className={`task-type-badge ${task.type}`}>
+                            {task.type === 'translate' ? t('text.translate') : t('text.rewrite')}
+                        </span>
+                        <button className="remove-task-btn" onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveTask(task.id);
+                        }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                        </button>
+                    </div>
+
+                    <div className="task-card-name" title={task.name}>
+                        {task.name}
+                    </div>
+
+                    <div className="task-content-preview" title={task.content}>
+                        {task.content}
+                    </div>
+
+                    <div className="task-stages-list">
+                        <div className={`task-stage-item status-${task.status}`}>
+                            <div className="stage-left">
+                                <LightbulbIcon />
+                                <span>{task.type === 'translate' ? t('text.translate') : t('text.rewrite')}</span>
+                            </div>
+                            <span className="stage-status-text">
+                                {task.status === 'running' ? `${task.progress}%` : task.status}
+                            </span>
+                        </div>
+                    </div>
+
+                    {task.status === 'running' && (
+                        <div className="progress-bar-container">
+                            <div
+                                className="progress-bar-fill"
+                                style={{ width: `${task.progress}%` }}
+                            ></div>
+                        </div>
+                    )}
+
+                    <div style={{ marginTop: '12px', fontSize: '10px', color: 'var(--text-placeholder)', textAlign: 'right' }}>
+                        {new Date(task.timestamp).toLocaleTimeString()}
+                    </div>
+                </div>
+
+                <div className="task-inline-log">
+                    <div className="log-header">
+                        <span className="log-title">{t('tabs.logs')}</span>
+                    </div>
+                    <div className="log-content premium-scrollbar">
+                        <div className="log-empty">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></svg>
+                            <span>{t('logsTab.empty')}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -30,68 +153,26 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                 )}
             </div>
 
-            <div className="queue-container">
+            <div className="queue-container premium-scrollbar">
                 {tasks.length === 0 ? (
                     <div className="queue-empty">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.2, marginBottom: '20px' }}><path d="M6 18H18" /><path d="M6 12H18" /><path d="M6 6H18" /><circle cx="3" cy="6" r="1" /><circle cx="3" cy="12" r="1" /><circle cx="3" cy="18" r="1" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.1, marginBottom: '20px' }}><path d="M6 18H18" /><path d="M6 12H18" /><path d="M6 6H18" /><circle cx="3" cy="6" r="1" /><circle cx="3" cy="12" r="1" /><circle cx="3" cy="18" r="1" /></svg>
                         <p>{t('queue.empty')}</p>
                     </div>
                 ) : (
                     <div className="tasks-list">
-                        {tasks.map((task) => (
-                            <div key={task.id} className="task-item animate-sidebar-item" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', marginBottom: '12px' }}>
-                                <div className="task-info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                                    <div style={{ display: 'flex', gap: '12px' }}>
-                                        <div className={`task-badge ${task.type}`} style={{
-                                            padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 800, color: 'white',
-                                            background: task.type === 'translate' ? '#3f51b5' : '#9c27b0'
-                                        }}>
-                                            {task.type.toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <div className="task-name" style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                                                {task.content.substring(0, 80)}{task.content.length > 80 ? '...' : ''}
-                                            </div>
-                                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                                {new Date(task.timestamp).toLocaleString()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <span className={`task-status ${task.status.toLowerCase()}`} style={{
-                                            fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '20px',
-                                            background: task.status === 'running' ? 'rgba(255, 193, 7, 0.1)' : task.status === 'completed' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                                            color: task.status === 'running' ? '#FFC107' : task.status === 'completed' ? '#4caf50' : 'var(--text-secondary)'
-                                        }}>
-                                            {task.status.toUpperCase()}
-                                        </span>
-                                        <button
-                                            onClick={() => removeTask(task.id)}
-                                            style={{ background: 'transparent', border: 'none', color: 'var(--text-placeholder)', cursor: 'pointer', padding: '4px' }}
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {task.status === 'running' && (
-                                    <div className="progress-container" style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
-                                        <div
-                                            className="progress-bar"
-                                            style={{
-                                                width: `${task.progress}%`,
-                                                height: '100%',
-                                                background: 'var(--accent-primary)',
-                                                transition: 'width 0.3s ease'
-                                            }}
-                                        ></div>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                        {tasks.map(renderTaskItem)}
                     </div>
                 )}
             </div>
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+            />
         </div>
     );
 };

@@ -5,6 +5,8 @@ import { useQueue } from '../contexts/QueueContext';
 // @ts-ignore
 import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels } from '../../wailsjs/go/main/App';
 
+import { TaskNameModal } from './TaskNameModal';
+
 interface PipelineSidebarProps {
     type: 'translate' | 'rewrite';
     isOpen: boolean;
@@ -19,6 +21,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [models, setModels] = useState<string[]>([]);
     const [isResizing, setIsResizing] = useState(false);
     const [editingField, setEditingField] = useState<string | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const sidebarRef = useRef<HTMLDivElement>(null);
     const lastSavedRef = useRef<string>("");
@@ -326,7 +329,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                         className="add-to-queue-btn"
                         onClick={() => {
                             if (content.trim()) {
-                                addTask(type, content, settings);
+                                setIsModalOpen(true);
                             }
                         }}
                     >
@@ -338,6 +341,12 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     </button>
                 </div>
             </div>
+
+            <TaskNameModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onConfirm={(name) => addTask(type, content, settings, name)}
+            />
 
             <button
                 className={`sidebar-floating-toggle ${isOpen ? 'is-open' : ''}`}

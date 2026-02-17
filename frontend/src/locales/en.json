@@ -22,7 +22,10 @@
         "title": "Task Queue",
         "empty": "Queue is empty",
         "status": "Status",
-        "progress": "Progress"
+        "progress": "Progress",
+        "clear_all": "Clear All",
+        "delete_confirm": "Delete this task?",
+        "delete_all_confirm": "Delete all tasks from the queue?"
     },
     "gallery": {
         "title": "Media Gallery",
@@ -185,10 +188,15 @@
             "enabled": "Enabled",
             "disabled": "Disabled (original text)"
         },
-        "add_to_queue": "Add to Queue"
+        "add_to_queue": "Add to Queue",
+        "task_name_title": "Task Name",
+        "task_name_description": "Enter a name for this task or leave empty for auto-naming"
     },
     "common": {
         "save": "Save",
-        "saving": "Saving..."
+        "saving": "Saving...",
+        "add": "Add",
+        "cancel": "Cancel",
+        "delete": "Delete"
     }
 }

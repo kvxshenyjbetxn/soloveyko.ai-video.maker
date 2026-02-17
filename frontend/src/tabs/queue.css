@@ -24,97 +24,273 @@
 .queue-container {
     flex: 1;
     overflow-y: auto;
+    padding: 10px;
 }
 
 .tasks-list {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
+    flex-wrap: wrap;
+    flex-direction: row;
+    gap: 20px;
+    align-content: flex-start;
 }
 
-.task-item {
-    background-color: var(--bg-secondary);
+.task-card-wrapper {
+    display: flex;
+    gap: 0;
+    transition: gap 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    align-items: stretch;
+    max-width: 100%;
+}
+
+.task-card-wrapper.expanded {
+    gap: 12px;
+}
+
+.task-card {
+    width: 280px;
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 20px;
-    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+    cursor: pointer;
+    flex-shrink: 0;
+    z-index: 2;
 }
 
-.task-item:hover {
+.task-card.active {
     border-color: var(--accent-primary);
-    background-color: var(--bg-tertiary);
-    transform: translateX(4px);
+    background: rgba(255, 0, 195, 0.05);
+    box-shadow: 0 0 20px rgba(255, 0, 195, 0.1);
 }
 
-.task-info {
+.task-card:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Inline Log Panel */
+.task-inline-log {
+    width: 0;
+    opacity: 0;
+    visibility: hidden;
+    background: rgba(15, 15, 20, 0.6);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(10px);
+}
+
+.task-card-wrapper.expanded .task-inline-log {
+    width: 500px;
+    opacity: 1;
+    visibility: visible;
+}
+
+.log-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.log-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-primary);
+}
+
+.log-content {
+    flex: 1;
+    padding: 15px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow-y: auto;
+}
+
+.log-empty {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    opacity: 0.3;
+}
+
+/* Existing Inner Styles... */
+.task-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
 }
 
-.task-name {
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
-.task-status {
-    font-size: 12px;
-    font-weight: 600;
+.task-type-badge {
+    font-size: 10px;
+    font-weight: 800;
     padding: 4px 10px;
-    border-radius: 20px;
+    border-radius: 6px;
+    color: white;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.task-status.processing {
-    background-color: rgba(var(--accent-primary-rgb, 0, 120, 212), 0.2);
-    color: var(--accent-primary);
-    border: 1px solid var(--accent-primary);
+.task-type-badge.translate {
+    background: #3f51b5;
 }
 
-.task-status.pending {
-    background-color: rgba(255, 165, 0, 0.1);
-    color: #ffa500;
-    border: 1px solid rgba(255, 165, 0, 0.3);
+.task-type-badge.rewrite {
+    background: #9c27b0;
 }
 
-.task-status.waiting {
-    background-color: rgba(160, 160, 160, 0.1);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
-}
-
-.progress-container {
-    height: 8px;
-    background-color: var(--bg-primary);
+.remove-task-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-placeholder);
+    cursor: pointer;
+    padding: 4px;
     border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.remove-task-btn:hover {
+    color: #ff5252;
+    background: rgba(255, 82, 82, 0.1);
+}
+
+.task-card-name {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    white-space: nowrap;
     overflow: hidden;
-    margin-bottom: 10px;
+    text-overflow: ellipsis;
 }
 
-.progress-bar {
-    height: 100%;
-    background-color: var(--accent-primary);
-    border-radius: 4px;
-    transition: width 0.3s ease;
-    box-shadow: 0 0 10px var(--accent-primary);
+.task-content-preview {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-bottom: 16px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
-.task-footer {
+.task-stages-list {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 16px;
     display: flex;
-    justify-content: flex-end;
-    font-size: 12px;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.task-stage-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    font-size: 13px;
     color: var(--text-secondary);
+}
+
+.stage-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.lightbulb-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.status-pending .lightbulb-icon {
+    color: #757575;
+}
+
+.status-running .lightbulb-icon {
+    color: #ffeb3b;
+    filter: drop-shadow(0 0 8px #ffeb3b);
+    animation: bulb-pulse 1.5s infinite;
+}
+
+.status-completed .lightbulb-icon {
+    color: #4caf50;
+}
+
+.status-failed .lightbulb-icon {
+    color: #ff5252;
+}
+
+@keyframes bulb-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+}
+
+.stage-status-text {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.progress-bar-container {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    transition: width 0.3s ease;
 }
 
 .queue-empty {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    height: 200px;
+    height: 400px;
     color: var(--text-secondary);
     border: 2px dashed var(--border-color);
-    border-radius: 12px;
+    border-radius: 16px;
+    margin-top: 20px;
+    width: 100%;
 }
