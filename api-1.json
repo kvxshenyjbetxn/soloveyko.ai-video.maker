@@ -1,0 +1,3784 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "media_gen_api",
+    "description": "Image and Video Generation API with Google Account Management.\n\n## Authentication\n\nAll API endpoints require authentication via:\n- **Header**: `X-API-Key: <your-license-key>`\n- **Query Parameter**: `?api_key=<your-license-key>`\n\n## API Versions\n\n- **v2** (`/api/v2/`): Enhanced API with file upload support. Videos are asynchronous (returns operation_id, poll for results), images are synchronous\n- **v3** (`/api/v3/`): Self-documenting API with dedicated endpoints per operation. Fully typed schemas - no examples needed\n\n## File Upload Support\n\nFor operations requiring input images, you can provide images in two formats:\n\n1. **Data URI** (inline base64): `\"data:image/png;base64,iVBORw0KGgo...\"`\n2. **File reference** (uploaded file): `\"file:abc123def456...\"`\n\n### Storage Server\n\nUpload files to `https://storage.fast-gen.ai` to get file references:\n\n```bash\n# Upload a file\ncurl -X POST \"https://storage.fast-gen.ai/upload\" \\\n  -H \"X-API-Key: YOUR_API_KEY\" \\\n  -F \"file=@image.png\"\n\n# Response\n{\n  \"success\": true,\n  \"file_hash\": \"file:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4\",\n  \"filename\": \"image.png\",\n  \"file_size\": 12345,\n  \"mime_type\": \"image/png\"\n}\n```\n\nUse the returned `file_hash` in place of data URIs:\n\n```json\n{\n  \"provider\": \"google_fx\",\n  \"operation\": \"transform\",\n  \"parameters\": {\n    \"prompt\": \"Make it look like winter\",\n    \"input_image\": \"file:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4\"\n  }\n}\n```\n\n### Storage Server Endpoints\n\n- `POST /upload` - Upload a file, returns file hash\n- `GET /file/{file_hash}` - Retrieve file as data URI\n- `HEAD /exists/{file_hash}` - Check if file exists\n- `DELETE /file/{file_hash}` - Delete a file\n- `GET /stats` - Get storage usage statistics\n\n### Storage Limits\n\n- **Max file size**: 10 MB per file\n- **Storage quota**: 40 MB per API key\n- **File TTL**: 1 hour since last use (files are automatically deleted after expiry)\n",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v2/providers": {
+      "get": {
+        "tags": [
+          "v2"
+        ],
+        "summary": "List Providers",
+        "description": "List all available providers and their capabilities.\n\nReturns a map of provider names to their supported image and video operations.",
+        "operationId": "list_providers_api_v2_providers_get",
+        "responses": {
+          "200": {
+            "description": "List of available providers",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "example": {
+                  "providers": {
+                    "google_fx": {
+                      "image_operations": [
+                        "generate",
+                        "transform",
+                        "remix",
+                        "extract_prompt"
+                      ],
+                      "video_operations": [
+                        "generate_video_from_ingredients",
+                        "generate_video_from_prompt_flow",
+                        "generate_video_start_end",
+                        "generate_video_from_image",
+                        "generate_video_from_prompt_whisk"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/images": {
+      "post": {
+        "tags": [
+          "v2"
+        ],
+        "summary": "Create Image",
+        "description": "Create or transform images using various providers.\n\n**Operations:**\n- `generate`: Generate a new image from a text prompt\n- `transform`: Transform an existing image based on a prompt\n- `remix`: Remix images with up to 3 reference images (subjects, scenes, styles)\n- `extract_prompt`: Extract a text description from an image\n\n**Image Input Formats:**\n\nFor operations requiring input images, you can provide images in two formats:\n\n1. **Data URI** (inline base64): `\"data:image/png;base64,iVBORw0KGgo...\"`\n2. **File reference** (uploaded file): `\"file:abc123def456...\"`\n\nFile references are obtained by uploading images to the storage server at\n`https://storage.fast-gen.ai/upload`. This is recommended for large images\nor when reusing the same image across multiple requests.\n\n**Request body example (generate):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"generate\",\n    \"parameters\": {\n        \"prompt\": \"A serene mountain landscape at sunset\",\n        \"aspect_ratio\": \"IMAGE_ASPECT_RATIO_LANDSCAPE\",\n        \"seed\": 12345\n    }\n}\n```\n\n**Request body example (remix with data URI):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"remix\",\n    \"parameters\": {\n        \"prompt\": \"A portrait in this style\",\n        \"reference_images\": [\n            {\"image\": \"data:image/png;base64,...\", \"category\": \"MEDIA_CATEGORY_SUBJECT\"},\n            {\"image\": \"data:image/png;base64,...\", \"category\": \"MEDIA_CATEGORY_STYLE\"}\n        ],\n        \"aspect_ratio\": \"IMAGE_ASPECT_RATIO_PORTRAIT\"\n    }\n}\n```\n\n**Request body example (remix with file references):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"remix\",\n    \"parameters\": {\n        \"prompt\": \"A portrait in this style\",\n        \"reference_images\": [\n            {\"image\": \"file:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4\", \"category\": \"MEDIA_CATEGORY_SUBJECT\"},\n            {\"image\": \"file:f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3\", \"category\": \"MEDIA_CATEGORY_STYLE\"}\n        ],\n        \"aspect_ratio\": \"IMAGE_ASPECT_RATIO_PORTRAIT\"\n    }\n}\n```",
+        "operationId": "create_image_api_v2_images_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful image generation/transformation",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "examples": {
+                  "generate": {
+                    "summary": "Image generation success",
+                    "value": {
+                      "success": true,
+                      "provider": "google_fx",
+                      "operation": "generate",
+                      "result": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                      "task_id": "550e8400-e29b-41d4-a716-446655440000"
+                    }
+                  },
+                  "transform": {
+                    "summary": "Image transformation success",
+                    "value": {
+                      "success": true,
+                      "provider": "google_fx",
+                      "operation": "transform",
+                      "result": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                      "task_id": "550e8400-e29b-41d4-a716-446655440001"
+                    }
+                  },
+                  "remix": {
+                    "summary": "Image remix success",
+                    "value": {
+                      "success": true,
+                      "provider": "google_fx",
+                      "operation": "remix",
+                      "result": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                      "task_id": "550e8400-e29b-41d4-a716-446655440002"
+                    }
+                  },
+                  "extract_prompt": {
+                    "summary": "Extract prompt success",
+                    "value": {
+                      "success": true,
+                      "provider": "google_fx",
+                      "operation": "extract_prompt",
+                      "result": "A beautiful sunset over the ocean with vibrant orange and purple clouds",
+                      "task_id": "550e8400-e29b-41d4-a716-446655440003"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or unsupported operation",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Operation 'invalid_op' not supported by provider 'google_fx'",
+                  "task_id": "550e8400-e29b-41d4-a716-446655440003",
+                  "supported_operations": [
+                    "generate",
+                    "transform",
+                    "remix",
+                    "extract_prompt"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Rate limit exceeded. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Image generation failed: provider timeout",
+                  "task_id": "550e8400-e29b-41d4-a716-446655440004",
+                  "provider": "google_fx"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/videos": {
+      "post": {
+        "tags": [
+          "v2"
+        ],
+        "summary": "Create Video",
+        "description": "Initiate video generation and return operation_id immediately.\n\n**Operations:**\n- `generate_video_from_ingredients`: Generate from 1-3 reference images\n- `generate_video_from_prompt_flow`: Generate from text prompt only\n- `generate_video_start_end`: Generate with start keyframe and optional end keyframe\n- `generate_video_from_image`: Generate from a single input image (legacy)\n- `generate_video_from_prompt_whisk`: Alternative prompt-based generation (legacy)\n\n**Image Input Formats:**\n\nFor operations requiring input images, you can provide images in two formats:\n\n1. **Data URI** (inline base64): `\"data:image/png;base64,iVBORw0KGgo...\"`\n2. **File reference** (uploaded file): `\"file:abc123def456...\"`\n\nFile references are obtained by uploading images to the storage server at\n`https://storage.fast-gen.ai/upload`. This is recommended for large images\nor when reusing the same image across multiple requests.\n\n**Request body example (generate_video_from_prompt_flow):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"generate_video_from_prompt_flow\",\n    \"parameters\": {\n        \"prompt\": \"A cinematic shot of a mountain landscape\",\n        \"aspect_ratio\": \"VIDEO_ASPECT_RATIO_LANDSCAPE\",\n        \"seed\": 12345\n    }\n}\n```\n\n**Request body example (generate_video_from_ingredients with data URI):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"generate_video_from_ingredients\",\n    \"parameters\": {\n        \"prompt\": \"A dynamic scene combining these elements\",\n        \"reference_images\": [\n            \"data:image/png;base64,...\",\n            \"data:image/png;base64,...\"\n        ],\n        \"seed\": 12345\n    }\n}\n```\n\n**Request body example (generate_video_from_ingredients with file references):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"generate_video_from_ingredients\",\n    \"parameters\": {\n        \"prompt\": \"A dynamic scene combining these elements\",\n        \"reference_images\": [\n            \"file:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4\",\n            \"file:f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3\"\n        ],\n        \"seed\": 12345\n    }\n}\n```\n\n**Request body example (generate_video_start_end with data URI):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"generate_video_start_end\",\n    \"parameters\": {\n        \"prompt\": \"Smooth camera zoom into the scene\",\n        \"start_image\": \"data:image/png;base64,...\",\n        \"end_image\": \"data:image/png;base64,...\",\n        \"aspect_ratio\": \"VIDEO_ASPECT_RATIO_LANDSCAPE\"\n    }\n}\n```\n\n**Request body example (generate_video_start_end with file references):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"generate_video_start_end\",\n    \"parameters\": {\n        \"prompt\": \"Smooth camera zoom into the scene\",\n        \"start_image\": \"file:a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4\",\n        \"end_image\": \"file:f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3\",\n        \"aspect_ratio\": \"VIDEO_ASPECT_RATIO_LANDSCAPE\"\n    }\n}\n```\n\n**Request body example (generate_video_start_end with start image only):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"generate_video_start_end\",\n    \"parameters\": {\n        \"prompt\": \"Smooth camera zoom into the scene\",\n        \"start_image\": \"data:image/png;base64,...\",\n        \"aspect_ratio\": \"VIDEO_ASPECT_RATIO_LANDSCAPE\"\n    }\n}\n```\n\n**Request body example (generate_video_from_image - legacy):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"generate_video_from_image\",\n    \"parameters\": {\n        \"prompt\": \"Animate this scene with gentle motion\",\n        \"input_image\": \"data:image/png;base64,...\"\n    }\n}\n```\n\n**Request body example (generate_video_from_prompt_whisk - legacy):**\n```json\n{\n    \"provider\": \"google_fx\",\n    \"operation\": \"generate_video_from_prompt_whisk\",\n    \"parameters\": {\n        \"prompt\": \"A serene ocean wave at sunset\"\n    }\n}\n```\n\n**Parameter notes:**\n- `seed`: Optional integer for reproducible results (max value: 2147483647)\n\nPoll `/videos/status/{operation_id}` to check progress and retrieve results.",
+        "operationId": "create_video_api_v2_videos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VideoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Video generation initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2VideoResponse"
+                },
+                "example": {
+                  "success": true,
+                  "provider": "google_fx",
+                  "operation": "generate_video_from_prompt_flow",
+                  "operation_id": "550e8400-e29b-41d4-a716-446655440000",
+                  "status": "pending"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Rate limit exceeded. Please try again later."
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Failed to start video generation"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/videos/status/{operation_id}": {
+      "get": {
+        "tags": [
+          "v2"
+        ],
+        "summary": "Get Video Status",
+        "description": "Check the status of a video generation operation.\n\n**Status values:**\n- `pending`: Operation queued, not yet started\n- `processing`: Video is being generated\n- `success`: Video ready, `result` contains the data URI\n- `error`: Generation failed, check `error` field for details\n\nPoll this endpoint until status is `success` or `error`.\nOperations expire after a period of inactivity.",
+        "operationId": "get_video_status_api_v2_videos_status__operation_id__get",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Operation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video operation status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2VideoStatusResponse"
+                },
+                "examples": {
+                  "pending": {
+                    "summary": "Operation pending",
+                    "value": {
+                      "operation_id": "550e8400-e29b-41d4-a716-446655440000",
+                      "status": "pending"
+                    }
+                  },
+                  "processing": {
+                    "summary": "Operation in progress",
+                    "value": {
+                      "operation_id": "550e8400-e29b-41d4-a716-446655440000",
+                      "status": "processing"
+                    }
+                  },
+                  "success": {
+                    "summary": "Operation completed successfully",
+                    "value": {
+                      "operation_id": "550e8400-e29b-41d4-a716-446655440000",
+                      "status": "success",
+                      "result": "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDE..."
+                    }
+                  },
+                  "error": {
+                    "summary": "Operation failed",
+                    "value": {
+                      "operation_id": "550e8400-e29b-41d4-a716-446655440000",
+                      "status": "error",
+                      "error": "Video generation failed: content policy violation",
+                      "translations": {
+                        "en": "Content policy violation",
+                        "es": "Violación de política de contenido"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Operation not found or expired",
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "Operation 550e8400-e29b-41d4-a716-446655440000 not found or expired"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/usage": {
+      "get": {
+        "tags": [
+          "v2"
+        ],
+        "summary": "Get Usage Stats",
+        "description": "Get current usage statistics for the authenticated API key.\n\nReturns the account's rate limits and current usage within the hourly window.\nUse this endpoint to monitor your API consumption and avoid hitting rate limits.",
+        "operationId": "get_usage_stats_api_v2_usage_get",
+        "responses": {
+          "200": {
+            "description": "Current usage statistics",
+            "content": {
+              "application/json": {
+                "schema": {},
+                "example": {
+                  "api_key": "ogCv4xdIDt8x0alxFxqQkthg9ORkOfcY",
+                  "account_limits": {
+                    "img_gen_per_hour_limit": 5000,
+                    "video_gen_per_hour_limit": 10000,
+                    "img_generation_threads_allowed": 50,
+                    "video_generation_threads_allowed": 100
+                  },
+                  "current_usage": {
+                    "hourly_usage": {},
+                    "active_threads": {
+                      "image_threads": 0,
+                      "video_threads": 0
+                    }
+                  },
+                  "usage_window": "per_hour",
+                  "activation_date": 1732900800,
+                  "expiration_date": 1735579200
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or missing API key",
+            "content": {
+              "application/json": {
+                "example": {
+                  "error": "Invalid API key"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/account/usage": {
+      "get": {
+        "tags": [
+          "v3-account"
+        ],
+        "summary": "Get Usage Stats",
+        "description": "Get current usage statistics for the authenticated API key.\n\nReturns the account's rate limits and current usage within the hourly window.\nUse this endpoint to monitor your API consumption and avoid hitting rate limits.",
+        "operationId": "get_usage_stats_api_v3_account_usage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/image/from-text": {
+      "post": {
+        "tags": [
+          "v3-image"
+        ],
+        "summary": "Generate Image From Text",
+        "description": "Generate an image from a text prompt.",
+        "operationId": "generate_image_from_text_api_v3_image_from_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxGenerateImageRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxGenerateImageRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/image/from-text-flow": {
+      "post": {
+        "tags": [
+          "v3-image"
+        ],
+        "summary": "Generate Image From Text Flow",
+        "description": "Generate an image from a text prompt using Flow API.",
+        "operationId": "generate_image_from_text_flow_api_v3_image_from_text_flow_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxGenerateImageFlowRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxGenerateImageFlowRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/image/transform": {
+      "post": {
+        "tags": [
+          "v3-image"
+        ],
+        "summary": "Transform Image",
+        "description": "Transform an existing image based on a text prompt.",
+        "operationId": "transform_image_api_v3_image_transform_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxTransformImageRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxTransformImageRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/image/remix": {
+      "post": {
+        "tags": [
+          "v3-image"
+        ],
+        "summary": "Remix Image",
+        "description": "Remix images by combining subjects, scenes, and styles from reference images.",
+        "operationId": "remix_image_api_v3_image_remix_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxRemixImageRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxRemixImageRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/image/extract-prompt": {
+      "post": {
+        "tags": [
+          "v3-image"
+        ],
+        "summary": "Extract Prompt",
+        "description": "Extract a text description from an image.",
+        "operationId": "extract_prompt_api_v3_image_extract_prompt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxExtractPromptRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxExtractPromptRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractPromptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/video/from-text": {
+      "post": {
+        "tags": [
+          "v3-video"
+        ],
+        "summary": "Generate Video From Text",
+        "description": "Generate a video from a text prompt.",
+        "operationId": "generate_video_from_text_api_v3_video_from_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxGenerateVideoFromPromptRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxGenerateVideoFromPromptRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/video/from-image-legacy": {
+      "post": {
+        "tags": [
+          "v3-video"
+        ],
+        "summary": "Generate Video From Image Legacy",
+        "description": "Generate a video from a single input image (legacy).",
+        "operationId": "generate_video_from_image_legacy_api_v3_video_from_image_legacy_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxGenerateVideoFromImageLegacyRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxGenerateVideoFromImageLegacyRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/video/from-text-legacy": {
+      "post": {
+        "tags": [
+          "v3-video"
+        ],
+        "summary": "Generate Video From Text Legacy",
+        "description": "Generate a video from a text prompt (legacy alternative method).",
+        "operationId": "generate_video_from_text_legacy_api_v3_video_from_text_legacy_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxGenerateVideoFromPromptLegacyRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxGenerateVideoFromPromptLegacyRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/video/from-ingredients": {
+      "post": {
+        "tags": [
+          "v3-video"
+        ],
+        "summary": "Generate Video From Ingredients",
+        "description": "Generate a video from 1-3 reference images.",
+        "operationId": "generate_video_from_ingredients_api_v3_video_from_ingredients_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxGenerateVideoFromIngredientsRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxGenerateVideoFromIngredientsRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/video/from-keyframes": {
+      "post": {
+        "tags": [
+          "v3-video"
+        ],
+        "summary": "Generate Video From Keyframes",
+        "description": "Generate a video with start and optional end keyframes.",
+        "operationId": "generate_video_from_keyframes_api_v3_video_from_keyframes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/GoogleFxGenerateVideoStartEndRequest"
+                  }
+                ],
+                "title": "Request Data",
+                "discriminator": {
+                  "propertyName": "provider",
+                  "mapping": {
+                    "google_fx": "#/components/schemas/GoogleFxGenerateVideoStartEndRequest"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/video/status/{operation_id}": {
+      "get": {
+        "tags": [
+          "v3-video"
+        ],
+        "summary": "Get Video Status",
+        "description": "Check the status of a video generation operation.\n\nPoll this endpoint until status is `success` or `error`.",
+        "operationId": "get_video_status_api_v3_video_status__operation_id__get",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Operation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/flow/image/generate": {
+      "post": {
+        "tags": [
+          "v4-flow-image"
+        ],
+        "summary": "Generate Image",
+        "description": "Generate an image using Google Flow API (async).\n\nSupports GEM_PIX (Nano), GEM_PIX_2 (Nano Pro), and IMAGEN_3_5 models.\nOptionally provide reference images for style/content guidance.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_image_api_v4_flow_image_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlowGenerateImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/flow/video/from-text": {
+      "post": {
+        "tags": [
+          "v4-flow-video"
+        ],
+        "summary": "Generate Video From Text",
+        "description": "Generate a video from a text prompt using Google Flow API (VEO).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_video_from_text_api_v4_flow_video_from_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlowGenerateVideoFromTextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/flow/video/from-ingredients": {
+      "post": {
+        "tags": [
+          "v4-flow-video"
+        ],
+        "summary": "Generate Video From Ingredients",
+        "description": "Generate a video from 1-3 reference images using Google Flow API (VEO).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_video_from_ingredients_api_v4_flow_video_from_ingredients_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateVideoFromIngredientsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/flow/video/from-keyframes": {
+      "post": {
+        "tags": [
+          "v4-flow-video"
+        ],
+        "summary": "Generate Video From Keyframes",
+        "description": "Generate a video with start/end keyframes using Google Flow API (VEO).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_video_from_keyframes_api_v4_flow_video_from_keyframes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateVideoFromKeyframesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/whisk/image/generate": {
+      "post": {
+        "tags": [
+          "v4-whisk-image"
+        ],
+        "summary": "Generate Image",
+        "description": "Generate an image from a text prompt using Google Whisk API (Imagen 4).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_image_api_v4_whisk_image_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhiskGenerateImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/whisk/image/transform": {
+      "post": {
+        "tags": [
+          "v4-whisk-image"
+        ],
+        "summary": "Transform Image",
+        "description": "Transform an existing image based on a text prompt.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "transform_image_api_v4_whisk_image_transform_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransformImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/whisk/image/remix": {
+      "post": {
+        "tags": [
+          "v4-whisk-image"
+        ],
+        "summary": "Remix Image",
+        "description": "Generate an image using multiple reference images (subjects, scenes, styles).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "remix_image_api_v4_whisk_image_remix_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemixImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/whisk/image/extract-prompt": {
+      "post": {
+        "tags": [
+          "v4-whisk-image"
+        ],
+        "summary": "Extract Prompt",
+        "description": "Extract a text description from an image.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "extract_prompt_api_v4_whisk_image_extract_prompt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractPromptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/whisk/video/from-text": {
+      "post": {
+        "tags": [
+          "v4-whisk-video"
+        ],
+        "summary": "Generate Video From Text",
+        "description": "Generate a video from a text prompt using legacy Whisk API.\n\nThis generates an image from the prompt first, then creates a video from that image.\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_video_from_text_api_v4_whisk_video_from_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhiskGenerateVideoFromTextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/whisk/video/from-image": {
+      "post": {
+        "tags": [
+          "v4-whisk-video"
+        ],
+        "summary": "Generate Video From Image",
+        "description": "Generate a video from a single input image using legacy Whisk API.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_video_from_image_api_v4_whisk_video_from_image_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateVideoFromImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/grok/image/generate": {
+      "post": {
+        "tags": [
+          "v4-grok-image"
+        ],
+        "summary": "Generate Images",
+        "description": "Generate 4 images from a text prompt using Grok (async).\n\nGrok's WebSocket-based image generation always produces 4 images per request.\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result (list of 4 image DataURIs).",
+        "operationId": "generate_images_api_v4_grok_image_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateImagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/grok/image/edit": {
+      "post": {
+        "tags": [
+          "v4-grok-image"
+        ],
+        "summary": "Edit Image",
+        "description": "Edit/transform an image using Grok's image-to-image mode.\n\nUpload an image and provide a prompt describing the desired edit/transformation.\nReturns 2 edited variations of the image.\n\nThe image can be provided as:\n- Data URI (e.g., \"data:image/jpeg;base64,/9j/4AAQ...\")\n- File reference (e.g., \"file:abc123def456...\")\n\nSupported image formats: JPEG, PNG, WebP. Maximum size: 5MB.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result (list of 2 edited image URLs).",
+        "operationId": "edit_image_api_v4_grok_image_edit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/grok/video/from-text": {
+      "post": {
+        "tags": [
+          "v4-grok-video"
+        ],
+        "summary": "Generate Video From Text",
+        "description": "Generate a video from a text prompt using Grok.\n\nThis endpoint requires server-side statsig token configuration\n(GROK_TOKEN_SERVICE_URL environment variable).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_video_from_text_api_v4_grok_video_from_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateVideoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/grok/video/from-image": {
+      "post": {
+        "tags": [
+          "v4-grok-video"
+        ],
+        "summary": "Generate Video From Image",
+        "description": "Generate a video from an uploaded image (image-to-video) using Grok.\n\nThis uploads the image to Grok and then animates it into a video.\n\nThe image can be provided as:\n- Data URI (e.g., \"data:image/jpeg;base64,/9j/4AAQ...\")\n- File reference (e.g., \"file:abc123def456...\")\n\nSupported image formats: JPEG, PNG, WebP. Maximum size: 5MB.\n\nThis endpoint requires server-side statsig token configuration\n(GROK_TOKEN_SERVICE_URL environment variable).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_video_from_image_api_v4_grok_video_from_image_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VideoFromImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/prompt/generate": {
+      "post": {
+        "tags": [
+          "v4-prompt"
+        ],
+        "summary": "Generate a prompt using server-side LLM",
+        "description": "Generate text using the server's OpenAI API key.\n\nToken usage (input + output) is tracked per API key and counted against the hourly token limit.\nThe model and parameters are configured server-side.\n\n**Rate Limiting:**\n- Total tokens consumed (prompt + completion) count against `prompt_tokens_per_hour_limit`\n- Pre-check rejects requests if the token budget is already exhausted\n- Actual token count is recorded after each successful generation",
+        "operationId": "generate_prompt_api_v4_prompt_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneratePromptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratePromptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/gemini/image/generate": {
+      "post": {
+        "tags": [
+          "v4-gemini-image"
+        ],
+        "summary": "Generate Image",
+        "description": "Generate an image using Gemini API (async).\n\nUses the gemini-imagen model for image generation.\nOptionally provide reference images for style/content guidance.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_image_api_v4_gemini_image_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeminiImageGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/gemini/video/generate": {
+      "post": {
+        "tags": [
+          "v4-gemini-video"
+        ],
+        "summary": "Generate Video",
+        "description": "Generate a video using Gemini API (async).\n\nUses the gemini-veo model for video generation.\nOptionally provide reference images for style/content guidance.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id}\nto get the result.",
+        "operationId": "generate_video_api_v4_gemini_video_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeminiVideoGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/operations/{operation_id}": {
+      "get": {
+        "tags": [
+          "v4-operations"
+        ],
+        "summary": "Get Operation Status",
+        "description": "Get the status of any async operation (image or video).\n\nThis is the unified status endpoint for all V4 operations.\nPoll this endpoint to check if your operation has completed.\n\nReturns:\n    - status: \"pending\" (queued), \"processing\" (in progress), \"success\", or \"error\"\n    - result: The generated content (DataURI) when status is \"success\"\n    - error: Error message when status is \"error\"",
+        "operationId": "get_operation_status_api_v4_operations__operation_id__get",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Operation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint. Use ?deep=true for dependency checks.",
+        "operationId": "health_check_api_health_get",
+        "parameters": [
+          {
+            "name": "deep",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Deep"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "Root endpoint",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountLimits": {
+        "properties": {
+          "img_gen_per_hour_limit": {
+            "type": "integer",
+            "title": "Img Gen Per Hour Limit",
+            "default": 0
+          },
+          "video_gen_per_hour_limit": {
+            "type": "integer",
+            "title": "Video Gen Per Hour Limit",
+            "default": 0
+          },
+          "img_generation_threads_allowed": {
+            "type": "integer",
+            "title": "Img Generation Threads Allowed",
+            "default": 0
+          },
+          "video_generation_threads_allowed": {
+            "type": "integer",
+            "title": "Video Generation Threads Allowed",
+            "default": 0
+          },
+          "prompt_tokens_per_hour_limit": {
+            "type": "integer",
+            "title": "Prompt Tokens Per Hour Limit",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "AccountLimits",
+        "description": "Account rate limits."
+      },
+      "ActiveThreads": {
+        "properties": {
+          "image_threads": {
+            "type": "integer",
+            "title": "Image Threads",
+            "default": 0
+          },
+          "video_threads": {
+            "type": "integer",
+            "title": "Video Threads",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ActiveThreads",
+        "description": "Current active thread counts."
+      },
+      "CurrentUsage": {
+        "properties": {
+          "hourly_usage": {
+            "$ref": "#/components/schemas/HourlyUsage",
+            "default": {}
+          },
+          "active_threads": {
+            "$ref": "#/components/schemas/ActiveThreads",
+            "default": {
+              "image_threads": 0,
+              "video_threads": 0
+            }
+          }
+        },
+        "type": "object",
+        "title": "CurrentUsage",
+        "description": "Current usage statistics."
+      },
+      "EditImageRequest": {
+        "properties": {
+          "image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Image",
+            "description": "Image as data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Supported formats: JPEG, PNG, WebP. Maximum size: 5MB."
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the edit/transformation (e.g., 'make it HDR', 'cartoon style', 'add sunset lighting')"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image",
+          "prompt"
+        ],
+        "title": "EditImageRequest",
+        "description": "Edit/transform an image using Grok's image-to-image mode.\n\nUpload an image and provide a prompt describing the desired edit/transformation.\nReturns 2 edited variations of the image."
+      },
+      "ExtractPromptRequest": {
+        "properties": {
+          "input_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Input Image",
+            "description": "Image to analyze"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_image"
+        ],
+        "title": "ExtractPromptRequest",
+        "description": "Extract a text description from an image."
+      },
+      "ExtractPromptResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "result",
+          "task_id"
+        ],
+        "title": "ExtractPromptResponse",
+        "description": "Response for successful prompt extraction."
+      },
+      "FlowGenerateImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "IMAGE_ASPECT_RATIO_PORTRAIT",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Image aspect ratio: PORTRAIT or LANDSCAPE",
+            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "GEM_PIX",
+              "GEM_PIX_2",
+              "IMAGEN_3_5"
+            ],
+            "title": "Model",
+            "description": "Model to use: GEM_PIX (Nano), GEM_PIX_2 (Nano Pro), or IMAGEN_3_5",
+            "default": "GEM_PIX_2"
+          },
+          "reference_images": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^data:[^;]+;base64,"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^file:[a-f0-9]{32}$"
+                    }
+                  ],
+                  "description": "Image as data URI or file reference. Maximum size: 5MB"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Images",
+            "description": "Optional reference images (up to 10 for GEM_PIX_2) for style/content guidance"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "FlowGenerateImageRequest",
+        "description": "Generate an image using Google Flow API (GEM_PIX/GEM_PIX_2/Imagen 4 models)."
+      },
+      "FlowGenerateVideoFromTextRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "VIDEO_ASPECT_RATIO_PORTRAIT",
+              "VIDEO_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio: PORTRAIT or LANDSCAPE",
+            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "FlowGenerateVideoFromTextRequest",
+        "description": "Generate a video from text prompt using Google Flow API (VEO)."
+      },
+      "GeminiImageGenerateRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the image to generate"
+          },
+          "reference_images": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^data:[^;]+;base64,"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^file:[a-f0-9]{32}$"
+                    }
+                  ],
+                  "description": "Image as data URI or file reference. Maximum size: 5MB"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Images",
+            "description": "Optional reference images (data URI or file reference) to guide generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GeminiImageGenerateRequest",
+        "description": "Generate an image using Gemini API (gemini-imagen model).\n\nSupports generation from text prompt with optional reference images.\nReference images can be used for style transfer, composition guidance, etc."
+      },
+      "GeminiVideoGenerateRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "reference_images": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^data:[^;]+;base64,"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^file:[a-f0-9]{32}$"
+                    }
+                  ],
+                  "description": "Image as data URI or file reference. Maximum size: 5MB"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Images",
+            "description": "Optional reference images (data URI or file reference) to guide generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GeminiVideoGenerateRequest",
+        "description": "Generate a video using Gemini API (gemini-veo model).\n\nSupports generation from text prompt with optional reference images.\nReference images can be used for style transfer, subject guidance, etc."
+      },
+      "GenerateImagesRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the images to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "9:16",
+              "16:9"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Image aspect ratio: 1:1, 2:3, 3:2, 9:16, or 16:9",
+            "default": "3:2"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerateImagesRequest",
+        "description": "Generate 4 images from a text prompt using Grok.\n\nGrok's WebSocket-based image generation always produces 4 images per request."
+      },
+      "GeneratePromptRequest": {
+        "properties": {
+          "user_prompt": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "User Prompt",
+            "description": "The full prompt to send to the LLM (e.g., base prompt template with user text already substituted)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_prompt"
+        ],
+        "title": "GeneratePromptRequest",
+        "description": "Request to generate a prompt via server-side LLM."
+      },
+      "GeneratePromptResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id",
+            "description": "Unique operation ID for tracking and error reporting"
+          },
+          "generated_text": {
+            "type": "string",
+            "title": "Generated Text",
+            "description": "The LLM-generated text"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/PromptTokenUsage",
+            "description": "Token usage breakdown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "generated_text",
+          "usage"
+        ],
+        "title": "GeneratePromptResponse",
+        "description": "Response from server-side prompt generation."
+      },
+      "GenerateVideoFromImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt to guide the video generation"
+          },
+          "input_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Input Image",
+            "description": "Starting image for the video"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "input_image"
+        ],
+        "title": "GenerateVideoFromImageRequest",
+        "description": "Generate a video from a single input image using legacy Whisk API."
+      },
+      "GenerateVideoFromIngredientsRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "reference_images": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^data:[^;]+;base64,"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^file:[a-f0-9]{32}$"
+                }
+              ],
+              "description": "Image as data URI or file reference. Maximum size: 5MB"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Reference Images",
+            "description": "Reference images (1-3) to guide video generation"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "VIDEO_ASPECT_RATIO_PORTRAIT",
+              "VIDEO_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio: PORTRAIT or LANDSCAPE",
+            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "reference_images"
+        ],
+        "title": "GenerateVideoFromIngredientsRequest",
+        "description": "Generate a video from 1-3 reference images using Google Flow API (VEO)."
+      },
+      "GenerateVideoFromKeyframesRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "start_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Start Image",
+            "description": "Starting keyframe image (required)"
+          },
+          "end_image": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^data:[^;]+;base64,"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^file:[a-f0-9]{32}$"
+                  }
+                ],
+                "description": "Image as data URI or file reference. Maximum size: 5MB"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Image",
+            "description": "Optional ending keyframe image"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "VIDEO_ASPECT_RATIO_PORTRAIT",
+              "VIDEO_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio: PORTRAIT or LANDSCAPE",
+            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "start_image"
+        ],
+        "title": "GenerateVideoFromKeyframesRequest",
+        "description": "Generate a video with start/end keyframes using Google Flow API (VEO)."
+      },
+      "GenerateVideoRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "9:16",
+              "16:9"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio: 1:1, 2:3, 3:2, 9:16, or 16:9",
+            "default": "3:2"
+          },
+          "upscale": {
+            "type": "boolean",
+            "title": "Upscale",
+            "description": "If true, upscale the video to HD after generation. Adds ~5-10 seconds to processing time.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerateVideoRequest",
+        "description": "Generate a video from a text prompt using Grok.\n\nNote: Grok video generation requires a valid statsig token which must be\nconfigured server-side via GROK_TOKEN_SERVICE_URL. The operation returns\nimmediately with an operation_id that can be polled for completion.\n\nVideo duration is fixed at 6 seconds."
+      },
+      "GoogleFxExtractPromptRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "input_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Input Image",
+            "description": "Image to analyze (data URI or file reference)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_image"
+        ],
+        "title": "GoogleFxExtractPromptRequest",
+        "description": "Extract a text description from an image using Google FX."
+      },
+      "GoogleFxGenerateImageFlowRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "IMAGE_ASPECT_RATIO_PORTRAIT",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output image aspect ratio (portrait or landscape only, square not supported)",
+            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "GEM_PIX",
+              "GEM_PIX_2",
+              "IMAGEN_3_5"
+            ],
+            "title": "Model",
+            "description": "Model to use: GEM_PIX (nano banana), GEM_PIX_2 (nano banana pro), or IMAGEN_3_5 (imagen 4)",
+            "default": "GEM_PIX_2"
+          },
+          "reference_images": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^data:[^;]+;base64,"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^file:[a-f0-9]{32}$"
+                    }
+                  ],
+                  "description": "Image as data URI or file reference. Maximum size: 5MB"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Images",
+            "description": "Optional reference images (1-10 depending on model). Data URIs or file references."
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GoogleFxGenerateImageFlowRequest",
+        "description": "Generate an image from a text prompt using Google FX Flow API (GEM_PIX, GEM_PIX_2, or Imagen 4)."
+      },
+      "GoogleFxGenerateImageRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "IMAGE_ASPECT_RATIO_PORTRAIT",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE",
+              "IMAGE_ASPECT_RATIO_SQUARE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output image aspect ratio",
+            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GoogleFxGenerateImageRequest",
+        "description": "Generate an image from a text prompt using Google FX (Imagen 4)."
+      },
+      "GoogleFxGenerateVideoFromImageLegacyRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description guiding the video generation"
+          },
+          "input_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Input Image",
+            "description": "Starting image (data URI or file reference). Max 5MB"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "input_image"
+        ],
+        "title": "GoogleFxGenerateVideoFromImageLegacyRequest",
+        "description": "Generate a video from a single input image using Google FX (legacy)."
+      },
+      "GoogleFxGenerateVideoFromIngredientsRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description guiding the video generation"
+          },
+          "reference_images": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^data:[^;]+;base64,"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^file:[a-f0-9]{32}$"
+                }
+              ],
+              "description": "Image as data URI or file reference. Maximum size: 5MB"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Reference Images",
+            "description": "1-3 reference images (data URIs or file references). Max 5MB each"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "VIDEO_ASPECT_RATIO_PORTRAIT",
+              "VIDEO_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output video aspect ratio",
+            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "reference_images"
+        ],
+        "title": "GoogleFxGenerateVideoFromIngredientsRequest",
+        "description": "Generate a video from 1-3 reference images using Google FX."
+      },
+      "GoogleFxGenerateVideoFromPromptLegacyRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the video to generate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GoogleFxGenerateVideoFromPromptLegacyRequest",
+        "description": "Generate a video from a text prompt using Google FX (legacy alternative method)."
+      },
+      "GoogleFxGenerateVideoFromPromptRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the video to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "VIDEO_ASPECT_RATIO_PORTRAIT",
+              "VIDEO_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output video aspect ratio",
+            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GoogleFxGenerateVideoFromPromptRequest",
+        "description": "Generate a video from a text prompt using Google FX (VEO)."
+      },
+      "GoogleFxGenerateVideoStartEndRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description guiding the video generation"
+          },
+          "start_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Start Image",
+            "description": "Starting keyframe image (data URI or file reference). Max 5MB"
+          },
+          "end_image": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^data:[^;]+;base64,"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^file:[a-f0-9]{32}$"
+                  }
+                ],
+                "description": "Image as data URI or file reference. Maximum size: 5MB"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Image",
+            "description": "Optional ending keyframe image. Max 5MB"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "VIDEO_ASPECT_RATIO_PORTRAIT",
+              "VIDEO_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output video aspect ratio",
+            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "start_image"
+        ],
+        "title": "GoogleFxGenerateVideoStartEndRequest",
+        "description": "Generate a video with start and optional end keyframes using Google FX."
+      },
+      "GoogleFxRemixImageRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description guiding the remix"
+          },
+          "reference_images": {
+            "items": {
+              "$ref": "#/components/schemas/src__api__v3__models__image__RemixReference"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Reference Images",
+            "description": "1-3 reference images with categories"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "IMAGE_ASPECT_RATIO_PORTRAIT",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE",
+              "IMAGE_ASPECT_RATIO_SQUARE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output image aspect ratio",
+            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          },
+          "strict_mode": {
+            "type": "boolean",
+            "title": "Strict Mode",
+            "description": "Use strict mode (R2I model) or relaxed mode (IMAGEN_3_5 model)",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "reference_images"
+        ],
+        "title": "GoogleFxRemixImageRequest",
+        "description": "Remix images by combining subjects, scenes, and styles from reference images."
+      },
+      "GoogleFxTransformImageRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the transformation to apply"
+          },
+          "input_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Input Image",
+            "description": "Image to transform (data URI or file reference)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "input_image"
+        ],
+        "title": "GoogleFxTransformImageRequest",
+        "description": "Transform an existing image based on a text prompt using Google FX."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HourlyUsage": {
+        "properties": {
+          "image_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HourlyUsageStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HourlyUsageStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HourlyUsageStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "HourlyUsage",
+        "description": "Hourly usage breakdown by operation type."
+      },
+      "HourlyUsageStats": {
+        "properties": {
+          "current_usage": {
+            "type": "integer",
+            "title": "Current Usage"
+          },
+          "window_start": {
+            "type": "number",
+            "title": "Window Start"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_usage",
+          "window_start"
+        ],
+        "title": "HourlyUsageStats",
+        "description": "Usage statistics for a single endpoint within the current hourly window."
+      },
+      "ImageRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Parameters"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "generate",
+              "transform",
+              "remix",
+              "extract_prompt"
+            ],
+            "title": "Operation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "operation"
+        ],
+        "title": "ImageRequest",
+        "examples": [
+          {
+            "operation": "generate",
+            "parameters": {
+              "aspect_ratio": "IMAGE_ASPECT_RATIO_LANDSCAPE",
+              "prompt": "A serene mountain landscape at sunset",
+              "seed": 12345
+            },
+            "provider": "google_fx"
+          }
+        ]
+      },
+      "ImageResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider"
+          },
+          "result": {
+            "type": "string",
+            "pattern": "^data:[^;]+;base64,",
+            "title": "Result"
+          },
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "result",
+          "task_id"
+        ],
+        "title": "ImageResponse",
+        "description": "Response for successful image generation/transformation."
+      },
+      "OperationResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id",
+            "description": "Unique identifier for this operation"
+          },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "description": "Type of operation (e.g., 'flow_image_generate', 'whisk_transform')"
+          },
+          "status": {
+            "type": "string",
+            "const": "pending",
+            "title": "Status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "operation_type"
+        ],
+        "title": "OperationResponse",
+        "description": "Response when any operation is initiated (async).\n\nAll V4 operations are async and return this response immediately.\nPoll /api/v4/operations/{operation_id} to get the result."
+      },
+      "OperationStatusResponse": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "description": "Type of operation"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "success",
+              "error"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "List of results when status is 'success'"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message when status is 'error'"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations",
+            "description": "Translated error messages when status is 'error'"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "operation_type",
+          "status"
+        ],
+        "title": "OperationStatusResponse",
+        "description": "Response for operation status check.\n\nUsed by the unified /api/v4/operations/{operation_id} endpoint."
+      },
+      "PromptTokenUsage": {
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens",
+            "description": "Number of input tokens consumed"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens",
+            "description": "Number of output tokens generated"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "title": "Total Tokens",
+            "description": "Total tokens consumed (prompt + completion). This counts against the hourly limit."
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens"
+        ],
+        "title": "PromptTokenUsage",
+        "description": "Token usage breakdown from the LLM response."
+      },
+      "RemixImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the desired output"
+          },
+          "reference_images": {
+            "items": {
+              "$ref": "#/components/schemas/RemixReference"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Reference Images",
+            "description": "Reference images with categories (1-3 images)"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "IMAGE_ASPECT_RATIO_PORTRAIT",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE",
+              "IMAGE_ASPECT_RATIO_SQUARE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Image aspect ratio: PORTRAIT, LANDSCAPE, or SQUARE",
+            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          },
+          "strict_mode": {
+            "type": "boolean",
+            "title": "Strict Mode",
+            "description": "Enable strict mode for closer reference adherence",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "reference_images"
+        ],
+        "title": "RemixImageRequest",
+        "description": "Generate an image using multiple reference images (subjects, scenes, styles)."
+      },
+      "RemixReference": {
+        "properties": {
+          "image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Image",
+            "description": "Reference image"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "MEDIA_CATEGORY_SUBJECT",
+              "MEDIA_CATEGORY_SCENE",
+              "MEDIA_CATEGORY_STYLE"
+            ],
+            "title": "Category",
+            "description": "Category: SUBJECT, SCENE, or STYLE"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image",
+          "category"
+        ],
+        "title": "RemixReference",
+        "description": "A reference image with its category for remix operations."
+      },
+      "TransformImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the transformation"
+          },
+          "input_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Input Image",
+            "description": "Image to transform"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "input_image"
+        ],
+        "title": "TransformImageRequest",
+        "description": "Transform an existing image based on a text prompt."
+      },
+      "UsageResponse": {
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "title": "Api Key"
+          },
+          "account_limits": {
+            "$ref": "#/components/schemas/AccountLimits"
+          },
+          "current_usage": {
+            "$ref": "#/components/schemas/CurrentUsage"
+          },
+          "usage_window": {
+            "type": "string",
+            "title": "Usage Window",
+            "default": "per_hour"
+          },
+          "activation_date": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Date"
+          },
+          "expiration_date": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiration Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_key",
+          "account_limits",
+          "current_usage"
+        ],
+        "title": "UsageResponse",
+        "description": "Response for usage statistics endpoint."
+      },
+      "V2VideoResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success"
+          },
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider"
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "status": {
+            "type": "string",
+            "const": "pending",
+            "title": "Status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "provider",
+          "operation",
+          "operation_id"
+        ],
+        "title": "V2VideoResponse"
+      },
+      "V2VideoStatusResponse": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "success",
+              "error"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "status"
+        ],
+        "title": "V2VideoStatusResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VideoFromImageRequest": {
+        "properties": {
+          "image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Image",
+            "description": "Image as data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Supported formats: JPEG, PNG, WebP. Maximum size: 5MB."
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt",
+            "description": "Optional text prompt to guide the video generation. If provided, uses custom mode; otherwise uses normal mode."
+          },
+          "upscale": {
+            "type": "boolean",
+            "title": "Upscale",
+            "description": "If true, upscale the video to HD after generation. Adds ~5-10 seconds to processing time.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "VideoFromImageRequest",
+        "description": "Generate a video from an uploaded image (image-to-video) using Grok.\n\nThis uploads an image and animates it into a video.\n\nThe image is first uploaded to Grok's asset storage, then used for video generation.\n\nNote: Grok video generation requires a valid statsig token which must be\nconfigured server-side via GROK_TOKEN_SERVICE_URL. The operation returns\nimmediately with an operation_id that can be polled for completion."
+      },
+      "VideoRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Parameters"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "generate_video_from_ingredients",
+              "generate_video_from_prompt_flow",
+              "generate_video_start_end",
+              "generate_video_from_image",
+              "generate_video_from_prompt_whisk"
+            ],
+            "title": "Operation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "operation"
+        ],
+        "title": "VideoRequest",
+        "examples": [
+          {
+            "operation": "generate_video_from_prompt_flow",
+            "parameters": {
+              "aspect_ratio": "VIDEO_ASPECT_RATIO_LANDSCAPE",
+              "prompt": "A cinematic shot of a mountain landscape",
+              "seed": 12345
+            },
+            "provider": "google_fx"
+          }
+        ]
+      },
+      "VideoResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider"
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "status": {
+            "type": "string",
+            "const": "pending",
+            "title": "Status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "operation_id"
+        ],
+        "title": "VideoResponse",
+        "description": "Response when video generation is initiated (async)."
+      },
+      "VideoStatusResponse": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "success",
+              "error"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "status"
+        ],
+        "title": "VideoStatusResponse",
+        "description": "Response for video generation status check."
+      },
+      "WhiskGenerateImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "IMAGE_ASPECT_RATIO_PORTRAIT",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE",
+              "IMAGE_ASPECT_RATIO_SQUARE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Image aspect ratio: PORTRAIT, LANDSCAPE, or SQUARE",
+            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "WhiskGenerateImageRequest",
+        "description": "Generate an image using Google Whisk API (Imagen 4)."
+      },
+      "WhiskGenerateVideoFromTextRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "WhiskGenerateVideoFromTextRequest",
+        "description": "Generate a video from a text prompt using legacy Whisk API.\n\nThis generates an image from the prompt first, then creates a video from that image."
+      },
+      "src__api__v3__models__image__RemixReference": {
+        "properties": {
+          "image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Image",
+            "description": "Reference image (data URI or file reference)"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "MEDIA_CATEGORY_SUBJECT",
+              "MEDIA_CATEGORY_SCENE",
+              "MEDIA_CATEGORY_STYLE"
+            ],
+            "title": "Category",
+            "description": "How this image should be used: MEDIA_CATEGORY_SUBJECT, MEDIA_CATEGORY_SCENE, or MEDIA_CATEGORY_STYLE"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image",
+          "category"
+        ],
+        "title": "RemixReference",
+        "description": "A reference image with its category for the remix operation."
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "API key passed in the X-API-Key header"
+      },
+      "ApiKeyQuery": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "api_key",
+        "description": "API key passed as a query parameter"
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyHeader": []
+    },
+    {
+      "ApiKeyQuery": []
+    }
+  ]
+}

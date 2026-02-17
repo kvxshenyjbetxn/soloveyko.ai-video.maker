@@ -4,12 +4,11 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { useServices } from '../../../contexts/ServiceContext';
 // @ts-ignore
 import { SaveOpenRouterAPIKey, GetOpenRouterAPIKey, SaveOpenRouterModels, GetOpenRouterSavedModels } from '../../../../wailsjs/go/main/App';
+import '../general.css';
 
 export const OpenRouter = () => {
     const { t } = useI18n();
     const { accentColor } = useTheme();
-
-    // Global Service State
     const { openRouterBalance, loadingOpenRouter, refreshOpenRouterBalance } = useServices();
 
     const [apiKey, setApiKey] = useState('');
@@ -18,57 +17,45 @@ export const OpenRouter = () => {
     const [isLoaded, setIsLoaded] = useState(false);
     const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-    // Initial Load
     useEffect(() => {
-        const loadData = async () => {
+        const loadKey = async () => {
             const key = await GetOpenRouterAPIKey();
             setApiKey(key || '');
             const models = await GetOpenRouterSavedModels();
             setSavedModels(models || []);
             setIsLoaded(true);
         };
-        loadData();
+        loadKey();
     }, []);
 
-    // Auto-save API Key
     useEffect(() => {
         if (!isLoaded) return;
-
         const timer = setTimeout(() => {
             SaveOpenRouterAPIKey(apiKey);
         }, 1000);
-
         return () => clearTimeout(timer);
     }, [apiKey, isLoaded]);
 
     const handleCheckBalance = async () => {
         setStatusMsg(null);
         if (!apiKey) return;
-
-        // Save immediately before checking
         await SaveOpenRouterAPIKey(apiKey);
-
         try {
             await refreshOpenRouterBalance();
-            // We assume success if no error thrown inside refreshOpenRouterBalance
-            // But since refreshOpenRouterBalance catches its own errors, we check the balance
-            // Actually, for better UX let's show success message briefly
-            setStatusMsg({ type: 'success', text: 'Updated' });
+            setStatusMsg({ type: 'success', text: t('image.success') || 'Updated' });
             setTimeout(() => setStatusMsg(null), 3000);
-        } catch (err) {
-            setStatusMsg({ type: 'error', text: 'Failed' });
+        } catch (err: any) {
+            setStatusMsg({ type: 'error', text: err?.message || 'Error' });
         }
     };
 
     const handleAddModel = () => {
         if (!newModel.trim()) return;
         const modelName = newModel.trim();
-
         if (savedModels.includes(modelName)) {
             setNewModel('');
             return;
         }
-
         const updatedModels = [...savedModels, modelName];
         setSavedModels(updatedModels);
         SaveOpenRouterModels(updatedModels);
@@ -83,156 +70,142 @@ export const OpenRouter = () => {
 
     return (
         <div className="content-wrapper animate-fade">
-            <div className="settings-container">
-
-                {/* API Key Section */}
-                <div className="settings-section">
-                    <h3 className="section-title">{t('api.openrouterSettings.apikey')}</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input
-                                type="password"
-                                style={{
-                                    flex: 1,
-                                    padding: '10px',
-                                    borderRadius: '6px',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    background: 'rgba(0, 0, 0, 0.2)',
-                                    color: '#fff',
-                                    outline: 'none',
-                                    transition: 'border-color 0.2s',
-                                    boxSizing: 'border-box'
-                                }}
-                                onFocus={(e) => e.target.style.borderColor = accentColor}
-                                onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
-                                value={apiKey}
-                                onChange={(e) => {
-                                    setApiKey(e.target.value);
-                                    setStatusMsg(null);
-                                }}
-                                placeholder="sk-or-..."
-                            />
-
-                            <button
-                                onClick={handleCheckBalance}
-                                disabled={loadingOpenRouter || !apiKey}
-                                style={{
-                                    padding: '10px 20px',
-                                    borderRadius: '6px',
-                                    background: accentColor,
-                                    border: 'none',
-                                    color: '#fff',
-                                    cursor: 'pointer',
-                                    fontWeight: '500',
-                                    fontSize: '0.9em',
-                                    transition: 'opacity 0.2s',
-                                    whiteSpace: 'nowrap',
-                                    opacity: (loadingOpenRouter || !apiKey) ? 0.5 : 1
-                                }}
-                            >
-                                {loadingOpenRouter ? '...' : t('api.openrouterSettings.checkbalance')}
-                            </button>
+            <div className="settings-container" style={{ maxWidth: '1000px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+                    <h2 className="settings-title" style={{ margin: 0 }}>OpenRouter</h2>
+                    {openRouterBalance !== null && (
+                        <div style={{
+                            padding: '10px 20px',
+                            borderRadius: '12px',
+                            background: 'rgba(76, 175, 80, 0.1)',
+                            border: '1px solid rgba(76, 175, 80, 0.2)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-end'
+                        }}>
+                            <span style={{ fontSize: '0.75em', opacity: 0.6, textTransform: 'uppercase' }}>Available Balance</span>
+                            <span style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#4caf50' }}>${openRouterBalance.toFixed(4)}</span>
                         </div>
-
-                        <div style={{ minHeight: '20px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                            {openRouterBalance !== null && (
-                                <span style={{ color: '#4caf50', fontWeight: 'bold', fontSize: '1.1em', marginRight: '10px' }}>
-                                    {t('api.openrouterSettings.balance')} ${openRouterBalance.toFixed(4)}
-                                </span>
-                            )}
-                            {statusMsg && (
-                                <span style={{
-                                    color: statusMsg.type === 'success' ? '#4caf50' : '#ff5252',
-                                    fontSize: '0.9em'
-                                }}>
-                                    {statusMsg.text}
-                                </span>
-                            )}
-                        </div>
-                    </div>
+                    )}
                 </div>
 
-                {/* Models Section */}
-                <div className="settings-section">
-                    <h3 className="section-title">{t('api.openrouterSettings.models')}</h3>
-                    <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '30px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('api.openrouterSettings.apikey')}</h3>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <input
+                            type="password"
+                            className="premium-input"
+                            style={{
+                                flex: 1,
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                background: 'rgba(0, 0, 0, 0.3)',
+                                color: '#fff',
+                                outline: 'none',
+                                fontSize: '0.95em'
+                            }}
+                            value={apiKey}
+                            onChange={(e) => {
+                                setApiKey(e.target.value);
+                                setStatusMsg(null);
+                            }}
+                            placeholder="sk-or-..."
+                        />
+                        <button
+                            onClick={handleCheckBalance}
+                            disabled={loadingOpenRouter || !apiKey}
+                            style={{
+                                padding: '12px 24px',
+                                borderRadius: '8px',
+                                background: accentColor,
+                                border: 'none',
+                                color: '#fff',
+                                cursor: 'pointer',
+                                fontWeight: '600',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s ease',
+                                opacity: (loadingOpenRouter || !apiKey) ? 0.5 : 1,
+                                boxShadow: `0 4px 15px ${accentColor}33`
+                            }}
+                        >
+                            {loadingOpenRouter ? <div className="spinner-small" /> : <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>}
+                            {t('api.openrouterSettings.checkbalance')}
+                        </button>
+                    </div>
+                    {statusMsg && (
+                        <div style={{ marginTop: '10px', color: statusMsg.type === 'success' ? '#4caf50' : '#ff5252', fontSize: '0.85em', textAlign: 'right', fontWeight: '500' }}>
+                            {statusMsg.text}
+                        </div>
+                    )}
+                </div>
+
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                    <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('api.openrouterSettings.models')}</h3>
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
                         <input
                             type="text"
+                            className="premium-input"
+                            style={{
+                                flex: 1,
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                background: 'rgba(0, 0, 0, 0.3)',
+                                color: '#fff',
+                                outline: 'none',
+                                fontSize: '0.95em'
+                            }}
                             placeholder={t('api.openrouterSettings.modelname')}
                             value={newModel}
                             onChange={(e) => setNewModel(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAddModel()}
-                            style={{
-                                flex: 1,
-                                padding: '10px',
-                                borderRadius: '6px',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                background: 'rgba(0, 0, 0, 0.2)',
-                                color: '#fff',
-                                outline: 'none',
-                                transition: 'border-color 0.2s'
-                            }}
-                            onFocus={(e) => e.target.style.borderColor = accentColor}
-                            onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
                         />
                         <button
                             onClick={handleAddModel}
                             disabled={!newModel.trim()}
                             style={{
-                                padding: '10px 20px',
-                                borderRadius: '6px',
-                                background: accentColor,
-                                border: 'none',
+                                padding: '12px 24px',
+                                borderRadius: '8px',
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
                                 color: '#fff',
                                 cursor: 'pointer',
-                                fontWeight: '500',
-                                opacity: !newModel.trim() ? 0.5 : 1,
-                                transition: 'opacity 0.2s'
+                                fontWeight: '600',
+                                opacity: !newModel.trim() ? 0.5 : 1
                             }}
                         >
                             {t('api.openrouterSettings.add')}
                         </button>
                     </div>
 
-                    <div className="models-list" style={{
-                        maxHeight: '300px',
+                    <div style={{
+                        maxHeight: '400px',
                         overflowY: 'auto',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        borderRadius: '6px',
-                        background: 'rgba(0, 0, 0, 0.2)'
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        background: 'rgba(0,0,0,0.2)'
                     }}>
                         {savedModels.length === 0 ? (
-                            <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                            <div style={{ padding: '40px', textAlign: 'center', opacity: 0.3 }}>
                                 {t('api.openrouterSettings.nomodels')}
                             </div>
                         ) : (
                             savedModels.map(model => (
                                 <div key={model} style={{
-                                    padding: '12px',
-                                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                    padding: '12px 20px',
+                                    borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
                                     transition: 'background 0.2s'
-                                }}>
-                                    <span style={{ color: '#e0e0e0' }}>{model}</span>
+                                }} onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                                    <span style={{ fontSize: '0.95em', opacity: 0.8 }}>{model}</span>
                                     <button
                                         onClick={() => handleRemoveModel(model)}
-                                        style={{
-                                            background: 'none',
-                                            border: 'none',
-                                            color: '#ff5252',
-                                            cursor: 'pointer',
-                                            fontSize: '18px',
-                                            padding: '0 5px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            opacity: 0.8
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-                                        onMouseLeave={(e) => e.currentTarget.style.opacity = '0.8'}
-                                        title="Remove"
+                                        style={{ background: 'none', border: 'none', color: '#ff5252', cursor: 'pointer', opacity: 0.6, fontSize: '1.2em' }}
                                     >
                                         &times;
                                     </button>
@@ -241,8 +214,11 @@ export const OpenRouter = () => {
                         )}
                     </div>
                 </div>
-
             </div>
+            <style>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+                .spinner-small { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+            `}</style>
         </div>
     );
 };

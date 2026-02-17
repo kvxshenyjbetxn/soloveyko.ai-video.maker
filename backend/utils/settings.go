@@ -18,6 +18,7 @@ type Settings struct {
 	ElevenLabsUnlimAPIKey string   `json:"elevenLabsUnlimAPIKey"`
 	VoiceMakerAPIKey      string   `json:"voiceMakerAPIKey"`
 	VoiceMakerBalance     float64  `json:"voiceMakerBalance"`
+	GooglerAPIKey         string   `json:"googlerAPIKey"`
 }
 
 type SettingsService struct {
@@ -312,5 +313,25 @@ func (s *SettingsService) SetVoiceMakerBalance(balance float64) error {
 	}
 
 	settings.VoiceMakerBalance = balance
+	return s.SaveSettings(settings)
+}
+
+// GetGooglerAPIKey повертає API ключ Googler
+func (s *SettingsService) GetGooglerAPIKey() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.GooglerAPIKey
+}
+
+// SetGooglerAPIKey зберігає API ключ Googler
+func (s *SettingsService) SetGooglerAPIKey(apiKey string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.GooglerAPIKey = apiKey
 	return s.SaveSettings(settings)
 }

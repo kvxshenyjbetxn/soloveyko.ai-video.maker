@@ -18,6 +18,7 @@ type App struct {
 	elevenLabs      *api.ElevenLabsBotService
 	elevenLabsUnlim *api.ElevenLabsUnlimService
 	voiceMaker      *api.VoiceMakerService
+	googler         *api.GooglerService
 }
 
 // NewApp creates a new App application struct
@@ -31,6 +32,7 @@ func NewApp() *App {
 		elevenLabs:      api.NewElevenLabsBotService(settings),
 		elevenLabsUnlim: api.NewElevenLabsUnlimService(settings),
 		voiceMaker:      api.NewVoiceMakerService(settings),
+		googler:         api.NewGooglerService(settings),
 	}
 }
 
@@ -218,4 +220,21 @@ func (a *App) SaveVoiceMakerBalance(balance float64) error {
 // GetVoiceMakerSavedBalance gets last saved balance
 func (a *App) GetVoiceMakerSavedBalance() float64 {
 	return a.settings.GetVoiceMakerBalance()
+}
+
+// Googler Methods
+
+// GetGooglerUsage returns account usage stats
+func (a *App) GetGooglerUsage(apiKey string) (*api.GooglerUsageResponse, error) {
+	return a.googler.GetUsage(apiKey)
+}
+
+// SaveGooglerAPIKey saves API key
+func (a *App) SaveGooglerAPIKey(apiKey string) error {
+	return a.googler.SaveAPIKey(apiKey)
+}
+
+// GetGooglerAPIKey gets API key
+func (a *App) GetGooglerAPIKey() string {
+	return a.googler.GetAPIKey()
 }

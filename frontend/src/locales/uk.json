@@ -82,6 +82,7 @@
   "image": {
     "pollinationsai": "Pollinations AI",
     "googler": "Googler",
+    "success": "Статистику оновлено",
     "elevenlabsimage": "ElevenLabs Image"
   },
   "other": {
@@ -118,6 +119,11 @@
     "elevenlabsbot": "ElevenLabsBot",
     "elevenlabsunlim": "ElevenLabs Unlim",
     "voicemaker": "VoiceMaker",
+    "googler": "Googler",
+    "videoThreads": "Відео потоки",
+    "imageThreads": "Фото потоки",
+    "videoTotal": "Відео",
+    "imageTotal": "Фото",
     "refreshAll": "Оновити все",
     "total": "Всього"
   }

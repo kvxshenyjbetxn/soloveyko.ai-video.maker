@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 // @ts-ignore
-import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey, GetVoiceMakerBalance, GetVoiceMakerAPIKey, GetVoiceMakerSavedBalance, SaveVoiceMakerBalance } from '../../wailsjs/go/main/App';
+import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey, GetVoiceMakerBalance, GetVoiceMakerAPIKey, GetVoiceMakerSavedBalance, SaveVoiceMakerBalance, GetGooglerUsage, GetGooglerAPIKey } from '../../wailsjs/go/main/App';
 import { useLogger } from './LoggerContext';
 
 interface ServiceContextType {
@@ -16,6 +16,9 @@ interface ServiceContextType {
     voiceMakerBalance: number | null;
     refreshVoiceMakerBalance: () => Promise<void>;
     loadingVoiceMaker: boolean;
+    googlerUsage: any;
+    refreshGooglerUsage: () => Promise<void>;
+    loadingGoogler: boolean;
     refreshAllBalances: () => Promise<void>;
 }
 
@@ -32,6 +35,15 @@ const ServiceContext = createContext<ServiceContextType>({
     voiceMakerBalance: null,
     refreshVoiceMakerBalance: async () => { },
     loadingVoiceMaker: false,
+    googlerUsage: {
+        account_limits: { video_generation_threads_allowed: 0, img_generation_threads_allowed: 0, video_gen_per_hour_limit: 0, img_gen_per_hour_limit: 0, prompt_tokens_per_hour_limit: 0 },
+        current_usage: { active_threads: { video_threads: 0, image_threads: 0 }, hourly_usage: { image_generation: 0, video_generation: 0, prompt_generation: 0 } },
+        usage_window: 'per_hour',
+        activation_date: 0,
+        expiration_date: 0
+    },
+    refreshGooglerUsage: async () => { },
+    loadingGoogler: false,
     refreshAllBalances: async () => { },
 });
 
@@ -47,6 +59,14 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [loadingElevenLabsUnlim, setLoadingElevenLabsUnlim] = useState(false);
     const [voiceMakerBalance, setVoiceMakerBalance] = useState<number | null>(null);
     const [loadingVoiceMaker, setLoadingVoiceMaker] = useState(false);
+    const [googlerUsage, setGooglerUsage] = useState<any>({
+        account_limits: { video_generation_threads_allowed: 0, img_generation_threads_allowed: 0, video_gen_per_hour_limit: 0, img_gen_per_hour_limit: 0, prompt_tokens_per_hour_limit: 0 },
+        current_usage: { active_threads: { video_threads: 0, image_threads: 0 }, hourly_usage: { image_generation: 0, video_generation: 0, prompt_generation: 0 } },
+        usage_window: 'per_hour',
+        activation_date: 0,
+        expiration_date: 0
+    });
+    const [loadingGoogler, setLoadingGoogler] = useState(false);
     const hasFetchedRef = useRef(false);
 
     const refreshOpenRouterBalance = async () => {
@@ -123,7 +143,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await Promise.all([
             refreshOpenRouterBalance(),
             refreshElevenLabsBotBalance(),
-            refreshElevenLabsUnlimBalance()
+            refreshElevenLabsUnlimBalance(),
+            refreshGooglerUsage()
         ]);
     };
 
@@ -169,6 +190,30 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }
 
+    const refreshGooglerUsage = async () => {
+        if (loadingGoogler) return;
+
+        setLoadingGoogler(true);
+        addLog('INFO', 'Requesting Googler usage stats...');
+        try {
+            const apiKey = await GetGooglerAPIKey();
+            if (apiKey) {
+                const usage = await GetGooglerUsage(apiKey);
+                console.log("Googler usage received:", usage);
+                setGooglerUsage(usage);
+                addLog('INFO', 'Received Googler usage stats');
+            } else {
+                addLog('WARN', 'Googler API Key not found');
+            }
+        } catch (err: any) {
+            console.error("Failed to update Googler usage:", err);
+            const errMsg = err?.message || String(err);
+            addLog('ERROR', `Googler error: ${errMsg}`);
+        } finally {
+            setLoadingGoogler(false);
+        }
+    }
+
     return (
         <ServiceContext.Provider value={{
             openRouterBalance,
@@ -183,6 +228,9 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             voiceMakerBalance,
             refreshVoiceMakerBalance,
             loadingVoiceMaker,
+            googlerUsage,
+            refreshGooglerUsage,
+            loadingGoogler,
             refreshAllBalances
         }}>
             {children}
