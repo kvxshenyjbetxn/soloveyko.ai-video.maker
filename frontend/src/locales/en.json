@@ -150,5 +150,36 @@
         "imageTotal": "Images",
         "refreshAll": "Refresh All",
         "total": "Total"
+    },
+    "pipeline": {
+        "translate": {
+            "title": "Translation Settings",
+            "prompt_placeholder": "Enter translation prompt..."
+        },
+        "rewrite": {
+            "title": "Rewrite Settings",
+            "prompt_placeholder": "Enter rewrite prompt..."
+        },
+        "group": {
+            "ai": "AI Parameters",
+            "prompt": "Prompt Settings",
+            "subtitles": "Subtitle Style"
+        },
+        "model": "Model",
+        "model.default": "Default (GPT-4o)",
+        "temperature": "Temperature",
+        "system_prompt": "System Prompt",
+        "subtitle": {
+            "size": "Font Size",
+            "color": "Text Color",
+            "outline": "Outline Color"
+        },
+        "hide_settings": "Hide Settings",
+        "show_settings": "Show Settings",
+        "empty_state": "Pipeline settings will appear here..."
+    },
+    "common": {
+        "save": "Save",
+        "saving": "Saving..."
     }
 }

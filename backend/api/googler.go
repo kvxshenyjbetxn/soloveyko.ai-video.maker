@@ -20,23 +20,50 @@ func NewGooglerService(settings *utils.SettingsService) *GooglerService {
 	}
 }
 
+type FlexibleFloat64 float64
+
+func (f *FlexibleFloat64) UnmarshalJSON(data []byte) error {
+	// Спробуємо розпарсити як число
+	var n float64
+	if err := json.Unmarshal(data, &n); err == nil {
+		*f = FlexibleFloat64(n)
+		return nil
+	}
+
+	// Спробуємо розпарсити як об'єкт {"used": X} або {"count": X}
+	var obj map[string]float64
+	if err := json.Unmarshal(data, &obj); err == nil {
+		if val, ok := obj["used"]; ok {
+			*f = FlexibleFloat64(val)
+			return nil
+		}
+		if val, ok := obj["count"]; ok {
+			*f = FlexibleFloat64(val)
+			return nil
+		}
+	}
+
+	*f = 0
+	return nil
+}
+
 type GooglerAccountLimits struct {
-	ImgGenPerHourLimit            float64 `json:"img_gen_per_hour_limit"`
-	VideoGenPerHourLimit          float64 `json:"video_gen_per_hour_limit"`
-	ImgGenerationThreadsAllowed   float64 `json:"img_generation_threads_allowed"`
-	VideoGenerationThreadsAllowed float64 `json:"video_generation_threads_allowed"`
-	PromptTokensPerHourLimit      float64 `json:"prompt_tokens_per_hour_limit"`
+	ImgGenPerHourLimit            FlexibleFloat64 `json:"img_gen_per_hour_limit"`
+	VideoGenPerHourLimit          FlexibleFloat64 `json:"video_gen_per_hour_limit"`
+	ImgGenerationThreadsAllowed   FlexibleFloat64 `json:"img_generation_threads_allowed"`
+	VideoGenerationThreadsAllowed FlexibleFloat64 `json:"video_generation_threads_allowed"`
+	PromptTokensPerHourLimit      FlexibleFloat64 `json:"prompt_tokens_per_hour_limit"`
 }
 
 type GooglerActiveThreads struct {
-	ImageThreads float64 `json:"image_threads"`
-	VideoThreads float64 `json:"video_threads"`
+	ImageThreads FlexibleFloat64 `json:"image_threads"`
+	VideoThreads FlexibleFloat64 `json:"video_threads"`
 }
 
 type GooglerHourlyUsage struct {
-	ImageGeneration  float64 `json:"image_generation"`
-	VideoGeneration  float64 `json:"video_generation"`
-	PromptGeneration float64 `json:"prompt_generation"`
+	ImageGeneration  FlexibleFloat64 `json:"image_generation"`
+	VideoGeneration  FlexibleFloat64 `json:"video_generation"`
+	PromptGeneration FlexibleFloat64 `json:"prompt_generation"`
 }
 
 type GooglerCurrentUsage struct {
@@ -49,8 +76,8 @@ type GooglerUsageResponse struct {
 	AccountLimits  GooglerAccountLimits `json:"account_limits"`
 	CurrentUsage   GooglerCurrentUsage  `json:"current_usage"`
 	UsageWindow    string               `json:"usage_window"`
-	ActivationDate float64              `json:"activation_date"`
-	ExpirationDate float64              `json:"expiration_date"`
+	ActivationDate FlexibleFloat64      `json:"activation_date"`
+	ExpirationDate FlexibleFloat64      `json:"expiration_date"`
 }
 
 // GetUsage отримує статистику використання акаунту

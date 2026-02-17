@@ -148,6 +148,37 @@
         "videoTotal": "Видео",
         "imageTotal": "Фото",
         "refreshAll": "Обновить всё",
-        "total": "Всего"
+        "total": "Total"
+    },
+    "pipeline": {
+        "translate": {
+            "title": "Настройки перевода",
+            "prompt_placeholder": "Введите промт для перевода..."
+        },
+        "rewrite": {
+            "title": "Настройки рерайта",
+            "prompt_placeholder": "Введите промт для рерайта..."
+        },
+        "group": {
+            "ai": "Параметры ИИ",
+            "prompt": "Настройки промтов",
+            "subtitles": "Стиль субтитров"
+        },
+        "model": "Модель",
+        "model.default": "По умолчанию (GPT-4o)",
+        "temperature": "Температура",
+        "system_prompt": "Системный промт",
+        "subtitle": {
+            "size": "Размер шрифта",
+            "color": "Цвет текста",
+            "outline": "Цвет контура"
+        },
+        "hide_settings": "Скрыть настройки",
+        "show_settings": "Показать настройки",
+        "empty_state": "Здесь будут настройки пайплайна..."
+    },
+    "common": {
+        "save": "Сохранить",
+        "saving": "Сохранение..."
     }
 }

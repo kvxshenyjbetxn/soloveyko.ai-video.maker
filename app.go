@@ -347,3 +347,15 @@ func (a *App) GetGooglerImageAlertThreshold() float64 {
 func (a *App) SaveGooglerImageAlertThreshold(threshold float64) error {
 	return a.settings.SetGooglerImageAlertThreshold(threshold)
 }
+
+// Pipeline Methods
+
+// GetPipelineSettings returns pipeline configuration
+func (a *App) GetPipelineSettings() utils.PipelineSettings {
+	return a.settings.GetPipelineSettings()
+}
+
+// SavePipelineSettings saves pipeline configuration
+func (a *App) SavePipelineSettings(pipeline utils.PipelineSettings) error {
+	return a.settings.SavePipelineSettings(pipeline)
+}

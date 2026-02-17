@@ -7,28 +7,43 @@ import (
 	"sync"
 )
 
+type PipelineSettings struct {
+	TranslateModel       string  `json:"translateModel"`
+	TranslatePrompt      string  `json:"translatePrompt"`
+	TranslateTemperature float64 `json:"translateTemperature"`
+	RewriteModel         string  `json:"rewriteModel"`
+	RewritePrompt        string  `json:"rewritePrompt"`
+	RewriteTemperature   float64 `json:"rewriteTemperature"`
+	SubtitleFont         string  `json:"subtitleFont"`
+	SubtitleSize         int     `json:"subtitleSize"`
+	SubtitleColor        string  `json:"subtitleColor"`
+	SubtitleOutlineColor string  `json:"subtitleOutlineColor"`
+	SidebarWidth         int     `json:"sidebarWidth"`
+}
+
 type Settings struct {
-	Language                      string   `json:"language"`
-	Theme                         string   `json:"theme"`
-	AccentColor                   string   `json:"accentColor"`
-	OpenRouterAPIKey              string   `json:"openRouterAPIKey"`
-	OpenRouterModels              []string `json:"openRouterModels"`
-	PollinationsAPIKey            string   `json:"pollinationsAPIKey"`
-	PollinationsModels            []string `json:"pollinationsModels"`
-	ElevenLabsBotAPIKey           string   `json:"elevenLabsBotAPIKey"`
-	ElevenLabsUnlimAPIKey         string   `json:"elevenLabsUnlimAPIKey"`
-	VoiceMakerAPIKey              string   `json:"voiceMakerAPIKey"`
-	VoiceMakerBalance             float64  `json:"voiceMakerBalance"`
-	GooglerAPIKey                 string   `json:"googlerAPIKey"`
-	ElevenLabsImageAPIKey         string   `json:"elevenLabsImageAPIKey"`
-	ElevenLabsUAAPIKey            string   `json:"elevenLabsUAAPIKey"`
-	AssemblyAIAPIKey              string   `json:"assemblyAIAPIKey"`
-	ElevenLabsBotAlertThreshold   float64  `json:"elevenLabsBotAlertThreshold"`
-	ElevenLabsUnlimAlertThreshold float64  `json:"elevenLabsUnlimAlertThreshold"`
-	VoiceMakerAlertThreshold      float64  `json:"voiceMakerAlertThreshold"`
-	OpenRouterAlertThreshold      float64  `json:"openRouterAlertThreshold"`
-	GooglerVideoAlertThreshold    float64  `json:"googlerVideoAlertThreshold"`
-	GooglerImageAlertThreshold    float64  `json:"googlerImageAlertThreshold"`
+	Language                      string           `json:"language"`
+	Theme                         string           `json:"theme"`
+	AccentColor                   string           `json:"accentColor"`
+	OpenRouterAPIKey              string           `json:"openRouterAPIKey"`
+	OpenRouterModels              []string         `json:"openRouterModels"`
+	PollinationsAPIKey            string           `json:"pollinationsAPIKey"`
+	PollinationsModels            []string         `json:"pollinationsModels"`
+	ElevenLabsBotAPIKey           string           `json:"elevenLabsBotAPIKey"`
+	ElevenLabsUnlimAPIKey         string           `json:"elevenLabsUnlimAPIKey"`
+	VoiceMakerAPIKey              string           `json:"voiceMakerAPIKey"`
+	VoiceMakerBalance             float64          `json:"voiceMakerBalance"`
+	GooglerAPIKey                 string           `json:"googlerAPIKey"`
+	ElevenLabsImageAPIKey         string           `json:"elevenLabsImageAPIKey"`
+	ElevenLabsUAAPIKey            string           `json:"elevenLabsUAAPIKey"`
+	AssemblyAIAPIKey              string           `json:"assemblyAIAPIKey"`
+	ElevenLabsBotAlertThreshold   float64          `json:"elevenLabsBotAlertThreshold"`
+	ElevenLabsUnlimAlertThreshold float64          `json:"elevenLabsUnlimAlertThreshold"`
+	VoiceMakerAlertThreshold      float64          `json:"voiceMakerAlertThreshold"`
+	OpenRouterAlertThreshold      float64          `json:"openRouterAlertThreshold"`
+	GooglerVideoAlertThreshold    float64          `json:"googlerVideoAlertThreshold"`
+	GooglerImageAlertThreshold    float64          `json:"googlerImageAlertThreshold"`
+	Pipeline                      PipelineSettings `json:"pipeline"`
 }
 
 type SettingsService struct {
@@ -531,5 +546,50 @@ func (s *SettingsService) SetAssemblyAIAPIKey(apiKey string) error {
 	}
 
 	settings.AssemblyAIAPIKey = apiKey
+	return s.SaveSettings(settings)
+}
+
+// GetPipelineSettings повертає налаштування пайплайну
+func (s *SettingsService) GetPipelineSettings() PipelineSettings {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return PipelineSettings{
+			TranslateTemperature: 0.7,
+			RewriteTemperature:   0.7,
+			SubtitleSize:         24,
+			SubtitleColor:        "#FFFFFF",
+			SubtitleOutlineColor: "#000000",
+		}
+	}
+	// Якщо налаштування порожні, повертаємо дефолтні
+	if settings.Pipeline.TranslateTemperature == 0 {
+		settings.Pipeline.TranslateTemperature = 0.7
+	}
+	if settings.Pipeline.RewriteTemperature == 0 {
+		settings.Pipeline.RewriteTemperature = 0.7
+	}
+	if settings.Pipeline.SubtitleSize == 0 {
+		settings.Pipeline.SubtitleSize = 24
+	}
+	if settings.Pipeline.SubtitleColor == "" {
+		settings.Pipeline.SubtitleColor = "#FFFFFF"
+	}
+	if settings.Pipeline.SubtitleOutlineColor == "" {
+		settings.Pipeline.SubtitleOutlineColor = "#000000"
+	}
+	if settings.Pipeline.SidebarWidth == 0 {
+		settings.Pipeline.SidebarWidth = 320
+	}
+	return settings.Pipeline
+}
+
+// SavePipelineSettings зберігає налаштування пайплайну
+func (s *SettingsService) SavePipelineSettings(pipeline PipelineSettings) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.Pipeline = pipeline
 	return s.SaveSettings(settings)
 }
