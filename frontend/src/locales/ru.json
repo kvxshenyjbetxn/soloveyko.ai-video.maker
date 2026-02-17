@@ -39,7 +39,14 @@
         "api": "API",
         "montage": "Монтаж",
         "subtitle": "Субтитры",
-        "templates": "Шаблоны"
+        "templates": "Шаблоны",
+        "voice": {
+            "apiKey": "API Ключ",
+            "apiKeyPlaceholder": "Введите ваш X-API-Key...",
+            "fetchBalance": "Обновить баланс",
+            "balance": "Баланс:",
+            "saveSuccess": "Настройки ElevenLabsBot сохранены"
+        }
     },
     "api": {
         "openrouter": "OpenRouter",
@@ -108,6 +115,8 @@
     "balanceMonitor": {
         "title": "Баланс сервисов",
         "openrouter": "OpenRouter",
+        "elevenlabsbot": "ElevenLabsBot",
+        "refreshAll": "Обновить всё",
         "total": "Всего"
     }
 }

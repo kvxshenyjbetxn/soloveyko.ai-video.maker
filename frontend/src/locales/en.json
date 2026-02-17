@@ -39,7 +39,14 @@
         "api": "API",
         "montage": "Montage",
         "subtitle": "Subtitles",
-        "templates": "Templates"
+        "templates": "Templates",
+        "voice": {
+            "apiKey": "API Key",
+            "apiKeyPlaceholder": "Enter your X-API-Key...",
+            "fetchBalance": "Refresh Balance",
+            "balance": "Balance:",
+            "saveSuccess": "ElevenLabsBot settings saved"
+        }
     },
     "api": {
         "openrouter": "OpenRouter",
@@ -62,6 +69,7 @@
             "models": "Models",
             "fetchModels": "Fetch Models",
             "availableModels": "Available Models",
+            "elevenlabsbot": "ElevenLabsBot",
             "savedModels": "Selected Models",
             "nomodels": "List is empty",
             "add": "Add"
@@ -108,6 +116,8 @@
     "balanceMonitor": {
         "title": "Service Balances",
         "openrouter": "OpenRouter",
+        "elevenlabsbot": "ElevenLabsBot",
+        "refreshAll": "Refresh All",
         "total": "Total"
     }
 }

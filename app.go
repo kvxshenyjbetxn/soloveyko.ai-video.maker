@@ -15,6 +15,7 @@ type App struct {
 	stats        *utils.StatsService
 	openRouter   *api.OpenRouterService
 	pollinations *api.PollinationsService
+	elevenLabs   *api.ElevenLabsBotService
 }
 
 // NewApp creates a new App application struct
@@ -25,6 +26,7 @@ func NewApp() *App {
 		stats:        utils.NewStatsService(),
 		openRouter:   api.NewOpenRouterService(settings),
 		pollinations: api.NewPollinationsService(settings),
+		elevenLabs:   api.NewElevenLabsBotService(settings),
 	}
 }
 
@@ -151,4 +153,21 @@ func (a *App) SavePollinationsModels(models []string) error {
 // GetPollinationsSavedModels gets list of saved model IDs
 func (a *App) GetPollinationsSavedModels() []string {
 	return a.pollinations.GetPollinationsSavedModels()
+}
+
+// ElevenLabsBot Methods
+
+// GetElevenLabsBotBalance returns the user's balance from ElevenLabsBot
+func (a *App) GetElevenLabsBotBalance(apiKey string) (float64, error) {
+	return a.elevenLabs.GetBalance(apiKey)
+}
+
+// SaveElevenLabsBotAPIKey saves API key
+func (a *App) SaveElevenLabsBotAPIKey(apiKey string) error {
+	return a.elevenLabs.SaveAPIKey(apiKey)
+}
+
+// GetElevenLabsBotAPIKey gets API key
+func (a *App) GetElevenLabsBotAPIKey() string {
+	return a.elevenLabs.GetAPIKey()
 }

@@ -7,13 +7,14 @@ import (
 )
 
 type Settings struct {
-	Language           string   `json:"language"`
-	Theme              string   `json:"theme"`
-	AccentColor        string   `json:"accentColor"`
-	OpenRouterAPIKey   string   `json:"openRouterAPIKey"`
-	OpenRouterModels   []string `json:"openRouterModels"`
-	PollinationsAPIKey string   `json:"pollinationsAPIKey"`
-	PollinationsModels []string `json:"pollinationsModels"`
+	Language            string   `json:"language"`
+	Theme               string   `json:"theme"`
+	AccentColor         string   `json:"accentColor"`
+	OpenRouterAPIKey    string   `json:"openRouterAPIKey"`
+	OpenRouterModels    []string `json:"openRouterModels"`
+	PollinationsAPIKey  string   `json:"pollinationsAPIKey"`
+	PollinationsModels  []string `json:"pollinationsModels"`
+	ElevenLabsBotAPIKey string   `json:"elevenLabsBotAPIKey"`
 }
 
 type SettingsService struct {
@@ -228,5 +229,25 @@ func (s *SettingsService) SetPollinationsModels(models []string) error {
 	}
 
 	settings.PollinationsModels = models
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsBotAPIKey повертає API ключ ElevenLabsBot
+func (s *SettingsService) GetElevenLabsBotAPIKey() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.ElevenLabsBotAPIKey
+}
+
+// SetElevenLabsBotAPIKey зберігає API ключ ElevenLabsBot
+func (s *SettingsService) SetElevenLabsBotAPIKey(apiKey string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.ElevenLabsBotAPIKey = apiKey
 	return s.SaveSettings(settings)
 }
