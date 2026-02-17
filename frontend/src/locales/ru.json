@@ -167,6 +167,8 @@
         "model": "Модель",
         "model.default": "По умолчанию (GPT-4o)",
         "temperature": "Температура",
+        "max_tokens": "Макс. токенов",
+        "max_tokens_unlimited": "Стандарт (0)",
         "system_prompt": "Системный промт",
         "subtitle": {
             "size": "Размер шрифта",
@@ -175,7 +177,14 @@
         },
         "hide_settings": "Скрыть настройки",
         "show_settings": "Показать настройки",
-        "empty_state": "Здесь будут настройки пайплайна..."
+        "empty_state": "Здесь будут настройки пайплайна...",
+        "stage": {
+            "translate": "1. Перевод",
+            "rewrite": "1. Рерайт",
+            "enabled": "Включено",
+            "disabled": "Выключено (оригинальный текст)"
+        },
+        "add_to_queue": "Добавить в очередь"
     },
     "common": {
         "save": "Сохранить",

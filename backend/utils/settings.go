@@ -11,14 +11,16 @@ type PipelineSettings struct {
 	TranslateModel       string  `json:"translateModel"`
 	TranslatePrompt      string  `json:"translatePrompt"`
 	TranslateTemperature float64 `json:"translateTemperature"`
+	TranslateMaxTokens   int     `json:"translateMaxTokens"`
+	TranslateCollapsed   bool    `json:"translateCollapsed"`
 	RewriteModel         string  `json:"rewriteModel"`
 	RewritePrompt        string  `json:"rewritePrompt"`
 	RewriteTemperature   float64 `json:"rewriteTemperature"`
-	SubtitleFont         string  `json:"subtitleFont"`
-	SubtitleSize         int     `json:"subtitleSize"`
-	SubtitleColor        string  `json:"subtitleColor"`
-	SubtitleOutlineColor string  `json:"subtitleOutlineColor"`
+	RewriteMaxTokens     int     `json:"rewriteMaxTokens"`
+	RewriteCollapsed     bool    `json:"rewriteCollapsed"`
 	SidebarWidth         int     `json:"sidebarWidth"`
+	TranslateEnabled     bool    `json:"translateEnabled"`
+	RewriteEnabled       bool    `json:"rewriteEnabled"`
 }
 
 type Settings struct {
@@ -556,9 +558,6 @@ func (s *SettingsService) GetPipelineSettings() PipelineSettings {
 		return PipelineSettings{
 			TranslateTemperature: 0.7,
 			RewriteTemperature:   0.7,
-			SubtitleSize:         24,
-			SubtitleColor:        "#FFFFFF",
-			SubtitleOutlineColor: "#000000",
 		}
 	}
 	// Якщо налаштування порожні, повертаємо дефолтні
@@ -568,17 +567,10 @@ func (s *SettingsService) GetPipelineSettings() PipelineSettings {
 	if settings.Pipeline.RewriteTemperature == 0 {
 		settings.Pipeline.RewriteTemperature = 0.7
 	}
-	if settings.Pipeline.SubtitleSize == 0 {
-		settings.Pipeline.SubtitleSize = 24
-	}
-	if settings.Pipeline.SubtitleColor == "" {
-		settings.Pipeline.SubtitleColor = "#FFFFFF"
-	}
-	if settings.Pipeline.SubtitleOutlineColor == "" {
-		settings.Pipeline.SubtitleOutlineColor = "#000000"
-	}
 	if settings.Pipeline.SidebarWidth == 0 {
 		settings.Pipeline.SidebarWidth = 320
+		settings.Pipeline.TranslateEnabled = true
+		settings.Pipeline.RewriteEnabled = true
 	}
 	return settings.Pipeline
 }

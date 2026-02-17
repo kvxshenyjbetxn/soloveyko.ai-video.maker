@@ -168,6 +168,8 @@
         "model": "Model",
         "model.default": "Default (GPT-4o)",
         "temperature": "Temperature",
+        "max_tokens": "Max Tokens",
+        "max_tokens_unlimited": "Default (0)",
         "system_prompt": "System Prompt",
         "subtitle": {
             "size": "Font Size",
@@ -176,7 +178,14 @@
         },
         "hide_settings": "Hide Settings",
         "show_settings": "Show Settings",
-        "empty_state": "Pipeline settings will appear here..."
+        "empty_state": "Pipeline settings will appear here...",
+        "stage": {
+            "translate": "1. Translation",
+            "rewrite": "1. Rewrite",
+            "enabled": "Enabled",
+            "disabled": "Disabled (original text)"
+        },
+        "add_to_queue": "Add to Queue"
     },
     "common": {
         "save": "Save",

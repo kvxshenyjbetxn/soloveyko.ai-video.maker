@@ -371,8 +371,9 @@ function App() {
             <div className="monitors-container" style={{
                 position: 'fixed',
                 bottom: '15px',
-                right: '15px',
+                right: 'calc(10px + var(--pipeline-sidebar-width, 0px) + var(--sidebar-toggle-width, 0px))',
                 display: 'flex',
+                transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 flexDirection: 'row-reverse',
                 gap: '15px',
                 alignItems: 'flex-end',
