@@ -11,13 +11,17 @@ interface DiskInfo {
     usedPercent: number;
 }
 
+interface GPUData {
+    name: string;
+    percent: number;
+}
+
 interface SystemStats {
     cpuPercent: number;
     ramTotal: number;
     ramUsed: number;
     ramPercent: number;
-    gpuInfo: string;
-    gpuPercent: number;
+    gpus: GPUData[];
     disks: DiskInfo[];
 }
 
@@ -86,16 +90,29 @@ export const SystemMonitor = () => {
                             </div>
                         </div>
 
-                        {/* GPU */}
-                        <div className="stat-group">
-                            <div className="stat-label">
-                                <span>{t('systemMonitor.gpu')}</span>
-                                <span>{stats?.gpuPercent.toFixed(1)}%</span>
-                            </div>
-                            <div className="stat-bar-bg">
-                                <div className="stat-bar-fill" style={{ width: `${stats?.gpuPercent}%` }}></div>
-                            </div>
-                            <div className="gpu-name">{stats?.gpuInfo || 'Detecting...'}</div>
+                        {/* GPUs */}
+                        <div className="gpus-list">
+                            {stats?.gpus.map((gpu, idx) => (
+                                <div key={idx} className="stat-group gpu-item">
+                                    <div className="stat-label">
+                                        <span>{t('systemMonitor.gpu')} {stats.gpus.length > 1 ? `#${idx + 1}` : ''}</span>
+                                        <span>{gpu.percent.toFixed(1)}%</span>
+                                    </div>
+                                    <div className="stat-bar-bg">
+                                        <div className="stat-bar-fill" style={{ width: `${gpu.percent}%` }}></div>
+                                    </div>
+                                    <div className="gpu-name">{gpu.name}</div>
+                                </div>
+                            ))}
+                            {(!stats?.gpus || stats.gpus.length === 0) && (
+                                <div className="stat-group">
+                                    <div className="stat-label">
+                                        <span>{t('systemMonitor.gpu')}</span>
+                                        <span>0%</span>
+                                    </div>
+                                    <div className="gpu-name">Detecting...</div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Disks */}

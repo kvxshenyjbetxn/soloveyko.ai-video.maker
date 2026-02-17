@@ -19,13 +19,17 @@ type DiskInfo struct {
 	UsedPercent float64 `json:"usedPercent"`
 }
 
+type GPUData struct {
+	Name    string  `json:"name"`
+	Percent float64 `json:"percent"`
+}
+
 type SystemStats struct {
 	CPUPercent float64    `json:"cpuPercent"`
 	RAMTotal   uint64     `json:"ramTotal"`
 	RAMUsed    uint64     `json:"ramUsed"`
 	RAMPercent float64    `json:"ramPercent"`
-	GPUInfo    string     `json:"gpuInfo"`
-	GPUPercent float64    `json:"gpuPercent"`
+	GPUs       []GPUData  `json:"gpus"`
 	Disks      []DiskInfo `json:"disks"`
 }
 
@@ -76,69 +80,95 @@ func (s *StatsService) GetSystemStats() (*SystemStats, error) {
 	// GPU
 	switch runtime.GOOS {
 	case "windows":
-		stats.GPUInfo = getWindowsGPUInfo()
-		stats.GPUPercent = getWindowsGPULoad()
+		stats.GPUs = getWindowsGPUs()
 	case "darwin":
-		stats.GPUInfo = getMacGPUInfo()
-		stats.GPUPercent = 0
+		stats.GPUs = []GPUData{{Name: getMacGPUInfo(), Percent: 0}}
 	default:
-		stats.GPUInfo = "N/A"
+		stats.GPUs = []GPUData{{Name: "N/A", Percent: 0}}
 	}
 
 	return stats, nil
 }
 
-func getWindowsGPULoad() float64 {
-	// 1. Try NVIDIA SMI
-	out, err := runHiddenCommand("nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits")
-	if err == nil {
-		val, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
-		if err == nil {
-			return val
-		}
-	}
+func getWindowsGPUs() []GPUData {
+	var gpus []GPUData
 
-	// 2. Try PowerShell
-	psCmd := "$v = Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction SilentlyContinue; if ($v) { ($v.CounterSamples | Measure-Object -Property CookedValue -Max).Maximum } else { 0 }"
-	out, err = runHiddenCommand("powershell", "-Command", psCmd)
-	if err == nil {
-		val, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
-		if err == nil {
-			return val
-		}
-	}
-
-	// 3. Try WMIC
-	out, err = runHiddenCommand("wmic", "path", "Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine", "get", "UtilizationPercentage")
-	if err == nil {
-		lines := strings.Split(string(out), "\n")
-		var maxLoad float64
-		for _, line := range lines {
-			val, err := strconv.ParseFloat(strings.TrimSpace(line), 64)
-			if err == nil && val > maxLoad {
-				maxLoad = val
-			}
-		}
-		if maxLoad > 0 {
-			return maxLoad
-		}
-	}
-
-	return 0
-}
-
-func getWindowsGPUInfo() string {
-	out, err := runHiddenCommand("wmic", "path", "win32_VideoController", "get", "name")
+	// 1. Try to get names via PowerShell
+	psNamesCmd := "(Get-CimInstance Win32_VideoController).Name"
+	out, err := runHiddenCommand("powershell", "-Command", psNamesCmd)
 	if err == nil {
 		lines := strings.Split(string(out), "\n")
 		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if trimmed != "" && trimmed != "Name" {
-				return trimmed
+			name := strings.TrimSpace(line)
+			// Cleanup name
+			name = strings.Map(func(r rune) rune {
+				if r < 32 || r > 126 && r < 160 {
+					if r == '\n' || r == '\r' || r == '\t' {
+						return -1
+					}
+					return -1
+				}
+				return r
+			}, name)
+
+			if name != "" {
+				// Avoid duplicates
+				duplicate := false
+				for _, g := range gpus {
+					if g.Name == name {
+						duplicate = true
+						break
+					}
+				}
+				if !duplicate {
+					gpus = append(gpus, GPUData{Name: name, Percent: 0})
+				}
 			}
 		}
 	}
-	return "Generic GPU"
+
+	if len(gpus) == 0 {
+		return []GPUData{{Name: "Generic GPU", Percent: 0}}
+	}
+
+	// 2. Try to get utilization metrics
+	// NVIDIA SMI (accurate for NVIDIA)
+	nvOut, nvErr := runHiddenCommand("nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits")
+	if nvErr == nil {
+		nvLines := strings.Split(strings.TrimSpace(string(nvOut)), "\n")
+		nvIdx := 0
+		for i := range gpus {
+			if strings.Contains(strings.ToLower(gpus[i].Name), "nvidia") && nvIdx < len(nvLines) {
+				val, err := strconv.ParseFloat(strings.TrimSpace(nvLines[nvIdx]), 64)
+				if err == nil {
+					gpus[i].Percent = val
+				}
+				nvIdx++
+			}
+		}
+	}
+
+	// For other GPUs (Intel, AMD) or if NVIDIA SMI failed, use PowerShell CIM
+	// Note: It's hard to map UtilizationPercentage to specific GPU in WMI perfectly
+	// because GPUEngine doesn't hold the Name, it holds LUIDs.
+	// As a best effort, we'll get the max utilization for those that still have 0.
+	psLoadCmd := "$v = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction SilentlyContinue; if ($v) { ($v | Measure-Object -Property UtilizationPercentage -Max).Maximum } else { 0 }"
+	loadOut, loadErr := runHiddenCommand("powershell", "-Command", psLoadCmd)
+	if loadErr == nil {
+		maxLoad, err := strconv.ParseFloat(strings.TrimSpace(string(loadOut)), 64)
+		if err == nil && maxLoad > 0 {
+			for i := range gpus {
+				if gpus[i].Percent == 0 {
+					gpus[i].Percent = maxLoad
+					// We apply maxLoad to all non-nvidia as a fallback
+					// since we can't easily distinguish which one is working
+					// without complex LUID mapping.
+				}
+			}
+		}
+	}
+
+	return gpus
 }
 
 func getMacGPUInfo() string {
