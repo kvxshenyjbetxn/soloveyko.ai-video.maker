@@ -44,7 +44,7 @@ jobs:
 
       - name: Build Wails App
         run: |
-          wails build
+          wails build -platform darwin/universal
 
       # --- Mac Specific ---
       # For Mac, we want to upload the .app bundle (zipped)
@@ -52,11 +52,12 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: mv build/bin/soloveyko.app build/bin/Soloveyko-macOS.app
 
-      - name: Zip Mac App
+      - name: Fix Permissions and Zip Mac App
         if: matrix.os == 'macos-latest'
         run: |
+          chmod +x build/bin/Soloveyko-macOS.app/Contents/MacOS/*
           cd build/bin
-          zip -r Soloveyko-macOS.zip Soloveyko-macOS.app
+          zip -ry Soloveyko-macOS.zip Soloveyko-macOS.app
 
       # --- Upload Artifacts ---
       
