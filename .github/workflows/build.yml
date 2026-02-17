@@ -44,20 +44,20 @@ jobs:
 
       - name: Build Wails App
         run: |
-          wails build -platform darwin/universal
+          # Збираємо саме для ARM64 (M1/M2/M3)
+          wails build -platform darwin/arm64 -o Soloveyko-macOS
 
       # --- Mac Specific ---
-      # For Mac, we want to upload the .app bundle (zipped)
-      - name: Rename Mac App
-        if: matrix.os == 'macos-latest'
-        run: mv build/bin/soloveyko.app build/bin/Soloveyko-macOS.app
-
-      - name: Fix Permissions and Zip Mac App
+      - name: Code Sign and Zip
         if: matrix.os == 'macos-latest'
         run: |
-          chmod +x build/bin/Soloveyko-macOS.app/Contents/MacOS/*
           cd build/bin
-          zip -ry Soloveyko-macOS.zip Soloveyko-macOS.app
+          # Надаємо права на запуск
+          chmod +x Soloveyko-macOS.app/Contents/MacOS/*
+          # Примусово підписуємо "ad-hoc" підписом (це критично для M-процесорів)
+          codesign --force --deep --sign - Soloveyko-macOS.app
+          # Пакуємо за допомогою ditto (краще за zip для Mac)
+          ditto -c -k --sequesterRsrc Soloveyko-macOS.app Soloveyko-macOS.zip
 
       # --- Upload Artifacts ---
       
