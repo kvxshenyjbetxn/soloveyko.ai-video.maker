@@ -48,24 +48,17 @@ jobs:
           wails build -platform darwin/arm64
 
       # --- Mac Specific ---
-      - name: Code Sign and Zip
+      - name: Prepare and Code Sign
         if: matrix.os == 'macos-latest'
         run: |
-          # Перейменовуємо папку (в wails.json назва "soloveyko")
+          # В wails.json назва "soloveyko"
           mv build/bin/soloveyko.app build/bin/Soloveyko-macOS.app
           
-          cd build/bin
-          # Робимо всі файли в папці MacOS виконуваними (це надійніше за зірочку)
-          find Soloveyko-macOS.app/Contents/MacOS -type f -exec chmod +x {} +
+          # Надаємо права на запуск бінарного файлу
+          find build/bin/Soloveyko-macOS.app/Contents/MacOS -type f -exec chmod +x {} +
           
-          # Тимчасово прибираємо карантин (про всяк випадок для самого раннера)
-          xattr -rd com.apple.quarantine Soloveyko-macOS.app || true
-          
-          # Підписуємо локальним (ad-hoc) підписом
-          codesign --force --deep --sign - Soloveyko-macOS.app
-          
-          # Створюємо архів за допомогою ditto (зберігає всі аттрибути Mac)
-          ditto -c -k --sequesterRsrc Soloveyko-macOS.app Soloveyko-macOS.zip
+          # Підписуємо ad-hoc підписом для M-процесорів
+          codesign --force --deep --sign - build/bin/Soloveyko-macOS.app
 
       # --- Upload Artifacts ---
       
@@ -73,8 +66,9 @@ jobs:
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
+          # GitHub сам створить архів Soloveyko-macOS.zip
           name: Soloveyko-macOS
-          path: build/bin/Soloveyko-macOS.zip
+          path: build/bin/Soloveyko-macOS.app
 
       - name: Upload Linux Artifact
         if: matrix.os == 'ubuntu-latest'
