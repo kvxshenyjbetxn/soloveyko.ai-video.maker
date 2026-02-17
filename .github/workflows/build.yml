@@ -44,26 +44,26 @@ jobs:
 
       - name: Build Wails App
         run: |
-          # Збираємо для ARM64 (M1/M2/M3) з назвою за замовчуванням
-          wails build -platform darwin/arm64
+          # Робимо універсальну збірку (Intel + Apple Silicon)
+          wails build -platform darwin/universal
 
       # --- Mac Specific ---
-      - name: Prepare, Sign and Zip
+      - name: Package macOS DMG
         if: matrix.os == 'macos-latest'
         run: |
-          # В wails.json назва "soloveyko"
-          mv build/bin/soloveyko.app build/bin/Soloveyko-macOS.app
-          
-          # Надаємо права на запуск бінарного файлу
-          find build/bin/Soloveyko-macOS.app/Contents/MacOS -type f -exec chmod +x {} +
-          
-          # Підписуємо ad-hoc підписом для M-процесорів
-          codesign --force --deep --sign - build/bin/Soloveyko-macOS.app
-          
-          # Важливо: використовуємо ditto для створення архіву всередині раннера
-          # Це гарантує, що при розпакуванні це БУДЕ програма, а не папка
           cd build/bin
-          ditto -c -k --sequesterRsrc Soloveyko-macOS.app Soloveyko-macOS.zip
+          # 1. Надаємо правильну назву додатку
+          mv soloveyko.app "Soloveyko.app"
+          
+          # 2. Виправляємо права та прибираємо мітки карантину раннера
+          chmod -R +x "Soloveyko.app/Contents/MacOS/"
+          xattr -rc "Soloveyko.app"
+          
+          # 3. Підписуємо (ad-hoc), щоб M-процесори не блокували програму
+          codesign --force --deep --sign - "Soloveyko.app"
+          
+          # 4. Створюємо DMG образ (це стандарт для Mac)
+          hdiutil create -volname "Soloveyko AI" -srcfolder "Soloveyko.app" -ov -format UDZO Soloveyko.dmg
 
       # --- Upload Artifacts ---
       
@@ -72,7 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Soloveyko-macOS
-          path: build/bin/Soloveyko-macOS.zip
+          path: build/bin/Soloveyko.dmg
 
       - name: Upload Linux Artifact
         if: matrix.os == 'ubuntu-latest'
