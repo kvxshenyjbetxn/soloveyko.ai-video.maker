@@ -8,16 +8,17 @@ export const ServiceBalanceMonitor = () => {
     const {
         openRouterBalance, loadingOpenRouter, refreshOpenRouterBalance,
         elevenLabsBotBalance, loadingElevenLabsBot, refreshElevenLabsBotBalance,
+        elevenLabsUnlimBalance, loadingElevenLabsUnlim, refreshElevenLabsUnlimBalance,
         refreshAllBalances
     } = useServices();
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const isAnyLoading = loadingOpenRouter || loadingElevenLabsBot;
+    const isAnyLoading = loadingOpenRouter || loadingElevenLabsBot || loadingElevenLabsUnlim;
 
     const getIconColor = () => {
         if (isAnyLoading) return '#FFC107'; // Yellow
-        if (openRouterBalance === null && elevenLabsBotBalance === null) return '#757575'; // Grey
-        if ((openRouterBalance !== null && openRouterBalance < 1) || (elevenLabsBotBalance !== null && elevenLabsBotBalance < 5000)) return '#ff5252'; // Red
+        if (openRouterBalance === null && elevenLabsBotBalance === null && elevenLabsUnlimBalance === null) return '#757575'; // Grey
+        if ((openRouterBalance !== null && openRouterBalance < 1) || (elevenLabsBotBalance !== null && elevenLabsBotBalance < 5000) || (elevenLabsUnlimBalance !== null && elevenLabsUnlimBalance !== -1 && elevenLabsUnlimBalance < 5000)) return '#ff5252'; // Red
         return '#4caf50'; // Green
     };
 
@@ -66,6 +67,16 @@ export const ServiceBalanceMonitor = () => {
                                 {loadingElevenLabsBot ? '...' : (elevenLabsBotBalance !== null ? elevenLabsBotBalance.toLocaleString() : 'N/A')}
                             </div>
                         </div>
+
+                        <div className="balance-item">
+                            <div className="service-name">
+                                <div className={`service-status-dot ${loadingElevenLabsUnlim ? 'loading' : (elevenLabsUnlimBalance === null ? 'error' : '')}`}></div>
+                                {t('balanceMonitor.elevenlabsunlim') || 'ElevenLabsUnlim'}
+                            </div>
+                            <div className="service-balance">
+                                {loadingElevenLabsUnlim ? '...' : (elevenLabsUnlimBalance !== null ? (elevenLabsUnlimBalance === -1 ? 'Unlimited' : elevenLabsUnlimBalance.toLocaleString()) : 'N/A')}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -78,6 +89,7 @@ export const ServiceBalanceMonitor = () => {
                         if (newExpanded) {
                             if (openRouterBalance === null) refreshOpenRouterBalance();
                             if (elevenLabsBotBalance === null) refreshElevenLabsBotBalance();
+                            if (elevenLabsUnlimBalance === null) refreshElevenLabsUnlimBalance();
                         }
                     }}
                     title="Balance Monitor"

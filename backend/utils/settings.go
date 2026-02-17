@@ -7,14 +7,15 @@ import (
 )
 
 type Settings struct {
-	Language            string   `json:"language"`
-	Theme               string   `json:"theme"`
-	AccentColor         string   `json:"accentColor"`
-	OpenRouterAPIKey    string   `json:"openRouterAPIKey"`
-	OpenRouterModels    []string `json:"openRouterModels"`
-	PollinationsAPIKey  string   `json:"pollinationsAPIKey"`
-	PollinationsModels  []string `json:"pollinationsModels"`
-	ElevenLabsBotAPIKey string   `json:"elevenLabsBotAPIKey"`
+	Language              string   `json:"language"`
+	Theme                 string   `json:"theme"`
+	AccentColor           string   `json:"accentColor"`
+	OpenRouterAPIKey      string   `json:"openRouterAPIKey"`
+	OpenRouterModels      []string `json:"openRouterModels"`
+	PollinationsAPIKey    string   `json:"pollinationsAPIKey"`
+	PollinationsModels    []string `json:"pollinationsModels"`
+	ElevenLabsBotAPIKey   string   `json:"elevenLabsBotAPIKey"`
+	ElevenLabsUnlimAPIKey string   `json:"elevenLabsUnlimAPIKey"`
 }
 
 type SettingsService struct {
@@ -249,5 +250,25 @@ func (s *SettingsService) SetElevenLabsBotAPIKey(apiKey string) error {
 	}
 
 	settings.ElevenLabsBotAPIKey = apiKey
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsUnlimAPIKey повертає API ключ ElevenLabsUnlim
+func (s *SettingsService) GetElevenLabsUnlimAPIKey() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.ElevenLabsUnlimAPIKey
+}
+
+// SetElevenLabsUnlimAPIKey зберігає API ключ ElevenLabsUnlim
+func (s *SettingsService) SetElevenLabsUnlimAPIKey(apiKey string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.ElevenLabsUnlimAPIKey = apiKey
 	return s.SaveSettings(settings)
 }

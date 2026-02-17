@@ -116,6 +116,7 @@
         "title": "Баланс сервисов",
         "openrouter": "OpenRouter",
         "elevenlabsbot": "ElevenLabsBot",
+        "elevenlabsunlim": "ElevenLabs Unlim",
         "refreshAll": "Обновить всё",
         "total": "Всего"
     }

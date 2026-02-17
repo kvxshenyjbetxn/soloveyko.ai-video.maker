@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 // @ts-ignore
-import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey } from '../../wailsjs/go/main/App';
+import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey } from '../../wailsjs/go/main/App';
 import { useLogger } from './LoggerContext';
 
 interface ServiceContextType {
@@ -10,6 +10,9 @@ interface ServiceContextType {
     elevenLabsBotBalance: number | null;
     refreshElevenLabsBotBalance: () => Promise<void>;
     loadingElevenLabsBot: boolean;
+    elevenLabsUnlimBalance: number | null;
+    refreshElevenLabsUnlimBalance: () => Promise<void>;
+    loadingElevenLabsUnlim: boolean;
     refreshAllBalances: () => Promise<void>;
 }
 
@@ -20,6 +23,9 @@ const ServiceContext = createContext<ServiceContextType>({
     elevenLabsBotBalance: null,
     refreshElevenLabsBotBalance: async () => { },
     loadingElevenLabsBot: false,
+    elevenLabsUnlimBalance: null,
+    refreshElevenLabsUnlimBalance: async () => { },
+    loadingElevenLabsUnlim: false,
     refreshAllBalances: async () => { },
 });
 
@@ -31,6 +37,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [loadingOpenRouter, setLoadingOpenRouter] = useState(false);
     const [elevenLabsBotBalance, setElevenLabsBotBalance] = useState<number | null>(null);
     const [loadingElevenLabsBot, setLoadingElevenLabsBot] = useState(false);
+    const [elevenLabsUnlimBalance, setElevenLabsUnlimBalance] = useState<number | null>(null);
+    const [loadingElevenLabsUnlim, setLoadingElevenLabsUnlim] = useState(false);
     const hasFetchedRef = useRef(false);
 
     const refreshOpenRouterBalance = async () => {
@@ -80,10 +88,34 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }
 
+    const refreshElevenLabsUnlimBalance = async () => {
+        if (loadingElevenLabsUnlim) return;
+
+        setLoadingElevenLabsUnlim(true);
+        addLog('INFO', 'Requesting ElevenLabsUnlim balance update...');
+        try {
+            const apiKey = await GetElevenLabsUnlimAPIKey();
+            if (apiKey) {
+                const balance = await GetElevenLabsUnlimBalance(apiKey);
+                setElevenLabsUnlimBalance(balance);
+                addLog('INFO', `Received ElevenLabsUnlim balance: ${balance === -1 ? 'Unlimited' : balance.toFixed(0) + ' chars'}`);
+            } else {
+                setElevenLabsUnlimBalance(null);
+                addLog('WARN', 'ElevenLabsUnlim API Key not found');
+            }
+        } catch (err: any) {
+            console.error("Failed to update ElevenLabsUnlim balance:", err);
+            addLog('ERROR', `Failed to fetch ElevenLabsUnlim balance: ${err?.message || String(err)}`);
+        } finally {
+            setLoadingElevenLabsUnlim(false);
+        }
+    }
+
     const refreshAllBalances = async () => {
         await Promise.all([
             refreshOpenRouterBalance(),
-            refreshElevenLabsBotBalance()
+            refreshElevenLabsBotBalance(),
+            refreshElevenLabsUnlimBalance()
         ]);
     };
 
@@ -103,6 +135,9 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             elevenLabsBotBalance,
             refreshElevenLabsBotBalance,
             loadingElevenLabsBot,
+            elevenLabsUnlimBalance,
+            refreshElevenLabsUnlimBalance,
+            loadingElevenLabsUnlim,
             refreshAllBalances
         }}>
             {children}

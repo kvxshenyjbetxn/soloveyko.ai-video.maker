@@ -10,23 +10,25 @@ import (
 
 // App struct
 type App struct {
-	ctx          context.Context
-	settings     *utils.SettingsService
-	stats        *utils.StatsService
-	openRouter   *api.OpenRouterService
-	pollinations *api.PollinationsService
-	elevenLabs   *api.ElevenLabsBotService
+	ctx             context.Context
+	settings        *utils.SettingsService
+	stats           *utils.StatsService
+	openRouter      *api.OpenRouterService
+	pollinations    *api.PollinationsService
+	elevenLabs      *api.ElevenLabsBotService
+	elevenLabsUnlim *api.ElevenLabsUnlimService
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	settings := utils.NewSettingsService()
 	return &App{
-		settings:     settings,
-		stats:        utils.NewStatsService(),
-		openRouter:   api.NewOpenRouterService(settings),
-		pollinations: api.NewPollinationsService(settings),
-		elevenLabs:   api.NewElevenLabsBotService(settings),
+		settings:        settings,
+		stats:           utils.NewStatsService(),
+		openRouter:      api.NewOpenRouterService(settings),
+		pollinations:    api.NewPollinationsService(settings),
+		elevenLabs:      api.NewElevenLabsBotService(settings),
+		elevenLabsUnlim: api.NewElevenLabsUnlimService(settings),
 	}
 }
 
@@ -170,4 +172,21 @@ func (a *App) SaveElevenLabsBotAPIKey(apiKey string) error {
 // GetElevenLabsBotAPIKey gets API key
 func (a *App) GetElevenLabsBotAPIKey() string {
 	return a.elevenLabs.GetAPIKey()
+}
+
+// ElevenLabsUnlim Methods
+
+// GetElevenLabsUnlimBalance returns the user's balance from ElevenLabsUnlim
+func (a *App) GetElevenLabsUnlimBalance(apiKey string) (float64, error) {
+	return a.elevenLabsUnlim.GetBalance(apiKey)
+}
+
+// SaveElevenLabsUnlimAPIKey saves API key
+func (a *App) SaveElevenLabsUnlimAPIKey(apiKey string) error {
+	return a.elevenLabsUnlim.SaveAPIKey(apiKey)
+}
+
+// GetElevenLabsUnlimAPIKey gets API key
+func (a *App) GetElevenLabsUnlimAPIKey() string {
+	return a.elevenLabsUnlim.GetAPIKey()
 }
