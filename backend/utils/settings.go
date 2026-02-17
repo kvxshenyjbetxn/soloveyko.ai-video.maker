@@ -19,6 +19,7 @@ type Settings struct {
 	VoiceMakerAPIKey      string   `json:"voiceMakerAPIKey"`
 	VoiceMakerBalance     float64  `json:"voiceMakerBalance"`
 	GooglerAPIKey         string   `json:"googlerAPIKey"`
+	ElevenLabsImageAPIKey string   `json:"elevenLabsImageAPIKey"`
 }
 
 type SettingsService struct {
@@ -333,5 +334,25 @@ func (s *SettingsService) SetGooglerAPIKey(apiKey string) error {
 	}
 
 	settings.GooglerAPIKey = apiKey
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsImageAPIKey повертає API ключ ElevenLabsImage
+func (s *SettingsService) GetElevenLabsImageAPIKey() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.ElevenLabsImageAPIKey
+}
+
+// SetElevenLabsImageAPIKey зберігає API ключ ElevenLabsImage
+func (s *SettingsService) SetElevenLabsImageAPIKey(apiKey string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.ElevenLabsImageAPIKey = apiKey
 	return s.SaveSettings(settings)
 }

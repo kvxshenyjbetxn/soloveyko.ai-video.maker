@@ -19,6 +19,7 @@ type App struct {
 	elevenLabsUnlim *api.ElevenLabsUnlimService
 	voiceMaker      *api.VoiceMakerService
 	googler         *api.GooglerService
+	elevenLabsImage *api.ElevenLabsImageService
 }
 
 // NewApp creates a new App application struct
@@ -33,6 +34,7 @@ func NewApp() *App {
 		elevenLabsUnlim: api.NewElevenLabsUnlimService(settings),
 		voiceMaker:      api.NewVoiceMakerService(settings),
 		googler:         api.NewGooglerService(settings),
+		elevenLabsImage: api.NewElevenLabsImageService(settings),
 	}
 }
 
@@ -237,4 +239,16 @@ func (a *App) SaveGooglerAPIKey(apiKey string) error {
 // GetGooglerAPIKey gets API key
 func (a *App) GetGooglerAPIKey() string {
 	return a.googler.GetAPIKey()
+}
+
+// ElevenLabsImage Methods
+
+// SaveElevenLabsImageAPIKey saves API key
+func (a *App) SaveElevenLabsImageAPIKey(apiKey string) error {
+	return a.elevenLabsImage.SaveAPIKey(apiKey)
+}
+
+// GetElevenLabsImageAPIKey gets API key
+func (a *App) GetElevenLabsImageAPIKey() string {
+	return a.elevenLabsImage.GetAPIKey()
 }
