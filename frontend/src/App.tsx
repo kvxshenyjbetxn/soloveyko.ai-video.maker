@@ -15,6 +15,7 @@ import { OpenRouter } from './tabs/settings/api/openrouter';
 import { ServiceBalanceMonitor } from './components/ServiceBalanceMonitor';
 import { ElevenLabsBot } from './tabs/settings/api/voice/elevenlabsbot';
 import { ElevenLabsUnlim } from './tabs/settings/api/voice/elevenlabsunlim';
+import { ElevenLabsUA } from './tabs/settings/api/voice/elevenlabsua';
 import { VoiceMaker } from './tabs/settings/api/voice/voicemaker';
 import { PollinationsAI } from './tabs/settings/api/image/pollinationsai';
 import { Googler } from './tabs/settings/api/image/googler';
@@ -94,6 +95,7 @@ function App() {
             case 'settings.api.openrouter': return <OpenRouter />;
             case 'settings.api.voice.elevenlabsbot': return <ElevenLabsBot />;
             case 'settings.api.voice.elevenlabsunlim': return <ElevenLabsUnlim />;
+            case 'settings.api.voice.elevenlabsua': return <ElevenLabsUA />;
             case 'settings.api.voice.voicemaker': return <VoiceMaker />;
             case 'settings.api.image.pollinationsai': return <PollinationsAI />;
             case 'settings.api.image.googler': return <Googler />;
@@ -194,6 +196,12 @@ function App() {
                                                 onClick={() => setCurrentPath('settings.api.voice.elevenlabsunlim')}
                                             >
                                                 {t('voice.elevenlabsunlim')}
+                                            </div>
+                                            <div
+                                                className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'settings.api.voice.elevenlabsua' ? 'active' : ''}`}
+                                                onClick={() => setCurrentPath('settings.api.voice.elevenlabsua')}
+                                            >
+                                                {t('voice.elevenlabsua')}
                                             </div>
                                             <div
                                                 className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'settings.api.voice.voicemaker' ? 'active' : ''}`}

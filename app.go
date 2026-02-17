@@ -20,6 +20,7 @@ type App struct {
 	voiceMaker      *api.VoiceMakerService
 	googler         *api.GooglerService
 	elevenLabsImage *api.ElevenLabsImageService
+	elevenLabsUA    *api.ElevenLabsUAService
 }
 
 // NewApp creates a new App application struct
@@ -35,6 +36,7 @@ func NewApp() *App {
 		voiceMaker:      api.NewVoiceMakerService(settings),
 		googler:         api.NewGooglerService(settings),
 		elevenLabsImage: api.NewElevenLabsImageService(settings),
+		elevenLabsUA:    api.NewElevenLabsUAService(settings),
 	}
 }
 
@@ -251,4 +253,16 @@ func (a *App) SaveElevenLabsImageAPIKey(apiKey string) error {
 // GetElevenLabsImageAPIKey gets API key
 func (a *App) GetElevenLabsImageAPIKey() string {
 	return a.elevenLabsImage.GetAPIKey()
+}
+
+// ElevenLabsUA Methods
+
+// SaveElevenLabsUAAPIKey saves API key
+func (a *App) SaveElevenLabsUAAPIKey(apiKey string) error {
+	return a.elevenLabsUA.SaveAPIKey(apiKey)
+}
+
+// GetElevenLabsUAAPIKey gets API key
+func (a *App) GetElevenLabsUAAPIKey() string {
+	return a.elevenLabsUA.GetAPIKey()
 }

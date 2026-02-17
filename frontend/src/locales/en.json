@@ -78,6 +78,7 @@
     "voice": {
         "elevenlabsbot": "ElevenLabs Bot",
         "elevenlabsunlim": "ElevenLabs Unlim",
+        "elevenlabsua": "ElevenLabs UA",
         "voicemaker": "VoiceMaker"
     },
     "image": {
