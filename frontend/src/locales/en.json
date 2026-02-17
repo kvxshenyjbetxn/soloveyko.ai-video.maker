@@ -118,6 +118,7 @@
         "openrouter": "OpenRouter",
         "elevenlabsbot": "ElevenLabsBot",
         "elevenlabsunlim": "ElevenLabs Unlim",
+        "voicemaker": "VoiceMaker",
         "refreshAll": "Refresh All",
         "total": "Total"
     }

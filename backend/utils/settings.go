@@ -16,6 +16,8 @@ type Settings struct {
 	PollinationsModels    []string `json:"pollinationsModels"`
 	ElevenLabsBotAPIKey   string   `json:"elevenLabsBotAPIKey"`
 	ElevenLabsUnlimAPIKey string   `json:"elevenLabsUnlimAPIKey"`
+	VoiceMakerAPIKey      string   `json:"voiceMakerAPIKey"`
+	VoiceMakerBalance     float64  `json:"voiceMakerBalance"`
 }
 
 type SettingsService struct {
@@ -270,5 +272,45 @@ func (s *SettingsService) SetElevenLabsUnlimAPIKey(apiKey string) error {
 	}
 
 	settings.ElevenLabsUnlimAPIKey = apiKey
+	return s.SaveSettings(settings)
+}
+
+// GetVoiceMakerAPIKey повертає API ключ VoiceMaker
+func (s *SettingsService) GetVoiceMakerAPIKey() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.VoiceMakerAPIKey
+}
+
+// SetVoiceMakerAPIKey зберігає API ключ VoiceMaker
+func (s *SettingsService) SetVoiceMakerAPIKey(apiKey string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.VoiceMakerAPIKey = apiKey
+	return s.SaveSettings(settings)
+}
+
+// GetVoiceMakerBalance повертає останній збережений баланс VoiceMaker
+func (s *SettingsService) GetVoiceMakerBalance() float64 {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 0
+	}
+	return settings.VoiceMakerBalance
+}
+
+// SetVoiceMakerBalance зберігає баланс VoiceMaker
+func (s *SettingsService) SetVoiceMakerBalance(balance float64) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		settings = &Settings{}
+	}
+
+	settings.VoiceMakerBalance = balance
 	return s.SaveSettings(settings)
 }

@@ -9,16 +9,17 @@ export const ServiceBalanceMonitor = () => {
         openRouterBalance, loadingOpenRouter, refreshOpenRouterBalance,
         elevenLabsBotBalance, loadingElevenLabsBot, refreshElevenLabsBotBalance,
         elevenLabsUnlimBalance, loadingElevenLabsUnlim, refreshElevenLabsUnlimBalance,
+        voiceMakerBalance, loadingVoiceMaker, refreshVoiceMakerBalance,
         refreshAllBalances
     } = useServices();
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const isAnyLoading = loadingOpenRouter || loadingElevenLabsBot || loadingElevenLabsUnlim;
+    const isAnyLoading = loadingOpenRouter || loadingElevenLabsBot || loadingElevenLabsUnlim || loadingVoiceMaker;
 
     const getIconColor = () => {
         if (isAnyLoading) return '#FFC107'; // Yellow
-        if (openRouterBalance === null && elevenLabsBotBalance === null && elevenLabsUnlimBalance === null) return '#757575'; // Grey
-        if ((openRouterBalance !== null && openRouterBalance < 1) || (elevenLabsBotBalance !== null && elevenLabsBotBalance < 5000) || (elevenLabsUnlimBalance !== null && elevenLabsUnlimBalance !== -1 && elevenLabsUnlimBalance < 5000)) return '#ff5252'; // Red
+        if (openRouterBalance === null && elevenLabsBotBalance === null && elevenLabsUnlimBalance === null && voiceMakerBalance === null) return '#757575'; // Grey
+        if ((openRouterBalance !== null && openRouterBalance < 1) || (elevenLabsBotBalance !== null && elevenLabsBotBalance < 5000) || (elevenLabsUnlimBalance !== null && elevenLabsUnlimBalance !== -1 && elevenLabsUnlimBalance < 5000) || (voiceMakerBalance !== null && voiceMakerBalance < 5000)) return '#ff5252'; // Red
         return '#4caf50'; // Green
     };
 
@@ -75,6 +76,16 @@ export const ServiceBalanceMonitor = () => {
                             </div>
                             <div className="service-balance">
                                 {loadingElevenLabsUnlim ? '...' : (elevenLabsUnlimBalance !== null ? (elevenLabsUnlimBalance === -1 ? 'Unlimited' : elevenLabsUnlimBalance.toLocaleString()) : 'N/A')}
+                            </div>
+                        </div>
+
+                        <div className="balance-item">
+                            <div className="service-name">
+                                <div className={`service-status-dot ${loadingVoiceMaker ? 'loading' : (voiceMakerBalance === null ? 'error' : '')}`}></div>
+                                {t('balanceMonitor.voicemaker') || 'VoiceMaker'}
+                            </div>
+                            <div className="service-balance">
+                                {loadingVoiceMaker ? '...' : (voiceMakerBalance !== null ? voiceMakerBalance.toLocaleString() : 'N/A')}
                             </div>
                         </div>
                     </div>

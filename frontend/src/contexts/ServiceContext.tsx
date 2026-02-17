@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 // @ts-ignore
-import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey } from '../../wailsjs/go/main/App';
+import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey, GetVoiceMakerBalance, GetVoiceMakerAPIKey, GetVoiceMakerSavedBalance, SaveVoiceMakerBalance } from '../../wailsjs/go/main/App';
 import { useLogger } from './LoggerContext';
 
 interface ServiceContextType {
@@ -13,6 +13,9 @@ interface ServiceContextType {
     elevenLabsUnlimBalance: number | null;
     refreshElevenLabsUnlimBalance: () => Promise<void>;
     loadingElevenLabsUnlim: boolean;
+    voiceMakerBalance: number | null;
+    refreshVoiceMakerBalance: () => Promise<void>;
+    loadingVoiceMaker: boolean;
     refreshAllBalances: () => Promise<void>;
 }
 
@@ -26,6 +29,9 @@ const ServiceContext = createContext<ServiceContextType>({
     elevenLabsUnlimBalance: null,
     refreshElevenLabsUnlimBalance: async () => { },
     loadingElevenLabsUnlim: false,
+    voiceMakerBalance: null,
+    refreshVoiceMakerBalance: async () => { },
+    loadingVoiceMaker: false,
     refreshAllBalances: async () => { },
 });
 
@@ -39,6 +45,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [loadingElevenLabsBot, setLoadingElevenLabsBot] = useState(false);
     const [elevenLabsUnlimBalance, setElevenLabsUnlimBalance] = useState<number | null>(null);
     const [loadingElevenLabsUnlim, setLoadingElevenLabsUnlim] = useState(false);
+    const [voiceMakerBalance, setVoiceMakerBalance] = useState<number | null>(null);
+    const [loadingVoiceMaker, setLoadingVoiceMaker] = useState(false);
     const hasFetchedRef = useRef(false);
 
     const refreshOpenRouterBalance = async () => {
@@ -123,9 +131,43 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     useEffect(() => {
         if (!hasFetchedRef.current) {
             hasFetchedRef.current = true;
+
+            // Завантажуємо збережений баланс VoiceMaker
+            const loadVoiceMakerBalance = async () => {
+                const savedBalance = await GetVoiceMakerSavedBalance();
+                if (savedBalance > 0) {
+                    setVoiceMakerBalance(savedBalance);
+                }
+            };
+            loadVoiceMakerBalance();
+
             refreshAllBalances();
         }
     }, []);
+
+    const refreshVoiceMakerBalance = async () => {
+        if (loadingVoiceMaker) return;
+
+        setLoadingVoiceMaker(true);
+        addLog('INFO', 'Requesting VoiceMaker balance update (test conversion)...');
+        try {
+            const apiKey = await GetVoiceMakerAPIKey();
+            if (apiKey) {
+                const balance = await GetVoiceMakerBalance(apiKey);
+                setVoiceMakerBalance(balance);
+                await SaveVoiceMakerBalance(balance); // Зберігаємо в налаштування
+                addLog('INFO', `Received VoiceMaker balance: ${balance.toFixed(0)} chars`);
+            } else {
+                setVoiceMakerBalance(null);
+                addLog('WARN', 'VoiceMaker API Key not found');
+            }
+        } catch (err: any) {
+            console.error("Failed to update VoiceMaker balance:", err);
+            addLog('ERROR', `Failed to fetch VoiceMaker balance: ${err?.message || String(err)}`);
+        } finally {
+            setLoadingVoiceMaker(false);
+        }
+    }
 
     return (
         <ServiceContext.Provider value={{
@@ -138,6 +180,9 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             elevenLabsUnlimBalance,
             refreshElevenLabsUnlimBalance,
             loadingElevenLabsUnlim,
+            voiceMakerBalance,
+            refreshVoiceMakerBalance,
+            loadingVoiceMaker,
             refreshAllBalances
         }}>
             {children}

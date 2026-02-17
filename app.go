@@ -17,6 +17,7 @@ type App struct {
 	pollinations    *api.PollinationsService
 	elevenLabs      *api.ElevenLabsBotService
 	elevenLabsUnlim *api.ElevenLabsUnlimService
+	voiceMaker      *api.VoiceMakerService
 }
 
 // NewApp creates a new App application struct
@@ -29,6 +30,7 @@ func NewApp() *App {
 		pollinations:    api.NewPollinationsService(settings),
 		elevenLabs:      api.NewElevenLabsBotService(settings),
 		elevenLabsUnlim: api.NewElevenLabsUnlimService(settings),
+		voiceMaker:      api.NewVoiceMakerService(settings),
 	}
 }
 
@@ -189,4 +191,31 @@ func (a *App) SaveElevenLabsUnlimAPIKey(apiKey string) error {
 // GetElevenLabsUnlimAPIKey gets API key
 func (a *App) GetElevenLabsUnlimAPIKey() string {
 	return a.elevenLabsUnlim.GetAPIKey()
+}
+
+// VoiceMaker Methods
+
+// GetVoiceMakerBalance returns the user's balance from VoiceMaker (via test request)
+func (a *App) GetVoiceMakerBalance(apiKey string) (float64, error) {
+	return a.voiceMaker.GetBalance(apiKey)
+}
+
+// SaveVoiceMakerAPIKey saves API key
+func (a *App) SaveVoiceMakerAPIKey(apiKey string) error {
+	return a.voiceMaker.SaveAPIKey(apiKey)
+}
+
+// GetVoiceMakerAPIKey gets API key
+func (a *App) GetVoiceMakerAPIKey() string {
+	return a.voiceMaker.GetAPIKey()
+}
+
+// SaveVoiceMakerBalance saves last known balance
+func (a *App) SaveVoiceMakerBalance(balance float64) error {
+	return a.settings.SetVoiceMakerBalance(balance)
+}
+
+// GetVoiceMakerSavedBalance gets last saved balance
+func (a *App) GetVoiceMakerSavedBalance() float64 {
+	return a.settings.GetVoiceMakerBalance()
 }
