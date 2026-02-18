@@ -34,10 +34,11 @@ type App struct {
 // NewApp creates a new App application struct
 func NewApp() *App {
 	settings := utils.NewSettingsService()
-	return &App{
+	orService := api.NewOpenRouterService(settings)
+	app := &App{
 		settings:        settings,
 		stats:           utils.NewStatsService(),
-		openRouter:      api.NewOpenRouterService(settings),
+		openRouter:      orService,
 		pollinations:    api.NewPollinationsService(settings),
 		elevenLabs:      api.NewElevenLabsBotService(settings),
 		elevenLabsUnlim: api.NewElevenLabsUnlimService(settings),
@@ -48,6 +49,16 @@ func NewApp() *App {
 		assemblyAI:      api.NewAssemblyAIService(settings),
 		templates:       utils.NewTemplateService(),
 	}
+
+	orService.OnRequestStart = func(id string, taskLabel string, taskType string, keyName string, model string, temp float64, tokens int) {
+		app.LogToUI("INFO", fmt.Sprintf("[OpenRouter] [%s] Request | Key: %s | Model: %s | Temp: %.2f | Max Tokens: %v", strings.Title(taskType), keyName, model, temp, tokens), id, taskLabel)
+		// Емітуємо подію, щоб фронтенд знав, що завдання ДІЙСНО почало обробку
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "taskStatus", id, "processing", 10)
+		}
+	}
+
+	return app
 }
 
 // GetSystemStats повертає поточну статистику системи
@@ -449,6 +460,16 @@ func (a *App) SaveOpenRouterAlertThreshold(threshold float64) error {
 	return a.settings.SetOpenRouterAlertThreshold(threshold)
 }
 
+// GetOpenRouterMaxConnections повертає ліміт одночасних запитів
+func (a *App) GetOpenRouterMaxConnections() int {
+	return a.settings.GetOpenRouterMaxConnections()
+}
+
+// SaveOpenRouterMaxConnections встановлює ліміт одночасних запитів
+func (a *App) SaveOpenRouterMaxConnections(max int) error {
+	return a.settings.SetOpenRouterMaxConnections(max)
+}
+
 // GetGooglerVideoAlertThreshold gets alert threshold
 func (a *App) GetGooglerVideoAlertThreshold() float64 {
 	return a.settings.GetGooglerVideoAlertThreshold()
@@ -553,9 +574,6 @@ func (a *App) ProcessTask(id string, taskNumber int, taskType string, content st
 			}
 		}
 
-		// Log Request
-		a.LogToUI("INFO", fmt.Sprintf("[OpenRouter] [%s] Request | Key: %s | Model: %s | Temp: %.2f | Max Tokens: %v", strings.Title(taskType), keyName, model, temp, tokens), id, taskLabel)
-
 		var fullPrompt string
 		if strings.Contains(prompt, "{{content}}") {
 			fullPrompt = strings.ReplaceAll(prompt, "{{content}}", content)
@@ -563,7 +581,7 @@ func (a *App) ProcessTask(id string, taskNumber int, taskType string, content st
 			fullPrompt = prompt + "\n\n" + content
 		}
 
-		result, err := a.openRouter.Chat(apiKey, model, fullPrompt, temp, int(tokens))
+		result, err := a.openRouter.Chat(id, taskLabel, taskType, keyName, apiKey, model, fullPrompt, temp, int(tokens))
 		if err != nil {
 			a.LogToUI("ERROR", fmt.Sprintf("[OpenRouter] [%s] Error: %v", strings.Title(taskType), err), id, taskLabel)
 			return "", err

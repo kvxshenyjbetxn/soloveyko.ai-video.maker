@@ -27,9 +27,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [isResizing, setIsResizing] = useState(false);
     const [editingField, setEditingField] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
     const [templateToDelete, setTemplateToDelete] = useState<any | null>(null);
-    const { templates, saveTemplate, removeTemplate } = useTemplates();
+    const { templates, saveTemplate, removeTemplate, selectedTemplateIds, setSelectedTemplateIds } = useTemplates();
 
     const sidebarRef = useRef<HTMLDivElement>(null);
     const lastSavedRef = useRef<string>("");
@@ -87,12 +86,13 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 // Завжди згортаємо блок API та Шлях при ініціалізації
                 s.apiCollapsed = true;
                 s.pathCollapsed = true;
-                if (s.templatesCollapsed === undefined) s.templatesCollapsed = true;
-                updated = true;
 
-                if (updated) {
-                    await SavePipelineSettings(s);
-                }
+                // Для шаблонів встановлюємо дефолт, якщо ще немає
+                if (s.translateTemplatesCollapsed === undefined) s.translateTemplatesCollapsed = true;
+                if (s.rewriteTemplatesCollapsed === undefined) s.rewriteTemplatesCollapsed = true;
+
+                // Оновлюємо налаштування на сервері, щоб зафіксувати згортання API/Шляху
+                await SavePipelineSettings(s);
 
                 setSettings(s);
                 lastSavedRef.current = JSON.stringify(s);
@@ -166,21 +166,22 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     };
 
     const handleAddTask = (taskName: string) => {
-        if (selectedTemplateIds.length === 0) {
-            // No templates selected - use current sidebar settings
+        const relevantTemplateIds = selectedTemplateIds.filter(id => {
+            const tpl = templates.find(t => t.id === id);
+            return tpl && tpl.type === type;
+        });
+
+        if (relevantTemplateIds.length === 0) {
+            // No templates of current type selected - use current sidebar settings
             addTask(type, content, settings, taskName);
         } else {
-            // Create tasks for each selected template
-            selectedTemplateIds.forEach(id => {
+            // Create tasks for each selected template of current type
+            relevantTemplateIds.forEach(id => {
                 const template = templates.find(t => t.id === id);
                 if (template) {
-                    // Передаємо taskName як назву проекту (QueueContext сам додасть номер, якщо порожньо)
-                    // а template.name як підпапку
                     addTask(type, content, template.settings, taskName, template.name);
                 }
             });
-            // Clear selection after adding
-            setSelectedTemplateIds([]);
         }
         setIsModalOpen(false);
     };
@@ -196,6 +197,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             apiCollapsed: prev.apiCollapsed,
             pathCollapsed: prev.pathCollapsed,
             templatesCollapsed: prev.templatesCollapsed,
+            translateTemplatesCollapsed: prev.translateTemplatesCollapsed,
+            rewriteTemplatesCollapsed: prev.rewriteTemplatesCollapsed,
         }));
     };
 
@@ -258,6 +261,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const isTranslate = type === 'translate';
     const isEnabled = isTranslate ? settings.translateEnabled : settings.rewriteEnabled;
     const isCollapsed = isTranslate ? settings.translateCollapsed : settings.rewriteCollapsed;
+    const templatesCollapsedField = isTranslate ? 'translateTemplatesCollapsed' : 'rewriteTemplatesCollapsed';
+    const isTemplatesCollapsed = settings[templatesCollapsedField];
     const isApiCollapsed = settings.apiCollapsed;
     const isPathCollapsed = settings.pathCollapsed;
 
@@ -383,14 +388,14 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 <div className="pipeline-sidebar-content">
 
                     {/* Templates Section */}
-                    <div className={`pipeline-stage-container ${settings.templatesCollapsed ? 'is-collapsed' : ''}`}>
+                    <div className={`pipeline-stage-container ${isTemplatesCollapsed ? 'is-collapsed' : ''}`}>
                         <div
                             className="pipeline-stage-header"
-                            onClick={() => handleChange('templatesCollapsed', !settings.templatesCollapsed)}
+                            onClick={() => handleChange(templatesCollapsedField, !isTemplatesCollapsed)}
                         >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                                 <svg
-                                    className={`stage-chevron ${settings.templatesCollapsed ? 'rotated' : ''}`}
+                                    className={`stage-chevron ${isTemplatesCollapsed ? 'rotated' : ''}`}
                                     xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                                 >
                                     <path d="m6 9 6 6 6-6" />
@@ -415,7 +420,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                 )}
                             </div>
                         </div>
-                        <div className={`stage-settings-content ${settings.templatesCollapsed ? 'collapsed' : ''}`}>
+                        <div className={`stage-settings-content ${isTemplatesCollapsed ? 'collapsed' : ''}`}>
                             {templates.filter(t => t.type === type).length === 0 ? (
                                 <div className="no-templates-text">{t('pipeline.no_templates')}</div>
                             ) : (
@@ -690,8 +695,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                 <line x1="12" y1="5" x2="12" y2="19"></line>
                                 <line x1="5" y1="12" x2="19" y2="12"></line>
                             </svg>
-                            {selectedTemplateIds.length > 0
-                                ? `${t('pipeline.add_to_queue')} (${selectedTemplateIds.length})`
+                            {selectedTemplateIds.filter(id => templates.find(t => t.id === id)?.type === type).length > 0
+                                ? `${t('pipeline.add_to_queue')} (${selectedTemplateIds.filter(id => templates.find(t => t.id === id)?.type === type).length})`
                                 : t('pipeline.add_to_queue')}
                         </button>
                     </div>

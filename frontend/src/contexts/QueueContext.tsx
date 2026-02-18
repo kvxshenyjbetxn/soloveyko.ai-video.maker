@@ -1,9 +1,9 @@
 // @ts-ignore
 import { ProcessTask } from '../../wailsjs/go/main/App';
-import React, { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react';
 import { useToast } from './ToastContext';
 
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type TaskStatus = 'pending' | 'waiting' | 'running' | 'completed' | 'failed';
 
 export interface QueueTask {
     id: string;
@@ -108,8 +108,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setIsProcessing(true);
         showToast("Початок обробки черги...", "info", 2000);
 
-        for (const task of pendingTasks) {
-            updateTaskStatus(task.id, 'running', 10);
+        await Promise.all(pendingTasks.map(async (task) => {
+            updateTaskStatus(task.id, 'waiting', 0);
 
             try {
                 // Fallback для старих завдань, які ще в черзі
@@ -123,7 +123,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 updateTaskStatus(task.id, 'failed', 0);
                 showToast(`Помилка: ${task.name} не вдалося обробити`, "error", 4000);
             }
-        }
+        }));
 
         const endTime = Date.now();
         const durationSeconds = Math.round((endTime - startTime) / 1000);
@@ -152,6 +152,17 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
         showToast("Черга закінчила обробку!", "success", 5000);
     }, [tasks, isProcessing, updateTaskStatus, showToast]);
+
+    useEffect(() => {
+        // @ts-ignore
+        if (window.runtime) {
+            // @ts-ignore
+            const unsubscribe = window.runtime.EventsOn("taskStatus", (id: string, status: string, progress: number) => {
+                updateTaskStatus(id, status as TaskStatus, progress);
+            });
+            return () => unsubscribe();
+        }
+    }, [updateTaskStatus]);
 
     return (
         <QueueContext.Provider value={{ tasks, addTask, removeTask, clearQueue, updateTaskStatus, startQueue, isProcessing, completionModal, closeCompletionModal }}>

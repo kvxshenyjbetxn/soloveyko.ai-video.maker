@@ -114,7 +114,8 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                             <span className="stage-status-text badge-status">
                                 {task.status === 'completed' ? `${task.resultLength || 0} chars` :
                                     task.status === 'running' ? `${task.progress}%` :
-                                        task.status === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                        task.status === 'waiting' ? 'В черзі' :
+                                            task.status === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                             </span>
                         </div>
                     </div>
@@ -128,7 +129,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                         </div>
                     )}
 
-                    <div style={{ marginTop: '12px', fontSize: '10px', color: 'var(--text-placeholder)', textAlign: 'right' }}>
+                    <div className="task-card-footer">
                         {new Date(task.timestamp).toLocaleTimeString()}
                     </div>
                 </div>

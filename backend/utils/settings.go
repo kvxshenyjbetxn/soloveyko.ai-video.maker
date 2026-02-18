@@ -14,28 +14,30 @@ type NamedAPIKey struct {
 }
 
 type PipelineSettings struct {
-	TranslateModel           string  `json:"translateModel,omitempty"`
-	TranslatePrompt          string  `json:"translatePrompt,omitempty"`
-	TranslateTemperature     float64 `json:"translateTemperature,omitempty"`
-	TranslateMaxTokens       int     `json:"translateMaxTokens,omitempty"`
-	TranslateCollapsed       bool    `json:"translateCollapsed,omitempty"`
-	TranslateOpenRouterKeyID string  `json:"translateOpenRouterKeyID,omitempty"`
-	RewriteModel             string  `json:"rewriteModel,omitempty"`
-	RewritePrompt            string  `json:"rewritePrompt,omitempty"`
-	RewriteTemperature       float64 `json:"rewriteTemperature,omitempty"`
-	RewriteMaxTokens         int     `json:"rewriteMaxTokens,omitempty"`
-	RewriteCollapsed         bool    `json:"rewriteCollapsed,omitempty"`
-	RewriteOpenRouterKeyID   string  `json:"rewriteOpenRouterKeyID,omitempty"`
-	SidebarWidth             int     `json:"sidebarWidth,omitempty"`
-	TranslateEnabled         bool    `json:"translateEnabled,omitempty"`
-	RewriteEnabled           bool    `json:"rewriteEnabled,omitempty"`
-	ApiCollapsed             bool    `json:"apiCollapsed,omitempty"`
-	TranslateOutputPath      string  `json:"translateOutputPath,omitempty"`
-	RewriteOutputPath        string  `json:"rewriteOutputPath,omitempty"`
-	PathCollapsed            bool    `json:"pathCollapsed,omitempty"`
-	TranslatePipelineName    string  `json:"translatePipelineName,omitempty"`
-	RewritePipelineName      string  `json:"rewritePipelineName,omitempty"`
-	TemplatesCollapsed       bool    `json:"templatesCollapsed,omitempty"`
+	TranslateModel              string  `json:"translateModel,omitempty"`
+	TranslatePrompt             string  `json:"translatePrompt,omitempty"`
+	TranslateTemperature        float64 `json:"translateTemperature,omitempty"`
+	TranslateMaxTokens          int     `json:"translateMaxTokens,omitempty"`
+	TranslateCollapsed          bool    `json:"translateCollapsed"`
+	TranslateOpenRouterKeyID    string  `json:"translateOpenRouterKeyID,omitempty"`
+	RewriteModel                string  `json:"rewriteModel,omitempty"`
+	RewritePrompt               string  `json:"rewritePrompt,omitempty"`
+	RewriteTemperature          float64 `json:"rewriteTemperature,omitempty"`
+	RewriteMaxTokens            int     `json:"rewriteMaxTokens,omitempty"`
+	RewriteCollapsed            bool    `json:"rewriteCollapsed"`
+	RewriteOpenRouterKeyID      string  `json:"rewriteOpenRouterKeyID,omitempty"`
+	SidebarWidth                int     `json:"sidebarWidth,omitempty"`
+	TranslateEnabled            bool    `json:"translateEnabled"`
+	RewriteEnabled              bool    `json:"rewriteEnabled"`
+	ApiCollapsed                bool    `json:"apiCollapsed"`
+	TranslateOutputPath         string  `json:"translateOutputPath,omitempty"`
+	RewriteOutputPath           string  `json:"rewriteOutputPath,omitempty"`
+	PathCollapsed               bool    `json:"pathCollapsed"`
+	TranslatePipelineName       string  `json:"translatePipelineName,omitempty"`
+	RewritePipelineName         string  `json:"rewritePipelineName,omitempty"`
+	TemplatesCollapsed          bool    `json:"templatesCollapsed"`
+	TranslateTemplatesCollapsed bool    `json:"translateTemplatesCollapsed"`
+	RewriteTemplatesCollapsed   bool    `json:"rewriteTemplatesCollapsed"`
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`
 }
@@ -57,6 +59,7 @@ type Settings struct {
 	ElevenLabsImageAPIKey         string           `json:"elevenLabsImageAPIKey"`
 	ElevenLabsUAAPIKey            string           `json:"elevenLabsUAAPIKey"`
 	AssemblyAIAPIKey              string           `json:"assemblyAIAPIKey"`
+	OpenRouterMaxConnections      int              `json:"openRouterMaxConnections"`
 	ElevenLabsBotAlertThreshold   float64          `json:"elevenLabsBotAlertThreshold"`
 	ElevenLabsUnlimAlertThreshold float64          `json:"elevenLabsUnlimAlertThreshold"`
 	VoiceMakerAlertThreshold      float64          `json:"voiceMakerAlertThreshold"`
@@ -135,6 +138,9 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 	}
 	if settings.AccentColor == "" {
 		settings.AccentColor = "#ff00c3"
+	}
+	if settings.OpenRouterMaxConnections <= 0 {
+		settings.OpenRouterMaxConnections = 5
 	}
 	// Якщо список моделей взагалі nil (поле відсутнє в JSON), додаємо дефолтні.
 	// Якщо список порожній [], але не nil (користувач все видалив), не чіпаємо.
@@ -626,6 +632,28 @@ func (s *SettingsService) SetAssemblyAIAPIKey(apiKey string) error {
 	}
 
 	settings.AssemblyAIAPIKey = apiKey
+	return s.SaveSettings(settings)
+}
+
+// GetOpenRouterMaxConnections повертає ліміт одночасних запитів
+func (s *SettingsService) GetOpenRouterMaxConnections() int {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 5
+	}
+	if settings.OpenRouterMaxConnections <= 0 {
+		return 5
+	}
+	return settings.OpenRouterMaxConnections
+}
+
+// SetOpenRouterMaxConnections встановлює ліміт одночасних запитів
+func (s *SettingsService) SetOpenRouterMaxConnections(max int) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.OpenRouterMaxConnections = max
 	return s.SaveSettings(settings)
 }
 

@@ -27,6 +27,8 @@ export interface PipelineSettings {
     translatePipelineName: string;
     rewritePipelineName: string;
     templatesCollapsed: boolean;
+    translateTemplatesCollapsed: boolean;
+    rewriteTemplatesCollapsed: boolean;
 }
 
 export interface PipelineTemplate {
@@ -44,6 +46,8 @@ interface TemplateContextType {
     removeTemplate: (id: string) => Promise<void>;
     updateTemplate: (id: string, name: string, data: any) => Promise<void>;
     isLoading: boolean;
+    selectedTemplateIds: string[];
+    setSelectedTemplateIds: React.Dispatch<React.SetStateAction<string[]>>;
 }
 
 const TemplateContext = createContext<TemplateContextType | undefined>(undefined);
@@ -51,6 +55,7 @@ const TemplateContext = createContext<TemplateContextType | undefined>(undefined
 export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [templates, setTemplates] = useState<PipelineTemplate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
     const { showToast } = useToast();
 
     const loadTemplates = useCallback(async () => {
@@ -104,7 +109,16 @@ export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }
     }, [loadTemplates]);
 
     return (
-        <TemplateContext.Provider value={{ templates, loadTemplates, saveTemplate, removeTemplate, updateTemplate, isLoading }}>
+        <TemplateContext.Provider value={{
+            templates,
+            loadTemplates,
+            saveTemplate,
+            removeTemplate,
+            updateTemplate,
+            isLoading,
+            selectedTemplateIds,
+            setSelectedTemplateIds
+        }}>
             {children}
         </TemplateContext.Provider>
     );

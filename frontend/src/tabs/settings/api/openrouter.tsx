@@ -3,7 +3,7 @@ import { useI18n } from '../../../contexts/I18nContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useServices } from '../../../contexts/ServiceContext';
 // @ts-ignore
-import { SaveOpenRouterAPIKey, GetOpenRouterAPIKey, SaveOpenRouterModels, GetOpenRouterSavedModels, GetOpenRouterKeys, SaveOpenRouterKeys } from '../../../../wailsjs/go/main/App';
+import { SaveOpenRouterAPIKey, GetOpenRouterAPIKey, SaveOpenRouterModels, GetOpenRouterSavedModels, GetOpenRouterKeys, SaveOpenRouterKeys, GetOpenRouterMaxConnections, SaveOpenRouterMaxConnections } from '../../../../wailsjs/go/main/App';
 import '../general.css';
 
 export const OpenRouter = () => {
@@ -22,6 +22,7 @@ export const OpenRouter = () => {
     const [newModel, setNewModel] = useState('');
     const [isLoaded, setIsLoaded] = useState(false);
     const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [maxConnections, setMaxConnections] = useState<number>(5);
 
     useEffect(() => {
         const loadKey = async () => {
@@ -30,6 +31,8 @@ export const OpenRouter = () => {
             setThreshold(openRouterThreshold.toString());
             const models = await GetOpenRouterSavedModels();
             setSavedModels(models || []);
+            const max = await GetOpenRouterMaxConnections();
+            setMaxConnections(max || 5);
             setIsLoaded(true);
         };
         loadKey();
@@ -44,9 +47,10 @@ export const OpenRouter = () => {
                 SaveOpenRouterAlertThreshold(numThreshold);
                 setOpenRouterThreshold(numThreshold);
             }
+            SaveOpenRouterMaxConnections(maxConnections);
         }, 1000);
         return () => clearTimeout(timer);
-    }, [keys, threshold, isLoaded]);
+    }, [keys, threshold, maxConnections, isLoaded]);
 
     const handleAddKey = () => {
         if (!newName.trim() || !newKey.trim()) return;
@@ -273,6 +277,44 @@ export const OpenRouter = () => {
                             onChange={(e) => setThreshold(e.target.value)}
                             placeholder={t('api.openrouterSettings.alertThresholdPlaceholder')}
                         />
+                    </div>
+                </div>
+
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '30px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '10px', fontSize: '1.1em', opacity: 0.9 }}>{t('pipeline.openrouter.max_connections') || 'Кількість одночасних з\'єднань'}</h3>
+                    <p style={{ fontSize: '0.85em', opacity: 0.5, marginBottom: '20px' }}>
+                        {t('pipeline.openrouter.max_connections_desc') || 'Ліміт одночасних запитів до OpenRouter для всієї програми. Нові запити чекатимуть у черзі.'}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                        <input
+                            type="range"
+                            min="1"
+                            max="50"
+                            step="1"
+                            style={{
+                                flex: 1,
+                                height: '6px',
+                                borderRadius: '3px',
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                appearance: 'none',
+                                outline: 'none',
+                                cursor: 'pointer'
+                            }}
+                            value={maxConnections}
+                            onChange={(e) => setMaxConnections(parseInt(e.target.value))}
+                        />
+                        <div style={{
+                            minWidth: '45px',
+                            padding: '8px 12px',
+                            background: 'rgba(0,0,0,0.3)',
+                            borderRadius: '6px',
+                            border: `1px solid ${accentColor}`,
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            color: accentColor
+                        }}>
+                            {maxConnections}
+                        </div>
                     </div>
                 </div>
 

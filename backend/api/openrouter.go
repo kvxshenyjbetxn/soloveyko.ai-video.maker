@@ -7,17 +7,35 @@ import (
 	"io"
 	"net/http"
 	"soloveyko/backend/utils"
+	"sync"
 	"time"
 )
 
 type OpenRouterService struct {
-	settings *utils.SettingsService
+	settings       *utils.SettingsService
+	sem            chan struct{}
+	limit          int
+	mu             sync.Mutex
+	OnRequestStart func(id string, taskLabel string, taskType string, keyName string, model string, temp float64, tokens int)
 }
 
 func NewOpenRouterService(settings *utils.SettingsService) *OpenRouterService {
 	return &OpenRouterService{
 		settings: settings,
 	}
+}
+
+// ensureSemaphore ensures the semaphore channel is initialized with the correct limit
+func (s *OpenRouterService) ensureSemaphore() chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	max := s.settings.GetOpenRouterMaxConnections()
+	if s.sem == nil || s.limit != max {
+		s.sem = make(chan struct{}, max)
+		s.limit = max
+	}
+	return s.sem
 }
 
 type OpenRouterModel struct {
@@ -139,8 +157,17 @@ func (s *OpenRouterService) GetOpenRouterSavedModels() []string {
 	return s.settings.GetOpenRouterModels()
 }
 
-// Chat executes a chat completion request to OpenRouter
-func (s *OpenRouterService) Chat(apiKey string, model string, prompt string, temperature float64, maxTokens int) (string, error) {
+// Chat executes a chat completion request to OpenRouter with retries and concurrency limit
+func (s *OpenRouterService) Chat(id string, taskLabel string, taskType string, keyName string, apiKey string, model string, prompt string, temperature float64, maxTokens int) (string, error) {
+	sem := s.ensureSemaphore()
+	sem <- struct{}{}        // Acquire
+	defer func() { <-sem }() // Release
+
+	// Log that we actually started the request now
+	if s.OnRequestStart != nil {
+		s.OnRequestStart(id, taskLabel, taskType, keyName, model, temperature, maxTokens)
+	}
+
 	client := &http.Client{Timeout: 120 * time.Second}
 
 	reqBody := ChatRequest{
@@ -157,44 +184,59 @@ func (s *OpenRouterService) Chat(apiKey string, model string, prompt string, tem
 		return "", err
 	}
 
-	req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", err
-	}
+	retryDelays := []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second}
+	maxAttempts := len(retryDelays) + 1
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("HTTP-Referer", "http://localhost:3000")
-	req.Header.Set("X-Title", "Soloveyko AI Video Maker")
+	var lastErr error
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		var chatResp ChatResponse
-		json.Unmarshal(body, &chatResp)
-		if chatResp.Error.Message != "" {
-			return "", fmt.Errorf("OpenRouter error: %s", chatResp.Error.Message)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(jsonData))
+		if err != nil {
+			return "", err
 		}
-		return "", fmt.Errorf("OpenRouter API failed with status %d: %s", resp.StatusCode, string(body))
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("HTTP-Referer", "http://localhost:3000")
+		req.Header.Set("X-Title", "Soloveyko AI Video Maker")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+		} else {
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if err != nil {
+				lastErr = err
+			} else if resp.StatusCode != http.StatusOK {
+				var chatResp ChatResponse
+				json.Unmarshal(body, &chatResp)
+				if chatResp.Error.Message != "" {
+					lastErr = fmt.Errorf("OpenRouter error: %s", chatResp.Error.Message)
+				} else {
+					lastErr = fmt.Errorf("OpenRouter API failed with status %d: %s", resp.StatusCode, string(body))
+				}
+			} else {
+				var chatResp ChatResponse
+				if err := json.Unmarshal(body, &chatResp); err != nil {
+					return "", err
+				}
+
+				if len(chatResp.Choices) > 0 {
+					return chatResp.Choices[0].Message.Content, nil
+				}
+				lastErr = fmt.Errorf("no response from OpenRouter")
+			}
+		}
+
+		// If we still have retries left, wait before next attempt
+		if attempt < maxAttempts {
+			delay := retryDelays[attempt-1]
+			fmt.Printf("OpenRouter attempt %d failed: %v. Retrying in %v...\n", attempt, lastErr, delay)
+			time.Sleep(delay)
+		}
 	}
 
-	var chatResp ChatResponse
-	if err := json.Unmarshal(body, &chatResp); err != nil {
-		return "", err
-	}
-
-	if len(chatResp.Choices) > 0 {
-		return chatResp.Choices[0].Message.Content, nil
-	}
-
-	return "", fmt.Errorf("no response from OpenRouter")
+	return "", fmt.Errorf("OpenRouter failed after %d attempts. Last error: %v", maxAttempts, lastErr)
 }

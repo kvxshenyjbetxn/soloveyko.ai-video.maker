@@ -33,6 +33,7 @@
     flex-direction: row;
     gap: 20px;
     align-content: flex-start;
+    align-items: flex-start;
 }
 
 .task-card-wrapper {
@@ -43,9 +44,6 @@
     max-width: 100%;
 }
 
-.task-card-wrapper.expanded {
-    gap: 12px;
-}
 
 .task-card {
     width: 280px;
@@ -78,11 +76,15 @@
 .task-inline-log {
     width: 0;
     opacity: 0;
+    margin-left: 0;
     visibility: hidden;
     background: rgba(15, 15, 20, 0.6);
     border: 1px solid var(--border-color);
     border-radius: 16px;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+        margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+        visibility 0.4s;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -93,6 +95,7 @@
     width: 500px;
     opacity: 1;
     visibility: visible;
+    margin-left: 12px;
 }
 
 .log-header {
@@ -283,7 +286,8 @@
     height: 16px;
 }
 
-.status-pending .lightbulb-icon {
+.status-pending .lightbulb-icon,
+.status-waiting .lightbulb-icon {
     color: #757575;
 }
 
@@ -349,6 +353,11 @@
     color: #ff5252;
 }
 
+.status-waiting .stage-status-text.badge-status {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-placeholder);
+}
+
 .progress-bar-container {
     height: 4px;
     background: rgba(255, 255, 255, 0.05);
@@ -374,4 +383,12 @@
     border-radius: 16px;
     margin-top: 20px;
     width: 100%;
+}
+
+.task-card-footer {
+    margin-top: auto;
+    padding-top: 12px;
+    font-size: 10px;
+    color: var(--text-placeholder);
+    text-align: right;
 }
