@@ -51,6 +51,38 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
+    user-select: none;
+    /* Prevent accidental text selection like a native app */
+}
+
+/* Base Normalization for Buttons and Inputs */
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+    font-size: inherit;
+    background: none;
+    border: none;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+button {
+    cursor: pointer;
+}
+
+:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent-primary);
+    outline: none;
 }
 
 /* Animations */
@@ -150,21 +182,72 @@ body {
     flex-direction: column;
 }
 
-/* Simple Scrollbar */
+/* Custom Scrollbars */
+.premium-scrollbar::-webkit-scrollbar,
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
 }
 
+.premium-scrollbar::-webkit-scrollbar-track,
 ::-webkit-scrollbar-track {
     background: transparent;
 }
 
+.premium-scrollbar::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    transition: background 0.2s ease;
 }
 
+.premium-scrollbar::-webkit-scrollbar-thumb:hover,
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
+    background: var(--accent-primary);
+}
+
+/* Custom Range Input (Sliders) Normalization */
+input[type="range"].custom-slider,
+.settings-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(to right, var(--accent-primary) 0%, var(--accent-primary) var(--range-progress, 0%), rgba(255, 255, 255, 0.08) var(--range-progress, 0%), rgba(255, 255, 255, 0.08) 100%);
+    border-radius: 4px;
+    outline: none;
+    margin: 12px 0;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+input[type="range"].custom-slider::-webkit-slider-thumb,
+.settings-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--bg-primary);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
+input[type="range"].custom-slider::-webkit-slider-thumb:hover,
+.settings-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 15px var(--accent-primary);
+}
+
+input[type="range"].custom-slider::-moz-range-thumb,
+.settings-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--bg-primary);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
 }

@@ -32,3 +32,5 @@ assets/demo/test_video.mp4
 
 frontend/wailsjs/go/
 frontend/wailsjs/runtime/
+frontend/package-lock.json
+frontend/package.json.md5

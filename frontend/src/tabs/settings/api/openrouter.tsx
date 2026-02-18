@@ -254,25 +254,6 @@ export const OpenRouter = () => {
                     </div>
                 </div>
             </div>
-            <style>{`
-                @keyframes spin { to { transform: rotate(360deg); } }
-                .spinner-small { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
-                
-                /* Custom Scrollbar for OpenRouter tab */
-                .content-wrapper::-webkit-scrollbar {
-                    width: 6px;
-                }
-                .content-wrapper::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .content-wrapper::-webkit-scrollbar-thumb {
-                    background: rgba(255, 255, 255, 0.1);
-                    border-radius: 10px;
-                }
-                .content-wrapper::-webkit-scrollbar-thumb:hover {
-                    background: rgba(255, 255, 255, 0.2);
-                }
-            `}</style>
         </div>
     );
 };

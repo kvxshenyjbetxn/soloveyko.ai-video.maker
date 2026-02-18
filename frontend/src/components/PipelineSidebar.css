@@ -341,9 +341,6 @@ input:checked+.stage-slider:before {
 
 .settings-slider {
     flex: 1;
-    accent-color: var(--accent-primary);
-    height: 3px;
-    cursor: pointer;
 }
 
 .settings-slider-value {

@@ -282,6 +282,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                             max="2"
                                             step="0.1"
                                             value={tempValue}
+                                            style={{ '--range-progress': `${(tempValue / 2) * 100}%` } as React.CSSProperties}
                                             onChange={(e) => handleChange(isTranslate ? 'translateTemperature' : 'rewriteTemperature', parseFloat(e.target.value))}
                                         />
                                         {renderValueOrInput(isTranslate ? 'translateTemperature' : 'rewriteTemperature', tempValue, true)}
@@ -298,6 +299,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                             max="128000"
                                             step="500"
                                             value={tokensValue}
+                                            style={{ '--range-progress': `${(tokensValue / 128000) * 100}%` } as React.CSSProperties}
                                             onChange={(e) => handleChange(isTranslate ? 'translateMaxTokens' : 'rewriteMaxTokens', parseInt(e.target.value))}
                                         />
                                         {renderValueOrInput(isTranslate ? 'translateMaxTokens' : 'rewriteMaxTokens', tokensValue, false)}
