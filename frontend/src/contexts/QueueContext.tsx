@@ -7,7 +7,9 @@ export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface QueueTask {
     id: string;
-    name: string;
+    name: string; // Відображається в UI (Завдання - Шаблон)
+    folderName: string; // Базова папка завдання
+    subName: string; // Підпапка шаблону
     type: 'translate' | 'rewrite';
     content: string;
     status: TaskStatus;
@@ -19,7 +21,7 @@ export interface QueueTask {
 
 interface QueueContextType {
     tasks: QueueTask[];
-    addTask: (type: 'translate' | 'rewrite', content: string, settings: any, name?: string) => void;
+    addTask: (type: 'translate' | 'rewrite', content: string, settings: any, name?: string, subName?: string) => void;
     removeTask: (id: string) => void;
     clearQueue: () => void;
     updateTaskStatus: (id: string, status: TaskStatus, progress?: number) => void;
@@ -50,12 +52,15 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setCompletionModal(prev => ({ ...prev, isOpen: false }));
     }, []);
 
-    const addTask = useCallback((type: 'translate' | 'rewrite', content: string, settings: any, name?: string) => {
-        const finalName = name?.trim() || `Task ${taskCounter}`;
+    const addTask = useCallback((type: 'translate' | 'rewrite', content: string, settings: any, name?: string, subName?: string) => {
+        const folderName = name?.trim() || `Task ${taskCounter}`;
+        const displayName = subName ? `${folderName} - ${subName}` : folderName;
 
         const newTask: QueueTask = {
             id: Math.random().toString(36).substr(2, 9),
-            name: finalName,
+            name: displayName,
+            folderName: folderName,
+            subName: subName || "",
             type,
             content,
             status: 'pending',
@@ -102,7 +107,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             updateTaskStatus(task.id, 'running', 10);
 
             try {
-                const result = await ProcessTask(task.type, task.content, task.settings, task.name);
+                // Fallback для старих завдань, які ще в черзі
+                const fName = task.folderName || task.name || "Task";
+                const sName = task.subName || "";
+
+                const result = await ProcessTask(task.type, task.content, task.settings, fName, sName);
                 updateTaskStatus(task.id, 'completed', 100, result.length);
             } catch (error) {
                 console.error(`Task ${task.id} failed:`, error);

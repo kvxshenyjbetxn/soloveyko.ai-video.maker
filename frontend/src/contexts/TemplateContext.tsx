@@ -34,15 +34,15 @@ export interface PipelineTemplate {
     type: 'translate' | 'rewrite';
     name: string;
     createdAt: number;
-    settings: PipelineSettings;
+    settings: any;
 }
 
 interface TemplateContextType {
     templates: PipelineTemplate[];
     loadTemplates: () => Promise<void>;
-    saveTemplate: (tplType: 'translate' | 'rewrite', name: string, data: PipelineSettings) => Promise<void>;
+    saveTemplate: (tplType: 'translate' | 'rewrite', name: string, data: any) => Promise<void>;
     removeTemplate: (id: string) => Promise<void>;
-    updateTemplate: (id: string, name: string, data: PipelineSettings) => Promise<void>;
+    updateTemplate: (id: string, name: string, data: any) => Promise<void>;
     isLoading: boolean;
 }
 

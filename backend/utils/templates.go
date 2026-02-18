@@ -10,11 +10,11 @@ import (
 )
 
 type PipelineTemplate struct {
-	ID        string           `json:"id"`
-	Type      string           `json:"type"` // "translate" or "rewrite"
-	Name      string           `json:"name"`
-	CreatedAt int64            `json:"createdAt"`
-	Settings  PipelineSettings `json:"settings"`
+	ID        string                 `json:"id"`
+	Type      string                 `json:"type"` // "translate" or "rewrite"
+	Name      string                 `json:"name"`
+	CreatedAt int64                  `json:"createdAt"`
+	Settings  map[string]interface{} `json:"settings"`
 }
 
 type TemplateService struct {
@@ -87,7 +87,7 @@ func (s *TemplateService) LoadTemplates() ([]PipelineTemplate, error) {
 	return templates, nil
 }
 
-func (s *TemplateService) AddTemplate(tplType string, name string, data PipelineSettings) (*PipelineTemplate, error) {
+func (s *TemplateService) AddTemplate(tplType string, name string, data map[string]interface{}) (*PipelineTemplate, error) {
 	if name == "" {
 		templates, _ := s.LoadTemplates()
 		count := 0
@@ -169,6 +169,7 @@ func (s *TemplateService) DeleteTemplate(id string) error {
 		return err
 	}
 
+	deleted := false
 	for _, file := range files {
 		if file.IsDir() || filepath.Ext(file.Name()) != ".json" {
 			continue
@@ -183,15 +184,20 @@ func (s *TemplateService) DeleteTemplate(id string) error {
 		var tpl PipelineTemplate
 		if err := json.Unmarshal(data, &tpl); err == nil {
 			if tpl.ID == id {
-				return os.Remove(fullPath)
+				os.Remove(fullPath)
+				deleted = true
 			}
 		}
+	}
+
+	if !deleted {
+		return fmt.Errorf("template with ID %s not found", id)
 	}
 
 	return nil
 }
 
-func (s *TemplateService) UpdateTemplate(id string, name string, data PipelineSettings) error {
+func (s *TemplateService) UpdateTemplate(id string, name string, data map[string]interface{}) error {
 	templates, err := s.LoadTemplates()
 	if err != nil {
 		return err

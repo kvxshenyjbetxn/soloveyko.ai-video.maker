@@ -133,7 +133,7 @@ func (a *App) GetTemplates() ([]utils.PipelineTemplate, error) {
 }
 
 // AddTemplate додає новий шаблон пайплайну
-func (a *App) AddTemplate(tplType string, name string, data utils.PipelineSettings) (*utils.PipelineTemplate, error) {
+func (a *App) AddTemplate(tplType string, name string, data map[string]interface{}) (*utils.PipelineTemplate, error) {
 	return a.templates.AddTemplate(tplType, name, data)
 }
 
@@ -143,7 +143,7 @@ func (a *App) DeleteTemplate(id string) error {
 }
 
 // UpdateTemplate оновлює шаблон пайплайну
-func (a *App) UpdateTemplate(id string, name string, data utils.PipelineSettings) error {
+func (a *App) UpdateTemplate(id string, name string, data map[string]interface{}) error {
 	return a.templates.UpdateTemplate(id, name, data)
 }
 
@@ -474,7 +474,7 @@ func (a *App) SavePipelineSettings(pipeline utils.PipelineSettings) error {
 }
 
 // ProcessTask handles the execution of a single pipeline task
-func (a *App) ProcessTask(taskType string, content string, settings map[string]interface{}, taskName string) (string, error) {
+func (a *App) ProcessTask(taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
 	// 1. Get Pipeline Settings for Output Path and Keys
 	pSettings := a.settings.GetPipelineSettings()
 
@@ -487,7 +487,16 @@ func (a *App) ProcessTask(taskType string, content string, settings map[string]i
 	if taskType == "translate" || taskType == "rewrite" {
 		// Get actual API Key
 		keyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
-		outPath, _ = settings["outputPath"].(string)
+		outPath, _ = settings[taskType+"OutputPath"].(string)
+
+		if outPath == "" {
+			switch taskType {
+			case "translate":
+				outPath = pSettings.TranslateOutputPath
+			case "rewrite":
+				outPath = pSettings.RewriteOutputPath
+			}
+		}
 
 		if outPath == "" {
 			outPath = pSettings.OutputPath
@@ -545,15 +554,22 @@ func (a *App) ProcessTask(taskType string, content string, settings map[string]i
 		// Log Result
 		a.LogToUI("SUCCESS", fmt.Sprintf("[OpenRouter] [%s] Success: Result received", strings.Title(taskType)))
 
-		// Save to file with new structure: OutputPath / TaskName / PipelineName / fileName
+		// Save to file with new structure: OutputPath / TaskName / TemplateName (subName) / fileName
 		if outPath != "" {
-			finalDir := filepath.Join(outPath, taskName, pipelineName)
+			// Якщо subName порожній, використовуємо внутрішню назву пайплайну
+			templateDir := subName
+			if templateDir == "" {
+				templateDir = pipelineName
+			}
+
+			finalDir := filepath.Join(outPath, taskName, templateDir)
 			err := os.MkdirAll(finalDir, 0755)
 			if err == nil {
 				fileName := "result.txt"
-				if taskType == "translate" {
+				switch taskType {
+				case "translate":
 					fileName = "translation.txt"
-				} else if taskType == "rewrite" {
+				case "rewrite":
 					fileName = "rewrite.txt"
 				}
 				filePath := filepath.Join(finalDir, fileName)

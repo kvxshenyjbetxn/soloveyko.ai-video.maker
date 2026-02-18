@@ -125,17 +125,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         );
     };
 
-    const getCleanSettings = (fullSettings: TemplatePipelineSettings, tplType: 'translate' | 'rewrite'): TemplatePipelineSettings => {
-        // Ми залишаємо лише ті поля, які стосуються поточного процесу + загальний шлях
-        const clean: any = {
-            outputPath: fullSettings.outputPath,
-            sidebarWidth: 320,
-            translateCollapsed: false,
-            rewriteCollapsed: false,
-            apiCollapsed: false,
-            pathCollapsed: false,
-            templatesCollapsed: false,
-        };
+    const getCleanSettings = (fullSettings: TemplatePipelineSettings, tplType: 'translate' | 'rewrite'): any => {
+        const clean: any = {};
 
         if (tplType === 'translate') {
             clean.translateModel = fullSettings.translateModel;
@@ -157,7 +148,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             clean.rewriteOutputPath = fullSettings.rewriteOutputPath;
         }
 
-        return clean as TemplatePipelineSettings;
+        return clean;
     };
 
     const handleSaveTemplate = async () => {
@@ -169,6 +160,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const handleConfirmDelete = async () => {
         if (templateToDelete) {
             await removeTemplate(templateToDelete.id);
+            setSelectedTemplateIds(prev => prev.filter(id => id !== templateToDelete.id));
             setTemplateToDelete(null);
         }
     };
@@ -182,8 +174,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             selectedTemplateIds.forEach(id => {
                 const template = templates.find(t => t.id === id);
                 if (template) {
-                    const finalTaskName = taskName.trim() ? `${taskName} - ${template.name}` : template.name;
-                    addTask(type, content, template.settings, finalTaskName);
+                    // Передаємо taskName як назву проекту (QueueContext сам додасть номер, якщо порожньо)
+                    // а template.name як підпапку
+                    addTask(type, content, template.settings, taskName, template.name);
                 }
             });
             // Clear selection after adding
@@ -282,9 +275,14 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
     const handleToggleEnable = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.checked;
-        const newSettings = { ...settings, translateEnabled: val };
+        const field = isTranslate ? 'translateEnabled' : 'rewriteEnabled';
+        const collapsedField = isTranslate ? 'translateCollapsed' : 'rewriteCollapsed';
+        const newSettings = {
+            ...settings,
+            [field]: val
+        };
         if (!val) {
-            newSettings.translateCollapsed = true;
+            newSettings[collapsedField] = true;
         }
         setSettings(newSettings);
     };
@@ -578,24 +576,19 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                 </svg>
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                     <span className="pipeline-stage-title">{t(`pipeline.stage.${type}`)}</span>
-                                    {isTranslate && (
-                                        <span className="stage-status-text">
-                                            {isEnabled ? t('pipeline.stage.enabled') : t('pipeline.stage.disabled')}
-                                        </span>
-                                    )}
+                                    <span className="stage-status-text">
+                                        {isEnabled ? t('pipeline.stage.enabled') : t('pipeline.stage.disabled')}
+                                    </span>
                                 </div>
                             </div>
-
-                            {isTranslate && (
-                                <label className="stage-switch" onClick={(e) => e.stopPropagation()}>
-                                    <input
-                                        type="checkbox"
-                                        checked={isEnabled}
-                                        onChange={handleToggleEnable}
-                                    />
-                                    <span className="stage-slider"></span>
-                                </label>
-                            )}
+                            <label className="stage-switch" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                    type="checkbox"
+                                    checked={isEnabled}
+                                    onChange={handleToggleEnable}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
                         </div>
 
                         <div className={`stage-settings-content ${isCollapsed || !isEnabled ? 'collapsed' : ''}`}>

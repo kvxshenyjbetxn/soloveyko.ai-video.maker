@@ -4,7 +4,7 @@ import { useTemplates, PipelineTemplate } from '../../contexts/TemplateContext';
 import { useServices } from '../../contexts/ServiceContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 // @ts-ignore
-import { GetOpenRouterSavedModels } from '../../../wailsjs/go/main/App';
+import { GetOpenRouterSavedModels, SelectDirectory } from '../../../wailsjs/go/main/App';
 import './templates.css';
 
 export const Templates = () => {
@@ -81,33 +81,26 @@ export const Templates = () => {
                 [bulkParam]: bulkValue
             };
 
-            // Створюємо чистий об'єкт, де залишаємо лише шлях та параметри відповідного типу
-            const cleanSettings: any = {
-                outputPath: newSettings.outputPath || '',
-                sidebarWidth: 320,
-                translateCollapsed: false,
-                rewriteCollapsed: false,
-                apiCollapsed: false,
-                pathCollapsed: false,
-                templatesCollapsed: false,
-            };
+            const cleanSettings: any = {};
 
             if (tpl.type === 'translate') {
-                cleanSettings.translateModel = newSettings.translateModel;
-                cleanSettings.translatePrompt = newSettings.translatePrompt;
-                cleanSettings.translateTemperature = newSettings.translateTemperature;
-                cleanSettings.translateMaxTokens = newSettings.translateMaxTokens;
-                cleanSettings.translateOpenRouterKeyID = newSettings.translateOpenRouterKeyID;
+                cleanSettings.translateModel = newSettings.translateModel || "";
+                cleanSettings.translatePrompt = newSettings.translatePrompt || "";
+                cleanSettings.translateTemperature = newSettings.translateTemperature || 0;
+                cleanSettings.translateMaxTokens = newSettings.translateMaxTokens || 0;
+                cleanSettings.translateOpenRouterKeyID = newSettings.translateOpenRouterKeyID || "";
                 cleanSettings.translateEnabled = newSettings.translateEnabled === undefined ? true : newSettings.translateEnabled;
                 cleanSettings.translatePipelineName = newSettings.translatePipelineName || '';
+                cleanSettings.translateOutputPath = newSettings.translateOutputPath || '';
             } else {
-                cleanSettings.rewriteModel = newSettings.rewriteModel;
-                cleanSettings.rewritePrompt = newSettings.rewritePrompt;
-                cleanSettings.rewriteTemperature = newSettings.rewriteTemperature;
-                cleanSettings.rewriteMaxTokens = newSettings.rewriteMaxTokens;
-                cleanSettings.rewriteOpenRouterKeyID = newSettings.rewriteOpenRouterKeyID;
+                cleanSettings.rewriteModel = newSettings.rewriteModel || "";
+                cleanSettings.rewritePrompt = newSettings.rewritePrompt || "";
+                cleanSettings.rewriteTemperature = newSettings.rewriteTemperature || 0;
+                cleanSettings.rewriteMaxTokens = newSettings.rewriteMaxTokens || 0;
+                cleanSettings.rewriteOpenRouterKeyID = newSettings.rewriteOpenRouterKeyID || "";
                 cleanSettings.rewriteEnabled = newSettings.rewriteEnabled === undefined ? true : newSettings.rewriteEnabled;
                 cleanSettings.rewritePipelineName = newSettings.rewritePipelineName || '';
+                cleanSettings.rewriteOutputPath = newSettings.rewriteOutputPath || '';
             }
 
             await updateTemplate(tpl.id, tpl.name, cleanSettings);
@@ -311,6 +304,26 @@ export const Templates = () => {
                                         <option key={k.id} value={k.id}>{k.name}</option>
                                     ))}
                                 </select>
+                            ) : bulkParam.includes('OutputPath') ? (
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input
+                                        className="panel-input"
+                                        value={bulkValue}
+                                        readOnly
+                                        placeholder={t('pipeline.select_path') || 'Select path...'}
+                                        style={{ flex: 1 }}
+                                    />
+                                    <button
+                                        className="panel-button"
+                                        onClick={async () => {
+                                            const path = await SelectDirectory();
+                                            if (path) setBulkValue(path);
+                                        }}
+                                        style={{ padding: '8px 12px', background: 'var(--accent-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                    >
+                                        ...
+                                    </button>
+                                </div>
                             ) : null}
                         </div>
                     )}

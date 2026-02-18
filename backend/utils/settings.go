@@ -14,30 +14,30 @@ type NamedAPIKey struct {
 }
 
 type PipelineSettings struct {
-	TranslateModel           string  `json:"translateModel"`
-	TranslatePrompt          string  `json:"translatePrompt"`
-	TranslateTemperature     float64 `json:"translateTemperature"`
-	TranslateMaxTokens       int     `json:"translateMaxTokens"`
-	TranslateCollapsed       bool    `json:"translateCollapsed"`
-	TranslateOpenRouterKeyID string  `json:"translateOpenRouterKeyID"`
-	RewriteModel             string  `json:"rewriteModel"`
-	RewritePrompt            string  `json:"rewritePrompt"`
-	RewriteTemperature       float64 `json:"rewriteTemperature"`
-	RewriteMaxTokens         int     `json:"rewriteMaxTokens"`
-	RewriteCollapsed         bool    `json:"rewriteCollapsed"`
-	RewriteOpenRouterKeyID   string  `json:"rewriteOpenRouterKeyID"`
-	SidebarWidth             int     `json:"sidebarWidth"`
-	TranslateEnabled         bool    `json:"translateEnabled"`
-	RewriteEnabled           bool    `json:"rewriteEnabled"`
-	ApiCollapsed             bool    `json:"apiCollapsed"`
-	TranslateOutputPath      string  `json:"translateOutputPath"`
-	RewriteOutputPath        string  `json:"rewriteOutputPath"`
-	PathCollapsed            bool    `json:"pathCollapsed"`
-	TranslatePipelineName    string  `json:"translatePipelineName"`
-	RewritePipelineName      string  `json:"rewritePipelineName"`
-	TemplatesCollapsed       bool    `json:"templatesCollapsed"`
+	TranslateModel           string  `json:"translateModel,omitempty"`
+	TranslatePrompt          string  `json:"translatePrompt,omitempty"`
+	TranslateTemperature     float64 `json:"translateTemperature,omitempty"`
+	TranslateMaxTokens       int     `json:"translateMaxTokens,omitempty"`
+	TranslateCollapsed       bool    `json:"translateCollapsed,omitempty"`
+	TranslateOpenRouterKeyID string  `json:"translateOpenRouterKeyID,omitempty"`
+	RewriteModel             string  `json:"rewriteModel,omitempty"`
+	RewritePrompt            string  `json:"rewritePrompt,omitempty"`
+	RewriteTemperature       float64 `json:"rewriteTemperature,omitempty"`
+	RewriteMaxTokens         int     `json:"rewriteMaxTokens,omitempty"`
+	RewriteCollapsed         bool    `json:"rewriteCollapsed,omitempty"`
+	RewriteOpenRouterKeyID   string  `json:"rewriteOpenRouterKeyID,omitempty"`
+	SidebarWidth             int     `json:"sidebarWidth,omitempty"`
+	TranslateEnabled         bool    `json:"translateEnabled,omitempty"`
+	RewriteEnabled           bool    `json:"rewriteEnabled,omitempty"`
+	ApiCollapsed             bool    `json:"apiCollapsed,omitempty"`
+	TranslateOutputPath      string  `json:"translateOutputPath,omitempty"`
+	RewriteOutputPath        string  `json:"rewriteOutputPath,omitempty"`
+	PathCollapsed            bool    `json:"pathCollapsed,omitempty"`
+	TranslatePipelineName    string  `json:"translatePipelineName,omitempty"`
+	RewritePipelineName      string  `json:"rewritePipelineName,omitempty"`
+	TemplatesCollapsed       bool    `json:"templatesCollapsed,omitempty"`
 	// Keep outputPath for migration if needed
-	OutputPath string `json:"outputPath"`
+	OutputPath string `json:"outputPath,omitempty"`
 }
 
 type Settings struct {
