@@ -267,6 +267,19 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 </div>
 
                 <div className="pipeline-sidebar-content">
+                    {/* Pipeline Name Section */}
+                    <div className="settings-group" style={{ marginBottom: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+                        <div className="settings-control">
+                            <label className="settings-label">{t('pipeline.name')}</label>
+                            <input
+                                className="settings-input"
+                                value={(isTranslate ? settings.translatePipelineName : settings.rewritePipelineName) || ''}
+                                onChange={(e) => handleChange(isTranslate ? 'translatePipelineName' : 'rewritePipelineName', e.target.value)}
+                                placeholder="Назва пайплайну..."
+                            />
+                        </div>
+                    </div>
+
                     {/* API Settings Section */}
                     <div className={`pipeline-stage-container ${isApiCollapsed ? 'is-collapsed' : ''}`}>
                         <div

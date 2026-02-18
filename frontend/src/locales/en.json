@@ -25,7 +25,15 @@
         "progress": "Progress",
         "clear_all": "Clear All",
         "delete_confirm": "Delete this task?",
-        "delete_all_confirm": "Delete all tasks from the queue?"
+        "delete_all_confirm": "Delete all tasks from the queue?",
+        "status_pending": "Pending",
+        "status_running": "Processing...",
+        "status_completed": "Completed",
+        "status_failed": "Failed",
+        "completion_title": "Processing Completed",
+        "completion_message": "Queue successfully processed!\nTasks completed: {count}\nDuration: {duration}",
+        "completion_ok": "Got it",
+        "completion_open_folder": "Open Folder"
     },
     "gallery": {
         "title": "Media Gallery",
@@ -191,7 +199,8 @@
         },
         "add_to_queue": "Add to Queue",
         "task_name_title": "Task Name",
-        "task_name_description": "Enter a name for this task or leave empty for auto-naming"
+        "task_name_description": "Enter a name for this task or leave empty for auto-naming",
+        "name": "Pipeline Name"
     },
     "common": {
         "save": "Save",

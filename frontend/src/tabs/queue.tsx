@@ -16,7 +16,7 @@ const LightbulbIcon = () => (
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing } = useQueue();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
 
     // Custom Modal State
@@ -42,6 +42,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
     }, [tasks.length, setCurrentPath]);
 
     const handleClearQueue = () => {
+        if (isProcessing) return;
         setConfirmModal({
             isOpen: true,
             title: t('queue.clear_all'),
@@ -55,6 +56,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
     };
 
     const handleRemoveTask = (id: string) => {
+        if (isProcessing) return;
         setConfirmModal({
             isOpen: true,
             title: t('common.delete'),
@@ -85,10 +87,14 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                         <span className={`task-type-badge ${task.type}`}>
                             {task.type === 'translate' ? t('text.translate') : t('text.rewrite')}
                         </span>
-                        <button className="remove-task-btn" onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveTask(task.id);
-                        }}>
+                        <button
+                            className="remove-task-btn"
+                            disabled={isProcessing}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveTask(task.id);
+                            }}
+                        >
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                         </button>
                     </div>
@@ -97,18 +103,16 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                         {task.name}
                     </div>
 
-                    <div className="task-content-preview" title={task.content}>
-                        {task.content}
-                    </div>
-
                     <div className="task-stages-list">
                         <div className={`task-stage-item status-${task.status}`}>
                             <div className="stage-left">
                                 <LightbulbIcon />
                                 <span>{task.type === 'translate' ? t('text.translate') : t('text.rewrite')}</span>
                             </div>
-                            <span className="stage-status-text">
-                                {task.status === 'running' ? `${task.progress}%` : task.status}
+                            <span className="stage-status-text badge-status">
+                                {task.status === 'completed' ? `${task.resultLength || 0} chars` :
+                                    task.status === 'running' ? `${task.progress}%` :
+                                        task.status === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                             </span>
                         </div>
                     </div>
@@ -146,11 +150,32 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         <div className="content-wrapper animate-fade">
             <div className="queue-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{ fontSize: '24px', fontWeight: 800, margin: 0 }}>{t('queue.title')}</h2>
-                {tasks.length > 0 && (
-                    <button className="clear-queue-btn" onClick={handleClearQueue}>
-                        {t('queue.clear_all') || 'Clear All'}
-                    </button>
-                )}
+                <div style={{ display: 'flex', gap: '12px' }}>
+                    {tasks.length > 0 && (
+                        <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing}>
+                            {t('queue.clear_all') || 'Clear All'}
+                        </button>
+                    )}
+                    {tasks.length > 0 && (
+                        <button
+                            className={`start-queue-btn ${isProcessing ? 'processing' : ''}`}
+                            onClick={startQueue}
+                            disabled={isProcessing}
+                        >
+                            {isProcessing ? (
+                                <>
+                                    <div className="spinner-small" />
+                                    <span>{t('queue.processing')}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                                    <span>{t('queue.start')}</span>
+                                </>
+                            )}
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="queue-container premium-scrollbar">

@@ -24,8 +24,18 @@
     "status": "Статус",
     "progress": "Прогрес",
     "clear_all": "Очистити все",
+    "start": "Запустити чергу",
+    "processing": "Обробка...",
     "delete_confirm": "Видалити це завдання?",
-    "delete_all_confirm": "Видалити всі завдання з черги?"
+    "delete_all_confirm": "Видалити всі завдання з черги?",
+    "status_pending": "Очікує",
+    "status_running": "Обробка...",
+    "status_completed": "Готово",
+    "status_failed": "Помилка",
+    "completion_title": "Обробку завершено",
+    "completion_message": "Черга успішно оброблена!\nВиконано завдань: {count}\nЧас виконання: {duration}",
+    "completion_ok": "Зрозуміло",
+    "completion_open_folder": "Відкрити папку"
   },
   "gallery": {
     "title": "Медіа Галерея",
@@ -159,11 +169,11 @@
   "pipeline": {
     "translate": {
       "title": "Налаштування перекладу",
-      "prompt_placeholder": "Введіть промт для перекладу..."
+      "prompt_placeholder": "Промт для перекладу... Використовуйте {{content}} для вставки тексту."
     },
     "rewrite": {
       "title": "Налаштування рерайту",
-      "prompt_placeholder": "Введіть промт для рерайту..."
+      "prompt_placeholder": "Промт для рерайту... Використовуйте {{content}} для вставки тексту."
     },
     "group": {
       "ai": "Параметри ШІ",
@@ -196,7 +206,8 @@
     },
     "add_to_queue": "Додати в чергу",
     "task_name_title": "Назва завдання",
-    "task_name_description": "Введіть назву для цього завдання або залиште порожнім для авто-назви"
+    "task_name_description": "Введіть назву для цього завдання або залиште порожнім для авто-назви",
+    "name": "Назва пайплайну"
   },
   "common": {
     "save": "Зберегти",

@@ -268,6 +268,31 @@
     text-transform: uppercase;
 }
 
+.stage-status-text.badge-status {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    transition: all 0.3s ease;
+}
+
+.status-completed .stage-status-text.badge-status {
+    background: rgba(76, 175, 80, 0.1);
+    color: #4caf50;
+    text-transform: none;
+    /* For "chars" text */
+}
+
+.status-running .stage-status-text.badge-status {
+    background: rgba(255, 235, 59, 0.1);
+    color: #ffeb3b;
+}
+
+.status-failed .stage-status-text.badge-status {
+    background: rgba(255, 82, 82, 0.1);
+    color: #ff5252;
+}
+
 .progress-bar-container {
     height: 4px;
     background: rgba(255, 255, 255, 0.05);

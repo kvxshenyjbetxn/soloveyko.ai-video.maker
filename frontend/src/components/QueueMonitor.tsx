@@ -9,7 +9,7 @@ interface QueueMonitorProps {
 
 export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask } = useQueue();
+    const { tasks, removeTask, startQueue, isProcessing } = useQueue();
     const [isExpanded, setIsExpanded] = useState(false);
 
     if (tasks.length === 0) return null;
@@ -22,7 +22,22 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
             <div className={`queue-mini-panel`}>
                 <div className="queue-mini-header">
                     <span className="queue-mini-title">{t('tabs.queue')}</span>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button
+                            className={`mini-start-btn ${isProcessing ? 'processing' : ''}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                startQueue();
+                            }}
+                            disabled={isProcessing}
+                            title={t('queue.start')}
+                        >
+                            {isProcessing ? (
+                                <div className="spinner-tiny" />
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                            )}
+                        </button>
                         <button
                             className="go-to-queue-btn"
                             title={t('tabs.queue')}
@@ -42,7 +57,14 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
                         <div key={task.id} className="queue-mini-item">
                             <div className="queue-mini-item-info">
                                 <span className={`task-badge ${task.type}`}>{task.type === 'translate' ? 'TR' : 'RW'}</span>
-                                <span className="task-text-preview">{task.content.substring(0, 30)}...</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                                    <span className="task-text-preview" title={task.name}>{task.name}</span>
+                                    <span className="task-mini-status">
+                                        {task.status === 'pending' ? t('queue.status_pending') :
+                                            task.status === 'running' ? t('queue.status_running') :
+                                                task.status === 'completed' ? t('queue.status_completed') : t('queue.status_failed')}
+                                    </span>
+                                </div>
                             </div>
                             <div className="queue-mini-item-status">
                                 {task.status === 'running' && (

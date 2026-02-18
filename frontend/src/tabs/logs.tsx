@@ -40,10 +40,11 @@ export const Logs = () => {
 
     const getLevelColor = (level: LogLevel) => {
         switch (level) {
-            case 'INFO': return '#4caf50';
-            case 'ERROR': return '#f44336';
-            case 'WARN': return '#ff9800';
-            case 'DEBUG': return '#9e9e9e';
+            case 'INFO': return '#ffffff';   // White
+            case 'SUCCESS': return '#69f0ae'; // Light Green
+            case 'ERROR': return '#ff5252';   // Bright Red
+            case 'WARN': return '#ffd740';    // Amber/Yellow
+            case 'DEBUG': return '#b0bec5';   // Blue Grey
             default: return 'var(--text-secondary)';
         }
     };
@@ -85,6 +86,7 @@ export const Logs = () => {
                     >
                         <option value="ALL">{t('logsTab.allLevels')}</option>
                         <option value="INFO">INFO</option>
+                        <option value="SUCCESS">SUCCESS</option>
                         <option value="ERROR">ERROR</option>
                         <option value="WARN">WARN</option>
                         <option value="DEBUG">DEBUG</option>
@@ -114,19 +116,22 @@ export const Logs = () => {
                     {filteredLogs.length === 0 ? (
                         <div style={{ color: 'var(--text-placeholder)', fontStyle: 'italic' }}>{t('logsTab.empty')}</div>
                     ) : (
-                        filteredLogs.map(log => (
-                            <div key={log.id} className="log-row">
-                                <span style={{ color: 'var(--text-placeholder)', minWidth: '85px', fontSize: '12px' }}>
-                                    {log.timestamp.toLocaleTimeString()}
-                                </span>
-                                <span style={{ color: getLevelColor(log.level), fontWeight: 'bold', minWidth: '60px', fontSize: '12px' }}>
-                                    [{log.level}]
-                                </span>
-                                <span style={{ color: 'var(--text-primary)', wordBreak: 'break-all', fontSize: '13px' }}>
-                                    {log.message}
-                                </span>
-                            </div>
-                        ))
+                        filteredLogs.map(log => {
+                            const levelColor = getLevelColor(log.level);
+                            return (
+                                <div key={log.id} className="log-row" style={{ color: levelColor }}>
+                                    <span style={{ opacity: 0.5, minWidth: '85px', fontSize: '11px' }}>
+                                        {log.timestamp.toLocaleTimeString()}
+                                    </span>
+                                    <span style={{ fontWeight: '800', minWidth: '70px', fontSize: '11px' }}>
+                                        [{log.level}]
+                                    </span>
+                                    <span style={{ fontSize: '13px', fontWeight: 500 }}>
+                                        {log.message}
+                                    </span>
+                                </div>
+                            );
+                        })
                     )}
                 </div>
             </div>

@@ -4,6 +4,9 @@ import { useI18n } from './contexts/I18nContext';
 import { useQueue } from './contexts/QueueContext';
 import { useLogger } from './contexts/LoggerContext';
 import logo from './assets/logo.png';
+import { ConfirmModal } from './components/ConfirmModal';
+// @ts-ignore
+import { GetPipelineSettings, OpenPath } from '../wailsjs/go/main/App';
 
 // Import all tab components
 import { Translate } from './tabs/text/translate';
@@ -60,7 +63,7 @@ type TabPath = string;
 
 function App() {
     const { t } = useI18n();
-    const { tasks } = useQueue();
+    const { tasks, completionModal, closeCompletionModal } = useQueue();
     const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');
     const initLogRef = useRef(false);
@@ -389,6 +392,30 @@ function App() {
                 <ServiceBalanceMonitor navigateTo={setCurrentPath} />
                 <QueueMonitor navigateTo={setCurrentPath} />
             </div>
+
+            <ConfirmModal
+                isOpen={completionModal.isOpen}
+                onClose={closeCompletionModal}
+                onConfirm={closeCompletionModal}
+                title={t('queue.completion_title')}
+                message={t('queue.completion_message')
+                    .replace('{count}', completionModal.taskCount.toString())
+                    .replace('{duration}', completionModal.duration)}
+                confirmText={t('queue.completion_ok')}
+                extraText={t('queue.completion_open_folder')}
+                extraAction={async () => {
+                    try {
+                        const settings = await GetPipelineSettings();
+                        if (settings && settings.outputPath) {
+                            await OpenPath(settings.outputPath);
+                        }
+                    } catch (e) {
+                        console.error("Failed to open output folder:", e);
+                    }
+                }}
+                isDanger={false}
+                type="info"
+            />
         </div>
     )
 }

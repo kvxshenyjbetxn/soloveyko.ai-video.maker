@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
+	"strings"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -57,6 +59,13 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+// LogToUI emits a log event to the frontend
+func (a *App) LogToUI(level string, message string) {
+	if a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "log", level, message)
+	}
+}
+
 // GetLanguage повертає поточну мову з налаштувань
 func (a *App) GetLanguage() string {
 	return a.settings.GetLanguage()
@@ -90,6 +99,11 @@ func (a *App) SetAccentColor(color string) error {
 // OpenConfigDir відкриває папку з конфігурацією в системному провіднику
 func (a *App) OpenConfigDir() {
 	path := a.settings.GetConfigDir()
+	a.OpenPath(path)
+}
+
+// OpenPath opens the specified path in the system file explorer
+func (a *App) OpenPath(path string) {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
@@ -98,7 +112,6 @@ func (a *App) OpenConfigDir() {
 	case "darwin":
 		cmd = exec.Command("open", path)
 	default:
-		// Для Linux (на випадок якщо знадобиться)
 		cmd = exec.Command("xdg-open", path)
 	}
 
@@ -140,7 +153,13 @@ func (a *App) GetDefaultVideosPath() string {
 
 // GetOpenRouterCredits returns the user's credits balance from OpenRouter
 func (a *App) GetOpenRouterCredits(apiKey string) (float64, error) {
-	return a.openRouter.GetOpenRouterCredits(apiKey)
+	balance, err := a.openRouter.GetOpenRouterCredits(apiKey)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[OpenRouter] Balance check failed: %v", err))
+		return 0, err
+	}
+	a.LogToUI("SUCCESS", fmt.Sprintf("[OpenRouter] Balance updated: $%.4f", balance))
+	return balance, nil
 }
 
 // GetOpenRouterAvailableModels returns the list of available models from OpenRouter
@@ -209,7 +228,13 @@ func (a *App) GetPollinationsSavedModels() []string {
 
 // GetElevenLabsBotBalance returns the user's balance from ElevenLabsBot
 func (a *App) GetElevenLabsBotBalance(apiKey string) (float64, error) {
-	return a.elevenLabs.GetBalance(apiKey)
+	balance, err := a.elevenLabs.GetBalance(apiKey)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[ElevenLabsBot] Balance check failed: %v", err))
+		return 0, err
+	}
+	a.LogToUI("SUCCESS", fmt.Sprintf("[ElevenLabsBot] Balance updated: %.0f tokens", balance))
+	return balance, nil
 }
 
 // SaveElevenLabsBotAPIKey saves API key
@@ -226,7 +251,17 @@ func (a *App) GetElevenLabsBotAPIKey() string {
 
 // GetElevenLabsUnlimBalance returns the user's balance from ElevenLabsUnlim
 func (a *App) GetElevenLabsUnlimBalance(apiKey string) (float64, error) {
-	return a.elevenLabsUnlim.GetBalance(apiKey)
+	balance, err := a.elevenLabsUnlim.GetBalance(apiKey)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[ElevenLabsUnlim] Balance check failed: %v", err))
+		return 0, err
+	}
+	if balance == -1 {
+		a.LogToUI("SUCCESS", "[ElevenLabsUnlim] Balance updated: Unlimited")
+	} else {
+		a.LogToUI("SUCCESS", fmt.Sprintf("[ElevenLabsUnlim] Balance updated: %.0f tokens", balance))
+	}
+	return balance, nil
 }
 
 // SaveElevenLabsUnlimAPIKey saves API key
@@ -243,7 +278,13 @@ func (a *App) GetElevenLabsUnlimAPIKey() string {
 
 // GetVoiceMakerBalance returns the user's balance from VoiceMaker (via test request)
 func (a *App) GetVoiceMakerBalance(apiKey string) (float64, error) {
-	return a.voiceMaker.GetBalance(apiKey)
+	balance, err := a.voiceMaker.GetBalance(apiKey)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[VoiceMaker] Balance check failed: %v", err))
+		return 0, err
+	}
+	a.LogToUI("SUCCESS", fmt.Sprintf("[VoiceMaker] Balance updated: %.0f units", balance))
+	return balance, nil
 }
 
 // SaveVoiceMakerAPIKey saves API key
@@ -270,7 +311,13 @@ func (a *App) GetVoiceMakerSavedBalance() float64 {
 
 // GetGooglerUsage returns account usage stats
 func (a *App) GetGooglerUsage(apiKey string) (*api.GooglerUsageResponse, error) {
-	return a.googler.GetUsage(apiKey)
+	usage, err := a.googler.GetUsage(apiKey)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Googler] Usage check failed: %v", err))
+		return nil, err
+	}
+	a.LogToUI("SUCCESS", "[Googler] API Status: Online (Usage data received)")
+	return usage, nil
 }
 
 // SaveGooglerAPIKey saves API key
@@ -311,7 +358,13 @@ func (a *App) GetElevenLabsUAAPIKey() string {
 
 // CheckAssemblyAIConnection checks if the API key is valid
 func (a *App) CheckAssemblyAIConnection(apiKey string) error {
-	return a.assemblyAI.CheckConnection(apiKey)
+	err := a.assemblyAI.CheckConnection(apiKey)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[AssemblyAI] Connection failed: %v", err))
+		return err
+	}
+	a.LogToUI("SUCCESS", "[AssemblyAI] Connection successful")
+	return nil
 }
 
 // SaveAssemblyAIAPIKey saves API key
@@ -396,4 +449,94 @@ func (a *App) GetPipelineSettings() utils.PipelineSettings {
 // SavePipelineSettings saves pipeline configuration
 func (a *App) SavePipelineSettings(pipeline utils.PipelineSettings) error {
 	return a.settings.SavePipelineSettings(pipeline)
+}
+
+// ProcessTask handles the execution of a single pipeline task
+func (a *App) ProcessTask(taskType string, content string, settings map[string]interface{}, taskName string) (string, error) {
+	// 1. Get Pipeline Settings for Output Path and Keys
+	pSettings := a.settings.GetPipelineSettings()
+
+	var apiKey string
+	var model, prompt string
+	var temp, tokens float64
+	var pipelineName string
+
+	if taskType == "translate" || taskType == "rewrite" {
+		// Get actual API Key
+		keyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
+		keys := a.settings.GetOpenRouterKeys()
+		for _, k := range keys {
+			if k.ID == keyID {
+				apiKey = k.Key
+				break
+			}
+		}
+
+		if apiKey == "" && len(keys) > 0 {
+			apiKey = keys[0].Key // Fallback to first key
+		}
+
+		if apiKey == "" {
+			return "", fmt.Errorf("API key not found")
+		}
+
+		model, _ = settings[taskType+"Model"].(string)
+		prompt, _ = settings[taskType+"Prompt"].(string)
+		temp, _ = settings[taskType+"Temperature"].(float64)
+		tokens, _ = settings[taskType+"MaxTokens"].(float64)
+		pipelineName, _ = settings[taskType+"PipelineName"].(string)
+
+		if pipelineName == "" {
+			pipelineName = "Default"
+		}
+
+		keyName := "Default/First"
+		for _, k := range keys {
+			if k.ID == keyID {
+				keyName = k.Name
+				break
+			}
+		}
+
+		// Log Request
+		a.LogToUI("INFO", fmt.Sprintf("[OpenRouter] [%s] Request | Key: %s | Model: %s | Temp: %.2f | Max Tokens: %v", strings.Title(taskType), keyName, model, temp, tokens))
+
+		var fullPrompt string
+		if strings.Contains(prompt, "{{content}}") {
+			fullPrompt = strings.ReplaceAll(prompt, "{{content}}", content)
+		} else {
+			fullPrompt = prompt + "\n\n" + content
+		}
+
+		result, err := a.openRouter.Chat(apiKey, model, fullPrompt, temp, int(tokens))
+		if err != nil {
+			a.LogToUI("ERROR", fmt.Sprintf("[OpenRouter] [%s] Error: %v", strings.Title(taskType), err))
+			return "", err
+		}
+
+		// Log Result
+		a.LogToUI("SUCCESS", fmt.Sprintf("[OpenRouter] [%s] Success: Result received", strings.Title(taskType)))
+
+		// Save to file with new structure: OutputPath / TaskName / PipelineName / fileName
+		if pSettings.OutputPath != "" {
+			finalDir := filepath.Join(pSettings.OutputPath, taskName, pipelineName)
+			err := os.MkdirAll(finalDir, 0755)
+			if err == nil {
+				fileName := "result.txt"
+				if taskType == "translate" {
+					fileName = "translation.txt"
+				} else if taskType == "rewrite" {
+					fileName = "rewrite.txt"
+				}
+				filePath := filepath.Join(finalDir, fileName)
+				os.WriteFile(filePath, []byte(result), 0644)
+			} else {
+				a.LogToUI("ERROR", fmt.Sprintf("[FileSystem] Failed to create directory: %v", err))
+			}
+		}
+
+		return result, nil
+	}
+
+	return "", fmt.Errorf("task type %s not implemented", taskType)
 }

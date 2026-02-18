@@ -32,6 +32,8 @@ type PipelineSettings struct {
 	ApiCollapsed             bool    `json:"apiCollapsed"`
 	OutputPath               string  `json:"outputPath"`
 	PathCollapsed            bool    `json:"pathCollapsed"`
+	TranslatePipelineName    string  `json:"translatePipelineName"`
+	RewritePipelineName      string  `json:"rewritePipelineName"`
 }
 
 type Settings struct {

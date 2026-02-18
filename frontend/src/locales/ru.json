@@ -25,7 +25,15 @@
         "progress": "Прогресс",
         "clear_all": "Очистить всё",
         "delete_confirm": "Удалить эту задачу?",
-        "delete_all_confirm": "Удалить все задачи из очереди?"
+        "delete_all_confirm": "Удалить все задачи из очереди?",
+        "status_pending": "Ожидание",
+        "status_running": "Обработка...",
+        "status_completed": "Готово",
+        "status_failed": "Ошибка",
+        "completion_title": "Обработка завершена",
+        "completion_message": "Очередь успешно обработана!\nВыполнено задач: {count}\nВремя выполнения: {duration}",
+        "completion_ok": "Понятно",
+        "completion_open_folder": "Открыть папку"
     },
     "gallery": {
         "title": "Медиа Галерея",
@@ -190,7 +198,8 @@
         },
         "add_to_queue": "Добавить в очередь",
         "task_name_title": "Название задачи",
-        "task_name_description": "Введите название для этой задачи или оставьте пустым для авто-имени"
+        "task_name_description": "Введите название для этой задачи или оставьте пустым для авто-имени",
+        "name": "Название пайплайну"
     },
     "common": {
         "save": "Сохранить",

@@ -7,6 +7,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { LoggerProvider } from './contexts/LoggerContext';
 import { ServiceProvider } from './contexts/ServiceContext';
 import { QueueProvider } from './contexts/QueueContext';
+import { ToastProvider } from './contexts/ToastContext';
 
 const container = document.getElementById('root');
 
@@ -18,9 +19,11 @@ root.render(
             <ThemeProvider>
                 <LoggerProvider>
                     <ServiceProvider>
-                        <QueueProvider>
-                            <App />
-                        </QueueProvider>
+                        <ToastProvider>
+                            <QueueProvider>
+                                <App />
+                            </QueueProvider>
+                        </ToastProvider>
                     </ServiceProvider>
                 </LoggerProvider>
             </ThemeProvider>

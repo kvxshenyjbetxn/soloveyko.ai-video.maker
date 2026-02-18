@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,6 +34,27 @@ type CreditsResponse struct {
 		TotalCredits float64 `json:"total_credits"`
 		TotalUsage   float64 `json:"total_usage"`
 	} `json:"data"`
+}
+
+type ChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type ChatRequest struct {
+	Model       string        `json:"model"`
+	Messages    []ChatMessage `json:"messages"`
+	Temperature float64       `json:"temperature"`
+	MaxTokens   int           `json:"max_tokens,omitempty"`
+}
+
+type ChatResponse struct {
+	Choices []struct {
+		Message ChatMessage `json:"message"`
+	} `json:"choices"`
+	Error struct {
+		Message string `json:"message"`
+	} `json:"error"`
 }
 
 // GetOpenRouterCredits check balance
@@ -115,4 +137,64 @@ func (s *OpenRouterService) SaveOpenRouterModels(models []string) error {
 // GetOpenRouterSavedModels gets list of saved model IDs
 func (s *OpenRouterService) GetOpenRouterSavedModels() []string {
 	return s.settings.GetOpenRouterModels()
+}
+
+// Chat executes a chat completion request to OpenRouter
+func (s *OpenRouterService) Chat(apiKey string, model string, prompt string, temperature float64, maxTokens int) (string, error) {
+	client := &http.Client{Timeout: 120 * time.Second}
+
+	reqBody := ChatRequest{
+		Model: model,
+		Messages: []ChatMessage{
+			{Role: "user", Content: prompt},
+		},
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("HTTP-Referer", "http://localhost:3000")
+	req.Header.Set("X-Title", "Soloveyko AI Video Maker")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var chatResp ChatResponse
+		json.Unmarshal(body, &chatResp)
+		if chatResp.Error.Message != "" {
+			return "", fmt.Errorf("OpenRouter error: %s", chatResp.Error.Message)
+		}
+		return "", fmt.Errorf("OpenRouter API failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var chatResp ChatResponse
+	if err := json.Unmarshal(body, &chatResp); err != nil {
+		return "", err
+	}
+
+	if len(chatResp.Choices) > 0 {
+		return chatResp.Choices[0].Message.Content, nil
+	}
+
+	return "", fmt.Errorf("no response from OpenRouter")
 }

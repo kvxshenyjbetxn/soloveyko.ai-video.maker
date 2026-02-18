@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+// @ts-ignore
+import { EventsOn } from '../../wailsjs/runtime';
 
-export type LogLevel = 'INFO' | 'ERROR' | 'WARN' | 'DEBUG';
+export type LogLevel = 'INFO' | 'ERROR' | 'WARN' | 'DEBUG' | 'SUCCESS';
 
 export interface LogEntry {
     id: string;
@@ -41,6 +43,15 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const clearLogs = useCallback(() => {
         setLogs([]);
     }, []);
+
+    useEffect(() => {
+        const unsubscribe = EventsOn('log', (level: LogLevel, message: string) => {
+            addLog(level, message);
+        });
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
+    }, [addLog]);
 
     return (
         <LoggerContext.Provider value={{ logs, addLog, clearLogs }}>

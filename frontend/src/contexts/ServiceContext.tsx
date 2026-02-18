@@ -106,7 +106,6 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (loadingOpenRouter) return;
 
         setLoadingOpenRouter(true);
-        addLog('INFO', 'Requesting OpenRouter balance update for all keys...');
         try {
             const keys = await GetOpenRouterKeys();
             setOpenRouterKeys(keys || []);
@@ -118,18 +117,15 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         newBalances[item.id] = Math.max(0, credit);
                     } catch (e) {
                         newBalances[item.id] = null;
-                        addLog('ERROR', `Failed for key ${item.name}: ${String(e)}`);
                     }
                 }));
                 setOpenRouterBalances(newBalances);
-                addLog('INFO', `Updated ${Object.keys(newBalances).length} OpenRouter balances`);
             } else {
                 setOpenRouterBalances({});
                 addLog('WARN', 'No OpenRouter API Keys found');
             }
         } catch (err: any) {
             console.error("Failed to update balances:", err);
-            addLog('ERROR', `Failed to fetch OpenRouter balances: ${err?.message || String(err)}`);
         } finally {
             setLoadingOpenRouter(false);
         }
@@ -139,20 +135,17 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (loadingElevenLabsBot) return;
 
         setLoadingElevenLabsBot(true);
-        addLog('INFO', 'Requesting ElevenLabsBot balance update...');
         try {
             const apiKey = await GetElevenLabsBotAPIKey();
             if (apiKey) {
                 const balance = await GetElevenLabsBotBalance(apiKey);
                 setElevenLabsBotBalance(balance);
-                addLog('INFO', `Received ElevenLabsBot balance: ${balance.toFixed(0)} chars`);
             } else {
                 setElevenLabsBotBalance(null);
                 addLog('WARN', 'ElevenLabsBot API Key not found');
             }
         } catch (err: any) {
             console.error("Failed to update ElevenLabsBot balance:", err);
-            addLog('ERROR', `Failed to fetch ElevenLabsBot balance: ${err?.message || String(err)}`);
         } finally {
             setLoadingElevenLabsBot(false);
         }
@@ -162,20 +155,17 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (loadingElevenLabsUnlim) return;
 
         setLoadingElevenLabsUnlim(true);
-        addLog('INFO', 'Requesting ElevenLabsUnlim balance update...');
         try {
             const apiKey = await GetElevenLabsUnlimAPIKey();
             if (apiKey) {
                 const balance = await GetElevenLabsUnlimBalance(apiKey);
                 setElevenLabsUnlimBalance(balance);
-                addLog('INFO', `Received ElevenLabsUnlim balance: ${balance === -1 ? 'Unlimited' : balance.toFixed(0) + ' chars'}`);
             } else {
                 setElevenLabsUnlimBalance(null);
                 addLog('WARN', 'ElevenLabsUnlim API Key not found');
             }
         } catch (err: any) {
             console.error("Failed to update ElevenLabsUnlim balance:", err);
-            addLog('ERROR', `Failed to fetch ElevenLabsUnlim balance: ${err?.message || String(err)}`);
         } finally {
             setLoadingElevenLabsUnlim(false);
         }
@@ -225,21 +215,18 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (loadingVoiceMaker) return;
 
         setLoadingVoiceMaker(true);
-        addLog('INFO', 'Requesting VoiceMaker balance update (test conversion)...');
         try {
             const apiKey = await GetVoiceMakerAPIKey();
             if (apiKey) {
                 const balance = await GetVoiceMakerBalance(apiKey);
                 setVoiceMakerBalance(balance);
                 await SaveVoiceMakerBalance(balance); // Зберігаємо в налаштування
-                addLog('INFO', `Received VoiceMaker balance: ${balance.toFixed(0)} chars`);
             } else {
                 setVoiceMakerBalance(null);
                 addLog('WARN', 'VoiceMaker API Key not found');
             }
         } catch (err: any) {
             console.error("Failed to update VoiceMaker balance:", err);
-            addLog('ERROR', `Failed to fetch VoiceMaker balance: ${err?.message || String(err)}`);
         } finally {
             setLoadingVoiceMaker(false);
         }
@@ -249,21 +236,18 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (loadingGoogler) return;
 
         setLoadingGoogler(true);
-        addLog('INFO', 'Requesting Googler usage stats...');
         try {
             const apiKey = await GetGooglerAPIKey();
             if (apiKey) {
                 const usage = await GetGooglerUsage(apiKey);
                 console.log("Googler usage received:", usage);
                 setGooglerUsage(usage);
-                addLog('INFO', 'Received Googler usage stats');
             } else {
                 addLog('WARN', 'Googler API Key not found');
             }
         } catch (err: any) {
             console.error("Failed to update Googler usage:", err);
             const errMsg = err?.message || String(err);
-            addLog('ERROR', `Googler error: ${errMsg}`);
         } finally {
             setLoadingGoogler(false);
         }

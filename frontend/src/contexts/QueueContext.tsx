@@ -1,4 +1,7 @@
+// @ts-ignore
+import { ProcessTask } from '../../wailsjs/go/main/App';
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { useToast } from './ToastContext';
 
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -11,6 +14,7 @@ export interface QueueTask {
     progress: number;
     timestamp: number;
     settings: any;
+    resultLength?: number;
 }
 
 interface QueueContextType {
@@ -19,13 +23,32 @@ interface QueueContextType {
     removeTask: (id: string) => void;
     clearQueue: () => void;
     updateTaskStatus: (id: string, status: TaskStatus, progress?: number) => void;
+    startQueue: () => Promise<void>;
+    isProcessing: boolean;
+    completionModal: {
+        isOpen: boolean;
+        duration: string;
+        taskCount: number;
+    };
+    closeCompletionModal: () => void;
 }
 
 const QueueContext = createContext<QueueContextType | undefined>(undefined);
 
 export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const { showToast } = useToast();
     const [tasks, setTasks] = useState<QueueTask[]>([]);
     const [taskCounter, setTaskCounter] = useState(1);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [completionModal, setCompletionModal] = useState({
+        isOpen: false,
+        duration: '',
+        taskCount: 0
+    });
+
+    const closeCompletionModal = useCallback(() => {
+        setCompletionModal(prev => ({ ...prev, isOpen: false }));
+    }, []);
 
     const addTask = useCallback((type: 'translate' | 'rewrite', content: string, settings: any, name?: string) => {
         const finalName = name?.trim() || `Task ${taskCounter}`;
@@ -55,14 +78,69 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setTasks([]);
     }, []);
 
-    const updateTaskStatus = useCallback((id: string, status: TaskStatus, progress?: number) => {
+    const updateTaskStatus = useCallback((id: string, status: TaskStatus, progress?: number, resultLength?: number) => {
         setTasks(prev => prev.map(t =>
-            t.id === id ? { ...t, status, progress: progress ?? t.progress } : t
+            t.id === id ? { ...t, status, progress: progress ?? t.progress, resultLength: resultLength ?? t.resultLength } : t
         ));
     }, []);
 
+    const startQueue = useCallback(async () => {
+        if (isProcessing) return;
+
+        const pendingTasks = tasks.filter(t => t.status === 'pending');
+        const count = pendingTasks.length;
+
+        if (count === 0) {
+            return;
+        }
+
+        const startTime = Date.now();
+        setIsProcessing(true);
+        showToast("Початок обробки черги...", "info", 2000);
+
+        for (const task of pendingTasks) {
+            updateTaskStatus(task.id, 'running', 10);
+
+            try {
+                const result = await ProcessTask(task.type, task.content, task.settings, task.name);
+                updateTaskStatus(task.id, 'completed', 100, result.length);
+            } catch (error) {
+                console.error(`Task ${task.id} failed:`, error);
+                updateTaskStatus(task.id, 'failed', 0);
+                showToast(`Помилка: ${task.name} не вдалося обробити`, "error", 4000);
+            }
+        }
+
+        const endTime = Date.now();
+        const durationSeconds = Math.round((endTime - startTime) / 1000);
+        const durationText = durationSeconds > 60
+            ? `${Math.floor(durationSeconds / 60)} хв ${durationSeconds % 60} сек`
+            : `${durationSeconds} сек`;
+
+        setIsProcessing(false);
+
+        // Trigger OS Flash
+        try {
+            // @ts-ignore
+            if (window.runtime && typeof window.runtime.WindowFlash === 'function') {
+                // @ts-ignore
+                window.runtime.WindowFlash(true);
+            }
+        } catch (e) {
+            console.error("Failed to flash window:", e);
+        }
+
+        setCompletionModal({
+            isOpen: true,
+            duration: durationText,
+            taskCount: count
+        });
+
+        showToast("Черга закінчила обробку!", "success", 5000);
+    }, [tasks, isProcessing, updateTaskStatus, showToast]);
+
     return (
-        <QueueContext.Provider value={{ tasks, addTask, removeTask, clearQueue, updateTaskStatus }}>
+        <QueueContext.Provider value={{ tasks, addTask, removeTask, clearQueue, updateTaskStatus, startQueue, isProcessing, completionModal, closeCompletionModal }}>
             {children}
         </QueueContext.Provider>
     );
