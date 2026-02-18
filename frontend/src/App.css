@@ -88,6 +88,22 @@
     border-bottom-color: var(--accent-primary);
 }
 
+.tab-badge {
+    background: #ff5252;
+    color: white;
+    font-size: 10px;
+    font-weight: 800;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    margin-left: 2px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
 /* Content Area with Sidebar */
 .content-with-sidebar {
     flex: 1;

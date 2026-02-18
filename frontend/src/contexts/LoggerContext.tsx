@@ -9,11 +9,13 @@ export interface LogEntry {
     timestamp: Date;
     level: LogLevel;
     message: string;
+    taskId?: string; // ID завдання, якщо лог належить до нього
+    taskLabel?: string; // Назва або номер завдання для відображення в загальному лозі
 }
 
 interface LoggerContextType {
     logs: LogEntry[];
-    addLog: (level: LogLevel, message: string) => void;
+    addLog: (level: LogLevel, message: string, taskId?: string, taskLabel?: string) => void;
     clearLogs: () => void;
 }
 
@@ -30,12 +32,14 @@ export const useLogger = () => {
 export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
 
-    const addLog = useCallback((level: LogLevel, message: string) => {
+    const addLog = useCallback((level: LogLevel, message: string, taskId?: string, taskLabel?: string) => {
         const newLog: LogEntry = {
             id: Math.random().toString(36).substr(2, 9),
             timestamp: new Date(),
             level,
             message,
+            taskId,
+            taskLabel
         };
         setLogs(prevLogs => [newLog, ...prevLogs]);
     }, []);
@@ -45,8 +49,8 @@ export const LoggerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }, []);
 
     useEffect(() => {
-        const unsubscribe = EventsOn('log', (level: LogLevel, message: string) => {
-            addLog(level, message);
+        const unsubscribe = EventsOn('log', (level: LogLevel, message: string, taskId?: string, taskLabel?: string) => {
+            addLog(level, message, taskId, taskLabel);
         });
         return () => {
             if (unsubscribe) unsubscribe();

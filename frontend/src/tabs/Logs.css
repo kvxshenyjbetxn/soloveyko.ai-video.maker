@@ -17,3 +17,24 @@
     background-color: rgba(255, 255, 255, 0.08);
     /* Slightly lighter on click if desired */
 }
+
+.logs-page-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    max-width: none !important;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

@@ -131,6 +131,62 @@
     opacity: 0.3;
 }
 
+.task-logs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.task-log-entry {
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    animation: fadeIn 0.3s ease;
+}
+
+.task-log-time {
+    color: var(--text-placeholder);
+    font-size: 10px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.task-log-message {
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.level-info .task-log-message {
+    color: var(--text-primary);
+}
+
+.level-error .task-log-message {
+    color: #ff5252;
+}
+
+.level-warn .task-log-message {
+    color: #ffb74d;
+}
+
+.level-success .task-log-message {
+    color: #4caf50;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(2px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* Existing Inner Styles... */
 .task-card-header {
     display: flex;

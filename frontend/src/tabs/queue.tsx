@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import './queue.css';
 import { useQueue, QueueTask } from '../contexts/QueueContext';
+import { useLogger } from '../contexts/LoggerContext';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 interface QueueProps {
@@ -17,6 +18,7 @@ const LightbulbIcon = () => (
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
     const { tasks, removeTask, clearQueue, startQueue, isProcessing } = useQueue();
+    const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
 
     // Custom Modal State
@@ -131,15 +133,26 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                     </div>
                 </div>
 
-                <div className="task-inline-log">
+                <div className="task-inline-log" onClick={(e) => e.stopPropagation()}>
                     <div className="log-header">
                         <span className="log-title">{t('tabs.logs')}</span>
                     </div>
                     <div className="log-content premium-scrollbar">
-                        <div className="log-empty">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></svg>
-                            <span>{t('logsTab.empty')}</span>
-                        </div>
+                        {logs.filter(l => l.taskId === task.id).length === 0 ? (
+                            <div className="log-empty">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></svg>
+                                <span>{t('logsTab.empty')}</span>
+                            </div>
+                        ) : (
+                            <div className="task-logs-list">
+                                {logs.filter(l => l.taskId === task.id).map(log => (
+                                    <div key={log.id} className={`task-log-entry level-${log.level.toLowerCase()}`}>
+                                        <span className="task-log-time">{log.timestamp.toLocaleTimeString()}</span>
+                                        <span className="task-log-message">{log.message}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

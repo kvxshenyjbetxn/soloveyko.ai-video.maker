@@ -1,6 +1,6 @@
 // @ts-ignore
 import { ProcessTask } from '../../wailsjs/go/main/App';
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
 import { useToast } from './ToastContext';
 
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
@@ -17,6 +17,7 @@ export interface QueueTask {
     timestamp: number;
     settings: any;
     resultLength?: number;
+    taskNumber?: number; // Простий порядковий номер завдання
 }
 
 interface QueueContextType {
@@ -41,6 +42,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const { showToast } = useToast();
     const [tasks, setTasks] = useState<QueueTask[]>([]);
     const [taskCounter, setTaskCounter] = useState(1);
+    const taskCounterRef = useRef(1);
     const [isProcessing, setIsProcessing] = useState(false);
     const [completionModal, setCompletionModal] = useState({
         isOpen: false,
@@ -53,7 +55,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }, []);
 
     const addTask = useCallback((type: 'translate' | 'rewrite', content: string, settings: any, name?: string, subName?: string) => {
-        const folderName = name?.trim() || `Task ${taskCounter}`;
+        const currentCount = taskCounterRef.current;
+        const folderName = name?.trim() || `Task ${currentCount}`;
         const displayName = subName ? `${folderName} - ${subName}` : folderName;
 
         const newTask: QueueTask = {
@@ -66,14 +69,16 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             status: 'pending',
             progress: 0,
             timestamp: Date.now(),
-            settings
+            settings,
+            taskNumber: currentCount
         };
 
         setTasks(prev => [...prev, newTask]);
-        if (!name?.trim()) {
-            setTaskCounter(prev => prev + 1);
-        }
-    }, [taskCounter]);
+
+        // Оновлюємо реф та стан для майбутніх завдань
+        taskCounterRef.current += 1;
+        setTaskCounter(taskCounterRef.current);
+    }, []);
 
     const removeTask = useCallback((id: string) => {
         setTasks(prev => prev.filter(t => t.id !== id));
@@ -111,7 +116,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 const fName = task.folderName || task.name || "Task";
                 const sName = task.subName || "";
 
-                const result = await ProcessTask(task.type, task.content, task.settings, fName, sName);
+                const result = await ProcessTask(task.id, task.taskNumber || 0, task.type, task.content, task.settings, fName, sName);
                 updateTaskStatus(task.id, 'completed', 100, result.length);
             } catch (error) {
                 console.error(`Task ${task.id} failed:`, error);

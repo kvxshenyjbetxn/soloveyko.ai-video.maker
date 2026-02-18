@@ -50,8 +50,8 @@ export const Logs = () => {
     };
 
     return (
-        <div className="content-wrapper">
-            <div className="settings-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div className="content-wrapper animate-fade">
+            <div className="logs-page-container">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h2 className="settings-title" style={{ margin: 0 }}>{t('tabs.logs')}</h2>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -126,6 +126,20 @@ export const Logs = () => {
                                     <span style={{ fontWeight: '800', minWidth: '70px', fontSize: '11px' }}>
                                         [{log.level}]
                                     </span>
+                                    {log.taskLabel && (
+                                        <span className="task-label-badge" style={{
+                                            background: 'rgba(92, 107, 192, 0.2)',
+                                            color: '#5c6bc0',
+                                            padding: '1px 6px',
+                                            borderRadius: '4px',
+                                            fontSize: '10px',
+                                            marginRight: '8px',
+                                            fontWeight: 'bold',
+                                            border: '1px solid rgba(92, 107, 192, 0.3)'
+                                        }}>
+                                            {log.taskLabel}
+                                        </span>
+                                    )}
                                     <span style={{ fontSize: '13px', fontWeight: 500 }}>
                                         {log.message}
                                     </span>

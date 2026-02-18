@@ -15,6 +15,7 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
     if (tasks.length === 0) return null;
 
     const runningTasks = tasks.filter(t => t.status === 'running').length;
+    const pendingTasksCount = tasks.filter(t => t.status === 'pending').length;
 
     return (
         <div className={`queue-monitor-wrapper ${isExpanded ? 'expanded' : ''}`}>
@@ -94,7 +95,7 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
                 className={`queue-monitor-circle ${runningTasks > 0 ? 'is-running' : ''}`}
                 onClick={() => setIsExpanded(!isExpanded)}
             >
-                <div className="queue-count-badge">{tasks.length}</div>
+                {pendingTasksCount > 0 && <div className="queue-count-badge">{pendingTasksCount}</div>}
                 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 18H18" /><path d="M6 12H18" /><path d="M6 6H18" /><circle cx="3" cy="6" r="1" /><circle cx="3" cy="12" r="1" /><circle cx="3" cy="18" r="1" /></svg>
 
                 {runningTasks > 0 && <div className="running-indicator"></div>}

@@ -64,6 +64,7 @@ type TabPath = string;
 function App() {
     const { t } = useI18n();
     const { tasks, completionModal, closeCompletionModal } = useQueue();
+    const pendingCount = tasks.filter(t => t.status === 'pending').length;
     const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');
     const initLogRef = useRef(false);
@@ -335,6 +336,7 @@ function App() {
                             >
                                 <QueueIcon />
                                 <span>{t('tabs.queue')}</span>
+                                {pendingCount > 0 && <span className="tab-badge">{pendingCount}</span>}
                             </div>
                         )}
                         <div

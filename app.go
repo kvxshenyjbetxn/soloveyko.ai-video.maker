@@ -62,9 +62,17 @@ func (a *App) startup(ctx context.Context) {
 }
 
 // LogToUI emits a log event to the frontend
-func (a *App) LogToUI(level string, message string) {
+func (a *App) LogToUI(level string, message string, details ...string) {
 	if a.ctx != nil {
-		wruntime.EventsEmit(a.ctx, "log", level, message)
+		tID := ""
+		tLabel := ""
+		if len(details) > 0 {
+			tID = details[0]
+		}
+		if len(details) > 1 {
+			tLabel = details[1]
+		}
+		wruntime.EventsEmit(a.ctx, "log", level, message, tID, tLabel)
 	}
 }
 
@@ -474,7 +482,17 @@ func (a *App) SavePipelineSettings(pipeline utils.PipelineSettings) error {
 }
 
 // ProcessTask handles the execution of a single pipeline task
-func (a *App) ProcessTask(taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
+func (a *App) ProcessTask(id string, taskNumber int, taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
+	displayTaskName := taskName
+	if len([]rune(displayTaskName)) > 10 {
+		displayTaskName = string([]rune(displayTaskName)[:10]) + "..."
+	}
+
+	label := displayTaskName
+	if subName != "" {
+		label = fmt.Sprintf("%s - %s", displayTaskName, subName)
+	}
+	taskLabel := fmt.Sprintf("%s (#%d)", label, taskNumber)
 	// 1. Get Pipeline Settings for Output Path and Keys
 	pSettings := a.settings.GetPipelineSettings()
 
@@ -536,7 +554,7 @@ func (a *App) ProcessTask(taskType string, content string, settings map[string]i
 		}
 
 		// Log Request
-		a.LogToUI("INFO", fmt.Sprintf("[OpenRouter] [%s] Request | Key: %s | Model: %s | Temp: %.2f | Max Tokens: %v", strings.Title(taskType), keyName, model, temp, tokens))
+		a.LogToUI("INFO", fmt.Sprintf("[OpenRouter] [%s] Request | Key: %s | Model: %s | Temp: %.2f | Max Tokens: %v", strings.Title(taskType), keyName, model, temp, tokens), id, taskLabel)
 
 		var fullPrompt string
 		if strings.Contains(prompt, "{{content}}") {
@@ -547,12 +565,12 @@ func (a *App) ProcessTask(taskType string, content string, settings map[string]i
 
 		result, err := a.openRouter.Chat(apiKey, model, fullPrompt, temp, int(tokens))
 		if err != nil {
-			a.LogToUI("ERROR", fmt.Sprintf("[OpenRouter] [%s] Error: %v", strings.Title(taskType), err))
+			a.LogToUI("ERROR", fmt.Sprintf("[OpenRouter] [%s] Error: %v", strings.Title(taskType), err), id, taskLabel)
 			return "", err
 		}
 
 		// Log Result
-		a.LogToUI("SUCCESS", fmt.Sprintf("[OpenRouter] [%s] Success: Result received", strings.Title(taskType)))
+		a.LogToUI("SUCCESS", fmt.Sprintf("[OpenRouter] [%s] Success: Result received", strings.Title(taskType)), id, taskLabel)
 
 		// Save to file with new structure: OutputPath / TaskName / TemplateName (subName) / fileName
 		if outPath != "" {
@@ -575,7 +593,7 @@ func (a *App) ProcessTask(taskType string, content string, settings map[string]i
 				filePath := filepath.Join(finalDir, fileName)
 				os.WriteFile(filePath, []byte(result), 0644)
 			} else {
-				a.LogToUI("ERROR", fmt.Sprintf("[FileSystem] Failed to create directory: %v", err))
+				a.LogToUI("ERROR", fmt.Sprintf("[FileSystem] Failed to create directory: %v", err), id, taskLabel)
 			}
 		}
 
