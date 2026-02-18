@@ -30,6 +30,8 @@ type PipelineSettings struct {
 	TranslateEnabled         bool    `json:"translateEnabled"`
 	RewriteEnabled           bool    `json:"rewriteEnabled"`
 	ApiCollapsed             bool    `json:"apiCollapsed"`
+	OutputPath               string  `json:"outputPath"`
+	PathCollapsed            bool    `json:"pathCollapsed"`
 }
 
 type Settings struct {

@@ -4,7 +4,7 @@ import { useI18n } from '../contexts/I18nContext';
 import { useQueue } from '../contexts/QueueContext';
 import { useServices } from '../contexts/ServiceContext';
 // @ts-ignore
-import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels } from '../../wailsjs/go/main/App';
+import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath } from '../../wailsjs/go/main/App';
 
 import { TaskNameModal } from './TaskNameModal';
 
@@ -66,8 +66,21 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     updated = true;
                 }
 
-                // Завжди згортаємо блок API при ініціалізації
+                if (!s.outputPath) {
+                    try {
+                        const def = await GetDefaultVideosPath();
+                        if (def) {
+                            s.outputPath = def;
+                            updated = true;
+                        }
+                    } catch (e) {
+                        console.error("Failed to get default path:", e);
+                    }
+                }
+
+                // Завжди згортаємо блок API та Шлях при ініціалізації
                 s.apiCollapsed = true;
+                s.pathCollapsed = true;
                 updated = true;
 
                 if (updated) {
@@ -159,12 +172,14 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const isEnabled = isTranslate ? settings.translateEnabled : settings.rewriteEnabled;
     const isCollapsed = isTranslate ? settings.translateCollapsed : settings.rewriteCollapsed;
     const isApiCollapsed = settings.apiCollapsed;
+    const isPathCollapsed = settings.pathCollapsed;
 
     const modelValue = isTranslate ? settings.translateModel : settings.rewriteModel;
     const tempValue = isTranslate ? settings.translateTemperature : settings.rewriteTemperature;
     const tokensValue = isTranslate ? settings.translateMaxTokens : settings.rewriteMaxTokens;
     const promptValue = isTranslate ? settings.translatePrompt : settings.rewritePrompt;
     const selectedApiKeyID = isTranslate ? settings.translateOpenRouterKeyID : settings.rewriteOpenRouterKeyID;
+    const outputPath = settings.outputPath || '';
 
 
     const toggleCollapse = () => {
@@ -179,6 +194,17 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             newSettings.translateCollapsed = true;
         }
         setSettings(newSettings);
+    };
+
+    const handleSelectPath = async () => {
+        try {
+            const path = await SelectDirectory();
+            if (path) {
+                handleChange('outputPath', path);
+            }
+        } catch (err) {
+            console.error("Failed to select path:", err);
+        }
     };
 
     const renderValueOrInput = (field: string, value: number, isFloat: boolean) => {
@@ -289,6 +315,49 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                             ⚙️ {t('tabs.settings')}
                                         </option>
                                     </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Save Path Section */}
+                    <div className={`pipeline-stage-container ${isPathCollapsed ? 'is-collapsed' : ''}`}>
+                        <div
+                            className="pipeline-stage-header"
+                            onClick={() => handleChange('pathCollapsed', !isPathCollapsed)}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                <svg
+                                    className={`stage-chevron ${isPathCollapsed ? 'rotated' : ''}`}
+                                    xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                                >
+                                    <path d="m6 9 6 6 6-6" />
+                                </svg>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span className="pipeline-stage-title">{t('pipeline.stage.path')}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={`stage-settings-content ${isPathCollapsed ? 'collapsed' : ''}`}>
+                            <div className="settings-group">
+                                <div className="settings-control">
+                                    <label className="settings-label">{t('pipeline.group.path')}</label>
+                                    <div className="settings-row">
+                                        <input
+                                            className="settings-input"
+                                            style={{ flex: 1, textOverflow: 'ellipsis' }}
+                                            value={outputPath}
+                                            readOnly
+                                            placeholder="Виберіть папку..."
+                                        />
+                                        <button
+                                            className="settings-button"
+                                            onClick={handleSelectPath}
+                                        >
+                                            Обзор
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

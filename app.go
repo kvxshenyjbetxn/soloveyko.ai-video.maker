@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
+
+	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -106,6 +110,30 @@ func (a *App) OpenConfigDir() {
 // GetConfigPath повертає шлях до файлу налаштувань (для дебагу)
 func (a *App) GetConfigPath() string {
 	return a.settings.GetConfigPath()
+}
+
+// SelectDirectory opens a directory dialog and returns the selected path
+func (a *App) SelectDirectory() (string, error) {
+	return wruntime.OpenDirectoryDialog(a.ctx, wruntime.OpenDialogOptions{
+		Title: "Виберіть папку для збереження",
+	})
+}
+
+// GetDefaultVideosPath returns the system default videos folder
+func (a *App) GetDefaultVideosPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(home, "Videos")
+	case "darwin":
+		return filepath.Join(home, "Movies")
+	default:
+		return filepath.Join(home, "Videos")
+	}
 }
 
 // OpenRouter Methods

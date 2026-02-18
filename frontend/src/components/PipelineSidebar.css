@@ -7,8 +7,8 @@
     position: relative;
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
     z-index: 10;
-    overflow: visible;
-    /* Дозволяємо кнопці "визирати" */
+    overflow: hidden;
+    /* Панель сама не скроллиться, скроллиться контент всередині */
 }
 
 .sidebar-clipper {
@@ -93,13 +93,33 @@
 }
 
 .pipeline-sidebar-content {
-    padding: 12px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
     flex: 1;
-    overflow-y: auto;
-    padding-bottom: 20px;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    min-height: 0;
+    padding-bottom: 12px;
+}
+
+/* Примусова прокрутка: дуже контрастний скролбар */
+.pipeline-sidebar-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.pipeline-sidebar-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.pipeline-sidebar-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.pipeline-sidebar-content::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
 }
 
 .pipeline-sidebar-footer {
@@ -154,6 +174,8 @@
 }
 
 .pipeline-stage-container {
+    flex-shrink: 0 !important;
+    /* ЗАБОРОНА СТИСКАННЯ ВІКНА */
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -243,10 +265,10 @@ input:checked+.stage-slider:before {
 }
 
 .stage-settings-content {
-    padding: 12px 14px;
+    padding: 16px 16px 14px 16px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
     max-height: 1000px;
     opacity: 1;
     transform: translateY(0);
@@ -329,6 +351,37 @@ input:checked+.stage-slider:before {
     border-color: var(--accent-primary);
     background-color: var(--bg-tertiary);
     box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.settings-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.settings-button {
+    padding: 0 14px;
+    background: var(--accent-primary);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.settings-button:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.settings-button:active {
+    transform: translateY(0);
 }
 
 .settings-textarea {
