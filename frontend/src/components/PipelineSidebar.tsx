@@ -3,10 +3,12 @@ import './PipelineSidebar.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useQueue } from '../contexts/QueueContext';
 import { useServices } from '../contexts/ServiceContext';
+import { useTemplates, PipelineSettings as TemplatePipelineSettings } from '../contexts/TemplateContext';
 // @ts-ignore
 import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath } from '../../wailsjs/go/main/App';
 
 import { TaskNameModal } from './TaskNameModal';
+import { ConfirmModal } from './ConfirmModal';
 
 interface PipelineSidebarProps {
     type: 'translate' | 'rewrite';
@@ -25,6 +27,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [isResizing, setIsResizing] = useState(false);
     const [editingField, setEditingField] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+    const [templateToDelete, setTemplateToDelete] = useState<any | null>(null);
+    const { templates, saveTemplate, removeTemplate } = useTemplates();
 
     const sidebarRef = useRef<HTMLDivElement>(null);
     const lastSavedRef = useRef<string>("");
@@ -81,6 +86,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 // Завжди згортаємо блок API та Шлях при ініціалізації
                 s.apiCollapsed = true;
                 s.pathCollapsed = true;
+                if (s.templatesCollapsed === undefined) s.templatesCollapsed = true;
                 updated = true;
 
                 if (updated) {
@@ -111,6 +117,57 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             document.documentElement.style.setProperty('--pipeline-sidebar-width', '0px');
         };
     }, [settings?.sidebarWidth, isOpen]);
+
+    const toggleTemplate = (id: string) => {
+        setSelectedTemplateIds(prev =>
+            prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]
+        );
+    };
+
+    const handleSaveTemplate = async () => {
+        const name = isTranslate ? settings.translatePipelineName : settings.rewritePipelineName;
+        await saveTemplate(type, name, settings);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (templateToDelete) {
+            await removeTemplate(templateToDelete.id);
+            setTemplateToDelete(null);
+        }
+    };
+
+    const handleAddTask = (taskName: string) => {
+        if (selectedTemplateIds.length === 0) {
+            // No templates selected - use current sidebar settings
+            addTask(type, content, settings, taskName);
+        } else {
+            // Create tasks for each selected template
+            selectedTemplateIds.forEach(id => {
+                const template = templates.find(t => t.id === id);
+                if (template) {
+                    const finalTaskName = taskName.trim() ? `${taskName} - ${template.name}` : template.name;
+                    addTask(type, content, template.settings, finalTaskName);
+                }
+            });
+            // Clear selection after adding
+            setSelectedTemplateIds([]);
+        }
+        setIsModalOpen(false);
+    };
+
+    const applyTemplate = (tpl: any) => {
+        setSettings((prev: any) => ({
+            ...prev,
+            ...tpl.settings,
+            // We want to keep some local settings like width and sidebar state
+            sidebarWidth: prev.sidebarWidth,
+            apiCollapsed: prev.apiCollapsed,
+            pathCollapsed: prev.pathCollapsed,
+            templatesCollapsed: prev.templatesCollapsed,
+            translateCollapsed: prev.translateCollapsed,
+            rewriteCollapsed: prev.rewriteCollapsed
+        }));
+    };
 
     const startResizing = useCallback((e: React.MouseEvent) => {
         setIsResizing(true);
@@ -262,21 +319,116 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             />
 
             <div className="sidebar-clipper">
-                <div className="pipeline-sidebar-header">
-                    <div className="pipeline-sidebar-title">{t(`pipeline.${type}.title`)}</div>
-                </div>
-
-                <div className="pipeline-sidebar-content">
-                    {/* Pipeline Name Section */}
-                    <div className="settings-group" style={{ marginBottom: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
-                        <div className="settings-control">
-                            <label className="settings-label">{t('pipeline.name')}</label>
+                <div className="pipeline-sidebar-header" style={{ display: 'block', padding: '10px 12px', borderBottom: '1px solid var(--border-color)' }}>
+                    <div className="settings-control" style={{ marginBottom: 0 }}>
+                        <label className="settings-label" style={{ marginBottom: '4px', fontSize: '10px' }}>{t('pipeline.name')}</label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
                             <input
                                 className="settings-input"
                                 value={(isTranslate ? settings.translatePipelineName : settings.rewritePipelineName) || ''}
                                 onChange={(e) => handleChange(isTranslate ? 'translatePipelineName' : 'rewritePipelineName', e.target.value)}
                                 placeholder="Назва пайплайну..."
+                                style={{ flex: 1, height: '32px' }}
                             />
+                            <button
+                                className="save-template-btn"
+                                onClick={handleSaveTemplate}
+                                title={t('pipeline.save_template')}
+                                style={{ marginTop: 0, width: '32px', height: '32px', flexShrink: 0 }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                    <polyline points="7 3 7 8 15 8"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="pipeline-sidebar-content">
+
+                    {/* Templates Section */}
+                    <div className={`pipeline-stage-container ${settings.templatesCollapsed ? 'is-collapsed' : ''}`}>
+                        <div
+                            className="pipeline-stage-header"
+                            onClick={() => handleChange('templatesCollapsed', !settings.templatesCollapsed)}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                <svg
+                                    className={`stage-chevron ${settings.templatesCollapsed ? 'rotated' : ''}`}
+                                    xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                                >
+                                    <path d="m6 9 6 6 6-6" />
+                                </svg>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span className="pipeline-stage-title">{t('pipeline.templates')}</span>
+                                </div>
+                                {setCurrentPath && (
+                                    <button
+                                        className="templates-settings-link"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCurrentPath('settings.templates');
+                                        }}
+                                        title={t('settings.templates')}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <circle cx="12" cy="12" r="3" />
+                                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                                        </svg>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                        <div className={`stage-settings-content ${settings.templatesCollapsed ? 'collapsed' : ''}`}>
+                            {templates.filter(t => t.type === type).length === 0 ? (
+                                <div className="no-templates-text">{t('pipeline.no_templates')}</div>
+                            ) : (
+                                <div className="templates-list">
+                                    {templates.filter(t => t.type === type).map(tpl => (
+                                        <div
+                                            key={tpl.id}
+                                            className={`template-item ${selectedTemplateIds.includes(tpl.id) ? 'selected' : ''}`}
+                                            onClick={() => toggleTemplate(tpl.id)}
+                                        >
+                                            <div className="template-checkbox">
+                                                {selectedTemplateIds.includes(tpl.id) && (
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                )}
+                                            </div>
+                                            <span className="template-name">{tpl.name}</span>
+                                            <button
+                                                className="template-apply-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    applyTemplate(tpl);
+                                                }}
+                                                title={t('common.load')}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                    <polyline points="7 10 12 15 17 10" />
+                                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                className="template-delete-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setTemplateToDelete(tpl);
+                                                }}
+                                                title={t('common.delete')}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -492,30 +644,35 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                             </div>
                         </div>
                     </div>
+
                 </div>
 
                 <div className="pipeline-sidebar-footer">
-                    <button
-                        className="add-to-queue-btn"
-                        onClick={() => {
-                            if (content.trim()) {
-                                setIsModalOpen(true);
-                            }
-                        }}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        {t('pipeline.add_to_queue')}
-                    </button>
+                    <div className="footer-actions">
+                        <button
+                            className="add-to-queue-btn"
+                            onClick={() => {
+                                if (content.trim()) {
+                                    setIsModalOpen(true);
+                                }
+                            }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            {selectedTemplateIds.length > 0
+                                ? `${t('pipeline.add_to_queue')} (${selectedTemplateIds.length})`
+                                : t('pipeline.add_to_queue')}
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <TaskNameModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                onConfirm={(name) => addTask(type, content, settings, name)}
+                onConfirm={handleAddTask}
             />
 
             <button
@@ -525,6 +682,13 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
             </button>
+            <ConfirmModal
+                isOpen={!!templateToDelete}
+                onClose={() => setTemplateToDelete(null)}
+                onConfirm={handleConfirmDelete}
+                title={t('common.delete')}
+                message={t('templatesTab.delete_confirm')}
+            />
         </aside>
     );
 };

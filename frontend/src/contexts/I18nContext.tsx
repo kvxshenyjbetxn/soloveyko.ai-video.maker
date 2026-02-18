@@ -18,7 +18,7 @@ const translations: Record<Locale, Translations> = {
 interface I18nContextType {
     locale: Locale;
     setLocale: (locale: Locale) => void;
-    t: (key: string) => string;
+    t: (key: string, params?: Record<string, any>) => string;
 }
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
@@ -48,7 +48,7 @@ export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const t = (key: string): string => {
+    const t = (key: string, params?: Record<string, any>): string => {
         const keys = key.split('.');
         let value: any = translations[locale];
 
@@ -56,7 +56,15 @@ export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             value = value?.[k];
         }
 
-        return value || key;
+        if (typeof value !== 'string') return value || key;
+
+        if (params) {
+            Object.keys(params).forEach(param => {
+                value = (value as string).replace(`{{${param}}}`, params[param].toString());
+            });
+        }
+
+        return value;
     };
 
     return (

@@ -198,15 +198,34 @@
             "disabled": "Disabled (original text)"
         },
         "add_to_queue": "Add to Queue",
+        "save_template": "Save as Template",
+        "templates": "Templates",
+        "no_templates": "No templates",
+        "select_templates": "Select Templates",
         "task_name_title": "Task Name",
         "task_name_description": "Enter a name for this task or leave empty for auto-naming",
         "name": "Pipeline Name"
+    },
+    "templatesTab": {
+        "description": "Managing your pipeline templates.",
+        "delete_confirm": "Are you sure you want to delete this template?",
+        "created_at": "Created",
+        "type": "Type",
+        "bulk_edit": "Bulk Edit",
+        "bulk_edit_title": "Editing Selected Templates",
+        "select_param": "Select parameter to change",
+        "apply_to_selected": "Apply to Selected",
+        "selected_count": "Selected: {{count}}",
+        "select_all": "Select All",
+        "deselect_all": "Deselect All"
     },
     "common": {
         "save": "Save",
         "saving": "Saving...",
         "add": "Add",
         "cancel": "Cancel",
-        "delete": "Delete"
+        "delete": "Delete",
+        "load": "Load",
+        "value": "Value"
     }
 }

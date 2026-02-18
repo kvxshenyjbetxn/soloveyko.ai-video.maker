@@ -34,6 +34,7 @@ type PipelineSettings struct {
 	PathCollapsed            bool    `json:"pathCollapsed"`
 	TranslatePipelineName    string  `json:"translatePipelineName"`
 	RewritePipelineName      string  `json:"rewritePipelineName"`
+	TemplatesCollapsed       bool    `json:"templatesCollapsed"`
 }
 
 type Settings struct {

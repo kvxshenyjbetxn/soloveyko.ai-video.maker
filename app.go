@@ -28,6 +28,7 @@ type App struct {
 	elevenLabsImage *api.ElevenLabsImageService
 	elevenLabsUA    *api.ElevenLabsUAService
 	assemblyAI      *api.AssemblyAIService
+	templates       *utils.TemplateService
 }
 
 // NewApp creates a new App application struct
@@ -45,6 +46,7 @@ func NewApp() *App {
 		elevenLabsImage: api.NewElevenLabsImageService(settings),
 		elevenLabsUA:    api.NewElevenLabsUAService(settings),
 		assemblyAI:      api.NewAssemblyAIService(settings),
+		templates:       utils.NewTemplateService(),
 	}
 }
 
@@ -123,6 +125,26 @@ func (a *App) OpenPath(path string) {
 // GetConfigPath повертає шлях до файлу налаштувань (для дебагу)
 func (a *App) GetConfigPath() string {
 	return a.settings.GetConfigPath()
+}
+
+// GetTemplates повертає список шаблонів пайплайнів
+func (a *App) GetTemplates() ([]utils.PipelineTemplate, error) {
+	return a.templates.LoadTemplates()
+}
+
+// AddTemplate додає новий шаблон пайплайну
+func (a *App) AddTemplate(tplType string, name string, data utils.PipelineSettings) (*utils.PipelineTemplate, error) {
+	return a.templates.AddTemplate(tplType, name, data)
+}
+
+// DeleteTemplate видаляє шаблон пайплайну
+func (a *App) DeleteTemplate(id string) error {
+	return a.templates.DeleteTemplate(id)
+}
+
+// UpdateTemplate оновлює шаблон пайплайну
+func (a *App) UpdateTemplate(id string, name string, data utils.PipelineSettings) error {
+	return a.templates.UpdateTemplate(id, name, data)
 }
 
 // SelectDirectory opens a directory dialog and returns the selected path
@@ -460,10 +482,16 @@ func (a *App) ProcessTask(taskType string, content string, settings map[string]i
 	var model, prompt string
 	var temp, tokens float64
 	var pipelineName string
+	var outPath string
 
 	if taskType == "translate" || taskType == "rewrite" {
 		// Get actual API Key
 		keyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
+		outPath, _ = settings["outputPath"].(string)
+
+		if outPath == "" {
+			outPath = pSettings.OutputPath
+		}
 		keys := a.settings.GetOpenRouterKeys()
 		for _, k := range keys {
 			if k.ID == keyID {
@@ -518,8 +546,8 @@ func (a *App) ProcessTask(taskType string, content string, settings map[string]i
 		a.LogToUI("SUCCESS", fmt.Sprintf("[OpenRouter] [%s] Success: Result received", strings.Title(taskType)))
 
 		// Save to file with new structure: OutputPath / TaskName / PipelineName / fileName
-		if pSettings.OutputPath != "" {
-			finalDir := filepath.Join(pSettings.OutputPath, taskName, pipelineName)
+		if outPath != "" {
+			finalDir := filepath.Join(outPath, taskName, pipelineName)
 			err := os.MkdirAll(finalDir, 0755)
 			if err == nil {
 				fileName := "result.txt"
