@@ -11,6 +11,7 @@ on:
     branches:
       - main
       - master
+  workflow_dispatch: # Дозволяє запускати збірку вручну кнопкою
 
 env:
   # Necessary for most environments (https://github.com/wailsapp/wails/issues/1402)
@@ -23,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest]
+        os: [macos-14] # macos-14 — це стабільний M1-раннер
 
     steps:
       - uses: actions/checkout@v4
@@ -44,35 +45,35 @@ jobs:
 
       - name: Build Wails App
         run: |
-          # Робимо універсальну збірку (Intel + Apple Silicon)
-          wails build -platform darwin/universal
+          # Збираємо для ARM64 (твій M-процесор)
+          wails build -platform darwin/arm64 -o Soloveyko -clean
 
       # --- Mac Specific ---
-      - name: Package macOS DMG
-        if: matrix.os == 'macos-latest'
+      - name: Prepare, Sign and Zip
+        if: matrix.os == 'macos-14'
         run: |
           cd build/bin
-          # 1. Надаємо правильну назву додатку
-          mv soloveyko.app "Soloveyko.app"
+          # Очищаємо аттрибути
+          xattr -cr Soloveyko.app
           
-          # 2. Виправляємо права та прибираємо мітки карантину раннера
-          chmod -R +x "Soloveyko.app/Contents/MacOS/"
-          xattr -rc "Soloveyko.app"
+          # Надаємо права на запуск
+          chmod +x Soloveyko.app/Contents/MacOS/Soloveyko
           
-          # 3. Підписуємо (ad-hoc), щоб M-процесори не блокували програму
-          codesign --force --deep --sign - "Soloveyko.app"
+          # Підписуємо (критично для M1/M2/M3)
+          codesign --force --sign - Soloveyko.app/Contents/MacOS/Soloveyko
+          codesign --force --sign - Soloveyko.app
           
-          # 4. Створюємо DMG образ (це стандарт для Mac)
-          hdiutil create -volname "Soloveyko AI" -srcfolder "Soloveyko.app" -ov -format UDZO Soloveyko.dmg
+          # Створюємо ZIP за допомогою ditto (це стандарт Mac)
+          ditto -c -k --sequesterRsrc Soloveyko.app Soloveyko-macOS.zip
 
       # --- Upload Artifacts ---
       
       - name: Upload Mac Artifact
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-14'
         uses: actions/upload-artifact@v4
         with:
           name: Soloveyko-macOS
-          path: build/bin/Soloveyko.dmg
+          path: build/bin/Soloveyko-macOS.zip
 
       - name: Upload Linux Artifact
         if: matrix.os == 'ubuntu-latest'
