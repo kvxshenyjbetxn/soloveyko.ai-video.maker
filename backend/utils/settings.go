@@ -7,20 +7,29 @@ import (
 	"sync"
 )
 
+type NamedAPIKey struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Key  string `json:"key"`
+}
+
 type PipelineSettings struct {
-	TranslateModel       string  `json:"translateModel"`
-	TranslatePrompt      string  `json:"translatePrompt"`
-	TranslateTemperature float64 `json:"translateTemperature"`
-	TranslateMaxTokens   int     `json:"translateMaxTokens"`
-	TranslateCollapsed   bool    `json:"translateCollapsed"`
-	RewriteModel         string  `json:"rewriteModel"`
-	RewritePrompt        string  `json:"rewritePrompt"`
-	RewriteTemperature   float64 `json:"rewriteTemperature"`
-	RewriteMaxTokens     int     `json:"rewriteMaxTokens"`
-	RewriteCollapsed     bool    `json:"rewriteCollapsed"`
-	SidebarWidth         int     `json:"sidebarWidth"`
-	TranslateEnabled     bool    `json:"translateEnabled"`
-	RewriteEnabled       bool    `json:"rewriteEnabled"`
+	TranslateModel           string  `json:"translateModel"`
+	TranslatePrompt          string  `json:"translatePrompt"`
+	TranslateTemperature     float64 `json:"translateTemperature"`
+	TranslateMaxTokens       int     `json:"translateMaxTokens"`
+	TranslateCollapsed       bool    `json:"translateCollapsed"`
+	TranslateOpenRouterKeyID string  `json:"translateOpenRouterKeyID"`
+	RewriteModel             string  `json:"rewriteModel"`
+	RewritePrompt            string  `json:"rewritePrompt"`
+	RewriteTemperature       float64 `json:"rewriteTemperature"`
+	RewriteMaxTokens         int     `json:"rewriteMaxTokens"`
+	RewriteCollapsed         bool    `json:"rewriteCollapsed"`
+	RewriteOpenRouterKeyID   string  `json:"rewriteOpenRouterKeyID"`
+	SidebarWidth             int     `json:"sidebarWidth"`
+	TranslateEnabled         bool    `json:"translateEnabled"`
+	RewriteEnabled           bool    `json:"rewriteEnabled"`
+	ApiCollapsed             bool    `json:"apiCollapsed"`
 }
 
 type Settings struct {
@@ -28,6 +37,7 @@ type Settings struct {
 	Theme                         string           `json:"theme"`
 	AccentColor                   string           `json:"accentColor"`
 	OpenRouterAPIKey              string           `json:"openRouterAPIKey"`
+	OpenRouterKeys                []NamedAPIKey    `json:"openRouterKeys"`
 	OpenRouterModels              []string         `json:"openRouterModels"`
 	PollinationsAPIKey            string           `json:"pollinationsAPIKey"`
 	PollinationsModels            []string         `json:"pollinationsModels"`
@@ -81,8 +91,22 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 	// Якщо файл не існує, повертаємо налаштування за замовчуванням
 	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
 		return &Settings{
-			Language: "uk",
-			Theme:    "dark",
+			Language:    "uk",
+			Theme:       "dark",
+			AccentColor: "#ff00c3", // Наш фірмовий рожевий
+			OpenRouterModels: []string{
+				"google/gemini-2.5-flash",
+				"z-ai/glm-4.5-air:free",
+			},
+			Pipeline: PipelineSettings{
+				TranslateModel:       "google/gemini-2.5-flash",
+				TranslateTemperature: 1.0,
+				TranslateEnabled:     true,
+				RewriteModel:         "google/gemini-2.5-flash",
+				RewriteTemperature:   1.0,
+				RewriteEnabled:       true,
+				SidebarWidth:         320,
+			},
 		}, nil
 	}
 
@@ -97,12 +121,33 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 		return nil, err
 	}
 
-	// Дефолтні значення, якщо порожньо
+	// Дефолтні значення, якщо поле відсутнє в конфізі
 	if settings.Theme == "" {
 		settings.Theme = "dark"
 	}
 	if settings.AccentColor == "" {
-		settings.AccentColor = "#0078d4"
+		settings.AccentColor = "#ff00c3"
+	}
+	// Якщо список моделей взагалі nil (поле відсутнє в JSON), додаємо дефолтні.
+	// Якщо список порожній [], але не nil (користувач все видалив), не чіпаємо.
+	if settings.OpenRouterModels == nil {
+		settings.OpenRouterModels = []string{
+			"google/gemini-2.5-flash",
+			"z-ai/glm-4.5-air:free",
+		}
+	}
+	if settings.Pipeline.TranslateModel == "" && len(settings.OpenRouterModels) > 0 {
+		settings.Pipeline.TranslateModel = settings.OpenRouterModels[0]
+	}
+	// Міграція для OpenRouterKeys
+	if len(settings.OpenRouterKeys) == 0 && settings.OpenRouterAPIKey != "" {
+		settings.OpenRouterKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  settings.OpenRouterAPIKey,
+			},
+		}
 	}
 
 	return &settings, nil
@@ -351,6 +396,31 @@ func (s *SettingsService) SetOpenRouterModels(models []string) error {
 	return s.SaveSettings(settings)
 }
 
+// GetOpenRouterKeys повертає список іменованих ключів OpenRouter
+func (s *SettingsService) GetOpenRouterKeys() []NamedAPIKey {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []NamedAPIKey{}
+	}
+	return settings.OpenRouterKeys
+}
+
+// SetOpenRouterKeys зберігає список іменованих ключів OpenRouter
+func (s *SettingsService) SetOpenRouterKeys(keys []NamedAPIKey) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.OpenRouterKeys = keys
+	// Оновлюємо старий ключ для сумісності з іншими частинами коду
+	if len(keys) > 0 {
+		settings.OpenRouterAPIKey = keys[0].Key
+	}
+
+	return s.SaveSettings(settings)
+}
+
 // GetPollinationsAPIKey повертає API ключ Pollinations
 func (s *SettingsService) GetPollinationsAPIKey() string {
 	settings, err := s.LoadSettings()
@@ -562,10 +632,10 @@ func (s *SettingsService) GetPipelineSettings() PipelineSettings {
 	}
 	// Якщо налаштування порожні, повертаємо дефолтні
 	if settings.Pipeline.TranslateTemperature == 0 {
-		settings.Pipeline.TranslateTemperature = 0.7
+		settings.Pipeline.TranslateTemperature = 1.0
 	}
 	if settings.Pipeline.RewriteTemperature == 0 {
-		settings.Pipeline.RewriteTemperature = 0.7
+		settings.Pipeline.RewriteTemperature = 1.0
 	}
 	if settings.Pipeline.SidebarWidth == 0 {
 		settings.Pipeline.SidebarWidth = 320

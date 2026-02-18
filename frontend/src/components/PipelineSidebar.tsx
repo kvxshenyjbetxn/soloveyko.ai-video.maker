@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './PipelineSidebar.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useQueue } from '../contexts/QueueContext';
+import { useServices } from '../contexts/ServiceContext';
 // @ts-ignore
 import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels } from '../../wailsjs/go/main/App';
 
@@ -12,11 +13,13 @@ interface PipelineSidebarProps {
     isOpen: boolean;
     onToggle: () => void;
     content: string;
+    setCurrentPath?: (path: string) => void;
 }
 
-export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, onToggle, content }) => {
+export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, onToggle, content, setCurrentPath }) => {
     const { t } = useI18n();
     const { addTask } = useQueue();
+    const { openRouterKeys } = useServices();
     const [settings, setSettings] = useState<any>(null);
     const [models, setModels] = useState<string[]>([]);
     const [isResizing, setIsResizing] = useState(false);
@@ -47,10 +50,25 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     }
                 }
 
+                if (openRouterKeys.length > 0) {
+                    if (!s.translateOpenRouterKeyID) {
+                        s.translateOpenRouterKeyID = openRouterKeys[0].id;
+                        updated = true;
+                    }
+                    if (!s.rewriteOpenRouterKeyID) {
+                        s.rewriteOpenRouterKeyID = openRouterKeys[0].id;
+                        updated = true;
+                    }
+                }
+
                 if (!s.rewriteEnabled) {
                     s.rewriteEnabled = true;
                     updated = true;
                 }
+
+                // Завжди згортаємо блок API при ініціалізації
+                s.apiCollapsed = true;
+                updated = true;
 
                 if (updated) {
                     await SavePipelineSettings(s);
@@ -138,13 +156,16 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     if (!settings) return null;
 
     const isTranslate = type === 'translate';
-    const isEnabled = isTranslate ? settings.translateEnabled : true;
+    const isEnabled = isTranslate ? settings.translateEnabled : settings.rewriteEnabled;
     const isCollapsed = isTranslate ? settings.translateCollapsed : settings.rewriteCollapsed;
+    const isApiCollapsed = settings.apiCollapsed;
 
     const modelValue = isTranslate ? settings.translateModel : settings.rewriteModel;
     const tempValue = isTranslate ? settings.translateTemperature : settings.rewriteTemperature;
-    const tokensValue = isTranslate ? (settings.translateMaxTokens || 0) : (settings.rewriteMaxTokens || 0);
+    const tokensValue = isTranslate ? settings.translateMaxTokens : settings.rewriteMaxTokens;
     const promptValue = isTranslate ? settings.translatePrompt : settings.rewritePrompt;
+    const selectedApiKeyID = isTranslate ? settings.translateOpenRouterKeyID : settings.rewriteOpenRouterKeyID;
+
 
     const toggleCollapse = () => {
         const field = isTranslate ? 'translateCollapsed' : 'rewriteCollapsed';
@@ -220,6 +241,59 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 </div>
 
                 <div className="pipeline-sidebar-content">
+                    {/* API Settings Section */}
+                    <div className={`pipeline-stage-container ${isApiCollapsed ? 'is-collapsed' : ''}`}>
+                        <div
+                            className="pipeline-stage-header"
+                            onClick={() => handleChange('apiCollapsed', !isApiCollapsed)}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                <svg
+                                    className={`stage-chevron ${isApiCollapsed ? 'rotated' : ''}`}
+                                    xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                                >
+                                    <path d="m6 9 6 6 6-6" />
+                                </svg>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span className="pipeline-stage-title">{t('pipeline.group.api')}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={`stage-settings-content ${isApiCollapsed ? 'collapsed' : ''}`}>
+                            <div className="settings-group">
+                                <div className="settings-control">
+                                    <label className="settings-label">OpenRouter Key</label>
+                                    <select
+                                        className="settings-select"
+                                        value={selectedApiKeyID}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === "MANAGE_KEYS") {
+                                                if (setCurrentPath) {
+                                                    setCurrentPath('settings.api.openrouter');
+                                                }
+                                                return;
+                                            }
+                                            handleChange(isTranslate ? 'translateOpenRouterKeyID' : 'rewriteOpenRouterKeyID', val);
+                                        }}
+                                    >
+                                        {openRouterKeys.length === 0 ? (
+                                            <option value="">{t('api.openrouterSettings.noKeys')}</option>
+                                        ) : (
+                                            openRouterKeys.map(k => (
+                                                <option key={k.id} value={k.id}>{k.name}</option>
+                                            ))
+                                        )}
+                                        <option value="MANAGE_KEYS" style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                                            ⚙️ {t('tabs.settings')}
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className={`pipeline-stage-container ${isCollapsed || !isEnabled ? 'is-collapsed' : ''}`}>
                         <div
                             className="pipeline-stage-header"
@@ -266,9 +340,21 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                     <select
                                         className="settings-select"
                                         value={modelValue}
-                                        onChange={(e) => handleChange(isTranslate ? 'translateModel' : 'rewriteModel', e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === "ADD_NEW_MODEL") {
+                                                if (setCurrentPath) {
+                                                    setCurrentPath('settings.api.openrouter');
+                                                }
+                                                return;
+                                            }
+                                            handleChange(isTranslate ? 'translateModel' : 'rewriteModel', val);
+                                        }}
                                     >
                                         {models.map(m => <option key={m} value={m}>{m}</option>)}
+                                        <option value="ADD_NEW_MODEL" style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                                            + {t('pipeline.add_model')}
+                                        </option>
                                     </select>
                                 </div>
 

@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { PipelineSidebar } from '../../components/PipelineSidebar';
 
-export const Translate = () => {
+export const Translate = ({ setCurrentPath }: { setCurrentPath?: (path: string) => void }) => {
     const { t } = useI18n();
     const [text, setText] = useState("");
     const [isDragging, setIsDragging] = useState(false);
@@ -103,6 +103,7 @@ export const Translate = () => {
                 isOpen={showPipelineSettings}
                 onToggle={() => setShowPipelineSettings(!showPipelineSettings)}
                 content={text}
+                setCurrentPath={setCurrentPath}
             />
         </div>
     );

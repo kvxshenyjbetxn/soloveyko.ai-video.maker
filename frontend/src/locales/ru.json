@@ -169,6 +169,7 @@
         },
         "model": "Модель",
         "model.default": "По умолчанию (GPT-4o)",
+        "add_model": "Добавить модель...",
         "temperature": "Температура",
         "max_tokens": "Макс. токенов",
         "max_tokens_unlimited": "Стандарт (0)",

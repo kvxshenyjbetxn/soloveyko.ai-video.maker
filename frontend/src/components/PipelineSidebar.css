@@ -93,10 +93,10 @@
 }
 
 .pipeline-sidebar-content {
-    padding: 16px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 14px;
     flex: 1;
     overflow-y: auto;
     padding-bottom: 20px;
@@ -243,10 +243,10 @@ input:checked+.stage-slider:before {
 }
 
 .stage-settings-content {
-    padding: 16px;
+    padding: 12px 14px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     max-height: 1000px;
     opacity: 1;
     transform: translateY(0);
@@ -255,7 +255,9 @@ input:checked+.stage-slider:before {
 
 .stage-settings-content.collapsed {
     max-height: 0;
+    padding-top: 0;
     padding-bottom: 0;
+    gap: 0;
     opacity: 0;
     transform: translateY(-10px);
     pointer-events: none;
@@ -272,13 +274,14 @@ input:checked+.stage-slider:before {
 .settings-group {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding-bottom: 15px;
+    gap: 12px;
+    padding-bottom: 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .settings-group:last-child {
     border-bottom: none;
+    padding-bottom: 0;
 }
 
 .settings-group-title {
@@ -289,12 +292,15 @@ input:checked+.stage-slider:before {
     align-items: center;
     gap: 6px;
     opacity: 0.8;
+    margin-bottom: -4px;
+    /* Compensate for the gap to look visually consistent */
 }
 
 .settings-control {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    /* Константна відстань між Label та Control (Select/Slider/Textarea) */
 }
 
 .settings-label {
@@ -336,7 +342,8 @@ input:checked+.stage-slider:before {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 4px 0;
+    padding: 0;
+    /* Прибираємо внутрішні падінги, щоб контролі стояли рівно */
 }
 
 .settings-slider {

@@ -88,8 +88,8 @@ function App() {
     const renderContent = () => {
         switch (currentPath) {
             // Text tabs
-            case 'text.translate': return <Translate />;
-            case 'text.rewrite': return <Rewrite />;
+            case 'text.translate': return <Translate setCurrentPath={setCurrentPath} />;
+            case 'text.rewrite': return <Rewrite setCurrentPath={setCurrentPath} />;
             case 'queue': return <Queue setCurrentPath={setCurrentPath} />;
             case 'gallery': return <Gallery />;
 

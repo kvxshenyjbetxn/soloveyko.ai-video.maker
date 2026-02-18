@@ -140,6 +140,16 @@ func (a *App) GetOpenRouterSavedModels() []string {
 	return a.openRouter.GetOpenRouterSavedModels()
 }
 
+// GetOpenRouterKeys returns the list of named API keys
+func (a *App) GetOpenRouterKeys() []utils.NamedAPIKey {
+	return a.settings.GetOpenRouterKeys()
+}
+
+// SaveOpenRouterKeys saves the list of named API keys
+func (a *App) SaveOpenRouterKeys(keys []utils.NamedAPIKey) error {
+	return a.settings.SetOpenRouterKeys(keys)
+}
+
 // Pollinations Methods
 
 // GetPollinationsImageModels fetches available image models from Pollinations.ai

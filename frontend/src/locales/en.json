@@ -170,6 +170,7 @@
         },
         "model": "Model",
         "model.default": "Default (GPT-4o)",
+        "add_model": "Add model...",
         "temperature": "Temperature",
         "max_tokens": "Max Tokens",
         "max_tokens_unlimited": "Default (0)",

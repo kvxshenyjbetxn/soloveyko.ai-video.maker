@@ -10,7 +10,7 @@ interface ServiceBalanceMonitorProps {
 export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps) => {
     const { t } = useI18n();
     const {
-        openRouterBalance, loadingOpenRouter, refreshOpenRouterBalance,
+        openRouterBalances, openRouterKeys, loadingOpenRouter, refreshOpenRouterBalance,
         elevenLabsBotBalance, loadingElevenLabsBot, refreshElevenLabsBotBalance,
         elevenLabsUnlimBalance, loadingElevenLabsUnlim, refreshElevenLabsUnlimBalance,
         voiceMakerBalance, loadingVoiceMaker, refreshVoiceMakerBalance,
@@ -30,11 +30,15 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
     const isGooglerVideoAlert = googlerVideoThreshold > 0 && (googlerUsage.current_usage.hourly_usage.video_generation || 0) >= googlerVideoThreshold;
     const isGooglerImageAlert = googlerImageThreshold > 0 && (googlerUsage.current_usage.hourly_usage.image_generation || 0) >= googlerImageThreshold;
 
+    const isOpenRouterAlert = Object.entries(openRouterBalances).some(([id, balance]) =>
+        balance !== null && openRouterThreshold > 0 && balance < openRouterThreshold
+    );
+
     const isAnyAlertActive = (
         (elevenLabsBotBalance !== null && elevenLabsBotThreshold > 0 && elevenLabsBotBalance < elevenLabsBotThreshold) ||
         (elevenLabsUnlimBalance !== null && elevenLabsUnlimBalance !== -1 && elevenLabsUnlimThreshold > 0 && elevenLabsUnlimBalance < elevenLabsUnlimThreshold) ||
         (voiceMakerBalance !== null && voiceMakerThreshold > 0 && voiceMakerBalance < voiceMakerThreshold) ||
-        (openRouterBalance !== null && openRouterThreshold > 0 && openRouterBalance < openRouterThreshold) ||
+        isOpenRouterAlert ||
         isGooglerVideoAlert ||
         isGooglerImageAlert
     );
@@ -46,7 +50,13 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
             return '#ff5252'; // Red warning
         }
 
-        if (openRouterBalance === null && elevenLabsBotBalance === null && elevenLabsUnlimBalance === null && voiceMakerBalance === null && googlerUsage.expiration_date === 0) return '#757575'; // Grey
+        const hasAnyBalance = Object.values(openRouterBalances).some(b => b !== null) ||
+            elevenLabsBotBalance !== null ||
+            elevenLabsUnlimBalance !== null ||
+            voiceMakerBalance !== null ||
+            googlerUsage.expiration_date !== 0;
+
+        if (!hasAnyBalance) return '#757575'; // Grey
         return '#4caf50'; // Green
     };
 
@@ -76,29 +86,33 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                     </div>
 
                     <div className="balance-list premium-scrollbar">
-                        <div className="balance-item">
-                            <div className="service-name">
-                                <div className={`service-status-dot ${loadingOpenRouter ? 'loading' : (openRouterBalance === null ? 'error' : '')}`}></div>
-                                {t('balanceMonitor.openrouter') || 'OpenRouter'}
-                                {navigateTo && (
-                                    <button
-                                        className="service-settings-btn"
-                                        onClick={() => { navigateTo('settings.api.openrouter'); setIsExpanded(false); }}
-                                        title="Settings"
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                                    </button>
-                                )}
-                            </div>
-                            <div className="service-balance" style={{
-                                color: (openRouterBalance !== null && openRouterThreshold > 0 && openRouterBalance < openRouterThreshold) ? '#ff5252' : '#4caf50'
-                            }}>
-                                {loadingOpenRouter ? '...' : (openRouterBalance !== null ? `$${openRouterBalance.toFixed(4)}` : 'N/A')}
-                                {openRouterBalance !== null && openRouterThreshold > 0 && openRouterBalance < openRouterThreshold && (
-                                    <span style={{ fontSize: '0.8em', marginLeft: '4px', verticalAlign: 'middle' }}>⚠️</span>
-                                )}
-                            </div>
-                        </div>
+                        {openRouterKeys.map((keyItem) => {
+                            const balance = openRouterBalances[keyItem.id];
+                            const isAlert = balance !== null && openRouterThreshold > 0 && balance < openRouterThreshold;
+
+                            return (
+                                <div className="balance-item" key={keyItem.id}>
+                                    <div className="service-name">
+                                        <div className={`service-status-dot ${loadingOpenRouter ? 'loading' : (balance === null ? 'error' : '')}`}></div>
+                                        <span style={{ fontSize: '0.85em', opacity: 0.7, marginRight: '4px' }}>OR:</span>
+                                        <span style={{ maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{keyItem.name}</span>
+                                        {navigateTo && (
+                                            <button
+                                                className="service-settings-btn"
+                                                onClick={() => { navigateTo('settings.api.openrouter'); setIsExpanded(false); }}
+                                                title="Settings"
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="service-balance" style={{ color: isAlert ? '#ff5252' : '#4caf50' }}>
+                                        {loadingOpenRouter ? '...' : (typeof balance === 'number' ? `$${balance.toFixed(4)}` : 'N/A')}
+                                        {isAlert && <span style={{ fontSize: '0.8em', marginLeft: '4px', verticalAlign: 'middle' }}>⚠️</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
 
                         <div className="balance-item">
                             <div className="service-name">
@@ -244,7 +258,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                         const newExpanded = !isExpanded;
                         setIsExpanded(newExpanded);
                         if (newExpanded) {
-                            if (openRouterBalance === null) refreshOpenRouterBalance();
+                            if (Object.values(openRouterBalances).some(b => b === null)) refreshOpenRouterBalance();
                             if (elevenLabsBotBalance === null) refreshElevenLabsBotBalance();
                             if (elevenLabsUnlimBalance === null) refreshElevenLabsUnlimBalance();
                             if (googlerUsage.expiration_date === 0) refreshGooglerUsage();

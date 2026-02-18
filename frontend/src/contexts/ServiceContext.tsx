@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 // @ts-ignore
-import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey, GetVoiceMakerBalance, GetVoiceMakerAPIKey, GetVoiceMakerSavedBalance, SaveVoiceMakerBalance, GetGooglerUsage, GetGooglerAPIKey } from '../../wailsjs/go/main/App';
+import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetOpenRouterKeys, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey, GetVoiceMakerBalance, GetVoiceMakerAPIKey, GetVoiceMakerSavedBalance, SaveVoiceMakerBalance, GetGooglerUsage, GetGooglerAPIKey } from '../../wailsjs/go/main/App';
 import { useLogger } from './LoggerContext';
 
 interface ServiceContextType {
-    openRouterBalance: number | null;
+    openRouterBalances: Record<string, number | null>;
+    openRouterKeys: any[];
     refreshOpenRouterBalance: () => Promise<void>;
     loadingOpenRouter: boolean;
     elevenLabsBotBalance: number | null;
@@ -35,7 +36,8 @@ interface ServiceContextType {
 }
 
 const ServiceContext = createContext<ServiceContextType>({
-    openRouterBalance: null,
+    openRouterBalances: {},
+    openRouterKeys: [],
     refreshOpenRouterBalance: async () => { },
     loadingOpenRouter: false,
     elevenLabsBotBalance: null,
@@ -75,7 +77,8 @@ export const useServices = () => useContext(ServiceContext);
 
 export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { addLog } = useLogger();
-    const [openRouterBalance, setOpenRouterBalance] = useState<number | null>(null);
+    const [openRouterBalances, setOpenRouterBalances] = useState<Record<string, number | null>>({});
+    const [openRouterKeys, setOpenRouterKeys] = useState<any[]>([]);
     const [loadingOpenRouter, setLoadingOpenRouter] = useState(false);
     const [elevenLabsBotBalance, setElevenLabsBotBalance] = useState<number | null>(null);
     const [loadingElevenLabsBot, setLoadingElevenLabsBot] = useState(false);
@@ -103,21 +106,30 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (loadingOpenRouter) return;
 
         setLoadingOpenRouter(true);
-        addLog('INFO', 'Requesting OpenRouter balance update...');
+        addLog('INFO', 'Requesting OpenRouter balance update for all keys...');
         try {
-            const apiKey = await GetOpenRouterAPIKey();
-            if (apiKey) {
-                const credit = await GetOpenRouterCredits(apiKey);
-                const balance = Math.max(0, credit);
-                setOpenRouterBalance(balance);
-                addLog('INFO', `Received OpenRouter balance: $${balance.toFixed(4)}`);
+            const keys = await GetOpenRouterKeys();
+            setOpenRouterKeys(keys || []);
+            if (keys && keys.length > 0) {
+                const newBalances: Record<string, number | null> = {};
+                await Promise.all(keys.map(async (item: any) => {
+                    try {
+                        const credit = await GetOpenRouterCredits(item.key);
+                        newBalances[item.id] = Math.max(0, credit);
+                    } catch (e) {
+                        newBalances[item.id] = null;
+                        addLog('ERROR', `Failed for key ${item.name}: ${String(e)}`);
+                    }
+                }));
+                setOpenRouterBalances(newBalances);
+                addLog('INFO', `Updated ${Object.keys(newBalances).length} OpenRouter balances`);
             } else {
-                setOpenRouterBalance(null);
-                addLog('WARN', 'OpenRouter API Key not found');
+                setOpenRouterBalances({});
+                addLog('WARN', 'No OpenRouter API Keys found');
             }
         } catch (err: any) {
-            console.error("Failed to update balance:", err);
-            addLog('ERROR', `Failed to fetch OpenRouter balance: ${err?.message || String(err)}`);
+            console.error("Failed to update balances:", err);
+            addLog('ERROR', `Failed to fetch OpenRouter balances: ${err?.message || String(err)}`);
         } finally {
             setLoadingOpenRouter(false);
         }
@@ -259,7 +271,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     return (
         <ServiceContext.Provider value={{
-            openRouterBalance,
+            openRouterBalances,
+            openRouterKeys,
             refreshOpenRouterBalance,
             loadingOpenRouter,
             elevenLabsBotBalance,
