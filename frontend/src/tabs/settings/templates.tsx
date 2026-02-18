@@ -76,11 +76,41 @@ export const Templates = () => {
         if (!bulkParam || bulkValue === undefined) return;
 
         for (const tpl of selectedTemplates) {
-            const updatedSettings = {
+            const newSettings = {
                 ...tpl.settings,
                 [bulkParam]: bulkValue
             };
-            await updateTemplate(tpl.id, tpl.name, updatedSettings);
+
+            // Створюємо чистий об'єкт, де залишаємо лише шлях та параметри відповідного типу
+            const cleanSettings: any = {
+                outputPath: newSettings.outputPath || '',
+                sidebarWidth: 320,
+                translateCollapsed: false,
+                rewriteCollapsed: false,
+                apiCollapsed: false,
+                pathCollapsed: false,
+                templatesCollapsed: false,
+            };
+
+            if (tpl.type === 'translate') {
+                cleanSettings.translateModel = newSettings.translateModel;
+                cleanSettings.translatePrompt = newSettings.translatePrompt;
+                cleanSettings.translateTemperature = newSettings.translateTemperature;
+                cleanSettings.translateMaxTokens = newSettings.translateMaxTokens;
+                cleanSettings.translateOpenRouterKeyID = newSettings.translateOpenRouterKeyID;
+                cleanSettings.translateEnabled = newSettings.translateEnabled === undefined ? true : newSettings.translateEnabled;
+                cleanSettings.translatePipelineName = newSettings.translatePipelineName || '';
+            } else {
+                cleanSettings.rewriteModel = newSettings.rewriteModel;
+                cleanSettings.rewritePrompt = newSettings.rewritePrompt;
+                cleanSettings.rewriteTemperature = newSettings.rewriteTemperature;
+                cleanSettings.rewriteMaxTokens = newSettings.rewriteMaxTokens;
+                cleanSettings.rewriteOpenRouterKeyID = newSettings.rewriteOpenRouterKeyID;
+                cleanSettings.rewriteEnabled = newSettings.rewriteEnabled === undefined ? true : newSettings.rewriteEnabled;
+                cleanSettings.rewritePipelineName = newSettings.rewritePipelineName || '';
+            }
+
+            await updateTemplate(tpl.id, tpl.name, cleanSettings);
         }
         setIsBulkEditOpen(false);
         setBulkParam('');
@@ -96,6 +126,7 @@ export const Templates = () => {
             { id: `${prefix}MaxTokens`, label: t('pipeline.max_tokens') },
             { id: `${prefix}Prompt`, label: t('pipeline.system_prompt') },
             { id: `${prefix}OpenRouterKeyID`, label: t('pipeline.group.api') },
+            { id: `${prefix}OutputPath`, label: t('pipeline.group.path') },
         ];
     };
 

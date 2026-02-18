@@ -30,11 +30,14 @@ type PipelineSettings struct {
 	TranslateEnabled         bool    `json:"translateEnabled"`
 	RewriteEnabled           bool    `json:"rewriteEnabled"`
 	ApiCollapsed             bool    `json:"apiCollapsed"`
-	OutputPath               string  `json:"outputPath"`
+	TranslateOutputPath      string  `json:"translateOutputPath"`
+	RewriteOutputPath        string  `json:"rewriteOutputPath"`
 	PathCollapsed            bool    `json:"pathCollapsed"`
 	TranslatePipelineName    string  `json:"translatePipelineName"`
 	RewritePipelineName      string  `json:"rewritePipelineName"`
 	TemplatesCollapsed       bool    `json:"templatesCollapsed"`
+	// Keep outputPath for migration if needed
+	OutputPath string `json:"outputPath"`
 }
 
 type Settings struct {

@@ -71,11 +71,12 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     updated = true;
                 }
 
-                if (!s.outputPath) {
+                if (!s.translateOutputPath || !s.rewriteOutputPath) {
                     try {
                         const def = await GetDefaultVideosPath();
                         if (def) {
-                            s.outputPath = def;
+                            if (!s.translateOutputPath) s.translateOutputPath = s.outputPath || def;
+                            if (!s.rewriteOutputPath) s.rewriteOutputPath = s.outputPath || def;
                             updated = true;
                         }
                     } catch (e) {
@@ -124,9 +125,45 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         );
     };
 
+    const getCleanSettings = (fullSettings: TemplatePipelineSettings, tplType: 'translate' | 'rewrite'): TemplatePipelineSettings => {
+        // Ми залишаємо лише ті поля, які стосуються поточного процесу + загальний шлях
+        const clean: any = {
+            outputPath: fullSettings.outputPath,
+            sidebarWidth: 320,
+            translateCollapsed: false,
+            rewriteCollapsed: false,
+            apiCollapsed: false,
+            pathCollapsed: false,
+            templatesCollapsed: false,
+        };
+
+        if (tplType === 'translate') {
+            clean.translateModel = fullSettings.translateModel;
+            clean.translatePrompt = fullSettings.translatePrompt;
+            clean.translateTemperature = fullSettings.translateTemperature;
+            clean.translateMaxTokens = fullSettings.translateMaxTokens;
+            clean.translateOpenRouterKeyID = fullSettings.translateOpenRouterKeyID;
+            clean.translateEnabled = fullSettings.translateEnabled;
+            clean.translatePipelineName = fullSettings.translatePipelineName;
+            clean.translateOutputPath = fullSettings.translateOutputPath;
+        } else {
+            clean.rewriteModel = fullSettings.rewriteModel;
+            clean.rewritePrompt = fullSettings.rewritePrompt;
+            clean.rewriteTemperature = fullSettings.rewriteTemperature;
+            clean.rewriteMaxTokens = fullSettings.rewriteMaxTokens;
+            clean.rewriteOpenRouterKeyID = fullSettings.rewriteOpenRouterKeyID;
+            clean.rewriteEnabled = fullSettings.rewriteEnabled;
+            clean.rewritePipelineName = fullSettings.rewritePipelineName;
+            clean.rewriteOutputPath = fullSettings.rewriteOutputPath;
+        }
+
+        return clean as TemplatePipelineSettings;
+    };
+
     const handleSaveTemplate = async () => {
         const name = isTranslate ? settings.translatePipelineName : settings.rewritePipelineName;
-        await saveTemplate(type, name, settings);
+        const cleanSettings = getCleanSettings(settings, type);
+        await saveTemplate(type, name, cleanSettings);
     };
 
     const handleConfirmDelete = async () => {
@@ -159,13 +196,13 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         setSettings((prev: any) => ({
             ...prev,
             ...tpl.settings,
-            // We want to keep some local settings like width and sidebar state
+            // Завжди зберігаємо поточний стан інтерфейсу, незалежно від того, що в шаблоні
             sidebarWidth: prev.sidebarWidth,
+            translateCollapsed: prev.translateCollapsed,
+            rewriteCollapsed: prev.rewriteCollapsed,
             apiCollapsed: prev.apiCollapsed,
             pathCollapsed: prev.pathCollapsed,
             templatesCollapsed: prev.templatesCollapsed,
-            translateCollapsed: prev.translateCollapsed,
-            rewriteCollapsed: prev.rewriteCollapsed
         }));
     };
 
@@ -236,7 +273,6 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const tokensValue = isTranslate ? settings.translateMaxTokens : settings.rewriteMaxTokens;
     const promptValue = isTranslate ? settings.translatePrompt : settings.rewritePrompt;
     const selectedApiKeyID = isTranslate ? settings.translateOpenRouterKeyID : settings.rewriteOpenRouterKeyID;
-    const outputPath = settings.outputPath || '';
 
 
     const toggleCollapse = () => {
@@ -257,7 +293,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         try {
             const path = await SelectDirectory();
             if (path) {
-                handleChange('outputPath', path);
+                handleChange(isTranslate ? 'translateOutputPath' : 'rewriteOutputPath', path);
             }
         } catch (err) {
             console.error("Failed to select path:", err);
@@ -512,7 +548,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                         <input
                                             className="settings-input"
                                             style={{ flex: 1, textOverflow: 'ellipsis' }}
-                                            value={outputPath}
+                                            value={isTranslate ? settings?.translateOutputPath || '' : settings?.rewriteOutputPath || ''}
                                             readOnly
                                             placeholder="Виберіть папку..."
                                         />

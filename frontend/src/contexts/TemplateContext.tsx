@@ -20,6 +20,8 @@ export interface PipelineSettings {
     translateEnabled: boolean;
     rewriteEnabled: boolean;
     apiCollapsed: boolean;
+    translateOutputPath: string;
+    rewriteOutputPath: string;
     outputPath: string;
     pathCollapsed: boolean;
     translatePipelineName: string;
