@@ -33,14 +33,19 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Universal Binary
-        run: |
-          wails build -platform darwin/universal -clean
+        run: wails build -platform darwin/universal -clean
 
       - name: Ad-hoc sign
         run: codesign --force --deep --sign - build/bin/soloveyko.app
 
+      - name: Create correct .zip archive
+        run: |
+          # Архівуємо ВСЮ папку .app, а не Contents
+          cd build/bin
+          zip -r ../${{ github.event.repository.name }}-macos-universal.zip *.app
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Soloveyko-macOS
-          path: build/bin/soloveyko.app
+          name: macos-universal-app
+          path: build/*.zip  # Тепер архів буде правильний
