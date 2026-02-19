@@ -15,6 +15,12 @@ const LightbulbIcon = () => (
     </svg>
 );
 
+const VoiceIcon = () => (
+    <svg className="voice-icon" viewBox="0 0 24 24" fill="currentColor" style={{ width: '14px', height: '14px', opacity: 0.7 }}>
+        <path d="M12,2C9.24,2,7,4.24,7,7v5c0,2.76,2.24,5,5,5s5-2.24,5-5V7C17,4.24,14.76,2,12,2z M12,14c-1.1,0-2-0.9-2-2V7 c0-1.1,0.9-2,2-2s2,0.9,2,2v5C14,13.1,13.1,14,12,14z M19,12c0,3.53-2.61,6.43-6,6.92V21h-2v-2.08c-3.39-0.49-6-3.39-6-6.92h2 c0,2.76,2.24,5,5,5s5-2.24,5-5H19z" />
+    </svg>
+);
+
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
     const { tasks, removeTask, clearQueue, startQueue, isProcessing } = useQueue();
@@ -78,6 +84,21 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
 
     const renderTaskItem = (task: QueueTask) => {
         const isExpanded = expandedTaskIds.includes(task.id);
+        const settings = task.settings || {};
+
+        // Визначаємо, чи увімкнено основний етап (переклад/рерайт)
+        let isMainStageEnabled = true;
+        if (task.type === 'translate') {
+            isMainStageEnabled = settings.translateEnabled !== false;
+        } else if (task.type === 'rewrite') {
+            isMainStageEnabled = settings.rewriteEnabled !== false;
+        }
+
+        const isVoiceEnabled = settings.voiceoverEnabled === true;
+
+        const mainLabel = isMainStageEnabled
+            ? (task.type === 'translate' ? t('text.translate') : t('text.rewrite'))
+            : t('text.original');
 
         return (
             <div key={task.id} className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
@@ -87,7 +108,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                 >
                     <div className="task-card-header">
                         <span className={`task-type-badge ${task.type}`}>
-                            {task.type === 'translate' ? t('text.translate') : t('text.rewrite')}
+                            {mainLabel}
                         </span>
                         <button
                             className="remove-task-btn"
@@ -106,18 +127,35 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                     </div>
 
                     <div className="task-stages-list">
-                        <div className={`task-stage-item status-${task.status}`}>
+                        {/* Етап 1: Текст */}
+                        <div className={`task-stage-item status-${task.textStatus}`}>
                             <div className="stage-left">
                                 <LightbulbIcon />
-                                <span>{task.type === 'translate' ? t('text.translate') : t('text.rewrite')}</span>
+                                <span>{mainLabel}</span>
                             </div>
                             <span className="stage-status-text badge-status">
-                                {task.status === 'completed' ? `${task.resultLength || 0} chars` :
-                                    task.status === 'running' ? `${task.progress}%` :
-                                        task.status === 'waiting' ? 'В черзі' :
-                                            task.status === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                {task.textStatus === 'completed' ? `${task.resultLength || 0} chars` :
+                                    task.textStatus === 'running' ? `Processing...` :
+                                        task.textStatus === 'waiting' ? 'В черзі' :
+                                            task.textStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                             </span>
                         </div>
+
+                        {/* Етап 2: Озвучка (якщо увімкнено) */}
+                        {isVoiceEnabled && (
+                            <div className={`task-stage-item status-${task.voiceStatus}`} style={{ marginTop: '4px' }}>
+                                <div className="stage-left">
+                                    <LightbulbIcon />
+                                    <span>{t('text.voiceover')}</span>
+                                </div>
+                                <span className="stage-status-text badge-status">
+                                    {task.voiceStatus === 'completed' ? 'MP3 saved' :
+                                        task.voiceStatus === 'running' ? 'Synthesizing...' :
+                                            task.voiceStatus === 'waiting' ? 'В черзі' :
+                                                task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     {task.status === 'running' && (

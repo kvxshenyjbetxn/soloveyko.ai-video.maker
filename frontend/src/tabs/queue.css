@@ -40,13 +40,19 @@
     display: flex;
     gap: 0;
     transition: gap 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    align-items: stretch;
+    align-items: flex-start;
     max-width: 100%;
+    height: 340px;
+    /* Фіксована висота, щоб не розтягувалося вниз */
+    margin-bottom: 16px;
 }
 
 
 .task-card {
     width: 280px;
+    height: 340px !important;
+    /* Force fixed height */
+    max-height: 340px !important;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-color);
     border-radius: 16px;
@@ -59,6 +65,7 @@
     cursor: pointer;
     flex-shrink: 0;
     z-index: 2;
+    overflow: hidden;
 }
 
 .task-card.active {
@@ -75,6 +82,8 @@
 /* Inline Log Panel */
 .task-inline-log {
     width: 0;
+    height: 340px;
+    /* Співпадає з висотою картки */
     opacity: 0;
     margin-left: 0;
     visibility: hidden;
@@ -91,8 +100,18 @@
     backdrop-filter: blur(10px);
 }
 
+.task-card-wrapper.expanded {
+    height: 340px;
+    margin-bottom: 20px;
+}
+
+.task-card-wrapper.expanded .task-card {
+    height: 100% !important;
+}
+
 .task-card-wrapper.expanded .task-inline-log {
-    width: 500px;
+    width: 600px;
+    height: 100% !important;
     opacity: 1;
     visibility: visible;
     margin-left: 12px;
@@ -262,6 +281,20 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    /* Important for flex-basis issues */
+    padding-right: 4px;
+}
+
+.task-stages-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.task-stages-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
 }
 
 .task-stage-item {

@@ -33,7 +33,8 @@
         "completion_title": "Обработка завершена",
         "completion_message": "Очередь успешно обработана!\nВыполнено задач: {count}\nВремя выполнения: {duration}",
         "completion_ok": "Понятно",
-        "completion_open_folder": "Открыть папку"
+        "completion_open_folder": "Открыть папку",
+        "task_default_name": "Задание"
     },
     "gallery": {
         "title": "Медиа Галерея",
@@ -44,6 +45,7 @@
         "translate": "Перевод",
         "rewrite": "Рерайт",
         "voiceover": "Озвучка",
+        "original": "Оригинал",
         "placeholder": "Начните писать ваш текст здесь... (или перетяните .txt файл сюда)"
     },
     "settings": {

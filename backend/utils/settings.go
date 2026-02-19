@@ -40,12 +40,7 @@ type PipelineSettings struct {
 	TemplatesCollapsed          bool    `json:"templatesCollapsed"`
 	TranslateTemplatesCollapsed bool    `json:"translateTemplatesCollapsed"`
 	RewriteTemplatesCollapsed   bool    `json:"rewriteTemplatesCollapsed"`
-	VoiceoverOpenRouterKeyID    string  `json:"voiceoverOpenRouterKeyID,omitempty"`
 	VoiceoverElevenLabsBotKeyID string  `json:"voiceoverElevenLabsBotKeyID,omitempty"`
-	VoiceoverModel              string  `json:"voiceoverModel,omitempty"`
-	VoiceoverPrompt             string  `json:"voiceoverPrompt,omitempty"`
-	VoiceoverTemperature        float64 `json:"voiceoverTemperature,omitempty"`
-	VoiceoverMaxTokens          int     `json:"voiceoverMaxTokens,omitempty"`
 	VoiceoverCollapsed          bool    `json:"voiceoverCollapsed"`
 	VoiceoverEnabled            bool    `json:"voiceoverEnabled"`
 	VoiceoverOutputPath         string  `json:"voiceoverOutputPath,omitempty"`
@@ -132,8 +127,6 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				RewriteModel:         "google/gemini-2.5-flash",
 				RewriteTemperature:   1.0,
 				RewriteEnabled:       true,
-				VoiceoverModel:       "google/gemini-2.5-flash",
-				VoiceoverTemperature: 1.0,
 				VoiceoverEnabled:     false,
 				SidebarWidth:         320,
 			},
@@ -737,9 +730,6 @@ func (s *SettingsService) GetPipelineSettings() PipelineSettings {
 	}
 	if settings.Pipeline.RewriteTemperature == 0 {
 		settings.Pipeline.RewriteTemperature = 1.0
-	}
-	if settings.Pipeline.VoiceoverTemperature == 0 {
-		settings.Pipeline.VoiceoverTemperature = 1.0
 	}
 	if settings.Pipeline.SidebarWidth == 0 {
 		settings.Pipeline.SidebarWidth = 320

@@ -2,6 +2,7 @@
 import { ProcessTask } from '../../wailsjs/go/main/App';
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react';
 import { useToast } from './ToastContext';
+import { useI18n } from './I18nContext';
 
 export type TaskStatus = 'pending' | 'waiting' | 'running' | 'completed' | 'failed';
 
@@ -13,6 +14,8 @@ export interface QueueTask {
     type: 'translate' | 'rewrite' | 'voiceover';
     content: string;
     status: TaskStatus;
+    textStatus: TaskStatus;
+    voiceStatus: TaskStatus;
     progress: number;
     timestamp: number;
     settings: any;
@@ -23,6 +26,7 @@ export interface QueueTask {
 interface QueueContextType {
     tasks: QueueTask[];
     addTask: (type: 'translate' | 'rewrite' | 'voiceover', content: string, settings: any, name?: string, subName?: string) => void;
+    addTasks: (type: 'translate' | 'rewrite' | 'voiceover', content: string, tasksData: { settings: any, subName?: string }[], name?: string) => void;
     removeTask: (id: string) => void;
     clearQueue: () => void;
     updateTaskStatus: (id: string, status: TaskStatus, progress?: number) => void;
@@ -39,6 +43,7 @@ interface QueueContextType {
 const QueueContext = createContext<QueueContextType | undefined>(undefined);
 
 export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const { t } = useI18n();
     const { showToast } = useToast();
     const [tasks, setTasks] = useState<QueueTask[]>([]);
     const [taskCounter, setTaskCounter] = useState(1);
@@ -56,7 +61,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const addTask = useCallback((type: 'translate' | 'rewrite' | 'voiceover', content: string, settings: any, name?: string, subName?: string) => {
         const currentCount = taskCounterRef.current;
-        const folderName = name?.trim() || `Task ${currentCount}`;
+        const baseName = t('queue.task_default_name') || 'Task';
+        const folderName = name?.trim() || `${baseName} ${currentCount}`;
         const displayName = subName ? `${folderName} - ${subName}` : folderName;
 
         const newTask: QueueTask = {
@@ -67,6 +73,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             type,
             content,
             status: 'pending',
+            textStatus: 'pending',
+            voiceStatus: 'pending',
             progress: 0,
             timestamp: Date.now(),
             settings,
@@ -76,6 +84,39 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setTasks(prev => [...prev, newTask]);
 
         // Оновлюємо реф та стан для майбутніх завдань
+        taskCounterRef.current += 1;
+        setTaskCounter(taskCounterRef.current);
+    }, []);
+
+    const addTasks = useCallback((type: 'translate' | 'rewrite' | 'voiceover', content: string, tasksData: { settings: any, subName?: string }[], name?: string) => {
+        if (tasksData.length === 0) return;
+
+        const currentCount = taskCounterRef.current;
+        const baseName = t('queue.task_default_name') || 'Task';
+        const folderName = name?.trim() || `${baseName} ${currentCount}`;
+
+        const newTasks: QueueTask[] = tasksData.map(data => {
+            const displayName = data.subName ? `${folderName} - ${data.subName}` : folderName;
+            return {
+                id: Math.random().toString(36).substr(2, 9),
+                name: displayName,
+                folderName: folderName,
+                subName: data.subName || "",
+                type,
+                content,
+                status: 'pending',
+                textStatus: 'pending',
+                voiceStatus: 'pending',
+                progress: 0,
+                timestamp: Date.now(),
+                settings: data.settings,
+                taskNumber: currentCount
+            };
+        });
+
+        setTasks(prev => [...prev, ...newTasks]);
+
+        // Оновлюємо лічильник один раз для всієї пачки завдань
         taskCounterRef.current += 1;
         setTaskCounter(taskCounterRef.current);
     }, []);
@@ -90,7 +131,24 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const updateTaskStatus = useCallback((id: string, status: TaskStatus, progress?: number, resultLength?: number) => {
         setTasks(prev => prev.map(t =>
-            t.id === id ? { ...t, status, progress: progress ?? t.progress, resultLength: resultLength ?? t.resultLength } : t
+            t.id === id ? {
+                ...t,
+                status,
+                progress: progress ?? t.progress,
+                resultLength: resultLength ?? t.resultLength,
+                // Коли завдання завершено або впало, оновлюємо і стейджі для лампочок
+                textStatus: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : (status === 'waiting' ? 'waiting' : t.textStatus)),
+                voiceStatus: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : (status === 'waiting' ? 'waiting' : t.voiceStatus))
+            } : t
+        ));
+    }, []);
+
+    const updateStageStatus = useCallback((id: string, stage: 'text' | 'voice', status: TaskStatus) => {
+        setTasks(prev => prev.map(t =>
+            t.id === id ? {
+                ...t,
+                [stage === 'text' ? 'textStatus' : 'voiceStatus']: status
+            } : t
         ));
     }, []);
 
@@ -157,15 +215,22 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         // @ts-ignore
         if (window.runtime) {
             // @ts-ignore
-            const unsubscribe = window.runtime.EventsOn("taskStatus", (id: string, status: string, progress: number) => {
+            const unsubStatus = window.runtime.EventsOn("taskStatus", (id: string, status: string, progress: number) => {
                 updateTaskStatus(id, status as TaskStatus, progress);
             });
-            return () => unsubscribe();
+            // @ts-ignore
+            const unsubStage = window.runtime.EventsOn("stageStatus", (id: string, stage: string, status: string) => {
+                updateStageStatus(id, stage as 'text' | 'voice', status as TaskStatus);
+            });
+            return () => {
+                unsubStatus();
+                unsubStage();
+            };
         }
-    }, [updateTaskStatus]);
+    }, [updateTaskStatus, updateStageStatus]);
 
     return (
-        <QueueContext.Provider value={{ tasks, addTask, removeTask, clearQueue, updateTaskStatus, startQueue, isProcessing, completionModal, closeCompletionModal }}>
+        <QueueContext.Provider value={{ tasks, addTask, addTasks, removeTask, clearQueue, updateTaskStatus, startQueue, isProcessing, completionModal, closeCompletionModal }}>
             {children}
         </QueueContext.Provider>
     );

@@ -28,12 +28,7 @@ export interface PipelineSettings {
     pathCollapsed: boolean;
     translatePipelineName: string;
     rewritePipelineName: string;
-    voiceoverModel: string;
-    voiceoverPrompt: string;
-    voiceoverTemperature: number;
-    voiceoverMaxTokens: number;
     voiceoverCollapsed: boolean;
-    voiceoverOpenRouterKeyID: string;
     voiceoverElevenLabsBotKeyID: string;
     voiceoverEnabled: boolean;
     voiceoverOutputPath: string;

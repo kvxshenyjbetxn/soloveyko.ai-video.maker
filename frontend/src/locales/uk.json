@@ -35,7 +35,8 @@
     "completion_title": "Обробку завершено",
     "completion_message": "Черга успішно оброблена!\nВиконано завдань: {count}\nЧас виконання: {duration}",
     "completion_ok": "Зрозуміло",
-    "completion_open_folder": "Відкрити папку"
+    "completion_open_folder": "Відкрити папку",
+    "task_default_name": "Завдання"
   },
   "gallery": {
     "title": "Медіа Галерея",
@@ -46,6 +47,7 @@
     "translate": "Переклад",
     "rewrite": "Рерайт",
     "voiceover": "Озвучка",
+    "original": "Оригінал",
     "placeholder": "Почніть писати ваш текст тут... (або перетягніть .txt файл сюди)"
   },
   "settings": {

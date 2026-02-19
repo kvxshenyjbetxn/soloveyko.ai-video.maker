@@ -33,7 +33,8 @@
         "completion_title": "Processing Completed",
         "completion_message": "Queue successfully processed!\nTasks completed: {count}\nDuration: {duration}",
         "completion_ok": "Got it",
-        "completion_open_folder": "Open Folder"
+        "completion_open_folder": "Open Folder",
+        "task_default_name": "Task"
     },
     "gallery": {
         "title": "Media Gallery",
@@ -44,6 +45,7 @@
         "translate": "Translate",
         "rewrite": "Rewrite",
         "voiceover": "Voiceover",
+        "original": "Original",
         "placeholder": "Start writing your text here... (or drag and drop a .txt file)"
     },
     "settings": {
