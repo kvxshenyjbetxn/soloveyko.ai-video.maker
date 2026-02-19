@@ -46,6 +46,10 @@ type PipelineSettings struct {
 	VoiceoverTemplatesCollapsed   bool    `json:"voiceoverTemplatesCollapsed"`
 	VoiceoverService              string  `json:"voiceoverService,omitempty"`
 	VoiceoverTemplate             string  `json:"voiceoverTemplate,omitempty"`
+	VoiceoverVoiceMakerKeyID      string  `json:"voiceoverVoiceMakerKeyID,omitempty"`
+	VoiceMakerVoiceID             string  `json:"voiceMakerVoiceID,omitempty"`
+	VoiceMakerLanguageCode        string  `json:"voiceMakerLanguageCode,omitempty"`
+	VoiceMakerCharLimit           int     `json:"voiceMakerCharLimit,omitempty"`
 	ElevenLabsUnlimVoiceID        string  `json:"elevenLabsUnlimVoiceID,omitempty"`
 	ElevenLabsUnlimStability      float64 `json:"elevenLabsUnlimStability,omitempty"`
 	ElevenLabsUnlimSimilarity     float64 `json:"elevenLabsUnlimSimilarity,omitempty"`
@@ -80,6 +84,7 @@ type Settings struct {
 	ElevenLabsUnlimKeys           []NamedAPIKey    `json:"elevenLabsUnlimKeys"`
 	ElevenLabsUAKeys              []NamedAPIKey    `json:"elevenLabsUAKeys"`
 	VoiceMakerAPIKey              string           `json:"voiceMakerAPIKey"`
+	VoiceMakerKeys                []NamedAPIKey    `json:"voiceMakerKeys"`
 	VoiceMakerBalance             float64          `json:"voiceMakerBalance"`
 	GooglerAPIKey                 string           `json:"googlerAPIKey"`
 	ElevenLabsImageAPIKey         string           `json:"elevenLabsImageAPIKey"`
@@ -218,6 +223,16 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				ID:   "default",
 				Name: "Default",
 				Key:  settings.ElevenLabsUAAPIKey,
+			},
+		}
+	}
+	// Міграція для VoiceMakerKeys
+	if len(settings.VoiceMakerKeys) == 0 && settings.VoiceMakerAPIKey != "" {
+		settings.VoiceMakerKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  settings.VoiceMakerAPIKey,
 			},
 		}
 	}
@@ -661,6 +676,41 @@ func (s *SettingsService) SetVoiceMakerAPIKey(apiKey string) error {
 	}
 
 	settings.VoiceMakerAPIKey = apiKey
+	// Оновлюємо також іменовані ключі, якщо вони порожні
+	if len(settings.VoiceMakerKeys) == 0 {
+		settings.VoiceMakerKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  apiKey,
+			},
+		}
+	}
+	return s.SaveSettings(settings)
+}
+
+// GetVoiceMakerKeys повертає список іменованих ключів VoiceMaker
+func (s *SettingsService) GetVoiceMakerKeys() []NamedAPIKey {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []NamedAPIKey{}
+	}
+	return settings.VoiceMakerKeys
+}
+
+// SetVoiceMakerKeys зберігає список іменованих ключів VoiceMaker
+func (s *SettingsService) SetVoiceMakerKeys(keys []NamedAPIKey) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.VoiceMakerKeys = keys
+	// Оновлюємо старий ключ для сумісності
+	if len(keys) > 0 {
+		settings.VoiceMakerAPIKey = keys[0].Key
+	}
+
 	return s.SaveSettings(settings)
 }
 
@@ -861,6 +911,9 @@ func (s *SettingsService) GetPipelineSettings() PipelineSettings {
 		settings.Pipeline.SidebarWidth = 320
 		settings.Pipeline.TranslateEnabled = true
 		settings.Pipeline.RewriteEnabled = true
+	}
+	if settings.Pipeline.VoiceMakerCharLimit <= 0 {
+		settings.Pipeline.VoiceMakerCharLimit = 3000 // Дефолтне значення
 	}
 	return settings.Pipeline
 }

@@ -14,7 +14,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         elevenLabsBotBalances, elevenLabsBotKeys, loadingElevenLabsBot, refreshElevenLabsBotBalance,
         elevenLabsUnlimBalances, elevenLabsUnlimKeys, loadingElevenLabsUnlim, refreshElevenLabsUnlimBalance,
         elevenLabsUABalances, elevenLabsUAKeys, loadingElevenLabsUA, refreshElevenLabsUABalance,
-        voiceMakerBalance, loadingVoiceMaker, refreshVoiceMakerBalance,
+        voiceMakerBalances, voiceMakerKeys, loadingVoiceMaker, refreshVoiceMakerBalance,
         googlerUsage, loadingGoogler, refreshGooglerUsage,
         elevenLabsBotThreshold,
         elevenLabsUnlimThreshold,
@@ -52,7 +52,9 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         isElevenLabsBotAlert ||
         isElevenLabsUnlimAlert ||
         isElevenLabsUAAlert ||
-        (voiceMakerBalance !== null && voiceMakerThreshold > 0 && voiceMakerBalance < voiceMakerThreshold) ||
+        Object.entries(voiceMakerBalances).some(([id, balance]) =>
+            balance !== null && voiceMakerThreshold > 0 && balance < voiceMakerThreshold
+        ) ||
         isOpenRouterAlert ||
         isGooglerVideoAlert ||
         isGooglerImageAlert
@@ -69,7 +71,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
             Object.values(elevenLabsBotBalances).some(b => b !== null) ||
             Object.values(elevenLabsUnlimBalances).some(b => b !== null) ||
             Object.values(elevenLabsUABalances).some(b => b !== null) ||
-            voiceMakerBalance !== null ||
+            Object.values(voiceMakerBalances).some(b => b !== null) ||
             googlerUsage.expiration_date !== 0;
 
         if (!hasAnyBalance) return '#757575'; // Grey
@@ -187,29 +189,33 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                         })}
 
 
-                        <div className="balance-item">
-                            <div className="service-name">
-                                <div className={`service-status-dot ${loadingVoiceMaker ? 'loading' : (voiceMakerBalance === null ? 'error' : '')}`}></div>
-                                {t('balanceMonitor.voicemaker') || 'VoiceMaker'}
-                                {navigateTo && (
-                                    <button
-                                        className="service-settings-btn"
-                                        onClick={() => { navigateTo('settings.api.voice.voicemaker'); setIsExpanded(false); }}
-                                        title="Settings"
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                                    </button>
-                                )}
-                            </div>
-                            <div className="service-balance" style={{
-                                color: (voiceMakerBalance !== null && voiceMakerThreshold > 0 && voiceMakerBalance < voiceMakerThreshold) ? '#ff5252' : '#4caf50'
-                            }}>
-                                {loadingVoiceMaker ? '...' : (voiceMakerBalance !== null ? voiceMakerBalance.toLocaleString() : 'N/A')}
-                                {voiceMakerBalance !== null && voiceMakerThreshold > 0 && voiceMakerBalance < voiceMakerThreshold && (
-                                    <span style={{ fontSize: '0.8em', marginLeft: '4px', verticalAlign: 'middle' }}>⚠️</span>
-                                )}
-                            </div>
-                        </div>
+                        {voiceMakerKeys.map((keyItem) => {
+                            const balance = voiceMakerBalances[keyItem.id];
+                            const isAlert = balance !== null && voiceMakerThreshold > 0 && balance < voiceMakerThreshold;
+
+                            return (
+                                <div className="balance-item" key={keyItem.id}>
+                                    <div className="service-name">
+                                        <div className={`service-status-dot ${loadingVoiceMaker ? 'loading' : (balance === null ? 'error' : '')}`}></div>
+                                        <span style={{ fontSize: '0.7em', opacity: 0.5, marginRight: '4px', textTransform: 'uppercase' }}>V-Maker:</span>
+                                        <span style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{keyItem.name}</span>
+                                        {navigateTo && (
+                                            <button
+                                                className="service-settings-btn"
+                                                onClick={() => { navigateTo('settings.api.voice.voicemaker'); setIsExpanded(false); }}
+                                                title="Settings"
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="service-balance" style={{ color: isAlert ? '#ff5252' : '#4caf50' }}>
+                                        {loadingVoiceMaker ? '...' : (typeof balance === 'number' ? balance.toLocaleString() : 'N/A')}
+                                        {isAlert && <span style={{ fontSize: '0.8em', marginLeft: '4px', verticalAlign: 'middle' }}>⚠️</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
 
                         <div className="balance-item" style={{ height: 'auto', flexDirection: 'column', alignItems: 'flex-start', gap: '4px', padding: '8px 0' }}>
                             <div className="service-name" style={{ marginBottom: '2px' }}>
@@ -287,6 +293,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                             if (Object.values(elevenLabsBotBalances).some(b => b === null)) refreshElevenLabsBotBalance();
                             if (Object.values(elevenLabsUnlimBalances).some(b => b === null)) refreshElevenLabsUnlimBalance();
                             if (Object.values(elevenLabsUABalances).some(b => b === null)) refreshElevenLabsUABalance();
+                            if (Object.values(voiceMakerBalances).some(b => b === null)) refreshVoiceMakerBalance();
                             if (googlerUsage.expiration_date === 0) refreshGooglerUsage();
                         }
                     }}

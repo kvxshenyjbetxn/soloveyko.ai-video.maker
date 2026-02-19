@@ -10,35 +10,58 @@ export interface PipelineSettings {
     translateMaxTokens: number;
     translateCollapsed: boolean;
     translateOpenRouterKeyID: string;
-    translateElevenLabsBotKeyID: string;
+    translateEnabled: boolean;
+    translateOutputPath: string;
+    translatePipelineName: string;
+    translateTemplatesCollapsed: boolean;
+    translateControlEnabled: boolean;
+
     rewriteModel: string;
     rewritePrompt: string;
     rewriteTemperature: number;
     rewriteMaxTokens: number;
     rewriteCollapsed: boolean;
     rewriteOpenRouterKeyID: string;
-    rewriteElevenLabsBotKeyID: string;
-    sidebarWidth: number;
-    translateEnabled: boolean;
     rewriteEnabled: boolean;
-    apiCollapsed: boolean;
-    translateOutputPath: string;
     rewriteOutputPath: string;
-    outputPath: string;
-    pathCollapsed: boolean;
-    translatePipelineName: string;
     rewritePipelineName: string;
-    voiceoverCollapsed: boolean;
-    voiceoverElevenLabsBotKeyID: string;
-    voiceoverEnabled: boolean;
-    voiceoverOutputPath: string;
-    voiceoverPipelineName: string;
-    templatesCollapsed: boolean;
-    translateTemplatesCollapsed: boolean;
     rewriteTemplatesCollapsed: boolean;
-    voiceoverTemplatesCollapsed: boolean;
+
+    voiceoverEnabled: boolean;
     voiceoverService: string;
     voiceoverTemplate: string;
+    voiceoverElevenLabsBotKeyID: string;
+    voiceoverElevenLabsUnlimKeyID: string;
+    voiceoverElevenLabsUAKeyID: string;
+    voiceoverVoiceMakerKeyID: string;
+    voiceoverOutputPath: string;
+    voiceoverPipelineName: string;
+    voiceoverTemplatesCollapsed: boolean;
+    voiceoverCollapsed: boolean;
+
+    voiceMakerVoiceID: string;
+    voiceMakerLanguageCode: string;
+    voiceMakerCharLimit: number;
+
+    elevenLabsUnlimVoiceID: string;
+    elevenLabsUnlimStability: number;
+    elevenLabsUnlimSimilarity: number;
+    elevenLabsUnlimStyle: number;
+    elevenLabsUnlimSpeakerBoost: boolean;
+
+    elevenLabsUAVoiceID: string;
+    elevenLabsUAStability: number;
+    elevenLabsUASimilarity: number;
+    elevenLabsUAStyle: number;
+    elevenLabsUASpeakerBoost: boolean;
+    elevenLabsUAModel: string;
+
+    sidebarWidth: number;
+    apiCollapsed: boolean;
+    pathCollapsed: boolean;
+    templatesCollapsed: boolean;
+    controlCollapsed: boolean;
+    outputPath: string;
 }
 
 export interface PipelineTemplate {

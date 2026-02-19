@@ -5,10 +5,12 @@ import { useQueue } from '../contexts/QueueContext';
 import { useServices } from '../contexts/ServiceContext';
 import { useTemplates, PipelineSettings as TemplatePipelineSettings } from '../contexts/TemplateContext';
 // @ts-ignore
-import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotKeys, GetElevenLabsBotVoiceTemplates, GetElevenLabsUnlimKeys, GetElevenLabsUAKeys } from '../../wailsjs/go/main/App';
+import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices } from '../../wailsjs/go/main/App';
+import voicemakerVoicesData from '../assets/voicemaker_voices.json';
 
 import { TaskNameModal } from './TaskNameModal';
 import { ConfirmModal } from './ConfirmModal';
+import SearchableSelect from './SearchableSelect';
 
 interface PipelineSidebarProps {
     type: 'translate' | 'rewrite' | 'voiceover';
@@ -21,7 +23,7 @@ interface PipelineSidebarProps {
 export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, onToggle, content, setCurrentPath }) => {
     const { t } = useI18n();
     const { addTask, addTasks } = useQueue();
-    const { openRouterKeys } = useServices();
+    const { openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys } = useServices();
     const [settings, setSettings] = useState<any>(null);
     const [models, setModels] = useState<string[]>([]);
     const [isResizing, setIsResizing] = useState(false);
@@ -31,8 +33,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const { templates, saveTemplate, removeTemplate, selectedTemplateIds, setSelectedTemplateIds } = useTemplates();
     const [voiceTemplates, setVoiceTemplates] = useState<string[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
-    const [elevenLabsUnlimKeys, setElevenLabsUnlimKeys] = useState<any[]>([]);
-    const [elevenLabsUAKeys, setElevenLabsUAKeys] = useState<any[]>([]);
+    const [voiceMakerVoices, setVoiceMakerVoices] = useState<any[]>([]);
 
     const fetchVoiceTemplates = async (keyID?: string) => {
         const id = keyID || settings?.voiceoverElevenLabsBotKeyID;
@@ -40,14 +41,62 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
         setLoadingTemplates(true);
         try {
-            const keys = await GetElevenLabsBotKeys();
-            const keyObj = keys.find((k: any) => k.id === id);
+            const keyObj = elevenLabsBotKeys.find((k: any) => k.id === id);
             if (keyObj) {
                 const results = await GetElevenLabsBotVoiceTemplates(keyObj.key);
                 setVoiceTemplates(results || []);
             }
         } catch (err) {
             console.error("Failed to fetch templates:", err);
+        } finally {
+            setLoadingTemplates(false);
+        }
+    };
+
+    const normalizeVoices = (data: any[]) => {
+        if (!data || data.length === 0) return [];
+        // Check if it's the new grouped format
+        if (data[0].Voices && Array.isArray(data[0].Voices)) {
+            const flat: any[] = [];
+            data.forEach((langGroup: any) => {
+                langGroup.Voices.forEach((voiceId: string) => {
+                    flat.push({
+                        VoiceId: voiceId,
+                        LanguageName: langGroup.Language,
+                        LanguageCode: langGroup.LanguageCode || 'multi-lang',
+                        VoiceWebname: voiceId.split('-').pop() || voiceId,
+                        Engine: voiceId.startsWith('ai') ? 'neural' : 'standard'
+                    });
+                });
+            });
+            return flat;
+        }
+        return data;
+    };
+
+    const fetchVoiceMakerVoices = async (keyID?: string) => {
+        const id = keyID || settings?.voiceoverVoiceMakerKeyID;
+        if (!id) {
+            setVoiceMakerVoices(normalizeVoices(voicemakerVoicesData || []));
+            return;
+        }
+
+        setLoadingTemplates(true);
+        try {
+            const keyObj = voiceMakerKeys.find((k: any) => k.id === id);
+            if (keyObj) {
+                const results = await GetVoiceMakerVoices(keyObj.key);
+                if (results && results.length > 0) {
+                    setVoiceMakerVoices(normalizeVoices(results));
+                } else {
+                    setVoiceMakerVoices(normalizeVoices(voicemakerVoicesData || []));
+                }
+            } else {
+                setVoiceMakerVoices(normalizeVoices(voicemakerVoicesData || []));
+            }
+        } catch (err) {
+            console.error("Failed to fetch VoiceMaker voices:", err);
+            setVoiceMakerVoices(normalizeVoices(voicemakerVoicesData || []));
         } finally {
             setLoadingTemplates(false);
         }
@@ -88,21 +137,24 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     }
                 }
 
-                const botKeys = await GetElevenLabsBotKeys();
-                if (botKeys && botKeys.length > 0) {
+                if (elevenLabsBotKeys.length > 0) {
                     if (!s.voiceoverElevenLabsBotKeyID) {
-                        s.voiceoverElevenLabsBotKeyID = botKeys[0].id;
+                        s.voiceoverElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
                         updated = true;
                     }
                 }
 
-                const unlimKeys = await GetElevenLabsUnlimKeys();
-                setElevenLabsUnlimKeys(unlimKeys || []);
-                const uaKeys = await GetElevenLabsUAKeys();
-                setElevenLabsUAKeys(uaKeys || []);
-                if (uaKeys && uaKeys.length > 0) {
+                // Завантажуємо ключі VoiceMaker
+                if (voiceMakerKeys.length > 0) {
+                    if (!s.voiceoverVoiceMakerKeyID) {
+                        s.voiceoverVoiceMakerKeyID = voiceMakerKeys[0].id;
+                        updated = true;
+                    }
+                }
+
+                if (elevenLabsUAKeys.length > 0) {
                     if (!s.voiceoverElevenLabsUAKeyID) {
-                        s.voiceoverElevenLabsUAKeyID = uaKeys[0].id;
+                        s.voiceoverElevenLabsUAKeyID = elevenLabsUAKeys[0].id;
                         updated = true;
                     }
                 }
@@ -170,9 +222,12 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 setSettings(s);
                 lastSavedRef.current = JSON.stringify(s);
 
-                // Завантажуємо шаблони голосів, якщо обрано ElevenLabs Bot
+                // Завантажуємо шаблони голосів, якщо обрано ElevenLabs Bot або VoiceMaker
                 if (s.voiceoverService === 'elevenlabsbot' && s.voiceoverElevenLabsBotKeyID) {
                     setTimeout(() => fetchVoiceTemplates(s.voiceoverElevenLabsBotKeyID), 0);
+                }
+                if (s.voiceoverService === 'voicemaker') {
+                    setTimeout(() => fetchVoiceMakerVoices(s.voiceoverVoiceMakerKeyID), 0);
                 }
             } catch (err) {
                 console.error("Failed to initialize sidebar:", err);
@@ -229,7 +284,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             'elevenLabsUnlimVoiceID', 'elevenLabsUnlimStability', 'elevenLabsUnlimSimilarity',
             'elevenLabsUnlimStyle', 'elevenLabsUnlimSpeakerBoost',
             'elevenLabsUAVoiceID', 'elevenLabsUAStability', 'elevenLabsUASimilarity',
-            'elevenLabsUAStyle', 'elevenLabsUASpeakerBoost', 'elevenLabsUAModel'
+            'elevenLabsUAStyle', 'elevenLabsUASpeakerBoost', 'elevenLabsUAModel',
+            'voiceoverVoiceMakerKeyID', 'voiceMakerVoiceID', 'voiceMakerLanguageCode', 'voiceMakerCharLimit'
         ];
 
         voiceoverFields.forEach(field => {
@@ -401,7 +457,6 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const promptValue = isTranslate ? settings.translatePrompt : (isRewrite ? settings.rewritePrompt : '');
     const selectedApiKeyID = isTranslate ? settings.translateOpenRouterKeyID : (isRewrite ? settings.rewriteOpenRouterKeyID : '');
     const selectedElevenLabsBotKeyID = isTranslate ? settings.translateElevenLabsBotKeyID : (isRewrite ? settings.rewriteElevenLabsBotKeyID : settings.voiceoverElevenLabsBotKeyID);
-    const { elevenLabsBotKeys } = useServices();
 
 
     const toggleCollapse = () => {
@@ -795,6 +850,38 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                         </option>
                                     </select>
                                 </div>
+
+                                <div className="settings-control">
+                                    <label className="settings-label">VoiceMaker Key</label>
+                                    <select
+                                        className="settings-select"
+                                        value={settings.voiceoverVoiceMakerKeyID}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === "MANAGE_KEYS") {
+                                                if (setCurrentPath) {
+                                                    setCurrentPath('settings.api.voice.voicemaker');
+                                                }
+                                                return;
+                                            }
+                                            handleChange('voiceoverVoiceMakerKeyID', val);
+                                            if (settings.voiceoverService === 'voicemaker') {
+                                                fetchVoiceMakerVoices(val);
+                                            }
+                                        }}
+                                    >
+                                        {voiceMakerKeys.length === 0 ? (
+                                            <option value="">{t('api.openrouterSettings.noKeys')}</option>
+                                        ) : (
+                                            voiceMakerKeys.map(k => (
+                                                <option key={k.id} value={k.id}>{k.name}</option>
+                                            ))
+                                        )}
+                                        <option value="MANAGE_KEYS" style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                                            ⚙️ {t('tabs.settings')}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1021,6 +1108,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                             handleChange('voiceoverService', val);
                                             if (val === 'elevenlabsbot') {
                                                 fetchVoiceTemplates();
+                                            } else if (val === 'voicemaker') {
+                                                fetchVoiceMakerVoices();
                                             }
                                         }}
                                     >
@@ -1244,10 +1333,71 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                         </div>
                                     </>
                                 )}
+
+                                {settings.voiceoverService === 'voicemaker' && (
+                                    <>
+                                        <div className="settings-control">
+                                            <label className="settings-label">{t('pipeline.voiceover.template') || 'Голос'}</label>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <SearchableSelect
+                                                    options={(voiceMakerVoices || []).map(v => ({
+                                                        value: v.VoiceId,
+                                                        label: v.VoiceWebname,
+                                                        subLabel: v.LanguageName
+                                                    }))}
+                                                    value={settings.voiceMakerVoiceID}
+                                                    onChange={(val) => {
+                                                        const vInfo = voiceMakerVoices.find(v => v.VoiceId === val);
+                                                        setSettings((prev: any) => ({
+                                                            ...prev,
+                                                            voiceMakerVoiceID: val,
+                                                            voiceMakerLanguageCode: vInfo?.LanguageCode || 'multi-lang'
+                                                        }));
+                                                    }}
+                                                    loading={loadingTemplates}
+                                                    placeholder="Виберіть голос..."
+                                                    searchPlaceholder={t('common.search') || 'Пошук...'}
+                                                />
+                                                <button
+                                                    className="premium-btn-sm"
+                                                    style={{ padding: '0 10px', height: '32px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                    onClick={() => fetchVoiceMakerVoices()}
+                                                    disabled={loadingTemplates}
+                                                >
+                                                    <svg
+                                                        className={loadingTemplates ? 'animate-spin' : ''}
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        width="14" height="14"
+                                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                                    >
+                                                        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.83 6.72 2.24" />
+                                                        <polyline points="21 3 21 9 15 9" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="settings-control">
+                                            <label className="settings-label">Max Chars per Request</label>
+                                            <div className="settings-slider-container">
+                                                <input
+                                                    type="range"
+                                                    className="settings-slider"
+                                                    min="500"
+                                                    max="10000"
+                                                    step="100"
+                                                    value={settings.voiceMakerCharLimit ?? 3000}
+                                                    style={{ '--range-progress': `${((settings.voiceMakerCharLimit ?? 3000) - 500) / 9500 * 100}%` } as React.CSSProperties}
+                                                    onChange={(e) => handleChange('voiceMakerCharLimit', parseInt(e.target.value))}
+                                                />
+                                                <span className="settings-slider-value">{settings.voiceMakerCharLimit ?? 3000}</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
-
                 </div>
 
                 <div className="pipeline-sidebar-footer">

@@ -102,6 +102,9 @@
         "elevenlabsuaSettings": {
             "totalBalance": "Общий баланс"
         },
+        "voicemakerSettings": {
+            "totalBalance": "Общий баланс (символов)"
+        },
         "pollinationsSettings": {
             "apikey": "API Ключ (Необязательно)",
             "models": "Модели",

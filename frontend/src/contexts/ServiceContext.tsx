@@ -20,7 +20,8 @@ interface ServiceContextType {
     elevenLabsUAKeys: any[];
     refreshElevenLabsUABalance: () => Promise<void>;
     loadingElevenLabsUA: boolean;
-    voiceMakerBalance: number | null;
+    voiceMakerBalances: Record<string, number | null>;
+    voiceMakerKeys: any[];
     refreshVoiceMakerBalance: () => Promise<void>;
     loadingVoiceMaker: boolean;
     googlerUsage: any;
@@ -60,7 +61,8 @@ const ServiceContext = createContext<ServiceContextType>({
     elevenLabsUAKeys: [],
     refreshElevenLabsUABalance: async () => { },
     loadingElevenLabsUA: false,
-    voiceMakerBalance: null,
+    voiceMakerBalances: {},
+    voiceMakerKeys: [],
     refreshVoiceMakerBalance: async () => { },
     loadingVoiceMaker: false,
     googlerUsage: {
@@ -105,7 +107,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [elevenLabsUABalances, setElevenLabsUABalances] = useState<Record<string, number | null>>({});
     const [elevenLabsUAKeys, setElevenLabsUAKeys] = useState<any[]>([]);
     const [loadingElevenLabsUA, setLoadingElevenLabsUA] = useState(false);
-    const [voiceMakerBalance, setVoiceMakerBalance] = useState<number | null>(null);
+    const [voiceMakerBalances, setVoiceMakerBalances] = useState<Record<string, number | null>>({});
+    const [voiceMakerKeys, setVoiceMakerKeys] = useState<any[]>([]);
     const [loadingVoiceMaker, setLoadingVoiceMaker] = useState(false);
     const [googlerUsage, setGooglerUsage] = useState<any>({
         account_limits: { video_generation_threads_allowed: 0, img_generation_threads_allowed: 0, video_gen_per_hour_limit: 0, img_gen_per_hour_limit: 0, prompt_tokens_per_hour_limit: 0 },
@@ -237,6 +240,7 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             refreshElevenLabsBotBalance(),
             refreshElevenLabsUnlimBalance(),
             refreshElevenLabsUABalance(),
+            refreshVoiceMakerBalance(),
             refreshGooglerUsage()
         ]);
     };
@@ -246,14 +250,7 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!hasFetchedRef.current) {
             hasFetchedRef.current = true;
 
-            // Завантажуємо збережений баланс VoiceMaker
-            const loadVoiceMakerBalance = async () => {
-                const savedBalance = await GetVoiceMakerSavedBalance();
-                if (savedBalance > 0) {
-                    setVoiceMakerBalance(savedBalance);
-                }
-            };
-            loadVoiceMakerBalance();
+            // refreshAllBalances calls refreshVoiceMakerBalance
 
             // Завантажуємо пороги попередження
             GetElevenLabsBotAlertThreshold().then(setElevenLabsBotThreshold);
@@ -272,17 +269,27 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const refreshVoiceMakerBalance = async () => {
         if (loadingVoiceMaker) return;
-
         setLoadingVoiceMaker(true);
         try {
-            const apiKey = await GetVoiceMakerAPIKey();
-            if (apiKey) {
-                const balance = await GetVoiceMakerBalance(apiKey);
-                setVoiceMakerBalance(balance);
-                await SaveVoiceMakerBalance(balance); // Зберігаємо в налаштування
+            // @ts-ignore
+            const { GetVoiceMakerKeys } = window.go.main.App;
+            const keys = await GetVoiceMakerKeys();
+            setVoiceMakerKeys(keys || []);
+
+            if (keys && keys.length > 0) {
+                const newBalances: Record<string, number | null> = {};
+                await Promise.all(keys.map(async (item: any) => {
+                    try {
+                        const balance = await GetVoiceMakerBalance(item.key);
+                        newBalances[item.id] = balance;
+                    } catch (e) {
+                        newBalances[item.id] = null;
+                    }
+                }));
+                setVoiceMakerBalances(newBalances);
             } else {
-                setVoiceMakerBalance(null);
-                addLog('WARN', 'VoiceMaker API Key not found');
+                setVoiceMakerBalances({});
+                addLog('WARN', 'No VoiceMaker API Keys found');
             }
         } catch (err: any) {
             console.error("Failed to update VoiceMaker balance:", err);
@@ -330,7 +337,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             elevenLabsUAKeys,
             refreshElevenLabsUABalance,
             loadingElevenLabsUA,
-            voiceMakerBalance,
+            voiceMakerBalances,
+            voiceMakerKeys,
             refreshVoiceMakerBalance,
             loadingVoiceMaker,
             googlerUsage,

@@ -102,6 +102,9 @@
         "elevenlabsuaSettings": {
             "totalBalance": "Total Balance"
         },
+        "voicemakerSettings": {
+            "totalBalance": "Total Balance (characters)"
+        },
         "pollinationsSettings": {
             "apikey": "API Key (Optional)",
             "models": "Models",

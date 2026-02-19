@@ -175,12 +175,15 @@
 
 .pipeline-stage-container {
     flex-shrink: 0 !important;
-    /* ЗАБОРОНА СТИСКАННЯ ВІКНА */
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    overflow: hidden;
+    /* overflow: hidden; Removed to allow dropdowns to pop out */
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pipeline-stage-container.is-collapsed {
+    overflow: hidden;
 }
 
 .pipeline-stage-container.is-collapsed {
@@ -304,10 +307,12 @@ input:checked+.stage-slider:before {
     display: flex;
     flex-direction: column;
     gap: 14px;
-    max-height: 1000px;
+    max-height: 2000px;
+    /* Increased to avoid clipping large content */
     opacity: 1;
     transform: translateY(0);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* overflow: visible; default, allowed to pop out */
 }
 
 .stage-settings-content.collapsed {
@@ -318,6 +323,8 @@ input:checked+.stage-slider:before {
     opacity: 0;
     transform: translateY(-10px);
     pointer-events: none;
+    overflow: hidden;
+    /* Keep hidden only when collapsed */
 }
 
 .stage-status-text {

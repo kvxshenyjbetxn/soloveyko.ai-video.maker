@@ -52,7 +52,7 @@ func NewApp() *App {
 		templates:       utils.NewTemplateService(),
 	}
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -406,14 +406,25 @@ func (a *App) GetVoiceMakerAPIKey() string {
 	return a.voiceMaker.GetAPIKey()
 }
 
-// SaveVoiceMakerBalance saves last known balance
-func (a *App) SaveVoiceMakerBalance(balance float64) error {
-	return a.settings.SetVoiceMakerBalance(balance)
+// GetVoiceMakerKeys returns the list of named API keys
+func (a *App) GetVoiceMakerKeys() []utils.NamedAPIKey {
+	return a.settings.GetVoiceMakerKeys()
 }
 
-// GetVoiceMakerSavedBalance gets last saved balance
-func (a *App) GetVoiceMakerSavedBalance() float64 {
-	return a.settings.GetVoiceMakerBalance()
+// SaveVoiceMakerKeys saves the list of named API keys
+func (a *App) SaveVoiceMakerKeys(keys []utils.NamedAPIKey) error {
+	return a.settings.SetVoiceMakerKeys(keys)
+}
+
+// GetVoiceMakerVoices returns the list of voices for a given key
+func (a *App) GetVoiceMakerVoices(apiKey string) ([]api.VoicemakerVoice, error) {
+	voices, err := a.voiceMaker.GetVoicesList(apiKey)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[VoiceMaker] Failed to fetch voices: %v", err))
+		return nil, err
+	}
+	a.LogToUI("SUCCESS", fmt.Sprintf("[VoiceMaker] Successfully fetched %d voices", len(voices)))
+	return voices, nil
 }
 
 // Googler Methods

@@ -16,6 +16,7 @@ type PipelineService struct {
 	elevenLabs      *api.ElevenLabsBotService
 	elevenLabsUnlim *api.ElevenLabsUnlimService
 	elevenLabsUA    *api.ElevenLabsUAService
+	voiceMaker      *api.VoiceMakerService
 
 	// Callbacks for UI updates
 	OnLog            func(level string, message string, details ...string)
@@ -33,6 +34,7 @@ func NewPipelineService(
 	elevenLabs *api.ElevenLabsBotService,
 	elevenLabsUnlim *api.ElevenLabsUnlimService,
 	elevenLabsUA *api.ElevenLabsUAService,
+	voiceMaker *api.VoiceMakerService,
 ) *PipelineService {
 	return &PipelineService{
 		settings:        settings,
@@ -40,6 +42,7 @@ func NewPipelineService(
 		elevenLabs:      elevenLabs,
 		elevenLabsUnlim: elevenLabsUnlim,
 		elevenLabsUA:    elevenLabsUA,
+		voiceMaker:      voiceMaker,
 	}
 }
 

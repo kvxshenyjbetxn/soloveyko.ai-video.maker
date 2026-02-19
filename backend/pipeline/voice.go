@@ -2,9 +2,12 @@ package pipeline
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
+	"sync"
 	"time"
 )
 
@@ -294,11 +297,145 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 
 		s.log("SUCCESS", "[ElevenLabsUA] Success: Voice saved to voice.mp3", id, taskLabel)
 		s.emitStageStatus(id, "voice", "completed")
+	} else if vService == "voicemaker" {
+		vKeyID, _ := settings["voiceoverVoiceMakerKeyID"].(string)
+		vID, _ := settings["voiceMakerVoiceID"].(string)
+		vLang, _ := settings["voiceMakerLanguageCode"].(string)
+		if vLang == "" {
+			vLang = pSettings.VoiceMakerLanguageCode
+		}
+		if vLang == "" {
+			vLang = "multi-lang"
+		}
+
+		charLimit, _ := settings["voiceMakerCharLimit"].(int)
+		if charLimit <= 0 {
+			charLimit = pSettings.VoiceMakerCharLimit
+		}
+		if charLimit <= 0 {
+			charLimit = 3000
+		}
+
+		vApiKey := ""
+		vKeys := s.settings.GetVoiceMakerKeys()
+		for _, k := range vKeys {
+			if k.ID == vKeyID {
+				vApiKey = k.Key
+				break
+			}
+		}
+		if vApiKey == "" && len(vKeys) > 0 {
+			vApiKey = vKeys[0].Key
+		}
+
+		if vApiKey == "" {
+			s.log("ERROR", "[VoiceMaker] API key not found", id, taskLabel)
+			s.emitStageStatus(id, "voice", "failed")
+			return fmt.Errorf("API key not found")
+		}
+
+		if vID == "" {
+			s.log("ERROR", "[VoiceMaker] Voice ID is not selected!", id, taskLabel)
+			return fmt.Errorf("voice ID not selected")
+		}
+
+		s.emitStageStatus(id, "voice", "running")
+
+		// 1. Splitting text
+		chunks := utils.SplitTextByChunks(processedText, charLimit)
+		s.log("INFO", fmt.Sprintf("[VoiceMaker] Split text into %d chunks (limit: %d chars)", len(chunks), charLimit), id, taskLabel)
+
+		tempDir := filepath.Join(finalDir, "temp_audio")
+		os.MkdirAll(tempDir, 0755)
+		// Removed defer os.RemoveAll(tempDir) as requested by user to keep temporary files
+
+		chunkFiles := make([]string, len(chunks))
+		var wg sync.WaitGroup
+		semaphore := make(chan struct{}, 10) // Limit to 10 concurrent connections
+		var firstErr error
+		var errOnce sync.Once
+
+		for i, chunk := range chunks {
+			wg.Add(1)
+			go func(idx int, text string) {
+				defer wg.Done()
+				semaphore <- struct{}{}
+				defer func() { <-semaphore }()
+
+				if firstErr != nil {
+					return
+				}
+
+				chunkPath := filepath.Join(tempDir, fmt.Sprintf("chunk_%03d.mp3", idx))
+				// Retry logic: 10 attempts, 5s delay
+				var err error
+				maxAttempts := 10
+				for attempt := 0; attempt < maxAttempts; attempt++ {
+					err = s.voiceMaker.Synthesize(vApiKey, text, vID, vLang, chunkPath, id, taskLabel)
+					if err == nil {
+						chunkFiles[idx] = chunkPath
+						s.log("INFO", fmt.Sprintf("[VoiceMaker] Chunk %d/%d generated", idx+1, len(chunks)), id, taskLabel)
+						return
+					}
+					s.log("WARN", fmt.Sprintf("[VoiceMaker] Chunk %d failed (attempt %d/%d): %v. Retrying in 5s...", idx+1, attempt+1, maxAttempts, err), id, taskLabel)
+					time.Sleep(5 * time.Second)
+				}
+
+				errOnce.Do(func() {
+					firstErr = err
+				})
+			}(i, chunk)
+		}
+
+		wg.Wait()
+
+		if firstErr != nil {
+			s.log("ERROR", fmt.Sprintf("[VoiceMaker] Synthesis failed: %v", firstErr), id, taskLabel)
+			s.emitStageStatus(id, "voice", "failed")
+			return firstErr
+		}
+
+		// 2. Merging files
+		voiceFilePath := filepath.Join(finalDir, "voice.mp3")
+		err := s.mergeAudioFiles(chunkFiles, voiceFilePath)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[VoiceMaker] Failed to merge audio files: %v", err), id, taskLabel)
+			s.emitStageStatus(id, "voice", "failed")
+			return err
+		}
+
+		s.log("SUCCESS", "[VoiceMaker] Success: Voice saved to voice.mp3", id, taskLabel)
+		s.emitStageStatus(id, "voice", "completed")
 	} else if vService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for auto-synthesis", vService), id, taskLabel)
 	} else {
 		s.log("ERROR", "[Pipeline] Voiceover service is not selected!", id, taskLabel)
 	}
 
+	return nil
+}
+
+// mergeAudioFiles concatenates multiple audio files into one
+func (s *PipelineService) mergeAudioFiles(files []string, outputPath string) error {
+	out, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	for _, f := range files {
+		if f == "" {
+			continue
+		}
+		in, err := os.Open(f)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(out, in)
+		in.Close()
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
