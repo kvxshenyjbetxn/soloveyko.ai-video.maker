@@ -91,6 +91,12 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.translateTemplatesCollapsed === undefined) s.translateTemplatesCollapsed = true;
                 if (s.rewriteTemplatesCollapsed === undefined) s.rewriteTemplatesCollapsed = true;
 
+                // Забезпечуємо наявність значень для повзунків
+                if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
+                if (s.rewriteTemperature === undefined) s.rewriteTemperature = 0.7;
+                if (s.translateMaxTokens === undefined) s.translateMaxTokens = 0;
+                if (s.rewriteMaxTokens === undefined) s.rewriteMaxTokens = 0;
+
                 // Оновлюємо налаштування на сервері, щоб зафіксувати згортання API/Шляху
                 await SavePipelineSettings(s);
 
@@ -267,8 +273,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const isPathCollapsed = settings.pathCollapsed;
 
     const modelValue = isTranslate ? settings.translateModel : settings.rewriteModel;
-    const tempValue = isTranslate ? settings.translateTemperature : settings.rewriteTemperature;
-    const tokensValue = isTranslate ? settings.translateMaxTokens : settings.rewriteMaxTokens;
+    const tempValue = (isTranslate ? settings.translateTemperature : settings.rewriteTemperature) ?? 0;
+    const tokensValue = (isTranslate ? settings.translateMaxTokens : settings.rewriteMaxTokens) ?? 0;
     const promptValue = isTranslate ? settings.translatePrompt : settings.rewritePrompt;
     const selectedApiKeyID = isTranslate ? settings.translateOpenRouterKeyID : settings.rewriteOpenRouterKeyID;
 
