@@ -52,6 +52,13 @@ type PipelineSettings struct {
 	ElevenLabsUnlimStyle          float64 `json:"elevenLabsUnlimStyle,omitempty"`
 	ElevenLabsUnlimSpeakerBoost   bool    `json:"elevenLabsUnlimSpeakerBoost,omitempty"`
 	VoiceoverElevenLabsUnlimKeyID string  `json:"voiceoverElevenLabsUnlimKeyID,omitempty"`
+	VoiceoverElevenLabsUAKeyID    string  `json:"voiceoverElevenLabsUAKeyID,omitempty"`
+	ElevenLabsUAVoiceID           string  `json:"elevenLabsUAVoiceID,omitempty"`
+	ElevenLabsUAStability         float64 `json:"elevenLabsUAStability,omitempty"`
+	ElevenLabsUASimilarity        float64 `json:"elevenLabsUASimilarity,omitempty"`
+	ElevenLabsUAStyle             float64 `json:"elevenLabsUAStyle,omitempty"`
+	ElevenLabsUASpeakerBoost      bool    `json:"elevenLabsUASpeakerBoost,omitempty"`
+	ElevenLabsUAModel             string  `json:"elevenLabsUAModel,omitempty"`
 	TranslateControlEnabled       bool    `json:"translateControlEnabled"`
 	ControlCollapsed              bool    `json:"controlCollapsed"`
 	// Keep outputPath for migration if needed
@@ -71,6 +78,7 @@ type Settings struct {
 	ElevenLabsBotKeys             []NamedAPIKey    `json:"elevenLabsBotKeys"`
 	ElevenLabsUnlimAPIKey         string           `json:"elevenLabsUnlimAPIKey"`
 	ElevenLabsUnlimKeys           []NamedAPIKey    `json:"elevenLabsUnlimKeys"`
+	ElevenLabsUAKeys              []NamedAPIKey    `json:"elevenLabsUAKeys"`
 	VoiceMakerAPIKey              string           `json:"voiceMakerAPIKey"`
 	VoiceMakerBalance             float64          `json:"voiceMakerBalance"`
 	GooglerAPIKey                 string           `json:"googlerAPIKey"`
@@ -80,6 +88,7 @@ type Settings struct {
 	OpenRouterMaxConnections      int              `json:"openRouterMaxConnections"`
 	ElevenLabsBotAlertThreshold   float64          `json:"elevenLabsBotAlertThreshold"`
 	ElevenLabsUnlimAlertThreshold float64          `json:"elevenLabsUnlimAlertThreshold"`
+	ElevenLabsUAAlertThreshold    float64          `json:"elevenLabsUAAlertThreshold"`
 	VoiceMakerAlertThreshold      float64          `json:"voiceMakerAlertThreshold"`
 	OpenRouterAlertThreshold      float64          `json:"openRouterAlertThreshold"`
 	GooglerVideoAlertThreshold    float64          `json:"googlerVideoAlertThreshold"`
@@ -199,6 +208,16 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				ID:   "default",
 				Name: "Default",
 				Key:  settings.ElevenLabsUnlimAPIKey,
+			},
+		}
+	}
+	// Міграція для ElevenLabsUAKeys
+	if len(settings.ElevenLabsUAKeys) == 0 && settings.ElevenLabsUAAPIKey != "" {
+		settings.ElevenLabsUAKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  settings.ElevenLabsUAAPIKey,
 			},
 		}
 	}
@@ -722,6 +741,61 @@ func (s *SettingsService) SetElevenLabsUAAPIKey(apiKey string) error {
 	}
 
 	settings.ElevenLabsUAAPIKey = apiKey
+	// Оновлюємо також іменовані ключі, якщо вони порожні
+	if len(settings.ElevenLabsUAKeys) == 0 {
+		settings.ElevenLabsUAKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  apiKey,
+			},
+		}
+	}
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsUAKeys повертає список іменованих ключів ElevenLabsUA
+func (s *SettingsService) GetElevenLabsUAKeys() []NamedAPIKey {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []NamedAPIKey{}
+	}
+	return settings.ElevenLabsUAKeys
+}
+
+// SetElevenLabsUAKeys зберігає список іменованих ключів ElevenLabsUA
+func (s *SettingsService) SetElevenLabsUAKeys(keys []NamedAPIKey) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.ElevenLabsUAKeys = keys
+	// Оновлюємо старий ключ для сумісності
+	if len(keys) > 0 {
+		settings.ElevenLabsUAAPIKey = keys[0].Key
+	}
+
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsUAAlertThreshold повертає поріг попередження для ElevenLabsUA
+func (s *SettingsService) GetElevenLabsUAAlertThreshold() float64 {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 0
+	}
+	return settings.ElevenLabsUAAlertThreshold
+}
+
+// SetElevenLabsUAAlertThreshold зберігає поріг попередження для ElevenLabsUA
+func (s *SettingsService) SetElevenLabsUAAlertThreshold(threshold float64) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.ElevenLabsUAAlertThreshold = threshold
 	return s.SaveSettings(settings)
 }
 

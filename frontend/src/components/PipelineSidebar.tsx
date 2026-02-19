@@ -5,7 +5,7 @@ import { useQueue } from '../contexts/QueueContext';
 import { useServices } from '../contexts/ServiceContext';
 import { useTemplates, PipelineSettings as TemplatePipelineSettings } from '../contexts/TemplateContext';
 // @ts-ignore
-import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotKeys, GetElevenLabsBotVoiceTemplates, GetElevenLabsUnlimKeys } from '../../wailsjs/go/main/App';
+import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotKeys, GetElevenLabsBotVoiceTemplates, GetElevenLabsUnlimKeys, GetElevenLabsUAKeys } from '../../wailsjs/go/main/App';
 
 import { TaskNameModal } from './TaskNameModal';
 import { ConfirmModal } from './ConfirmModal';
@@ -32,6 +32,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [voiceTemplates, setVoiceTemplates] = useState<string[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [elevenLabsUnlimKeys, setElevenLabsUnlimKeys] = useState<any[]>([]);
+    const [elevenLabsUAKeys, setElevenLabsUAKeys] = useState<any[]>([]);
 
     const fetchVoiceTemplates = async (keyID?: string) => {
         const id = keyID || settings?.voiceoverElevenLabsBotKeyID;
@@ -97,9 +98,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
                 const unlimKeys = await GetElevenLabsUnlimKeys();
                 setElevenLabsUnlimKeys(unlimKeys || []);
-                if (unlimKeys && unlimKeys.length > 0) {
-                    if (!s.voiceoverElevenLabsUnlimKeyID) {
-                        s.voiceoverElevenLabsUnlimKeyID = unlimKeys[0].id;
+                const uaKeys = await GetElevenLabsUAKeys();
+                setElevenLabsUAKeys(uaKeys || []);
+                if (uaKeys && uaKeys.length > 0) {
+                    if (!s.voiceoverElevenLabsUAKeyID) {
+                        s.voiceoverElevenLabsUAKeyID = uaKeys[0].id;
                         updated = true;
                     }
                 }
@@ -147,6 +150,12 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.elevenLabsUnlimSimilarity === undefined) s.elevenLabsUnlimSimilarity = 0.75;
                 if (s.elevenLabsUnlimStyle === undefined) s.elevenLabsUnlimStyle = 0.0;
                 if (s.elevenLabsUnlimSpeakerBoost === undefined) s.elevenLabsUnlimSpeakerBoost = true;
+
+                if (s.elevenLabsUAStability === undefined) s.elevenLabsUAStability = 0.5;
+                if (s.elevenLabsUASimilarity === undefined) s.elevenLabsUASimilarity = 0.75;
+                if (s.elevenLabsUAStyle === undefined) s.elevenLabsUAStyle = 0.0;
+                if (s.elevenLabsUASpeakerBoost === undefined) s.elevenLabsUASpeakerBoost = true;
+                if (s.elevenLabsUAModel === undefined) s.elevenLabsUAModel = 'eleven_multilingual_v2';
 
                 if (!s.voiceoverService) {
                     s.voiceoverService = 'elevenlabsbot';
@@ -216,8 +225,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         const voiceoverFields = [
             'voiceoverEnabled', 'voiceoverService', 'voiceoverTemplate',
             'voiceoverElevenLabsBotKeyID', 'voiceoverElevenLabsUnlimKeyID',
+            'voiceoverElevenLabsUAKeyID',
             'elevenLabsUnlimVoiceID', 'elevenLabsUnlimStability', 'elevenLabsUnlimSimilarity',
-            'elevenLabsUnlimStyle', 'elevenLabsUnlimSpeakerBoost'
+            'elevenLabsUnlimStyle', 'elevenLabsUnlimSpeakerBoost',
+            'elevenLabsUAVoiceID', 'elevenLabsUAStability', 'elevenLabsUASimilarity',
+            'elevenLabsUAStyle', 'elevenLabsUASpeakerBoost', 'elevenLabsUAModel'
         ];
 
         voiceoverFields.forEach(field => {
@@ -754,6 +766,35 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                         </option>
                                     </select>
                                 </div>
+
+                                <div className="settings-control">
+                                    <label className="settings-label">ElevenLabs UA Key</label>
+                                    <select
+                                        className="settings-select"
+                                        value={settings.voiceoverElevenLabsUAKeyID}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === "MANAGE_KEYS") {
+                                                if (setCurrentPath) {
+                                                    setCurrentPath('settings.api.voice.elevenlabsua');
+                                                }
+                                                return;
+                                            }
+                                            handleChange('voiceoverElevenLabsUAKeyID', val);
+                                        }}
+                                    >
+                                        {elevenLabsUAKeys.length === 0 ? (
+                                            <option value="">{t('api.openrouterSettings.noKeys')}</option>
+                                        ) : (
+                                            elevenLabsUAKeys.map(k => (
+                                                <option key={k.id} value={k.id}>{k.name}</option>
+                                            ))
+                                        )}
+                                        <option value="MANAGE_KEYS" style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                                            ⚙️ {t('tabs.settings')}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1035,35 +1076,6 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                 {settings.voiceoverService === 'elevenlabsunlim' && (
                                     <>
                                         <div className="settings-control">
-                                            <label className="settings-label">API Key</label>
-                                            <select
-                                                className="settings-select"
-                                                value={settings.voiceoverElevenLabsUnlimKeyID}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val === "MANAGE_KEYS") {
-                                                        if (setCurrentPath) {
-                                                            setCurrentPath('settings.api.voice.elevenlabsunlim');
-                                                        }
-                                                        return;
-                                                    }
-                                                    handleChange('voiceoverElevenLabsUnlimKeyID', val);
-                                                }}
-                                            >
-                                                {elevenLabsUnlimKeys.length === 0 ? (
-                                                    <option value="">{t('api.openrouterSettings.noKeys')}</option>
-                                                ) : (
-                                                    elevenLabsUnlimKeys.map(k => (
-                                                        <option key={k.id} value={k.id}>{k.name}</option>
-                                                    ))
-                                                )}
-                                                <option value="MANAGE_KEYS" style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>
-                                                    ⚙️ {t('tabs.settings')}
-                                                </option>
-                                            </select>
-                                        </div>
-
-                                        <div className="settings-control">
                                             <label className="settings-label">Voice ID</label>
                                             <input
                                                 className="settings-input"
@@ -1132,6 +1144,99 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                                         type="checkbox"
                                                         checked={settings.elevenLabsUnlimSpeakerBoost}
                                                         onChange={(e) => handleChange('elevenLabsUnlimSpeakerBoost', e.target.checked)}
+                                                    />
+                                                    <span className="stage-slider"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                {settings.voiceoverService === 'elevenlabsua' && (
+                                    <>
+                                        <div className="settings-control">
+                                            <label className="settings-label">Voice ID</label>
+                                            <input
+                                                className="settings-input"
+                                                value={settings.elevenLabsUAVoiceID || ''}
+                                                onChange={(e) => handleChange('elevenLabsUAVoiceID', e.target.value)}
+                                                placeholder="eBthAb30..."
+                                            />
+                                        </div>
+
+                                        <div className="settings-control">
+                                            <label className="settings-label">Model ID</label>
+                                            <select
+                                                className="settings-select"
+                                                value={settings.elevenLabsUAModel || 'eleven_multilingual_v2'}
+                                                onChange={(e) => handleChange('elevenLabsUAModel', e.target.value)}
+                                            >
+                                                <option value="eleven_multilingual_v2">Multilingual v2</option>
+                                                <option value="eleven_flash_v2_5">Flash v2.5</option>
+                                                <option value="eleven_turbo_v2_5">Turbo v2.5</option>
+                                                <option value="eleven_multilingual_v3">v3 (Emotions)</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="settings-control">
+                                            <label className="settings-label">{t('pipeline.voiceover.settings.stability') || 'Stability'}</label>
+                                            <div className="settings-slider-container">
+                                                <input
+                                                    type="range"
+                                                    className="settings-slider"
+                                                    min="0"
+                                                    max="1"
+                                                    step="0.01"
+                                                    value={settings.elevenLabsUAStability ?? 0.5}
+                                                    style={{ '--range-progress': `${(settings.elevenLabsUAStability ?? 0.5) * 100}%` } as React.CSSProperties}
+                                                    onChange={(e) => handleChange('elevenLabsUAStability', parseFloat(e.target.value))}
+                                                />
+                                                <span className="settings-slider-value">{(settings.elevenLabsUAStability ?? 0.5).toFixed(2)}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="settings-control">
+                                            <label className="settings-label">{t('pipeline.voiceover.settings.similarity') || 'Similarity'}</label>
+                                            <div className="settings-slider-container">
+                                                <input
+                                                    type="range"
+                                                    className="settings-slider"
+                                                    min="0"
+                                                    max="1"
+                                                    step="0.01"
+                                                    value={settings.elevenLabsUASimilarity ?? 0.75}
+                                                    style={{ '--range-progress': `${(settings.elevenLabsUASimilarity ?? 0.75) * 100}%` } as React.CSSProperties}
+                                                    onChange={(e) => handleChange('elevenLabsUASimilarity', parseFloat(e.target.value))}
+                                                />
+                                                <span className="settings-slider-value">{(settings.elevenLabsUASimilarity ?? 0.75).toFixed(2)}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="settings-control">
+                                            <label className="settings-label">{t('pipeline.voiceover.settings.style') || 'Style Exaggeration'}</label>
+                                            <div className="settings-slider-container">
+                                                <input
+                                                    type="range"
+                                                    className="settings-slider"
+                                                    min="0"
+                                                    max="1"
+                                                    step="0.01"
+                                                    value={settings.elevenLabsUAStyle ?? 0}
+                                                    style={{ '--range-progress': `${(settings.elevenLabsUAStyle ?? 0) * 100}%` } as React.CSSProperties}
+                                                    onChange={(e) => handleChange('elevenLabsUAStyle', parseFloat(e.target.value))}
+                                                />
+                                                <span className="settings-slider-value">{(settings.elevenLabsUAStyle ?? 0).toFixed(2)}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="settings-control">
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.voiceover.settings.speaker_boost') || 'Speaker Boost'}</label>
+                                                <label className="stage-switch small">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={settings.elevenLabsUASpeakerBoost}
+                                                        onChange={(e) => handleChange('elevenLabsUASpeakerBoost', e.target.checked)}
                                                     />
                                                     <span className="stage-slider"></span>
                                                 </label>

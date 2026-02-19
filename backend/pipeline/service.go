@@ -15,6 +15,7 @@ type PipelineService struct {
 	openRouter      *api.OpenRouterService
 	elevenLabs      *api.ElevenLabsBotService
 	elevenLabsUnlim *api.ElevenLabsUnlimService
+	elevenLabsUA    *api.ElevenLabsUAService
 
 	// Callbacks for UI updates
 	OnLog            func(level string, message string, details ...string)
@@ -31,12 +32,14 @@ func NewPipelineService(
 	openRouter *api.OpenRouterService,
 	elevenLabs *api.ElevenLabsBotService,
 	elevenLabsUnlim *api.ElevenLabsUnlimService,
+	elevenLabsUA *api.ElevenLabsUAService,
 ) *PipelineService {
 	return &PipelineService{
 		settings:        settings,
 		openRouter:      openRouter,
 		elevenLabs:      elevenLabs,
 		elevenLabsUnlim: elevenLabsUnlim,
+		elevenLabsUA:    elevenLabsUA,
 	}
 }
 
@@ -160,8 +163,8 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	// 3. Voiceover Stage
 	err = s.ProcessVoiceover(id, taskLabel, processedText, finalDir, settings, &pSettings)
 	if err != nil {
-		// We don't necessarily want to fail the whole pipeline if voiceover fails,
-		// but for now we follow old logic which just logged it.
+		s.log("ERROR", fmt.Sprintf("[Pipeline] Voiceover stage failed: %v", err), id, taskLabel)
+		return processedText, err
 	}
 
 	return processedText, nil

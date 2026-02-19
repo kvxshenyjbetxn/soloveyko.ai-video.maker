@@ -13,10 +13,12 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         openRouterBalances, openRouterKeys, loadingOpenRouter, refreshOpenRouterBalance,
         elevenLabsBotBalances, elevenLabsBotKeys, loadingElevenLabsBot, refreshElevenLabsBotBalance,
         elevenLabsUnlimBalances, elevenLabsUnlimKeys, loadingElevenLabsUnlim, refreshElevenLabsUnlimBalance,
+        elevenLabsUABalances, elevenLabsUAKeys, loadingElevenLabsUA, refreshElevenLabsUABalance,
         voiceMakerBalance, loadingVoiceMaker, refreshVoiceMakerBalance,
         googlerUsage, loadingGoogler, refreshGooglerUsage,
         elevenLabsBotThreshold,
         elevenLabsUnlimThreshold,
+        elevenLabsUAThreshold,
         voiceMakerThreshold,
         openRouterThreshold,
         googlerVideoThreshold,
@@ -25,7 +27,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
     } = useServices();
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const isAnyLoading = loadingOpenRouter || loadingElevenLabsBot || loadingElevenLabsUnlim || loadingVoiceMaker || loadingGoogler;
+    const isAnyLoading = loadingOpenRouter || loadingElevenLabsBot || loadingElevenLabsUnlim || loadingElevenLabsUA || loadingVoiceMaker || loadingGoogler;
 
     const isGooglerVideoAlert = googlerVideoThreshold > 0 && (googlerUsage.current_usage.hourly_usage.video_generation || 0) >= googlerVideoThreshold;
     const isGooglerImageAlert = googlerImageThreshold > 0 && (googlerUsage.current_usage.hourly_usage.image_generation || 0) >= googlerImageThreshold;
@@ -42,9 +44,14 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         balance !== null && balance !== -1 && elevenLabsUnlimThreshold > 0 && balance < elevenLabsUnlimThreshold
     );
 
+    const isElevenLabsUAAlert = Object.entries(elevenLabsUABalances).some(([id, balance]) =>
+        balance !== null && elevenLabsUAThreshold > 0 && balance < elevenLabsUAThreshold
+    );
+
     const isAnyAlertActive = (
         isElevenLabsBotAlert ||
         isElevenLabsUnlimAlert ||
+        isElevenLabsUAAlert ||
         (voiceMakerBalance !== null && voiceMakerThreshold > 0 && voiceMakerBalance < voiceMakerThreshold) ||
         isOpenRouterAlert ||
         isGooglerVideoAlert ||
@@ -61,6 +68,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         const hasAnyBalance = Object.values(openRouterBalances).some(b => b !== null) ||
             Object.values(elevenLabsBotBalances).some(b => b !== null) ||
             Object.values(elevenLabsUnlimBalances).some(b => b !== null) ||
+            Object.values(elevenLabsUABalances).some(b => b !== null) ||
             voiceMakerBalance !== null ||
             googlerUsage.expiration_date !== 0;
 
@@ -178,6 +186,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                             );
                         })}
 
+
                         <div className="balance-item">
                             <div className="service-name">
                                 <div className={`service-status-dot ${loadingVoiceMaker ? 'loading' : (voiceMakerBalance === null ? 'error' : '')}`}></div>
@@ -277,6 +286,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                             if (Object.values(openRouterBalances).some(b => b === null)) refreshOpenRouterBalance();
                             if (Object.values(elevenLabsBotBalances).some(b => b === null)) refreshElevenLabsBotBalance();
                             if (Object.values(elevenLabsUnlimBalances).some(b => b === null)) refreshElevenLabsUnlimBalance();
+                            if (Object.values(elevenLabsUABalances).some(b => b === null)) refreshElevenLabsUABalance();
                             if (googlerUsage.expiration_date === 0) refreshGooglerUsage();
                         }
                     }}

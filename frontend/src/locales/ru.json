@@ -99,6 +99,9 @@
         "elevenlabsunlimSettings": {
             "totalBalance": "Общий баланс"
         },
+        "elevenlabsuaSettings": {
+            "totalBalance": "Общий баланс"
+        },
         "pollinationsSettings": {
             "apikey": "API Ключ (Необязательно)",
             "models": "Модели",

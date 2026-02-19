@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"path/filepath"
+	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
 	"time"
 )
@@ -193,6 +194,105 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		}
 
 		s.log("SUCCESS", "[ElevenLabsUnlim] Success: Voice saved to voice.mp3", id, taskLabel)
+		s.emitStageStatus(id, "voice", "completed")
+	} else if vService == "elevenlabsua" {
+		vKeyID, _ := settings["voiceoverElevenLabsUAKeyID"].(string)
+		if vKeyID == "" {
+			vKeyID = pSettings.VoiceoverElevenLabsUAKeyID
+		}
+
+		vApiKey := ""
+		vKeys := s.settings.GetElevenLabsUAKeys()
+		for _, k := range vKeys {
+			if k.ID == vKeyID {
+				vApiKey = k.Key
+				break
+			}
+		}
+		if vApiKey == "" && len(vKeys) > 0 {
+			vApiKey = vKeys[0].Key
+		}
+
+		if vApiKey == "" {
+			s.log("ERROR", "[ElevenLabsUA] API key not found", id, taskLabel)
+			s.emitStageStatus(id, "voice", "failed")
+			return fmt.Errorf("API key not found")
+		}
+
+		vID, _ := settings["elevenLabsUAVoiceID"].(string)
+		if vID == "" {
+			vID = pSettings.ElevenLabsUAVoiceID
+		}
+		if vID == "" {
+			vID = "eBthAb30UYbt2nojGXeA" // Default voice from docs
+		}
+
+		modelID, _ := settings["elevenLabsUAModel"].(string)
+		if modelID == "" {
+			modelID = pSettings.ElevenLabsUAModel
+		}
+
+		// Extract sliders
+		stability, _ := settings["elevenLabsUAStability"].(float64)
+		if stability == 0 {
+			stability = pSettings.ElevenLabsUAStability
+			if stability == 0 {
+				stability = 0.5
+			}
+		}
+
+		similarity, _ := settings["elevenLabsUASimilarity"].(float64)
+		if similarity == 0 {
+			similarity = pSettings.ElevenLabsUASimilarity
+			if similarity == 0 {
+				similarity = 0.75
+			}
+		}
+
+		style, _ := settings["elevenLabsUAStyle"].(float64)
+		if style == 0 {
+			style = pSettings.ElevenLabsUAStyle
+		}
+
+		boost, ok := settings["elevenLabsUASpeakerBoost"].(bool)
+		if !ok {
+			boost = pSettings.ElevenLabsUASpeakerBoost
+		}
+
+		vSettings := &api.ElevenLabsUAVoiceSettings{
+			Stability:       stability,
+			SimilarityBoost: similarity,
+			Style:           style,
+			UseSpeakerBoost: boost,
+		}
+
+		s.emitStageStatus(id, "voice", "running")
+		voiceFilePath := filepath.Join(finalDir, "voice.mp3")
+
+		var err error
+		backoffs := []int{5, 10, 15}
+		maxRetries := 3
+
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			if attempt > 0 {
+				s.log("WARN", fmt.Sprintf("[ElevenLabsUA] Retry attempt %d/%d after %ds...", attempt, maxRetries, backoffs[attempt-1]), id, taskLabel)
+				time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
+			}
+
+			err = s.elevenLabsUA.Synthesize(vApiKey, processedText, vID, modelID, vSettings, voiceFilePath, id, taskLabel)
+			if err == nil {
+				break
+			}
+			s.log("ERROR", fmt.Sprintf("[ElevenLabsUA] Attempt %d failed: %v", attempt+1, err), id, taskLabel)
+		}
+
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[ElevenLabsUA] All 3 retry attempts failed. Final Error: %v", err), id, taskLabel)
+			s.emitStageStatus(id, "voice", "failed")
+			return err
+		}
+
+		s.log("SUCCESS", "[ElevenLabsUA] Success: Voice saved to voice.mp3", id, taskLabel)
 		s.emitStageStatus(id, "voice", "completed")
 	} else if vService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for auto-synthesis", vService), id, taskLabel)

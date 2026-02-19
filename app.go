@@ -52,7 +52,7 @@ func NewApp() *App {
 		templates:       utils.NewTemplateService(),
 	}
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -94,8 +94,8 @@ func NewApp() *App {
 		app.LogToUI(level, message, details...)
 	}
 
-	app.elevenLabsUA.OnLog = func(level string, message string) {
-		app.LogToUI(level, message)
+	app.elevenLabsUA.OnLog = func(level string, message string, details ...string) {
+		app.LogToUI(level, message, details...)
 	}
 
 	return app
@@ -453,6 +453,17 @@ func (a *App) GetElevenLabsImageAPIKey() string {
 
 // ElevenLabsUA Methods
 
+// GetElevenLabsUABalance returns the user's balance from ElevenLabsUA
+func (a *App) GetElevenLabsUABalance(apiKey string) (float64, error) {
+	balance, err := a.elevenLabsUA.GetBalance(apiKey)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[ElevenLabsUA] Balance check failed: %v", err))
+		return 0, err
+	}
+	a.LogToUI("SUCCESS", fmt.Sprintf("[ElevenLabsUA] Balance updated: %.0f characters", balance))
+	return balance, nil
+}
+
 // SaveElevenLabsUAAPIKey saves API key
 func (a *App) SaveElevenLabsUAAPIKey(apiKey string) error {
 	return a.elevenLabsUA.SaveAPIKey(apiKey)
@@ -461,6 +472,26 @@ func (a *App) SaveElevenLabsUAAPIKey(apiKey string) error {
 // GetElevenLabsUAAPIKey gets API key
 func (a *App) GetElevenLabsUAAPIKey() string {
 	return a.elevenLabsUA.GetAPIKey()
+}
+
+// GetElevenLabsUAKeys returns the list of named API keys
+func (a *App) GetElevenLabsUAKeys() []utils.NamedAPIKey {
+	return a.settings.GetElevenLabsUAKeys()
+}
+
+// SaveElevenLabsUAKeys saves the list of named API keys
+func (a *App) SaveElevenLabsUAKeys(keys []utils.NamedAPIKey) error {
+	return a.settings.SetElevenLabsUAKeys(keys)
+}
+
+// GetElevenLabsUAAlertThreshold gets alert threshold
+func (a *App) GetElevenLabsUAAlertThreshold() float64 {
+	return a.settings.GetElevenLabsUAAlertThreshold()
+}
+
+// SaveElevenLabsUAAlertThreshold saves alert threshold
+func (a *App) SaveElevenLabsUAAlertThreshold(threshold float64) error {
+	return a.settings.SetElevenLabsUAAlertThreshold(threshold)
 }
 
 // AssemblyAI Methods

@@ -99,6 +99,9 @@
         "elevenlabsunlimSettings": {
             "totalBalance": "Total Balance"
         },
+        "elevenlabsuaSettings": {
+            "totalBalance": "Total Balance"
+        },
         "pollinationsSettings": {
             "apikey": "API Key (Optional)",
             "models": "Models",

@@ -1,98 +1,155 @@
 import React, { useState, useEffect } from 'react';
 import { useI18n } from '../../../../contexts/I18nContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
-// @ts-ignore
-import { GetElevenLabsUAAPIKey, SaveElevenLabsUAAPIKey } from '../../../../../wailsjs/go/main/App';
 import '../../general.css';
 
 export const ElevenLabsUA = () => {
     const { t } = useI18n();
     const { accentColor } = useTheme();
 
-    const [apiKey, setApiKey] = useState('');
+    // @ts-ignore
+    const { GetElevenLabsUAKeys, SaveElevenLabsUAKeys } = window.go.main.App;
+
+    const [keys, setKeys] = useState<any[]>([]);
+    const [newName, setNewName] = useState('');
+    const [newKey, setNewKey] = useState('');
     const [isLoaded, setIsLoaded] = useState(false);
-    const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     useEffect(() => {
         const loadKey = async () => {
-            try {
-                const key = await GetElevenLabsUAAPIKey();
-                setApiKey(key || '');
-            } catch (err) {
-                console.error("Failed to load ElevenLabsUA API key:", err);
-            } finally {
-                setIsLoaded(true);
+            if (GetElevenLabsUAKeys) {
+                const uaKeys = await GetElevenLabsUAKeys();
+                setKeys(uaKeys || []);
             }
+            setIsLoaded(true);
         };
         loadKey();
     }, []);
 
     useEffect(() => {
         if (!isLoaded) return;
-        const timer = setTimeout(async () => {
-            try {
-                await SaveElevenLabsUAAPIKey(apiKey);
-                setStatusMsg({ type: 'success', text: 'Saved' });
-                setTimeout(() => {
-                    setStatusMsg(prev => prev?.text === 'Saved' ? null : prev);
-                }, 2000);
-            } catch (err) {
-                setStatusMsg({ type: 'error', text: 'Error' });
-            }
+        const timer = setTimeout(() => {
+            if (SaveElevenLabsUAKeys) SaveElevenLabsUAKeys(keys);
         }, 1000);
         return () => clearTimeout(timer);
-    }, [apiKey, isLoaded]);
+    }, [keys, isLoaded]);
+
+    const handleAddKey = () => {
+        if (!newName.trim() || !newKey.trim()) return;
+        const id = 'key_' + Date.now();
+        const updatedKeys = [...keys, { id, name: newName.trim(), key: newKey.trim() }];
+        setKeys(updatedKeys);
+        setNewName('');
+        setNewKey('');
+    };
+
+    const handleRemoveKey = (id: string) => {
+        setKeys(keys.filter(k => k.id !== id));
+    };
 
     return (
-        <div className="content-wrapper animate-fade">
-            <div className="settings-container" style={{ maxWidth: '1000px' }}>
+        <div className="content-wrapper animate-fade" style={{
+            height: '100%',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            paddingRight: '10px'
+        }}>
+            <div className="settings-container" style={{ maxWidth: '1000px', paddingBottom: '40px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
                     <h2 className="settings-title" style={{ margin: 0 }}>ElevenLabs UA</h2>
                 </div>
 
                 <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '30px' }}>
-                    <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('settings.voice.apiKey')}</h3>
-                    <div style={{ position: 'relative' }}>
+                    <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('api.openrouterSettings.apikey')}</h3>
+
+                    {/* Add Key Form */}
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                        <input
+                            type="text"
+                            className="premium-input"
+                            style={{
+                                flex: 0.4,
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                background: 'rgba(0, 0, 0, 0.3)',
+                                color: '#fff',
+                                outline: 'none',
+                                fontSize: '0.95em'
+                            }}
+                            placeholder={t('api.openrouterSettings.keyNamePlaceholder') || "Назва ключа (напр. Основний)"}
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                        />
                         <input
                             type="password"
                             className="premium-input"
                             style={{
-                                width: '100%',
+                                flex: 1,
                                 padding: '12px 16px',
                                 borderRadius: '8px',
-                                border: `1px solid ${statusMsg?.type === 'success' && statusMsg.text === 'Saved' ? '#4caf5044' : 'rgba(255, 255, 255, 0.08)'}`,
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
                                 background: 'rgba(0, 0, 0, 0.3)',
                                 color: '#fff',
                                 outline: 'none',
-                                fontSize: '0.95em',
-                                transition: 'all 0.3s ease',
-                                boxSizing: 'border-box'
+                                fontSize: '0.95em'
                             }}
-                            value={apiKey}
-                            onChange={(e) => {
-                                setApiKey(e.target.value);
-                                setStatusMsg({ type: 'success', text: 'Typing...' });
-                            }}
-                            placeholder="X-API-Key / xi-api-key..."
+                            placeholder="API Key"
+                            value={newKey}
+                            onChange={(e) => setNewKey(e.target.value)}
                         />
-                        {statusMsg && (
-                            <div style={{
-                                position: 'absolute',
-                                right: '12px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                color: statusMsg.type === 'success' ? '#4caf50' : '#ff5252',
-                                fontSize: '0.75em',
+                        <button
+                            onClick={handleAddKey}
+                            disabled={!newName.trim() || !newKey.trim()}
+                            style={{
+                                padding: '12px 24px',
+                                borderRadius: '8px',
+                                background: accentColor,
+                                border: 'none',
+                                color: '#fff',
+                                cursor: 'pointer',
                                 fontWeight: '600',
-                                opacity: 0.8,
-                                pointerEvents: 'none',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '5px'
-                            }}>
-                                {statusMsg.text === 'Saved' && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
-                                {statusMsg.text}
+                                opacity: (!newName.trim() || !newKey.trim()) ? 0.5 : 1
+                            }}
+                        >
+                            {t('api.openrouterSettings.add')}
+                        </button>
+                    </div>
+
+                    {/* Keys List */}
+                    <div style={{
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        background: 'rgba(0,0,0,0.2)',
+                        marginBottom: '20px'
+                    }}>
+                        {keys.length === 0 ? (
+                            <div style={{ padding: '20px', textAlign: 'center', opacity: 0.3 }}>
+                                {t('api.openrouterSettings.noKeys') || "Немає доданих ключів"}
                             </div>
+                        ) : (
+                            keys.map((k) => (
+                                <div key={k.id} style={{
+                                    padding: '12px 20px',
+                                    borderBottom: '1px solid rgba(255, 255, 255, 0.03)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <span style={{ fontSize: '0.95em', fontWeight: 'bold' }}>{k.name}</span>
+                                        <span style={{ fontSize: '0.8em', opacity: 0.4 }}>{k.key.substring(0, 5)}...{k.key.substring(k.key.length - 4)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                        <button
+                                            onClick={() => handleRemoveKey(k.id)}
+                                            style={{ background: 'none', border: 'none', color: '#ff5252', cursor: 'pointer', opacity: 0.6, fontSize: '1.2em' }}
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
                         )}
                     </div>
                 </div>

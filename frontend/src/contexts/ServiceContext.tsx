@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 // @ts-ignore
-import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetOpenRouterKeys, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey, GetVoiceMakerBalance, GetVoiceMakerAPIKey, GetVoiceMakerSavedBalance, SaveVoiceMakerBalance, GetGooglerUsage, GetGooglerAPIKey } from '../../wailsjs/go/main/App';
+import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetOpenRouterKeys, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey, GetVoiceMakerBalance, GetVoiceMakerAPIKey, GetVoiceMakerSavedBalance, SaveVoiceMakerBalance, GetGooglerUsage, GetGooglerAPIKey, GetElevenLabsUABalance, GetElevenLabsUAKeys, GetElevenLabsUAAlertThreshold, SaveElevenLabsUAAlertThreshold, GetElevenLabsBotAlertThreshold, GetElevenLabsUnlimAlertThreshold, GetVoiceMakerAlertThreshold, GetOpenRouterAlertThreshold } from '../../wailsjs/go/main/App';
 import { useLogger } from './LoggerContext';
 
 interface ServiceContextType {
@@ -16,6 +16,10 @@ interface ServiceContextType {
     elevenLabsUnlimKeys: any[];
     refreshElevenLabsUnlimBalance: () => Promise<void>;
     loadingElevenLabsUnlim: boolean;
+    elevenLabsUABalances: Record<string, number | null>;
+    elevenLabsUAKeys: any[];
+    refreshElevenLabsUABalance: () => Promise<void>;
+    loadingElevenLabsUA: boolean;
     voiceMakerBalance: number | null;
     refreshVoiceMakerBalance: () => Promise<void>;
     loadingVoiceMaker: boolean;
@@ -34,6 +38,8 @@ interface ServiceContextType {
     setGooglerVideoThreshold: (val: number) => void;
     googlerImageThreshold: number;
     setGooglerImageThreshold: (val: number) => void;
+    elevenLabsUAThreshold: number;
+    setElevenLabsUAThreshold: (val: number) => void;
     refreshAllBalances: () => Promise<void>;
 }
 
@@ -50,6 +56,10 @@ const ServiceContext = createContext<ServiceContextType>({
     elevenLabsUnlimKeys: [],
     refreshElevenLabsUnlimBalance: async () => { },
     loadingElevenLabsUnlim: false,
+    elevenLabsUABalances: {},
+    elevenLabsUAKeys: [],
+    refreshElevenLabsUABalance: async () => { },
+    loadingElevenLabsUA: false,
     voiceMakerBalance: null,
     refreshVoiceMakerBalance: async () => { },
     loadingVoiceMaker: false,
@@ -74,6 +84,8 @@ const ServiceContext = createContext<ServiceContextType>({
     setGooglerVideoThreshold: () => { },
     googlerImageThreshold: 0,
     setGooglerImageThreshold: () => { },
+    elevenLabsUAThreshold: 0,
+    setElevenLabsUAThreshold: () => { },
     refreshAllBalances: async () => { },
 });
 
@@ -90,6 +102,9 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [elevenLabsUnlimBalances, setElevenLabsUnlimBalances] = useState<Record<string, number | null>>({});
     const [elevenLabsUnlimKeys, setElevenLabsUnlimKeys] = useState<any[]>([]);
     const [loadingElevenLabsUnlim, setLoadingElevenLabsUnlim] = useState(false);
+    const [elevenLabsUABalances, setElevenLabsUABalances] = useState<Record<string, number | null>>({});
+    const [elevenLabsUAKeys, setElevenLabsUAKeys] = useState<any[]>([]);
+    const [loadingElevenLabsUA, setLoadingElevenLabsUA] = useState(false);
     const [voiceMakerBalance, setVoiceMakerBalance] = useState<number | null>(null);
     const [loadingVoiceMaker, setLoadingVoiceMaker] = useState(false);
     const [googlerUsage, setGooglerUsage] = useState<any>({
@@ -106,6 +121,7 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [openRouterThreshold, setOpenRouterThreshold] = useState(0);
     const [googlerVideoThreshold, setGooglerVideoThreshold] = useState(0);
     const [googlerImageThreshold, setGooglerImageThreshold] = useState(0);
+    const [elevenLabsUAThreshold, setElevenLabsUAThreshold] = useState(0);
     const hasFetchedRef = useRef(false);
 
     const refreshOpenRouterBalance = async () => {
@@ -201,11 +217,26 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }
 
+    const refreshElevenLabsUABalance = async () => {
+        if (loadingElevenLabsUA) return;
+        setLoadingElevenLabsUA(true);
+        try {
+            const keys = await GetElevenLabsUAKeys();
+            setElevenLabsUAKeys(keys || []);
+            setElevenLabsUABalances({}); // Баланс не підтримується
+        } catch (err: any) {
+            console.error("Failed to update ElevenLabsUA keys:", err);
+        } finally {
+            setLoadingElevenLabsUA(false);
+        }
+    }
+
     const refreshAllBalances = async () => {
         await Promise.all([
             refreshOpenRouterBalance(),
             refreshElevenLabsBotBalance(),
             refreshElevenLabsUnlimBalance(),
+            refreshElevenLabsUABalance(),
             refreshGooglerUsage()
         ]);
     };
@@ -225,13 +256,11 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             loadVoiceMakerBalance();
 
             // Завантажуємо пороги попередження
-            // @ts-ignore
-            const { GetElevenLabsBotAlertThreshold, GetElevenLabsUnlimAlertThreshold, GetVoiceMakerAlertThreshold, GetOpenRouterAlertThreshold } = window.go.main.App;
-
-            if (GetElevenLabsBotAlertThreshold) GetElevenLabsBotAlertThreshold().then(setElevenLabsBotThreshold);
-            if (GetElevenLabsUnlimAlertThreshold) GetElevenLabsUnlimAlertThreshold().then(setElevenLabsUnlimThreshold);
-            if (GetVoiceMakerAlertThreshold) GetVoiceMakerAlertThreshold().then(setVoiceMakerThreshold);
-            if (GetOpenRouterAlertThreshold) GetOpenRouterAlertThreshold().then(setOpenRouterThreshold);
+            GetElevenLabsBotAlertThreshold().then(setElevenLabsBotThreshold);
+            GetElevenLabsUnlimAlertThreshold().then(setElevenLabsUnlimThreshold);
+            GetElevenLabsUAAlertThreshold().then(setElevenLabsUAThreshold);
+            GetVoiceMakerAlertThreshold().then(setVoiceMakerThreshold);
+            GetOpenRouterAlertThreshold().then(setOpenRouterThreshold);
 
             const { GetGooglerVideoAlertThreshold, GetGooglerImageAlertThreshold } = (window as any).go.main.App;
             if (GetGooglerVideoAlertThreshold) GetGooglerVideoAlertThreshold().then(setGooglerVideoThreshold);
@@ -297,6 +326,10 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             elevenLabsUnlimKeys,
             refreshElevenLabsUnlimBalance,
             loadingElevenLabsUnlim,
+            elevenLabsUABalances,
+            elevenLabsUAKeys,
+            refreshElevenLabsUABalance,
+            loadingElevenLabsUA,
             voiceMakerBalance,
             refreshVoiceMakerBalance,
             loadingVoiceMaker,
@@ -315,6 +348,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setGooglerVideoThreshold,
             googlerImageThreshold,
             setGooglerImageThreshold,
+            elevenLabsUAThreshold,
+            setElevenLabsUAThreshold,
             refreshAllBalances
         }}>
             {children}
