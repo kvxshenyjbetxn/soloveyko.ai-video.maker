@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
+	"sync"
 )
 
 // PipelineService handles the execution of multi-stage tasks
@@ -15,9 +16,12 @@ type PipelineService struct {
 	elevenLabs *api.ElevenLabsBotService
 
 	// Callbacks for UI updates
-	OnLog         func(level string, message string, details ...string)
-	OnStageStatus func(id string, stage string, status string)
-	OnTextResult  func(id string, resultText string)
+	OnLog            func(level string, message string, details ...string)
+	OnStageStatus    func(id string, stage string, status string)
+	OnTextResult     func(id string, resultText string)
+	OnRequestControl func(id string, text string)
+
+	pendingControl sync.Map // Map taskID -> chan string
 }
 
 // NewPipelineService creates a new PipelineService
@@ -84,6 +88,30 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		s.OnTextResult(id, processedText)
 	}
 
+	// 1.5 Control Stage
+	if pSettings.TranslateControlEnabled && (taskType == "translate" || taskType == "rewrite") {
+		s.emitStageStatus(id, "text", "waiting")
+		s.log("INFO", "[Control] Waiting for user translation review...", id, taskLabel)
+
+		resChan := make(chan string)
+		s.pendingControl.Store(id, resChan)
+
+		if s.OnRequestControl != nil {
+			s.OnRequestControl(id, processedText)
+		}
+
+		// Block until result received
+		updatedText := <-resChan
+		processedText = updatedText
+		s.pendingControl.Delete(id)
+
+		s.log("SUCCESS", "[Control] Translation approved by user", id, taskLabel)
+		// Re-emit result length if it changed
+		if s.OnTextResult != nil {
+			s.OnTextResult(id, processedText)
+		}
+	}
+
 	// 2. FS Stage - Prepare Directory
 	outPath, _ := settings[taskType+"OutputPath"].(string)
 	if outPath == "" {
@@ -133,4 +161,12 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	return processedText, nil
+}
+
+// SubmitControlResult resumes a paused pipeline with updated text
+func (s *PipelineService) SubmitControlResult(id string, text string) {
+	if val, ok := s.pendingControl.Load(id); ok {
+		ch := val.(chan string)
+		ch <- text
+	}
 }

@@ -36,7 +36,8 @@
     "completion_message": "Черга успішно оброблена!\nВиконано завдань: {count}\nЧас виконання: {duration}",
     "completion_ok": "Зрозуміло",
     "completion_open_folder": "Відкрити папку",
-    "task_default_name": "Завдання"
+    "task_default_name": "Завдання",
+    "control_title": "ПЕРЕВІРКА ТЕКСТУ"
   },
   "gallery": {
     "title": "Медіа Галерея",
@@ -237,7 +238,9 @@
     "openrouter": {
       "max_connections": "Кількість одночасних з'єднань",
       "max_connections_desc": "Ліміт одночасних запитів до OpenRouter для всієї програми. Нові запити чекатимуть у черзі."
-    }
+    },
+    "control": "Контроль",
+    "translate_control": "Контроль перекладу"
   },
   "templatesTab": {
     "description": "Тут ви можете керувати вашими шаблонами пайплайнів.",

@@ -34,7 +34,8 @@
         "completion_message": "Queue successfully processed!\nTasks completed: {count}\nDuration: {duration}",
         "completion_ok": "Got it",
         "completion_open_folder": "Open Folder",
-        "task_default_name": "Task"
+        "task_default_name": "Task",
+        "control_title": "TEXT CHECK"
     },
     "gallery": {
         "title": "Media Gallery",
@@ -228,9 +229,11 @@
         "task_name_description": "Enter a name for this task or leave empty for auto-naming",
         "name": "Pipeline Name",
         "openrouter": {
-            "max_connections": "Simultaneous Connections",
-            "max_connections_desc": "Global limit of simultaneous requests to OpenRouter. New requests will wait in a queue."
-        }
+            "max_connections": "Max simultaneous connections",
+            "max_connections_desc": "Global limit of simultaneous requests to OpenRouter. New requests will wait in queue."
+        },
+        "control": "Control",
+        "translate_control": "Translation Control"
     },
     "templatesTab": {
         "description": "Managing your pipeline templates.",

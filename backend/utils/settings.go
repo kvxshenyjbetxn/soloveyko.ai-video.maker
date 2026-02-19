@@ -48,6 +48,8 @@ type PipelineSettings struct {
 	VoiceoverTemplatesCollapsed bool    `json:"voiceoverTemplatesCollapsed"`
 	VoiceoverService            string  `json:"voiceoverService,omitempty"`
 	VoiceoverTemplate           string  `json:"voiceoverTemplate,omitempty"`
+	TranslateControlEnabled     bool    `json:"translateControlEnabled"`
+	ControlCollapsed            bool    `json:"controlCollapsed"`
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`
 }

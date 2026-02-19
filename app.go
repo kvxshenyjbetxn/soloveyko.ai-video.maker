@@ -68,6 +68,12 @@ func NewApp() *App {
 		}
 	}
 
+	app.pipeline.OnRequestControl = func(id string, text string) {
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "requestControl", id, text)
+		}
+	}
+
 	orService.OnRequestStart = func(id string, taskLabel string, taskType string, keyName string, model string, temp float64, tokens int) {
 		app.LogToUI("INFO", fmt.Sprintf("[OpenRouter] [%s] Request | Key: %s | Model: %s | Temp: %.2f | Max Tokens: %v", strings.Title(taskType), keyName, model, temp, tokens), id, taskLabel)
 		// Емітуємо подію, щоб фронтенд знав, що завдання ДІЙСНО почало обробку
@@ -554,4 +560,9 @@ func (a *App) GetElevenLabsBotVoiceTemplates(apiKey string) ([]string, error) {
 // ProcessTask handles the execution of a single pipeline task
 func (a *App) ProcessTask(id string, taskNumber int, taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
 	return a.pipeline.ProcessTask(id, taskNumber, taskType, content, settings, taskName, subName)
+}
+
+// SubmitControlResult resumes a paused task with edited text
+func (a *App) SubmitControlResult(taskId string, content string) {
+	a.pipeline.SubmitControlResult(taskId, content)
 }

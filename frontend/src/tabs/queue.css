@@ -425,3 +425,80 @@
     color: var(--text-placeholder);
     text-align: right;
 }
+
+/* Control Editor */
+.task-card.awaiting-control {
+    border-color: #ffeb3b;
+    background: rgba(255, 235, 59, 0.05);
+}
+
+.control-editor-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 15, 20, 0.95);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    animation: fadeIn 0.3s ease;
+}
+
+.control-editor-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.control-editor-content h3 {
+    font-size: 12px;
+    font-weight: 800;
+    margin: 0 0 12px 0;
+    color: #ffeb3b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.control-textarea {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 10px;
+    color: var(--text-primary);
+    font-size: 12px;
+    line-height: 1.5;
+    resize: none;
+    margin-bottom: 12px;
+    outline: none;
+    transition: border-color 0.2s ease;
+    font-family: inherit;
+}
+
+.control-textarea:focus {
+    border-color: #ffeb3b;
+}
+
+.control-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.control-ok-btn {
+    background: #ffeb3b;
+    color: #000;
+    border: none;
+    padding: 6px 20px;
+    border-radius: 8px;
+    font-weight: 800;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.control-ok-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(255, 235, 59, 0.3);
+}

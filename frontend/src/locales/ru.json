@@ -34,7 +34,8 @@
         "completion_message": "Очередь успешно обработана!\nВыполнено задач: {count}\nВремя выполнения: {duration}",
         "completion_ok": "Понятно",
         "completion_open_folder": "Открыть папку",
-        "task_default_name": "Задание"
+        "task_default_name": "Задание",
+        "control_title": "ПРОВЕРКА ТЕКСТА"
     },
     "gallery": {
         "title": "Медиа Галерея",
@@ -232,7 +233,9 @@
         "openrouter": {
             "max_connections": "Количество одновременных соединений",
             "max_connections_desc": "Лимит одновременных запросов к OpenRouter для всей программы. Новые запросы будут ждать в очереди."
-        }
+        },
+        "control": "Контроль",
+        "translate_control": "Контроль перевода"
     },
     "templatesTab": {
         "description": "Здесь вы можете управлять вашими шаблонами пайплайнов.",

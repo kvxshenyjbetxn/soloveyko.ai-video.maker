@@ -21,9 +21,33 @@ const VoiceIcon = () => (
     </svg>
 );
 
+const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: string, text: string) => void }) => {
+    const [text, setText] = useState(task.controlContent || '');
+    const { t } = useI18n();
+
+    return (
+        <div className="control-editor-overlay" onClick={(e) => e.stopPropagation()}>
+            <div className="control-editor-content">
+                <h3>{t('queue.control_title') || 'ПЕРЕВІРКА ПЕРЕКЛАДУ'}</h3>
+                <textarea
+                    className="control-textarea premium-scrollbar"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    autoFocus
+                />
+                <div className="control-actions">
+                    <button className="control-ok-btn" onClick={() => onConfirm(task.id, text)}>
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask } = useQueue();
     const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
 
@@ -103,9 +127,12 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         return (
             <div key={task.id} className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
                 <div
-                    className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''}`}
-                    onClick={() => toggleExpand(task.id)}
+                    className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${task.isAwaitingControl ? 'awaiting-control' : ''}`}
+                    onClick={() => !task.isAwaitingControl && toggleExpand(task.id)}
                 >
+                    {task.isAwaitingControl && (
+                        <ControlEditor task={task} onConfirm={resumeTask} />
+                    )}
                     <div className="task-card-header">
                         <span className={`task-type-badge ${task.type}`}>
                             {mainLabel}

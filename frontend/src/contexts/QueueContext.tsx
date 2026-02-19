@@ -1,5 +1,5 @@
 // @ts-ignore
-import { ProcessTask } from '../../wailsjs/go/main/App';
+import { ProcessTask, SubmitControlResult } from '../../wailsjs/go/main/App';
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from 'react';
 import { useToast } from './ToastContext';
 import { useI18n } from './I18nContext';
@@ -21,6 +21,8 @@ export interface QueueTask {
     settings: any;
     resultLength?: number;
     taskNumber?: number; // Простий порядковий номер завдання
+    isAwaitingControl?: boolean;
+    controlContent?: string;
 }
 
 interface QueueContextType {
@@ -38,6 +40,7 @@ interface QueueContextType {
         taskCount: number;
     };
     closeCompletionModal: () => void;
+    resumeTask: (id: string, editedContent: string) => Promise<void>;
 }
 
 const QueueContext = createContext<QueueContextType | undefined>(undefined);
@@ -152,6 +155,30 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ));
     }, []);
 
+    const updateTaskControl = useCallback((id: string, text: string) => {
+        setTasks(prev => prev.map(t =>
+            t.id === id ? {
+                ...t,
+                status: 'running',
+                isAwaitingControl: true,
+                controlContent: text
+            } : t
+        ));
+    }, []);
+
+    const resumeTask = useCallback(async (id: string, editedContent: string) => {
+        setTasks(prev => prev.map(t =>
+            t.id === id ? {
+                ...t,
+                isAwaitingControl: false,
+                controlContent: undefined,
+                resultLength: editedContent.length,
+                textStatus: 'completed'
+            } : t
+        ));
+        await SubmitControlResult(id, editedContent);
+    }, []);
+
     const updateTaskResultLength = useCallback((id: string, length: number) => {
         setTasks(prev => prev.map(t =>
             t.id === id ? {
@@ -235,16 +262,21 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             const unsubResult = window.runtime.EventsOn("textResult", (id: string, length: number) => {
                 updateTaskResultLength(id, length);
             });
+            // @ts-ignore
+            const unsubControl = window.runtime.EventsOn("requestControl", (id: string, text: string) => {
+                updateTaskControl(id, text);
+            });
             return () => {
                 unsubStatus();
                 unsubStage();
                 unsubResult();
+                unsubControl();
             };
         }
     }, [updateTaskStatus, updateStageStatus]);
 
     return (
-        <QueueContext.Provider value={{ tasks, addTask, addTasks, removeTask, clearQueue, updateTaskStatus, startQueue, isProcessing, completionModal, closeCompletionModal }}>
+        <QueueContext.Provider value={{ tasks, addTask, addTasks, removeTask, clearQueue, updateTaskStatus, startQueue, isProcessing, completionModal, closeCompletionModal, resumeTask }}>
             {children}
         </QueueContext.Provider>
     );
