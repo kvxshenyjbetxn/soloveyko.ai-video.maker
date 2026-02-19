@@ -7,6 +7,7 @@ import (
 type ElevenLabsUAService struct {
 	settings *utils.SettingsService
 	baseUrl  string
+	OnLog    func(level string, message string)
 }
 
 func NewElevenLabsUAService(settings *utils.SettingsService) *ElevenLabsUAService {

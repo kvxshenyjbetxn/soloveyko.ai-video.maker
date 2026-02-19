@@ -5,7 +5,7 @@ import { useQueue } from '../contexts/QueueContext';
 import { useServices } from '../contexts/ServiceContext';
 import { useTemplates, PipelineSettings as TemplatePipelineSettings } from '../contexts/TemplateContext';
 // @ts-ignore
-import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath } from '../../wailsjs/go/main/App';
+import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotKeys, GetElevenLabsBotVoiceTemplates } from '../../wailsjs/go/main/App';
 
 import { TaskNameModal } from './TaskNameModal';
 import { ConfirmModal } from './ConfirmModal';
@@ -29,6 +29,27 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [templateToDelete, setTemplateToDelete] = useState<any | null>(null);
     const { templates, saveTemplate, removeTemplate, selectedTemplateIds, setSelectedTemplateIds } = useTemplates();
+    const [voiceTemplates, setVoiceTemplates] = useState<string[]>([]);
+    const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+    const fetchVoiceTemplates = async (keyID?: string) => {
+        const id = keyID || (isTranslate ? settings.translateElevenLabsBotKeyID : (isRewrite ? settings.rewriteElevenLabsBotKeyID : settings.voiceoverElevenLabsBotKeyID));
+        if (!id) return;
+
+        setLoadingTemplates(true);
+        try {
+            const keys = await GetElevenLabsBotKeys();
+            const keyObj = keys.find((k: any) => k.id === id);
+            if (keyObj) {
+                const results = await GetElevenLabsBotVoiceTemplates(keyObj.key);
+                setVoiceTemplates(results || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch templates:", err);
+        } finally {
+            setLoadingTemplates(false);
+        }
+    };
 
     const sidebarRef = useRef<HTMLDivElement>(null);
     const lastSavedRef = useRef<string>("");
@@ -69,7 +90,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     }
                 }
 
-                const botKeys = await window.go.main.App.GetElevenLabsBotKeys();
+                const botKeys = await GetElevenLabsBotKeys();
                 if (botKeys && botKeys.length > 0) {
                     if (!s.translateElevenLabsBotKeyID) {
                         s.translateElevenLabsBotKeyID = botKeys[0].id;
@@ -125,11 +146,23 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.rewriteMaxTokens === undefined) s.rewriteMaxTokens = 0;
                 if (s.voiceoverMaxTokens === undefined) s.voiceoverMaxTokens = 0;
 
-                // Оновлюємо налаштування на сервері, щоб зафіксувати згортання API/Шляху
-                await SavePipelineSettings(s);
+                if (!s.voiceoverService) {
+                    s.voiceoverService = 'elevenlabsbot';
+                    updated = true;
+                }
+
+                // Оновлюємо налаштування на сервері
+                if (updated) {
+                    await SavePipelineSettings(s);
+                }
 
                 setSettings(s);
                 lastSavedRef.current = JSON.stringify(s);
+
+                // Завантажуємо шаблони голосів, якщо обрано ElevenLabs Bot
+                if (s.voiceoverService === 'elevenlabsbot' && s.voiceoverElevenLabsBotKeyID) {
+                    setTimeout(() => fetchVoiceTemplates(s.voiceoverElevenLabsBotKeyID), 0);
+                }
             } catch (err) {
                 console.error("Failed to initialize sidebar:", err);
             }
@@ -628,6 +661,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                             else if (isRewrite) field = 'rewriteElevenLabsBotKeyID';
                                             else field = 'voiceoverElevenLabsBotKeyID';
                                             handleChange(field, val);
+                                            if (val !== "MANAGE_KEYS" && settings.voiceoverService === 'elevenlabsbot') {
+                                                fetchVoiceTemplates(val);
+                                            }
                                         }}
                                     >
                                         {elevenLabsBotKeys.length === 0 ? (
@@ -861,18 +897,68 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                         </div>
 
                         <div className={`stage-settings-content ${settings.voiceoverCollapsed || !settings.voiceoverEnabled ? 'collapsed' : ''}`}>
-                            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
-                                <div style={{ marginBottom: '12px', opacity: 0.3 }}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
-                                    </svg>
+                            <div className="settings-group">
+                                <div className="settings-control">
+                                    <label className="settings-label">{t('pipeline.voiceover.service') || 'Сервіс озвучки'}</label>
+                                    <select
+                                        className="settings-select"
+                                        value={settings.voiceoverService}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            handleChange('voiceoverService', val);
+                                            if (val === 'elevenlabsbot') {
+                                                fetchVoiceTemplates();
+                                            }
+                                        }}
+                                    >
+                                        <option value="elevenlabsbot">{t('pipeline.voiceover.services.elevenlabsbot') || 'ElevenLabs Bot'}</option>
+                                        <option value="elevenlabsunlim">{t('pipeline.voiceover.services.elevenlabsunlim') || 'ElevenLabs Unlim'}</option>
+                                        <option value="elevenlabsua">{t('pipeline.voiceover.services.elevenlabsua') || 'ElevenLabs UA'}</option>
+                                        <option value="voicemaker">{t('pipeline.voiceover.services.voicemaker') || 'VoiceMaker'}</option>
+                                    </select>
                                 </div>
-                                <div style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>
-                                    {t('pipeline.voiceover.empty_title') || 'Параметри озвучки'}
-                                </div>
-                                <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', lineHeight: 1.4 }}>
-                                    {t('pipeline.voiceover.empty_description') || 'Налаштування цієї стадії будуть доступні в наступних оновленнях'}
-                                </div>
+
+                                {settings.voiceoverService === 'elevenlabsbot' && (
+                                    <div className="settings-control">
+                                        <label className="settings-label">{t('pipeline.voiceover.template') || 'Шаблон голосу'}</label>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <select
+                                                className="settings-select"
+                                                style={{ flex: 1 }}
+                                                value={settings.voiceoverTemplate}
+                                                onChange={(e) => handleChange('voiceoverTemplate', e.target.value)}
+                                                disabled={loadingTemplates}
+                                            >
+                                                <option value="">{loadingTemplates ? (t('common.loading') || 'Loading...') : (t('common.select_template') || 'Select template...')}</option>
+                                                {voiceTemplates.map(tpl => (
+                                                    <option key={tpl} value={tpl}>{tpl}</option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                className="premium-btn-sm"
+                                                style={{ padding: '0 10px', height: '32px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                onClick={() => fetchVoiceTemplates()}
+                                                disabled={loadingTemplates}
+                                                title={t('common.refresh') || 'Refresh'}
+                                            >
+                                                <svg
+                                                    className={loadingTemplates ? 'animate-spin' : ''}
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    width="14" height="14"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2.5"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                >
+                                                    <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.83 6.72 2.24" />
+                                                    <polyline points="21 3 21 9 15 9" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

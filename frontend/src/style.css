@@ -334,3 +334,7 @@ input[type="range"].custom-slider::-moz-range-thumb,
         transform: rotate(360deg);
     }
 }
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}

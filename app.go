@@ -58,6 +58,14 @@ func NewApp() *App {
 		}
 	}
 
+	app.elevenLabs.OnLog = func(level string, message string) {
+		app.LogToUI(level, message)
+	}
+
+	app.elevenLabsUA.OnLog = func(level string, message string) {
+		app.LogToUI(level, message)
+	}
+
 	return app
 }
 
@@ -510,6 +518,11 @@ func (a *App) GetPipelineSettings() utils.PipelineSettings {
 // SavePipelineSettings saves pipeline configuration
 func (a *App) SavePipelineSettings(pipeline utils.PipelineSettings) error {
 	return a.settings.SavePipelineSettings(pipeline)
+}
+
+// GetElevenLabsBotVoiceTemplates returns the list of voice templates for a given API key
+func (a *App) GetElevenLabsBotVoiceTemplates(apiKey string) ([]string, error) {
+	return a.elevenLabs.GetTemplates(apiKey)
 }
 
 // ProcessTask handles the execution of a single pipeline task

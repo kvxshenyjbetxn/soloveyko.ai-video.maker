@@ -179,7 +179,15 @@
         },
         "voiceover": {
             "title": "Voiceover Settings",
-            "prompt_placeholder": "Enter voiceover prompt..."
+            "prompt_placeholder": "Prompt for voiceover... Use {{content}} to insert text.",
+            "service": "Voiceover Service",
+            "template": "Voice Template",
+            "services": {
+                "elevenlabsbot": "ElevenLabs Bot",
+                "elevenlabsunlim": "ElevenLabs Unlim",
+                "elevenlabsua": "ElevenLabs UA",
+                "voicemaker": "VoiceMaker"
+            }
         },
         "group": {
             "ai": "AI Parameters",
@@ -242,6 +250,9 @@
         "cancel": "Cancel",
         "delete": "Delete",
         "load": "Load",
-        "value": "Value"
+        "value": "Value",
+        "select_template": "Select template...",
+        "refresh": "Refresh",
+        "loading": "Loading..."
     }
 }

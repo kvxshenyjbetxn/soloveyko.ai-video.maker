@@ -178,7 +178,15 @@
         },
         "voiceover": {
             "title": "Настройки озвучки",
-            "prompt_placeholder": "Введите промт для озвучки..."
+            "prompt_placeholder": "Промт для озвучки... Используйте {{content}} для вставки текста.",
+            "service": "Сервис озвучки",
+            "template": "Шаблон голоса",
+            "services": {
+                "elevenlabsbot": "ElevenLabs Bot",
+                "elevenlabsunlim": "ElevenLabs Unlim",
+                "elevenlabsua": "ElevenLabs UA",
+                "voicemaker": "VoiceMaker"
+            }
         },
         "group": {
             "ai": "Параметры ИИ",
@@ -244,6 +252,9 @@
         "cancel": "Отмена",
         "delete": "Удалить",
         "load": "Загрузить",
-        "value": "Значение"
+        "value": "Значение",
+        "select_template": "Выберите шаблон...",
+        "refresh": "Обновить",
+        "loading": "Загрузка..."
     }
 }

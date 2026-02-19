@@ -42,6 +42,8 @@ export interface PipelineSettings {
     translateTemplatesCollapsed: boolean;
     rewriteTemplatesCollapsed: boolean;
     voiceoverTemplatesCollapsed: boolean;
+    voiceoverService: string;
+    voiceoverTemplate: string;
 }
 
 export interface PipelineTemplate {

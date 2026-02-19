@@ -183,7 +183,15 @@
       "title": "Налаштування озвучки",
       "prompt_placeholder": "Промт для озвучки... Використовуйте {{content}} для вставки тексту.",
       "empty_title": "Параметри озвучки",
-      "empty_description": "Налаштування цієї стадії будуть доступні в наступних оновленнях"
+      "empty_description": "Налаштування цієї стадії будуть доступні в наступних оновленнях",
+      "service": "Сервіс озвучки",
+      "template": "Шаблон голосу",
+      "services": {
+        "elevenlabsbot": "ElevenLabs Bot",
+        "elevenlabsunlim": "ElevenLabs Unlim",
+        "elevenlabsua": "ElevenLabs UA",
+        "voicemaker": "VoiceMaker"
+      }
     },
     "group": {
       "ai": "Параметри ШІ",
@@ -249,6 +257,9 @@
     "cancel": "Скасувати",
     "delete": "Видалити",
     "load": "Завантажити",
-    "value": "Значення"
+    "value": "Значення",
+    "select_template": "Оберіть шаблон...",
+    "refresh": "Оновити",
+    "loading": "Завантаження..."
   }
 }
