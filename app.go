@@ -52,7 +52,7 @@ func NewApp() *App {
 		templates:       utils.NewTemplateService(),
 	}
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -82,7 +82,15 @@ func NewApp() *App {
 		}
 	}
 
+	orService.OnLog = func(level string, message string, details ...string) {
+		app.LogToUI(level, message, details...)
+	}
+
 	app.elevenLabs.OnLog = func(level string, message string, details ...string) {
+		app.LogToUI(level, message, details...)
+	}
+
+	app.elevenLabsUnlim.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
 	}
 
@@ -363,6 +371,16 @@ func (a *App) SaveElevenLabsUnlimAPIKey(apiKey string) error {
 // GetElevenLabsUnlimAPIKey gets API key
 func (a *App) GetElevenLabsUnlimAPIKey() string {
 	return a.elevenLabsUnlim.GetAPIKey()
+}
+
+// GetElevenLabsUnlimKeys returns the list of named API keys
+func (a *App) GetElevenLabsUnlimKeys() []utils.NamedAPIKey {
+	return a.settings.GetElevenLabsUnlimKeys()
+}
+
+// SaveElevenLabsUnlimKeys saves the list of named API keys
+func (a *App) SaveElevenLabsUnlimKeys(keys []utils.NamedAPIKey) error {
+	return a.settings.SetElevenLabsUnlimKeys(keys)
 }
 
 // VoiceMaker Methods

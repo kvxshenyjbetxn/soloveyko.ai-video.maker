@@ -10,10 +10,11 @@ import (
 
 // PipelineService handles the execution of multi-stage tasks
 type PipelineService struct {
-	ctx        context.Context
-	settings   *utils.SettingsService
-	openRouter *api.OpenRouterService
-	elevenLabs *api.ElevenLabsBotService
+	ctx             context.Context
+	settings        *utils.SettingsService
+	openRouter      *api.OpenRouterService
+	elevenLabs      *api.ElevenLabsBotService
+	elevenLabsUnlim *api.ElevenLabsUnlimService
 
 	// Callbacks for UI updates
 	OnLog            func(level string, message string, details ...string)
@@ -29,11 +30,13 @@ func NewPipelineService(
 	settings *utils.SettingsService,
 	openRouter *api.OpenRouterService,
 	elevenLabs *api.ElevenLabsBotService,
+	elevenLabsUnlim *api.ElevenLabsUnlimService,
 ) *PipelineService {
 	return &PipelineService{
-		settings:   settings,
-		openRouter: openRouter,
-		elevenLabs: elevenLabs,
+		settings:        settings,
+		openRouter:      openRouter,
+		elevenLabs:      elevenLabs,
+		elevenLabsUnlim: elevenLabsUnlim,
 	}
 }
 
@@ -89,7 +92,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	// 1.5 Control Stage
-	if pSettings.TranslateControlEnabled && (taskType == "translate" || taskType == "rewrite") {
+	if pSettings.TranslateControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
 		s.emitStageStatus(id, "text", "waiting")
 		s.log("INFO", "[Control] Waiting for user translation review...", id, taskLabel)
 

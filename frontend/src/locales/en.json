@@ -35,6 +35,7 @@
         "completion_ok": "Got it",
         "completion_open_folder": "Open Folder",
         "task_default_name": "Task",
+        "voice_saved": "MP3 Saved",
         "control_title": "TEXT CHECK"
     },
     "gallery": {
@@ -93,6 +94,9 @@
             "alertThresholdPlaceholder": "e.g. 5.0"
         },
         "elevenlabsbotSettings": {
+            "totalBalance": "Total Balance"
+        },
+        "elevenlabsunlimSettings": {
             "totalBalance": "Total Balance"
         },
         "pollinationsSettings": {
@@ -185,6 +189,12 @@
             "prompt_placeholder": "Prompt for voiceover... Use {{content}} to insert text.",
             "service": "Voiceover Service",
             "template": "Voice Template",
+            "settings": {
+                "stability": "Stability",
+                "similarity": "Similarity",
+                "style": "Style Exaggeration",
+                "speaker_boost": "Speaker Boost"
+            },
             "services": {
                 "elevenlabsbot": "ElevenLabs Bot",
                 "elevenlabsunlim": "ElevenLabs Unlim",

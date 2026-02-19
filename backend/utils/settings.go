@@ -14,42 +14,46 @@ type NamedAPIKey struct {
 }
 
 type PipelineSettings struct {
-	TranslateModel              string  `json:"translateModel,omitempty"`
-	TranslatePrompt             string  `json:"translatePrompt,omitempty"`
-	TranslateTemperature        float64 `json:"translateTemperature,omitempty"`
-	TranslateMaxTokens          int     `json:"translateMaxTokens,omitempty"`
-	TranslateCollapsed          bool    `json:"translateCollapsed"`
-	TranslateOpenRouterKeyID    string  `json:"translateOpenRouterKeyID,omitempty"`
-	TranslateElevenLabsBotKeyID string  `json:"translateElevenLabsBotKeyID,omitempty"`
-	RewriteModel                string  `json:"rewriteModel,omitempty"`
-	RewritePrompt               string  `json:"rewritePrompt,omitempty"`
-	RewriteTemperature          float64 `json:"rewriteTemperature,omitempty"`
-	RewriteMaxTokens            int     `json:"rewriteMaxTokens,omitempty"`
-	RewriteCollapsed            bool    `json:"rewriteCollapsed"`
-	RewriteOpenRouterKeyID      string  `json:"rewriteOpenRouterKeyID,omitempty"`
-	RewriteElevenLabsBotKeyID   string  `json:"rewriteElevenLabsBotKeyID,omitempty"`
-	SidebarWidth                int     `json:"sidebarWidth,omitempty"`
-	TranslateEnabled            bool    `json:"translateEnabled"`
-	RewriteEnabled              bool    `json:"rewriteEnabled"`
-	ApiCollapsed                bool    `json:"apiCollapsed"`
-	TranslateOutputPath         string  `json:"translateOutputPath,omitempty"`
-	RewriteOutputPath           string  `json:"rewriteOutputPath,omitempty"`
-	PathCollapsed               bool    `json:"pathCollapsed"`
-	TranslatePipelineName       string  `json:"translatePipelineName,omitempty"`
-	RewritePipelineName         string  `json:"rewritePipelineName,omitempty"`
-	TemplatesCollapsed          bool    `json:"templatesCollapsed"`
-	TranslateTemplatesCollapsed bool    `json:"translateTemplatesCollapsed"`
-	RewriteTemplatesCollapsed   bool    `json:"rewriteTemplatesCollapsed"`
-	VoiceoverElevenLabsBotKeyID string  `json:"voiceoverElevenLabsBotKeyID,omitempty"`
-	VoiceoverCollapsed          bool    `json:"voiceoverCollapsed"`
-	VoiceoverEnabled            bool    `json:"voiceoverEnabled"`
-	VoiceoverOutputPath         string  `json:"voiceoverOutputPath,omitempty"`
-	VoiceoverPipelineName       string  `json:"voiceoverPipelineName,omitempty"`
-	VoiceoverTemplatesCollapsed bool    `json:"voiceoverTemplatesCollapsed"`
-	VoiceoverService            string  `json:"voiceoverService,omitempty"`
-	VoiceoverTemplate           string  `json:"voiceoverTemplate,omitempty"`
-	TranslateControlEnabled     bool    `json:"translateControlEnabled"`
-	ControlCollapsed            bool    `json:"controlCollapsed"`
+	TranslateModel                string  `json:"translateModel,omitempty"`
+	TranslatePrompt               string  `json:"translatePrompt,omitempty"`
+	TranslateTemperature          float64 `json:"translateTemperature,omitempty"`
+	TranslateMaxTokens            int     `json:"translateMaxTokens,omitempty"`
+	TranslateCollapsed            bool    `json:"translateCollapsed"`
+	TranslateOpenRouterKeyID      string  `json:"translateOpenRouterKeyID,omitempty"`
+	RewriteModel                  string  `json:"rewriteModel,omitempty"`
+	RewritePrompt                 string  `json:"rewritePrompt,omitempty"`
+	RewriteTemperature            float64 `json:"rewriteTemperature,omitempty"`
+	RewriteMaxTokens              int     `json:"rewriteMaxTokens,omitempty"`
+	RewriteCollapsed              bool    `json:"rewriteCollapsed"`
+	RewriteOpenRouterKeyID        string  `json:"rewriteOpenRouterKeyID,omitempty"`
+	SidebarWidth                  int     `json:"sidebarWidth,omitempty"`
+	TranslateEnabled              bool    `json:"translateEnabled"`
+	RewriteEnabled                bool    `json:"rewriteEnabled"`
+	ApiCollapsed                  bool    `json:"apiCollapsed"`
+	TranslateOutputPath           string  `json:"translateOutputPath,omitempty"`
+	RewriteOutputPath             string  `json:"rewriteOutputPath,omitempty"`
+	PathCollapsed                 bool    `json:"pathCollapsed"`
+	TranslatePipelineName         string  `json:"translatePipelineName,omitempty"`
+	RewritePipelineName           string  `json:"rewritePipelineName,omitempty"`
+	TemplatesCollapsed            bool    `json:"templatesCollapsed"`
+	TranslateTemplatesCollapsed   bool    `json:"translateTemplatesCollapsed"`
+	RewriteTemplatesCollapsed     bool    `json:"rewriteTemplatesCollapsed"`
+	VoiceoverElevenLabsBotKeyID   string  `json:"voiceoverElevenLabsBotKeyID,omitempty"`
+	VoiceoverCollapsed            bool    `json:"voiceoverCollapsed"`
+	VoiceoverEnabled              bool    `json:"voiceoverEnabled"`
+	VoiceoverOutputPath           string  `json:"voiceoverOutputPath,omitempty"`
+	VoiceoverPipelineName         string  `json:"voiceoverPipelineName,omitempty"`
+	VoiceoverTemplatesCollapsed   bool    `json:"voiceoverTemplatesCollapsed"`
+	VoiceoverService              string  `json:"voiceoverService,omitempty"`
+	VoiceoverTemplate             string  `json:"voiceoverTemplate,omitempty"`
+	ElevenLabsUnlimVoiceID        string  `json:"elevenLabsUnlimVoiceID,omitempty"`
+	ElevenLabsUnlimStability      float64 `json:"elevenLabsUnlimStability,omitempty"`
+	ElevenLabsUnlimSimilarity     float64 `json:"elevenLabsUnlimSimilarity,omitempty"`
+	ElevenLabsUnlimStyle          float64 `json:"elevenLabsUnlimStyle,omitempty"`
+	ElevenLabsUnlimSpeakerBoost   bool    `json:"elevenLabsUnlimSpeakerBoost,omitempty"`
+	VoiceoverElevenLabsUnlimKeyID string  `json:"voiceoverElevenLabsUnlimKeyID,omitempty"`
+	TranslateControlEnabled       bool    `json:"translateControlEnabled"`
+	ControlCollapsed              bool    `json:"controlCollapsed"`
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`
 }
@@ -66,6 +70,7 @@ type Settings struct {
 	ElevenLabsBotAPIKey           string           `json:"elevenLabsBotAPIKey"`
 	ElevenLabsBotKeys             []NamedAPIKey    `json:"elevenLabsBotKeys"`
 	ElevenLabsUnlimAPIKey         string           `json:"elevenLabsUnlimAPIKey"`
+	ElevenLabsUnlimKeys           []NamedAPIKey    `json:"elevenLabsUnlimKeys"`
 	VoiceMakerAPIKey              string           `json:"voiceMakerAPIKey"`
 	VoiceMakerBalance             float64          `json:"voiceMakerBalance"`
 	GooglerAPIKey                 string           `json:"googlerAPIKey"`
@@ -184,6 +189,16 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				ID:   "default",
 				Name: "Default",
 				Key:  settings.ElevenLabsBotAPIKey,
+			},
+		}
+	}
+	// Міграція для ElevenLabsUnlimKeys
+	if len(settings.ElevenLabsUnlimKeys) == 0 && settings.ElevenLabsUnlimAPIKey != "" {
+		settings.ElevenLabsUnlimKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  settings.ElevenLabsUnlimAPIKey,
 			},
 		}
 	}
@@ -572,6 +587,41 @@ func (s *SettingsService) SetElevenLabsUnlimAPIKey(apiKey string) error {
 	}
 
 	settings.ElevenLabsUnlimAPIKey = apiKey
+	// Оновлюємо також іменовані ключі, якщо вони порожні
+	if len(settings.ElevenLabsUnlimKeys) == 0 {
+		settings.ElevenLabsUnlimKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  apiKey,
+			},
+		}
+	}
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsUnlimKeys повертає список іменованих ключів ElevenLabsUnlim
+func (s *SettingsService) GetElevenLabsUnlimKeys() []NamedAPIKey {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []NamedAPIKey{}
+	}
+	return settings.ElevenLabsUnlimKeys
+}
+
+// SetElevenLabsUnlimKeys зберігає список іменованих ключів ElevenLabsUnlim
+func (s *SettingsService) SetElevenLabsUnlimKeys(keys []NamedAPIKey) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.ElevenLabsUnlimKeys = keys
+	// Оновлюємо старий ключ для сумісності
+	if len(keys) > 0 {
+		settings.ElevenLabsUnlimAPIKey = keys[0].Key
+	}
+
 	return s.SaveSettings(settings)
 }
 

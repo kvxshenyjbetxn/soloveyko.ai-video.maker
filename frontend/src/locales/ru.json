@@ -35,6 +35,7 @@
         "completion_ok": "Понятно",
         "completion_open_folder": "Открыть папку",
         "task_default_name": "Задание",
+        "voice_saved": "MP3 сохранено",
         "control_title": "ПРОВЕРКА ТЕКСТА"
     },
     "gallery": {
@@ -93,6 +94,9 @@
             "alertThresholdPlaceholder": "Например: 5.0"
         },
         "elevenlabsbotSettings": {
+            "totalBalance": "Общий баланс"
+        },
+        "elevenlabsunlimSettings": {
             "totalBalance": "Общий баланс"
         },
         "pollinationsSettings": {
@@ -184,6 +188,12 @@
             "prompt_placeholder": "Промт для озвучки... Используйте {{content}} для вставки текста.",
             "service": "Сервис озвучки",
             "template": "Шаблон голоса",
+            "settings": {
+                "stability": "Стабильность",
+                "similarity": "Сходство",
+                "style": "Экспрессия",
+                "speaker_boost": "Усиление дикции"
+            },
             "services": {
                 "elevenlabsbot": "ElevenLabs Bot",
                 "elevenlabsunlim": "ElevenLabs Unlim",

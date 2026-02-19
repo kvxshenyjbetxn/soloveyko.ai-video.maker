@@ -12,7 +12,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
     const {
         openRouterBalances, openRouterKeys, loadingOpenRouter, refreshOpenRouterBalance,
         elevenLabsBotBalances, elevenLabsBotKeys, loadingElevenLabsBot, refreshElevenLabsBotBalance,
-        elevenLabsUnlimBalance, loadingElevenLabsUnlim, refreshElevenLabsUnlimBalance,
+        elevenLabsUnlimBalances, elevenLabsUnlimKeys, loadingElevenLabsUnlim, refreshElevenLabsUnlimBalance,
         voiceMakerBalance, loadingVoiceMaker, refreshVoiceMakerBalance,
         googlerUsage, loadingGoogler, refreshGooglerUsage,
         elevenLabsBotThreshold,
@@ -38,9 +38,13 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         balance !== null && elevenLabsBotThreshold > 0 && balance < elevenLabsBotThreshold
     );
 
+    const isElevenLabsUnlimAlert = Object.entries(elevenLabsUnlimBalances).some(([id, balance]) =>
+        balance !== null && balance !== -1 && elevenLabsUnlimThreshold > 0 && balance < elevenLabsUnlimThreshold
+    );
+
     const isAnyAlertActive = (
         isElevenLabsBotAlert ||
-        (elevenLabsUnlimBalance !== null && elevenLabsUnlimBalance !== -1 && elevenLabsUnlimThreshold > 0 && elevenLabsUnlimBalance < elevenLabsUnlimThreshold) ||
+        isElevenLabsUnlimAlert ||
         (voiceMakerBalance !== null && voiceMakerThreshold > 0 && voiceMakerBalance < voiceMakerThreshold) ||
         isOpenRouterAlert ||
         isGooglerVideoAlert ||
@@ -56,7 +60,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
 
         const hasAnyBalance = Object.values(openRouterBalances).some(b => b !== null) ||
             Object.values(elevenLabsBotBalances).some(b => b !== null) ||
-            elevenLabsUnlimBalance !== null ||
+            Object.values(elevenLabsUnlimBalances).some(b => b !== null) ||
             voiceMakerBalance !== null ||
             googlerUsage.expiration_date !== 0;
 
@@ -146,29 +150,33 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                             );
                         })}
 
-                        <div className="balance-item">
-                            <div className="service-name">
-                                <div className={`service-status-dot ${loadingElevenLabsUnlim ? 'loading' : (elevenLabsUnlimBalance === null ? 'error' : '')}`}></div>
-                                {t('balanceMonitor.elevenlabsunlim') || 'ElevenLabsUnlim'}
-                                {navigateTo && (
-                                    <button
-                                        className="service-settings-btn"
-                                        onClick={() => { navigateTo('settings.api.voice.elevenlabsunlim'); setIsExpanded(false); }}
-                                        title="Settings"
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                                    </button>
-                                )}
-                            </div>
-                            <div className="service-balance" style={{
-                                color: (elevenLabsUnlimBalance !== null && elevenLabsUnlimBalance !== -1 && elevenLabsUnlimThreshold > 0 && elevenLabsUnlimBalance < elevenLabsUnlimThreshold) ? '#ff5252' : '#4caf50'
-                            }}>
-                                {loadingElevenLabsUnlim ? '...' : (elevenLabsUnlimBalance !== null ? (elevenLabsUnlimBalance === -1 ? 'Unlimited' : elevenLabsUnlimBalance.toLocaleString()) : 'N/A')}
-                                {elevenLabsUnlimBalance !== null && elevenLabsUnlimBalance !== -1 && elevenLabsUnlimThreshold > 0 && elevenLabsUnlimBalance < elevenLabsUnlimThreshold && (
-                                    <span style={{ fontSize: '0.8em', marginLeft: '4px', verticalAlign: 'middle' }}>⚠️</span>
-                                )}
-                            </div>
-                        </div>
+                        {elevenLabsUnlimKeys.map((keyItem) => {
+                            const balance = elevenLabsUnlimBalances[keyItem.id];
+                            const isAlert = balance !== null && balance !== -1 && elevenLabsUnlimThreshold > 0 && balance < elevenLabsUnlimThreshold;
+
+                            return (
+                                <div className="balance-item" key={keyItem.id}>
+                                    <div className="service-name">
+                                        <div className={`service-status-dot ${loadingElevenLabsUnlim ? 'loading' : (balance === null ? 'error' : '')}`}></div>
+                                        <span style={{ fontSize: '0.7em', opacity: 0.5, marginRight: '4px', textTransform: 'uppercase' }}>Unlim:</span>
+                                        <span style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{keyItem.name}</span>
+                                        {navigateTo && (
+                                            <button
+                                                className="service-settings-btn"
+                                                onClick={() => { navigateTo('settings.api.voice.elevenlabsunlim'); setIsExpanded(false); }}
+                                                title="Settings"
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="service-balance" style={{ color: isAlert ? '#ff5252' : (balance === -1 ? '#FFC107' : '#4caf50') }}>
+                                        {loadingElevenLabsUnlim ? '...' : (balance !== null ? (balance === -1 ? 'Unlimited' : balance.toLocaleString()) : 'N/A')}
+                                        {isAlert && <span style={{ fontSize: '0.8em', marginLeft: '4px', verticalAlign: 'middle' }}>⚠️</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
 
                         <div className="balance-item">
                             <div className="service-name">
@@ -268,7 +276,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                         if (newExpanded) {
                             if (Object.values(openRouterBalances).some(b => b === null)) refreshOpenRouterBalance();
                             if (Object.values(elevenLabsBotBalances).some(b => b === null)) refreshElevenLabsBotBalance();
-                            if (elevenLabsUnlimBalance === null) refreshElevenLabsUnlimBalance();
+                            if (Object.values(elevenLabsUnlimBalances).some(b => b === null)) refreshElevenLabsUnlimBalance();
                             if (googlerUsage.expiration_date === 0) refreshGooglerUsage();
                         }
                     }}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"soloveyko/backend/utils"
+	"time"
 )
 
 // ProcessVoiceover handles voice synthesis using ElevenLabs
@@ -33,7 +34,19 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		vKeyID = pSettings.VoiceoverElevenLabsBotKeyID
 	}
 
-	s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Template: %s", vService, vTemplate), id, taskLabel)
+	// Conditional logging based on service type
+	if vService == "elevenlabsunlim" {
+		vID, _ := settings["elevenLabsUnlimVoiceID"].(string)
+		if vID == "" {
+			vID = pSettings.ElevenLabsUnlimVoiceID
+		}
+		if vID == "" {
+			vID = "AB9XsbSA4eLG12t2myjN" // Default voice from docs
+		}
+		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice ID: %s", vService, vID), id, taskLabel)
+	} else {
+		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Template: %s", vService, vTemplate), id, taskLabel)
+	}
 
 	if vService == "elevenlabsbot" {
 		if vTemplate == "" {
@@ -61,14 +74,125 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 
 		s.emitStageStatus(id, "voice", "running")
 		voiceFilePath := filepath.Join(finalDir, "voice.mp3")
-		err := s.elevenLabs.Synthesize(vApiKey, processedText, vTemplate, voiceFilePath, id, taskLabel)
+
+		var err error
+		backoffs := []int{5, 10, 15}
+		maxRetries := 3
+
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			if attempt > 0 {
+				s.log("WARN", fmt.Sprintf("[ElevenLabsBot] Retry attempt %d/%d after %ds...", attempt, maxRetries, backoffs[attempt-1]), id, taskLabel)
+				time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
+			}
+
+			err = s.elevenLabs.Synthesize(vApiKey, processedText, vTemplate, voiceFilePath, id, taskLabel)
+			if err == nil {
+				break
+			}
+			s.log("ERROR", fmt.Sprintf("[ElevenLabsBot] Attempt %d failed: %v", attempt+1, err), id, taskLabel)
+		}
+
 		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[ElevenLabsBot] Synthesis Error: %v", err), id, taskLabel)
+			s.log("ERROR", fmt.Sprintf("[ElevenLabsBot] All 3 retry attempts failed. Final Error: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "voice", "failed")
 			return err
 		}
 
 		s.log("SUCCESS", "[ElevenLabsBot] Success: Voice saved to voice.mp3", id, taskLabel)
+		s.emitStageStatus(id, "voice", "completed")
+	} else if vService == "elevenlabsunlim" {
+		vKeyID, _ := settings["voiceoverElevenLabsUnlimKeyID"].(string)
+		if vKeyID == "" {
+			vKeyID = pSettings.VoiceoverElevenLabsUnlimKeyID
+		}
+
+		vApiKey := ""
+		vKeys := s.settings.GetElevenLabsUnlimKeys()
+		for _, k := range vKeys {
+			if k.ID == vKeyID {
+				vApiKey = k.Key
+				break
+			}
+		}
+		if vApiKey == "" && len(vKeys) > 0 {
+			vApiKey = vKeys[0].Key
+		}
+
+		if vApiKey == "" {
+			s.log("ERROR", "[ElevenLabsUnlim] API key not found", id, taskLabel)
+			s.emitStageStatus(id, "voice", "failed")
+			return fmt.Errorf("API key not found")
+		}
+
+		vID, _ := settings["elevenLabsUnlimVoiceID"].(string)
+		if vID == "" {
+			vID = pSettings.ElevenLabsUnlimVoiceID
+		}
+		if vID == "" {
+			vID = "AB9XsbSA4eLG12t2myjN" // Default voice from docs
+		}
+
+		// Extract sliders
+		stability, _ := settings["elevenLabsUnlimStability"].(float64)
+		if stability == 0 {
+			stability = pSettings.ElevenLabsUnlimStability
+			if stability == 0 {
+				stability = 0.5
+			}
+		}
+
+		similarity, _ := settings["elevenLabsUnlimSimilarity"].(float64)
+		if similarity == 0 {
+			similarity = pSettings.ElevenLabsUnlimSimilarity
+			if similarity == 0 {
+				similarity = 0.75
+			}
+		}
+
+		style, _ := settings["elevenLabsUnlimStyle"].(float64)
+		if style == 0 {
+			style = pSettings.ElevenLabsUnlimStyle
+		}
+
+		boost, ok := settings["elevenLabsUnlimSpeakerBoost"].(bool)
+		if !ok {
+			boost = pSettings.ElevenLabsUnlimSpeakerBoost
+		}
+
+		vSettings := map[string]interface{}{
+			"stability":         stability,
+			"similarity_boost":  similarity,
+			"style":             style,
+			"use_speaker_boost": boost,
+		}
+
+		s.emitStageStatus(id, "voice", "running")
+		voiceFilePath := filepath.Join(finalDir, "voice.mp3")
+
+		var err error
+		backoffs := []int{5, 10, 15}
+		maxRetries := 3
+
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			if attempt > 0 {
+				s.log("WARN", fmt.Sprintf("[ElevenLabsUnlim] Retry attempt %d/%d after %ds...", attempt, maxRetries, backoffs[attempt-1]), id, taskLabel)
+				time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
+			}
+
+			err = s.elevenLabsUnlim.Synthesize(vApiKey, processedText, vID, vSettings, voiceFilePath, id, taskLabel)
+			if err == nil {
+				break
+			}
+			s.log("ERROR", fmt.Sprintf("[ElevenLabsUnlim] Attempt %d failed: %v", attempt+1, err), id, taskLabel)
+		}
+
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[ElevenLabsUnlim] All 3 retry attempts failed. Final Error: %v", err), id, taskLabel)
+			s.emitStageStatus(id, "voice", "failed")
+			return err
+		}
+
+		s.log("SUCCESS", "[ElevenLabsUnlim] Success: Voice saved to voice.mp3", id, taskLabel)
 		s.emitStageStatus(id, "voice", "completed")
 	} else if vService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for auto-synthesis", vService), id, taskLabel)

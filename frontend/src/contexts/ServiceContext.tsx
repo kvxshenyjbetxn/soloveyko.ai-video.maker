@@ -12,7 +12,8 @@ interface ServiceContextType {
     elevenLabsBotKeys: any[];
     refreshElevenLabsBotBalance: () => Promise<void>;
     loadingElevenLabsBot: boolean;
-    elevenLabsUnlimBalance: number | null;
+    elevenLabsUnlimBalances: Record<string, number | null>;
+    elevenLabsUnlimKeys: any[];
     refreshElevenLabsUnlimBalance: () => Promise<void>;
     loadingElevenLabsUnlim: boolean;
     voiceMakerBalance: number | null;
@@ -45,7 +46,8 @@ const ServiceContext = createContext<ServiceContextType>({
     elevenLabsBotKeys: [],
     refreshElevenLabsBotBalance: async () => { },
     loadingElevenLabsBot: false,
-    elevenLabsUnlimBalance: null,
+    elevenLabsUnlimBalances: {},
+    elevenLabsUnlimKeys: [],
     refreshElevenLabsUnlimBalance: async () => { },
     loadingElevenLabsUnlim: false,
     voiceMakerBalance: null,
@@ -85,7 +87,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [elevenLabsBotBalances, setElevenLabsBotBalances] = useState<Record<string, number | null>>({});
     const [elevenLabsBotKeys, setElevenLabsBotKeys] = useState<any[]>([]);
     const [loadingElevenLabsBot, setLoadingElevenLabsBot] = useState(false);
-    const [elevenLabsUnlimBalance, setElevenLabsUnlimBalance] = useState<number | null>(null);
+    const [elevenLabsUnlimBalances, setElevenLabsUnlimBalances] = useState<Record<string, number | null>>({});
+    const [elevenLabsUnlimKeys, setElevenLabsUnlimKeys] = useState<any[]>([]);
     const [loadingElevenLabsUnlim, setLoadingElevenLabsUnlim] = useState(false);
     const [voiceMakerBalance, setVoiceMakerBalance] = useState<number | null>(null);
     const [loadingVoiceMaker, setLoadingVoiceMaker] = useState(false);
@@ -171,13 +174,25 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         setLoadingElevenLabsUnlim(true);
         try {
-            const apiKey = await GetElevenLabsUnlimAPIKey();
-            if (apiKey) {
-                const balance = await GetElevenLabsUnlimBalance(apiKey);
-                setElevenLabsUnlimBalance(balance);
+            // @ts-ignore
+            const { GetElevenLabsUnlimKeys } = window.go.main.App;
+            const keys = await GetElevenLabsUnlimKeys();
+            setElevenLabsUnlimKeys(keys || []);
+
+            if (keys && keys.length > 0) {
+                const newBalances: Record<string, number | null> = {};
+                await Promise.all(keys.map(async (item: any) => {
+                    try {
+                        const balance = await GetElevenLabsUnlimBalance(item.key);
+                        newBalances[item.id] = balance;
+                    } catch (e) {
+                        newBalances[item.id] = null;
+                    }
+                }));
+                setElevenLabsUnlimBalances(newBalances);
             } else {
-                setElevenLabsUnlimBalance(null);
-                addLog('WARN', 'ElevenLabsUnlim API Key not found');
+                setElevenLabsUnlimBalances({});
+                addLog('WARN', 'No ElevenLabsUnlim API Keys found');
             }
         } catch (err: any) {
             console.error("Failed to update ElevenLabsUnlim balance:", err);
@@ -278,7 +293,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             elevenLabsBotKeys,
             refreshElevenLabsBotBalance,
             loadingElevenLabsBot,
-            elevenLabsUnlimBalance,
+            elevenLabsUnlimBalances,
+            elevenLabsUnlimKeys,
             refreshElevenLabsUnlimBalance,
             loadingElevenLabsUnlim,
             voiceMakerBalance,

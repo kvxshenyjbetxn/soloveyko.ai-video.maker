@@ -37,6 +37,7 @@
     "completion_ok": "Зрозуміло",
     "completion_open_folder": "Відкрити папку",
     "task_default_name": "Завдання",
+    "voice_saved": "MP3 збережено",
     "control_title": "ПЕРЕВІРКА ТЕКСТУ"
   },
   "gallery": {
@@ -96,6 +97,9 @@
       "alertThresholdPlaceholder": "Наприклад: 5.0"
     },
     "elevenlabsbotSettings": {
+      "totalBalance": "Загальний баланс"
+    },
+    "elevenlabsunlimSettings": {
       "totalBalance": "Загальний баланс"
     },
     "pollinationsSettings": {
@@ -189,6 +193,12 @@
       "empty_description": "Налаштування цієї стадії будуть доступні в наступних оновленнях",
       "service": "Сервіс озвучки",
       "template": "Шаблон голосу",
+      "settings": {
+        "stability": "Стабільність",
+        "similarity": "Схожість",
+        "style": "Експресія",
+        "speaker_boost": "Підсилення дикції"
+      },
       "services": {
         "elevenlabsbot": "ElevenLabs Bot",
         "elevenlabsunlim": "ElevenLabs Unlim",

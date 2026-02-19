@@ -17,6 +17,7 @@ type OpenRouterService struct {
 	limit          int
 	mu             sync.Mutex
 	OnRequestStart func(id string, taskLabel string, taskType string, keyName string, model string, temp float64, tokens int)
+	OnLog          func(level string, message string, details ...string)
 }
 
 func NewOpenRouterService(settings *utils.SettingsService) *OpenRouterService {
@@ -233,7 +234,9 @@ func (s *OpenRouterService) Chat(id string, taskLabel string, taskType string, k
 		// If we still have retries left, wait before next attempt
 		if attempt < maxAttempts {
 			delay := retryDelays[attempt-1]
-			fmt.Printf("OpenRouter attempt %d failed: %v. Retrying in %v...\n", attempt, lastErr, delay)
+			if s.OnLog != nil {
+				s.OnLog("WARN", fmt.Sprintf("[OpenRouter] Attempt %d failed: %v. Retrying in %v...", attempt, lastErr, delay), id, taskLabel)
+			}
 			time.Sleep(delay)
 		}
 	}
