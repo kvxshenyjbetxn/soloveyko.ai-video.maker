@@ -11,7 +11,7 @@ import { TaskNameModal } from './TaskNameModal';
 import { ConfirmModal } from './ConfirmModal';
 
 interface PipelineSidebarProps {
-    type: 'translate' | 'rewrite';
+    type: 'translate' | 'rewrite' | 'voiceover';
     isOpen: boolean;
     onToggle: () => void;
     content: string;
@@ -63,19 +63,44 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                         s.rewriteOpenRouterKeyID = openRouterKeys[0].id;
                         updated = true;
                     }
+                    if (!s.voiceoverOpenRouterKeyID) {
+                        s.voiceoverOpenRouterKeyID = openRouterKeys[0].id;
+                        updated = true;
+                    }
+                }
+
+                const botKeys = await window.go.main.App.GetElevenLabsBotKeys();
+                if (botKeys && botKeys.length > 0) {
+                    if (!s.translateElevenLabsBotKeyID) {
+                        s.translateElevenLabsBotKeyID = botKeys[0].id;
+                        updated = true;
+                    }
+                    if (!s.rewriteElevenLabsBotKeyID) {
+                        s.rewriteElevenLabsBotKeyID = botKeys[0].id;
+                        updated = true;
+                    }
+                    if (!s.voiceoverElevenLabsBotKeyID) {
+                        s.voiceoverElevenLabsBotKeyID = botKeys[0].id;
+                        updated = true;
+                    }
                 }
 
                 if (!s.rewriteEnabled) {
                     s.rewriteEnabled = true;
                     updated = true;
                 }
+                if (s.voiceoverEnabled === undefined) {
+                    s.voiceoverEnabled = false;
+                    updated = true;
+                }
 
-                if (!s.translateOutputPath || !s.rewriteOutputPath) {
+                if (!s.translateOutputPath || !s.rewriteOutputPath || !s.voiceoverOutputPath) {
                     try {
                         const def = await GetDefaultVideosPath();
                         if (def) {
                             if (!s.translateOutputPath) s.translateOutputPath = s.outputPath || def;
                             if (!s.rewriteOutputPath) s.rewriteOutputPath = s.outputPath || def;
+                            if (!s.voiceoverOutputPath) s.voiceoverOutputPath = s.outputPath || def;
                             updated = true;
                         }
                     } catch (e) {
@@ -90,12 +115,15 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 // Для шаблонів встановлюємо дефолт, якщо ще немає
                 if (s.translateTemplatesCollapsed === undefined) s.translateTemplatesCollapsed = true;
                 if (s.rewriteTemplatesCollapsed === undefined) s.rewriteTemplatesCollapsed = true;
+                if (s.voiceoverTemplatesCollapsed === undefined) s.voiceoverTemplatesCollapsed = true;
 
                 // Забезпечуємо наявність значень для повзунків
                 if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
                 if (s.rewriteTemperature === undefined) s.rewriteTemperature = 0.7;
+                if (s.voiceoverTemperature === undefined) s.voiceoverTemperature = 0.7;
                 if (s.translateMaxTokens === undefined) s.translateMaxTokens = 0;
                 if (s.rewriteMaxTokens === undefined) s.rewriteMaxTokens = 0;
+                if (s.voiceoverMaxTokens === undefined) s.voiceoverMaxTokens = 0;
 
                 // Оновлюємо налаштування на сервері, щоб зафіксувати згортання API/Шляху
                 await SavePipelineSettings(s);
@@ -131,7 +159,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         );
     };
 
-    const getCleanSettings = (fullSettings: TemplatePipelineSettings, tplType: 'translate' | 'rewrite'): any => {
+    const getCleanSettings = (fullSettings: TemplatePipelineSettings, tplType: 'translate' | 'rewrite' | 'voiceover'): any => {
         const clean: any = {};
 
         if (tplType === 'translate') {
@@ -140,25 +168,59 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             clean.translateTemperature = fullSettings.translateTemperature;
             clean.translateMaxTokens = fullSettings.translateMaxTokens;
             clean.translateOpenRouterKeyID = fullSettings.translateOpenRouterKeyID;
+            clean.translateElevenLabsBotKeyID = fullSettings.translateElevenLabsBotKeyID;
             clean.translateEnabled = fullSettings.translateEnabled;
             clean.translatePipelineName = fullSettings.translatePipelineName;
             clean.translateOutputPath = fullSettings.translateOutputPath;
-        } else {
+
+            // Завжди включаємо налаштування озвучки
+            clean.voiceoverModel = fullSettings.voiceoverModel;
+            clean.voiceoverPrompt = fullSettings.voiceoverPrompt;
+            clean.voiceoverTemperature = fullSettings.voiceoverTemperature;
+            clean.voiceoverMaxTokens = fullSettings.voiceoverMaxTokens;
+            clean.voiceoverOpenRouterKeyID = fullSettings.voiceoverOpenRouterKeyID;
+            clean.voiceoverElevenLabsBotKeyID = fullSettings.voiceoverElevenLabsBotKeyID;
+            clean.voiceoverEnabled = fullSettings.voiceoverEnabled;
+            clean.voiceoverPipelineName = fullSettings.voiceoverPipelineName;
+            clean.voiceoverOutputPath = fullSettings.voiceoverOutputPath;
+        } else if (tplType === 'rewrite') {
             clean.rewriteModel = fullSettings.rewriteModel;
             clean.rewritePrompt = fullSettings.rewritePrompt;
             clean.rewriteTemperature = fullSettings.rewriteTemperature;
             clean.rewriteMaxTokens = fullSettings.rewriteMaxTokens;
             clean.rewriteOpenRouterKeyID = fullSettings.rewriteOpenRouterKeyID;
+            clean.rewriteElevenLabsBotKeyID = fullSettings.rewriteElevenLabsBotKeyID;
             clean.rewriteEnabled = fullSettings.rewriteEnabled;
             clean.rewritePipelineName = fullSettings.rewritePipelineName;
             clean.rewriteOutputPath = fullSettings.rewriteOutputPath;
+
+            // Завжди включаємо налаштування озвучки
+            clean.voiceoverModel = fullSettings.voiceoverModel;
+            clean.voiceoverPrompt = fullSettings.voiceoverPrompt;
+            clean.voiceoverTemperature = fullSettings.voiceoverTemperature;
+            clean.voiceoverMaxTokens = fullSettings.voiceoverMaxTokens;
+            clean.voiceoverOpenRouterKeyID = fullSettings.voiceoverOpenRouterKeyID;
+            clean.voiceoverElevenLabsBotKeyID = fullSettings.voiceoverElevenLabsBotKeyID;
+            clean.voiceoverEnabled = fullSettings.voiceoverEnabled;
+            clean.voiceoverPipelineName = fullSettings.voiceoverPipelineName;
+            clean.voiceoverOutputPath = fullSettings.voiceoverOutputPath;
+        } else {
+            clean.voiceoverModel = fullSettings.voiceoverModel;
+            clean.voiceoverPrompt = fullSettings.voiceoverPrompt;
+            clean.voiceoverTemperature = fullSettings.voiceoverTemperature;
+            clean.voiceoverMaxTokens = fullSettings.voiceoverMaxTokens;
+            clean.voiceoverOpenRouterKeyID = fullSettings.voiceoverOpenRouterKeyID;
+            clean.voiceoverElevenLabsBotKeyID = fullSettings.voiceoverElevenLabsBotKeyID;
+            clean.voiceoverEnabled = fullSettings.voiceoverEnabled;
+            clean.voiceoverPipelineName = fullSettings.voiceoverPipelineName;
+            clean.voiceoverOutputPath = fullSettings.voiceoverOutputPath;
         }
 
         return clean;
     };
 
     const handleSaveTemplate = async () => {
-        const name = isTranslate ? settings.translatePipelineName : settings.rewritePipelineName;
+        const name = isTranslate ? settings.translatePipelineName : (isRewrite ? settings.rewritePipelineName : settings.voiceoverPipelineName);
         const cleanSettings = getCleanSettings(settings, type);
         await saveTemplate(type, name, cleanSettings);
     };
@@ -205,6 +267,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             templatesCollapsed: prev.templatesCollapsed,
             translateTemplatesCollapsed: prev.translateTemplatesCollapsed,
             rewriteTemplatesCollapsed: prev.rewriteTemplatesCollapsed,
+            voiceoverTemplatesCollapsed: prev.voiceoverTemplatesCollapsed,
         }));
     };
 
@@ -265,29 +328,35 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     if (!settings) return null;
 
     const isTranslate = type === 'translate';
-    const isEnabled = isTranslate ? settings.translateEnabled : settings.rewriteEnabled;
-    const isCollapsed = isTranslate ? settings.translateCollapsed : settings.rewriteCollapsed;
-    const templatesCollapsedField = isTranslate ? 'translateTemplatesCollapsed' : 'rewriteTemplatesCollapsed';
+    const isRewrite = type === 'rewrite';
+    const isVoiceover = type === 'voiceover';
+
+    const isEnabled = isTranslate ? settings.translateEnabled : (isRewrite ? settings.rewriteEnabled : settings.voiceoverEnabled);
+    const isCollapsed = isTranslate ? settings.translateCollapsed : (isRewrite ? settings.rewriteCollapsed : settings.voiceoverCollapsed);
+    const templatesCollapsedField = isTranslate ? 'translateTemplatesCollapsed' : (isRewrite ? 'rewriteTemplatesCollapsed' : 'voiceoverTemplatesCollapsed');
+
     const isTemplatesCollapsed = settings[templatesCollapsedField];
     const isApiCollapsed = settings.apiCollapsed;
     const isPathCollapsed = settings.pathCollapsed;
 
-    const modelValue = isTranslate ? settings.translateModel : settings.rewriteModel;
-    const tempValue = (isTranslate ? settings.translateTemperature : settings.rewriteTemperature) ?? 0;
-    const tokensValue = (isTranslate ? settings.translateMaxTokens : settings.rewriteMaxTokens) ?? 0;
-    const promptValue = isTranslate ? settings.translatePrompt : settings.rewritePrompt;
-    const selectedApiKeyID = isTranslate ? settings.translateOpenRouterKeyID : settings.rewriteOpenRouterKeyID;
+    const modelValue = isTranslate ? settings.translateModel : (isRewrite ? settings.rewriteModel : settings.voiceoverModel);
+    const tempValue = (isTranslate ? settings.translateTemperature : (isRewrite ? settings.rewriteTemperature : settings.voiceoverTemperature)) ?? 0;
+    const tokensValue = (isTranslate ? settings.translateMaxTokens : (isRewrite ? settings.rewriteMaxTokens : settings.voiceoverMaxTokens)) ?? 0;
+    const promptValue = isTranslate ? settings.translatePrompt : (isRewrite ? settings.rewritePrompt : settings.voiceoverPrompt);
+    const selectedApiKeyID = isTranslate ? settings.translateOpenRouterKeyID : (isRewrite ? settings.rewriteOpenRouterKeyID : settings.voiceoverOpenRouterKeyID);
+    const selectedElevenLabsBotKeyID = isTranslate ? settings.translateElevenLabsBotKeyID : (isRewrite ? settings.rewriteElevenLabsBotKeyID : settings.voiceoverElevenLabsBotKeyID);
+    const { elevenLabsBotKeys } = useServices();
 
 
     const toggleCollapse = () => {
-        const field = isTranslate ? 'translateCollapsed' : 'rewriteCollapsed';
+        const field = isTranslate ? 'translateCollapsed' : (isRewrite ? 'rewriteCollapsed' : 'voiceoverCollapsed');
         handleChange(field, !isCollapsed);
     };
 
     const handleToggleEnable = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.checked;
-        const field = isTranslate ? 'translateEnabled' : 'rewriteEnabled';
-        const collapsedField = isTranslate ? 'translateCollapsed' : 'rewriteCollapsed';
+        const field = isTranslate ? 'translateEnabled' : (isRewrite ? 'rewriteEnabled' : 'voiceoverEnabled');
+        const collapsedField = isTranslate ? 'translateCollapsed' : (isRewrite ? 'rewriteCollapsed' : 'voiceoverCollapsed');
         const newSettings = {
             ...settings,
             [field]: val
@@ -302,7 +371,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         try {
             const path = await SelectDirectory();
             if (path) {
-                handleChange(isTranslate ? 'translateOutputPath' : 'rewriteOutputPath', path);
+                let field = '';
+                if (isTranslate) field = 'translateOutputPath';
+                else if (isRewrite) field = 'rewriteOutputPath';
+                else field = 'voiceoverOutputPath';
+                handleChange(field, path);
             }
         } catch (err) {
             console.error("Failed to select path:", err);
@@ -370,8 +443,14 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                         <div style={{ display: 'flex', gap: '8px' }}>
                             <input
                                 className="settings-input"
-                                value={(isTranslate ? settings.translatePipelineName : settings.rewritePipelineName) || ''}
-                                onChange={(e) => handleChange(isTranslate ? 'translatePipelineName' : 'rewritePipelineName', e.target.value)}
+                                value={(isTranslate ? settings.translatePipelineName : (isRewrite ? settings.rewritePipelineName : settings.voiceoverPipelineName)) || ''}
+                                onChange={(e) => {
+                                    let field = '';
+                                    if (isTranslate) field = 'translatePipelineName';
+                                    else if (isRewrite) field = 'rewritePipelineName';
+                                    else field = 'voiceoverPipelineName';
+                                    handleChange(field, e.target.value);
+                                }}
                                 placeholder="Назва пайплайну..."
                                 style={{ flex: 1, height: '32px' }}
                             />
@@ -511,13 +590,50 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                                 }
                                                 return;
                                             }
-                                            handleChange(isTranslate ? 'translateOpenRouterKeyID' : 'rewriteOpenRouterKeyID', val);
+                                            let field = '';
+                                            if (isTranslate) field = 'translateOpenRouterKeyID';
+                                            else if (isRewrite) field = 'rewriteOpenRouterKeyID';
+                                            else field = 'voiceoverOpenRouterKeyID';
+                                            handleChange(field, val);
                                         }}
                                     >
                                         {openRouterKeys.length === 0 ? (
                                             <option value="">{t('api.openrouterSettings.noKeys')}</option>
                                         ) : (
                                             openRouterKeys.map(k => (
+                                                <option key={k.id} value={k.id}>{k.name}</option>
+                                            ))
+                                        )}
+                                        <option value="MANAGE_KEYS" style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                                            ⚙️ {t('tabs.settings')}
+                                        </option>
+                                    </select>
+                                </div>
+
+                                <div className="settings-control">
+                                    <label className="settings-label">ElevenLabs Bot Key</label>
+                                    <select
+                                        className="settings-select"
+                                        value={selectedElevenLabsBotKeyID}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === "MANAGE_KEYS") {
+                                                if (setCurrentPath) {
+                                                    setCurrentPath('settings.api.voice.elevenlabsbot');
+                                                }
+                                                return;
+                                            }
+                                            let field = '';
+                                            if (isTranslate) field = 'translateElevenLabsBotKeyID';
+                                            else if (isRewrite) field = 'rewriteElevenLabsBotKeyID';
+                                            else field = 'voiceoverElevenLabsBotKeyID';
+                                            handleChange(field, val);
+                                        }}
+                                    >
+                                        {elevenLabsBotKeys.length === 0 ? (
+                                            <option value="">{t('api.openrouterSettings.noKeys')}</option>
+                                        ) : (
+                                            elevenLabsBotKeys.map(k => (
                                                 <option key={k.id} value={k.id}>{k.name}</option>
                                             ))
                                         )}
@@ -557,7 +673,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                         <input
                                             className="settings-input"
                                             style={{ flex: 1, textOverflow: 'ellipsis' }}
-                                            value={isTranslate ? settings?.translateOutputPath || '' : settings?.rewriteOutputPath || ''}
+                                            value={isTranslate ? settings?.translateOutputPath : (isRewrite ? settings?.rewriteOutputPath : settings?.voiceoverOutputPath) || ''}
                                             readOnly
                                             placeholder="Виберіть папку..."
                                         />
@@ -622,7 +738,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                                 }
                                                 return;
                                             }
-                                            handleChange(isTranslate ? 'translateModel' : 'rewriteModel', val);
+                                            let field = '';
+                                            if (isTranslate) field = 'translateModel';
+                                            else if (isRewrite) field = 'rewriteModel';
+                                            else field = 'voiceoverModel';
+                                            handleChange(field, val);
                                         }}
                                     >
                                         {models.map(m => <option key={m} value={m}>{m}</option>)}
@@ -643,9 +763,15 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                             step="0.1"
                                             value={tempValue}
                                             style={{ '--range-progress': `${(tempValue / 2) * 100}%` } as React.CSSProperties}
-                                            onChange={(e) => handleChange(isTranslate ? 'translateTemperature' : 'rewriteTemperature', parseFloat(e.target.value))}
+                                            onChange={(e) => {
+                                                let field = '';
+                                                if (isTranslate) field = 'translateTemperature';
+                                                else if (isRewrite) field = 'rewriteTemperature';
+                                                else field = 'voiceoverTemperature';
+                                                handleChange(field, parseFloat(e.target.value));
+                                            }}
                                         />
-                                        {renderValueOrInput(isTranslate ? 'translateTemperature' : 'rewriteTemperature', tempValue, true)}
+                                        {renderValueOrInput(isTranslate ? 'translateTemperature' : (isRewrite ? 'rewriteTemperature' : 'voiceoverTemperature'), tempValue, true)}
                                     </div>
                                 </div>
 
@@ -660,9 +786,15 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                             step="500"
                                             value={tokensValue}
                                             style={{ '--range-progress': `${(tokensValue / 128000) * 100}%` } as React.CSSProperties}
-                                            onChange={(e) => handleChange(isTranslate ? 'translateMaxTokens' : 'rewriteMaxTokens', parseInt(e.target.value))}
+                                            onChange={(e) => {
+                                                let field = '';
+                                                if (isTranslate) field = 'translateMaxTokens';
+                                                else if (isRewrite) field = 'rewriteMaxTokens';
+                                                else field = 'voiceoverMaxTokens';
+                                                handleChange(field, parseInt(e.target.value));
+                                            }}
                                         />
-                                        {renderValueOrInput(isTranslate ? 'translateMaxTokens' : 'rewriteMaxTokens', tokensValue, false)}
+                                        {renderValueOrInput(isTranslate ? 'translateMaxTokens' : (isRewrite ? 'rewriteMaxTokens' : 'voiceoverMaxTokens'), tokensValue, false)}
                                     </div>
                                 </div>
                             </div>
@@ -677,9 +809,69 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                     <textarea
                                         className="settings-textarea"
                                         value={promptValue}
-                                        onChange={(e) => handleChange(isTranslate ? 'translatePrompt' : 'rewritePrompt', e.target.value)}
+                                        onChange={(e) => {
+                                            let field = '';
+                                            if (isTranslate) field = 'translatePrompt';
+                                            else if (isRewrite) field = 'rewritePrompt';
+                                            else field = 'voiceoverPrompt';
+                                            handleChange(field, e.target.value);
+                                        }}
                                         placeholder={t(`pipeline.${type}.prompt_placeholder`)}
                                     />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Stage 2.A: Voiceover */}
+                    <div className={`pipeline-stage-container ${settings.voiceoverCollapsed || !settings.voiceoverEnabled ? 'is-collapsed' : ''}`}>
+                        <div
+                            className="pipeline-stage-header"
+                            onClick={() => handleChange('voiceoverCollapsed', !settings.voiceoverCollapsed)}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                <svg
+                                    className={`stage-chevron ${settings.voiceoverCollapsed || !settings.voiceoverEnabled ? 'rotated' : ''}`}
+                                    xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                                >
+                                    <path d="m6 9 6 6 6-6" />
+                                </svg>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span className="pipeline-stage-title">{t('pipeline.stage.voiceover')}</span>
+                                    <span className="stage-status-text">
+                                        {settings.voiceoverEnabled ? t('pipeline.stage.enabled') : t('pipeline.stage.disabled_simple')}
+                                    </span>
+                                </div>
+                            </div>
+                            <label className="stage-switch" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.voiceoverEnabled}
+                                    onChange={(e) => {
+                                        const val = e.target.checked;
+                                        setSettings((prev: any) => ({
+                                            ...prev,
+                                            voiceoverEnabled: val,
+                                            voiceoverCollapsed: !val ? true : prev.voiceoverCollapsed
+                                        }));
+                                    }}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+
+                        <div className={`stage-settings-content ${settings.voiceoverCollapsed || !settings.voiceoverEnabled ? 'collapsed' : ''}`}>
+                            <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+                                <div style={{ marginBottom: '12px', opacity: 0.3 }}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+                                    </svg>
+                                </div>
+                                <div style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 500, marginBottom: '4px' }}>
+                                    {t('pipeline.voiceover.empty_title') || 'Параметри озвучки'}
+                                </div>
+                                <div style={{ color: 'var(--text-tertiary)', fontSize: '11px', lineHeight: 1.4 }}>
+                                    {t('pipeline.voiceover.empty_description') || 'Налаштування цієї стадії будуть доступні в наступних оновленнях'}
                                 </div>
                             </div>
                         </div>

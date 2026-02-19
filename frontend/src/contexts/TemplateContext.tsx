@@ -10,12 +10,14 @@ export interface PipelineSettings {
     translateMaxTokens: number;
     translateCollapsed: boolean;
     translateOpenRouterKeyID: string;
+    translateElevenLabsBotKeyID: string;
     rewriteModel: string;
     rewritePrompt: string;
     rewriteTemperature: number;
     rewriteMaxTokens: number;
     rewriteCollapsed: boolean;
     rewriteOpenRouterKeyID: string;
+    rewriteElevenLabsBotKeyID: string;
     sidebarWidth: number;
     translateEnabled: boolean;
     rewriteEnabled: boolean;
@@ -26,14 +28,25 @@ export interface PipelineSettings {
     pathCollapsed: boolean;
     translatePipelineName: string;
     rewritePipelineName: string;
+    voiceoverModel: string;
+    voiceoverPrompt: string;
+    voiceoverTemperature: number;
+    voiceoverMaxTokens: number;
+    voiceoverCollapsed: boolean;
+    voiceoverOpenRouterKeyID: string;
+    voiceoverElevenLabsBotKeyID: string;
+    voiceoverEnabled: boolean;
+    voiceoverOutputPath: string;
+    voiceoverPipelineName: string;
     templatesCollapsed: boolean;
     translateTemplatesCollapsed: boolean;
     rewriteTemplatesCollapsed: boolean;
+    voiceoverTemplatesCollapsed: boolean;
 }
 
 export interface PipelineTemplate {
     id: string;
-    type: 'translate' | 'rewrite';
+    type: 'translate' | 'rewrite' | 'voiceover';
     name: string;
     createdAt: number;
     settings: any;
@@ -42,7 +55,7 @@ export interface PipelineTemplate {
 interface TemplateContextType {
     templates: PipelineTemplate[];
     loadTemplates: () => Promise<void>;
-    saveTemplate: (tplType: 'translate' | 'rewrite', name: string, data: any) => Promise<void>;
+    saveTemplate: (tplType: 'translate' | 'rewrite' | 'voiceover', name: string, data: any) => Promise<void>;
     removeTemplate: (id: string) => Promise<void>;
     updateTemplate: (id: string, name: string, data: any) => Promise<void>;
     isLoading: boolean;
@@ -71,7 +84,7 @@ export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
     }, [showToast]);
 
-    const saveTemplate = useCallback(async (tplType: 'translate' | 'rewrite', name: string, data: PipelineSettings) => {
+    const saveTemplate = useCallback(async (tplType: 'translate' | 'rewrite' | 'voiceover', name: string, data: PipelineSettings) => {
         try {
             await AddTemplate(tplType, name, data);
             await loadTemplates();

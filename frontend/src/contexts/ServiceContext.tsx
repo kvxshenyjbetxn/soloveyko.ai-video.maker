@@ -8,7 +8,8 @@ interface ServiceContextType {
     openRouterKeys: any[];
     refreshOpenRouterBalance: () => Promise<void>;
     loadingOpenRouter: boolean;
-    elevenLabsBotBalance: number | null;
+    elevenLabsBotBalances: Record<string, number | null>;
+    elevenLabsBotKeys: any[];
     refreshElevenLabsBotBalance: () => Promise<void>;
     loadingElevenLabsBot: boolean;
     elevenLabsUnlimBalance: number | null;
@@ -40,7 +41,8 @@ const ServiceContext = createContext<ServiceContextType>({
     openRouterKeys: [],
     refreshOpenRouterBalance: async () => { },
     loadingOpenRouter: false,
-    elevenLabsBotBalance: null,
+    elevenLabsBotBalances: {},
+    elevenLabsBotKeys: [],
     refreshElevenLabsBotBalance: async () => { },
     loadingElevenLabsBot: false,
     elevenLabsUnlimBalance: null,
@@ -80,7 +82,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [openRouterBalances, setOpenRouterBalances] = useState<Record<string, number | null>>({});
     const [openRouterKeys, setOpenRouterKeys] = useState<any[]>([]);
     const [loadingOpenRouter, setLoadingOpenRouter] = useState(false);
-    const [elevenLabsBotBalance, setElevenLabsBotBalance] = useState<number | null>(null);
+    const [elevenLabsBotBalances, setElevenLabsBotBalances] = useState<Record<string, number | null>>({});
+    const [elevenLabsBotKeys, setElevenLabsBotKeys] = useState<any[]>([]);
     const [loadingElevenLabsBot, setLoadingElevenLabsBot] = useState(false);
     const [elevenLabsUnlimBalance, setElevenLabsUnlimBalance] = useState<number | null>(null);
     const [loadingElevenLabsUnlim, setLoadingElevenLabsUnlim] = useState(false);
@@ -136,13 +139,25 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         setLoadingElevenLabsBot(true);
         try {
-            const apiKey = await GetElevenLabsBotAPIKey();
-            if (apiKey) {
-                const balance = await GetElevenLabsBotBalance(apiKey);
-                setElevenLabsBotBalance(balance);
+            // @ts-ignore
+            const { GetElevenLabsBotKeys } = window.go.main.App;
+            const keys = await GetElevenLabsBotKeys();
+            setElevenLabsBotKeys(keys || []);
+
+            if (keys && keys.length > 0) {
+                const newBalances: Record<string, number | null> = {};
+                await Promise.all(keys.map(async (item: any) => {
+                    try {
+                        const balance = await GetElevenLabsBotBalance(item.key);
+                        newBalances[item.id] = balance;
+                    } catch (e) {
+                        newBalances[item.id] = null;
+                    }
+                }));
+                setElevenLabsBotBalances(newBalances);
             } else {
-                setElevenLabsBotBalance(null);
-                addLog('WARN', 'ElevenLabsBot API Key not found');
+                setElevenLabsBotBalances({});
+                addLog('WARN', 'No ElevenLabsBot API Keys found');
             }
         } catch (err: any) {
             console.error("Failed to update ElevenLabsBot balance:", err);
@@ -259,7 +274,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             openRouterKeys,
             refreshOpenRouterBalance,
             loadingOpenRouter,
-            elevenLabsBotBalance,
+            elevenLabsBotBalances,
+            elevenLabsBotKeys,
             refreshElevenLabsBotBalance,
             loadingElevenLabsBot,
             elevenLabsUnlimBalance,

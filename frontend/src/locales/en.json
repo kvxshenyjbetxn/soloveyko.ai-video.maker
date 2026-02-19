@@ -43,6 +43,7 @@
     "text": {
         "translate": "Translate",
         "rewrite": "Rewrite",
+        "voiceover": "Voiceover",
         "placeholder": "Start writing your text here... (or drag and drop a .txt file)"
     },
     "settings": {
@@ -75,6 +76,8 @@
         },
         "openrouterSettings": {
             "apikey": "OpenRouter API Key",
+            "keyNamePlaceholder": "Key name (e.g. Main)",
+            "noKeys": "No keys added",
             "balance": "Balance:",
             "checkbalance": "Check Balance",
             "save": "Save",
@@ -85,6 +88,9 @@
             "nomodels": "No saved models",
             "alertThreshold": "Alert Threshold ($)",
             "alertThresholdPlaceholder": "e.g. 5.0"
+        },
+        "elevenlabsbotSettings": {
+            "totalBalance": "Total Balance"
         },
         "pollinationsSettings": {
             "apikey": "API Key (Optional)",
@@ -171,6 +177,10 @@
             "title": "Rewrite Settings",
             "prompt_placeholder": "Enter rewrite prompt..."
         },
+        "voiceover": {
+            "title": "Voiceover Settings",
+            "prompt_placeholder": "Enter voiceover prompt..."
+        },
         "group": {
             "ai": "AI Parameters",
             "prompt": "Prompt Settings",
@@ -194,8 +204,10 @@
         "stage": {
             "translate": "1. Translation",
             "rewrite": "1. Rewrite",
+            "voiceover": "2.A. Voiceover",
             "enabled": "Enabled",
-            "disabled": "Disabled (original text)"
+            "disabled": "Disabled (original text)",
+            "disabled_simple": "Disabled"
         },
         "add_to_queue": "Add to Queue",
         "save_template": "Save as Template",

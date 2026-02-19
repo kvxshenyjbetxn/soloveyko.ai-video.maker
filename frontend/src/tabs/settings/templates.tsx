@@ -196,7 +196,7 @@ export const Templates = () => {
                                         </div>
                                         <div className="col-type">
                                             <span className={`type-tag ${tpl.type}`}>
-                                                {tpl.type === 'translate' ? t('text.translate') : t('text.rewrite')}
+                                                {tpl.type === 'translate' ? t('text.translate') : (tpl.type === 'rewrite' ? t('text.rewrite') : t('text.voiceover'))}
                                             </span>
                                         </div>
                                         <div className="col-date">

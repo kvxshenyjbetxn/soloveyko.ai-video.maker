@@ -20,12 +20,14 @@ type PipelineSettings struct {
 	TranslateMaxTokens          int     `json:"translateMaxTokens,omitempty"`
 	TranslateCollapsed          bool    `json:"translateCollapsed"`
 	TranslateOpenRouterKeyID    string  `json:"translateOpenRouterKeyID,omitempty"`
+	TranslateElevenLabsBotKeyID string  `json:"translateElevenLabsBotKeyID,omitempty"`
 	RewriteModel                string  `json:"rewriteModel,omitempty"`
 	RewritePrompt               string  `json:"rewritePrompt,omitempty"`
 	RewriteTemperature          float64 `json:"rewriteTemperature,omitempty"`
 	RewriteMaxTokens            int     `json:"rewriteMaxTokens,omitempty"`
 	RewriteCollapsed            bool    `json:"rewriteCollapsed"`
 	RewriteOpenRouterKeyID      string  `json:"rewriteOpenRouterKeyID,omitempty"`
+	RewriteElevenLabsBotKeyID   string  `json:"rewriteElevenLabsBotKeyID,omitempty"`
 	SidebarWidth                int     `json:"sidebarWidth,omitempty"`
 	TranslateEnabled            bool    `json:"translateEnabled"`
 	RewriteEnabled              bool    `json:"rewriteEnabled"`
@@ -38,6 +40,17 @@ type PipelineSettings struct {
 	TemplatesCollapsed          bool    `json:"templatesCollapsed"`
 	TranslateTemplatesCollapsed bool    `json:"translateTemplatesCollapsed"`
 	RewriteTemplatesCollapsed   bool    `json:"rewriteTemplatesCollapsed"`
+	VoiceoverOpenRouterKeyID    string  `json:"voiceoverOpenRouterKeyID,omitempty"`
+	VoiceoverElevenLabsBotKeyID string  `json:"voiceoverElevenLabsBotKeyID,omitempty"`
+	VoiceoverModel              string  `json:"voiceoverModel,omitempty"`
+	VoiceoverPrompt             string  `json:"voiceoverPrompt,omitempty"`
+	VoiceoverTemperature        float64 `json:"voiceoverTemperature,omitempty"`
+	VoiceoverMaxTokens          int     `json:"voiceoverMaxTokens,omitempty"`
+	VoiceoverCollapsed          bool    `json:"voiceoverCollapsed"`
+	VoiceoverEnabled            bool    `json:"voiceoverEnabled"`
+	VoiceoverOutputPath         string  `json:"voiceoverOutputPath,omitempty"`
+	VoiceoverPipelineName       string  `json:"voiceoverPipelineName,omitempty"`
+	VoiceoverTemplatesCollapsed bool    `json:"voiceoverTemplatesCollapsed"`
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`
 }
@@ -52,6 +65,7 @@ type Settings struct {
 	PollinationsAPIKey            string           `json:"pollinationsAPIKey"`
 	PollinationsModels            []string         `json:"pollinationsModels"`
 	ElevenLabsBotAPIKey           string           `json:"elevenLabsBotAPIKey"`
+	ElevenLabsBotKeys             []NamedAPIKey    `json:"elevenLabsBotKeys"`
 	ElevenLabsUnlimAPIKey         string           `json:"elevenLabsUnlimAPIKey"`
 	VoiceMakerAPIKey              string           `json:"voiceMakerAPIKey"`
 	VoiceMakerBalance             float64          `json:"voiceMakerBalance"`
@@ -116,6 +130,9 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				RewriteModel:         "google/gemini-2.5-flash",
 				RewriteTemperature:   1.0,
 				RewriteEnabled:       true,
+				VoiceoverModel:       "google/gemini-2.5-flash",
+				VoiceoverTemperature: 1.0,
+				VoiceoverEnabled:     false,
 				SidebarWidth:         320,
 			},
 		}, nil
@@ -160,6 +177,16 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				ID:   "default",
 				Name: "Default",
 				Key:  settings.OpenRouterAPIKey,
+			},
+		}
+	}
+	// Міграція для ElevenLabsBotKeys
+	if len(settings.ElevenLabsBotKeys) == 0 && settings.ElevenLabsBotAPIKey != "" {
+		settings.ElevenLabsBotKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  settings.ElevenLabsBotAPIKey,
 			},
 		}
 	}
@@ -492,6 +519,42 @@ func (s *SettingsService) SetElevenLabsBotAPIKey(apiKey string) error {
 	}
 
 	settings.ElevenLabsBotAPIKey = apiKey
+	// Оновлюємо також іменовані ключі, якщо вони порожні
+	if len(settings.ElevenLabsBotKeys) == 0 {
+		settings.ElevenLabsBotKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  apiKey,
+			},
+		}
+	}
+
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsBotKeys повертає список іменованих ключів ElevenLabsBot
+func (s *SettingsService) GetElevenLabsBotKeys() []NamedAPIKey {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []NamedAPIKey{}
+	}
+	return settings.ElevenLabsBotKeys
+}
+
+// SetElevenLabsBotKeys зберігає список іменованих ключів ElevenLabsBot
+func (s *SettingsService) SetElevenLabsBotKeys(keys []NamedAPIKey) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.ElevenLabsBotKeys = keys
+	// Оновлюємо старий ключ для сумісності
+	if len(keys) > 0 {
+		settings.ElevenLabsBotAPIKey = keys[0].Key
+	}
+
 	return s.SaveSettings(settings)
 }
 
@@ -672,6 +735,9 @@ func (s *SettingsService) GetPipelineSettings() PipelineSettings {
 	}
 	if settings.Pipeline.RewriteTemperature == 0 {
 		settings.Pipeline.RewriteTemperature = 1.0
+	}
+	if settings.Pipeline.VoiceoverTemperature == 0 {
+		settings.Pipeline.VoiceoverTemperature = 1.0
 	}
 	if settings.Pipeline.SidebarWidth == 0 {
 		settings.Pipeline.SidebarWidth = 320

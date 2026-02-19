@@ -10,7 +10,7 @@ export interface QueueTask {
     name: string; // Відображається в UI (Завдання - Шаблон)
     folderName: string; // Базова папка завдання
     subName: string; // Підпапка шаблону
-    type: 'translate' | 'rewrite';
+    type: 'translate' | 'rewrite' | 'voiceover';
     content: string;
     status: TaskStatus;
     progress: number;
@@ -22,7 +22,7 @@ export interface QueueTask {
 
 interface QueueContextType {
     tasks: QueueTask[];
-    addTask: (type: 'translate' | 'rewrite', content: string, settings: any, name?: string, subName?: string) => void;
+    addTask: (type: 'translate' | 'rewrite' | 'voiceover', content: string, settings: any, name?: string, subName?: string) => void;
     removeTask: (id: string) => void;
     clearQueue: () => void;
     updateTaskStatus: (id: string, status: TaskStatus, progress?: number) => void;
@@ -54,7 +54,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setCompletionModal(prev => ({ ...prev, isOpen: false }));
     }, []);
 
-    const addTask = useCallback((type: 'translate' | 'rewrite', content: string, settings: any, name?: string, subName?: string) => {
+    const addTask = useCallback((type: 'translate' | 'rewrite' | 'voiceover', content: string, settings: any, name?: string, subName?: string) => {
         const currentCount = taskCounterRef.current;
         const folderName = name?.trim() || `Task ${currentCount}`;
         const displayName = subName ? `${folderName} - ${subName}` : folderName;

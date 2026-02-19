@@ -45,6 +45,7 @@
   "text": {
     "translate": "Переклад",
     "rewrite": "Рерайт",
+    "voiceover": "Озвучка",
     "placeholder": "Почніть писати ваш текст тут... (або перетягніть .txt файл сюди)"
   },
   "settings": {
@@ -90,6 +91,9 @@
       "nomodels": "Немає збережених моделей",
       "alertThreshold": "Поріг попередження ($)",
       "alertThresholdPlaceholder": "Наприклад: 5.0"
+    },
+    "elevenlabsbotSettings": {
+      "totalBalance": "Загальний баланс"
     },
     "pollinationsSettings": {
       "apikey": "API Ключ (Необов'язково)",
@@ -175,6 +179,12 @@
       "title": "Налаштування рерайту",
       "prompt_placeholder": "Промт для рерайту... Використовуйте {{content}} для вставки тексту."
     },
+    "voiceover": {
+      "title": "Налаштування озвучки",
+      "prompt_placeholder": "Промт для озвучки... Використовуйте {{content}} для вставки тексту.",
+      "empty_title": "Параметри озвучки",
+      "empty_description": "Налаштування цієї стадії будуть доступні в наступних оновленнях"
+    },
     "group": {
       "ai": "Параметри ШІ",
       "prompt": "Налаштування промтів",
@@ -200,9 +210,11 @@
     "stage": {
       "translate": "1. Переклад",
       "rewrite": "1. Рерайт",
+      "voiceover": "2.A. Озвучка",
       "path": "Шлях результатів",
       "enabled": "Увімкнено",
-      "disabled": "Вимкнено (оригінальний текст)"
+      "disabled": "Вимкнено (оригінальний текст)",
+      "disabled_simple": "Вимкнено"
     },
     "add_to_queue": "Додати в чергу",
     "save_template": "Зберегти як шаблон",

@@ -43,6 +43,7 @@
     "text": {
         "translate": "Перевод",
         "rewrite": "Рерайт",
+        "voiceover": "Озвучка",
         "placeholder": "Начните писать ваш текст здесь... (или перетяните .txt файл сюда)"
     },
     "settings": {
@@ -75,6 +76,8 @@
         },
         "openrouterSettings": {
             "apikey": "API Ключ OpenRouter",
+            "keyNamePlaceholder": "Название ключа (напр. Основной)",
+            "noKeys": "Нет добавленных ключей",
             "balance": "Баланс:",
             "checkbalance": "Проверить баланс",
             "save": "Сохранить",
@@ -85,6 +88,9 @@
             "nomodels": "Нет сохраненных моделей",
             "alertThreshold": "Порог предупреждения ($)",
             "alertThresholdPlaceholder": "Например: 5.0"
+        },
+        "elevenlabsbotSettings": {
+            "totalBalance": "Общий баланс"
         },
         "pollinationsSettings": {
             "apikey": "API Ключ (Необязательно)",
@@ -170,6 +176,10 @@
             "title": "Настройки рерайта",
             "prompt_placeholder": "Введите промт для рерайта..."
         },
+        "voiceover": {
+            "title": "Настройки озвучки",
+            "prompt_placeholder": "Введите промт для озвучки..."
+        },
         "group": {
             "ai": "Параметры ИИ",
             "prompt": "Настройки промтов",
@@ -195,9 +205,11 @@
         "stage": {
             "translate": "1. Перевод",
             "rewrite": "1. Рерайт",
+            "voiceover": "2.A. Озвучка",
             "path": "Путь результатов",
             "enabled": "Включено",
-            "disabled": "Выключено (оригинальный текст)"
+            "disabled": "Выключено (оригинальный текст)",
+            "disabled_simple": "Выключено"
         },
         "add_to_queue": "Добавить в очередь",
         "save_template": "Сохранить как шаблон",

@@ -11,7 +11,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
     const { t } = useI18n();
     const {
         openRouterBalances, openRouterKeys, loadingOpenRouter, refreshOpenRouterBalance,
-        elevenLabsBotBalance, loadingElevenLabsBot, refreshElevenLabsBotBalance,
+        elevenLabsBotBalances, elevenLabsBotKeys, loadingElevenLabsBot, refreshElevenLabsBotBalance,
         elevenLabsUnlimBalance, loadingElevenLabsUnlim, refreshElevenLabsUnlimBalance,
         voiceMakerBalance, loadingVoiceMaker, refreshVoiceMakerBalance,
         googlerUsage, loadingGoogler, refreshGooglerUsage,
@@ -34,8 +34,12 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         balance !== null && openRouterThreshold > 0 && balance < openRouterThreshold
     );
 
+    const isElevenLabsBotAlert = Object.entries(elevenLabsBotBalances).some(([id, balance]) =>
+        balance !== null && elevenLabsBotThreshold > 0 && balance < elevenLabsBotThreshold
+    );
+
     const isAnyAlertActive = (
-        (elevenLabsBotBalance !== null && elevenLabsBotThreshold > 0 && elevenLabsBotBalance < elevenLabsBotThreshold) ||
+        isElevenLabsBotAlert ||
         (elevenLabsUnlimBalance !== null && elevenLabsUnlimBalance !== -1 && elevenLabsUnlimThreshold > 0 && elevenLabsUnlimBalance < elevenLabsUnlimThreshold) ||
         (voiceMakerBalance !== null && voiceMakerThreshold > 0 && voiceMakerBalance < voiceMakerThreshold) ||
         isOpenRouterAlert ||
@@ -51,7 +55,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         }
 
         const hasAnyBalance = Object.values(openRouterBalances).some(b => b !== null) ||
-            elevenLabsBotBalance !== null ||
+            Object.values(elevenLabsBotBalances).some(b => b !== null) ||
             elevenLabsUnlimBalance !== null ||
             voiceMakerBalance !== null ||
             googlerUsage.expiration_date !== 0;
@@ -94,8 +98,8 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                                 <div className="balance-item" key={keyItem.id}>
                                     <div className="service-name">
                                         <div className={`service-status-dot ${loadingOpenRouter ? 'loading' : (balance === null ? 'error' : '')}`}></div>
-                                        <span style={{ fontSize: '0.85em', opacity: 0.7, marginRight: '4px' }}>OR:</span>
-                                        <span style={{ maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{keyItem.name}</span>
+                                        <span style={{ fontSize: '0.7em', opacity: 0.5, marginRight: '4px', textTransform: 'uppercase' }}>OpenRouter:</span>
+                                        <span style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{keyItem.name}</span>
                                         {navigateTo && (
                                             <button
                                                 className="service-settings-btn"
@@ -114,29 +118,33 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                             );
                         })}
 
-                        <div className="balance-item">
-                            <div className="service-name">
-                                <div className={`service-status-dot ${loadingElevenLabsBot ? 'loading' : (elevenLabsBotBalance === null ? 'error' : '')}`}></div>
-                                {t('balanceMonitor.elevenlabsbot') || 'ElevenLabsBot'}
-                                {navigateTo && (
-                                    <button
-                                        className="service-settings-btn"
-                                        onClick={() => { navigateTo('settings.api.voice.elevenlabsbot'); setIsExpanded(false); }}
-                                        title="Settings"
-                                    >
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                                    </button>
-                                )}
-                            </div>
-                            <div className="service-balance" style={{
-                                color: (elevenLabsBotBalance !== null && elevenLabsBotThreshold > 0 && elevenLabsBotBalance < elevenLabsBotThreshold) ? '#ff5252' : '#4caf50'
-                            }}>
-                                {loadingElevenLabsBot ? '...' : (elevenLabsBotBalance !== null ? elevenLabsBotBalance.toLocaleString() : 'N/A')}
-                                {elevenLabsBotBalance !== null && elevenLabsBotThreshold > 0 && elevenLabsBotBalance < elevenLabsBotThreshold && (
-                                    <span style={{ fontSize: '0.8em', marginLeft: '4px', verticalAlign: 'middle' }}>⚠️</span>
-                                )}
-                            </div>
-                        </div>
+                        {elevenLabsBotKeys.map((keyItem) => {
+                            const balance = elevenLabsBotBalances[keyItem.id];
+                            const isAlert = balance !== null && elevenLabsBotThreshold > 0 && balance < elevenLabsBotThreshold;
+
+                            return (
+                                <div className="balance-item" key={keyItem.id}>
+                                    <div className="service-name">
+                                        <div className={`service-status-dot ${loadingElevenLabsBot ? 'loading' : (balance === null ? 'error' : '')}`}></div>
+                                        <span style={{ fontSize: '0.7em', opacity: 0.5, marginRight: '4px', textTransform: 'uppercase' }}>11Labs:</span>
+                                        <span style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{keyItem.name}</span>
+                                        {navigateTo && (
+                                            <button
+                                                className="service-settings-btn"
+                                                onClick={() => { navigateTo('settings.api.voice.elevenlabsbot'); setIsExpanded(false); }}
+                                                title="Settings"
+                                            >
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="service-balance" style={{ color: isAlert ? '#ff5252' : '#4caf50' }}>
+                                        {loadingElevenLabsBot ? '...' : (typeof balance === 'number' ? balance.toLocaleString() : 'N/A')}
+                                        {isAlert && <span style={{ fontSize: '0.8em', marginLeft: '4px', verticalAlign: 'middle' }}>⚠️</span>}
+                                    </div>
+                                </div>
+                            );
+                        })}
 
                         <div className="balance-item">
                             <div className="service-name">
@@ -259,7 +267,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                         setIsExpanded(newExpanded);
                         if (newExpanded) {
                             if (Object.values(openRouterBalances).some(b => b === null)) refreshOpenRouterBalance();
-                            if (elevenLabsBotBalance === null) refreshElevenLabsBotBalance();
+                            if (Object.values(elevenLabsBotBalances).some(b => b === null)) refreshElevenLabsBotBalance();
                             if (elevenLabsUnlimBalance === null) refreshElevenLabsUnlimBalance();
                             if (googlerUsage.expiration_date === 0) refreshGooglerUsage();
                         }

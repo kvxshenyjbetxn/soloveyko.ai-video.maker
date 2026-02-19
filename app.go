@@ -288,6 +288,16 @@ func (a *App) GetElevenLabsBotAPIKey() string {
 	return a.elevenLabs.GetAPIKey()
 }
 
+// GetElevenLabsBotKeys returns the list of named API keys
+func (a *App) GetElevenLabsBotKeys() []utils.NamedAPIKey {
+	return a.settings.GetElevenLabsBotKeys()
+}
+
+// SaveElevenLabsBotKeys saves the list of named API keys
+func (a *App) SaveElevenLabsBotKeys(keys []utils.NamedAPIKey) error {
+	return a.settings.SetElevenLabsBotKeys(keys)
+}
+
 // ElevenLabsUnlim Methods
 
 // GetElevenLabsUnlimBalance returns the user's balance from ElevenLabsUnlim
@@ -526,6 +536,7 @@ func (a *App) ProcessTask(id string, taskNumber int, taskType string, content st
 	if taskType == "translate" || taskType == "rewrite" {
 		// Get actual API Key
 		keyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
+		botKeyID, _ := settings[taskType+"ElevenLabsBotKeyID"].(string)
 		outPath, _ = settings[taskType+"OutputPath"].(string)
 
 		if outPath == "" {
@@ -540,6 +551,8 @@ func (a *App) ProcessTask(id string, taskNumber int, taskType string, content st
 		if outPath == "" {
 			outPath = pSettings.OutputPath
 		}
+
+		// Handle OpenRouter Keys
 		keys := a.settings.GetOpenRouterKeys()
 		for _, k := range keys {
 			if k.ID == keyID {
@@ -552,8 +565,11 @@ func (a *App) ProcessTask(id string, taskNumber int, taskType string, content st
 			apiKey = keys[0].Key // Fallback to first key
 		}
 
+		// Handle ElevenLabs Bot Keys (for balance check or future usage)
+		_ = botKeyID // For now just extracted
+
 		if apiKey == "" {
-			return "", fmt.Errorf("API key not found")
+			return "", fmt.Errorf("OpenRouter API key not found")
 		}
 
 		model, _ = settings[taskType+"Model"].(string)
