@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useI18n } from '../contexts/I18nContext';
 import './queue.css';
 import { useQueue, QueueTask } from '../contexts/QueueContext';
@@ -23,12 +24,41 @@ const VoiceIcon = () => (
 
 const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: string, text: string) => void }) => {
     const [text, setText] = useState(task.controlContent || '');
+    const [isFullScreen, setIsFullScreen] = useState(false);
     const { t } = useI18n();
 
-    return (
-        <div className="control-editor-overlay" onClick={(e) => e.stopPropagation()}>
+    const origLen = task.content?.length || 0;
+    const currLen = text.length;
+
+    const editorContent = (
+        <div className={`control-editor-overlay ${isFullScreen ? 'full-screen' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="control-editor-content">
-                <h3>{t('queue.control_title') || 'ПЕРЕВІРКА ПЕРЕКЛАДУ'}</h3>
+                <div className="control-editor-header">
+                    <h3>{t('queue.control_title') || 'ПЕРЕВІРКА ТЕКСТУ'}</h3>
+                    <button
+                        className="control-expand-btn"
+                        onClick={() => setIsFullScreen(!isFullScreen)}
+                        title={isFullScreen ? "Зменшити" : "Розгорнути"}
+                    >
+                        {isFullScreen ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v5H3M21 8h-5V3M3 16h5v5M16 21v-5h5" /></svg>
+                        ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+                        )}
+                    </button>
+                </div>
+
+                <div className="control-stats">
+                    <div className="stat-item">
+                        <span className="stat-label">Оригінал:</span>
+                        <span className="stat-value">{origLen}</span>
+                    </div>
+                    <div className="stat-item">
+                        <span className="stat-label">Переклад:</span>
+                        <span className={`stat-value ${currLen > origLen * 1.2 ? 'warning' : ''}`}>{currLen}</span>
+                    </div>
+                </div>
+
                 <textarea
                     className="control-textarea premium-scrollbar"
                     value={text}
@@ -43,6 +73,12 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
             </div>
         </div>
     );
+
+    if (isFullScreen) {
+        return createPortal(editorContent, document.body);
+    }
+
+    return editorContent;
 };
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
