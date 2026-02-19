@@ -152,6 +152,15 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ));
     }, []);
 
+    const updateTaskResultLength = useCallback((id: string, length: number) => {
+        setTasks(prev => prev.map(t =>
+            t.id === id ? {
+                ...t,
+                resultLength: length
+            } : t
+        ));
+    }, []);
+
     const startQueue = useCallback(async () => {
         if (isProcessing) return;
 
@@ -222,9 +231,14 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             const unsubStage = window.runtime.EventsOn("stageStatus", (id: string, stage: string, status: string) => {
                 updateStageStatus(id, stage as 'text' | 'voice', status as TaskStatus);
             });
+            // @ts-ignore
+            const unsubResult = window.runtime.EventsOn("textResult", (id: string, length: number) => {
+                updateTaskResultLength(id, length);
+            });
             return () => {
                 unsubStatus();
                 unsubStage();
+                unsubResult();
             };
         }
     }, [updateTaskStatus, updateStageStatus]);

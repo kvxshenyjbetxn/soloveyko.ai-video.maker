@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"soloveyko/backend/api"
+	"soloveyko/backend/pipeline"
 	"soloveyko/backend/utils"
 	"strings"
 
@@ -29,6 +30,7 @@ type App struct {
 	elevenLabsUA    *api.ElevenLabsUAService
 	assemblyAI      *api.AssemblyAIService
 	templates       *utils.TemplateService
+	pipeline        *pipeline.PipelineService
 }
 
 // NewApp creates a new App application struct
@@ -48,6 +50,22 @@ func NewApp() *App {
 		elevenLabsUA:    api.NewElevenLabsUAService(settings),
 		assemblyAI:      api.NewAssemblyAIService(settings),
 		templates:       utils.NewTemplateService(),
+	}
+
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs)
+
+	app.pipeline.OnLog = func(level string, message string, details ...string) {
+		app.LogToUI(level, message, details...)
+	}
+
+	app.pipeline.OnStageStatus = func(id string, stage string, status string) {
+		app.EmitStageStatus(id, stage, status)
+	}
+
+	app.pipeline.OnTextResult = func(id string, resultText string) {
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "textResult", id, len([]rune(resultText)))
+		}
 	}
 
 	orService.OnRequestStart = func(id string, taskLabel string, taskType string, keyName string, model string, temp float64, tokens int) {
@@ -78,6 +96,7 @@ func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.pipeline.SetContext(ctx)
 }
 
 // LogToUI emits a log event to the frontend
@@ -534,219 +553,5 @@ func (a *App) GetElevenLabsBotVoiceTemplates(apiKey string) ([]string, error) {
 
 // ProcessTask handles the execution of a single pipeline task
 func (a *App) ProcessTask(id string, taskNumber int, taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
-	displayTaskName := taskName
-	if len([]rune(displayTaskName)) > 10 {
-		displayTaskName = string([]rune(displayTaskName)[:10]) + "..."
-	}
-
-	label := displayTaskName
-	if subName != "" {
-		label = fmt.Sprintf("%s - %s", displayTaskName, subName)
-	}
-	taskLabel := fmt.Sprintf("%s (#%d)", label, taskNumber)
-	// 1. Get Pipeline Settings for Output Path and Keys
-	pSettings := a.settings.GetPipelineSettings()
-
-	var apiKey string
-	var model, prompt string
-	var temp, tokens float64
-	var pipelineName string
-	var outPath string
-
-	if taskType == "translate" || taskType == "rewrite" || taskType == "voiceover" {
-		// Get actual API Keys and Paths
-		keyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
-		outPath, _ = settings[taskType+"OutputPath"].(string)
-
-		if outPath == "" {
-			switch taskType {
-			case "translate":
-				outPath = pSettings.TranslateOutputPath
-			case "rewrite":
-				outPath = pSettings.RewriteOutputPath
-			case "voiceover":
-				outPath = pSettings.VoiceoverOutputPath
-			}
-		}
-
-		if outPath == "" {
-			outPath = pSettings.OutputPath
-		}
-
-		// 1. Process Text (OpenRouter)
-		var processedText string = content
-		var orSuccess bool = false
-
-		shouldProcessText := false
-		switch taskType {
-		case "translate":
-			enabled, ok := settings["translateEnabled"].(bool)
-			if (ok && enabled) || (!ok && pSettings.TranslateEnabled) {
-				shouldProcessText = true
-			}
-		case "rewrite":
-			enabled, ok := settings["rewriteEnabled"].(bool)
-			if (ok && enabled) || (!ok && pSettings.RewriteEnabled) {
-				shouldProcessText = true
-			}
-		}
-
-		if shouldProcessText {
-			// Handle OpenRouter Keys
-			keys := a.settings.GetOpenRouterKeys()
-			for _, k := range keys {
-				if k.ID == keyID {
-					apiKey = k.Key
-					break
-				}
-			}
-			if apiKey == "" && len(keys) > 0 {
-				apiKey = keys[0].Key
-			}
-
-			if apiKey != "" {
-				a.EmitStageStatus(id, "text", "running")
-				model, _ = settings[taskType+"Model"].(string)
-				prompt, _ = settings[taskType+"Prompt"].(string)
-				temp, _ = settings[taskType+"Temperature"].(float64)
-				tokens, _ = settings[taskType+"MaxTokens"].(float64)
-				pipelineName, _ = settings[taskType+"PipelineName"].(string)
-
-				if pipelineName == "" {
-					pipelineName = "Default"
-				}
-
-				keyName := "Default/First"
-				for _, k := range keys {
-					if k.ID == keyID {
-						keyName = k.Name
-						break
-					}
-				}
-
-				var fullPrompt string
-				if strings.Contains(prompt, "{{content}}") {
-					fullPrompt = strings.ReplaceAll(prompt, "{{content}}", content)
-				} else {
-					fullPrompt = prompt + "\n\n" + content
-				}
-
-				result, err := a.openRouter.Chat(id, taskLabel, taskType, keyName, apiKey, model, fullPrompt, temp, int(tokens))
-				if err != nil {
-					a.LogToUI("ERROR", fmt.Sprintf("[OpenRouter] [%s] Error: %v", strings.Title(taskType), err), id, taskLabel)
-					a.EmitStageStatus(id, "text", "failed")
-					return "", err
-				}
-				processedText = result
-				orSuccess = true
-				a.LogToUI("SUCCESS", fmt.Sprintf("[OpenRouter] [%s] Success: Result received", strings.Title(taskType)), id, taskLabel)
-				a.EmitStageStatus(id, "text", "completed")
-			} else {
-				a.LogToUI("WARN", fmt.Sprintf("[OpenRouter] [%s] API key not found, skipping text processing", strings.Title(taskType)), id, taskLabel)
-				a.EmitStageStatus(id, "text", "completed") // Mark as completed even if skipped due to missing API key
-			}
-		} else {
-			// Якщо етап тексту вимкнено - він одразу зелений (використовуємо оригінал)
-			a.EmitStageStatus(id, "text", "completed")
-		}
-
-		// Determine Directory Structure
-		templateDir := subName
-		if templateDir == "" {
-			templateDir = pipelineName
-			if templateDir == "" {
-				templateDir = "Default"
-			}
-		}
-		finalDir := filepath.Join(outPath, taskName, templateDir)
-		err := os.MkdirAll(finalDir, 0755)
-		if err != nil {
-			a.LogToUI("ERROR", fmt.Sprintf("[FileSystem] Failed to create directory: %v", err), id, taskLabel)
-			return "", err
-		}
-
-		// Save Text Result (if processed or explicitly requested)
-		if orSuccess || shouldProcessText || taskType != "voiceover" {
-			fileName := "result.txt"
-			switch taskType {
-			case "translate":
-				fileName = "translation.txt"
-			case "rewrite":
-				fileName = "rewrite.txt"
-			}
-			filePath := filepath.Join(finalDir, fileName)
-			os.WriteFile(filePath, []byte(processedText), 0644)
-		}
-
-		// 2. Voiceover Stage
-		var vEnabled bool
-		if val, ok := settings["voiceoverEnabled"].(bool); ok {
-			vEnabled = val
-		} else {
-			// If not in task settings, use global
-			vEnabled = pSettings.VoiceoverEnabled
-		}
-
-		if vEnabled {
-			vService, _ := settings["voiceoverService"].(string)
-			if vService == "" {
-				vService = pSettings.VoiceoverService
-			}
-			vTemplate, _ := settings["voiceoverTemplate"].(string)
-			if vTemplate == "" {
-				vTemplate = pSettings.VoiceoverTemplate
-			}
-			vKeyID, _ := settings["voiceoverElevenLabsBotKeyID"].(string)
-			if vKeyID == "" {
-				vKeyID = pSettings.VoiceoverElevenLabsBotKeyID
-			}
-
-			a.LogToUI("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Template: %s", vService, vTemplate), id, taskLabel)
-
-			if vService == "elevenlabsbot" {
-				if vTemplate == "" {
-					a.LogToUI("ERROR", "[ElevenLabsBot] Voice template is not selected!", id, taskLabel)
-				} else {
-					// Fetch API Key for Voiceover
-					vApiKey := ""
-					vKeys := a.settings.GetElevenLabsBotKeys()
-					for _, k := range vKeys {
-						if k.ID == vKeyID {
-							vApiKey = k.Key
-							break
-						}
-					}
-					if vApiKey == "" && len(vKeys) > 0 {
-						vApiKey = vKeys[0].Key
-					}
-
-					if vApiKey != "" {
-						a.EmitStageStatus(id, "voice", "running")
-						voiceFilePath := filepath.Join(finalDir, "voice.mp3")
-						err := a.elevenLabs.Synthesize(vApiKey, processedText, vTemplate, voiceFilePath, id, taskLabel)
-						if err != nil {
-							a.LogToUI("ERROR", fmt.Sprintf("[ElevenLabsBot] Synthesis Error: %v", err), id, taskLabel)
-							a.EmitStageStatus(id, "voice", "failed")
-						} else {
-							a.LogToUI("SUCCESS", "[ElevenLabsBot] Success: Voice saved to voice.mp3", id, taskLabel)
-							a.EmitStageStatus(id, "voice", "completed")
-						}
-					} else {
-						a.LogToUI("ERROR", "[ElevenLabsBot] API key not found for voiceover", id, taskLabel)
-						a.EmitStageStatus(id, "voice", "failed")
-					}
-				}
-			} else if vService != "" {
-				a.LogToUI("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for auto-synthesis", vService), id, taskLabel)
-			} else {
-				a.LogToUI("ERROR", "[Pipeline] Voiceover service is not selected!", id, taskLabel)
-			}
-		} else {
-			a.LogToUI("INFO", "[Pipeline] Voiceover stage is disabled, skipping.", id, taskLabel)
-		}
-
-		return processedText, nil
-	}
-
-	return "", fmt.Errorf("task type %s not implemented", taskType)
+	return a.pipeline.ProcessTask(id, taskNumber, taskType, content, settings, taskName, subName)
 }
