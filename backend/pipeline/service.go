@@ -47,6 +47,7 @@ func (s *PipelineService) SetContext(ctx context.Context) {
 
 // ProcessTask handles the execution of a single pipeline task
 func (s *PipelineService) ProcessTask(id string, taskNumber int, taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
+	settings = s.flattenSettings(settings)
 	displayTaskName := taskName
 	if len([]rune(displayTaskName)) > 10 {
 		displayTaskName = string([]rune(displayTaskName)[:10]) + "..."
@@ -164,6 +165,20 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	return processedText, nil
+}
+
+func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]interface{} {
+	res := make(map[string]interface{})
+	for k, v := range m {
+		if sub, ok := v.(map[string]interface{}); ok {
+			for sk, sv := range sub {
+				res[sk] = sv
+			}
+		} else {
+			res[k] = v
+		}
+	}
+	return res
 }
 
 // SubmitControlResult resumes a paused pipeline with updated text

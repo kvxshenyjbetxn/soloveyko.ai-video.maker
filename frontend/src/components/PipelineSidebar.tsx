@@ -34,7 +34,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [elevenLabsUnlimKeys, setElevenLabsUnlimKeys] = useState<any[]>([]);
 
     const fetchVoiceTemplates = async (keyID?: string) => {
-        const id = keyID || (isTranslate ? settings.translateElevenLabsBotKeyID : (isRewrite ? settings.rewriteElevenLabsBotKeyID : settings.voiceoverElevenLabsBotKeyID));
+        const id = keyID || settings?.voiceoverElevenLabsBotKeyID;
         if (!id) return;
 
         setLoadingTemplates(true);
@@ -197,21 +197,22 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const handleSaveTemplate = async () => {
         const name = isTranslate ? settings.translatePipelineName : (isRewrite ? settings.rewritePipelineName : settings.voiceoverPipelineName);
 
-        // Просто збираємо те, що реально треба, замість того щоб "чистити" сміття
-        const templateData: any = {};
+        const textSet: any = {};
+        const voiceSet: any = {};
+        const commonSet: any = {};
 
-        // 1. Беремо всі поля, що стосуються поточного типу (translate або rewrite)
+        // 1. Копіюємо налаштування тексту (тільки того типу, який ми зараз зберігаємо)
         Object.keys(settings).forEach(key => {
             if (key.startsWith(type)) {
-                // ПРИБИРАЄМО: стан згортання, шляхи та назву пайплайну (вона вже є в назві шаблону)
-                if (key.endsWith('Collapsed') || key.endsWith('OutputPath') || key.endsWith('PipelineName')) {
+                // Виключаємо UI стани, шляхи та контроль (він іде в common)
+                if (key.endsWith('Collapsed') || key.endsWith('OutputPath') || key.endsWith('PipelineName') || key === 'translateControlEnabled') {
                     return;
                 }
-                templateData[key] = settings[key];
+                textSet[key] = settings[key];
             }
         });
 
-        // 2. Додаємо критично важливі поля озвучки (без шляхів та стану UI)
+        // 2. Копіюємо озвучку
         const voiceoverFields = [
             'voiceoverEnabled', 'voiceoverService', 'voiceoverTemplate',
             'voiceoverElevenLabsBotKeyID', 'voiceoverElevenLabsUnlimKeyID',
@@ -221,14 +222,20 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
         voiceoverFields.forEach(field => {
             if (settings[field] !== undefined) {
-                templateData[field] = settings[field];
+                voiceSet[field] = settings[field];
             }
         });
 
-        // 3. Додаємо контроль
+        // 3. Контроль та загальні
         if (settings.translateControlEnabled !== undefined) {
-            templateData.translateControlEnabled = settings.translateControlEnabled;
+            commonSet.translateControlEnabled = settings.translateControlEnabled;
         }
+
+        const templateData = {
+            text: textSet,
+            voiceover: voiceSet,
+            common: commonSet
+        };
 
         await saveTemplate(type, name, templateData);
     };
@@ -254,8 +261,19 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             // Create tasks for each selected template of current type using batch add
             const tasksData = relevantTemplateIds.map(id => {
                 const template = templates.find(t => t.id === id);
+                let tplSettings = template?.settings;
+
+                // Flatten if nested
+                if (tplSettings && (tplSettings.text || tplSettings.voiceover || tplSettings.common)) {
+                    tplSettings = {
+                        ...(tplSettings.text || {}),
+                        ...(tplSettings.voiceover || {}),
+                        ...(tplSettings.common || {})
+                    };
+                }
+
                 return {
-                    settings: template?.settings,
+                    settings: tplSettings,
                     subName: template?.name
                 };
             }).filter(d => d.settings);
@@ -269,9 +287,20 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     };
 
     const applyTemplate = (tpl: any) => {
+        let appliedSettings = tpl.settings;
+
+        // Перевіряємо, чи це нова вкладена структура, і розгортаємо її
+        if (tpl.settings && (tpl.settings.text || tpl.settings.voiceover || tpl.settings.common)) {
+            appliedSettings = {
+                ...(tpl.settings.text || {}),
+                ...(tpl.settings.voiceover || {}),
+                ...(tpl.settings.common || {})
+            };
+        }
+
         setSettings((prev: any) => ({
             ...prev,
-            ...tpl.settings,
+            ...appliedSettings,
             // Завжди зберігаємо поточний стан інтерфейсу, незалежно від того, що в шаблоні
             sidebarWidth: prev.sidebarWidth,
             translateCollapsed: prev.translateCollapsed,
