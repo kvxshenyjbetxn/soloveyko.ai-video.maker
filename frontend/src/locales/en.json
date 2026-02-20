@@ -136,8 +136,8 @@
     "image": {
         "pollinationsai": "Pollinations AI",
         "googler": "Googler",
-        "success": "Stats updated",
-        "elevenlabsimage": "ElevenLabs Image"
+        "elevenlabsimage": "ElevenLabs Image",
+        "success": "Stats updated"
     },
     "other": {
         "statistic": "Statistics",
@@ -208,6 +208,17 @@
                 "voicemaker": "VoiceMaker"
             }
         },
+        "image": {
+            "title": "Image Settings",
+            "service": "Service",
+            "model": "Model",
+            "width": "Width",
+            "height": "Height",
+            "nologo": "No Logo",
+            "enhance": "Enhance",
+            "prompt": "Instruction for generating descriptions",
+            "prompt_placeholder": "Enter prompt for creating image instructions..."
+        },
         "group": {
             "ai": "AI Parameters",
             "prompt": "Prompt Settings",
@@ -232,6 +243,7 @@
             "translate": "1. Translation",
             "rewrite": "1. Rewrite",
             "voiceover": "2.A. Voiceover",
+            "image": "2.B. Images",
             "enabled": "Enabled",
             "disabled": "Disabled (original text)",
             "disabled_simple": "Disabled"

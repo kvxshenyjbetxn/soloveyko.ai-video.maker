@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"net/url"
 	"strings"
 	"unicode"
 )
@@ -65,4 +66,9 @@ func LastIndexAny(runes []rune, chars string) int {
 		}
 	}
 	return -1
+}
+
+// UrlEncode encodes a string for use in a URL path
+func UrlEncode(s string) string {
+	return url.PathEscape(s)
 }

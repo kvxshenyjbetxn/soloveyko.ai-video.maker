@@ -138,8 +138,8 @@
   "image": {
     "pollinationsai": "Pollinations AI",
     "googler": "Googler",
-    "success": "Статистику оновлено",
-    "elevenlabsimage": "ElevenLabs Image"
+    "elevenlabsimage": "ElevenLabs Image",
+    "success": "Статистику оновлено"
   },
   "other": {
     "statistic": "Статистика",
@@ -212,6 +212,17 @@
         "voicemaker": "VoiceMaker"
       }
     },
+    "image": {
+      "title": "Налаштування зображень",
+      "service": "Провайдер",
+      "model": "Модель",
+      "width": "Ширина",
+      "height": "Висота",
+      "nologo": "Прибрати лого (No Logo)",
+      "enhance": "Покращити промт (Enhance)",
+      "prompt": "Інструкція для генерації описів",
+      "prompt_placeholder": "Введіть промт для створення інструкцій до картинок..."
+    },
     "group": {
       "ai": "Параметри ШІ",
       "prompt": "Налаштування промтів",
@@ -238,6 +249,7 @@
       "translate": "1. Переклад",
       "rewrite": "1. Рерайт",
       "voiceover": "2.A. Озвучка",
+      "image": "2.B. Картинки",
       "path": "Шлях результатів",
       "enabled": "Увімкнено",
       "disabled": "Вимкнено (оригінальний текст)",

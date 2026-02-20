@@ -52,7 +52,7 @@ func NewApp() *App {
 		templates:       utils.NewTemplateService(),
 	}
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -311,6 +311,16 @@ func (a *App) SavePollinationsModels(models []string) error {
 // GetPollinationsSavedModels gets list of saved model IDs
 func (a *App) GetPollinationsSavedModels() []string {
 	return a.pollinations.GetPollinationsSavedModels()
+}
+
+// GetPollinationsKeys returns the list of named API keys
+func (a *App) GetPollinationsKeys() []utils.NamedAPIKey {
+	return a.settings.GetPollinationsKeys()
+}
+
+// SavePollinationsKeys saves the list of named API keys
+func (a *App) SavePollinationsKeys(keys []utils.NamedAPIKey) error {
+	return a.settings.SetPollinationsKeys(keys)
 }
 
 // ElevenLabsBot Methods

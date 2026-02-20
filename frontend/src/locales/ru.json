@@ -135,8 +135,8 @@
     "image": {
         "pollinationsai": "Pollinations AI",
         "googler": "Googler",
-        "success": "Статистика обновлена",
-        "elevenlabsimage": "ElevenLabs Image"
+        "elevenlabsimage": "ElevenLabs Image",
+        "success": "Статистика обновлена"
     },
     "other": {
         "statistic": "Статистика",
@@ -207,6 +207,17 @@
                 "voicemaker": "VoiceMaker"
             }
         },
+        "image": {
+            "title": "Настройки изображений",
+            "service": "Провайдер",
+            "model": "Модель",
+            "width": "Ширина",
+            "height": "Высота",
+            "nologo": "Убрать лого (No Logo)",
+            "enhance": "Улучшить промт (Enhance)",
+            "prompt": "Инструкция для генерации описаний",
+            "prompt_placeholder": "Введите промт для создания инструкций к картинкам..."
+        },
         "group": {
             "ai": "Параметры ИИ",
             "prompt": "Настройки промтов",
@@ -233,6 +244,7 @@
             "translate": "1. Перевод",
             "rewrite": "1. Рерайт",
             "voiceover": "2.A. Озвучка",
+            "image": "2.B. Картинки",
             "path": "Путь результатов",
             "enabled": "Включено",
             "disabled": "Выключено (оригинальный текст)",

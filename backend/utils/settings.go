@@ -65,6 +65,22 @@ type PipelineSettings struct {
 	ElevenLabsUAModel             string  `json:"elevenLabsUAModel,omitempty"`
 	TranslateControlEnabled       bool    `json:"translateControlEnabled"`
 	ControlCollapsed              bool    `json:"controlCollapsed"`
+
+	// Image settings
+	ImageEnabled            bool   `json:"imageEnabled"`
+	ImageService            string `json:"imageService,omitempty"`
+	ImageModel              string `json:"imageModel,omitempty"`
+	ImageWidth              int    `json:"imageWidth,omitempty"`
+	ImageHeight             int    `json:"imageHeight,omitempty"`
+	ImageNoLogo             bool   `json:"imageNoLogo"`
+	ImageEnhance            bool   `json:"imageEnhance"`
+	ImagePrompt             string `json:"imagePrompt,omitempty"`
+	ImagePollinationsKeyID  string `json:"imagePollinationsKeyID,omitempty"`
+	ImageOutputPath         string `json:"imageOutputPath,omitempty"`
+	ImagePipelineName       string `json:"imagePipelineName,omitempty"`
+	ImageTemplatesCollapsed bool   `json:"imageTemplatesCollapsed"`
+	ImageCollapsed          bool   `json:"imageCollapsed"`
+
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`
 }
@@ -77,6 +93,7 @@ type Settings struct {
 	OpenRouterKeys                []NamedAPIKey    `json:"openRouterKeys"`
 	OpenRouterModels              []string         `json:"openRouterModels"`
 	PollinationsAPIKey            string           `json:"pollinationsAPIKey"`
+	PollinationsKeys              []NamedAPIKey    `json:"pollinationsKeys"`
 	PollinationsModels            []string         `json:"pollinationsModels"`
 	ElevenLabsBotAPIKey           string           `json:"elevenLabsBotAPIKey"`
 	ElevenLabsBotKeys             []NamedAPIKey    `json:"elevenLabsBotKeys"`
@@ -233,6 +250,16 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				ID:   "default",
 				Name: "Default",
 				Key:  settings.VoiceMakerAPIKey,
+			},
+		}
+	}
+	// Міграція для PollinationsKeys
+	if len(settings.PollinationsKeys) == 0 && settings.PollinationsAPIKey != "" {
+		settings.PollinationsKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  settings.PollinationsAPIKey,
 			},
 		}
 	}
@@ -525,6 +552,41 @@ func (s *SettingsService) SetPollinationsAPIKey(apiKey string) error {
 	}
 
 	settings.PollinationsAPIKey = apiKey
+	// Оновлюємо також іменовані ключі, якщо вони порожні
+	if len(settings.PollinationsKeys) == 0 {
+		settings.PollinationsKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  apiKey,
+			},
+		}
+	}
+	return s.SaveSettings(settings)
+}
+
+// GetPollinationsKeys повертає список іменованих ключів Pollinations
+func (s *SettingsService) GetPollinationsKeys() []NamedAPIKey {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []NamedAPIKey{}
+	}
+	return settings.PollinationsKeys
+}
+
+// SetPollinationsKeys зберігає список іменованих ключів Pollinations
+func (s *SettingsService) SetPollinationsKeys(keys []NamedAPIKey) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.PollinationsKeys = keys
+	// Оновлюємо старий ключ для сумісності
+	if len(keys) > 0 {
+		settings.PollinationsAPIKey = keys[0].Key
+	}
+
 	return s.SaveSettings(settings)
 }
 

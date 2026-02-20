@@ -27,6 +27,9 @@ interface ServiceContextType {
     googlerUsage: any;
     refreshGooglerUsage: () => Promise<void>;
     loadingGoogler: boolean;
+    pollinationsKeys: any[];
+    refreshPollinationsKeys: () => Promise<void>;
+    loadingPollinations: boolean;
     elevenLabsBotThreshold: number;
     setElevenLabsBotThreshold: (val: number) => void;
     elevenLabsUnlimThreshold: number;
@@ -74,6 +77,9 @@ const ServiceContext = createContext<ServiceContextType>({
     },
     refreshGooglerUsage: async () => { },
     loadingGoogler: false,
+    pollinationsKeys: [],
+    refreshPollinationsKeys: async () => { },
+    loadingPollinations: false,
     elevenLabsBotThreshold: 0,
     setElevenLabsBotThreshold: () => { },
     elevenLabsUnlimThreshold: 0,
@@ -118,6 +124,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         expiration_date: 0
     });
     const [loadingGoogler, setLoadingGoogler] = useState(false);
+    const [pollinationsKeys, setPollinationsKeys] = useState<any[]>([]);
+    const [loadingPollinations, setLoadingPollinations] = useState(false);
     const [elevenLabsBotThreshold, setElevenLabsBotThreshold] = useState(0);
     const [elevenLabsUnlimThreshold, setElevenLabsUnlimThreshold] = useState(0);
     const [voiceMakerThreshold, setVoiceMakerThreshold] = useState(0);
@@ -234,6 +242,21 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }
 
+    const refreshPollinationsKeys = async () => {
+        if (loadingPollinations) return;
+        setLoadingPollinations(true);
+        try {
+            // @ts-ignore
+            const { GetPollinationsKeys } = window.go.main.App;
+            const keys = await GetPollinationsKeys();
+            setPollinationsKeys(keys || []);
+        } catch (err: any) {
+            console.error("Failed to update pollinations keys:", err);
+        } finally {
+            setLoadingPollinations(false);
+        }
+    }
+
     const refreshAllBalances = async () => {
         await Promise.all([
             refreshOpenRouterBalance(),
@@ -241,7 +264,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             refreshElevenLabsUnlimBalance(),
             refreshElevenLabsUABalance(),
             refreshVoiceMakerBalance(),
-            refreshGooglerUsage()
+            refreshGooglerUsage(),
+            refreshPollinationsKeys()
         ]);
     };
 
@@ -344,6 +368,9 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             googlerUsage,
             refreshGooglerUsage,
             loadingGoogler,
+            pollinationsKeys,
+            refreshPollinationsKeys,
+            loadingPollinations,
             elevenLabsBotThreshold,
             setElevenLabsBotThreshold,
             elevenLabsUnlimThreshold,

@@ -5,7 +5,7 @@ import { useQueue } from '../contexts/QueueContext';
 import { useServices } from '../contexts/ServiceContext';
 import { useTemplates, PipelineSettings as TemplatePipelineSettings } from '../contexts/TemplateContext';
 // @ts-ignore
-import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices } from '../../wailsjs/go/main/App';
+import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices, GetPollinationsImageModels, GetPollinationsSavedModels, SavePollinationsModels } from '../../wailsjs/go/main/App';
 import voicemakerVoicesData from '../assets/voicemaker_voices.json';
 
 import { TaskNameModal } from './TaskNameModal';
@@ -23,7 +23,7 @@ interface PipelineSidebarProps {
 export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, onToggle, content, setCurrentPath }) => {
     const { t } = useI18n();
     const { addTask, addTasks } = useQueue();
-    const { openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys } = useServices();
+    const { openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys } = useServices();
     const [settings, setSettings] = useState<any>(null);
     const [models, setModels] = useState<string[]>([]);
     const [isResizing, setIsResizing] = useState(false);
@@ -34,6 +34,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [voiceTemplates, setVoiceTemplates] = useState<string[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [voiceMakerVoices, setVoiceMakerVoices] = useState<any[]>([]);
+    const [pollinationsModels, setPollinationsModels] = useState<string[]>([]);
+    const [loadingPollinationsModels, setLoadingPollinationsModels] = useState(false);
 
     const fetchVoiceTemplates = async (keyID?: string) => {
         const id = keyID || settings?.voiceoverElevenLabsBotKeyID;
@@ -102,6 +104,26 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         }
     };
 
+    const fetchPollinationsModels = async () => {
+        setLoadingPollinationsModels(true);
+        try {
+            const results = await GetPollinationsImageModels();
+            if (results && results.length > 0) {
+                setPollinationsModels(results);
+                await SavePollinationsModels(results);
+            }
+        } catch (err) {
+            console.error("Failed to fetch Pollinations models:", err);
+            // fallback to saved models
+            const saved = await GetPollinationsSavedModels();
+            if (saved && saved.length > 0) {
+                setPollinationsModels(saved);
+            }
+        } finally {
+            setLoadingPollinationsModels(false);
+        }
+    };
+
     const sidebarRef = useRef<HTMLDivElement>(null);
     const lastSavedRef = useRef<string>("");
 
@@ -109,10 +131,15 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         const init = async () => {
             try {
                 const orModels = await GetOpenRouterSavedModels();
+                const pModels = await GetPollinationsSavedModels();
                 const s = await GetPipelineSettings();
 
                 const modelList = orModels || [];
                 setModels(modelList);
+
+                if (pModels && pModels.length > 0) {
+                    setPollinationsModels(pModels);
+                }
 
                 let updated = false;
                 if (modelList.length > 0) {
@@ -159,6 +186,13 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     }
                 }
 
+                if (pollinationsKeys.length > 0) {
+                    if (!s.imagePollinationsKeyID) {
+                        s.imagePollinationsKeyID = pollinationsKeys[0].id;
+                        updated = true;
+                    }
+                }
+
                 if (!s.rewriteEnabled) {
                     s.rewriteEnabled = true;
                     updated = true;
@@ -168,13 +202,14 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     updated = true;
                 }
 
-                if (!s.translateOutputPath || !s.rewriteOutputPath || !s.voiceoverOutputPath) {
+                if (!s.translateOutputPath || !s.rewriteOutputPath || !s.voiceoverOutputPath || !s.imageOutputPath) {
                     try {
                         const def = await GetDefaultVideosPath();
                         if (def) {
                             if (!s.translateOutputPath) s.translateOutputPath = s.outputPath || def;
                             if (!s.rewriteOutputPath) s.rewriteOutputPath = s.outputPath || def;
                             if (!s.voiceoverOutputPath) s.voiceoverOutputPath = s.outputPath || def;
+                            if (!s.imageOutputPath) s.imageOutputPath = s.outputPath || def;
                             updated = true;
                         }
                     } catch (e) {
@@ -190,13 +225,22 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.translateTemplatesCollapsed === undefined) s.translateTemplatesCollapsed = true;
                 if (s.rewriteTemplatesCollapsed === undefined) s.rewriteTemplatesCollapsed = true;
                 if (s.voiceoverTemplatesCollapsed === undefined) s.voiceoverTemplatesCollapsed = true;
+                if (s.imageTemplatesCollapsed === undefined) s.imageTemplatesCollapsed = true;
                 if (s.controlCollapsed === undefined) s.controlCollapsed = true;
+                if (s.imageCollapsed === undefined) s.imageCollapsed = true;
 
                 // Забезпечуємо наявність значень для повзунків
                 if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
                 if (s.rewriteTemperature === undefined) s.rewriteTemperature = 0.7;
                 if (s.translateMaxTokens === undefined) s.translateMaxTokens = 0;
                 if (s.rewriteMaxTokens === undefined) s.rewriteMaxTokens = 0;
+
+                if (s.imageWidth === undefined) s.imageWidth = 1920;
+                if (s.imageHeight === undefined) s.imageHeight = 1080;
+                if (s.imageNoLogo === undefined) s.imageNoLogo = true;
+                if (s.imageEnhance === undefined) s.imageEnhance = false;
+                if (s.imagePrompt === undefined) s.imagePrompt = "";
+                if (s.imageService === undefined) s.imageService = "pollinations";
 
                 if (s.elevenLabsUnlimStability === undefined) s.elevenLabsUnlimStability = 0.5;
                 if (s.elevenLabsUnlimSimilarity === undefined) s.elevenLabsUnlimSimilarity = 0.75;
@@ -882,6 +926,35 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                         </option>
                                     </select>
                                 </div>
+
+                                <div className="settings-control">
+                                    <label className="settings-label">Pollinations Key</label>
+                                    <select
+                                        className="settings-select"
+                                        value={settings.imagePollinationsKeyID}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === "MANAGE_KEYS") {
+                                                if (setCurrentPath) {
+                                                    setCurrentPath('settings.api.pollinations');
+                                                }
+                                                return;
+                                            }
+                                            handleChange('imagePollinationsKeyID', val);
+                                        }}
+                                    >
+                                        {pollinationsKeys.length === 0 ? (
+                                            <option value="">{t('api.openrouterSettings.noKeys')}</option>
+                                        ) : (
+                                            pollinationsKeys.map(k => (
+                                                <option key={k.id} value={k.id}>{k.name}</option>
+                                            ))
+                                        )}
+                                        <option value="MANAGE_KEYS" style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                                            ⚙️ {t('tabs.settings')}
+                                        </option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -913,7 +986,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                         <input
                                             className="settings-input"
                                             style={{ flex: 1, textOverflow: 'ellipsis' }}
-                                            value={isTranslate ? settings?.translateOutputPath : (isRewrite ? settings?.rewriteOutputPath : settings?.outputPath) || ''}
+                                            value={isTranslate ? settings?.translateOutputPath : (isRewrite ? settings?.rewriteOutputPath : (type === 'voiceover' ? settings?.voiceoverOutputPath : settings?.imageOutputPath)) || ''}
                                             readOnly
                                             placeholder="Виберіть папку..."
                                         />
@@ -1391,6 +1464,166 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                                     onChange={(e) => handleChange('voiceMakerCharLimit', parseInt(e.target.value))}
                                                 />
                                                 <span className="settings-slider-value">{settings.voiceMakerCharLimit ?? 3000}</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    {/* Stage 2.B: Images */}
+                    <div className={`pipeline-stage-container ${settings.imageCollapsed || !settings.imageEnabled ? 'is-collapsed' : ''}`}>
+                        <div
+                            className="pipeline-stage-header"
+                            onClick={() => handleChange('imageCollapsed', !settings.imageCollapsed)}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                <svg
+                                    className={`stage-chevron ${settings.imageCollapsed || !settings.imageEnabled ? 'rotated' : ''}`}
+                                    xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                                >
+                                    <path d="m6 9 6 6 6-6" />
+                                </svg>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <span className="pipeline-stage-title">{t('pipeline.stage.image')}</span>
+                                    <span className="stage-status-text">
+                                        {settings.imageEnabled ? t('pipeline.stage.enabled') : t('pipeline.stage.disabled_simple')}
+                                    </span>
+                                </div>
+                            </div>
+                            <label className="stage-switch" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.imageEnabled}
+                                    onChange={(e) => {
+                                        const val = e.target.checked;
+                                        setSettings((prev: any) => ({
+                                            ...prev,
+                                            imageEnabled: val,
+                                            imageCollapsed: !val ? true : prev.imageCollapsed
+                                        }));
+                                    }}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+
+                        <div className={`stage-settings-content ${settings.imageCollapsed || !settings.imageEnabled ? 'collapsed' : ''}`}>
+                            <div className="settings-group">
+                                <div className="settings-control">
+                                    <label className="settings-label">{t('pipeline.image.service')}</label>
+                                    <select
+                                        className="settings-select"
+                                        value={settings.imageService}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            handleChange('imageService', val);
+                                            if (val === 'pollinations') {
+                                                fetchPollinationsModels();
+                                            }
+                                        }}
+                                    >
+                                        <option value="pollinations">{t('image.pollinationsai') || 'Pollinations.ai'}</option>
+                                        <option value="googler">{t('image.googler') || 'Googler'}</option>
+                                        <option value="elevenlabsimage">{t('image.elevenlabsimage') || 'ElevenLabs Image'}</option>
+                                    </select>
+                                </div>
+
+                                <div className="settings-control">
+                                    <label className="settings-label">{t('pipeline.image.prompt') || 'Промт для інструкцій'}</label>
+                                    <textarea
+                                        className="settings-textarea"
+                                        style={{ height: '80px', resize: 'vertical' }}
+                                        value={settings.imagePrompt || ''}
+                                        onChange={(e) => handleChange('imagePrompt', e.target.value)}
+                                        placeholder={t('pipeline.image.prompt_placeholder') || 'Введіть промт...'}
+                                    />
+                                </div>
+
+                                {settings.imageService === 'pollinations' && (
+                                    <>
+                                        <div className="settings-control">
+                                            <label className="settings-label">{t('pipeline.image.model')}</label>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <select
+                                                    className="settings-select"
+                                                    style={{ flex: 1 }}
+                                                    value={settings.imageModel}
+                                                    onChange={(e) => handleChange('imageModel', e.target.value)}
+                                                    onFocus={() => {
+                                                        if (pollinationsModels.length === 0) fetchPollinationsModels();
+                                                    }}
+                                                >
+                                                    <option value="">{loadingPollinationsModels ? t('common.loading') : t('pipeline.model.default')}</option>
+                                                    {pollinationsModels.map(m => (
+                                                        <option key={m} value={m}>{m}</option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    className="premium-btn-sm"
+                                                    style={{ padding: '0 10px', height: '32px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                    onClick={() => fetchPollinationsModels()}
+                                                    disabled={loadingPollinationsModels}
+                                                >
+                                                    <svg
+                                                        className={loadingPollinationsModels ? 'animate-spin' : ''}
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        width="14" height="14"
+                                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                                    >
+                                                        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.83 6.72 2.24" />
+                                                        <polyline points="21 3 21 9 15 9" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="settings-row" style={{ gap: '16px' }}>
+                                            <div className="settings-control" style={{ flex: 1 }}>
+                                                <label className="settings-label">{t('pipeline.image.width')}</label>
+                                                <input
+                                                    type="number"
+                                                    className="settings-input"
+                                                    value={settings.imageWidth || 1920}
+                                                    onChange={(e) => handleChange('imageWidth', parseInt(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="settings-control" style={{ flex: 1 }}>
+                                                <label className="settings-label">{t('pipeline.image.height')}</label>
+                                                <input
+                                                    type="number"
+                                                    className="settings-input"
+                                                    value={settings.imageHeight || 1080}
+                                                    onChange={(e) => handleChange('imageHeight', parseInt(e.target.value))}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="settings-control">
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.nologo')}</label>
+                                                <label className="stage-switch small">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={settings.imageNoLogo}
+                                                        onChange={(e) => handleChange('imageNoLogo', e.target.checked)}
+                                                    />
+                                                    <span className="stage-slider"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div className="settings-control">
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.enhance')}</label>
+                                                <label className="stage-switch small">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={settings.imageEnhance}
+                                                        onChange={(e) => handleChange('imageEnhance', e.target.checked)}
+                                                    />
+                                                    <span className="stage-slider"></span>
+                                                </label>
                                             </div>
                                         </div>
                                     </>

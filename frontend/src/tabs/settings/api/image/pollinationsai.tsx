@@ -8,7 +8,9 @@ export const PollinationsAI = () => {
     const { t } = useI18n();
     const { accentColor } = useTheme();
 
-    const [apiKey, setApiKey] = useState('');
+    const [keys, setKeys] = useState<any[]>([]);
+    const [newName, setNewName] = useState('');
+    const [newKey, setNewKey] = useState('');
     const [savedModels, setSavedModels] = useState<string[]>([]);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [loadingModels, setLoadingModels] = useState(false);
@@ -18,8 +20,10 @@ export const PollinationsAI = () => {
     // Initial Load
     useEffect(() => {
         const loadData = async () => {
-            const key = await GetPollinationsAPIKey();
-            setApiKey(key || '');
+            // @ts-ignore
+            const { GetPollinationsKeys } = window.go.main.App;
+            const pKeys = await GetPollinationsKeys();
+            setKeys(pKeys || []);
             const models = await GetPollinationsSavedModels();
             setSavedModels(models || []);
             setIsLoaded(true);
@@ -27,20 +31,37 @@ export const PollinationsAI = () => {
         loadData();
     }, []);
 
-    // Auto-save API Key
+    // Auto-save API Keys
     useEffect(() => {
         if (!isLoaded) return;
         const timer = setTimeout(() => {
-            SavePollinationsAPIKey(apiKey);
+            // @ts-ignore
+            const { SavePollinationsKeys } = window.go.main.App;
+            SavePollinationsKeys(keys);
         }, 1000);
         return () => clearTimeout(timer);
-    }, [apiKey, isLoaded]);
+    }, [keys, isLoaded]);
+
+    const handleAddKey = () => {
+        if (!newName.trim()) return;
+        const id = 'key_' + Date.now();
+        const updatedKeys = [...keys, { id, name: newName.trim(), key: newKey.trim() }];
+        setKeys(updatedKeys);
+        setNewName('');
+        setNewKey('');
+    };
+
+    const handleRemoveKey = (id: string) => {
+        setKeys(keys.filter(k => k.id !== id));
+    };
 
     const handleFetchModels = async () => {
         setLoadingModels(true);
         setStatusMsg(null);
         try {
-            await SavePollinationsAPIKey(apiKey);
+            // @ts-ignore
+            const { SavePollinationsKeys } = window.go.main.App;
+            await SavePollinationsKeys(keys);
             const models = await GetPollinationsImageModels();
             setAvailableModels(models || []);
         } catch (err) {
@@ -71,28 +92,88 @@ export const PollinationsAI = () => {
                 {/* API Key */}
                 <div className="settings-section">
                     <h3 className="section-title">{t('api.pollinationsSettings.apikey')}</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                            <input
-                                type="password"
-                                style={{
-                                    flex: 1,
-                                    padding: '10px',
-                                    borderRadius: '6px',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    background: 'rgba(0, 0, 0, 0.2)',
-                                    color: '#fff',
-                                    outline: 'none',
-                                    transition: 'border-color 0.2s',
-                                    boxSizing: 'border-box'
-                                }}
-                                onFocus={(e) => e.target.style.borderColor = accentColor}
-                                onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
-                                value={apiKey}
-                                onChange={(e) => setApiKey(e.target.value)}
-                                placeholder="sk-..."
-                            />
-                        </div>
+
+                    {/* Add Key Form */}
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                        <input
+                            type="text"
+                            style={{
+                                flex: 0.4,
+                                padding: '10px',
+                                borderRadius: '6px',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                background: 'rgba(0, 0, 0, 0.2)',
+                                color: '#fff',
+                                outline: 'none'
+                            }}
+                            placeholder={t('api.openrouterSettings.keyNamePlaceholder') || "Назва"}
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                        />
+                        <input
+                            type="password"
+                            style={{
+                                flex: 1,
+                                padding: '10px',
+                                borderRadius: '6px',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                background: 'rgba(0, 0, 0, 0.2)',
+                                color: '#fff',
+                                outline: 'none'
+                            }}
+                            placeholder="API Key (можна пустим)"
+                            value={newKey}
+                            onChange={(e) => setNewKey(e.target.value)}
+                        />
+                        <button
+                            onClick={handleAddKey}
+                            style={{
+                                padding: '10px 15px',
+                                borderRadius: '6px',
+                                background: accentColor,
+                                border: 'none',
+                                color: '#fff',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            {t('common.add')}
+                        </button>
+                    </div>
+
+                    {/* Keys List */}
+                    <div style={{
+                        borderRadius: '6px',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'rgba(0,0,0,0.1)',
+                        overflow: 'hidden'
+                    }}>
+                        {keys.length === 0 ? (
+                            <div style={{ padding: '15px', textAlign: 'center', opacity: 0.5, fontSize: '0.9em' }}>
+                                {t('api.openrouterSettings.noKeys')}
+                            </div>
+                        ) : (
+                            keys.map(k => (
+                                <div key={k.id} style={{
+                                    padding: '10px 15px',
+                                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <div>
+                                        <div style={{ fontWeight: 'bold', fontSize: '0.9em' }}>{k.name}</div>
+                                        {k.key && <div style={{ fontSize: '0.8em', opacity: 0.5 }}>{k.key.substring(0, 8)}...</div>}
+                                    </div>
+                                    <button
+                                        onClick={() => handleRemoveKey(k.id)}
+                                        style={{ background: 'none', border: 'none', color: '#ff5252', cursor: 'pointer', fontSize: '1.2em' }}
+                                    >
+                                        &times;
+                                    </button>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </div>
 

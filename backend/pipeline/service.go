@@ -17,6 +17,7 @@ type PipelineService struct {
 	elevenLabsUnlim *api.ElevenLabsUnlimService
 	elevenLabsUA    *api.ElevenLabsUAService
 	voiceMaker      *api.VoiceMakerService
+	pollinations    *api.PollinationsService
 
 	// Callbacks for UI updates
 	OnLog            func(level string, message string, details ...string)
@@ -35,6 +36,7 @@ func NewPipelineService(
 	elevenLabsUnlim *api.ElevenLabsUnlimService,
 	elevenLabsUA *api.ElevenLabsUAService,
 	voiceMaker *api.VoiceMakerService,
+	pollinations *api.PollinationsService,
 ) *PipelineService {
 	return &PipelineService{
 		settings:        settings,
@@ -43,6 +45,7 @@ func NewPipelineService(
 		elevenLabsUnlim: elevenLabsUnlim,
 		elevenLabsUA:    elevenLabsUA,
 		voiceMaker:      voiceMaker,
+		pollinations:    pollinations,
 	}
 }
 
@@ -171,6 +174,13 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	err = s.ProcessVoiceover(id, taskLabel, processedText, finalDir, settings, &pSettings)
 	if err != nil {
 		s.log("ERROR", fmt.Sprintf("[Pipeline] Voiceover stage failed: %v", err), id, taskLabel)
+		return processedText, err
+	}
+
+	// 4. Image Generation Stage
+	err = s.ProcessImage(id, taskLabel, processedText, finalDir, settings, &pSettings)
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[Pipeline] Image stage failed: %v", err), id, taskLabel)
 		return processedText, err
 	}
 
