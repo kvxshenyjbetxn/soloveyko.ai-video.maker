@@ -49,13 +49,14 @@ export const Logs = () => {
         }
     };
 
+
     return (
         <div className="content-wrapper animate-fade">
             <div className="logs-page-container">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h2 className="settings-title" style={{ margin: 0 }}>{t('tabs.logs')}</h2>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={clearLogs} style={{ padding: '6px 12px', background: '#f44336', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                        <button onClick={clearLogs} style={{ padding: '6px 12px', background: 'rgba(244, 67, 54, 0.1)', border: '1px solid rgba(244, 67, 54, 0.2)', color: '#f44336', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
                             {t('logsTab.clear')}
                         </button>
                     </div>

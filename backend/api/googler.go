@@ -13,14 +13,15 @@ import (
 )
 
 type GooglerService struct {
-	settings *utils.SettingsService
-	baseUrl  string
-	imgSem   chan struct{}
-	vidSem   chan struct{}
-	imgLimit int
-	vidLimit int
-	mu       sync.Mutex
-	OnLog    func(level string, message string, details ...string)
+	settings  *utils.SettingsService
+	baseUrl   string
+	imgSem    chan struct{}
+	vidSem    chan struct{}
+	imgLimit  int
+	vidLimit  int
+	mu        sync.Mutex
+	OnLog     func(level string, message string, details ...string)
+	OnLogData func(category string, data string)
 }
 
 func NewGooglerService(settings *utils.SettingsService) *GooglerService {
@@ -193,11 +194,12 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 	apiRatio := aspectRatio
 	if model == "grok" {
 		// Grok використовує короткі назви (16:9, 1:1 і т.д.)
-		if apiRatio == "IMAGE_ASPECT_RATIO_LANDSCAPE" {
+		switch apiRatio {
+		case "IMAGE_ASPECT_RATIO_LANDSCAPE":
 			apiRatio = "16:9"
-		} else if apiRatio == "IMAGE_ASPECT_RATIO_PORTRAIT" {
+		case "IMAGE_ASPECT_RATIO_PORTRAIT":
 			apiRatio = "9:16"
-		} else if apiRatio == "IMAGE_ASPECT_RATIO_SQUARE" {
+		case "IMAGE_ASPECT_RATIO_SQUARE":
 			apiRatio = "1:1"
 		}
 	} else {
@@ -288,6 +290,10 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return err
+	}
+
+	if s.OnLogData != nil {
+		s.OnLogData("Googler Image Request", fmt.Sprintf("MODEL: %s\nPROMPT: %s\nRATIO: %s", model, prompt, apiRatio))
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))

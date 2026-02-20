@@ -18,6 +18,7 @@ type OpenRouterService struct {
 	mu             sync.Mutex
 	OnRequestStart func(id string, taskLabel string, taskType string, keyName string, model string, temp float64, tokens int)
 	OnLog          func(level string, message string, details ...string)
+	OnLogData      func(category string, data string)
 }
 
 func NewOpenRouterService(settings *utils.SettingsService) *OpenRouterService {
@@ -218,10 +219,18 @@ func (s *OpenRouterService) Chat(id string, taskLabel string, taskType string, k
 				} else {
 					lastErr = fmt.Errorf("OpenRouter API failed with status %d: %s", resp.StatusCode, string(body))
 				}
+				if s.OnLogData != nil {
+					s.OnLogData("OpenRouter Error Body", string(body))
+				}
 			} else {
 				var chatResp ChatResponse
 				if err := json.Unmarshal(body, &chatResp); err != nil {
 					return "", err
+				}
+
+				if s.OnLogData != nil {
+					detailedLog := fmt.Sprintf("PROMPT:\n%s\n\nRESPONSE:\n%s", prompt, string(body))
+					s.OnLogData("OpenRouter Chat Completion", detailedLog)
 				}
 
 				if len(chatResp.Choices) > 0 {

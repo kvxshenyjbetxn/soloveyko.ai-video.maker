@@ -11,12 +11,13 @@ import (
 )
 
 type ElevenLabsImageService struct {
-	settings *utils.SettingsService
-	baseUrl  string
-	sem      chan struct{}
-	limit    int
-	mu       sync.Mutex
-	OnLog    func(level string, message string, details ...string)
+	settings  *utils.SettingsService
+	baseUrl   string
+	sem       chan struct{}
+	limit     int
+	mu        sync.Mutex
+	OnLog     func(level string, message string, details ...string)
+	OnLogData func(category string, data string)
 }
 
 func NewElevenLabsImageService(settings *utils.SettingsService) *ElevenLabsImageService {
@@ -70,6 +71,10 @@ func (s *ElevenLabsImageService) GenerateImage(apiKey string, prompt string, asp
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return err
+	}
+
+	if s.OnLogData != nil {
+		s.OnLogData("ElevenLabs Image Request", fmt.Sprintf("PROMPT: %s\nRATIO: %s", prompt, aspectRatio))
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))

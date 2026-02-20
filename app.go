@@ -32,6 +32,7 @@ type App struct {
 	templates       *utils.TemplateService
 	pipeline        *pipeline.PipelineService
 	galleryManager  *utils.GalleryManager
+	fileLogger      *utils.FileLogger
 }
 
 // NewApp creates a new App application struct
@@ -40,6 +41,7 @@ func NewApp() *App {
 	orService := api.NewOpenRouterService(settings)
 	app := &App{
 		settings:        settings,
+		fileLogger:      utils.NewFileLogger(),
 		stats:           utils.NewStatsService(),
 		openRouter:      orService,
 		pollinations:    api.NewPollinationsService(settings),
@@ -88,6 +90,12 @@ func NewApp() *App {
 		}
 	}
 
+	orService.OnLogData = func(category string, data string) {
+		if app.fileLogger != nil {
+			app.fileLogger.LogData(category, data)
+		}
+	}
+
 	orService.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
 	}
@@ -108,8 +116,20 @@ func NewApp() *App {
 		app.LogToUI(level, message, details...)
 	}
 
+	app.googler.OnLogData = func(category string, data string) {
+		if app.fileLogger != nil {
+			app.fileLogger.LogData(category, data)
+		}
+	}
+
 	app.elevenLabsImage.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
+	}
+
+	app.elevenLabsImage.OnLogData = func(category string, data string) {
+		if app.fileLogger != nil {
+			app.fileLogger.LogData(category, data)
+		}
 	}
 
 	return app
@@ -129,6 +149,10 @@ func (a *App) startup(ctx context.Context) {
 
 // LogToUI emits a log event to the frontend
 func (a *App) LogToUI(level string, message string, details ...string) {
+	if a.fileLogger != nil {
+		a.fileLogger.Log(level, message, details...)
+	}
+
 	if a.ctx != nil {
 		tID := ""
 		tLabel := ""
