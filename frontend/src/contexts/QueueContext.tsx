@@ -23,6 +23,7 @@ export interface QueueTask {
     taskNumber?: number; // Простий порядковий номер завдання
     isAwaitingControl?: boolean;
     controlContent?: string;
+    voiceDuration?: string;
 }
 
 interface QueueContextType {
@@ -146,11 +147,12 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ));
     }, []);
 
-    const updateStageStatus = useCallback((id: string, stage: 'text' | 'voice', status: TaskStatus) => {
+    const updateStageStatus = useCallback((id: string, stage: 'text' | 'voice', status: TaskStatus, message?: string) => {
         setTasks(prev => prev.map(t =>
             t.id === id ? {
                 ...t,
-                [stage === 'text' ? 'textStatus' : 'voiceStatus']: status
+                [stage === 'text' ? 'textStatus' : 'voiceStatus']: status,
+                ...(stage === 'voice' && message ? { voiceDuration: message } : {})
             } : t
         ));
     }, []);
@@ -255,8 +257,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 updateTaskStatus(id, status as TaskStatus, progress);
             });
             // @ts-ignore
-            const unsubStage = window.runtime.EventsOn("stageStatus", (id: string, stage: string, status: string) => {
-                updateStageStatus(id, stage as 'text' | 'voice', status as TaskStatus);
+            const unsubStage = window.runtime.EventsOn("stageStatus", (id: string, stage: string, status: string, message?: string) => {
+                updateStageStatus(id, stage as 'text' | 'voice', status as TaskStatus, message);
             });
             // @ts-ignore
             const unsubResult = window.runtime.EventsOn("textResult", (id: string, length: number) => {

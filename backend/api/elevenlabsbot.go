@@ -348,7 +348,7 @@ func (s *ElevenLabsBotService) Synthesize(apiKey string, text string, templateNa
 		switch status {
 		case "ending_processed", "ending":
 			if s.OnLog != nil {
-				s.OnLog("SUCCESS", fmt.Sprintf("[ElevenLabsBot] Synthesis completed (status: %s). Downloading...", status), id, taskLabel)
+				s.OnLog("INFO", fmt.Sprintf("[ElevenLabsBot] Synthesis completed (status: %s). Downloading...", status), id, taskLabel)
 			}
 			// Якщо статус ending, даємо секунду на закриття файлу сервером
 			if status == "ending" {

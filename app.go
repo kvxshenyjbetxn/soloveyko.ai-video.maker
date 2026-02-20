@@ -58,8 +58,8 @@ func NewApp() *App {
 		app.LogToUI(level, message, details...)
 	}
 
-	app.pipeline.OnStageStatus = func(id string, stage string, status string) {
-		app.EmitStageStatus(id, stage, status)
+	app.pipeline.OnStageStatus = func(id string, stage string, status string, message string) {
+		app.EmitStageStatus(id, stage, status, message)
 	}
 
 	app.pipeline.OnTextResult = func(id string, resultText string) {
@@ -129,9 +129,9 @@ func (a *App) LogToUI(level string, message string, details ...string) {
 }
 
 // EmitStageStatus emits a stage status event to the frontend
-func (a *App) EmitStageStatus(id string, stage string, status string) {
+func (a *App) EmitStageStatus(id string, stage string, status string, message string) {
 	if a.ctx != nil {
-		wruntime.EventsEmit(a.ctx, "stageStatus", id, stage, status)
+		wruntime.EventsEmit(a.ctx, "stageStatus", id, stage, status, message)
 	}
 }
 

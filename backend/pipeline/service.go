@@ -20,7 +20,7 @@ type PipelineService struct {
 
 	// Callbacks for UI updates
 	OnLog            func(level string, message string, details ...string)
-	OnStageStatus    func(id string, stage string, status string)
+	OnStageStatus    func(id string, stage string, status string, message string)
 	OnTextResult     func(id string, resultText string)
 	OnRequestControl func(id string, text string)
 
@@ -74,9 +74,13 @@ func (s *PipelineService) log(level string, message string, details ...string) {
 	}
 }
 
-func (s *PipelineService) emitStageStatus(id string, stage string, status string) {
+func (s *PipelineService) emitStageStatus(id string, stage string, status string, message ...string) {
+	msg := ""
+	if len(message) > 0 {
+		msg = message[0]
+	}
 	if s.OnStageStatus != nil {
-		s.OnStageStatus(id, stage, status)
+		s.OnStageStatus(id, stage, status, msg)
 	}
 }
 

@@ -103,7 +103,8 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		}
 
 		s.log("SUCCESS", "[ElevenLabsBot] Success: Voice saved to voice.mp3", id, taskLabel)
-		s.emitStageStatus(id, "voice", "completed")
+		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService == "elevenlabsunlim" {
 		vKeyID, _ := settings["voiceoverElevenLabsUnlimKeyID"].(string)
 		if vKeyID == "" {
@@ -197,7 +198,8 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		}
 
 		s.log("SUCCESS", "[ElevenLabsUnlim] Success: Voice saved to voice.mp3", id, taskLabel)
-		s.emitStageStatus(id, "voice", "completed")
+		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService == "elevenlabsua" {
 		vKeyID, _ := settings["voiceoverElevenLabsUAKeyID"].(string)
 		if vKeyID == "" {
@@ -296,7 +298,8 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		}
 
 		s.log("SUCCESS", "[ElevenLabsUA] Success: Voice saved to voice.mp3", id, taskLabel)
-		s.emitStageStatus(id, "voice", "completed")
+		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService == "voicemaker" {
 		vKeyID, _ := settings["voiceoverVoiceMakerKeyID"].(string)
 		vID, _ := settings["voiceMakerVoiceID"].(string)
@@ -405,7 +408,8 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		}
 
 		s.log("SUCCESS", "[VoiceMaker] Success: Voice saved to voice.mp3", id, taskLabel)
-		s.emitStageStatus(id, "voice", "completed")
+		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for auto-synthesis", vService), id, taskLabel)
 	} else {

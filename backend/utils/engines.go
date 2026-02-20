@@ -1,0 +1,56 @@
+package utils
+
+import (
+	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"soloveyko/backend/engines"
+)
+
+// EnsureEngine перевіряє наявність бінарного файлу в системній папці
+// і розпаковує його з вбудованих ресурсів, якщо він відсутній.
+func EnsureEngine(name string) (string, error) {
+	binaryName := name
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+
+	// Отримуємо шлях до папки з бінарниками в конфигу користувача
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		homeDir, _ := os.UserHomeDir()
+		configDir = homeDir
+	}
+	binDir := filepath.Join(configDir, "Soloveyko", "bin")
+	targetPath := filepath.Join(binDir, binaryName)
+
+	// Якщо файл вже існує, повертаємо шлях
+	if _, err := os.Stat(targetPath); err == nil {
+		return targetPath, nil
+	}
+
+	// Якщо папки немає - створюємо
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		return "", err
+	}
+
+	// Розпаковуємо з вбудованої FS
+	src, err := engines.Binaries.Open(binaryName)
+	if err != nil {
+		return "", err // Файл не поклали в папку перед компіляцією
+	}
+	defer src.Close()
+
+	dst, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY, 0755)
+	if err != nil {
+		return "", err
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return "", err
+	}
+
+	return targetPath, nil
+}

@@ -212,7 +212,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                     <span>{t('text.voiceover')}</span>
                                 </div>
                                 <span className="stage-status-text badge-status">
-                                    {task.voiceStatus === 'completed' ? (t('queue.voice_saved') || 'MP3 saved') :
+                                    {task.voiceStatus === 'completed' ? (task.voiceDuration || t('queue.voice_saved') || 'MP3 saved') :
                                         task.voiceStatus === 'running' ? (t('queue.status_running') || 'Synthesizing...') :
                                             task.voiceStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
                                                 task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
