@@ -91,6 +91,9 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                                     disabled={loadingTemplates}
                                 >
                                     <option value="">{loadingTemplates ? (t('common.loading') || 'Loading...') : (t('common.select_template') || 'Select template...')}</option>
+                                    {settings.voiceoverTemplate && !voiceTemplates.includes(settings.voiceoverTemplate) && (
+                                        <option value={settings.voiceoverTemplate}>{settings.voiceoverTemplate}</option>
+                                    )}
                                     {voiceTemplates.map(tpl => (
                                         <option key={tpl} value={tpl}>{tpl}</option>
                                     ))}

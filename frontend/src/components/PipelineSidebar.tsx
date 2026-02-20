@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './PipelineSidebar.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useQueue } from '../contexts/QueueContext';
@@ -167,6 +167,20 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     }, [content, settings?.imageGenerationMethod, settings?.imageGroupSentences, settings?.imageSentenceLimit]);
 
     useEffect(() => {
+        if (!settings) return;
+
+        // Fetch ElevenLabs Bot templates if needed
+        if (settings.voiceoverService === 'elevenlabsbot' && settings.voiceoverElevenLabsBotKeyID && voiceTemplates.length === 0 && elevenLabsBotKeys.length > 0) {
+            fetchVoiceTemplates(settings.voiceoverElevenLabsBotKeyID);
+        }
+
+        // Fetch VoiceMaker voices if needed
+        if (settings.voiceoverService === 'voicemaker' && settings.voiceoverVoiceMakerKeyID && voiceMakerVoices.length === 0 && voiceMakerKeys.length > 0) {
+            fetchVoiceMakerVoices(settings.voiceoverVoiceMakerKeyID);
+        }
+    }, [elevenLabsBotKeys, voiceMakerKeys, settings?.voiceoverService, settings?.voiceoverElevenLabsBotKeyID, settings?.voiceoverVoiceMakerKeyID, voiceTemplates.length, voiceMakerVoices.length]);
+
+    useEffect(() => {
         const init = async () => {
             try {
                 const orModels = await GetOpenRouterSavedModels();
@@ -266,12 +280,6 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 setSettings(s);
                 lastSavedRef.current = JSON.stringify(s);
 
-                if (s.voiceoverService === 'elevenlabsbot' && s.voiceoverElevenLabsBotKeyID) {
-                    setTimeout(() => fetchVoiceTemplates(s.voiceoverElevenLabsBotKeyID), 0);
-                }
-                if (s.voiceoverService === 'voicemaker') {
-                    setTimeout(() => fetchVoiceMakerVoices(s.voiceoverVoiceMakerKeyID), 0);
-                }
             } catch (err) {
                 console.error("Failed to initialize sidebar:", err);
             }

@@ -25,12 +25,43 @@ func NewElevenLabsUAService(settings *utils.SettingsService) *ElevenLabsUAServic
 }
 
 type ElevenLabsUABalanceResponse struct {
-	RemainingCharacters int `json:"remaining_characters"`
+	CharacterLimit      int `json:"character_limit"`
+	CharactersUsed      int `json:"characters_used"`
+	CharactersRemaining int `json:"characters_remaining"`
 }
 
-// GetBalance ElevenLabsUA не підтримує отримання балансу через API
+// GetBalance повертає баланс символів користувача
 func (s *ElevenLabsUAService) GetBalance(apiKey string) (float64, error) {
-	return 0, nil
+	if apiKey == "" {
+		return 0, fmt.Errorf("API key is empty")
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	url := fmt.Sprintf("%s/user/balance", s.baseUrl)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	req.Header.Set("xi-api-key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var res ElevenLabsUABalanceResponse
+	if err := json.Unmarshal(body, &res); err != nil {
+		return 0, err
+	}
+
+	return float64(res.CharactersRemaining), nil
 }
 
 type ElevenLabsUAVoiceSettings struct {

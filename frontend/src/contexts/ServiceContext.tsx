@@ -234,9 +234,24 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const keys = await GetElevenLabsUAKeys();
             setElevenLabsUAKeys(keys || []);
-            setElevenLabsUABalances({}); // Баланс не підтримується
+
+            if (keys && keys.length > 0) {
+                const newBalances: Record<string, number | null> = {};
+                await Promise.all(keys.map(async (item: any) => {
+                    try {
+                        const balance = await GetElevenLabsUABalance(item.key);
+                        newBalances[item.id] = balance;
+                    } catch (e) {
+                        newBalances[item.id] = null;
+                    }
+                }));
+                setElevenLabsUABalances(newBalances);
+            } else {
+                setElevenLabsUABalances({});
+                addLog('WARN', 'No ElevenLabsUA API Keys found');
+            }
         } catch (err: any) {
-            console.error("Failed to update ElevenLabsUA keys:", err);
+            console.error("Failed to update ElevenLabsUA balance:", err);
         } finally {
             setLoadingElevenLabsUA(false);
         }
