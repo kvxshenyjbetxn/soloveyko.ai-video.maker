@@ -43,9 +43,16 @@ func (s *PollinationsService) GenerateImage(apiKey string, prompt string, model 
 
 	client := &http.Client{Timeout: 120 * time.Second}
 
-	// Build URL
-	baseUrl := fmt.Sprintf("https://gen.pollinations.ai/image/%s", utils.UrlEncode(prompt))
-	params := fmt.Sprintf("?width=%d&height=%d&nologo=%t&enhance=%t&seed=%d", width, height, nologo, enhance, time.Now().UnixNano())
+	// Determine base URL based on API key presence
+	var baseUrl string
+	if apiKey != "" {
+		baseUrl = fmt.Sprintf("https://gen.pollinations.ai/image/%s", utils.UrlEncode(prompt))
+	} else {
+		baseUrl = fmt.Sprintf("https://image.pollinations.ai/prompt/%s", utils.UrlEncode(prompt))
+	}
+
+	seed := time.Now().UnixMilli() % 10000000 // safe small integer for seed
+	params := fmt.Sprintf("?width=%d&height=%d&seed=%d", width, height, seed)
 	if model != "" {
 		params += "&model=" + model
 	}
@@ -68,7 +75,8 @@ func (s *PollinationsService) GenerateImage(apiKey string, prompt string, model 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API request failed with status: %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API request failed with status %d: %s (URL: %s)", resp.StatusCode, string(bodyBytes), url)
 	}
 
 	out, err := os.Create(outputPath)

@@ -217,11 +217,21 @@
             "nologo": "No Logo",
             "enhance": "Enhance",
             "prompt": "Instruction for generating descriptions",
-            "prompt_placeholder": "Enter prompt for creating image instructions..."
+            "prompt_placeholder": "Enter prompt for creating image instructions...",
+            "generation_method": "Task Generation Method",
+            "generation_desc": "Choose how to split text into individual prompts",
+            "lines": "Lines",
+            "sentences": "Sentences",
+            "group_limit": "Group by Character Limit",
+            "group_limit_desc": "Sentences will be grouped together until the character limit is reached",
+            "group_limit_desc_off": "Each sentence will be cut exactly into a separate prompt",
+            "symbol_limit": "Character Limit:",
+            "estimated_chunks": "Estimated number of prompts: "
         },
         "group": {
             "ai": "AI Parameters",
-            "prompt": "Prompt Settings",
+            "prompt": "Prompt Parameters",
+            "provider": "Provider Parameters",
             "subtitles": "Subtitle Style"
         },
         "model": "Model",

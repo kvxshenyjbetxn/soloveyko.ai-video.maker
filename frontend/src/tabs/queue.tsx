@@ -22,6 +22,12 @@ const VoiceIcon = () => (
     </svg>
 );
 
+const ImageIcon = () => (
+    <svg className="image-icon" viewBox="0 0 24 24" fill="currentColor" style={{ width: '14px', height: '14px', opacity: 0.7 }}>
+        <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+    </svg>
+);
+
 const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: string, text: string) => void }) => {
     const [text, setText] = useState(task.controlContent || '');
     const [isFullScreen, setIsFullScreen] = useState(false);
@@ -146,15 +152,9 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         const isExpanded = expandedTaskIds.includes(task.id);
         const settings = task.settings || {};
 
-        // Визначаємо, чи увімкнено основний етап (переклад/рерайт)
-        let isMainStageEnabled = true;
-        if (task.type === 'translate') {
-            isMainStageEnabled = settings.translateEnabled !== false;
-        } else if (task.type === 'rewrite') {
-            isMainStageEnabled = settings.rewriteEnabled !== false;
-        }
-
+        const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
         const isVoiceEnabled = settings.voiceoverEnabled === true;
+        const isImageEnabled = settings.imageEnabled === true;
 
         const mainLabel = isMainStageEnabled
             ? (task.type === 'translate' ? t('text.translate') : t('text.rewrite'))
@@ -208,7 +208,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                         {isVoiceEnabled && (
                             <div className={`task-stage-item status-${task.voiceStatus}`} style={{ marginTop: '4px' }}>
                                 <div className="stage-left">
-                                    <LightbulbIcon />
+                                    <VoiceIcon />
                                     <span>{t('text.voiceover')}</span>
                                 </div>
                                 <span className="stage-status-text badge-status">
@@ -216,6 +216,22 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                         task.voiceStatus === 'running' ? (t('queue.status_running') || 'Synthesizing...') :
                                             task.voiceStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
                                                 task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Етап 3: Картинки (якщо увімкнено) */}
+                        {isImageEnabled && (
+                            <div className={`task-stage-item status-${task.imageStatus}`} style={{ marginTop: '4px' }}>
+                                <div className="stage-left">
+                                    <ImageIcon />
+                                    <span>{t('api.image') || 'Images'}</span>
+                                </div>
+                                <span className="stage-status-text badge-status">
+                                    {task.imageStatus === 'completed' ? (task.imagesMessage || t('queue.image_saved') || 'Images Gen.') :
+                                        task.imageStatus === 'running' ? (task.imagesMessage || t('queue.status_running') || 'Generating...') :
+                                            task.imageStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
+                                                task.imageStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                                 </span>
                             </div>
                         )}

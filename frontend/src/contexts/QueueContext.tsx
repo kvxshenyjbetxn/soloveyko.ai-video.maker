@@ -16,6 +16,7 @@ export interface QueueTask {
     status: TaskStatus;
     textStatus: TaskStatus;
     voiceStatus: TaskStatus;
+    imageStatus: TaskStatus;
     progress: number;
     timestamp: number;
     settings: any;
@@ -24,6 +25,7 @@ export interface QueueTask {
     isAwaitingControl?: boolean;
     controlContent?: string;
     voiceDuration?: string;
+    imagesMessage?: string;
 }
 
 interface QueueContextType {
@@ -79,6 +81,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             status: 'pending',
             textStatus: 'pending',
             voiceStatus: 'pending',
+            imageStatus: 'pending',
             progress: 0,
             timestamp: Date.now(),
             settings,
@@ -111,6 +114,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 status: 'pending',
                 textStatus: 'pending',
                 voiceStatus: 'pending',
+                imageStatus: 'pending',
                 progress: 0,
                 timestamp: Date.now(),
                 settings: data.settings,
@@ -142,17 +146,19 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 resultLength: resultLength ?? t.resultLength,
                 // Коли завдання завершено або впало, оновлюємо і стейджі для лампочок
                 textStatus: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : (status === 'waiting' ? 'waiting' : t.textStatus)),
-                voiceStatus: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : (status === 'waiting' ? 'waiting' : t.voiceStatus))
+                voiceStatus: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : (status === 'waiting' ? 'waiting' : t.voiceStatus)),
+                imageStatus: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : (status === 'waiting' ? 'waiting' : t.imageStatus))
             } : t
         ));
     }, []);
 
-    const updateStageStatus = useCallback((id: string, stage: 'text' | 'voice', status: TaskStatus, message?: string) => {
+    const updateStageStatus = useCallback((id: string, stage: 'text' | 'voice' | 'image', status: TaskStatus, message?: string) => {
         setTasks(prev => prev.map(t =>
             t.id === id ? {
                 ...t,
-                [stage === 'text' ? 'textStatus' : 'voiceStatus']: status,
-                ...(stage === 'voice' && message ? { voiceDuration: message } : {})
+                [stage === 'text' ? 'textStatus' : stage === 'image' ? 'imageStatus' : 'voiceStatus']: status,
+                ...(stage === 'voice' && message ? { voiceDuration: message } : {}),
+                ...(stage === 'image' && message ? { imagesMessage: message } : {})
             } : t
         ));
     }, []);
@@ -258,7 +264,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             });
             // @ts-ignore
             const unsubStage = window.runtime.EventsOn("stageStatus", (id: string, stage: string, status: string, message?: string) => {
-                updateStageStatus(id, stage as 'text' | 'voice', status as TaskStatus, message);
+                updateStageStatus(id, stage as 'text' | 'voice' | 'image', status as TaskStatus, message);
             });
             // @ts-ignore
             const unsubResult = window.runtime.EventsOn("textResult", (id: string, length: number) => {

@@ -170,18 +170,36 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		s.SaveTextResult(finalDir, taskType, processedText)
 	}
 
-	// 3. Voiceover Stage
-	err = s.ProcessVoiceover(id, taskLabel, processedText, finalDir, settings, &pSettings)
-	if err != nil {
-		s.log("ERROR", fmt.Sprintf("[Pipeline] Voiceover stage failed: %v", err), id, taskLabel)
-		return processedText, err
-	}
+	// 3 & 4. Voiceover and Image Generation Stages logic in parallel
+	var stageWg sync.WaitGroup
+	var voiceErr error
+	var imageErr error
 
-	// 4. Image Generation Stage
-	err = s.ProcessImage(id, taskLabel, processedText, finalDir, settings, &pSettings)
-	if err != nil {
-		s.log("ERROR", fmt.Sprintf("[Pipeline] Image stage failed: %v", err), id, taskLabel)
-		return processedText, err
+	stageWg.Add(1)
+	go func() {
+		defer stageWg.Done()
+		voiceErr = s.ProcessVoiceover(id, taskLabel, processedText, finalDir, settings, &pSettings)
+		if voiceErr != nil {
+			s.log("ERROR", fmt.Sprintf("[Pipeline] Voiceover stage failed: %v", voiceErr), id, taskLabel)
+		}
+	}()
+
+	stageWg.Add(1)
+	go func() {
+		defer stageWg.Done()
+		imageErr = s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings)
+		if imageErr != nil {
+			s.log("ERROR", fmt.Sprintf("[Pipeline] Image stage failed: %v", imageErr), id, taskLabel)
+		}
+	}()
+
+	stageWg.Wait()
+
+	if voiceErr != nil || imageErr != nil {
+		if voiceErr != nil {
+			return processedText, voiceErr
+		}
+		return processedText, imageErr
 	}
 
 	return processedText, nil

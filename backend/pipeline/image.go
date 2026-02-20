@@ -2,12 +2,71 @@ package pipeline
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"soloveyko/backend/utils"
+	"strings"
+	"sync"
 )
 
+// splitIntoLines splits text by line breaks
+func splitIntoLines(text string) []string {
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if len(trimmed) > 0 {
+			lines = append(lines, trimmed)
+		}
+	}
+	return lines
+}
+
+// splitIntoSentences splits text by standard sentence delimiters
+func splitIntoSentences(text string) []string {
+	var sentences []string
+	var current []rune
+	runes := []rune(text)
+	for _, r := range runes {
+		current = append(current, r)
+		if r == '.' || r == '!' || r == '?' {
+			s := strings.TrimSpace(string(current))
+			if len(s) > 0 {
+				sentences = append(sentences, s)
+			}
+			current = nil
+		}
+	}
+	if len(current) > 0 {
+		s := strings.TrimSpace(string(current))
+		if len(s) > 0 {
+			sentences = append(sentences, s)
+		}
+	}
+	return sentences
+}
+
+// groupSentences groups sentences up to a character limit
+func groupSentences(sentences []string, limit int) []string {
+	var groups []string
+	var currentGroup string
+	for _, s := range sentences {
+		if len(currentGroup) == 0 {
+			currentGroup = s
+		} else if len([]rune(currentGroup))+1+len([]rune(s)) <= limit {
+			currentGroup += " " + s
+		} else {
+			groups = append(groups, currentGroup)
+			currentGroup = s
+		}
+	}
+	if len(currentGroup) > 0 {
+		groups = append(groups, currentGroup)
+	}
+	return groups
+}
+
 // ProcessImage handles image generation
-func (s *PipelineService) ProcessImage(id string, taskLabel string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
+func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
 	var iEnabled bool
 	if val, ok := settings["imageEnabled"].(bool); ok {
 		iEnabled = val
@@ -23,6 +82,164 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, processedTex
 	iService, _ := settings["imageService"].(string)
 	if iService == "" {
 		iService = pSettings.ImageService
+	}
+
+	iGenMethod, _ := settings["imageGenerationMethod"].(string)
+	if iGenMethod == "" {
+		iGenMethod = pSettings.ImageGenerationMethod
+	}
+	if iGenMethod == "" {
+		iGenMethod = "sentences"
+	}
+
+	iGroup, ok := settings["imageGroupSentences"].(bool)
+	if !ok {
+		iGroup = pSettings.ImageGroupSentences
+	}
+
+	iLimit := 1000.0
+	if val, ok := settings["imageSentenceLimit"].(float64); ok && val > 0 {
+		iLimit = val
+	} else if pSettings.ImageSentenceLimit > 0 {
+		iLimit = float64(pSettings.ImageSentenceLimit)
+	}
+
+	s.log("INFO", fmt.Sprintf("[Pipeline] Image chunking method: %s", iGenMethod), id, taskLabel)
+
+	var chunks []string
+	if iGenMethod == "lines" {
+		chunks = splitIntoLines(processedText)
+	} else {
+		sentences := splitIntoSentences(processedText)
+		if iGroup {
+			chunks = groupSentences(sentences, int(iLimit))
+		} else {
+			chunks = sentences
+		}
+	}
+
+	if len(chunks) == 0 {
+		s.log("WARN", "[Pipeline] No text segments found for image generation.", id, taskLabel)
+		return nil
+	}
+
+	s.log("INFO", fmt.Sprintf("[Pipeline] Created %d segments for image instructions", len(chunks)), id, taskLabel)
+
+	// Fetch OpenRouter API Key for prompt generation
+	orKeyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
+
+	orKeys := s.settings.GetOpenRouterKeys()
+	var orApiKey, orKeyName string
+
+	// First try to match the selected key
+	for _, k := range orKeys {
+		if k.ID == orKeyID {
+			orApiKey = k.Key
+			orKeyName = k.Name
+			break
+		}
+	}
+
+	// Fallback to first available key
+	if orApiKey == "" && len(orKeys) > 0 {
+		orApiKey = orKeys[0].Key
+		orKeyName = orKeys[0].Name
+	}
+
+	if orApiKey == "" {
+		s.log("ERROR", "[Pipeline] OpenRouter API Key missing! Required for interpreting prompts.", id, taskLabel)
+		return fmt.Errorf("OpenRouter API Key required")
+	}
+
+	orModel, _ := settings["imagePromptModel"].(string)
+	if orModel == "" {
+		orModel = pSettings.ImagePromptModel
+	}
+	if orModel == "" {
+		orModels := s.settings.GetOpenRouterModels()
+		if len(orModels) > 0 {
+			orModel = orModels[0]
+		} else {
+			orModel = "google/gemini-2.5-flash"
+		}
+	}
+
+	temp := 0.7
+	if val, ok := settings["imagePromptTemperature"].(float64); ok {
+		temp = val
+	} else if pSettings.ImagePromptTemperature > 0 {
+		temp = pSettings.ImagePromptTemperature
+	}
+
+	tokens := 0
+	if val, ok := settings["imagePromptMaxTokens"].(float64); ok {
+		tokens = int(val)
+	} else if pSettings.ImagePromptMaxTokens > 0 {
+		tokens = pSettings.ImagePromptMaxTokens
+	}
+
+	promptTemplate, _ := settings["imagePrompt"].(string)
+	if promptTemplate == "" {
+		promptTemplate = pSettings.ImagePrompt
+	}
+
+	s.emitStageStatus(id, "image", "running", fmt.Sprintf("Prompts 0/%d", len(chunks)))
+	prompts := make([]string, len(chunks))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var genError error
+	var generatedPromptsCount int
+
+	s.log("INFO", fmt.Sprintf("[Pipeline] Generating %d prompts via OpenRouter (%s)...", len(chunks), orModel), id, taskLabel)
+	for i, chunk := range chunks {
+		wg.Add(1)
+		go func(index int, textChunk string) {
+			defer wg.Done()
+			var fullPrompt string
+			if strings.Contains(promptTemplate, "{{content}}") {
+				fullPrompt = strings.ReplaceAll(promptTemplate, "{{content}}", textChunk)
+			} else {
+				fullPrompt = promptTemplate + "\n\n" + textChunk
+			}
+
+			// We use OpenRouter's internal Chat which handles rate limiting/semaphore automatically
+			res, err := s.openRouter.Chat(id, taskLabel, "image_prompt", orKeyName, orApiKey, orModel, fullPrompt, temp, tokens)
+
+			mu.Lock()
+			if err != nil {
+				if genError == nil {
+					genError = err
+				}
+			} else {
+				prompts[index] = strings.TrimSpace(res)
+				generatedPromptsCount++
+				s.emitStageStatus(id, "image", "running", fmt.Sprintf("Prompts %d/%d", generatedPromptsCount, len(chunks)))
+			}
+			mu.Unlock()
+		}(i, chunk)
+	}
+	wg.Wait()
+
+	if genError != nil {
+		s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to generate some image prompts: %v", genError), id, taskLabel)
+		s.emitStageStatus(id, "image", "failed")
+		return genError
+	}
+
+	// Save prompts to file
+	promptsFilePath := filepath.Join(finalDir, "prompts.txt")
+	promptsContent := strings.Join(prompts, "\n\n--------------------\n\n")
+	err := os.WriteFile(promptsFilePath, []byte(promptsContent), 0644)
+	if err != nil {
+		s.log("WARN", fmt.Sprintf("[Pipeline] Failed to save prompts.txt: %v", err), id, taskLabel)
+	} else {
+		s.log("SUCCESS", fmt.Sprintf("[Pipeline] Saved generated prompts to %s", promptsFilePath), id, taskLabel)
+	}
+
+	// Create images dir
+	imagesDir := filepath.Join(finalDir, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create images dir: %v", err)
 	}
 
 	if iService == "pollinations" {
@@ -43,15 +260,12 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, processedTex
 			iApiKey = iKeys[0].Key
 		}
 
-		// If still empty, it might be that the user is using the free tier without a key
-		// PollinationsService.GenerateImage handles empty apiKey for free tier rate limiting
-
 		iModel, _ := settings["imageModel"].(string)
 		if iModel == "" {
 			iModel = pSettings.ImageModel
 		}
 
-		iWidth, _ := settings["imageWidth"].(float64) // Settings often come as float64 from JSON map
+		iWidth, _ := settings["imageWidth"].(float64)
 		if iWidth == 0 {
 			iWidth = float64(pSettings.ImageWidth)
 		}
@@ -77,21 +291,45 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, processedTex
 			iEnhance = pSettings.ImageEnhance
 		}
 
-		s.log("INFO", fmt.Sprintf("[Pipeline] Image stage started. Service: %s, Model: %s, Size: %dx%d", iService, iModel, int(iWidth), int(iHeight)), id, taskLabel)
-		s.emitStageStatus(id, "image", "running")
-
-		imagePath := filepath.Join(finalDir, "image.jpg")
-
-		// Pollinations doesn't need much logic here, it's a single call
-		err := s.pollinations.GenerateImage(iApiKey, processedText, iModel, int(iWidth), int(iHeight), iNoLogo, iEnhance, imagePath)
-		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[Pollinations] Image generation failed: %v", err), id, taskLabel)
-			s.emitStageStatus(id, "image", "failed")
-			return err
+		var validPrompts int
+		for _, p := range prompts {
+			if len(p) > 0 {
+				validPrompts++
+			}
 		}
 
-		s.log("SUCCESS", "[Pollinations] Success: Image saved to image.jpg", id, taskLabel)
-		s.emitStageStatus(id, "image", "completed")
+		s.log("INFO", fmt.Sprintf("[Pipeline] Image Generation started. Service: %s", iService), id, taskLabel)
+		s.log("INFO", fmt.Sprintf("[Pollinations] Model: %s, Size: %dx%d, NoLogo: %t, Enhance: %t", iModel, int(iWidth), int(iHeight), iNoLogo, iEnhance), id, taskLabel)
+		s.emitStageStatus(id, "image", "running", fmt.Sprintf("Images 0/%d", validPrompts))
+
+		successCount := 0
+		for i, prompt := range prompts {
+			// Skip empty prompts
+			if len(prompt) == 0 {
+				continue
+			}
+
+			// save simply as 1.png, 2.png, etc
+			imgName := fmt.Sprintf("%d.png", i+1)
+			imgPath := filepath.Join(imagesDir, imgName)
+
+			err := s.pollinations.GenerateImage(iApiKey, prompt, iModel, int(iWidth), int(iHeight), iNoLogo, iEnhance, imgPath)
+			if err != nil {
+				s.log("ERROR", fmt.Sprintf("[Pollinations] Image %s failed: %v", imgName, err), id, taskLabel)
+				// continue generating others instead of failing completely, but we can fail completely if desired
+			} else {
+				successCount++
+				s.emitStageStatus(id, "image", "running", fmt.Sprintf("Images %d/%d", successCount, validPrompts))
+				s.log("SUCCESS", fmt.Sprintf("[Pollinations] Success: Generated %s", imgName), id, taskLabel)
+			}
+		}
+
+		if validPrompts > 0 && successCount == 0 {
+			s.emitStageStatus(id, "image", "failed", "0 Images")
+			return fmt.Errorf("failed to generate any images")
+		}
+
+		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("%d Images", successCount))
 	} else if iService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Image service %s is not yet implemented", iService), id, taskLabel)
 	} else {

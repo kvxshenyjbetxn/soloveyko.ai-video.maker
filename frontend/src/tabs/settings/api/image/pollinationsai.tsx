@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useI18n } from '../../../../contexts/I18nContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
+import { useServices } from '../../../../contexts/ServiceContext';
 // @ts-ignore
 import { SavePollinationsAPIKey, GetPollinationsAPIKey, SavePollinationsModels, GetPollinationsSavedModels, GetPollinationsImageModels } from '../../../../../wailsjs/go/main/App';
 
 export const PollinationsAI = () => {
     const { t } = useI18n();
     const { accentColor } = useTheme();
+    const { refreshPollinationsKeys } = useServices();
 
     const [keys, setKeys] = useState<any[]>([]);
     const [newName, setNewName] = useState('');
@@ -34,10 +36,11 @@ export const PollinationsAI = () => {
     // Auto-save API Keys
     useEffect(() => {
         if (!isLoaded) return;
-        const timer = setTimeout(() => {
+        const timer = setTimeout(async () => {
             // @ts-ignore
             const { SavePollinationsKeys } = window.go.main.App;
-            SavePollinationsKeys(keys);
+            await SavePollinationsKeys(keys);
+            refreshPollinationsKeys();
         }, 1000);
         return () => clearTimeout(timer);
     }, [keys, isLoaded]);
@@ -62,6 +65,7 @@ export const PollinationsAI = () => {
             // @ts-ignore
             const { SavePollinationsKeys } = window.go.main.App;
             await SavePollinationsKeys(keys);
+            refreshPollinationsKeys();
             const models = await GetPollinationsImageModels();
             setAvailableModels(models || []);
         } catch (err) {
