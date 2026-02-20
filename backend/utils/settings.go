@@ -67,27 +67,30 @@ type PipelineSettings struct {
 	ControlCollapsed              bool    `json:"controlCollapsed"`
 
 	// Image settings
-	ImageEnabled            bool    `json:"imageEnabled"`
-	ImageService            string  `json:"imageService,omitempty"`
-	ImageModel              string  `json:"imageModel,omitempty"`
-	ImageWidth              int     `json:"imageWidth,omitempty"`
-	ImageHeight             int     `json:"imageHeight,omitempty"`
-	ImageNoLogo             bool    `json:"imageNoLogo"`
-	ImageEnhance            bool    `json:"imageEnhance"`
-	ImagePrompt             string  `json:"imagePrompt,omitempty"`
-	ImagePollinationsKeyID  string  `json:"imagePollinationsKeyID,omitempty"`
-	ImageGooglerModel       string  `json:"imageGooglerModel,omitempty"`
-	ImageGooglerAspectRatio string  `json:"imageGooglerAspectRatio,omitempty"`
-	ImageOutputPath         string  `json:"imageOutputPath,omitempty"`
-	ImagePipelineName       string  `json:"imagePipelineName,omitempty"`
-	ImageTemplatesCollapsed bool    `json:"imageTemplatesCollapsed"`
-	ImageCollapsed          bool    `json:"imageCollapsed"`
-	ImageGenerationMethod   string  `json:"imageGenerationMethod,omitempty"`
-	ImageGroupSentences     bool    `json:"imageGroupSentences"`
-	ImageSentenceLimit      int     `json:"imageSentenceLimit,omitempty"`
-	ImagePromptModel        string  `json:"imagePromptModel,omitempty"`
-	ImagePromptTemperature  float64 `json:"imagePromptTemperature,omitempty"`
-	ImagePromptMaxTokens    int     `json:"imagePromptMaxTokens,omitempty"`
+	ImageEnabled               bool    `json:"imageEnabled"`
+	ImageService               string  `json:"imageService,omitempty"`
+	ImageModel                 string  `json:"imageModel,omitempty"`
+	ImageWidth                 int     `json:"imageWidth,omitempty"`
+	ImageHeight                int     `json:"imageHeight,omitempty"`
+	ImageNoLogo                bool    `json:"imageNoLogo"`
+	ImageEnhance               bool    `json:"imageEnhance"`
+	ImagePrompt                string  `json:"imagePrompt,omitempty"`
+	ImagePollinationsKeyID     string  `json:"imagePollinationsKeyID,omitempty"`
+	ImageGooglerModel          string  `json:"imageGooglerModel,omitempty"`
+	ImageGooglerAspectRatio    string  `json:"imageGooglerAspectRatio,omitempty"`
+	ImageOutputPath            string  `json:"imageOutputPath,omitempty"`
+	ImagePipelineName          string  `json:"imagePipelineName,omitempty"`
+	ImageTemplatesCollapsed    bool    `json:"imageTemplatesCollapsed"`
+	ImageCollapsed             bool    `json:"imageCollapsed"`
+	ImageGenerationMethod      string  `json:"imageGenerationMethod,omitempty"`
+	ImageGroupSentences        bool    `json:"imageGroupSentences"`
+	ImageSentenceLimit         int     `json:"imageSentenceLimit,omitempty"`
+	ImagePromptModel           string  `json:"imagePromptModel,omitempty"`
+	ImagePromptTemperature     float64 `json:"imagePromptTemperature,omitempty"`
+	ImagePromptMaxTokens       int     `json:"imagePromptMaxTokens,omitempty"`
+	ElevenLabsImageKeyID       string  `json:"elevenLabsImageKeyID,omitempty"`
+	ElevenLabsImagePortrait    bool    `json:"elevenLabsImagePortrait"`
+	ElevenLabsImageAspectRatio string  `json:"elevenLabsImageAspectRatio,omitempty"`
 
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`
@@ -125,6 +128,8 @@ type Settings struct {
 	OpenRouterAlertThreshold      float64          `json:"openRouterAlertThreshold"`
 	GooglerVideoAlertThreshold    float64          `json:"googlerVideoAlertThreshold"`
 	GooglerImageAlertThreshold    float64          `json:"googlerImageAlertThreshold"`
+	ElevenLabsImageKeys           []NamedAPIKey    `json:"elevenLabsImageKeys"`
+	ElevenLabsImageMaxConnections int              `json:"elevenLabsImageMaxConnections"`
 	Pipeline                      PipelineSettings `json:"pipeline"`
 }
 
@@ -208,6 +213,9 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 	if settings.GooglerMaxVideoConnections <= 0 {
 		settings.GooglerMaxVideoConnections = 10
 	}
+	if settings.ElevenLabsImageMaxConnections <= 0 {
+		settings.ElevenLabsImageMaxConnections = 25
+	}
 	// Якщо список моделей взагалі nil (поле відсутнє в JSON), додаємо дефолтні.
 	// Якщо список порожній [], але не nil (користувач все видалив), не чіпаємо.
 	if settings.OpenRouterModels == nil {
@@ -276,6 +284,16 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				ID:   "default",
 				Name: "Default",
 				Key:  settings.PollinationsAPIKey,
+			},
+		}
+	}
+	// Міграція для ElevenLabsImageKeys
+	if len(settings.ElevenLabsImageKeys) == 0 && settings.ElevenLabsImageAPIKey != "" {
+		settings.ElevenLabsImageKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  settings.ElevenLabsImageAPIKey,
 			},
 		}
 	}
@@ -849,6 +867,63 @@ func (s *SettingsService) SetElevenLabsImageAPIKey(apiKey string) error {
 	}
 
 	settings.ElevenLabsImageAPIKey = apiKey
+	// Оновлюємо також іменовані ключі, якщо вони порожні
+	if len(settings.ElevenLabsImageKeys) == 0 {
+		settings.ElevenLabsImageKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  apiKey,
+			},
+		}
+	}
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsImageKeys повертає список іменованих ключів ElevenLabsImage
+func (s *SettingsService) GetElevenLabsImageKeys() []NamedAPIKey {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []NamedAPIKey{}
+	}
+	return settings.ElevenLabsImageKeys
+}
+
+// SetElevenLabsImageKeys зберігає список іменованих ключів ElevenLabsImage
+func (s *SettingsService) SetElevenLabsImageKeys(keys []NamedAPIKey) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.ElevenLabsImageKeys = keys
+	// Оновлюємо старий ключ для сумісності
+	if len(keys) > 0 {
+		settings.ElevenLabsImageAPIKey = keys[0].Key
+	}
+
+	return s.SaveSettings(settings)
+}
+
+// GetElevenLabsImageMaxConnections повертає ліміт одночасних запитів ElevenLabs Image
+func (s *SettingsService) GetElevenLabsImageMaxConnections() int {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 25
+	}
+	if settings.ElevenLabsImageMaxConnections <= 0 {
+		return 25
+	}
+	return settings.ElevenLabsImageMaxConnections
+}
+
+// SetElevenLabsImageMaxConnections встановлює ліміт одночасних запитів ElevenLabs Image
+func (s *SettingsService) SetElevenLabsImageMaxConnections(max int) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.ElevenLabsImageMaxConnections = max
 	return s.SaveSettings(settings)
 }
 

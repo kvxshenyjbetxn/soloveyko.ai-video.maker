@@ -110,6 +110,10 @@
         "voicemakerSettings": {
             "totalBalance": "Общий баланс (символов)"
         },
+        "elevenlabsimageSettings": {
+            "totalBalance": "Общий баланс",
+            "threads": "Количество потоков (1-25)"
+        },
         "pollinationsSettings": {
             "apikey": "API Ключ (Необязательно)",
             "models": "Модели",
@@ -164,7 +168,8 @@
         "accentColor": "Цвет акцента",
         "googlerLimits": "Лимиты Googler",
         "googlerMaxImages": "Макс. соединений для фото",
-        "googlerMaxVideos": "Макс. соединений для видео"
+        "googlerMaxVideos": "Макс. соединений для видео",
+        "elevenlabsimageMaxConnections": "Макс. соединений для ElevenLabs Image"
     },
     "systemMonitor": {
         "cpu": "Процессор",
@@ -236,7 +241,11 @@
             "estimated_chunks": "Ориентировочное количество промптов: ",
             "aspect_ratio": "Соотношение сторон",
             "aspect_ratio_portrait": "Портрет (9:16)",
-            "aspect_ratio_landscape": "Ландшафт (16:9)"
+            "aspect_ratio_landscape": "Ландшафт (16:9)",
+            "elevenlabsimage": {
+                "portrait": "Портретность (9:16)",
+                "aspect_ratio": "Соотношение сторон"
+            }
         },
         "group": {
             "ai": "Параметры ИИ",

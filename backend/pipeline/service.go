@@ -19,6 +19,7 @@ type PipelineService struct {
 	voiceMaker      *api.VoiceMakerService
 	pollinations    *api.PollinationsService
 	googler         *api.GooglerService
+	elevenLabsImage *api.ElevenLabsImageService
 
 	// Callbacks for UI updates
 	OnLog            func(level string, message string, details ...string)
@@ -40,6 +41,7 @@ func NewPipelineService(
 	voiceMaker *api.VoiceMakerService,
 	pollinations *api.PollinationsService,
 	googler *api.GooglerService,
+	elevenLabsImage *api.ElevenLabsImageService,
 ) *PipelineService {
 	return &PipelineService{
 		settings:        settings,
@@ -50,6 +52,7 @@ func NewPipelineService(
 		voiceMaker:      voiceMaker,
 		pollinations:    pollinations,
 		googler:         googler,
+		elevenLabsImage: elevenLabsImage,
 	}
 }
 

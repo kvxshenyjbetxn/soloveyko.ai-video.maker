@@ -113,6 +113,10 @@
     "voicemakerSettings": {
       "totalBalance": "Загальний баланс (символів)"
     },
+    "elevenlabsimageSettings": {
+      "totalBalance": "Загальний баланс",
+      "threads": "Кількість потоків (1-25)"
+    },
     "pollinationsSettings": {
       "apikey": "API Ключ (Необов'язково)",
       "models": "Моделі",
@@ -167,7 +171,8 @@
     "accentColor": "Колір акценту",
     "googlerLimits": "Ліміти Googler",
     "googlerMaxImages": "Макс. з'єднань для фото",
-    "googlerMaxVideos": "Макс. з'єднань для відео"
+    "googlerMaxVideos": "Макс. з'єднань для відео",
+    "elevenlabsimageMaxConnections": "Макс. з'єднань для ElevenLabs Image"
   },
   "systemMonitor": {
     "cpu": "Процесор",
@@ -241,7 +246,11 @@
       "estimated_chunks": "Орієнтовна кількість промптів: ",
       "aspect_ratio": "Співвідношення сторін",
       "aspect_ratio_portrait": "Портрет (9:16)",
-      "aspect_ratio_landscape": "Ландшафт (16:9)"
+      "aspect_ratio_landscape": "Ландшафт (16:9)",
+      "elevenlabsimage": {
+        "portrait": "Портретність (9:16)",
+        "aspect_ratio": "Співвідношення сторін"
+      }
     },
     "group": {
       "ai": "Параметри ШІ",

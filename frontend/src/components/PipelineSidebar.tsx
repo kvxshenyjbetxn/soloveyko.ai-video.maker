@@ -33,7 +33,7 @@ interface PipelineSidebarProps {
 export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, onToggle, content, setCurrentPath }) => {
     const { t } = useI18n();
     const { addTasks, addTask } = useQueue();
-    const { openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys } = useServices();
+    const { openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys, elevenLabsImageKeys } = useServices();
     const [settings, setSettings] = useState<any>(null);
     const [models, setModels] = useState<string[]>([]);
     const [isResizing, setIsResizing] = useState(false);
@@ -461,6 +461,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                         type={type} settings={settings} handleChange={handleChange}
                         openRouterKeys={openRouterKeys} elevenLabsBotKeys={elevenLabsBotKeys} elevenLabsUnlimKeys={elevenLabsUnlimKeys}
                         elevenLabsUAKeys={elevenLabsUAKeys} voiceMakerKeys={voiceMakerKeys} pollinationsKeys={pollinationsKeys}
+                        elevenLabsImageKeys={elevenLabsImageKeys}
                         fetchVoiceTemplates={fetchVoiceTemplates} fetchVoiceMakerVoices={fetchVoiceMakerVoices} setCurrentPath={setCurrentPath}
                     />
                     <PathSection type={type} settings={settings} handleChange={handleChange} handleSelectPath={handleSelectPath} />

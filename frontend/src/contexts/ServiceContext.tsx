@@ -30,6 +30,11 @@ interface ServiceContextType {
     pollinationsKeys: any[];
     refreshPollinationsKeys: () => Promise<void>;
     loadingPollinations: boolean;
+    elevenLabsImageKeys: any[];
+    refreshElevenLabsImageKeys: () => Promise<void>;
+    loadingElevenLabsImage: boolean;
+    elevenLabsImageUsage: { active_threads: number, max_threads: number };
+    refreshElevenLabsImageUsage: () => Promise<void>;
     elevenLabsBotThreshold: number;
     setElevenLabsBotThreshold: (val: number) => void;
     elevenLabsUnlimThreshold: number;
@@ -102,6 +107,11 @@ const ServiceContext = createContext<ServiceContextType>({
     setGooglerMaxImages: () => { },
     googlerMaxVideos: 10,
     setGooglerMaxVideos: () => { },
+    elevenLabsImageKeys: [],
+    refreshElevenLabsImageKeys: async () => { },
+    loadingElevenLabsImage: false,
+    elevenLabsImageUsage: { active_threads: 0, max_threads: 0 },
+    refreshElevenLabsImageUsage: async () => { },
     refreshAllBalances: async () => { },
 });
 
@@ -134,6 +144,9 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [loadingGoogler, setLoadingGoogler] = useState(false);
     const [pollinationsKeys, setPollinationsKeys] = useState<any[]>([]);
     const [loadingPollinations, setLoadingPollinations] = useState(false);
+    const [elevenLabsImageKeys, setElevenLabsImageKeys] = useState<any[]>([]);
+    const [loadingElevenLabsImage, setLoadingElevenLabsImage] = useState(false);
+    const [elevenLabsImageUsage, setElevenLabsImageUsage] = useState({ active_threads: 0, max_threads: 25 });
     const [elevenLabsBotThreshold, setElevenLabsBotThreshold] = useState(0);
     const [elevenLabsUnlimThreshold, setElevenLabsUnlimThreshold] = useState(0);
     const [voiceMakerThreshold, setVoiceMakerThreshold] = useState(0);
@@ -282,6 +295,34 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }
 
+    const refreshElevenLabsImageKeys = async () => {
+        if (loadingElevenLabsImage) return;
+        setLoadingElevenLabsImage(true);
+        try {
+            const { GetElevenLabsImageKeys } = (window as any).go.main.App;
+            if (GetElevenLabsImageKeys) {
+                const keys = await GetElevenLabsImageKeys();
+                setElevenLabsImageKeys(keys || []);
+            }
+        } catch (err: any) {
+            console.error("Failed to update ElevenLabs Image keys:", err);
+        } finally {
+            setLoadingElevenLabsImage(false);
+        }
+    }
+
+    const refreshElevenLabsImageUsage = async () => {
+        try {
+            const { GetElevenLabsImageUsage } = (window as any).go.main.App;
+            if (GetElevenLabsImageUsage) {
+                const usage = await GetElevenLabsImageUsage();
+                setElevenLabsImageUsage(usage);
+            }
+        } catch (err) {
+            console.error("Failed to refresh ElevenLabs Image usage:", err);
+        }
+    }
+
     const refreshAllBalances = async () => {
         await Promise.all([
             refreshOpenRouterBalance(),
@@ -290,7 +331,9 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             refreshElevenLabsUABalance(),
             refreshVoiceMakerBalance(),
             refreshGooglerUsage(),
-            refreshPollinationsKeys()
+            refreshPollinationsKeys(),
+            refreshElevenLabsImageKeys(),
+            refreshElevenLabsImageUsage()
         ]);
     };
 
@@ -399,6 +442,11 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             pollinationsKeys,
             refreshPollinationsKeys,
             loadingPollinations,
+            elevenLabsImageKeys,
+            refreshElevenLabsImageKeys,
+            loadingElevenLabsImage,
+            elevenLabsImageUsage,
+            refreshElevenLabsImageUsage,
             elevenLabsBotThreshold,
             setElevenLabsBotThreshold,
             elevenLabsUnlimThreshold,

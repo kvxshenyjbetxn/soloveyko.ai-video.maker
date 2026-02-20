@@ -11,13 +11,14 @@ interface ApiSectionProps {
     elevenLabsUAKeys: any[];
     voiceMakerKeys: any[];
     pollinationsKeys: any[];
+    elevenLabsImageKeys: any[];
     fetchVoiceTemplates: (keyID?: string) => void;
     fetchVoiceMakerVoices: (keyID?: string) => void;
     setCurrentPath?: (path: string) => void;
 }
 
 export const ApiSection: React.FC<ApiSectionProps> = ({
-    type, settings, handleChange, openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys, fetchVoiceTemplates, fetchVoiceMakerVoices, setCurrentPath
+    type, settings, handleChange, openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys, elevenLabsImageKeys, fetchVoiceTemplates, fetchVoiceMakerVoices, setCurrentPath
 }) => {
     const { t } = useI18n();
     const isTranslate = type === 'translate';
@@ -203,6 +204,31 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                                 <option value="">{t('api.openrouterSettings.noKeys')}</option>
                             ) : (
                                 pollinationsKeys.map(k => <option key={k.id} value={k.id}>{k.name}</option>)
+                            )}
+                            <option value="MANAGE_KEYS" style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>
+                                ⚙️ {t('tabs.settings')}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div className="settings-control">
+                        <label className="settings-label">ElevenLabs Image Key</label>
+                        <select
+                            className="settings-select"
+                            value={settings.elevenLabsImageKeyID || ''}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === "MANAGE_KEYS") {
+                                    if (setCurrentPath) setCurrentPath('settings.api.image.elevenlabsimage');
+                                    return;
+                                }
+                                handleChange('elevenLabsImageKeyID', val);
+                            }}
+                        >
+                            {elevenLabsImageKeys.length === 0 ? (
+                                <option value="">{t('api.openrouterSettings.noKeys')}</option>
+                            ) : (
+                                elevenLabsImageKeys.map(k => <option key={k.id} value={k.id}>{k.name}</option>)
                             )}
                             <option value="MANAGE_KEYS" style={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}>
                                 ⚙️ {t('tabs.settings')}

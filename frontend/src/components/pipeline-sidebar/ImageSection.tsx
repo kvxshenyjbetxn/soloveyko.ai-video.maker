@@ -1,6 +1,5 @@
 import React from 'react';
 import { useI18n } from '../../contexts/I18nContext';
-import { useServices } from '../../contexts/ServiceContext';
 
 interface ImageSectionProps {
     settings: any;
@@ -20,7 +19,6 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
     settings, handleChange, setSettings, fetchPollinationsModels, pollinationsModels, loadingPollinationsModels, estimatedChunks, content, models, renderValueOrInput, setCurrentPath
 }) => {
     const { t } = useI18n();
-    const { } = useServices();
 
     return (
         <div className={`pipeline-stage-container ${settings.imageCollapsed || !settings.imageEnabled ? 'is-collapsed' : ''}`} >
@@ -362,6 +360,22 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                 >
                                     <option value="IMAGE_ASPECT_RATIO_PORTRAIT">{t('pipeline.image.aspect_ratio_portrait') || 'Портрет (9:16)'}</option>
                                     <option value="IMAGE_ASPECT_RATIO_LANDSCAPE">{t('pipeline.image.aspect_ratio_landscape') || 'Ландшафт (16:9)'}</option>
+                                </select>
+                            </div>
+                        </>
+                    )}
+
+                    {settings.imageService === 'elevenlabsimage' && (
+                        <>
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.image.elevenlabsimage.aspect_ratio') || 'Співвідношення сторін'}</label>
+                                <select
+                                    className="settings-select"
+                                    value={settings.elevenLabsImageAspectRatio || '16:9'}
+                                    onChange={(e) => handleChange('elevenLabsImageAspectRatio', e.target.value)}
+                                >
+                                    <option value="16:9">16:9</option>
+                                    <option value="9:16">9:16</option>
                                 </select>
                             </div>
                         </>

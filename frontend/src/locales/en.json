@@ -110,6 +110,10 @@
         "voicemakerSettings": {
             "totalBalance": "Total Balance (characters)"
         },
+        "elevenlabsimageSettings": {
+            "totalBalance": "Total Balance",
+            "threads": "Threads (1-25)"
+        },
         "pollinationsSettings": {
             "apikey": "API Key (Optional)",
             "models": "Models",
@@ -237,7 +241,11 @@
             "estimated_chunks": "Estimated number of prompts: ",
             "aspect_ratio": "Aspect Ratio",
             "aspect_ratio_portrait": "Portrait (9:16)",
-            "aspect_ratio_landscape": "Landscape (16:9)"
+            "aspect_ratio_landscape": "Landscape (16:9)",
+            "elevenlabsimage": {
+                "portrait": "Portrait (9:16)",
+                "aspect_ratio": "Aspect Ratio"
+            }
         },
         "group": {
             "ai": "AI Parameters",

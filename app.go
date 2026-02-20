@@ -54,7 +54,7 @@ func NewApp() *App {
 	}
 	app.galleryManager = utils.NewGalleryManager()
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -105,6 +105,10 @@ func NewApp() *App {
 	}
 
 	app.googler.OnLog = func(level string, message string, details ...string) {
+		app.LogToUI(level, message, details...)
+	}
+
+	app.elevenLabsImage.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
 	}
 
@@ -480,6 +484,31 @@ func (a *App) SaveElevenLabsImageAPIKey(apiKey string) error {
 // GetElevenLabsImageAPIKey gets API key
 func (a *App) GetElevenLabsImageAPIKey() string {
 	return a.elevenLabsImage.GetAPIKey()
+}
+
+// GetElevenLabsImageKeys returns the list of named API keys
+func (a *App) GetElevenLabsImageKeys() []utils.NamedAPIKey {
+	return a.settings.GetElevenLabsImageKeys()
+}
+
+// SaveElevenLabsImageKeys saves the list of named API keys
+func (a *App) SaveElevenLabsImageKeys(keys []utils.NamedAPIKey) error {
+	return a.settings.SetElevenLabsImageKeys(keys)
+}
+
+// GetElevenLabsImageMaxConnections повертає ліміт одночасних запитів ElevenLabs Image
+func (a *App) GetElevenLabsImageMaxConnections() int {
+	return a.settings.GetElevenLabsImageMaxConnections()
+}
+
+// SaveElevenLabsImageMaxConnections встановлює ліміт одночасних запитів ElevenLabs Image
+func (a *App) SaveElevenLabsImageMaxConnections(max int) error {
+	return a.settings.SetElevenLabsImageMaxConnections(max)
+}
+
+// GetElevenLabsImageUsage повертає статистику використання ElevenLabs Image
+func (a *App) GetElevenLabsImageUsage() api.ElevenLabsImageUsage {
+	return a.elevenLabsImage.GetUsage()
 }
 
 // ElevenLabsUA Methods

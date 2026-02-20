@@ -403,6 +403,83 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 
 		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("%d Images", successCount))
+	} else if iService == "elevenlabsimage" {
+		iKeyID, _ := settings["elevenLabsImageKeyID"].(string)
+		if iKeyID == "" {
+			iKeyID = pSettings.ElevenLabsImageKeyID
+		}
+
+		iApiKey := ""
+		iKeys := s.settings.GetElevenLabsImageKeys()
+		for _, k := range iKeys {
+			if k.ID == iKeyID {
+				iApiKey = k.Key
+				break
+			}
+		}
+		if iApiKey == "" && len(iKeys) > 0 {
+			iApiKey = iKeys[0].Key
+		}
+
+		iRatio, _ := settings["elevenLabsImageAspectRatio"].(string)
+		if iRatio == "" {
+			iRatio = pSettings.ElevenLabsImageAspectRatio
+		}
+		if iRatio == "" {
+			iRatio = "16:9"
+		}
+
+		var validPrompts int
+		for _, p := range prompts {
+			if len(p) > 0 {
+				validPrompts++
+			}
+		}
+
+		s.log("INFO", fmt.Sprintf("[Pipeline] Image Generation started. Service: %s", iService), id, taskLabel)
+		s.log("INFO", fmt.Sprintf("[ElevenLabs Image] Aspect Ratio: %s", iRatio), id, taskLabel)
+		s.emitStageStatus(id, "image", "running", fmt.Sprintf("Images 0/%d", validPrompts))
+
+		successCount := 0
+		var imageWg sync.WaitGroup
+		var imgMu sync.Mutex
+
+		for i, prompt := range prompts {
+			if len(prompt) == 0 {
+				continue
+			}
+
+			imageWg.Add(1)
+			go func(idx int, p string) {
+				defer imageWg.Done()
+				imgName := fmt.Sprintf("%d.png", idx+1)
+				imgPath := filepath.Join(imagesDir, imgName)
+
+				s.log("INFO", fmt.Sprintf("[ElevenLabs Image] Sending request for Image %s | Ratio: %s", imgName, iRatio), id, taskLabel)
+				err := s.elevenLabsImage.GenerateImage(iApiKey, p, iRatio, imgPath)
+
+				imgMu.Lock()
+				if err != nil {
+					s.log("ERROR", fmt.Sprintf("[ElevenLabs Image] Image %s failed: %v", imgName, err), id, taskLabel)
+				} else {
+					successCount++
+					if s.OnImageGenerated != nil {
+						s.OnImageGenerated(taskName, subName, imgName, imgPath)
+					}
+					s.emitStageStatus(id, "image", "running", fmt.Sprintf("Images %d/%d", successCount, validPrompts))
+					s.log("SUCCESS", fmt.Sprintf("[ElevenLabs Image] Success: Generated and saved %s", imgName), id, taskLabel)
+				}
+				imgMu.Unlock()
+			}(i, prompt)
+		}
+		imageWg.Wait()
+
+		if validPrompts > 0 && successCount == 0 {
+			s.emitStageStatus(id, "image", "failed", "0 Images")
+			return fmt.Errorf("failed to generate any images")
+		}
+
+		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("%d Images", successCount))
 	} else if iService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Image service %s is not yet implemented", iService), id, taskLabel)
 	} else {
