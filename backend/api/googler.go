@@ -184,6 +184,18 @@ type OperationStatusResponse struct {
 	Error       string      `json:"error,omitempty"`
 }
 
+type RemixImageRequest struct {
+	Prompt          string           `json:"prompt"`
+	ReferenceImages []ReferenceImage `json:"reference_images"`
+	AspectRatio     string           `json:"aspect_ratio,omitempty"`
+	StrictMode      bool             `json:"strict_mode"`
+}
+
+type ReferenceImage struct {
+	Category string `json:"category"`
+	Image    string `json:"image"`
+}
+
 // GenerateImage генерує картинку за допомогою Googler з автоматичними повторами
 func (s *GooglerService) GenerateImage(apiKey string, model string, prompt string, aspectRatio string, outputPath string) error {
 	imgSem, _ := s.ensureSemaphores()
@@ -260,26 +272,26 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 	// Визначаємо ендпоінт та тіло запиту на основі моделі
 	switch model {
 	case "flow":
-		url = fmt.Sprintf("%s/v4/flow/image/generate", s.baseUrl)
+		url = fmt.Sprintf("%s/v4/flow/image/generate?api_key=%s", s.baseUrl, apiKey)
 		reqBody = FlowImageRequest{
 			Prompt:      prompt,
 			AspectRatio: apiRatio,
 		}
 	case "whisk":
-		url = fmt.Sprintf("%s/v4/whisk/image/generate", s.baseUrl)
+		url = fmt.Sprintf("%s/v4/whisk/image/generate?api_key=%s", s.baseUrl, apiKey)
 		reqBody = GenericImageRequest{
 			Prompt:      prompt,
 			AspectRatio: apiRatio,
 		}
 	case "grok":
-		url = fmt.Sprintf("%s/v4/grok/image/generate", s.baseUrl)
+		url = fmt.Sprintf("%s/v4/grok/image/generate?api_key=%s", s.baseUrl, apiKey)
 		reqBody = GenericImageRequest{
 			Prompt:      prompt,
 			AspectRatio: apiRatio,
 		}
 	case "gemini":
 		// Gemini (Imagen 4) тепер у v4. Згідно googler.json, вона не приймає aspect_ratio в v4
-		url = fmt.Sprintf("%s/v4/gemini/image/generate", s.baseUrl)
+		url = fmt.Sprintf("%s/v4/gemini/image/generate?api_key=%s", s.baseUrl, apiKey)
 		reqBody = map[string]interface{}{
 			"prompt": prompt,
 		}
@@ -332,7 +344,7 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 	for i := 0; i < maxRetries; i++ {
 		time.Sleep(5 * time.Second)
 
-		statusUrl := fmt.Sprintf("%s/v4/operations/%s", s.baseUrl, opResp.OperationID)
+		statusUrl := fmt.Sprintf("%s/v4/operations/%s?api_key=%s", s.baseUrl, opResp.OperationID, apiKey)
 		sReq, err := http.NewRequest("GET", statusUrl, nil)
 		if err != nil {
 			return err
@@ -378,4 +390,110 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 	}
 
 	return fmt.Errorf("Googler timeout after 5 minutes")
+}
+
+// RemixImage генерує картинку на основі референсів (Style/Subject/Scene)
+func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string) error {
+	imgSem, _ := s.ensureSemaphores()
+	imgSem <- struct{}{}
+	defer func() { <-imgSem }()
+
+	client := &http.Client{Timeout: 300 * time.Second}
+	// Додаємо ключ в URL, як це зроблено в GenerateImage
+	url := fmt.Sprintf("%s/v4/whisk/image/remix?api_key=%s", s.baseUrl, apiKey)
+
+	reqBody := RemixImageRequest{
+		Prompt:          prompt,
+		ReferenceImages: referenceImages,
+		AspectRatio:     aspectRatio,
+		StrictMode:      strictMode,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	if s.OnLogData != nil {
+		s.OnLogData("Googler Image Remix Request", fmt.Sprintf("PROMPT: %s\nRATIO: %s\nSTRICT: %v\nREFS: %d", prompt, aspectRatio, strictMode, len(referenceImages)))
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Googler Remix API failed (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var opResp OperationResponse
+	if err := json.NewDecoder(resp.Body).Decode(&opResp); err != nil {
+		return err
+	}
+
+	if opResp.OperationID == "" {
+		return fmt.Errorf("no operation_id returned")
+	}
+
+	// Polling (логіка така ж як в GenerateImage)
+	maxRetries := 60 // 5 minutes (5s * 60)
+	for i := 0; i < maxRetries; i++ {
+		time.Sleep(5 * time.Second)
+
+		statusUrl := fmt.Sprintf("%s/v4/operations/%s?api_key=%s", s.baseUrl, opResp.OperationID, apiKey)
+		sReq, err := http.NewRequest("GET", statusUrl, nil)
+		if err != nil {
+			return err
+		}
+		sReq.Header.Set("X-API-Key", apiKey)
+
+		sResp, err := client.Do(sReq)
+		if err != nil {
+			continue // try again
+		}
+
+		var stResp OperationStatusResponse
+		if err := json.NewDecoder(sResp.Body).Decode(&stResp); err != nil {
+			sResp.Body.Close()
+			continue
+		}
+		sResp.Body.Close()
+
+		if stResp.Status == "success" {
+			var base64Data string
+			switch v := stResp.Result.(type) {
+			case string:
+				base64Data = v
+			case []interface{}:
+				if len(v) > 0 {
+					if s, ok := v[0].(string); ok {
+						base64Data = s
+					}
+				}
+			}
+
+			if base64Data == "" {
+				return fmt.Errorf("empty result in success status")
+			}
+
+			return utils.SaveBase64Image(base64Data, outputPath)
+		}
+
+		if stResp.Status == "error" {
+			return fmt.Errorf("Googler remix task failed: %s", stResp.Error)
+		}
+	}
+
+	return fmt.Errorf("Googler remix timeout after 5 minutes")
 }

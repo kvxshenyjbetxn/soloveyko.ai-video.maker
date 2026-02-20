@@ -245,6 +245,12 @@
             "elevenlabsimage": {
                 "portrait": "Portrait (9:16)",
                 "aspect_ratio": "Aspect Ratio"
+            },
+            "googler": {
+                "remix_enabled": "Select image for style",
+                "remix_select": "Select image",
+                "remix_change": "Change image",
+                "strict_mode": "Strict Mode"
             }
         },
         "group": {

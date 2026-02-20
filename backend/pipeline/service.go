@@ -26,6 +26,7 @@ type PipelineService struct {
 	OnStageStatus    func(id string, stage string, status string, message string)
 	OnTextResult     func(id string, resultText string)
 	OnRequestControl func(id string, text string)
+	OnTaskStatus     func(id string, status string, progress int)
 	OnImageGenerated func(taskName string, templateName string, imageName string, path string)
 
 	pendingControl sync.Map // Map taskID -> chan string
@@ -99,6 +100,10 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 
 	if taskType != "translate" && taskType != "rewrite" && taskType != "voiceover" {
 		return "", fmt.Errorf("task type %s not implemented", taskType)
+	}
+
+	if s.OnTaskStatus != nil {
+		s.OnTaskStatus(id, "running", 5)
 	}
 
 	// 1. Text Stage

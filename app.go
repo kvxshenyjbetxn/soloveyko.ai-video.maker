@@ -66,6 +66,12 @@ func NewApp() *App {
 		app.EmitStageStatus(id, stage, status, message)
 	}
 
+	app.pipeline.OnTaskStatus = func(id string, status string, progress int) {
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "taskStatus", id, status, progress)
+		}
+	}
+
 	app.pipeline.OnImageGenerated = func(taskName, templateName, imageName, imgPath string) {
 		app.galleryManager.AddImage(taskName, templateName, imageName, imgPath)
 	}
@@ -754,4 +760,19 @@ func (a *App) DeleteGalleryImages(imgPaths []string) int {
 		wruntime.EventsEmit(a.ctx, "galleryUpdate")
 	}
 	return successCount
+}
+
+// SelectImage opens a file dialog to select an image file
+func (a *App) SelectImage() (string, error) {
+	return wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{
+		Title: "Select Reference Image",
+		Filters: []wruntime.FileFilter{
+			{DisplayName: "Images", Pattern: "*.jpg;*.jpeg;*.png;*.webp"},
+		},
+	})
+}
+
+// GetImageAsBase64 returns base64 content of an image file for preview
+func (a *App) GetImageAsBase64(path string) (string, error) {
+	return utils.GetImageAsBase64(path)
 }

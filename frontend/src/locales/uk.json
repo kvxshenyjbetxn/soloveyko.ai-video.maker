@@ -250,6 +250,12 @@
       "elevenlabsimage": {
         "portrait": "Портретність (9:16)",
         "aspect_ratio": "Співвідношення сторін"
+      },
+      "googler": {
+        "remix_enabled": "Обрати картинку для стилю",
+        "remix_select": "Обрати картинку",
+        "remix_change": "Змінити картинку",
+        "strict_mode": "Суворий режим (Strict Mode)"
       }
     },
     "group": {

@@ -19,6 +19,25 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
     settings, handleChange, setSettings, fetchPollinationsModels, pollinationsModels, loadingPollinationsModels, estimatedChunks, content, models, renderValueOrInput, setCurrentPath
 }) => {
     const { t } = useI18n();
+    const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        if (settings.imageGooglerReferenceImage) {
+            // Load preview
+            const loadPreview = async () => {
+                try {
+                    const b64 = await (window as any).go.main.App.GetImageAsBase64(settings.imageGooglerReferenceImage);
+                    if (b64) setPreviewUrl(b64);
+                } catch (err) {
+                    console.error("Failed to load preview:", err);
+                    setPreviewUrl(null);
+                }
+            };
+            loadPreview();
+        } else {
+            setPreviewUrl(null);
+        }
+    }, [settings.imageGooglerReferenceImage]);
 
     return (
         <div className={`pipeline-stage-container ${settings.imageCollapsed || !settings.imageEnabled ? 'is-collapsed' : ''}`} >
@@ -362,6 +381,139 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                     <option value="IMAGE_ASPECT_RATIO_LANDSCAPE">{t('pipeline.image.aspect_ratio_landscape') || 'Ландшафт (16:9)'}</option>
                                 </select>
                             </div>
+
+                            {settings.imageGooglerModel === 'whisk' && (
+                                <>
+                                    <div className="settings-control">
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.googler.remix_enabled')}</label>
+                                            <label className="stage-switch small">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={settings.imageGooglerRemixEnabled || false}
+                                                    onChange={(e) => handleChange('imageGooglerRemixEnabled', e.target.checked)}
+                                                />
+                                                <span className="stage-slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {settings.imageGooglerRemixEnabled && (
+                                        <>
+                                            <div className="settings-control">
+                                                <div
+                                                    onClick={async () => {
+                                                        try {
+                                                            const path = await (window as any).go.main.App.SelectImage();
+                                                            if (path) {
+                                                                handleChange('imageGooglerReferenceImage', path);
+                                                            }
+                                                        } catch (err) {
+                                                            console.error(err);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '16px',
+                                                        borderRadius: '12px',
+                                                        border: settings.imageGooglerReferenceImage ? '1px solid var(--accent-color)' : '1px dashed var(--bg-tertiary)',
+                                                        backgroundColor: settings.imageGooglerReferenceImage ? 'rgba(var(--accent-rgb), 0.05)' : 'var(--bg-secondary)',
+                                                        backgroundImage: previewUrl ? `url(${previewUrl})` : 'none',
+                                                        backgroundSize: 'contain',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundPosition: 'center',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '8px',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                        position: 'relative',
+                                                        overflow: 'hidden',
+                                                        minHeight: '100px'
+                                                    }}
+                                                    className="image-remix-dropzone"
+                                                >
+                                                    {previewUrl && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            inset: 0,
+                                                            backgroundColor: 'rgba(0,0,0,0.4)',
+                                                            zIndex: 1
+                                                        }} />
+                                                    )}
+
+                                                    <div style={{
+                                                        fontSize: '24px',
+                                                        opacity: settings.imageGooglerReferenceImage ? 1 : 0.5,
+                                                        filter: settings.imageGooglerReferenceImage ? 'drop-shadow(0 0 8px var(--accent-color))' : 'none',
+                                                        position: 'relative',
+                                                        zIndex: 2
+                                                    }}>
+                                                        {settings.imageGooglerReferenceImage ? '🖼️' : '📁'}
+                                                    </div>
+                                                    <div style={{
+                                                        fontSize: '11px',
+                                                        fontWeight: '600',
+                                                        color: settings.imageGooglerReferenceImage ? '#fff' : 'var(--text-secondary)',
+                                                        textAlign: 'center',
+                                                        position: 'relative',
+                                                        zIndex: 2,
+                                                        textShadow: previewUrl ? '0 1px 4px rgba(0,0,0,0.8)' : 'none'
+                                                    }}>
+                                                        {settings.imageGooglerReferenceImage
+                                                            ? t('pipeline.image.googler.remix_change')
+                                                            : t('pipeline.image.googler.remix_select')}
+                                                    </div>
+                                                    {settings.imageGooglerReferenceImage && (
+                                                        <div style={{
+                                                            fontSize: '9px',
+                                                            color: '#ddd',
+                                                            maxWidth: '100%',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                            opacity: 0.9,
+                                                            position: 'relative',
+                                                            zIndex: 2,
+                                                            textShadow: '0 1px 2px rgba(0,0,0,0.8)'
+                                                        }}>
+                                                            {settings.imageGooglerReferenceImage.split(/[\\/]/).pop()}
+                                                        </div>
+                                                    )}
+
+                                                    {!settings.imageGooglerReferenceImage && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            bottom: '4px',
+                                                            fontSize: '8px',
+                                                            color: 'var(--text-tertiary)',
+                                                            opacity: 0.3
+                                                        }}>
+                                                            JPG, PNG, WEBP
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="settings-control">
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                    <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.googler.strict_mode')}</label>
+                                                    <label className="stage-switch small">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={settings.imageGooglerRemixStrictMode || false}
+                                                            onChange={(e) => handleChange('imageGooglerRemixStrictMode', e.target.checked)}
+                                                        />
+                                                        <span className="stage-slider"></span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </>
+                            )}
                         </>
                     )}
 

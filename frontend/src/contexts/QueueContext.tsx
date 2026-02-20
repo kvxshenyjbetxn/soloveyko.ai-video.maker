@@ -207,7 +207,17 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         showToast("Початок обробки черги...", "info", 2000);
 
         await Promise.all(pendingTasks.map(async (task) => {
-            updateTaskStatus(task.id, 'waiting', 0);
+            // Оновлюємо стани всіх етапів до 'waiting', щоб UI відреагував відразу
+            setTasks(prev => prev.map(t =>
+                t.id === task.id ? {
+                    ...t,
+                    status: 'waiting',
+                    textStatus: 'waiting',
+                    voiceStatus: 'waiting',
+                    imageStatus: 'waiting',
+                    progress: 0
+                } : t
+            ));
 
             try {
                 // Fallback для старих завдань, які ще в черзі

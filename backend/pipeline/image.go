@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	bapi "soloveyko/backend/api"
 	"soloveyko/backend/utils"
 	"strings"
 	"sync"
@@ -352,6 +353,24 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			iRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE"
 		}
 
+		iRemixEnabled, _ := settings["imageGooglerRemixEnabled"].(bool)
+		iRefImage, _ := settings["imageGooglerReferenceImage"].(string)
+		iStrictMode, _ := settings["imageGooglerRemixStrictMode"].(bool)
+
+		var refImages []bapi.ReferenceImage
+		if iRemixEnabled && iRefImage != "" && iModel == "whisk" {
+			b64, err := utils.GetImageAsBase64(iRefImage)
+			if err != nil {
+				s.log("WARN", fmt.Sprintf("[Googler] Reference image not found: %s. Falling back to standard generation without remix.", iRefImage), id, taskLabel)
+			} else {
+				refImages = append(refImages, bapi.ReferenceImage{
+					Category: "MEDIA_CATEGORY_STYLE",
+					Image:    b64,
+				})
+				s.log("INFO", fmt.Sprintf("[Googler] Reference image loaded (%s)", iRefImage), id, taskLabel)
+			}
+		}
+
 		var validPrompts int
 		for _, p := range prompts {
 			if len(p) > 0 {
@@ -360,7 +379,11 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 
 		s.log("INFO", fmt.Sprintf("[Pipeline] Image Generation started. Service: %s", iService), id, taskLabel)
-		s.log("INFO", fmt.Sprintf("[Googler] Model: %s, Aspect Ratio: %s", iModel, iRatio), id, taskLabel)
+		if len(refImages) > 0 {
+			s.log("INFO", fmt.Sprintf("[Googler] Mode: REMIX (Style), Aspect Ratio: %s, Strict: %v", iRatio, iStrictMode), id, taskLabel)
+		} else {
+			s.log("INFO", fmt.Sprintf("[Googler] Model: %s, Aspect Ratio: %s", iModel, iRatio), id, taskLabel)
+		}
 		s.emitStageStatus(id, "image", "running", fmt.Sprintf("Images 0/%d", validPrompts))
 
 		successCount := 0
@@ -379,7 +402,12 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				imgPath := filepath.Join(imagesDir, imgName)
 
 				s.log("INFO", fmt.Sprintf("[Googler] Sending request for Image %s...", imgName), id, taskLabel)
-				err := s.googler.GenerateImage(iApiKey, iModel, p, iRatio, imgPath)
+				var err error
+				if len(refImages) > 0 {
+					err = s.googler.RemixImage(iApiKey, p, refImages, iRatio, iStrictMode, imgPath)
+				} else {
+					err = s.googler.GenerateImage(iApiKey, iModel, p, iRatio, imgPath)
+				}
 
 				imgMu.Lock()
 				if err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -21,6 +22,27 @@ func SaveBase64Image(base64Data string, outputPath string) error {
 	}
 
 	return os.WriteFile(outputPath, data, 0644)
+}
+
+// GetImageAsBase64 читає файл та повертає base64 строку з префіксом
+func GetImageAsBase64(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	mimeType := "image/jpeg"
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".png":
+		mimeType = "image/png"
+	case ".webp":
+		mimeType = "image/webp"
+	case ".gif":
+		mimeType = "image/gif"
+	}
+
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)), nil
 }
 
 // GetAudioDuration повертає тривалість аудіофайлу у форматі "0:00" або "0 сек"

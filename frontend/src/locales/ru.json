@@ -245,6 +245,12 @@
             "elevenlabsimage": {
                 "portrait": "Портретность (9:16)",
                 "aspect_ratio": "Соотношение сторон"
+            },
+            "googler": {
+                "remix_enabled": "Выбрать картинку для стиля",
+                "remix_select": "Выбрать картинку",
+                "remix_change": "Изменить картинку",
+                "strict_mode": "Строгий режим (Strict Mode)"
             }
         },
         "group": {
