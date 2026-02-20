@@ -1511,6 +1511,17 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                         <div className={`stage-settings-content ${settings.imageCollapsed || !settings.imageEnabled ? 'collapsed' : ''}`}>
                             <div className="settings-group">
                                 <div className="settings-control">
+                                    <label className="settings-label">{t('pipeline.image.prompt') || 'Промт для інструкцій'}</label>
+                                    <textarea
+                                        className="settings-textarea"
+                                        style={{ height: '80px', resize: 'vertical' }}
+                                        value={settings.imagePrompt || ''}
+                                        onChange={(e) => handleChange('imagePrompt', e.target.value)}
+                                        placeholder={t('pipeline.image.prompt_placeholder') || 'Введіть промт...'}
+                                    />
+                                </div>
+
+                                <div className="settings-control">
                                     <label className="settings-label">{t('pipeline.image.service')}</label>
                                     <select
                                         className="settings-select"
@@ -1527,17 +1538,6 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                                         <option value="googler">{t('image.googler') || 'Googler'}</option>
                                         <option value="elevenlabsimage">{t('image.elevenlabsimage') || 'ElevenLabs Image'}</option>
                                     </select>
-                                </div>
-
-                                <div className="settings-control">
-                                    <label className="settings-label">{t('pipeline.image.prompt') || 'Промт для інструкцій'}</label>
-                                    <textarea
-                                        className="settings-textarea"
-                                        style={{ height: '80px', resize: 'vertical' }}
-                                        value={settings.imagePrompt || ''}
-                                        onChange={(e) => handleChange('imagePrompt', e.target.value)}
-                                        placeholder={t('pipeline.image.prompt_placeholder') || 'Введіть промт...'}
-                                    />
                                 </div>
 
                                 {settings.imageService === 'pollinations' && (
