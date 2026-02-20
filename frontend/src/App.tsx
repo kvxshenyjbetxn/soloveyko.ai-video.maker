@@ -110,33 +110,28 @@ function App() {
     useEffect(() => {
         checkGallery();
 
-        // Listen for new images or deletions
+        // Слухаємо лише специфічну подію для галереї
         // @ts-ignore
         if (window.runtime) {
-            // @ts-ignore
-            const unsubStage = window.runtime.EventsOn("stageStatus", (id: string, stage: string, status: string) => {
-                if (stage === 'image' && status === 'completed') {
-                    checkGallery();
-                }
-            });
-            // @ts-ignore
-            const unsubTask = window.runtime.EventsOn("taskStatus", (id: string, status: string) => {
-                if (status === 'completed') {
-                    checkGallery();
-                }
-            });
             // @ts-ignore
             const unsubGallery = window.runtime.EventsOn("galleryUpdate", () => {
                 checkGallery();
             });
 
             return () => {
-                unsubStage();
-                unsubTask();
                 unsubGallery();
             };
         }
     }, []);
+
+    // Використовуємо зміни в черзі для оновлення галереї замість Wails Events, 
+    // щоб уникнути конфліктів відписки (відписується одразу для всіх)
+    const completedTasksCount = tasks.filter(t => t.status === 'completed' || t.status === 'failed').length;
+    const completedImagesCount = tasks.filter(t => t.imageStatus === 'completed').length;
+
+    useEffect(() => {
+        checkGallery();
+    }, [completedTasksCount, completedImagesCount]);
 
     const renderContent = () => {
         switch (currentPath) {

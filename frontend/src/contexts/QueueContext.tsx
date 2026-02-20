@@ -72,7 +72,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const displayName = subName ? `${folderName} - ${subName}` : folderName;
 
         const newTask: QueueTask = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: Date.now().toString(36) + Math.random().toString(36).substr(2, 9),
             name: displayName,
             folderName: folderName,
             subName: subName || "",
@@ -105,7 +105,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const newTasks: QueueTask[] = tasksData.map(data => {
             const displayName = data.subName ? `${folderName} - ${data.subName}` : folderName;
             return {
-                id: Math.random().toString(36).substr(2, 9),
+                id: Date.now().toString(36) + Math.random().toString(36).substr(2, 9),
                 name: displayName,
                 folderName: folderName,
                 subName: data.subName || "",
