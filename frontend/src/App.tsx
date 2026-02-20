@@ -89,6 +89,55 @@ function App() {
         }));
     };
 
+    const [hasImages, setHasImages] = useState(false);
+
+    const checkGallery = async () => {
+        try {
+            // @ts-ignore
+            const data = await window.go.main.App.GetGalleryImages();
+            const exists = data && data.length > 0;
+            setHasImages(exists);
+
+            // If we are in gallery and it becomes empty, redirect
+            if (!exists && currentPath === 'gallery') {
+                setCurrentPath('settings.general');
+            }
+        } catch (e) {
+            console.error("Failed to check gallery:", e);
+        }
+    };
+
+    useEffect(() => {
+        checkGallery();
+
+        // Listen for new images or deletions
+        // @ts-ignore
+        if (window.runtime) {
+            // @ts-ignore
+            const unsubStage = window.runtime.EventsOn("stageStatus", (id: string, stage: string, status: string) => {
+                if (stage === 'image' && status === 'completed') {
+                    checkGallery();
+                }
+            });
+            // @ts-ignore
+            const unsubTask = window.runtime.EventsOn("taskStatus", (id: string, status: string) => {
+                if (status === 'completed') {
+                    checkGallery();
+                }
+            });
+            // @ts-ignore
+            const unsubGallery = window.runtime.EventsOn("galleryUpdate", () => {
+                checkGallery();
+            });
+
+            return () => {
+                unsubStage();
+                unsubTask();
+                unsubGallery();
+            };
+        }
+    }, []);
+
     const renderContent = () => {
         switch (currentPath) {
             // Text tabs
@@ -339,13 +388,15 @@ function App() {
                                 {pendingCount > 0 && <span className="tab-badge">{pendingCount}</span>}
                             </div>
                         )}
-                        <div
-                            className={`tab-item ${getMainTab(currentPath) === 'gallery' ? 'active' : ''}`}
-                            onClick={() => setCurrentPath('gallery')}
-                        >
-                            <GalleryIcon />
-                            <span>{t('tabs.gallery')}</span>
-                        </div>
+                        {hasImages && (
+                            <div
+                                className={`tab-item ${getMainTab(currentPath) === 'gallery' ? 'active' : ''}`}
+                                onClick={() => setCurrentPath('gallery')}
+                            >
+                                <GalleryIcon />
+                                <span>{t('tabs.gallery')}</span>
+                            </div>
+                        )}
                         <div
                             className={`tab-item ${getMainTab(currentPath) === 'settings' ? 'active' : ''}`}
                             onClick={() => setCurrentPath('settings.general')}

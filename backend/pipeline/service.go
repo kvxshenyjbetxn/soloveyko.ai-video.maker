@@ -25,6 +25,7 @@ type PipelineService struct {
 	OnStageStatus    func(id string, stage string, status string, message string)
 	OnTextResult     func(id string, resultText string)
 	OnRequestControl func(id string, text string)
+	OnImageGenerated func(taskName string, templateName string, imageName string, path string)
 
 	pendingControl sync.Map // Map taskID -> chan string
 }
@@ -190,7 +191,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	stageWg.Add(1)
 	go func() {
 		defer stageWg.Done()
-		imageErr = s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings)
+		imageErr = s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings, taskName, templateDir)
 		if imageErr != nil {
 			s.log("ERROR", fmt.Sprintf("[Pipeline] Image stage failed: %v", imageErr), id, taskLabel)
 		}

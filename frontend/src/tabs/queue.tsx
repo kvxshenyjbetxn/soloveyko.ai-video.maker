@@ -279,9 +279,9 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
 
     return (
         <div className="content-wrapper animate-fade">
-            <div className="queue-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ fontSize: '24px', fontWeight: 800, margin: 0 }}>{t('queue.title')}</h2>
-                <div style={{ display: 'flex', gap: '12px' }}>
+            <div className="queue-header">
+                <div className="queue-title">ЧЕРГА ЗАВДАНЬ</div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                     {tasks.length > 0 && (
                         <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing}>
                             {t('queue.clear_all') || 'Clear All'}

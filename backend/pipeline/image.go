@@ -66,7 +66,7 @@ func groupSentences(sentences []string, limit int) []string {
 }
 
 // ProcessImage handles image generation
-func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
+func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings, taskName string, subName string) error {
 	var iEnabled bool
 	if val, ok := settings["imageEnabled"].(bool); ok {
 		iEnabled = val
@@ -319,6 +319,9 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				// continue generating others instead of failing completely, but we can fail completely if desired
 			} else {
 				successCount++
+				if s.OnImageGenerated != nil {
+					s.OnImageGenerated(taskName, subName, imgName, imgPath)
+				}
 				s.emitStageStatus(id, "image", "running", fmt.Sprintf("Images %d/%d", successCount, validPrompts))
 				s.log("SUCCESS", fmt.Sprintf("[Pollinations] Success: Generated %s", imgName), id, taskLabel)
 			}
@@ -383,6 +386,9 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 					s.log("ERROR", fmt.Sprintf("[Googler] Image %s failed: %v", imgName, err), id, taskLabel)
 				} else {
 					successCount++
+					if s.OnImageGenerated != nil {
+						s.OnImageGenerated(taskName, subName, imgName, imgPath)
+					}
 					s.emitStageStatus(id, "image", "running", fmt.Sprintf("Images %d/%d", successCount, validPrompts))
 					s.log("SUCCESS", fmt.Sprintf("[Googler] Success: Generated and saved %s", imgName), id, taskLabel)
 				}

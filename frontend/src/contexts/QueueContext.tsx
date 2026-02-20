@@ -143,11 +143,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 ...t,
                 status,
                 progress: progress ?? t.progress,
-                resultLength: resultLength ?? t.resultLength,
-                // Коли завдання завершено або впало, оновлюємо і стейджі для лампочок
-                textStatus: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : (status === 'waiting' ? 'waiting' : t.textStatus)),
-                voiceStatus: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : (status === 'waiting' ? 'waiting' : t.voiceStatus)),
-                imageStatus: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : (status === 'waiting' ? 'waiting' : t.imageStatus))
+                resultLength: resultLength ?? t.resultLength
             } : t
         ));
     }, []);
@@ -255,24 +251,37 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         showToast("Черга закінчила обробку!", "success", 5000);
     }, [tasks, isProcessing, updateTaskStatus, showToast]);
 
+    // Використовуємо рефи для функцій оновлення, щоб EventsOn завжди мав доступ до актуальних методів
+    const updateTaskStatusRef = useRef(updateTaskStatus);
+    const updateStageStatusRef = useRef(updateStageStatus);
+    const updateTaskResultLengthRef = useRef(updateTaskResultLength);
+    const updateTaskControlRef = useRef(updateTaskControl);
+
+    useEffect(() => {
+        updateTaskStatusRef.current = updateTaskStatus;
+        updateStageStatusRef.current = updateStageStatus;
+        updateTaskResultLengthRef.current = updateTaskResultLength;
+        updateTaskControlRef.current = updateTaskControl;
+    }, [updateTaskStatus, updateStageStatus, updateTaskResultLength, updateTaskControl]);
+
     useEffect(() => {
         // @ts-ignore
         if (window.runtime) {
             // @ts-ignore
             const unsubStatus = window.runtime.EventsOn("taskStatus", (id: string, status: string, progress: number) => {
-                updateTaskStatus(id, status as TaskStatus, progress);
+                updateTaskStatusRef.current(id, status as TaskStatus, progress);
             });
             // @ts-ignore
             const unsubStage = window.runtime.EventsOn("stageStatus", (id: string, stage: string, status: string, message?: string) => {
-                updateStageStatus(id, stage as 'text' | 'voice' | 'image', status as TaskStatus, message);
+                updateStageStatusRef.current(id, stage as 'text' | 'voice' | 'image', status as TaskStatus, message);
             });
             // @ts-ignore
             const unsubResult = window.runtime.EventsOn("textResult", (id: string, length: number) => {
-                updateTaskResultLength(id, length);
+                updateTaskResultLengthRef.current(id, length);
             });
             // @ts-ignore
             const unsubControl = window.runtime.EventsOn("requestControl", (id: string, text: string) => {
-                updateTaskControl(id, text);
+                updateTaskControlRef.current(id, text);
             });
             return () => {
                 unsubStatus();
@@ -281,7 +290,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 unsubControl();
             };
         }
-    }, [updateTaskStatus, updateStageStatus]);
+    }, []); // Порожній масив, бо ми використовуємо рефи всередині
 
     return (
         <QueueContext.Provider value={{ tasks, addTask, addTasks, removeTask, clearQueue, updateTaskStatus, startQueue, isProcessing, completionModal, closeCompletionModal, resumeTask }}>

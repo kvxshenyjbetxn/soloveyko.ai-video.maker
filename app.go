@@ -31,6 +31,7 @@ type App struct {
 	assemblyAI      *api.AssemblyAIService
 	templates       *utils.TemplateService
 	pipeline        *pipeline.PipelineService
+	galleryManager  *utils.GalleryManager
 }
 
 // NewApp creates a new App application struct
@@ -51,6 +52,7 @@ func NewApp() *App {
 		assemblyAI:      api.NewAssemblyAIService(settings),
 		templates:       utils.NewTemplateService(),
 	}
+	app.galleryManager = utils.NewGalleryManager()
 
 	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler)
 
@@ -60,6 +62,10 @@ func NewApp() *App {
 
 	app.pipeline.OnStageStatus = func(id string, stage string, status string, message string) {
 		app.EmitStageStatus(id, stage, status, message)
+	}
+
+	app.pipeline.OnImageGenerated = func(taskName, templateName, imageName, imgPath string) {
+		app.galleryManager.AddImage(taskName, templateName, imageName, imgPath)
 	}
 
 	app.pipeline.OnTextResult = func(id string, resultText string) {
@@ -659,4 +665,40 @@ func (a *App) ProcessTask(id string, taskNumber int, taskType string, content st
 // SubmitControlResult resumes a paused task with edited text
 func (a *App) SubmitControlResult(taskId string, content string) {
 	a.pipeline.SubmitControlResult(taskId, content)
+}
+
+// GetGalleryImages scans output directories and returns gallery data
+func (a *App) GetGalleryImages() []utils.GalleryTask {
+	return a.galleryManager.GetGalleryData()
+}
+
+// DeleteGalleryImage removes an image from session memory and deletes the file from disk
+func (a *App) DeleteGalleryImage(imgPath string) bool {
+	// 1. Remove from Memory
+	a.galleryManager.RemoveImage(imgPath)
+
+	// 2. Remove from Disk
+	err := os.Remove(imgPath)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Gallery] Failed to delete file: %v", err))
+		return false
+	}
+
+	a.LogToUI("SUCCESS", fmt.Sprintf("[Gallery] Image deleted from disk: %s", filepath.Base(imgPath)))
+	wruntime.EventsEmit(a.ctx, "galleryUpdate")
+	return true
+}
+
+// DeleteGalleryImages removes multiple images
+func (a *App) DeleteGalleryImages(imgPaths []string) int {
+	successCount := 0
+	for _, path := range imgPaths {
+		if a.DeleteGalleryImage(path) {
+			successCount++
+		}
+	}
+	if successCount > 0 {
+		wruntime.EventsEmit(a.ctx, "galleryUpdate")
+	}
+	return successCount
 }
