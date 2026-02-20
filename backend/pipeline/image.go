@@ -330,6 +330,73 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 
 		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("%d Images", successCount))
+	} else if iService == "googler" {
+		iApiKey := s.googler.GetAPIKey()
+
+		iModel, _ := settings["imageGooglerModel"].(string)
+		if iModel == "" {
+			iModel = pSettings.ImageGooglerModel
+		}
+		if iModel == "" {
+			iModel = "flow"
+		}
+
+		iRatio, _ := settings["imageGooglerAspectRatio"].(string)
+		if iRatio == "" {
+			iRatio = pSettings.ImageGooglerAspectRatio
+		}
+		if iRatio == "" {
+			iRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE"
+		}
+
+		var validPrompts int
+		for _, p := range prompts {
+			if len(p) > 0 {
+				validPrompts++
+			}
+		}
+
+		s.log("INFO", fmt.Sprintf("[Pipeline] Image Generation started. Service: %s", iService), id, taskLabel)
+		s.log("INFO", fmt.Sprintf("[Googler] Model: %s, Aspect Ratio: %s", iModel, iRatio), id, taskLabel)
+		s.emitStageStatus(id, "image", "running", fmt.Sprintf("Images 0/%d", validPrompts))
+
+		successCount := 0
+		var imageWg sync.WaitGroup
+		var imgMu sync.Mutex
+
+		for i, prompt := range prompts {
+			if len(prompt) == 0 {
+				continue
+			}
+
+			imageWg.Add(1)
+			go func(idx int, p string) {
+				defer imageWg.Done()
+				imgName := fmt.Sprintf("%d.png", idx+1)
+				imgPath := filepath.Join(imagesDir, imgName)
+
+				s.log("INFO", fmt.Sprintf("[Googler] Sending request for Image %s...", imgName), id, taskLabel)
+				err := s.googler.GenerateImage(iApiKey, iModel, p, iRatio, imgPath)
+
+				imgMu.Lock()
+				if err != nil {
+					s.log("ERROR", fmt.Sprintf("[Googler] Image %s failed: %v", imgName, err), id, taskLabel)
+				} else {
+					successCount++
+					s.emitStageStatus(id, "image", "running", fmt.Sprintf("Images %d/%d", successCount, validPrompts))
+					s.log("SUCCESS", fmt.Sprintf("[Googler] Success: Generated and saved %s", imgName), id, taskLabel)
+				}
+				imgMu.Unlock()
+			}(i, prompt)
+		}
+		imageWg.Wait()
+
+		if validPrompts > 0 && successCount == 0 {
+			s.emitStageStatus(id, "image", "failed", "0 Images")
+			return fmt.Errorf("failed to generate any images")
+		}
+
+		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("%d Images", successCount))
 	} else if iService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Image service %s is not yet implemented", iService), id, taskLabel)
 	} else {

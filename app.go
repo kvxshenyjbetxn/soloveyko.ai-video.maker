@@ -52,7 +52,7 @@ func NewApp() *App {
 		templates:       utils.NewTemplateService(),
 	}
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -95,6 +95,10 @@ func NewApp() *App {
 	}
 
 	app.elevenLabsUA.OnLog = func(level string, message string, details ...string) {
+		app.LogToUI(level, message, details...)
+	}
+
+	app.googler.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
 	}
 
@@ -608,6 +612,26 @@ func (a *App) GetGooglerImageAlertThreshold() float64 {
 // SaveGooglerImageAlertThreshold saves alert threshold
 func (a *App) SaveGooglerImageAlertThreshold(threshold float64) error {
 	return a.settings.SetGooglerImageAlertThreshold(threshold)
+}
+
+// GetGooglerMaxImageConnections повертає ліміт одночасних запитів Googler (Image)
+func (a *App) GetGooglerMaxImageConnections() int {
+	return a.settings.GetGooglerMaxImageConnections()
+}
+
+// SaveGooglerMaxImageConnections встановлює ліміт одночасних запитів Googler (Image)
+func (a *App) SaveGooglerMaxImageConnections(max int) error {
+	return a.settings.SetGooglerMaxImageConnections(max)
+}
+
+// GetGooglerMaxVideoConnections повертає ліміт одночасних запитів Googler (Video)
+func (a *App) GetGooglerMaxVideoConnections() int {
+	return a.settings.GetGooglerMaxVideoConnections()
+}
+
+// SaveGooglerMaxVideoConnections встановлює ліміт одночасних запитів Googler (Video)
+func (a *App) SaveGooglerMaxVideoConnections(max int) error {
+	return a.settings.SetGooglerMaxVideoConnections(max)
 }
 
 // Pipeline Methods

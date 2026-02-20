@@ -1,5 +1,6 @@
 import React from 'react';
 import { useI18n } from '../../contexts/I18nContext';
+import { useServices } from '../../contexts/ServiceContext';
 
 interface ImageSectionProps {
     settings: any;
@@ -19,9 +20,10 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
     settings, handleChange, setSettings, fetchPollinationsModels, pollinationsModels, loadingPollinationsModels, estimatedChunks, content, models, renderValueOrInput, setCurrentPath
 }) => {
     const { t } = useI18n();
+    const { } = useServices();
 
     return (
-        <div className={`pipeline-stage-container ${settings.imageCollapsed || !settings.imageEnabled ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${settings.imageCollapsed || !settings.imageEnabled ? 'is-collapsed' : ''}`} >
             <div
                 className="pipeline-stage-header"
                 onClick={() => handleChange('imageCollapsed', !settings.imageCollapsed)}
@@ -334,8 +336,38 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             </div>
                         </>
                     )}
+
+                    {settings.imageService === 'googler' && (
+                        <>
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.image.model')}</label>
+                                <select
+                                    className="settings-select"
+                                    value={settings.imageGooglerModel || 'flow'}
+                                    onChange={(e) => handleChange('imageGooglerModel', e.target.value)}
+                                >
+                                    <option value="flow">Flow (v4)</option>
+                                    <option value="whisk">Whisk (v4)</option>
+                                    <option value="grok">Grok (v4)</option>
+                                    <option value="gemini">Gemini (v4)</option>
+                                </select>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.image.aspect_ratio') || 'Співвідношення сторін'}</label>
+                                <select
+                                    className="settings-select"
+                                    value={settings.imageGooglerAspectRatio || 'IMAGE_ASPECT_RATIO_LANDSCAPE'}
+                                    onChange={(e) => handleChange('imageGooglerAspectRatio', e.target.value)}
+                                >
+                                    <option value="IMAGE_ASPECT_RATIO_PORTRAIT">{t('pipeline.image.aspect_ratio_portrait') || 'Портрет (9:16)'}</option>
+                                    <option value="IMAGE_ASPECT_RATIO_LANDSCAPE">{t('pipeline.image.aspect_ratio_landscape') || 'Ландшафт (16:9)'}</option>
+                                </select>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };

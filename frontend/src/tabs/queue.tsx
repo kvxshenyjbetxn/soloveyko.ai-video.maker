@@ -17,13 +17,13 @@ const LightbulbIcon = () => (
 );
 
 const VoiceIcon = () => (
-    <svg className="voice-icon" viewBox="0 0 24 24" fill="currentColor" style={{ width: '14px', height: '14px', opacity: 0.7 }}>
+    <svg className="voice-icon" viewBox="0 0 24 24" fill="currentColor">
         <path d="M12,2C9.24,2,7,4.24,7,7v5c0,2.76,2.24,5,5,5s5-2.24,5-5V7C17,4.24,14.76,2,12,2z M12,14c-1.1,0-2-0.9-2-2V7 c0-1.1,0.9-2,2-2s2,0.9,2,2v5C14,13.1,13.1,14,12,14z M19,12c0,3.53-2.61,6.43-6,6.92V21h-2v-2.08c-3.39-0.49-6-3.39-6-6.92h2 c0,2.76,2.24,5,5,5s5-2.24,5-5H19z" />
     </svg>
 );
 
 const ImageIcon = () => (
-    <svg className="image-icon" viewBox="0 0 24 24" fill="currentColor" style={{ width: '14px', height: '14px', opacity: 0.7 }}>
+    <svg className="image-icon" viewBox="0 0 24 24" fill="currentColor">
         <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
     </svg>
 );

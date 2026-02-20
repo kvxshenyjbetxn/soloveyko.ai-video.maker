@@ -102,8 +102,8 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 			return err
 		}
 
-		s.log("SUCCESS", "[ElevenLabsBot] Success: Voice saved to voice.mp3", id, taskLabel)
 		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.log("SUCCESS", fmt.Sprintf("[ElevenLabsBot] Success: Voice saved to voice.mp3 (%s)", duration), id, taskLabel)
 		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService == "elevenlabsunlim" {
 		vKeyID, _ := settings["voiceoverElevenLabsUnlimKeyID"].(string)
@@ -197,8 +197,8 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 			return err
 		}
 
-		s.log("SUCCESS", "[ElevenLabsUnlim] Success: Voice saved to voice.mp3", id, taskLabel)
 		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.log("SUCCESS", fmt.Sprintf("[ElevenLabsUnlim] Success: Voice saved to voice.mp3 (%s)", duration), id, taskLabel)
 		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService == "elevenlabsua" {
 		vKeyID, _ := settings["voiceoverElevenLabsUAKeyID"].(string)
@@ -297,8 +297,8 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 			return err
 		}
 
-		s.log("SUCCESS", "[ElevenLabsUA] Success: Voice saved to voice.mp3", id, taskLabel)
 		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.log("SUCCESS", fmt.Sprintf("[ElevenLabsUA] Success: Voice saved to voice.mp3 (%s)", duration), id, taskLabel)
 		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService == "voicemaker" {
 		vKeyID, _ := settings["voiceoverVoiceMakerKeyID"].(string)
@@ -407,8 +407,8 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 			return err
 		}
 
-		s.log("SUCCESS", "[VoiceMaker] Success: Voice saved to voice.mp3", id, taskLabel)
 		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.log("SUCCESS", fmt.Sprintf("[VoiceMaker] Success: Voice saved to voice.mp3 (%s)", duration), id, taskLabel)
 		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for auto-synthesis", vService), id, taskLabel)

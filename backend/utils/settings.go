@@ -76,6 +76,8 @@ type PipelineSettings struct {
 	ImageEnhance            bool    `json:"imageEnhance"`
 	ImagePrompt             string  `json:"imagePrompt,omitempty"`
 	ImagePollinationsKeyID  string  `json:"imagePollinationsKeyID,omitempty"`
+	ImageGooglerModel       string  `json:"imageGooglerModel,omitempty"`
+	ImageGooglerAspectRatio string  `json:"imageGooglerAspectRatio,omitempty"`
 	ImageOutputPath         string  `json:"imageOutputPath,omitempty"`
 	ImagePipelineName       string  `json:"imagePipelineName,omitempty"`
 	ImageTemplatesCollapsed bool    `json:"imageTemplatesCollapsed"`
@@ -114,6 +116,8 @@ type Settings struct {
 	ElevenLabsUAAPIKey            string           `json:"elevenLabsUAAPIKey"`
 	AssemblyAIAPIKey              string           `json:"assemblyAIAPIKey"`
 	OpenRouterMaxConnections      int              `json:"openRouterMaxConnections"`
+	GooglerMaxImageConnections    int              `json:"googlerMaxImageConnections"`
+	GooglerMaxVideoConnections    int              `json:"googlerMaxVideoConnections"`
 	ElevenLabsBotAlertThreshold   float64          `json:"elevenLabsBotAlertThreshold"`
 	ElevenLabsUnlimAlertThreshold float64          `json:"elevenLabsUnlimAlertThreshold"`
 	ElevenLabsUAAlertThreshold    float64          `json:"elevenLabsUAAlertThreshold"`
@@ -197,6 +201,12 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 	}
 	if settings.OpenRouterMaxConnections <= 0 {
 		settings.OpenRouterMaxConnections = 5
+	}
+	if settings.GooglerMaxImageConnections <= 0 {
+		settings.GooglerMaxImageConnections = 25
+	}
+	if settings.GooglerMaxVideoConnections <= 0 {
+		settings.GooglerMaxVideoConnections = 10
 	}
 	// Якщо список моделей взагалі nil (поле відсутнє в JSON), додаємо дефолтні.
 	// Якщо список порожній [], але не nil (користувач все видалив), не чіпаємо.
@@ -956,6 +966,50 @@ func (s *SettingsService) SetOpenRouterMaxConnections(max int) error {
 		return err
 	}
 	settings.OpenRouterMaxConnections = max
+	return s.SaveSettings(settings)
+}
+
+// GetGooglerMaxImageConnections повертає ліміт одночасних запитів Googler (Image)
+func (s *SettingsService) GetGooglerMaxImageConnections() int {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 25
+	}
+	if settings.GooglerMaxImageConnections <= 0 {
+		return 25
+	}
+	return settings.GooglerMaxImageConnections
+}
+
+// SetGooglerMaxImageConnections встановлює ліміт одночасних запитів Googler (Image)
+func (s *SettingsService) SetGooglerMaxImageConnections(max int) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GooglerMaxImageConnections = max
+	return s.SaveSettings(settings)
+}
+
+// GetGooglerMaxVideoConnections повертає ліміт одночасних запитів Googler (Video)
+func (s *SettingsService) GetGooglerMaxVideoConnections() int {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 10
+	}
+	if settings.GooglerMaxVideoConnections <= 0 {
+		return 10
+	}
+	return settings.GooglerMaxVideoConnections
+}
+
+// SetGooglerMaxVideoConnections встановлює ліміт одночасних запитів Googler (Video)
+func (s *SettingsService) SetGooglerMaxVideoConnections(max int) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GooglerMaxVideoConnections = max
 	return s.SaveSettings(settings)
 }
 

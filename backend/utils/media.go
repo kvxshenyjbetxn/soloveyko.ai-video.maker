@@ -1,10 +1,27 @@
 package utils
 
 import (
+	"encoding/base64"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
+
+// SaveBase64Image декодує base64 строку (з префіксом або без) та зберігає у файл
+func SaveBase64Image(base64Data string, outputPath string) error {
+	// Видаляємо префікс "data:image/png;base64," якщо він є
+	if i := strings.Index(base64Data, ","); i != -1 {
+		base64Data = base64Data[i+1:]
+	}
+
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return fmt.Errorf("failed to decode base64: %v", err)
+	}
+
+	return os.WriteFile(outputPath, data, 0644)
+}
 
 // GetAudioDuration повертає тривалість аудіофайлу у форматі "0:00" або "0 сек"
 // Використовує вбудований ffprobe.

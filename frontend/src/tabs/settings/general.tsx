@@ -1,6 +1,8 @@
 import { useRef } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useServices } from '../../contexts/ServiceContext';
+// @ts-ignore
 import './general.css';
 
 export const General = () => {
@@ -87,6 +89,7 @@ export const General = () => {
                         </div>
                     </div>
                 </div>
+
 
                 <div className="settings-section">
                     <div className="settings-controls">

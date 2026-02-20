@@ -241,7 +241,12 @@ func (s *ElevenLabsUnlimService) Synthesize(apiKey string, text string, voiceID 
 			return fmt.Errorf("synthesis failed (status: failed)")
 		}
 
-		time.Sleep(5 * time.Second)
+		// Поступове збільшення інтервалу опитування (backoff)
+		pollInterval := 5 * time.Second
+		if i < 5 { // Перші 5 спроб - кожні 2 секунди
+			pollInterval = 2 * time.Second
+		}
+		time.Sleep(pollInterval)
 	}
 
 	return fmt.Errorf("synthesis timeout")

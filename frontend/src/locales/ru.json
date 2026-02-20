@@ -156,7 +156,10 @@
         "theme": "Тема интерфейса",
         "themeDark": "Тёмная",
         "themeAmoled": "Чёрная AMOLED",
-        "accentColor": "Цвет акцента"
+        "accentColor": "Цвет акцента",
+        "googlerLimits": "Лимиты Googler",
+        "googlerMaxImages": "Макс. соединений для фото",
+        "googlerMaxVideos": "Макс. соединений для видео"
     },
     "systemMonitor": {
         "cpu": "Процессор",
@@ -225,7 +228,10 @@
             "group_limit_desc": "Предложения будут объединены до достижения лимита символов",
             "group_limit_desc_off": "Каждое предложение будет разделено буквально как отдельный промпт",
             "symbol_limit": "Лимит символов:",
-            "estimated_chunks": "Ориентировочное количество промптов: "
+            "estimated_chunks": "Ориентировочное количество промптов: ",
+            "aspect_ratio": "Соотношение сторон",
+            "aspect_ratio_portrait": "Портрет (9:16)",
+            "aspect_ratio_landscape": "Ландшафт (16:9)"
         },
         "group": {
             "ai": "Параметры ИИ",

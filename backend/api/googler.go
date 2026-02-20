@@ -1,16 +1,26 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"soloveyko/backend/utils"
+	"strings"
+	"sync"
 	"time"
 )
 
 type GooglerService struct {
 	settings *utils.SettingsService
 	baseUrl  string
+	imgSem   chan struct{}
+	vidSem   chan struct{}
+	imgLimit int
+	vidLimit int
+	mu       sync.Mutex
+	OnLog    func(level string, message string, details ...string)
 }
 
 func NewGooglerService(settings *utils.SettingsService) *GooglerService {
@@ -18,6 +28,25 @@ func NewGooglerService(settings *utils.SettingsService) *GooglerService {
 		settings: settings,
 		baseUrl:  "https://googler.fast-gen.ai/api",
 	}
+}
+
+func (s *GooglerService) ensureSemaphores() (chan struct{}, chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	imgMax := s.settings.GetGooglerMaxImageConnections()
+	if s.imgSem == nil || s.imgLimit != imgMax {
+		s.imgSem = make(chan struct{}, imgMax)
+		s.imgLimit = imgMax
+	}
+
+	vidMax := s.settings.GetGooglerMaxVideoConnections()
+	if s.vidSem == nil || s.vidLimit != vidMax {
+		s.vidSem = make(chan struct{}, vidMax)
+		s.vidLimit = vidMax
+	}
+
+	return s.imgSem, s.vidSem
 }
 
 type FlexibleFloat64 float64
@@ -127,4 +156,220 @@ func (s *GooglerService) SaveAPIKey(apiKey string) error {
 // GetAPIKey повертає збережений API ключ
 func (s *GooglerService) GetAPIKey() string {
 	return s.settings.GetGooglerAPIKey()
+}
+
+type GenericImageRequest struct {
+	Prompt      string `json:"prompt"`
+	AspectRatio string `json:"aspect_ratio,omitempty"`
+}
+
+type FlowImageRequest struct {
+	Prompt      string `json:"prompt"`
+	AspectRatio string `json:"aspect_ratio,omitempty"`
+	Model       string `json:"model,omitempty"`
+}
+
+type OperationResponse struct {
+	Success       bool   `json:"success"`
+	OperationID   string `json:"operation_id"`
+	OperationType string `json:"operation_type"`
+	Status        string `json:"status"`
+}
+
+type OperationStatusResponse struct {
+	OperationID string      `json:"operation_id"`
+	Status      string      `json:"status"`
+	Result      interface{} `json:"result"` // can be string or []string
+	Error       string      `json:"error,omitempty"`
+}
+
+// GenerateImage генерує картинку за допомогою Googler з автоматичними повторами
+func (s *GooglerService) GenerateImage(apiKey string, model string, prompt string, aspectRatio string, outputPath string) error {
+	imgSem, _ := s.ensureSemaphores()
+	imgSem <- struct{}{}
+	defer func() { <-imgSem }()
+
+	// Мапінг аспект-ратіо під вимоги API Googler
+	apiRatio := aspectRatio
+	if model == "grok" {
+		// Grok використовує короткі назви (16:9, 1:1 і т.д.)
+		if apiRatio == "IMAGE_ASPECT_RATIO_LANDSCAPE" {
+			apiRatio = "16:9"
+		} else if apiRatio == "IMAGE_ASPECT_RATIO_PORTRAIT" {
+			apiRatio = "9:16"
+		} else if apiRatio == "IMAGE_ASPECT_RATIO_SQUARE" {
+			apiRatio = "1:1"
+		}
+	} else {
+		// Flow, Whisk та інші використовують довгі назви
+		if !strings.HasPrefix(apiRatio, "IMAGE_ASPECT_RATIO_") {
+			switch apiRatio {
+			case "16:9":
+				apiRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE"
+			case "9:16":
+				apiRatio = "IMAGE_ASPECT_RATIO_PORTRAIT"
+			case "1:1":
+				apiRatio = "IMAGE_ASPECT_RATIO_SQUARE"
+			default:
+				apiRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE"
+			}
+		}
+	}
+
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if attempt > 1 {
+			if s.OnLog != nil {
+				s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying image generation (attempt %d/%d)...", attempt, maxRetries))
+			}
+			time.Sleep(10 * time.Second)
+		}
+
+		err := s.generateImageOnce(apiKey, model, prompt, apiRatio, outputPath)
+		if err == nil {
+			return nil
+		}
+
+		lastErr = err
+		errMsg := strings.ToLower(err.Error())
+
+		// Ретрай тільки для мережевих помилок або тимчасових помилок сервера
+		shouldRetry := strings.Contains(errMsg, "timeout") ||
+			strings.Contains(errMsg, "no images were generated") ||
+			strings.Contains(errMsg, "internal error") ||
+			strings.Contains(errMsg, "rate limit") ||
+			strings.Contains(errMsg, "connection")
+
+		if !shouldRetry {
+			break
+		}
+	}
+
+	return lastErr
+}
+
+func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt string, apiRatio string, outputPath string) error {
+	client := &http.Client{Timeout: 300 * time.Second}
+	var url string
+	var reqBody interface{}
+
+	// Визначаємо ендпоінт та тіло запиту на основі моделі
+	switch model {
+	case "flow":
+		url = fmt.Sprintf("%s/v4/flow/image/generate", s.baseUrl)
+		reqBody = FlowImageRequest{
+			Prompt:      prompt,
+			AspectRatio: apiRatio,
+		}
+	case "whisk":
+		url = fmt.Sprintf("%s/v4/whisk/image/generate", s.baseUrl)
+		reqBody = GenericImageRequest{
+			Prompt:      prompt,
+			AspectRatio: apiRatio,
+		}
+	case "grok":
+		url = fmt.Sprintf("%s/v4/grok/image/generate", s.baseUrl)
+		reqBody = GenericImageRequest{
+			Prompt:      prompt,
+			AspectRatio: apiRatio,
+		}
+	case "gemini":
+		// Gemini (Imagen 4) тепер у v4. Згідно googler.json, вона не приймає aspect_ratio в v4
+		url = fmt.Sprintf("%s/v4/gemini/image/generate", s.baseUrl)
+		reqBody = map[string]interface{}{
+			"prompt": prompt,
+		}
+	default:
+		return fmt.Errorf("unknown model: %s", model)
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Googler API failed (%d): %s", resp.StatusCode, string(body))
+	}
+
+	// v4 (всі моделі тепер тут) повертають operation_id
+
+	// Асинхронна обробка для v4
+	var opResp OperationResponse
+	if err := json.NewDecoder(resp.Body).Decode(&opResp); err != nil {
+		return err
+	}
+
+	if opResp.OperationID == "" {
+		return fmt.Errorf("no operation_id returned")
+	}
+
+	// Polling
+	maxRetries := 60 // 5 minutes (5s * 60)
+	for i := 0; i < maxRetries; i++ {
+		time.Sleep(5 * time.Second)
+
+		statusUrl := fmt.Sprintf("%s/v4/operations/%s", s.baseUrl, opResp.OperationID)
+		sReq, err := http.NewRequest("GET", statusUrl, nil)
+		if err != nil {
+			return err
+		}
+		sReq.Header.Set("X-API-Key", apiKey)
+
+		sResp, err := client.Do(sReq)
+		if err != nil {
+			continue // try again
+		}
+
+		var stResp OperationStatusResponse
+		if err := json.NewDecoder(sResp.Body).Decode(&stResp); err != nil {
+			sResp.Body.Close()
+			continue
+		}
+		sResp.Body.Close()
+
+		if stResp.Status == "success" {
+			// Result can be string or []string (for grok)
+			var base64Data string
+			switch v := stResp.Result.(type) {
+			case string:
+				base64Data = v
+			case []interface{}:
+				if len(v) > 0 {
+					if s, ok := v[0].(string); ok {
+						base64Data = s
+					}
+				}
+			}
+
+			if base64Data == "" {
+				return fmt.Errorf("empty result in success status")
+			}
+
+			return utils.SaveBase64Image(base64Data, outputPath)
+		}
+
+		if stResp.Status == "error" {
+			return fmt.Errorf("Googler task failed: %s", stResp.Error)
+		}
+	}
+
+	return fmt.Errorf("Googler timeout after 5 minutes")
 }

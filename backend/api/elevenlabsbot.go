@@ -350,16 +350,17 @@ func (s *ElevenLabsBotService) Synthesize(apiKey string, text string, templateNa
 			if s.OnLog != nil {
 				s.OnLog("INFO", fmt.Sprintf("[ElevenLabsBot] Synthesis completed (status: %s). Downloading...", status), id, taskLabel)
 			}
-			// Якщо статус ending, даємо секунду на закриття файлу сервером
-			if status == "ending" {
-				time.Sleep(2 * time.Second)
-			}
 			return s.DownloadResult(apiKey, taskID, outputPath)
 		case "error", "error_handled":
 			return fmt.Errorf("synthesis failed with status: %s", status)
 		}
 
-		time.Sleep(5 * time.Second)
+		// Поступове збільшення інтервалу опитування (backoff)
+		pollInterval := 5 * time.Second
+		if i < 5 { // Перші 5 спроб - кожні 2 секунди
+			pollInterval = 2 * time.Second
+		}
+		time.Sleep(pollInterval)
 	}
 
 	return fmt.Errorf("synthesis timeout")

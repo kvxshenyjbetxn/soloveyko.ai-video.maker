@@ -159,7 +159,10 @@
     "theme": "Тема інтерфейсу",
     "themeDark": "Темна",
     "themeAmoled": "Чорна AMOLED",
-    "accentColor": "Колір акценту"
+    "accentColor": "Колір акценту",
+    "googlerLimits": "Ліміти Googler",
+    "googlerMaxImages": "Макс. з'єднань для фото",
+    "googlerMaxVideos": "Макс. з'єднань для відео"
   },
   "systemMonitor": {
     "cpu": "Процесор",
@@ -230,7 +233,10 @@
       "group_limit_desc": "Речення будуть об'єднані до досягнення ліміту символів",
       "group_limit_desc_off": "Кожне речення буде нарізане буквально як окремий промпт",
       "symbol_limit": "Ліміт символів:",
-      "estimated_chunks": "Орієнтовна кількість промптів: "
+      "estimated_chunks": "Орієнтовна кількість промптів: ",
+      "aspect_ratio": "Співвідношення сторін",
+      "aspect_ratio_portrait": "Портрет (9:16)",
+      "aspect_ratio_landscape": "Ландшафт (16:9)"
     },
     "group": {
       "ai": "Параметри ШІ",

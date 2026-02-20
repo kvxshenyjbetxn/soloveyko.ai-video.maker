@@ -314,28 +314,45 @@
     gap: 10px;
 }
 
-.lightbulb-icon {
+.lightbulb-icon,
+.voice-icon,
+.image-icon {
     width: 16px;
     height: 16px;
+    transition: all 0.3s ease;
 }
 
 .status-pending .lightbulb-icon,
-.status-waiting .lightbulb-icon {
+.status-pending .voice-icon,
+.status-pending .image-icon,
+.status-waiting .lightbulb-icon,
+.status-waiting .voice-icon,
+.status-waiting .image-icon {
     color: #757575;
+    opacity: 0.5;
 }
 
-.status-running .lightbulb-icon {
+.status-running .lightbulb-icon,
+.status-running .voice-icon,
+.status-running .image-icon {
     color: #ffeb3b;
     filter: drop-shadow(0 0 8px #ffeb3b);
     animation: bulb-pulse 1.5s infinite;
+    opacity: 1 !important;
 }
 
-.status-completed .lightbulb-icon {
+.status-completed .lightbulb-icon,
+.status-completed .voice-icon,
+.status-completed .image-icon {
     color: #4caf50;
+    opacity: 1 !important;
 }
 
-.status-failed .lightbulb-icon {
+.status-failed .lightbulb-icon,
+.status-failed .voice-icon,
+.status-failed .image-icon {
     color: #ff5252;
+    opacity: 1 !important;
 }
 
 @keyframes bulb-pulse {

@@ -157,7 +157,10 @@
         "theme": "Interface Theme",
         "themeDark": "Dark",
         "themeAmoled": "Black AMOLED",
-        "accentColor": "Accent Color"
+        "accentColor": "Accent Color",
+        "googlerLimits": "Googler Limits",
+        "googlerMaxImages": "Max image connections",
+        "googlerMaxVideos": "Max video connections"
     },
     "systemMonitor": {
         "cpu": "CPU",
@@ -226,7 +229,10 @@
             "group_limit_desc": "Sentences will be grouped together until the character limit is reached",
             "group_limit_desc_off": "Each sentence will be cut exactly into a separate prompt",
             "symbol_limit": "Character Limit:",
-            "estimated_chunks": "Estimated number of prompts: "
+            "estimated_chunks": "Estimated number of prompts: ",
+            "aspect_ratio": "Aspect Ratio",
+            "aspect_ratio_portrait": "Portrait (9:16)",
+            "aspect_ratio_landscape": "Landscape (16:9)"
         },
         "group": {
             "ai": "AI Parameters",

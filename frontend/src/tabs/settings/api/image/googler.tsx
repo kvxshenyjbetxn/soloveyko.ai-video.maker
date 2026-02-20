@@ -3,7 +3,7 @@ import { useI18n } from '../../../../contexts/I18nContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { useServices } from '../../../../contexts/ServiceContext';
 // @ts-ignore
-import { GetGooglerAPIKey, SaveGooglerAPIKey, SaveGooglerVideoAlertThreshold, SaveGooglerImageAlertThreshold } from '../../../../../wailsjs/go/main/App';
+import { GetGooglerAPIKey, SaveGooglerAPIKey, SaveGooglerVideoAlertThreshold, SaveGooglerImageAlertThreshold, SaveGooglerMaxImageConnections, SaveGooglerMaxVideoConnections } from '../../../../../wailsjs/go/main/App';
 import '../../general.css';
 
 export const Googler = () => {
@@ -16,7 +16,11 @@ export const Googler = () => {
         googlerVideoThreshold,
         setGooglerVideoThreshold,
         googlerImageThreshold,
-        setGooglerImageThreshold
+        setGooglerImageThreshold,
+        googlerMaxImages,
+        setGooglerMaxImages,
+        googlerMaxVideos,
+        setGooglerMaxVideos
     } = useServices();
 
     const [apiKey, setApiKey] = useState('');
@@ -212,6 +216,60 @@ export const Googler = () => {
                 </div>
 
                 <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '25px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('general.googlerLimits')}</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <span style={{ fontSize: '0.9em', opacity: 0.7 }}>{t('general.googlerMaxImages')}</span>
+                                <span style={{ fontSize: '0.95em', fontWeight: 'bold', color: accentColor }}>{googlerMaxImages} / 25</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="1"
+                                max="25"
+                                step="1"
+                                className="premium-range"
+                                style={{
+                                    width: '100%',
+                                    cursor: 'pointer',
+                                    background: `linear-gradient(to right, ${accentColor} ${((googlerMaxImages - 1) / 24) * 100}%, rgba(255,255,255,0.05) ${((googlerMaxImages - 1) / 24) * 100}%)`
+                                }}
+                                value={googlerMaxImages}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setGooglerMaxImages(val);
+                                    SaveGooglerMaxImageConnections(val);
+                                }}
+                            />
+                        </div>
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <span style={{ fontSize: '0.9em', opacity: 0.7 }}>{t('general.googlerMaxVideos')}</span>
+                                <span style={{ fontSize: '0.95em', fontWeight: 'bold', color: accentColor }}>{googlerMaxVideos} / 10</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="1"
+                                max="10"
+                                step="1"
+                                className="premium-range"
+                                style={{
+                                    width: '100%',
+                                    cursor: 'pointer',
+                                    background: `linear-gradient(to right, ${accentColor} ${((googlerMaxVideos - 1) / 9) * 100}%, rgba(255,255,255,0.05) ${((googlerMaxVideos - 1) / 9) * 100}%)`
+                                }}
+                                value={googlerMaxVideos}
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setGooglerMaxVideos(val);
+                                    SaveGooglerMaxVideoConnections(val);
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '25px' }}>
                     <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('api.googlerSettings.videoAlertThreshold')} & {t('api.googlerSettings.imageAlertThreshold')}</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                         <div>
@@ -274,6 +332,39 @@ export const Googler = () => {
                 .premium-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
                 .premium-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
                 .premium-scrollbar::-webkit-scrollbar-thumb:hover { background: ${accentColor}; }
+                
+                .premium-range {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    height: 6px;
+                    border-radius: 3px;
+                    outline: none;
+                    margin: 10px 0;
+                }
+                .premium-range::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 18px;
+                    height: 18px;
+                    border-radius: 50%;
+                    background: ${accentColor};
+                    cursor: pointer;
+                    border: 3px solid #1a1a1a;
+                    box-shadow: 0 0 10px ${accentColor}66;
+                    transition: transform 0.1s ease;
+                }
+                .premium-range::-webkit-slider-thumb:hover {
+                    transform: scale(1.15);
+                }
+                .premium-range::-moz-range-thumb {
+                    width: 18px;
+                    height: 18px;
+                    border-radius: 50%;
+                    background: ${accentColor};
+                    cursor: pointer;
+                    border: 3px solid #1a1a1a;
+                    box-shadow: 0 0 10px ${accentColor}66;
+                }
             `}</style>
         </div>
     );

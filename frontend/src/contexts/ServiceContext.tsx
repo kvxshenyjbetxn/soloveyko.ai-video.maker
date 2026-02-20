@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 // @ts-ignore
-import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetOpenRouterKeys, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey, GetVoiceMakerBalance, GetVoiceMakerAPIKey, GetVoiceMakerSavedBalance, SaveVoiceMakerBalance, GetGooglerUsage, GetGooglerAPIKey, GetElevenLabsUABalance, GetElevenLabsUAKeys, GetElevenLabsUAAlertThreshold, SaveElevenLabsUAAlertThreshold, GetElevenLabsBotAlertThreshold, GetElevenLabsUnlimAlertThreshold, GetVoiceMakerAlertThreshold, GetOpenRouterAlertThreshold } from '../../wailsjs/go/main/App';
+import { GetOpenRouterCredits, GetOpenRouterAPIKey, GetOpenRouterKeys, GetElevenLabsBotBalance, GetElevenLabsBotAPIKey, GetElevenLabsUnlimBalance, GetElevenLabsUnlimAPIKey, GetVoiceMakerBalance, GetVoiceMakerAPIKey, GetVoiceMakerSavedBalance, SaveVoiceMakerBalance, GetGooglerUsage, GetGooglerAPIKey, GetGooglerMaxImageConnections, GetGooglerMaxVideoConnections, GetElevenLabsUABalance, GetElevenLabsUAKeys, GetElevenLabsUAAlertThreshold, SaveElevenLabsUAAlertThreshold, GetElevenLabsBotAlertThreshold, GetElevenLabsUnlimAlertThreshold, GetVoiceMakerAlertThreshold, GetOpenRouterAlertThreshold } from '../../wailsjs/go/main/App';
 import { useLogger } from './LoggerContext';
 
 interface ServiceContextType {
@@ -44,6 +44,10 @@ interface ServiceContextType {
     setGooglerImageThreshold: (val: number) => void;
     elevenLabsUAThreshold: number;
     setElevenLabsUAThreshold: (val: number) => void;
+    googlerMaxImages: number;
+    setGooglerMaxImages: (val: number) => void;
+    googlerMaxVideos: number;
+    setGooglerMaxVideos: (val: number) => void;
     refreshAllBalances: () => Promise<void>;
 }
 
@@ -94,6 +98,10 @@ const ServiceContext = createContext<ServiceContextType>({
     setGooglerImageThreshold: () => { },
     elevenLabsUAThreshold: 0,
     setElevenLabsUAThreshold: () => { },
+    googlerMaxImages: 25,
+    setGooglerMaxImages: () => { },
+    googlerMaxVideos: 10,
+    setGooglerMaxVideos: () => { },
     refreshAllBalances: async () => { },
 });
 
@@ -133,6 +141,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [googlerVideoThreshold, setGooglerVideoThreshold] = useState(0);
     const [googlerImageThreshold, setGooglerImageThreshold] = useState(0);
     const [elevenLabsUAThreshold, setElevenLabsUAThreshold] = useState(0);
+    const [googlerMaxImages, setGooglerMaxImages] = useState(25);
+    const [googlerMaxVideos, setGooglerMaxVideos] = useState(10);
     const hasFetchedRef = useRef(false);
 
     const refreshOpenRouterBalance = async () => {
@@ -302,6 +312,9 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (GetGooglerVideoAlertThreshold) GetGooglerVideoAlertThreshold().then(setGooglerVideoThreshold);
             if (GetGooglerImageAlertThreshold) GetGooglerImageAlertThreshold().then(setGooglerImageThreshold);
 
+            GetGooglerMaxImageConnections().then(setGooglerMaxImages);
+            GetGooglerMaxVideoConnections().then(setGooglerMaxVideos);
+
             refreshAllBalances();
         }
     }, []);
@@ -400,6 +413,10 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setGooglerImageThreshold,
             elevenLabsUAThreshold,
             setElevenLabsUAThreshold,
+            googlerMaxImages,
+            setGooglerMaxImages,
+            googlerMaxVideos,
+            setGooglerMaxVideos,
             refreshAllBalances
         }}>
             {children}
