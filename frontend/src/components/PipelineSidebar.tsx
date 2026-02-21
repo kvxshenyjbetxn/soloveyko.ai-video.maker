@@ -52,18 +52,44 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const lastSavedRef = useRef<string>("");
 
     const fetchVoiceTemplates = async (keyID?: string) => {
+        // @ts-ignore
+        const app = window.go.main.App as any;
+
+        // 1. Пріоритет: переданий ID -> settings зі стейту -> settings з пропсів (якщо є)
         const id = keyID || settings?.voiceoverElevenLabsBotKeyID;
-        if (!id) return;
+
+        if (app && app.LogFromUI) {
+            app.LogFromUI("INFO", "[Frontend] Запит на отримання шаблонів ElevenLabs Bot...");
+        }
+
+        let keyObj = elevenLabsBotKeys.find((k: any) => k.id === id);
+
+        // Якщо за ID не знайшли або ID "default", беремо перший доступний ключ
+        if ((!keyObj || id === 'default') && elevenLabsBotKeys.length > 0) {
+            keyObj = elevenLabsBotKeys[0];
+            if (app && app.LogFromUI) app.LogFromUI("INFO", "[Frontend] Використовую ключ: " + keyObj.name);
+        }
+
+        if (!keyObj) {
+            if (app && app.LogFromUI) app.LogFromUI("ERROR", "[Frontend] Помилка: Ключі ElevenLabs Bot не знайдені в системі!");
+            return;
+        }
 
         setLoadingTemplates(true);
         try {
-            const keyObj = elevenLabsBotKeys.find((k: any) => k.id === id);
-            if (keyObj) {
-                const results = await GetElevenLabsBotVoiceTemplates(keyObj.key);
-                setVoiceTemplates(results || []);
+            const results = await GetElevenLabsBotVoiceTemplates(keyObj.key);
+            if (results && results.length > 0) {
+                setVoiceTemplates(results);
+                if (app && app.LogFromUI) {
+                    app.LogFromUI("SUCCESS", `[Frontend] Шаблони успішно завантажені (кількість: ${results.length})`);
+                }
+            } else {
+                if (app && app.LogFromUI) app.LogFromUI("WARN", "[Frontend] Сервер повернув порожній список шаблонів.");
+                setVoiceTemplates([]);
             }
-        } catch (err) {
-            console.error("Failed to fetch templates:", err);
+        } catch (err: any) {
+            if (app && app.LogFromUI) app.LogFromUI("ERROR", "[Frontend] Помилка: " + (err?.message || String(err)));
+            setVoiceTemplates([]);
         } finally {
             setLoadingTemplates(false);
         }
@@ -170,16 +196,16 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     useEffect(() => {
         if (!settings) return;
 
-        // Fetch ElevenLabs Bot templates if needed
-        if (settings.voiceoverService === 'elevenlabsbot' && settings.voiceoverElevenLabsBotKeyID && voiceTemplates.length === 0 && elevenLabsBotKeys.length > 0) {
+        // Fetch ElevenLabs Bot templates if service is active and key exists
+        if (settings.voiceoverService === 'elevenlabsbot' && settings.voiceoverElevenLabsBotKeyID && elevenLabsBotKeys.length > 0) {
             fetchVoiceTemplates(settings.voiceoverElevenLabsBotKeyID);
         }
 
-        // Fetch VoiceMaker voices if needed
-        if (settings.voiceoverService === 'voicemaker' && settings.voiceoverVoiceMakerKeyID && voiceMakerVoices.length === 0 && voiceMakerKeys.length > 0) {
+        // Fetch VoiceMaker voices if service is active and key exists
+        if (settings.voiceoverService === 'voicemaker' && settings.voiceoverVoiceMakerKeyID && voiceMakerKeys.length > 0) {
             fetchVoiceMakerVoices(settings.voiceoverVoiceMakerKeyID);
         }
-    }, [elevenLabsBotKeys, voiceMakerKeys, settings?.voiceoverService, settings?.voiceoverElevenLabsBotKeyID, settings?.voiceoverVoiceMakerKeyID, voiceTemplates.length, voiceMakerVoices.length]);
+    }, [settings?.voiceoverService, settings?.voiceoverElevenLabsBotKeyID, settings?.voiceoverVoiceMakerKeyID, elevenLabsBotKeys, voiceMakerKeys]);
 
     useEffect(() => {
         const init = async () => {

@@ -72,21 +72,28 @@ func (s *ElevenLabsBotService) GetBalance(apiKey string) (float64, error) {
 // GetTemplates отримує список шаблонів голосів
 func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
 	if apiKey == "" {
+		if s.OnLog != nil {
+			s.OnLog("ERROR", "[ElevenLabsBot] GetTemplates failed: API key is empty")
+		}
 		return nil, fmt.Errorf("API key is empty")
 	}
 
 	if s.OnLog != nil {
-		s.OnLog("INFO", "[ElevenLabsBot] Fetching voice templates...")
+		s.OnLog("INFO", fmt.Sprintf("[ElevenLabsBot] Fetching templates with key: %s...", utils.MaskKey(apiKey)))
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest("GET", s.baseUrl+"/templates", nil)
 	if err != nil {
+		if s.OnLog != nil {
+			s.OnLog("ERROR", fmt.Sprintf("[ElevenLabsBot] Failed to create request: %v", err))
+		}
 		return nil, err
 	}
 
-	// Documentation says X-API-Key is required
+	// Try multiple header formats
 	req.Header["X-API-Key"] = []string{apiKey}
+	req.Header["api-key"] = []string{apiKey}
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := client.Do(req)
@@ -102,7 +109,7 @@ func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		if s.OnLog != nil {
-			s.OnLog("ERROR", fmt.Sprintf("[ElevenLabsBot] API error %d: %s", resp.StatusCode, string(body)))
+			s.OnLog("ERROR", fmt.Sprintf("[ElevenLabsBot] API error %d: Status: %s | Body: %s", resp.StatusCode, resp.Status, string(body)))
 		}
 		return nil, fmt.Errorf("API error: %d", resp.StatusCode)
 	}
@@ -120,37 +127,37 @@ func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
 
 	// 1. Try as simple slice of strings
 	var strSlice []string
-	if err := json.Unmarshal(rawData, &strSlice); err == nil {
+	if err := json.Unmarshal(body, &strSlice); err == nil && len(strSlice) > 0 {
 		results = strSlice
 	}
 
-	// 2. Try as slice of objects
+	// 2. Try as slice of objects (Matches the schema provided by user)
 	if len(results) == 0 {
 		var objSlice []map[string]interface{}
-		if err := json.Unmarshal(rawData, &objSlice); err == nil {
+		if err := json.Unmarshal(body, &objSlice); err == nil {
 			for _, item := range objSlice {
-				if name, ok := item["name"].(string); ok {
+				// У схемі користувача є поле "name"
+				if name, ok := item["name"].(string); ok && name != "" {
 					results = append(results, name)
-				} else if name, ok := item["label"].(string); ok {
-					results = append(results, name)
-				} else if name, ok := item["title"].(string); ok {
-					results = append(results, name)
-				} else if id, ok := item["template_id"].(string); ok {
-					results = append(results, id)
-				} else if id, ok := item["id"].(string); ok {
-					results = append(results, id)
+				} else if label, ok := item["label"].(string); ok && label != "" {
+					results = append(results, label)
+				} else if title, ok := item["title"].(string); ok && title != "" {
+					results = append(results, title)
+				} else if uuid, ok := item["uuid"].(string); ok && uuid != "" {
+					results = append(results, uuid)
 				}
 			}
 		}
 	}
 
-	// 3. Try as object with "templates" or "data" field
+	// 3. Try as object with nested fields
 	if len(results) == 0 {
 		var tObj map[string]interface{}
-		if err := json.Unmarshal(rawData, &tObj); err == nil {
-			fields := []string{"templates", "data", "items"}
+		if err := json.Unmarshal(body, &tObj); err == nil {
+			fields := []string{"templates", "data", "items", "voices", "list"}
 			for _, f := range fields {
 				if val, ok := tObj[f]; ok {
+					// Handle if field is a slice
 					if slice, ok := val.([]interface{}); ok {
 						for _, item := range slice {
 							if s, ok := item.(string); ok {
@@ -165,6 +172,11 @@ func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
 								}
 							}
 						}
+					} else if m, ok := val.(map[string]interface{}); ok {
+						// Handle if field is a map (key is name)
+						for k := range m {
+							results = append(results, k)
+						}
 					}
 				}
 				if len(results) > 0 {
@@ -177,8 +189,12 @@ func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
 	// 4. Try as a map (key is template name)
 	if len(results) == 0 {
 		var tMap map[string]interface{}
-		if err := json.Unmarshal(rawData, &tMap); err == nil {
+		if err := json.Unmarshal(body, &tMap); err == nil {
 			for k := range tMap {
+				// Skip "status" or "error" if any
+				if k == "status" || k == "error" || k == "detail" {
+					continue
+				}
 				results = append(results, k)
 			}
 		}
@@ -188,6 +204,8 @@ func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
 		if s.OnLog != nil {
 			s.OnLog("SUCCESS", fmt.Sprintf("[ElevenLabsBot] Successfully loaded %d voice templates", len(results)))
 		}
+		// Sort results for better UX
+		// sort.Strings(results) // Optional
 		return results, nil
 	}
 

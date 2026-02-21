@@ -193,6 +193,12 @@ func (a *App) LogToUI(level string, message string, details ...string) {
 	}
 }
 
+// LogFromUI is a simple wrapper for LogToUI to be used from the frontend
+// to avoid issues with variadic arguments in Wails reflection
+func (a *App) LogFromUI(level string, message string) {
+	a.LogToUI(level, message)
+}
+
 // EmitStageStatus emits a stage status event to the frontend
 func (a *App) EmitStageStatus(id string, stage string, status string, message string) {
 	if a.ctx != nil {

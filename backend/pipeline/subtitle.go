@@ -46,7 +46,7 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 
 	if sService == "standard" {
 		// Mock transcription for now
-		result, err := s.localWhisper.TranscribeBase(voiceFilePath, sModel)
+		result, err := s.localWhisper.TranscribeBase(voiceFilePath, sModel, pSettings.SubtitleMaxLen)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[LocalWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")

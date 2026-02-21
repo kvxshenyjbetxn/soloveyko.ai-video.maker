@@ -71,6 +71,7 @@ type PipelineSettings struct {
 	SubtitleCollapsed bool   `json:"subtitleCollapsed"`
 	SubtitleService   string `json:"subtitleService,omitempty"`
 	SubtitleModel     string `json:"subtitleModel,omitempty"`
+	SubtitleMaxLen    int    `json:"subtitleMaxLen,omitempty"`
 
 	// Image settings
 	ImageEnabled                bool    `json:"imageEnabled"`
@@ -195,6 +196,7 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				RewriteTemperature:   1.0,
 				RewriteEnabled:       true,
 				VoiceoverEnabled:     false,
+				SubtitleMaxLen:       40,
 				SidebarWidth:         320,
 			},
 		}, nil

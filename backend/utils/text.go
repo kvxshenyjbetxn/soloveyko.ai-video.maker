@@ -72,3 +72,11 @@ func LastIndexAny(runes []rune, chars string) int {
 func UrlEncode(s string) string {
 	return url.PathEscape(s)
 }
+
+// MaskKey masks an API key, leaving only the first and last characters visible
+func MaskKey(key string) string {
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "...." + key[len(key)-4:]
+}

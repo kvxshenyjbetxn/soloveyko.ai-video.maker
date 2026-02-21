@@ -450,7 +450,7 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 
 	// Fallback to standard Image generation with next models
 	if s.OnLog != nil {
-		s.OnLog("WARN", fmt.Sprintf("[Googler] Remix failed -> Falling back to standard Flow generation"))
+		s.OnLog("WARN", "[Googler] Remix failed -> Falling back to standard Flow generation")
 	}
 	return s.GenerateImage(apiKey, "flow", prompt, aspectRatio, outputPath)
 }

@@ -159,6 +159,26 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                                 </select>
                             </div>
 
+                            <div className="settings-control">
+                                <label className="settings-label">Максимальна кількість символів у рядку</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range"
+                                        min="10"
+                                        max="150"
+                                        step="1"
+                                        className="settings-slider"
+                                        value={settings.subtitleMaxLen || 40}
+                                        style={{ '--range-progress': `${((settings.subtitleMaxLen || 40) - 10) / (150 - 10) * 100}%` } as React.CSSProperties}
+                                        onChange={(e) => handleChange('subtitleMaxLen', parseInt(e.target.value))}
+                                    />
+                                    <span className="settings-slider-value">{settings.subtitleMaxLen || 40}</span>
+                                </div>
+                                <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
+                                    Менше значення = коротші субтитри (краще для Reels/Shorts)
+                                </div>
+                            </div>
+
                             {!modelExists && !downloading && (
                                 <div className="settings-control">
                                     <div style={{ padding: '10px', backgroundColor: 'rgba(255, 170, 0, 0.1)', border: '1px solid rgba(255, 170, 0, 0.3)', borderRadius: '6px', fontSize: '12px', color: '#ffaa00' }}>
