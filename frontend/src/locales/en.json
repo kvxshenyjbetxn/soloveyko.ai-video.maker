@@ -289,6 +289,12 @@
             "outline": "Outline Color",
             "service": "Subtitle Service",
             "max_len": "Max chars per line",
+            "font": "Subtitle Font",
+            "font_placeholder": "Select font...",
+            "font_search": "Search font...",
+            "fade_enabled": "Smooth Fade (Fade)",
+            "fade_in": "Fade In (ms)",
+            "fade_out": "Fade Out (ms)",
             "services": {
                 "standard": "Whisper (Standard)",
                 "amd": "AMD Whisper (Windows/AMD only)"

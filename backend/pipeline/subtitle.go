@@ -47,28 +47,18 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 
 	s.emitStageStatus(id, "subtitle", "running")
 
-	subtitleFilePath := filepath.Join(finalDir, "subtitle.srt")
+	var result string
+	var err error
 
-	if sService == "standard" {
-		// Mock transcription for now
-		result, err := s.localWhisper.TranscribeBase(voiceFilePath, sModel, pSettings.SubtitleMaxLen)
+	switch sService {
+	case "standard":
+		result, err = s.localWhisper.TranscribeBase(voiceFilePath, sModel, pSettings.SubtitleMaxLen)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[LocalWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
 			return err
 		}
-
-		// Write result to subtitle.srt
-		err = os.WriteFile(subtitleFilePath, []byte(result), 0644)
-		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[LocalWhisper] Failed to save subtitle: %v", err), id, taskLabel)
-			s.emitStageStatus(id, "subtitle", "failed")
-			return err
-		}
-
-		s.log("SUCCESS", "[LocalWhisper] Success: Subtitles saved to subtitle.srt", id, taskLabel)
-		s.emitStageStatus(id, "subtitle", "completed")
-	} else if sService == "amd" {
+	case "amd":
 		amdLang, _ := settings["subtitleAmdLanguage"].(string)
 		if amdLang == "" {
 			amdLang = pSettings.SubtitleAmdLanguage
@@ -77,50 +67,65 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			amdLang = "uk"
 		}
 
-		result, err := s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, pSettings.SubtitleMaxLen)
+		result, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, pSettings.SubtitleMaxLen)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
 			return err
 		}
-
-		// Write result to subtitle.srt
-		err = os.WriteFile(subtitleFilePath, []byte(result), 0644)
-		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed to save subtitle: %v", err), id, taskLabel)
-			s.emitStageStatus(id, "subtitle", "failed")
-			return err
-		}
-
-		s.log("SUCCESS", "[AmdWhisper] Success: Subtitles saved to subtitle.srt", id, taskLabel)
-		s.emitStageStatus(id, "subtitle", "completed")
-	} else if sService == "assemblyai" {
+	case "assemblyai":
 		if s.assemblyAI == nil {
 			s.log("ERROR", "[AssemblyAI] Service is not initialized", id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
 			return fmt.Errorf("AssemblyAI service not initialized")
 		}
 
-		result, err := s.assemblyAI.Transcribe(s.ctx, voiceFilePath)
+		result, err = s.assemblyAI.Transcribe(s.ctx, voiceFilePath)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[AssemblyAI] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
 			return err
 		}
-
-		// Write result to subtitle.srt
-		err = os.WriteFile(subtitleFilePath, []byte(result), 0644)
-		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[AssemblyAI] Failed to save subtitle: %v", err), id, taskLabel)
-			s.emitStageStatus(id, "subtitle", "failed")
-			return err
-		}
-
-		s.log("SUCCESS", "[AssemblyAI] Success: Subtitles saved to subtitle.srt", id, taskLabel)
-		s.emitStageStatus(id, "subtitle", "completed")
-	} else {
+	default:
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for subtitle generation", sService), id, taskLabel)
 		s.emitStageStatus(id, "subtitle", "completed")
+		return nil
+	}
+
+	// Save results (SRT and convert to ASS)
+	err = s.saveSubtitles(finalDir, result, id, taskLabel, pSettings)
+	if err != nil {
+		s.emitStageStatus(id, "subtitle", "failed")
+		return err
+	}
+
+	s.emitStageStatus(id, "subtitle", "completed")
+	return nil
+}
+
+func (s *PipelineService) saveSubtitles(finalDir string, srtData string, id string, taskLabel string, pSettings *utils.PipelineSettings) error {
+	subtitleSrtPath := filepath.Join(finalDir, "subtitle.srt")
+	subtitleAssPath := filepath.Join(finalDir, "subtitle.ass")
+
+	// 1. Save SRT
+	err := os.WriteFile(subtitleSrtPath, []byte(srtData), 0644)
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[Subtitle] Failed to save SRT: %v", err), id, taskLabel)
+		return err
+	}
+
+	// 2. Convert to ASS and save
+	assData, err := utils.SrtToAss(srtData, pSettings)
+	if err != nil {
+		s.log("WARN", fmt.Sprintf("[Subtitle] Failed to convert to ASS: %v", err), id, taskLabel)
+		// We still have SRT, so we can continue
+	} else {
+		err = os.WriteFile(subtitleAssPath, []byte(assData), 0644)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[Subtitle] Failed to save ASS: %v", err), id, taskLabel)
+			return err
+		}
+		s.log("SUCCESS", "[Subtitle] Success: Subtitles saved in SRT and high-quality ASS formats", id, taskLabel)
 	}
 
 	return nil

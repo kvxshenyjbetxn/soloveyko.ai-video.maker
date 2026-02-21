@@ -77,6 +77,12 @@ type PipelineSettings struct {
 	SubtitleModel       string `json:"subtitleModel,omitempty"`
 	SubtitleAmdLanguage string `json:"subtitleAmdLanguage,omitempty"`
 	SubtitleMaxLen      int    `json:"subtitleMaxLen,omitempty"`
+	SubtitleColor       string `json:"subtitleColor,omitempty"`
+	SubtitleSize        int    `json:"subtitleSize,omitempty"`
+	SubtitleFont        string `json:"subtitleFont,omitempty"`
+	SubtitleFadeEnabled bool   `json:"subtitleFadeEnabled"`
+	SubtitleFadeIn      int    `json:"subtitleFadeIn,omitempty"`
+	SubtitleFadeOut     int    `json:"subtitleFadeOut,omitempty"`
 
 	// Image settings
 	ImageEnabled                bool    `json:"imageEnabled"`
@@ -202,6 +208,12 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				RewriteEnabled:       true,
 				VoiceoverEnabled:     false,
 				SubtitleMaxLen:       40,
+				SubtitleColor:        "#ffffff",
+				SubtitleSize:         24,
+				SubtitleFont:         "Arial",
+				SubtitleFadeEnabled:  true,
+				SubtitleFadeIn:       300,
+				SubtitleFadeOut:      300,
 				SidebarWidth:         320,
 			},
 		}, nil

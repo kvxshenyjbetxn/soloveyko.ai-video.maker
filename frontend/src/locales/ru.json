@@ -291,6 +291,12 @@
             "outline": "Цвет контура",
             "service": "Сервис субтитров",
             "max_len": "Макс. символов в строке",
+            "font": "Шрифт субтитров",
+            "font_placeholder": "Выберите шрифт...",
+            "font_search": "Поиск шрифта...",
+            "fade_enabled": "Плавное появление (Fade)",
+            "fade_in": "Появление (мс)",
+            "fade_out": "Исчезновение (мс)",
             "services": {
                 "standard": "Whisper (Стандартный)",
                 "amd": "AMD Whisper (Только Windows/AMD)"

@@ -10,6 +10,7 @@ import {
     GetAmdWhisperModels
 } from '../../../wailsjs/go/main/App';
 import { ConfirmModal } from '../ConfirmModal';
+import SearchableSelect from '../SearchableSelect';
 
 interface SubtitleSectionProps {
     settings: any;
@@ -313,6 +314,140 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                             </div>
                         </div>
                     )}
+
+                    {/* Styling Settings */}
+                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {t('pipeline.group.subtitles')}
+                        </div>
+
+                        {/* Font Selection with Search */}
+                        <div className="settings-control">
+                            <label className="settings-label">{t('pipeline.subtitle.font')}</label>
+                            <SearchableSelect
+                                options={[
+                                    'Arial', 'Montserrat', 'Inter', 'Roboto', 'Open Sans', 'Verdana', 'Tahoma',
+                                    'Impact', 'Georgia', 'Times New Roman', 'Courier New', 'Comic Sans MS',
+                                    'Trebuchet MS', 'Arial Black', 'Palatino', 'Garamond', 'Bookman', 'Avant Garde',
+                                    'Helvetica', 'Century Gothic', 'Futura', 'Gill Sans', 'Franklin Gothic',
+                                    'Candara', 'Calibri', 'Cambria', 'Constantia', 'Corbel', 'Segoe UI',
+                                    'Ubuntu', 'Noto Sans', 'Oswald', 'Raleway', 'Playfair Display',
+                                    'Poppins', 'Muli', 'Lato', 'Quicksand', 'Nunito', 'Karla', 'Lora',
+                                    'Bebas Neue', 'Source Sans Pro', 'Merriweather', 'PT Sans', 'PT Serif'
+                                ].sort().map(f => ({
+                                    value: f,
+                                    label: f
+                                }))}
+                                value={settings.subtitleFont || 'Arial'}
+                                onChange={(val) => handleChange('subtitleFont', val)}
+                                placeholder={t('pipeline.subtitle.font_placeholder')}
+                                searchPlaceholder={t('pipeline.subtitle.font_search')}
+                            />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            {/* Color Picker */}
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.subtitle.color')}</label>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <div style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '6px',
+                                        backgroundColor: settings.subtitleColor || '#ffffff',
+                                        border: '2px solid var(--border-color)',
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                        cursor: 'pointer'
+                                    }}>
+                                        <input
+                                            type="color"
+                                            value={settings.subtitleColor || '#ffffff'}
+                                            onChange={(e) => handleChange('subtitleColor', e.target.value)}
+                                            style={{ position: 'absolute', top: '-5px', left: '-5px', width: '50px', height: '50px', cursor: 'pointer', opacity: 0 }}
+                                        />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="settings-input"
+                                        style={{ fontFamily: 'monospace', fontSize: '11px', textTransform: 'uppercase' }}
+                                        value={settings.subtitleColor || '#ffffff'}
+                                        onChange={(e) => handleChange('subtitleColor', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Font Size */}
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.subtitle.size')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range"
+                                        min="12"
+                                        max="120"
+                                        step="1"
+                                        className="settings-slider"
+                                        value={settings.subtitleSize || 24}
+                                        style={{ '--range-progress': `${((settings.subtitleSize || 24) - 12) / (120 - 12) * 100}%` } as React.CSSProperties}
+                                        onChange={(e) => handleChange('subtitleSize', parseInt(e.target.value))}
+                                    />
+                                    <span className="settings-slider-value">{settings.subtitleSize || 24}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Fade Settings */}
+                        <div className="settings-control">
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.subtitle.fade_enabled')}</label>
+                                <label className="stage-switch" style={{ width: '32px', height: '18px' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.subtitleFadeEnabled !== false}
+                                        onChange={(e) => handleChange('subtitleFadeEnabled', e.target.checked)}
+                                    />
+                                    <span className="stage-slider" style={{ borderRadius: '18px' }}></span>
+                                </label>
+                            </div>
+
+                            {settings.subtitleFadeEnabled !== false && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    <div className="settings-control">
+                                        <label className="settings-label" style={{ fontSize: '10px' }}>{t('pipeline.subtitle.fade_in')}</label>
+                                        <div className="settings-slider-container">
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="2000"
+                                                step="50"
+                                                className="settings-slider"
+                                                value={settings.subtitleFadeIn || 300}
+                                                style={{ '--range-progress': `${((settings.subtitleFadeIn || 300) - 0) / (2000 - 0) * 100}%` } as React.CSSProperties}
+                                                onChange={(e) => handleChange('subtitleFadeIn', parseInt(e.target.value))}
+                                            />
+                                            <span className="settings-slider-value" style={{ minWidth: '40px' }}>{settings.subtitleFadeIn || 300}</span>
+                                        </div>
+                                    </div>
+                                    <div className="settings-control">
+                                        <label className="settings-label" style={{ fontSize: '10px' }}>{t('pipeline.subtitle.fade_out')}</label>
+                                        <div className="settings-slider-container">
+                                            <input
+                                                type="range"
+                                                min="0"
+                                                max="2000"
+                                                step="50"
+                                                className="settings-slider"
+                                                value={settings.subtitleFadeOut || 300}
+                                                style={{ '--range-progress': `${((settings.subtitleFadeOut || 300) - 0) / (2000 - 0) * 100}%` } as React.CSSProperties}
+                                                onChange={(e) => handleChange('subtitleFadeOut', parseInt(e.target.value))}
+                                            />
+                                            <span className="settings-slider-value" style={{ minWidth: '40px' }}>{settings.subtitleFadeOut || 300}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
 

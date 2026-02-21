@@ -296,6 +296,12 @@
       "outline": "Колір контуру",
       "service": "Сервіс субтитрів",
       "max_len": "Макс. символів у рядку",
+      "font": "Шрифт субтитрів",
+      "font_placeholder": "Виберіть шрифт...",
+      "font_search": "Пошук шрифту...",
+      "fade_enabled": "Плавна поява (Fade)",
+      "fade_in": "Поява (мс)",
+      "fade_out": "Зникнення (мс)",
       "services": {
         "standard": "Whisper (Стандартний)",
         "amd": "AMD Whisper (Тільки Windows/AMD)"
