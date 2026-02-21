@@ -30,6 +30,7 @@
     "delete_all_confirm": "Видалити всі завдання з черги?",
     "status_pending": "Очікує",
     "status_running": "Обробка...",
+    "status_waiting": "В черзі",
     "status_completed": "Готово",
     "status_failed": "Помилка",
     "completion_title": "Обробку завершено",
@@ -38,6 +39,7 @@
     "completion_open_folder": "Відкрити папку",
     "task_default_name": "Завдання",
     "voice_saved": "MP3 збережено",
+    "subtitle_saved": "SRT збережено",
     "control_title": "ПЕРЕВІРКА ТЕКСТУ"
   },
   "gallery": {
@@ -281,6 +283,7 @@
     "max_tokens_unlimited": "Стандарт (0)",
     "system_prompt": "Системний промт",
     "subtitle": {
+      "title": "Налаштування субтитрів",
       "size": "Розмір шрифту",
       "color": "Колір тексту",
       "outline": "Колір контуру"
@@ -289,10 +292,11 @@
     "show_settings": "Показати налаштування",
     "empty_state": "Тут будуть налаштування пайплайну...",
     "stage": {
-      "translate": "1. Переклад",
-      "rewrite": "1. Рерайт",
-      "voiceover": "2.A. Озвучка",
-      "image": "2.B. Картинки",
+      "translate": "Переклад",
+      "rewrite": "Рерайт",
+      "voiceover": "Озвучка",
+      "image": "Картинки",
+      "subtitle": "Субтитри",
       "path": "Шлях результатів",
       "enabled": "Увімкнено",
       "disabled": "Вимкнено (оригінальний текст)",

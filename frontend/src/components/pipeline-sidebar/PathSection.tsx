@@ -8,6 +8,12 @@ interface PathSectionProps {
     handleSelectPath: () => void;
 }
 
+const PathIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+);
+
 export const PathSection: React.FC<PathSectionProps> = ({ type, settings, handleChange, handleSelectPath }) => {
     const { t } = useI18n();
     const isTranslate = type === 'translate';
@@ -30,6 +36,19 @@ export const PathSection: React.FC<PathSectionProps> = ({ type, settings, handle
                     >
                         <path d="m6 9 6 6 6-6" />
                     </svg>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        color: 'var(--text-tertiary)',
+                        transition: 'all 0.3s'
+                    }}>
+                        <PathIcon />
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span className="pipeline-stage-title">{t('pipeline.stage.path')}</span>
                     </div>

@@ -33,6 +33,7 @@ type App struct {
 	pipeline        *pipeline.PipelineService
 	galleryManager  *utils.GalleryManager
 	fileLogger      *utils.FileLogger
+	localWhisper    *pipeline.LocalWhisperService
 }
 
 // NewApp creates a new App application struct
@@ -55,8 +56,9 @@ func NewApp() *App {
 		templates:       utils.NewTemplateService(),
 	}
 	app.galleryManager = utils.NewGalleryManager()
+	app.localWhisper = pipeline.NewLocalWhisperService()
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -161,6 +163,15 @@ func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.pipeline.SetContext(ctx)
+
+	// Розпаковуємо всі бінарники одразу при старті в фоні (без блокування UI)
+	go func() {
+		utils.EnsureEngine("ffprobe")
+		if a.localWhisper != nil {
+			a.localWhisper.EnsureFFmpeg()
+			a.localWhisper.EnsureWhisperCLI()
+		}
+	}()
 }
 
 // LogToUI emits a log event to the frontend
@@ -785,4 +796,16 @@ func (a *App) SelectImage() (string, error) {
 // GetImageAsBase64 returns base64 content of an image file for preview
 func (a *App) GetImageAsBase64(path string) (string, error) {
 	return utils.GetImageAsBase64(path)
+}
+
+// CheckSubtitleModel checks if local model exists
+func (a *App) CheckSubtitleModel(modelName string) bool {
+	return a.localWhisper.CheckModel(modelName)
+}
+
+// DownloadSubtitleModel downloads the local model
+func (a *App) DownloadSubtitleModel(modelName string) error {
+	a.localWhisper.SetContext(a.ctx)
+	_, err := a.localWhisper.GetModelPath(modelName)
+	return err
 }

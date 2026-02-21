@@ -1,0 +1,38 @@
+name: Build Whisper for macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout whisper.cpp
+        run: git clone https://github.com/ggerganov/whisper.cpp.git
+
+      - name: Build Whisper
+        run: |
+          cd whisper.cpp
+          make
+
+      - name: Download FFmpeg and FFprobe
+        run: |
+          curl -L https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip -o ffmpeg.zip
+          curl -L https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip -o ffprobe.zip
+          unzip ffmpeg.zip
+          unzip ffprobe.zip
+          chmod +x ffmpeg ffprobe
+
+      - name: Prepare Artifacts
+        run: |
+          mkdir mac-binaries
+          mv whisper.cpp/main mac-binaries/whisper
+          mv ffmpeg mac-binaries/ffmpeg
+          mv ffprobe mac-binaries/ffprobe
+          chmod +x mac-binaries/*
+
+      - name: Upload Binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: mac-binaries/

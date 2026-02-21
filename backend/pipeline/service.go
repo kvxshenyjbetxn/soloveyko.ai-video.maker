@@ -20,6 +20,7 @@ type PipelineService struct {
 	pollinations    *api.PollinationsService
 	googler         *api.GooglerService
 	elevenLabsImage *api.ElevenLabsImageService
+	localWhisper    *LocalWhisperService
 
 	// Callbacks for UI updates
 	OnLog            func(level string, message string, details ...string)
@@ -44,6 +45,7 @@ func NewPipelineService(
 	pollinations *api.PollinationsService,
 	googler *api.GooglerService,
 	elevenLabsImage *api.ElevenLabsImageService,
+	localWhisper *LocalWhisperService,
 ) *PipelineService {
 	return &PipelineService{
 		settings:        settings,
@@ -55,12 +57,15 @@ func NewPipelineService(
 		pollinations:    pollinations,
 		googler:         googler,
 		elevenLabsImage: elevenLabsImage,
+		localWhisper:    localWhisper,
 	}
 }
 
-// SetContext sets the runtime context
 func (s *PipelineService) SetContext(ctx context.Context) {
 	s.ctx = ctx
+	if s.localWhisper != nil {
+		s.localWhisper.SetContext(ctx)
+	}
 }
 
 // ProcessTask handles the execution of a single pipeline task
@@ -187,6 +192,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	var stageWg sync.WaitGroup
 	var voiceErr error
 	var imageErr error
+	var subtitleErr error
 
 	stageWg.Add(1)
 	go func() {
@@ -194,6 +200,12 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		voiceErr = s.ProcessVoiceover(id, taskLabel, processedText, finalDir, settings, &pSettings)
 		if voiceErr != nil {
 			s.log("ERROR", fmt.Sprintf("[Pipeline] Voiceover stage failed: %v", voiceErr), id, taskLabel)
+		} else if taskType == "voiceover" || taskType == "translate" || taskType == "rewrite" {
+			// Після успішного створення озвучки запускаємо створення субтитрів
+			subtitleErr = s.ProcessSubtitle(id, taskLabel, finalDir, settings, &pSettings)
+			if subtitleErr != nil {
+				s.log("ERROR", fmt.Sprintf("[Pipeline] Subtitle stage failed: %v", subtitleErr), id, taskLabel)
+			}
 		}
 	}()
 

@@ -66,6 +66,12 @@ type PipelineSettings struct {
 	TranslateControlEnabled       bool    `json:"translateControlEnabled"`
 	ControlCollapsed              bool    `json:"controlCollapsed"`
 
+	// Subtitle settings
+	SubtitleEnabled   bool   `json:"subtitleEnabled"`
+	SubtitleCollapsed bool   `json:"subtitleCollapsed"`
+	SubtitleService   string `json:"subtitleService,omitempty"`
+	SubtitleModel     string `json:"subtitleModel,omitempty"`
+
 	// Image settings
 	ImageEnabled                bool    `json:"imageEnabled"`
 	ImageService                string  `json:"imageService,omitempty"`

@@ -28,6 +28,7 @@
         "delete_all_confirm": "Удалить все задачи из очереди?",
         "status_pending": "Ожидание",
         "status_running": "Обработка...",
+        "status_waiting": "В очереди",
         "status_completed": "Готово",
         "status_failed": "Ошибка",
         "completion_title": "Обработка завершена",
@@ -36,6 +37,7 @@
         "completion_open_folder": "Открыть папку",
         "task_default_name": "Задание",
         "voice_saved": "MP3 сохранено",
+        "subtitle_saved": "SRT сохранено",
         "control_title": "ПРОВЕРКА ТЕКСТА"
     },
     "gallery": {
@@ -284,10 +286,11 @@
         "show_settings": "Показать настройки",
         "empty_state": "Здесь будут настройки пайплайна...",
         "stage": {
-            "translate": "1. Перевод",
-            "rewrite": "1. Рерайт",
-            "voiceover": "2.A. Озвучка",
-            "image": "2.B. Картинки",
+            "translate": "Перевод",
+            "rewrite": "Рерайт",
+            "voiceover": "Озвучка",
+            "image": "Картинки",
+            "subtitle": "Субтитры",
             "path": "Путь результатов",
             "enabled": "Включено",
             "disabled": "Выключено (оригинальный текст)",

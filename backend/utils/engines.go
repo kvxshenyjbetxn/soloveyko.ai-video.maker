@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"soloveyko/backend/engines"
+	"soloveyko/backend/bin"
 )
 
 // EnsureEngine перевіряє наявність бінарного файлу в системній папці
@@ -36,7 +36,7 @@ func EnsureEngine(name string) (string, error) {
 	}
 
 	// Розпаковуємо з вбудованої FS
-	src, err := engines.Binaries.Open(binaryName)
+	src, err := bin.Files.Open(binaryName)
 	if err != nil {
 		return "", err // Файл не поклали в папку перед компіляцією
 	}

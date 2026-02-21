@@ -28,6 +28,12 @@ const ImageIcon = () => (
     </svg>
 );
 
+const SubtitleIcon = () => (
+    <svg className="subtitle-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6V8h12v2z" />
+    </svg>
+);
+
 const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: string, text: string) => void }) => {
     const [text, setText] = useState(task.controlContent || '');
     const [isFullScreen, setIsFullScreen] = useState(false);
@@ -173,6 +179,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
 
         const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
         const isVoiceEnabled = settings.voiceoverEnabled === true;
+        const isSubtitleEnabled = settings.subtitleEnabled === true;
         const isImageEnabled = settings.imageEnabled === true;
 
         const mainLabel = isMainStageEnabled
@@ -235,6 +242,22 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                         task.voiceStatus === 'running' ? (t('queue.status_running') || 'Synthesizing...') :
                                             task.voiceStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
                                                 task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Етап 2.5: Субтитри (якщо увімкнено) */}
+                        {isSubtitleEnabled && (
+                            <div className={`task-stage-item status-${task.subtitleStatus}`} style={{ marginTop: '4px' }}>
+                                <div className="stage-left">
+                                    <SubtitleIcon />
+                                    <span>{t('pipeline.stage.subtitle')}</span>
+                                </div>
+                                <span className="stage-status-text badge-status">
+                                    {task.subtitleStatus === 'completed' ? (t('queue.subtitle_saved') || 'SRT збережено') :
+                                        task.subtitleStatus === 'running' ? (t('queue.status_running') || 'Transcribing...') :
+                                            task.subtitleStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
+                                                task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                                 </span>
                             </div>
                         )}

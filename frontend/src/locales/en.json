@@ -28,6 +28,7 @@
         "delete_all_confirm": "Delete all tasks from the queue?",
         "status_pending": "Pending",
         "status_running": "Processing...",
+        "status_waiting": "In Queue",
         "status_completed": "Completed",
         "status_failed": "Failed",
         "completion_title": "Processing Completed",
@@ -36,6 +37,7 @@
         "completion_open_folder": "Open Folder",
         "task_default_name": "Task",
         "voice_saved": "MP3 Saved",
+        "subtitle_saved": "SRT Saved",
         "control_title": "TEXT CHECK"
     },
     "gallery": {
@@ -282,10 +284,11 @@
         "show_settings": "Show Settings",
         "empty_state": "Pipeline settings will appear here...",
         "stage": {
-            "translate": "1. Translation",
-            "rewrite": "1. Rewrite",
-            "voiceover": "2.A. Voiceover",
-            "image": "2.B. Images",
+            "translate": "Translation",
+            "rewrite": "Rewrite",
+            "voiceover": "Voiceover",
+            "image": "Images",
+            "subtitle": "Subtitles",
             "enabled": "Enabled",
             "disabled": "Disabled (original text)",
             "disabled_simple": "Disabled"

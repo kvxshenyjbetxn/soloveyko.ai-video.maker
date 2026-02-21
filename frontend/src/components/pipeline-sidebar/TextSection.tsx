@@ -10,6 +10,12 @@ interface TextSectionProps {
     setCurrentPath?: (path: string) => void;
 }
 
+const TextIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+);
+
 export const TextSection: React.FC<TextSectionProps> = ({
     type, settings, handleChange, models, renderValueOrInput, setCurrentPath
 }) => {
@@ -53,6 +59,19 @@ export const TextSection: React.FC<TextSectionProps> = ({
                     >
                         <path d="m6 9 6 6 6-6" />
                     </svg>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '8px',
+                        background: isEnabled ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--bg-tertiary)',
+                        color: isEnabled ? 'var(--accent-color)' : 'var(--text-tertiary)',
+                        transition: 'all 0.3s'
+                    }}>
+                        <TextIcon />
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span className="pipeline-stage-title">{t(`pipeline.stage.${type}`)}</span>
                         <span className="stage-status-text">

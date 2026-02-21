@@ -17,6 +17,7 @@ export interface QueueTask {
     textStatus: TaskStatus;
     voiceStatus: TaskStatus;
     imageStatus: TaskStatus;
+    subtitleStatus: TaskStatus;
     progress: number;
     timestamp: number;
     settings: any;
@@ -82,6 +83,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             textStatus: 'pending',
             voiceStatus: 'pending',
             imageStatus: 'pending',
+            subtitleStatus: 'pending',
             progress: 0,
             timestamp: Date.now(),
             settings,
@@ -115,6 +117,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 textStatus: 'pending',
                 voiceStatus: 'pending',
                 imageStatus: 'pending',
+                subtitleStatus: 'pending',
                 progress: 0,
                 timestamp: Date.now(),
                 settings: data.settings,
@@ -148,11 +151,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ));
     }, []);
 
-    const updateStageStatus = useCallback((id: string, stage: 'text' | 'voice' | 'image', status: TaskStatus, message?: string) => {
+    const updateStageStatus = useCallback((id: string, stage: 'text' | 'voice' | 'image' | 'subtitle', status: TaskStatus, message?: string) => {
         setTasks(prev => prev.map(t =>
             t.id === id ? {
                 ...t,
-                [stage === 'text' ? 'textStatus' : stage === 'image' ? 'imageStatus' : 'voiceStatus']: status,
+                [stage === 'text' ? 'textStatus' : stage === 'image' ? 'imageStatus' : stage === 'subtitle' ? 'subtitleStatus' : 'voiceStatus']: status,
                 ...(stage === 'voice' && message ? { voiceDuration: message } : {}),
                 ...(stage === 'image' && message ? { imagesMessage: message } : {})
             } : t
@@ -215,6 +218,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                     textStatus: 'waiting',
                     voiceStatus: 'waiting',
                     imageStatus: 'waiting',
+                    subtitleStatus: 'waiting',
                     progress: 0
                 } : t
             ));
@@ -283,7 +287,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             });
             // @ts-ignore
             const unsubStage = window.runtime.EventsOn("stageStatus", (id: string, stage: string, status: string, message?: string) => {
-                updateStageStatusRef.current(id, stage as 'text' | 'voice' | 'image', status as TaskStatus, message);
+                updateStageStatusRef.current(id, stage as 'text' | 'voice' | 'image' | 'subtitle', status as TaskStatus, message);
             });
             // @ts-ignore
             const unsubResult = window.runtime.EventsOn("textResult", (id: string, length: number) => {

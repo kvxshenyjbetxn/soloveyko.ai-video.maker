@@ -15,6 +15,14 @@ interface ImageSectionProps {
     setCurrentPath?: (path: string) => void;
 }
 
+const ImageIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <polyline points="21 15 16 10 5 21" />
+    </svg>
+);
+
 export const ImageSection: React.FC<ImageSectionProps> = ({
     settings, handleChange, setSettings, fetchPollinationsModels, pollinationsModels, loadingPollinationsModels, estimatedChunks, content, models, renderValueOrInput, setCurrentPath
 }) => {
@@ -52,6 +60,19 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                     >
                         <path d="m6 9 6 6 6-6" />
                     </svg>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '8px',
+                        background: settings.imageEnabled ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--bg-tertiary)',
+                        color: settings.imageEnabled ? 'var(--accent-color)' : 'var(--text-tertiary)',
+                        transition: 'all 0.3s'
+                    }}>
+                        <ImageIcon />
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span className="pipeline-stage-title">{t('pipeline.stage.image')}</span>
                         <span className="stage-status-text">

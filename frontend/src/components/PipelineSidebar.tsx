@@ -19,6 +19,7 @@ import { ApiSection } from './pipeline-sidebar/ApiSection';
 import { PathSection } from './pipeline-sidebar/PathSection';
 import { TextSection } from './pipeline-sidebar/TextSection';
 import { VoiceoverSection } from './pipeline-sidebar/VoiceoverSection';
+import { SubtitleSection } from './pipeline-sidebar/SubtitleSection';
 import { ImageSection } from './pipeline-sidebar/ImageSection';
 import { SidebarFooter } from './pipeline-sidebar/SidebarFooter';
 
@@ -245,6 +246,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.voiceoverTemplatesCollapsed === undefined) s.voiceoverTemplatesCollapsed = true;
                 if (s.imageTemplatesCollapsed === undefined) s.imageTemplatesCollapsed = true;
                 if (s.controlCollapsed === undefined) s.controlCollapsed = true;
+                if (s.subtitleCollapsed === undefined) s.subtitleCollapsed = true;
                 if (s.imageCollapsed === undefined) s.imageCollapsed = true;
 
                 if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
@@ -277,6 +279,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.elevenLabsUAStyle === undefined) s.elevenLabsUAStyle = 0.0;
                 if (s.elevenLabsUASpeakerBoost === undefined) s.elevenLabsUASpeakerBoost = true;
                 if (s.elevenLabsUAModel === undefined) s.elevenLabsUAModel = 'eleven_multilingual_v2';
+
+                if (!s.subtitleService) { s.subtitleService = 'standard'; updated = true; }
+                if (!s.subtitleModel) { s.subtitleModel = 'base'; updated = true; }
+                if (s.subtitleEnabled === undefined) { s.subtitleEnabled = false; updated = true; }
 
                 if (!s.voiceoverService) { s.voiceoverService = 'elevenlabsbot'; updated = true; }
 
@@ -327,6 +333,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             'voiceoverVoiceMakerKeyID', 'voiceMakerVoiceID', 'voiceMakerLanguageCode', 'voiceMakerCharLimit'
         ];
         voiceoverFields.forEach(field => { if (settings[field] !== undefined) voiceSet[field] = settings[field]; });
+
+        const subtitleFields = [
+            'subtitleEnabled', 'subtitleService', 'subtitleModel'
+        ];
+        subtitleFields.forEach(field => { if (settings[field] !== undefined) commonSet[field] = settings[field]; });
 
         const imageFields = [
             'imageEnabled', 'imageService', 'imageModel', 'imageWidth', 'imageHeight', 'imageNoLogo', 'imageEnhance', 'imagePrompt', 'imagePollinationsKeyID',
@@ -488,6 +499,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                         fetchPollinationsModels={fetchPollinationsModels} pollinationsModels={pollinationsModels}
                         loadingPollinationsModels={loadingPollinationsModels} estimatedChunks={estimatedChunks}
                         content={content} models={models} renderValueOrInput={renderValueOrInput} setCurrentPath={setCurrentPath}
+                    />
+
+                    <SubtitleSection
+                        settings={settings} handleChange={handleChange} setSettings={setSettings}
                     />
                 </div>
                 <SidebarFooter type={type} content={content} selectedTemplateIds={selectedTemplateIds} templates={templates} setIsModalOpen={setIsModalOpen} />
