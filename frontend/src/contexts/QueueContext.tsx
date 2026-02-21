@@ -18,6 +18,7 @@ export interface QueueTask {
     voiceStatus: TaskStatus;
     imageStatus: TaskStatus;
     subtitleStatus: TaskStatus;
+    montageStatus: TaskStatus;
     progress: number;
     timestamp: number;
     settings: any;
@@ -84,6 +85,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             voiceStatus: 'pending',
             imageStatus: 'pending',
             subtitleStatus: 'pending',
+            montageStatus: 'pending',
             progress: 0,
             timestamp: Date.now(),
             settings,
@@ -118,6 +120,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 voiceStatus: 'pending',
                 imageStatus: 'pending',
                 subtitleStatus: 'pending',
+                montageStatus: 'pending',
                 progress: 0,
                 timestamp: Date.now(),
                 settings: data.settings,
@@ -151,11 +154,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         ));
     }, []);
 
-    const updateStageStatus = useCallback((id: string, stage: 'text' | 'voice' | 'image' | 'subtitle', status: TaskStatus, message?: string) => {
+    const updateStageStatus = useCallback((id: string, stage: 'text' | 'voice' | 'image' | 'subtitle' | 'montage', status: TaskStatus, message?: string) => {
         setTasks(prev => prev.map(t =>
             t.id === id ? {
                 ...t,
-                [stage === 'text' ? 'textStatus' : stage === 'image' ? 'imageStatus' : stage === 'subtitle' ? 'subtitleStatus' : 'voiceStatus']: status,
+                [stage === 'text' ? 'textStatus' : stage === 'image' ? 'imageStatus' : stage === 'subtitle' ? 'subtitleStatus' : stage === 'montage' ? 'montageStatus' : 'voiceStatus']: status,
                 ...(stage === 'voice' && message ? { voiceDuration: message } : {}),
                 ...(stage === 'image' && message ? { imagesMessage: message } : {})
             } : t
@@ -219,6 +222,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                     voiceStatus: 'waiting',
                     imageStatus: 'waiting',
                     subtitleStatus: 'waiting',
+                    montageStatus: 'waiting',
                     progress: 0
                 } : t
             ));

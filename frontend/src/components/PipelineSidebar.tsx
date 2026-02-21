@@ -21,6 +21,7 @@ import { TextSection } from './pipeline-sidebar/TextSection';
 import { VoiceoverSection } from './pipeline-sidebar/VoiceoverSection';
 import { SubtitleSection } from './pipeline-sidebar/SubtitleSection';
 import { ImageSection } from './pipeline-sidebar/ImageSection';
+import { MontageSection } from './pipeline-sidebar/MontageSection';
 import { SidebarFooter } from './pipeline-sidebar/SidebarFooter';
 
 interface PipelineSidebarProps {
@@ -286,6 +287,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.controlCollapsed === undefined) s.controlCollapsed = true;
                 if (s.subtitleCollapsed === undefined) s.subtitleCollapsed = true;
                 if (s.imageCollapsed === undefined) s.imageCollapsed = true;
+                if (s.montageCollapsed === undefined) s.montageCollapsed = true;
+                if (s.montageEnabled === undefined) { s.montageEnabled = false; updated = true; }
 
                 if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
                 if (s.rewriteTemperature === undefined) s.rewriteTemperature = 0.7;
@@ -540,6 +543,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     />
 
                     <SubtitleSection
+                        settings={settings} handleChange={handleChange} setSettings={setSettings}
+                    />
+
+                    <MontageSection
                         settings={settings} handleChange={handleChange} setSettings={setSettings}
                     />
                 </div>

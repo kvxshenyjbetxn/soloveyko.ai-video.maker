@@ -229,6 +229,10 @@
                 "select_voice": "Select voice..."
             }
         },
+        "montage": {
+            "title": "5. Montage",
+            "empty_description": "Settings for this stage will be available in future updates"
+        },
         "image": {
             "title": "Image Settings",
             "service": "Service",
@@ -316,6 +320,7 @@
             "voiceover": "Voiceover",
             "image": "Images",
             "subtitle": "Subtitles",
+            "montage": "Montage",
             "enabled": "Enabled",
             "disabled": "Disabled (original text)",
             "disabled_simple": "Disabled"

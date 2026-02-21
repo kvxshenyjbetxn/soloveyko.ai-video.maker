@@ -34,6 +34,12 @@ const SubtitleIcon = () => (
     </svg>
 );
 
+const MontageIcon = () => (
+    <svg className="montage-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+    </svg>
+);
+
 const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: string, text: string) => void }) => {
     const [text, setText] = useState(task.controlContent || '');
     const [isFullScreen, setIsFullScreen] = useState(false);
@@ -181,6 +187,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         const isVoiceEnabled = settings.voiceoverEnabled === true;
         const isSubtitleEnabled = settings.subtitleEnabled === true;
         const isImageEnabled = settings.imageEnabled === true;
+        const isMontageEnabled = settings.montageEnabled === true;
 
         const mainLabel = isMainStageEnabled
             ? (task.type === 'translate' ? t('text.translate') : t('text.rewrite'))
@@ -267,7 +274,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                             <div className={`task-stage-item status-${task.imageStatus}`} style={{ marginTop: '4px' }}>
                                 <div className="stage-left">
                                     <ImageIcon />
-                                    <span>{t('api.image') || 'Images'}</span>
+                                    <span>{t('pipeline.stage.image')}</span>
                                 </div>
                                 <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '11px', lineHeight: '1.4' }}>
                                     {task.imageStatus === 'completed' ? (
@@ -280,6 +287,22 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                         task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
                                     ) : t('queue.status_pending')}
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Етап 5: Монтаж (якщо увімкнено) */}
+                        {isMontageEnabled && (
+                            <div className={`task-stage-item status-${task.montageStatus}`} style={{ marginTop: '4px' }}>
+                                <div className="stage-left">
+                                    <MontageIcon />
+                                    <span>{t('pipeline.stage.montage')}</span>
+                                </div>
+                                <span className="stage-status-text badge-status">
+                                    {task.montageStatus === 'completed' ? t('queue.status_completed') :
+                                        task.montageStatus === 'running' ? t('queue.status_running') :
+                                            task.montageStatus === 'waiting' ? t('queue.status_waiting') :
+                                                task.montageStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                </span>
                             </div>
                         )}
                     </div>

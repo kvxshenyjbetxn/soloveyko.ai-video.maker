@@ -332,7 +332,8 @@
 .lightbulb-icon,
 .voice-icon,
 .image-icon,
-.subtitle-icon {
+.subtitle-icon,
+.montage-icon {
     width: 16px;
     height: 16px;
     transition: all 0.3s ease;
@@ -342,10 +343,12 @@
 .status-pending .voice-icon,
 .status-pending .image-icon,
 .status-pending .subtitle-icon,
+.status-pending .montage-icon,
 .status-waiting .lightbulb-icon,
 .status-waiting .voice-icon,
 .status-waiting .image-icon,
-.status-waiting .subtitle-icon {
+.status-waiting .subtitle-icon,
+.status-waiting .montage-icon {
     color: #757575;
     opacity: 0.5;
 }
@@ -353,7 +356,8 @@
 .status-running .lightbulb-icon,
 .status-running .voice-icon,
 .status-running .image-icon,
-.status-running .subtitle-icon {
+.status-running .subtitle-icon,
+.status-running .montage-icon {
     color: #ffeb3b;
     filter: drop-shadow(0 0 8px #ffeb3b);
     animation: bulb-pulse 1.5s infinite;
@@ -363,7 +367,8 @@
 .status-completed .lightbulb-icon,
 .status-completed .voice-icon,
 .status-completed .image-icon,
-.status-completed .subtitle-icon {
+.status-completed .subtitle-icon,
+.status-completed .montage-icon {
     color: #4caf50;
     opacity: 1 !important;
 }
@@ -371,7 +376,8 @@
 .status-failed .lightbulb-icon,
 .status-failed .voice-icon,
 .status-failed .image-icon,
-.status-failed .subtitle-icon {
+.status-failed .subtitle-icon,
+.status-failed .montage-icon {
     color: #ff5252;
     opacity: 1 !important;
 }

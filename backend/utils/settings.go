@@ -120,6 +120,9 @@ type PipelineSettings struct {
 
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`
+
+	MontageEnabled   bool `json:"montageEnabled"`
+	MontageCollapsed bool `json:"montageCollapsed"`
 }
 
 type Settings struct {
@@ -215,6 +218,8 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				SubtitleFadeIn:       300,
 				SubtitleFadeOut:      300,
 				SidebarWidth:         320,
+				MontageEnabled:       false,
+				MontageCollapsed:     true,
 			},
 		}, nil
 	}
