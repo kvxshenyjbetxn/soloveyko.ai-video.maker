@@ -6,6 +6,20 @@ interface ControlSectionProps {
     handleChange: (field: string, value: any) => void;
 }
 
+const ControlIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="4" y1="21" x2="4" y2="14" />
+        <line x1="4" y1="10" x2="4" y2="3" />
+        <line x1="12" y1="21" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12" y2="3" />
+        <line x1="20" y1="21" x2="20" y2="16" />
+        <line x1="20" y1="12" x2="20" y2="3" />
+        <line x1="2" y1="14" x2="6" y2="14" />
+        <line x1="10" y1="8" x2="14" y2="8" />
+        <line x1="18" y1="16" x2="22" y2="16" />
+    </svg>
+);
+
 export const ControlSection: React.FC<ControlSectionProps> = ({ settings, handleChange }) => {
     const { t } = useI18n();
 
@@ -22,6 +36,19 @@ export const ControlSection: React.FC<ControlSectionProps> = ({ settings, handle
                     >
                         <path d="m6 9 6 6 6-6" />
                     </svg>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '8px',
+                        background: 'rgba(var(--accent-rgb), 0.1)',
+                        color: 'var(--accent-color)',
+                        transition: 'all 0.3s'
+                    }}>
+                        <ControlIcon />
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span className="pipeline-stage-title">{t('pipeline.control') || 'Контроль'}</span>
                     </div>

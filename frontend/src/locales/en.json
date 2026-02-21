@@ -315,12 +315,12 @@
         "show_settings": "Show Settings",
         "empty_state": "Pipeline settings will appear here...",
         "stage": {
-            "translate": "Translation",
-            "rewrite": "Rewrite",
-            "voiceover": "Voiceover",
-            "image": "Images",
-            "subtitle": "Subtitles",
-            "montage": "Montage",
+            "translate": "1. Translation",
+            "rewrite": "1. Rewrite",
+            "voiceover": "2.A Voiceover",
+            "image": "2.B Images",
+            "subtitle": "3. Subtitles",
+            "montage": "4. Montage",
             "enabled": "Enabled",
             "disabled": "Disabled (original text)",
             "disabled_simple": "Disabled"

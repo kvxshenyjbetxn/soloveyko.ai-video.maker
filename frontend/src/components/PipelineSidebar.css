@@ -199,21 +199,42 @@
     cursor: pointer;
     user-select: none;
     background: rgba(255, 255, 255, 0.01);
-    transition: padding 0.2s ease;
+    transition: all 0.2s ease;
 }
 
 .pipeline-stage-container.is-collapsed .pipeline-stage-header {
-    padding: 6px 12px;
+    padding: 4px 10px;
 }
 
 .pipeline-stage-container.is-collapsed .pipeline-stage-title {
-    font-size: 12px;
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+.pipeline-stage-container.is-collapsed .stage-status-text {
+    display: none;
+}
+
+.pipeline-stage-container.is-collapsed .pipeline-stage-header div[style*="width: 28px"] {
+    width: 22px !important;
+    height: 22px !important;
+}
+
+.pipeline-stage-container.is-collapsed .pipeline-stage-header svg[width="16"] {
+    width: 12px;
+    height: 12px;
+}
+
+.pipeline-stage-container.is-collapsed .stage-chevron {
+    width: 10px;
+    height: 10px;
 }
 
 .pipeline-stage-title {
     font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
+    transition: all 0.2s ease;
 }
 
 .stage-chevron {
@@ -284,10 +305,11 @@
     height: 14px;
     width: 14px;
     left: 2px;
-    bottom: 2px;
+    top: 2px;
     background-color: white;
-    transition: .3s;
+    transition: .4s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 input:checked+.stage-slider {
@@ -300,6 +322,23 @@ input:focus+.stage-slider {
 
 input:checked+.stage-slider:before {
     transform: translateX(16px);
+}
+
+/* Small variant for nested switches */
+.stage-switch.small {
+    width: 30px;
+    height: 16px;
+}
+
+.stage-switch.small .stage-slider:before {
+    width: 10px;
+    height: 10px;
+    left: 2px;
+    top: 2px;
+}
+
+.stage-switch.small input:checked+.stage-slider:before {
+    transform: translateX(14px);
 }
 
 .stage-settings-content {

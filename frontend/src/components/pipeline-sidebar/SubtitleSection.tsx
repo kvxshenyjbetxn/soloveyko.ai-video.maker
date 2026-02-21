@@ -400,13 +400,13 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                         <div className="settings-control">
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                                 <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.subtitle.fade_enabled')}</label>
-                                <label className="stage-switch" style={{ width: '32px', height: '18px' }}>
+                                <label className="stage-switch small">
                                     <input
                                         type="checkbox"
                                         checked={settings.subtitleFadeEnabled !== false}
                                         onChange={(e) => handleChange('subtitleFadeEnabled', e.target.checked)}
                                     />
-                                    <span className="stage-slider" style={{ borderRadius: '18px' }}></span>
+                                    <span className="stage-slider"></span>
                                 </label>
                             </div>
 

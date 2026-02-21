@@ -13,6 +13,15 @@ interface TemplatesSectionProps {
     setCurrentPath?: (path: string) => void;
 }
 
+const TemplatesIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" />
+        <rect x="14" y="3" width="7" height="7" />
+        <rect x="14" y="14" width="7" height="7" />
+        <rect x="3" y="14" width="7" height="7" />
+    </svg>
+);
+
 export const TemplatesSection: React.FC<TemplatesSectionProps> = ({
     type, templates, selectedTemplateIds, toggleTemplate, applyTemplate, setTemplateToDelete, isCollapsed, onToggleCollapse, setCurrentPath
 }) => {
@@ -31,6 +40,19 @@ export const TemplatesSection: React.FC<TemplatesSectionProps> = ({
                     >
                         <path d="m6 9 6 6 6-6" />
                     </svg>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '8px',
+                        background: 'rgba(var(--accent-rgb), 0.1)',
+                        color: 'var(--accent-color)',
+                        transition: 'all 0.3s'
+                    }}>
+                        <TemplatesIcon />
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span className="pipeline-stage-title">{t('pipeline.templates')}</span>
                     </div>

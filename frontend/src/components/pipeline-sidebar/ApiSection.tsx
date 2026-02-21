@@ -17,6 +17,13 @@ interface ApiSectionProps {
     setCurrentPath?: (path: string) => void;
 }
 
+const ApiIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3" />
+        <circle cx="7.5" cy="16.5" r=".5" fill="currentColor" />
+    </svg>
+);
+
 export const ApiSection: React.FC<ApiSectionProps> = ({
     type, settings, handleChange, openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys, elevenLabsImageKeys, fetchVoiceTemplates, fetchVoiceMakerVoices, setCurrentPath
 }) => {
@@ -40,6 +47,19 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                     >
                         <path d="m6 9 6 6 6-6" />
                     </svg>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '8px',
+                        background: 'rgba(var(--accent-rgb), 0.1)',
+                        color: 'var(--accent-color)',
+                        transition: 'all 0.3s'
+                    }}>
+                        <ApiIcon />
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span className="pipeline-stage-title">{t('pipeline.group.api')}</span>
                     </div>

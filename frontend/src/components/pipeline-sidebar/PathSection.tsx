@@ -43,8 +43,8 @@ export const PathSection: React.FC<PathSectionProps> = ({ type, settings, handle
                         width: '28px',
                         height: '28px',
                         borderRadius: '8px',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        color: 'var(--text-tertiary)',
+                        background: 'rgba(var(--accent-rgb), 0.1)',
+                        color: 'var(--accent-color)',
                         transition: 'all 0.3s'
                     }}>
                         <PathIcon />
