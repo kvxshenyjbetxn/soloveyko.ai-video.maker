@@ -8,24 +8,27 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout whisper.cpp
-        run: git clone https://github.com/ggerganov/whisper.cpp.git
+        run: git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
+
+      - name: Setup CMake
+        run: brew install cmake
 
       - name: Build Whisper
         run: |
           cd whisper.cpp
-          # Компілюємо основний клієнт. В нових версіях він може називатися whisper-cli або main
-          make whisper-cli || make main || make
+          cmake -B build -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF
+          cmake --build build --config Release -j 4
 
       - name: Prepare Artifact
         run: |
-          # Шукаємо бінарник (він може бути або main, або whisper-cli)
-          if [ -f whisper.cpp/whisper-cli ]; then
-            mv whisper.cpp/whisper-cli whisper
-          elif [ -f whisper.cpp/main ]; then
-            mv whisper.cpp/main whisper
+          # В CMake бінарники лежать у папці build/bin/
+          if [ -f whisper.cpp/build/bin/whisper-cli ]; then
+            mv whisper.cpp/build/bin/whisper-cli whisper
+          elif [ -f whisper.cpp/build/bin/main ]; then
+            mv whisper.cpp/build/bin/main whisper
           else
-            echo "Помилка: Бінарник не знайдено в папці whisper.cpp"
-            ls -R whisper.cpp
+            echo "Помилка: Бінарник не знайдено!"
+            find whisper.cpp/build -name "whisper-cli" -o -name "main"
             exit 1
           fi
           chmod +x whisper

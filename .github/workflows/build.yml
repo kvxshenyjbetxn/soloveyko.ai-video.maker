@@ -33,7 +33,10 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Universal Binary
-        run: wails build -platform darwin/universal -clean
+        run: |
+          # Встановлюємо права на виконання для бінарників перед збіркою
+          chmod +x backend/bin/* || true
+          wails build -platform darwin/universal -clean
 
       - name: Ad-hoc sign
         run: codesign --force --deep --sign - build/bin/soloveyko.app
@@ -48,4 +51,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-universal-app
-          path: build/*.zip  # Тепер архів буде правильний
+          path: build/*.zip
