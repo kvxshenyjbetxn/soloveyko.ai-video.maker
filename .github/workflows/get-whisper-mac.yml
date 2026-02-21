@@ -13,26 +13,25 @@ jobs:
       - name: Build Whisper
         run: |
           cd whisper.cpp
-          make
+          # Компілюємо основний клієнт. В нових версіях він може називатися whisper-cli або main
+          make whisper-cli || make main || make
 
-      - name: Download FFmpeg and FFprobe
+      - name: Prepare Artifact
         run: |
-          curl -L https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip -o ffmpeg.zip
-          curl -L https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip -o ffprobe.zip
-          unzip ffmpeg.zip
-          unzip ffprobe.zip
-          chmod +x ffmpeg ffprobe
+          # Шукаємо бінарник (він може бути або main, або whisper-cli)
+          if [ -f whisper.cpp/whisper-cli ]; then
+            mv whisper.cpp/whisper-cli whisper
+          elif [ -f whisper.cpp/main ]; then
+            mv whisper.cpp/main whisper
+          else
+            echo "Помилка: Бінарник не знайдено в папці whisper.cpp"
+            ls -R whisper.cpp
+            exit 1
+          fi
+          chmod +x whisper
 
-      - name: Prepare Artifacts
-        run: |
-          mkdir mac-binaries
-          mv whisper.cpp/main mac-binaries/whisper
-          mv ffmpeg mac-binaries/ffmpeg
-          mv ffprobe mac-binaries/ffprobe
-          chmod +x mac-binaries/*
-
-      - name: Upload Binaries
+      - name: Upload Binary
         uses: actions/upload-artifact@v4
         with:
-          name: macos-binaries
-          path: mac-binaries/
+          name: whisper-mac-only
+          path: whisper

@@ -34,3 +34,4 @@ frontend/wailsjs/go/
 frontend/wailsjs/runtime/
 frontend/package-lock.json
 frontend/package.json.md5
+test_mac
