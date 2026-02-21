@@ -27,6 +27,10 @@ func EnsureEngine(name string) (string, error) {
 
 	// Якщо файл вже існує, повертаємо шлях
 	if _, err := os.Stat(targetPath); err == nil {
+		// Переконуємося, що права на виконання встановлені (могли бути скинуті або не встановлені раніше)
+		if runtime.GOOS != "windows" {
+			os.Chmod(targetPath, 0755)
+		}
 		return targetPath, nil
 	}
 

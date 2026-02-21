@@ -11,7 +11,7 @@ import (
 // runHiddenCommand виконує команду стандартним способом на Unix-системах,
 // оскільки вікна консолі там не створюються автоматично.
 func runHiddenCommand(name string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, name, args...)
