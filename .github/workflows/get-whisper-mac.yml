@@ -10,25 +10,24 @@ jobs:
       - name: Checkout whisper.cpp
         run: git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
 
-      - name: Setup CMake
-        run: brew install cmake
-
-      - name: Build Whisper
+      - name: Build Whisper (Static)
         run: |
           cd whisper.cpp
-          cmake -B build -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF
-          cmake --build build --config Release -j 4
-
+          # Використовуємо make для створення статичного бінарника, який не потребує .dylib
+          make whisper-cli || make main || make
+          
       - name: Prepare Artifact
         run: |
-          # В CMake бінарники лежать у папці build/bin/
-          if [ -f whisper.cpp/build/bin/whisper-cli ]; then
-            mv whisper.cpp/build/bin/whisper-cli whisper
-          elif [ -f whisper.cpp/build/bin/main ]; then
-            mv whisper.cpp/build/bin/main whisper
+          # Шукаємо бінарник у корені папки або в examples
+          if [ -f whisper.cpp/whisper-cli ]; then
+            mv whisper.cpp/whisper-cli whisper
+          elif [ -f whisper.cpp/main ]; then
+            mv whisper.cpp/main whisper
+          elif [ -f whisper.cpp/examples/main/main ]; then
+            mv whisper.cpp/examples/main/main whisper
           else
             echo "Помилка: Бінарник не знайдено!"
-            find whisper.cpp/build -name "whisper-cli" -o -name "main"
+            ls -R whisper.cpp
             exit 1
           fi
           chmod +x whisper
