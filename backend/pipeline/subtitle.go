@@ -39,7 +39,12 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		return nil
 	}
 
-	s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle stage started. Service: %s, Model: %s", sService, sModel), id, taskLabel)
+	if sService == "assemblyai" {
+		s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle stage started. Service: %s", sService), id, taskLabel)
+	} else {
+		s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle stage started. Service: %s, Model: %s", sService, sModel), id, taskLabel)
+	}
+
 	s.emitStageStatus(id, "subtitle", "running")
 
 	subtitleFilePath := filepath.Join(finalDir, "subtitle.srt")
@@ -88,6 +93,30 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		}
 
 		s.log("SUCCESS", "[AmdWhisper] Success: Subtitles saved to subtitle.srt", id, taskLabel)
+		s.emitStageStatus(id, "subtitle", "completed")
+	} else if sService == "assemblyai" {
+		if s.assemblyAI == nil {
+			s.log("ERROR", "[AssemblyAI] Service is not initialized", id, taskLabel)
+			s.emitStageStatus(id, "subtitle", "failed")
+			return fmt.Errorf("AssemblyAI service not initialized")
+		}
+
+		result, err := s.assemblyAI.Transcribe(s.ctx, voiceFilePath)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[AssemblyAI] Failed: %v", err), id, taskLabel)
+			s.emitStageStatus(id, "subtitle", "failed")
+			return err
+		}
+
+		// Write result to subtitle.srt
+		err = os.WriteFile(subtitleFilePath, []byte(result), 0644)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[AssemblyAI] Failed to save subtitle: %v", err), id, taskLabel)
+			s.emitStageStatus(id, "subtitle", "failed")
+			return err
+		}
+
+		s.log("SUCCESS", "[AssemblyAI] Success: Subtitles saved to subtitle.srt", id, taskLabel)
 		s.emitStageStatus(id, "subtitle", "completed")
 	} else {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for subtitle generation", sService), id, taskLabel)

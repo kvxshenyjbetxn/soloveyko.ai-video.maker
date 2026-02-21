@@ -42,7 +42,7 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
     const services = [
         { id: 'standard', name: t('pipeline.subtitle.services.standard') },
         { id: 'amd', name: t('pipeline.subtitle.services.amd') },
-        { id: 'assemblyai', name: 'AssemblyAI (в розробці)' }
+        { id: 'assemblyai', name: 'AssemblyAI' }
     ];
 
     useEffect(() => {
@@ -199,18 +199,20 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                         </select>
                     </div>
 
-                    <div className="settings-control">
-                        <label className="settings-label">{t('pipeline.model')} (Whisper)</label>
-                        <select
-                            className="settings-select"
-                            value={settings.subtitleModel || 'base'}
-                            onChange={(e) => handleChange('subtitleModel', e.target.value)}
-                        >
-                            {models.map(m => (
-                                <option key={m} value={m}>{m} ({m === 'tiny' || m === 'base' ? 'швидко' : m === 'small' || m === 'medium' ? 'баланс' : 'повільно/якісно'})</option>
-                            ))}
-                        </select>
-                    </div>
+                    {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && (
+                        <div className="settings-control">
+                            <label className="settings-label">{t('pipeline.model')} (Whisper)</label>
+                            <select
+                                className="settings-select"
+                                value={settings.subtitleModel || 'base'}
+                                onChange={(e) => handleChange('subtitleModel', e.target.value)}
+                            >
+                                {models.map(m => (
+                                    <option key={m} value={m}>{m} ({m === 'tiny' || m === 'base' ? 'швидко' : m === 'small' || m === 'medium' ? 'баланс' : 'повільно/якісно'})</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && (
                         <>

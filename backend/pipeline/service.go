@@ -23,6 +23,7 @@ type PipelineService struct {
 	localWhisper    *LocalWhisperService
 	amdWhisper      *AmdWhisperService
 	edgeTTS         *api.EdgeTTSService
+	assemblyAI      *api.AssemblyAIService
 
 	// Callbacks for UI updates
 	OnLog            func(level string, message string, details ...string)
@@ -54,6 +55,7 @@ func NewPipelineService(
 	localWhisper *LocalWhisperService,
 	amdWhisper *AmdWhisperService,
 	edgeTTS *api.EdgeTTSService,
+	assemblyAI *api.AssemblyAIService,
 ) *PipelineService {
 	return &PipelineService{
 		settings:           settings,
@@ -68,6 +70,7 @@ func NewPipelineService(
 		localWhisper:       localWhisper,
 		amdWhisper:         amdWhisper,
 		edgeTTS:            edgeTTS,
+		assemblyAI:         assemblyAI,
 		elevenLabsSem:      make(chan struct{}, 5),
 		elevenLabsUnlimSem: make(chan struct{}, 5),
 		elevenLabsUASem:    make(chan struct{}, 5),

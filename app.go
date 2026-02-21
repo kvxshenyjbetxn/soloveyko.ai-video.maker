@@ -62,7 +62,7 @@ func NewApp() *App {
 	app.amdWhisper = pipeline.NewAmdWhisperService()
 	app.edgeTTS = api.NewEdgeTTSService()
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper, app.amdWhisper, app.edgeTTS)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper, app.amdWhisper, app.edgeTTS, app.assemblyAI)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -131,6 +131,10 @@ func NewApp() *App {
 	}
 
 	app.elevenLabsUA.OnLog = func(level string, message string, details ...string) {
+		app.LogToUI(level, message, details...)
+	}
+
+	app.assemblyAI.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
 	}
 
