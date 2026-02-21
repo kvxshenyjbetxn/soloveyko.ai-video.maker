@@ -360,11 +360,11 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                 <label className="settings-label">{t('pipeline.image.model')}</label>
                                 <select
                                     className="settings-select"
-                                    value={settings.imageGooglerModel || 'flow'}
+                                    value={settings.imageGooglerModel || 'whisk'}
                                     onChange={(e) => handleChange('imageGooglerModel', e.target.value)}
                                 >
-                                    <option value="flow">Flow (v4)</option>
                                     <option value="whisk">Whisk (v4)</option>
+                                    <option value="flow">Flow (v4)</option>
                                     <option value="grok">Grok (v4)</option>
                                     <option value="gemini">Gemini (v4)</option>
                                 </select>
@@ -535,11 +535,11 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                         <label className="settings-label">{t('pipeline.image.googler.video_model') || 'Модель відео'}</label>
                                         <select
                                             className="settings-select"
-                                            value={settings.imageGooglerVideoModel || 'flow'}
+                                            value={settings.imageGooglerVideoModel || 'whisk'}
                                             onChange={(e) => handleChange('imageGooglerVideoModel', e.target.value)}
                                         >
-                                            <option value="flow">Flow</option>
                                             <option value="whisk">Whisk</option>
+                                            <option value="flow">Flow</option>
                                             <option value="grok">Grok</option>
                                             <option value="gemini">Gemini</option>
                                         </select>

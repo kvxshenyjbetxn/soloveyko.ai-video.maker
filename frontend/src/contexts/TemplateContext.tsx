@@ -56,6 +56,12 @@ export interface PipelineSettings {
     elevenLabsUASpeakerBoost: boolean;
     elevenLabsUAModel: string;
 
+    imageGooglerVideoEnabled: boolean;
+    imageGooglerVideoModel: string;
+    imageGooglerVideoMode: string;
+    imageGooglerVideoCount: number;
+    imageGooglerVideoUpscale: boolean;
+
     sidebarWidth: number;
     apiCollapsed: boolean;
     pathCollapsed: boolean;

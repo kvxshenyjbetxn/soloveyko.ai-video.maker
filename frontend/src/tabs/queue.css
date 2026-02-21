@@ -390,7 +390,6 @@
 .stage-status-text {
     font-size: 11px;
     font-weight: 700;
-    text-transform: uppercase;
 }
 
 .stage-status-text.badge-status {

@@ -202,66 +202,96 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 	imgSem <- struct{}{}
 	defer func() { <-imgSem }()
 
-	// Мапінг аспект-ратіо під вимоги API Googler
-	apiRatio := aspectRatio
-	if model == "grok" {
-		// Grok використовує короткі назви (16:9, 1:1 і т.д.)
-		switch apiRatio {
-		case "IMAGE_ASPECT_RATIO_LANDSCAPE":
-			apiRatio = "16:9"
-		case "IMAGE_ASPECT_RATIO_PORTRAIT":
-			apiRatio = "9:16"
-		case "IMAGE_ASPECT_RATIO_SQUARE":
-			apiRatio = "1:1"
-		}
-	} else {
-		// Flow, Whisk та інші використовують довгі назви
-		if !strings.HasPrefix(apiRatio, "IMAGE_ASPECT_RATIO_") {
-			switch apiRatio {
-			case "16:9":
-				apiRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE"
-			case "9:16":
-				apiRatio = "IMAGE_ASPECT_RATIO_PORTRAIT"
-			case "1:1":
-				apiRatio = "IMAGE_ASPECT_RATIO_SQUARE"
-			default:
-				apiRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE"
-			}
+	// Fallback list
+	allModels := []string{"whisk", "flow", "grok", "gemini"}
+	startIndex := -1
+	for i, m := range allModels {
+		if m == model {
+			startIndex = i
+			break
 		}
 	}
+	if startIndex == -1 {
+		allModels = append([]string{model}, allModels...)
+		startIndex = 0
+	}
 
-	maxRetries := 3
 	var lastErr error
+	for i := startIndex; i < len(allModels); i++ {
+		currentModel := allModels[i]
 
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		if attempt > 1 {
-			if s.OnLog != nil {
-				s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying image generation (attempt %d/%d)...", attempt, maxRetries))
+		// Map aspect ratio for current model
+		apiRatio := aspectRatio
+		if currentModel == "grok" {
+			switch apiRatio {
+			case "IMAGE_ASPECT_RATIO_LANDSCAPE":
+				apiRatio = "16:9"
+			case "IMAGE_ASPECT_RATIO_PORTRAIT":
+				apiRatio = "9:16"
+			case "IMAGE_ASPECT_RATIO_SQUARE":
+				apiRatio = "1:1"
 			}
-			time.Sleep(10 * time.Second)
+		} else {
+			if !strings.HasPrefix(apiRatio, "IMAGE_ASPECT_RATIO_") {
+				switch apiRatio {
+				case "16:9":
+					apiRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE"
+				case "9:16":
+					apiRatio = "IMAGE_ASPECT_RATIO_PORTRAIT"
+				case "1:1":
+					apiRatio = "IMAGE_ASPECT_RATIO_SQUARE"
+				default:
+					apiRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE"
+				}
+			}
 		}
 
-		err := s.generateImageOnce(apiKey, model, prompt, apiRatio, outputPath)
-		if err == nil {
-			return nil
+		maxAttempts := 3
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			if attempt > 1 {
+				if s.OnLog != nil {
+					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying %s (%d/%d) in 5s...", currentModel, attempt, maxAttempts))
+				}
+				time.Sleep(5 * time.Second)
+			}
+
+			err := s.generateImageOnce(apiKey, currentModel, prompt, apiRatio, outputPath)
+			if err == nil {
+				return nil
+			}
+
+			lastErr = err
+			if !s.isRetryable(err) {
+				break
+			}
 		}
 
-		lastErr = err
-		errMsg := strings.ToLower(err.Error())
-
-		// Ретрай тільки для мережевих помилок або тимчасових помилок сервера
-		shouldRetry := strings.Contains(errMsg, "timeout") ||
-			strings.Contains(errMsg, "no images were generated") ||
-			strings.Contains(errMsg, "internal error") ||
-			strings.Contains(errMsg, "rate limit") ||
-			strings.Contains(errMsg, "connection")
-
-		if !shouldRetry {
-			break
+		if i < len(allModels)-1 {
+			if s.OnLog != nil {
+				s.OnLog("WARN", fmt.Sprintf("[Googler] %s failed -> Falling back to %s", currentModel, allModels[i+1]))
+			}
+			time.Sleep(2 * time.Second)
 		}
 	}
 
 	return lastErr
+}
+
+func (s *GooglerService) isRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "timeout") ||
+		strings.Contains(errMsg, "no image") ||
+		strings.Contains(errMsg, "no video") ||
+		strings.Contains(errMsg, "internal error") ||
+		strings.Contains(errMsg, "rate limit") ||
+		strings.Contains(errMsg, "connection") ||
+		strings.Contains(errMsg, "500") ||
+		strings.Contains(errMsg, "502") ||
+		strings.Contains(errMsg, "503") ||
+		strings.Contains(errMsg, "504")
 }
 
 func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt string, apiRatio string, outputPath string) error {
@@ -392,14 +422,41 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 	return fmt.Errorf("Googler timeout after 5 minutes")
 }
 
-// RemixImage генерує картинку на основі референсів (Style/Subject/Scene)
+// RemixImage генерує картинку на основі референсів (Style/Subject/Scene) з автоматичними повторами та фалбеком
 func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string) error {
 	imgSem, _ := s.ensureSemaphores()
 	imgSem <- struct{}{}
 	defer func() { <-imgSem }()
 
+	maxAttempts := 3
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			if s.OnLog != nil {
+				s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying remix (%d/%d) in 5s...", attempt, maxAttempts))
+			}
+			time.Sleep(5 * time.Second)
+		}
+
+		err := s.remixImageOnce(apiKey, prompt, referenceImages, aspectRatio, strictMode, outputPath)
+		if err == nil {
+			return nil
+		}
+
+		if !s.isRetryable(err) {
+			break
+		}
+	}
+
+	// Fallback to standard Image generation with next models
+	if s.OnLog != nil {
+		s.OnLog("WARN", fmt.Sprintf("[Googler] Remix failed -> Falling back to standard Flow generation"))
+	}
+	return s.GenerateImage(apiKey, "flow", prompt, aspectRatio, outputPath)
+}
+
+func (s *GooglerService) remixImageOnce(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string) error {
 	client := &http.Client{Timeout: 300 * time.Second}
-	// Додаємо ключ в URL, як це зроблено в GenerateImage
 	url := fmt.Sprintf("%s/v4/whisk/image/remix?api_key=%s", s.baseUrl, apiKey)
 
 	reqBody := RemixImageRequest{
@@ -446,7 +503,7 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 		return fmt.Errorf("no operation_id returned")
 	}
 
-	// Polling (логіка така ж як в GenerateImage)
+	// Polling
 	maxRetries := 60 // 5 minutes (5s * 60)
 	for i := 0; i < maxRetries; i++ {
 		time.Sleep(5 * time.Second)
@@ -498,12 +555,62 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 	return fmt.Errorf("Googler remix timeout after 5 minutes")
 }
 
-// GenerateVideo генерує відео за допомогою Googler (text-to-video або image-to-video)
+// GenerateVideo генерує відео за допомогою Googler (text-to-video або image-to-video) з автоматичними повторами та фалбеком
 func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string) error {
 	_, vidSem := s.ensureSemaphores()
 	vidSem <- struct{}{}
 	defer func() { <-vidSem }()
 
+	// Fallback list
+	allModels := []string{"whisk", "flow", "grok", "gemini"}
+	startIndex := -1
+	for i, m := range allModels {
+		if m == model {
+			startIndex = i
+			break
+		}
+	}
+	if startIndex == -1 {
+		allModels = append([]string{model}, allModels...)
+		startIndex = 0
+	}
+
+	var lastErr error
+	for i := startIndex; i < len(allModels); i++ {
+		currentModel := allModels[i]
+
+		maxAttempts := 3
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			if attempt > 1 {
+				if s.OnLog != nil {
+					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying video (%s) [%d/%d] in 5s...", currentModel, attempt, maxAttempts))
+				}
+				time.Sleep(5 * time.Second)
+			}
+
+			err := s.generateVideoOnce(apiKey, currentModel, prompt, imageBase64, aspectRatio, upscale, outputPath)
+			if err == nil {
+				return nil
+			}
+
+			lastErr = err
+			if !s.isRetryable(err) {
+				break
+			}
+		}
+
+		if i < len(allModels)-1 {
+			if s.OnLog != nil {
+				s.OnLog("WARN", fmt.Sprintf("[Googler] Video %s failed -> Falling back to %s", currentModel, allModels[i+1]))
+			}
+			time.Sleep(2 * time.Second)
+		}
+	}
+
+	return lastErr
+}
+
+func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string) error {
 	client := &http.Client{Timeout: 300 * time.Second}
 	var url string
 	var reqBody interface{}

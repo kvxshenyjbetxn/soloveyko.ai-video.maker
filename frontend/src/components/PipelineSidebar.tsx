@@ -261,7 +261,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.imageNoLogo === undefined) s.imageNoLogo = true;
                 if (s.imageEnhance === undefined) s.imageEnhance = false;
                 if (s.imagePrompt === undefined) s.imagePrompt = "";
-                if (s.imageService === undefined) s.imageService = "pollinations";
+                if (s.imageService === undefined) { s.imageService = "pollinations"; updated = true; }
+                if (s.imageGooglerModel === undefined) { s.imageGooglerModel = "whisk"; updated = true; }
+                if (s.imageGooglerVideoModel === undefined) { s.imageGooglerVideoModel = "whisk"; updated = true; }
+                if (s.imageGooglerVideoUpscale === undefined) { s.imageGooglerVideoUpscale = false; updated = true; }
+                if (s.imageGooglerVideoEnabled === undefined) { s.imageGooglerVideoEnabled = false; updated = true; }
 
                 if (s.elevenLabsUnlimStability === undefined) s.elevenLabsUnlimStability = 0.5;
                 if (s.elevenLabsUnlimSimilarity === undefined) s.elevenLabsUnlimSimilarity = 0.75;
