@@ -13,24 +13,37 @@ jobs:
       - name: Build Whisper (Static)
         run: |
           cd whisper.cpp
-          # Компілюємо
-          make -j
+          # Вимикаємо динамічні бібліотеки (-DBUILD_SHARED_LIBS=OFF)
+          # Вмикаємо Metal для швидкості на Маках (-DWHISPER_METAL=ON)
+          cmake -B build \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_SERVER=OFF \
+            -DWHISPER_METAL=ON
           
+          cmake --build build --config Release -j 4
+
       - name: Prepare Artifact
         run: |
-          # Шукаємо бінарник за допомогою find, щоб не гадати з назвою
-          # Нам потрібен або 'whisper-cli' або 'main' який є виконуваним файлом
-          FOUND_BIN=$(find whisper.cpp -type f -perm +111 \( -name "whisper-cli" -o -name "main" \) | head -n 1)
-          
-          if [ -n "$FOUND_BIN" ]; then
-            echo "Знайдено бінарник: $FOUND_BIN"
-            cp "$FOUND_BIN" whisper
+          # В CMake бінарники зазвичай копіюються в build/bin/
+          if [ -f whisper.cpp/build/bin/whisper-cli ]; then
+            cp whisper.cpp/build/bin/whisper-cli whisper
+          elif [ -f whisper.cpp/build/bin/main ]; then
+            cp whisper.cpp/build/bin/main whisper
           else
-            echo "Помилка: Бінарник не знайдено! Список файлів у whisper.cpp:"
-            ls -R whisper.cpp
-            exit 1
+            echo "Шукаємо глибше..."
+            find whisper.cpp/build -type f -perm +111 \( -name "whisper-cli" -o -name "main" \) -exec cp {} whisper \;
           fi
+          
+          if [ ! -f whisper ]; then
+             echo "Помилка: Бінарник не знайдено!"
+             exit 1
+          fi
+          
           chmod +x whisper
+          echo "Розмір отриманого файлу:"
+          ls -lh whisper
 
       - name: Upload Binary
         uses: actions/upload-artifact@v4
