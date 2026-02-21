@@ -13,20 +13,20 @@ jobs:
       - name: Build Whisper (Static)
         run: |
           cd whisper.cpp
-          # Використовуємо make для створення статичного бінарника, який не потребує .dylib
-          make whisper-cli || make main || make
+          # Компілюємо
+          make -j
           
       - name: Prepare Artifact
         run: |
-          # Шукаємо бінарник у корені папки або в examples
-          if [ -f whisper.cpp/whisper-cli ]; then
-            mv whisper.cpp/whisper-cli whisper
-          elif [ -f whisper.cpp/main ]; then
-            mv whisper.cpp/main whisper
-          elif [ -f whisper.cpp/examples/main/main ]; then
-            mv whisper.cpp/examples/main/main whisper
+          # Шукаємо бінарник за допомогою find, щоб не гадати з назвою
+          # Нам потрібен або 'whisper-cli' або 'main' який є виконуваним файлом
+          FOUND_BIN=$(find whisper.cpp -type f -perm +111 \( -name "whisper-cli" -o -name "main" \) | head -n 1)
+          
+          if [ -n "$FOUND_BIN" ]; then
+            echo "Знайдено бінарник: $FOUND_BIN"
+            cp "$FOUND_BIN" whisper
           else
-            echo "Помилка: Бінарник не знайдено!"
+            echo "Помилка: Бінарник не знайдено! Список файлів у whisper.cpp:"
             ls -R whisper.cpp
             exit 1
           fi
