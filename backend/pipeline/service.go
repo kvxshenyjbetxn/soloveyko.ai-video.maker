@@ -28,6 +28,7 @@ type PipelineService struct {
 	OnRequestControl func(id string, text string)
 	OnTaskStatus     func(id string, status string, progress int)
 	OnImageGenerated func(taskName string, templateName string, imageName string, path string)
+	OnImageDeleted   func(imgPath string)
 
 	pendingControl sync.Map // Map taskID -> chan string
 }

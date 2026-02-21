@@ -81,6 +81,11 @@ type PipelineSettings struct {
 	ImageGooglerRemixEnabled    bool    `json:"imageGooglerRemixEnabled"`
 	ImageGooglerReferenceImage  string  `json:"imageGooglerReferenceImage,omitempty"`
 	ImageGooglerRemixStrictMode bool    `json:"imageGooglerRemixStrictMode"`
+	ImageGooglerVideoEnabled    bool    `json:"imageGooglerVideoEnabled"`
+	ImageGooglerVideoModel      string  `json:"imageGooglerVideoModel,omitempty"`
+	ImageGooglerVideoMode       string  `json:"imageGooglerVideoMode,omitempty"`
+	ImageGooglerVideoCount      int     `json:"imageGooglerVideoCount,omitempty"`
+	ImageGooglerVideoUpscale    bool    `json:"imageGooglerVideoUpscale"`
 	ImageOutputPath             string  `json:"imageOutputPath,omitempty"`
 	ImagePipelineName           string  `json:"imagePipelineName,omitempty"`
 	ImageTemplatesCollapsed     bool    `json:"imageTemplatesCollapsed"`

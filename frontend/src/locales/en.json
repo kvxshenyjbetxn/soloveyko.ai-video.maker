@@ -250,7 +250,14 @@
                 "remix_enabled": "Select image for style",
                 "remix_select": "Select image",
                 "remix_change": "Change image",
-                "strict_mode": "Strict Mode"
+                "strict_mode": "Strict Mode",
+                "video_enabled": "Animate Images",
+                "video_model": "Video Model",
+                "video_mode": "Animation Source",
+                "video_mode_text": "From Text (Prompt)",
+                "video_mode_image": "From Generated Image",
+                "video_count": "Number of Videos",
+                "video_upscale": "Upscale Video (Grok)"
             }
         },
         "group": {

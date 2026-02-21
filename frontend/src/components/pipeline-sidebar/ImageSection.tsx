@@ -514,6 +514,74 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                     )}
                                 </>
                             )}
+
+                            <div className="settings-control" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                    <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.googler.video_enabled') || 'Анімація картинок'}</label>
+                                    <label className="stage-switch small">
+                                        <input
+                                            type="checkbox"
+                                            checked={settings.imageGooglerVideoEnabled || false}
+                                            onChange={(e) => handleChange('imageGooglerVideoEnabled', e.target.checked)}
+                                        />
+                                        <span className="stage-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {settings.imageGooglerVideoEnabled && (
+                                <>
+                                    <div className="settings-control">
+                                        <label className="settings-label">{t('pipeline.image.googler.video_model') || 'Модель відео'}</label>
+                                        <select
+                                            className="settings-select"
+                                            value={settings.imageGooglerVideoModel || 'flow'}
+                                            onChange={(e) => handleChange('imageGooglerVideoModel', e.target.value)}
+                                        >
+                                            <option value="flow">Flow</option>
+                                            <option value="whisk">Whisk</option>
+                                            <option value="grok">Grok</option>
+                                            <option value="gemini">Gemini</option>
+                                        </select>
+                                    </div>
+                                    <div className="settings-control">
+                                        <label className="settings-label">{t('pipeline.image.googler.video_mode') || 'Джерело анімації'}</label>
+                                        <select
+                                            className="settings-select"
+                                            value={settings.imageGooglerVideoMode || 'text'}
+                                            onChange={(e) => handleChange('imageGooglerVideoMode', e.target.value)}
+                                        >
+                                            <option value="text">{t('pipeline.image.googler.video_mode_text') || 'З тексту (промту)'}</option>
+                                            <option value="image">{t('pipeline.image.googler.video_mode_image') || 'З згенерованого зображення'}</option>
+                                        </select>
+                                    </div>
+                                    <div className="settings-control">
+                                        <label className="settings-label">{t('pipeline.image.googler.video_count') || 'Кількість відео'}</label>
+                                        <input
+                                            type="number"
+                                            className="settings-input"
+                                            value={settings.imageGooglerVideoCount ?? 1}
+                                            onChange={(e) => handleChange('imageGooglerVideoCount', parseInt(e.target.value))}
+                                            min="1"
+                                        />
+                                    </div>
+                                    {settings.imageGooglerVideoModel === 'grok' && (
+                                        <div className="settings-control">
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                                <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.googler.video_upscale') || 'Upscale відео (Grok)'}</label>
+                                                <label className="stage-switch small">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={settings.imageGooglerVideoUpscale || false}
+                                                        onChange={(e) => handleChange('imageGooglerVideoUpscale', e.target.checked)}
+                                                    />
+                                                    <span className="stage-slider"></span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </>
                     )}
 

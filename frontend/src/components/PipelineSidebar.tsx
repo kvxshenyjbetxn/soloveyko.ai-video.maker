@@ -326,7 +326,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
         const imageFields = [
             'imageEnabled', 'imageService', 'imageModel', 'imageWidth', 'imageHeight', 'imageNoLogo', 'imageEnhance', 'imagePrompt', 'imagePollinationsKeyID',
-            'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens'
+            'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens',
+            'elevenLabsImageKeyID', 'elevenLabsImageAspectRatio', 'elevenLabsImagePortrait',
+            'imageGooglerModel', 'imageGooglerAspectRatio', 'imageGooglerRemixEnabled', 'imageGooglerReferenceImage', 'imageGooglerRemixStrictMode',
+            'imageGooglerVideoEnabled', 'imageGooglerVideoModel', 'imageGooglerVideoMode', 'imageGooglerVideoCount', 'imageGooglerVideoUpscale'
         ];
         imageFields.forEach(field => { if (settings[field] !== undefined) commonSet[field] = settings[field]; });
 

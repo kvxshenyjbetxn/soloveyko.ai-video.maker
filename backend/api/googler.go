@@ -497,3 +497,188 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 
 	return fmt.Errorf("Googler remix timeout after 5 minutes")
 }
+
+// GenerateVideo генерує відео за допомогою Googler (text-to-video або image-to-video)
+func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string) error {
+	_, vidSem := s.ensureSemaphores()
+	vidSem <- struct{}{}
+	defer func() { <-vidSem }()
+
+	client := &http.Client{Timeout: 300 * time.Second}
+	var url string
+	var reqBody interface{}
+
+	// Map aspect ratio
+	apiRatio := aspectRatio
+	if model == "grok" {
+		switch apiRatio {
+		case "IMAGE_ASPECT_RATIO_LANDSCAPE":
+			apiRatio = "16:9"
+		case "IMAGE_ASPECT_RATIO_PORTRAIT":
+			apiRatio = "9:16"
+		case "IMAGE_ASPECT_RATIO_SQUARE":
+			apiRatio = "1:1"
+		}
+	} else {
+		if !strings.HasPrefix(apiRatio, "VIDEO_ASPECT_RATIO_") {
+			switch apiRatio {
+			case "16:9", "IMAGE_ASPECT_RATIO_LANDSCAPE":
+				apiRatio = "VIDEO_ASPECT_RATIO_LANDSCAPE"
+			case "9:16", "IMAGE_ASPECT_RATIO_PORTRAIT":
+				apiRatio = "VIDEO_ASPECT_RATIO_PORTRAIT"
+			default:
+				apiRatio = "VIDEO_ASPECT_RATIO_LANDSCAPE"
+			}
+		}
+	}
+
+	if imageBase64 != "" {
+		// Image to video
+		switch model {
+		case "flow":
+			url = fmt.Sprintf("%s/v4/flow/video/from-ingredients?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":           prompt,
+				"reference_images": []string{imageBase64},
+				"aspect_ratio":     apiRatio,
+			}
+		case "whisk":
+			url = fmt.Sprintf("%s/v4/whisk/video/from-image?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":      prompt,
+				"input_image": imageBase64,
+			}
+		case "grok":
+			url = fmt.Sprintf("%s/v4/grok/video/from-image?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":  prompt,
+				"image":   imageBase64,
+				"upscale": upscale,
+			}
+		case "gemini":
+			url = fmt.Sprintf("%s/v4/gemini/video/generate?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":           prompt,
+				"reference_images": []string{imageBase64},
+			}
+		default:
+			return fmt.Errorf("unknown video model: %s", model)
+		}
+	} else {
+		// Text to video
+		switch model {
+		case "flow":
+			url = fmt.Sprintf("%s/v4/flow/video/from-text?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":       prompt,
+				"aspect_ratio": apiRatio,
+			}
+		case "whisk":
+			url = fmt.Sprintf("%s/v4/whisk/video/from-text?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt": prompt,
+			}
+		case "grok":
+			url = fmt.Sprintf("%s/v4/grok/video/from-text?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":       prompt,
+				"aspect_ratio": apiRatio,
+				"upscale":      upscale,
+			}
+		case "gemini":
+			url = fmt.Sprintf("%s/v4/gemini/video/generate?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt": prompt,
+			}
+		default:
+			return fmt.Errorf("unknown video model: %s", model)
+		}
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	if s.OnLogData != nil {
+		s.OnLogData("Googler Video Request", fmt.Sprintf("MODEL: %s\nPROMPT: %s\nRATIO: %s", model, prompt, apiRatio))
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Googler Video API failed (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var opResp OperationResponse
+	if err := json.NewDecoder(resp.Body).Decode(&opResp); err != nil {
+		return err
+	}
+
+	if opResp.OperationID == "" {
+		return fmt.Errorf("no operation_id returned")
+	}
+
+	// Polling
+	maxRetries := 120 // 10 minutes max for video
+	for i := 0; i < maxRetries; i++ {
+		time.Sleep(5 * time.Second)
+
+		statusUrl := fmt.Sprintf("%s/v4/operations/%s?api_key=%s", s.baseUrl, opResp.OperationID, apiKey)
+		sReq, err := http.NewRequest("GET", statusUrl, nil)
+		if err != nil {
+			return err
+		}
+		sReq.Header.Set("X-API-Key", apiKey)
+
+		sResp, err := client.Do(sReq)
+		if err != nil {
+			continue // try again
+		}
+
+		var stResp OperationStatusResponse
+		if err := json.NewDecoder(sResp.Body).Decode(&stResp); err != nil {
+			sResp.Body.Close()
+			continue
+		}
+		sResp.Body.Close()
+
+		if stResp.Status == "success" {
+			var base64Data string
+			switch v := stResp.Result.(type) {
+			case string:
+				base64Data = v
+			case []interface{}:
+				if len(v) > 0 {
+					if st, ok := v[0].(string); ok {
+						base64Data = st
+					}
+				}
+			}
+
+			if base64Data == "" {
+				return fmt.Errorf("empty result in success status")
+			}
+
+			return utils.SaveBase64Image(base64Data, outputPath)
+		}
+
+		if stResp.Status == "error" {
+			return fmt.Errorf("Googler video task failed: %s", stResp.Error)
+		}
+	}
+
+	return fmt.Errorf("Googler video timeout after 10 minutes")
+}

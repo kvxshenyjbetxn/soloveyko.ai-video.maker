@@ -255,7 +255,14 @@
         "remix_enabled": "Обрати картинку для стилю",
         "remix_select": "Обрати картинку",
         "remix_change": "Змінити картинку",
-        "strict_mode": "Суворий режим (Strict Mode)"
+        "strict_mode": "Суворий режим (Strict Mode)",
+        "video_enabled": "Анімація картинок",
+        "video_model": "Модель відео",
+        "video_mode": "Джерело анімації",
+        "video_mode_text": "З тексту (промту)",
+        "video_mode_image": "З згенерованого зображення",
+        "video_count": "Кількість відео",
+        "video_upscale": "Upscale відео (Grok)"
       }
     },
     "group": {

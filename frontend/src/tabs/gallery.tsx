@@ -260,7 +260,21 @@ export const Gallery = () => {
                                                                         })}
                                                                     >
                                                                         <div className="media-container">
-                                                                            <img src={image.url} alt={image.name} loading="lazy" />
+                                                                            {image.url.toLowerCase().endsWith('.mp4') ? (
+                                                                                <video
+                                                                                    src={image.url}
+                                                                                    muted
+                                                                                    loop
+                                                                                    playsInline
+                                                                                    onMouseEnter={(e) => { e.currentTarget.play().catch(() => { }); }}
+                                                                                    onMouseLeave={(e) => {
+                                                                                        e.currentTarget.pause();
+                                                                                        e.currentTarget.currentTime = 0;
+                                                                                    }}
+                                                                                />
+                                                                            ) : (
+                                                                                <img src={image.url} alt={image.name} loading="lazy" />
+                                                                            )}
                                                                             <div className="media-overlay">
                                                                                 <button
                                                                                     className="card-delete-btn"
@@ -312,7 +326,11 @@ export const Gallery = () => {
                             </div>
                         </div>
                         <div className="modal-image-wrapper" onClick={() => setSelectedMedia(null)}>
-                            <img src={selectedMedia.url} alt={selectedMedia.name} className="animate-fade" />
+                            {selectedMedia.url.toLowerCase().endsWith('.mp4') ? (
+                                <video src={selectedMedia.url} className="animate-fade" controls autoPlay loop playsInline onClick={e => e.stopPropagation()} />
+                            ) : (
+                                <img src={selectedMedia.url} alt={selectedMedia.name} className="animate-fade" onClick={e => e.stopPropagation()} />
+                            )}
                         </div>
                     </div>
                 </div>

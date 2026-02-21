@@ -87,6 +87,25 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
     return editorContent;
 };
 
+const renderStatusLines = (message: string, isFinished: boolean) => {
+    if (!message) return null;
+    return message.split('\n').map((line, idx) => {
+        const match = line.match(/^(\w+):\s*(\d+)\/(\d+)$/i);
+        if (match) {
+            const [, , currentStr, totalStr] = match;
+            const current = parseInt(currentStr, 10);
+            const total = parseInt(totalStr, 10);
+            const isWarning = isFinished && total > 0 && current < total;
+            return (
+                <div key={idx} style={{ color: isWarning ? '#ffa500' : 'inherit' }}>
+                    {line}
+                </div>
+            );
+        }
+        return <div key={idx}>{line}</div>;
+    });
+};
+
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
     const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask } = useQueue();
@@ -227,12 +246,17 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                     <ImageIcon />
                                     <span>{t('api.image') || 'Images'}</span>
                                 </div>
-                                <span className="stage-status-text badge-status">
-                                    {task.imageStatus === 'completed' ? (task.imagesMessage || t('queue.image_saved') || 'Images Gen.') :
-                                        task.imageStatus === 'running' ? (task.imagesMessage || t('queue.status_running') || 'Generating...') :
-                                            task.imageStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                                task.imageStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
-                                </span>
+                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '11px', lineHeight: '1.4' }}>
+                                    {task.imageStatus === 'completed' ? (
+                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : (t('queue.image_saved') || 'Images Gen.')
+                                    ) : task.imageStatus === 'running' ? (
+                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, false) : (t('queue.status_running') || 'Generating...')
+                                    ) : task.imageStatus === 'waiting' ? (
+                                        t('queue.status_waiting') || 'Waiting'
+                                    ) : task.imageStatus === 'failed' ? (
+                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
+                                    ) : t('queue.status_pending')}
+                                </div>
                             </div>
                         )}
                     </div>

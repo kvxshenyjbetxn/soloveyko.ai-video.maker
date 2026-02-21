@@ -74,6 +74,16 @@ func NewApp() *App {
 
 	app.pipeline.OnImageGenerated = func(taskName, templateName, imageName, imgPath string) {
 		app.galleryManager.AddImage(taskName, templateName, imageName, imgPath)
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "galleryUpdate")
+		}
+	}
+
+	app.pipeline.OnImageDeleted = func(imgPath string) {
+		app.galleryManager.RemoveImage(imgPath)
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "galleryUpdate")
+		}
 	}
 
 	app.pipeline.OnTextResult = func(id string, resultText string) {
