@@ -208,18 +208,25 @@
             "title": "Voiceover Settings",
             "prompt_placeholder": "Prompt for voiceover... Use {{content}} to insert text.",
             "service": "Voiceover Service",
-            "template": "Voice Template",
+            "template": "Voice",
             "settings": {
                 "stability": "Stability",
                 "similarity": "Similarity",
                 "style": "Style Exaggeration",
-                "speaker_boost": "Speaker Boost"
+                "speaker_boost": "Speaker Boost",
+                "rate": "Rate",
+                "pitch": "Pitch",
+                "volume": "Volume"
             },
             "services": {
                 "elevenlabsbot": "ElevenLabs Bot",
                 "elevenlabsunlim": "ElevenLabs Unlim",
                 "elevenlabsua": "ElevenLabs UA",
-                "voicemaker": "VoiceMaker"
+                "voicemaker": "VoiceMaker",
+                "edgetts": "Edge TTS (Free)"
+            },
+            "placeholders": {
+                "select_voice": "Select voice..."
             }
         },
         "image": {

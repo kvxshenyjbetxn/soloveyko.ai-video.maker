@@ -5,7 +5,7 @@ import { useQueue } from '../contexts/QueueContext';
 import { useServices } from '../contexts/ServiceContext';
 import { useTemplates } from '../contexts/TemplateContext';
 // @ts-ignore
-import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices, GetPollinationsImageModels, GetPollinationsSavedModels, SavePollinationsModels } from '../../wailsjs/go/main/App';
+import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices, GetPollinationsImageModels, GetPollinationsSavedModels, SavePollinationsModels, GetEdgeTTSVoices } from '../../wailsjs/go/main/App';
 import voicemakerVoicesData from '../assets/voicemaker_voices.json';
 
 import { TaskNameModal } from './TaskNameModal';
@@ -47,6 +47,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [voiceMakerVoices, setVoiceMakerVoices] = useState<any[]>([]);
     const [pollinationsModels, setPollinationsModels] = useState<string[]>([]);
     const [loadingPollinationsModels, setLoadingPollinationsModels] = useState(false);
+    const [edgeTTSVoices, setEdgeTTSVoices] = useState<any[]>([]);
 
     const sidebarRef = useRef<HTMLDivElement>(null);
     const lastSavedRef = useRef<string>("");
@@ -135,9 +136,20 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             } else {
                 setVoiceMakerVoices(normalizeVoices(voicemakerVoicesData || []));
             }
+        } finally {
+            setLoadingTemplates(false);
+        }
+    };
+
+    const fetchEdgeTTSVoices = async () => {
+        setLoadingTemplates(true);
+        try {
+            const results = await GetEdgeTTSVoices();
+            if (results && results.length > 0) {
+                setEdgeTTSVoices(results);
+            }
         } catch (err) {
-            console.error("Failed to fetch VoiceMaker voices:", err);
-            setVoiceMakerVoices(normalizeVoices(voicemakerVoicesData || []));
+            console.error("Failed to fetch Edge TTS voices:", err);
         } finally {
             setLoadingTemplates(false);
         }
@@ -516,8 +528,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
                     <VoiceoverSection
                         settings={settings} handleChange={handleChange} setSettings={setSettings}
-                        fetchVoiceTemplates={fetchVoiceTemplates} fetchVoiceMakerVoices={fetchVoiceMakerVoices}
-                        voiceTemplates={voiceTemplates} voiceMakerVoices={voiceMakerVoices} loadingTemplates={loadingTemplates}
+                        fetchVoiceTemplates={fetchVoiceTemplates} fetchVoiceMakerVoices={fetchVoiceMakerVoices} fetchEdgeTTSVoices={fetchEdgeTTSVoices}
+                        voiceTemplates={voiceTemplates} voiceMakerVoices={voiceMakerVoices} edgeTTSVoices={edgeTTSVoices} loadingTemplates={loadingTemplates}
                     />
 
                     <ImageSection

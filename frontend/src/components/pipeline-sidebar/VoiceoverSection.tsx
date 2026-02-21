@@ -8,8 +8,10 @@ interface VoiceoverSectionProps {
     setSettings: React.Dispatch<React.SetStateAction<any>>;
     fetchVoiceTemplates: (keyID?: string) => void;
     fetchVoiceMakerVoices: (keyID?: string) => void;
+    fetchEdgeTTSVoices: () => void;
     voiceTemplates: string[];
     voiceMakerVoices: any[];
+    edgeTTSVoices: any[];
     loadingTemplates: boolean;
 }
 
@@ -23,9 +25,15 @@ const VoiceIcon = () => (
 );
 
 export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
-    settings, handleChange, setSettings, fetchVoiceTemplates, fetchVoiceMakerVoices, voiceTemplates, voiceMakerVoices, loadingTemplates
+    settings, handleChange, setSettings, fetchVoiceTemplates, fetchVoiceMakerVoices, fetchEdgeTTSVoices, voiceTemplates, voiceMakerVoices, edgeTTSVoices, loadingTemplates
 }) => {
     const { t } = useI18n();
+
+    React.useEffect(() => {
+        if (settings.voiceoverService === 'edgetts' && edgeTTSVoices.length === 0) {
+            fetchEdgeTTSVoices();
+        }
+    }, [settings.voiceoverService]);
 
     return (
         <div className={`pipeline-stage-container ${settings.voiceoverCollapsed || !settings.voiceoverEnabled ? 'is-collapsed' : ''}`}>
@@ -91,13 +99,16 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                                     fetchVoiceTemplates();
                                 } else if (val === 'voicemaker') {
                                     fetchVoiceMakerVoices();
+                                } else if (val === 'edgetts') {
+                                    fetchEdgeTTSVoices();
                                 }
                             }}
                         >
                             <option value="elevenlabsbot">{t('pipeline.voiceover.services.elevenlabsbot') || 'ElevenLabs Bot'}</option>
                             <option value="elevenlabsunlim">{t('pipeline.voiceover.services.elevenlabsunlim') || 'ElevenLabs Unlim'}</option>
                             <option value="elevenlabsua">{t('pipeline.voiceover.services.elevenlabsua') || 'ElevenLabs UA'}</option>
-                            <option value="voicemaker">{t('pipeline.voiceover.services.voicemaker') || 'VoiceMaker'}</option>
+                            <option value="voicemaker">{t('pipeline.voiceover.services.voicemaker')}</option>
+                            <option value="edgetts">{t('pipeline.voiceover.services.edgetts')}</option>
                         </select>
                     </div>
 
@@ -375,6 +386,104 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                                         onChange={(e) => handleChange('voiceMakerCharLimit', parseInt(e.target.value))}
                                     />
                                     <span className="settings-slider-value">{settings.voiceMakerCharLimit ?? 3000}</span>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {settings.voiceoverService === 'edgetts' && (
+                        <>
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.voiceover.template') || 'Голос'}</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <SearchableSelect
+                                        options={(edgeTTSVoices || []).map((v: any) => ({
+                                            value: v.ShortName,
+                                            label: v.FriendlyName || v.ShortName,
+                                            subLabel: v.Locale
+                                        }))}
+                                        value={settings.edgeTTSVoiceID || 'uk-UA-PolinaNeural'}
+                                        onChange={(val) => handleChange('edgeTTSVoiceID', val)}
+                                        loading={loadingTemplates}
+                                        placeholder={t('pipeline.voiceover.placeholders.select_voice')}
+                                        searchPlaceholder={t('common.search')}
+                                    />
+                                    <button
+                                        className="premium-btn-sm"
+                                        style={{ padding: '0 10px', height: '32px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        onClick={() => fetchEdgeTTSVoices()}
+                                        disabled={loadingTemplates}
+                                    >
+                                        <svg
+                                            className={loadingTemplates ? 'animate-spin' : ''}
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="14" height="14"
+                                            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                        >
+                                            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.83 6.72 2.24" />
+                                            <polyline points="21 3 21 9 15 9" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.voiceover.settings.rate')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range"
+                                        className="settings-slider"
+                                        min="-50"
+                                        max="50"
+                                        step="1"
+                                        value={parseInt((settings.edgeTTSRate || "+0%").replace('%', ''))}
+                                        style={{ '--range-progress': `${(parseInt((settings.edgeTTSRate || "+0%").replace('%', '')) + 50) / 100 * 100}%` } as React.CSSProperties}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value);
+                                            handleChange('edgeTTSRate', (val >= 0 ? "+" : "") + val + "%");
+                                        }}
+                                    />
+                                    <span className="settings-slider-value">{settings.edgeTTSRate || "+0%"}</span>
+                                </div>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.voiceover.settings.pitch')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range"
+                                        className="settings-slider"
+                                        min="-50"
+                                        max="50"
+                                        step="1"
+                                        value={parseInt((settings.edgeTTSPitch || "+0Hz").replace('Hz', ''))}
+                                        style={{ '--range-progress': `${(parseInt((settings.edgeTTSPitch || "+0Hz").replace('Hz', '')) + 50) / 100 * 100}%` } as React.CSSProperties}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value);
+                                            handleChange('edgeTTSPitch', (val >= 0 ? "+" : "") + val + "Hz");
+                                        }}
+                                    />
+                                    <span className="settings-slider-value">{settings.edgeTTSPitch || "+0Hz"}</span>
+                                </div>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.voiceover.settings.volume')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range"
+                                        className="settings-slider"
+                                        min="-50"
+                                        max="50"
+                                        step="1"
+                                        value={parseInt((settings.edgeTTSVolume || "+0%").replace('%', ''))}
+                                        style={{ '--range-progress': `${(parseInt((settings.edgeTTSVolume || "+0%").replace('%', '')) + 50) / 100 * 100}%` } as React.CSSProperties}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value);
+                                            handleChange('edgeTTSVolume', (val >= 0 ? "+" : "") + val + "%");
+                                        }}
+                                    />
+                                    <span className="settings-slider-value">{settings.edgeTTSVolume || "+0%"}</span>
                                 </div>
                             </div>
                         </>

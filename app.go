@@ -34,6 +34,7 @@ type App struct {
 	galleryManager  *utils.GalleryManager
 	fileLogger      *utils.FileLogger
 	localWhisper    *pipeline.LocalWhisperService
+	edgeTTS         *api.EdgeTTSService
 }
 
 // NewApp creates a new App application struct
@@ -57,8 +58,9 @@ func NewApp() *App {
 	}
 	app.galleryManager = utils.NewGalleryManager()
 	app.localWhisper = pipeline.NewLocalWhisperService()
+	app.edgeTTS = api.NewEdgeTTSService()
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper, app.edgeTTS)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -741,6 +743,11 @@ func (a *App) SavePipelineSettings(pipeline utils.PipelineSettings) error {
 // GetElevenLabsBotVoiceTemplates returns the list of voice templates for a given API key
 func (a *App) GetElevenLabsBotVoiceTemplates(apiKey string) ([]string, error) {
 	return a.elevenLabs.GetTemplates(apiKey)
+}
+
+// GetEdgeTTSVoices returns the list of available Microsoft Edge TTS voices
+func (a *App) GetEdgeTTSVoices() ([]api.EdgeTTSVoice, error) {
+	return a.edgeTTS.GetVoices()
 }
 
 // ProcessTask handles the execution of a single pipeline task

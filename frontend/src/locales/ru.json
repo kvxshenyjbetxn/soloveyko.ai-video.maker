@@ -208,18 +208,25 @@
             "title": "Настройки озвучки",
             "prompt_placeholder": "Промт для озвучки... Используйте {{content}} для вставки текста.",
             "service": "Сервис озвучки",
-            "template": "Шаблон голоса",
+            "template": "Голос",
             "settings": {
                 "stability": "Стабильность",
                 "similarity": "Сходство",
                 "style": "Экспрессия",
-                "speaker_boost": "Усиление дикции"
+                "speaker_boost": "Усиление дикции",
+                "rate": "Скорость",
+                "pitch": "Высота",
+                "volume": "Громкость"
             },
             "services": {
                 "elevenlabsbot": "ElevenLabs Bot",
                 "elevenlabsunlim": "ElevenLabs Unlim",
                 "elevenlabsua": "ElevenLabs UA",
-                "voicemaker": "VoiceMaker"
+                "voicemaker": "VoiceMaker",
+                "edgetts": "Edge TTS (Бесплатно)"
+            },
+            "placeholders": {
+                "select_voice": "Выберите голос..."
             }
         },
         "image": {

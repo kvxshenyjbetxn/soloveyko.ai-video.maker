@@ -213,18 +213,25 @@
       "empty_title": "Параметри озвучки",
       "empty_description": "Налаштування цієї стадії будуть доступні в наступних оновленнях",
       "service": "Сервіс озвучки",
-      "template": "Шаблон голосу",
+      "template": "Голос",
       "settings": {
         "stability": "Стабільність",
         "similarity": "Схожість",
         "style": "Експресія",
-        "speaker_boost": "Підсилення дикції"
+        "speaker_boost": "Підсилення дикції",
+        "rate": "Швидкість",
+        "pitch": "Висота",
+        "volume": "Гучність"
       },
       "services": {
         "elevenlabsbot": "ElevenLabs Bot",
         "elevenlabsunlim": "ElevenLabs Unlim",
         "elevenlabsua": "ElevenLabs UA",
-        "voicemaker": "VoiceMaker"
+        "voicemaker": "VoiceMaker",
+        "edgetts": "Edge TTS (Безкоштовно)"
+      },
+      "placeholders": {
+        "select_voice": "Виберіть голос..."
       }
     },
     "image": {

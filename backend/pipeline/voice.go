@@ -39,16 +39,38 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 	}
 
 	// Conditional logging based on service type
-	if vService == "elevenlabsunlim" {
+	switch vService {
+	case "edgetts":
+		vID, _ := settings["edgeTTSVoiceID"].(string)
+		if vID == "" {
+			vID = pSettings.EdgeTTSVoiceID
+		}
+		if vID == "" {
+			vID = "uk-UA-PolinaNeural"
+		}
+		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice: %s", vService, vID), id, taskLabel)
+	case "voicemaker":
+		vID, _ := settings["voiceMakerVoiceID"].(string)
+		if vID == "" {
+			vID = pSettings.VoiceMakerVoiceID
+		}
+		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice: %s", vService, vID), id, taskLabel)
+	case "elevenlabsunlim":
 		vID, _ := settings["elevenLabsUnlimVoiceID"].(string)
 		if vID == "" {
 			vID = pSettings.ElevenLabsUnlimVoiceID
 		}
 		if vID == "" {
-			vID = "AB9XsbSA4eLG12t2myjN" // Default voice from docs
+			vID = "AB9XsbSA4eLG12t2myjN"
 		}
-		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice ID: %s", vService, vID), id, taskLabel)
-	} else {
+		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice: %s", vService, vID), id, taskLabel)
+	case "elevenlabsua":
+		vID, _ := settings["elevenLabsUAVoiceID"].(string)
+		if vID == "" {
+			vID = pSettings.ElevenLabsUAVoiceID
+		}
+		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice: %s", vService, vID), id, taskLabel)
+	default:
 		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Template: %s", vService, vTemplate), id, taskLabel)
 	}
 
@@ -409,6 +431,48 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 
 		duration, _ := utils.GetAudioDuration(voiceFilePath)
 		s.log("SUCCESS", fmt.Sprintf("[VoiceMaker] Success: Voice saved to voice.mp3 (%s)", duration), id, taskLabel)
+		s.emitStageStatus(id, "voice", "completed", duration)
+	} else if vService == "edgetts" {
+		vID, _ := settings["edgeTTSVoiceID"].(string)
+		if vID == "" {
+			vID = pSettings.EdgeTTSVoiceID
+		}
+		if vID == "" {
+			vID = "uk-UA-PolinaNeural" // Default Ukrainian voice
+		}
+
+		rate, _ := settings["edgeTTSRate"].(string)
+		pitch, _ := settings["edgeTTSPitch"].(string)
+		volume, _ := settings["edgeTTSVolume"].(string)
+
+		s.emitStageStatus(id, "voice", "running")
+		voiceFilePath := filepath.Join(finalDir, "voice.mp3")
+
+		var err error
+		backoffs := []int{5, 10, 15}
+		maxRetries := 3
+
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			if attempt > 0 {
+				s.log("WARN", fmt.Sprintf("[EdgeTTS] Retry attempt %d/%d after %ds...", attempt, maxRetries, backoffs[attempt-1]), id, taskLabel)
+				time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
+			}
+
+			err = s.edgeTTS.Synthesize(processedText, vID, rate, pitch, volume, voiceFilePath, id, taskLabel)
+			if err == nil {
+				break
+			}
+			s.log("ERROR", fmt.Sprintf("[EdgeTTS] Attempt %d failed: %v", attempt+1, err), id, taskLabel)
+		}
+
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[EdgeTTS] All 3 retry attempts failed. Final Error: %v", err), id, taskLabel)
+			s.emitStageStatus(id, "voice", "failed")
+			return err
+		}
+
+		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.log("SUCCESS", fmt.Sprintf("[EdgeTTS] Success: Voice saved to voice.mp3 (%s)", duration), id, taskLabel)
 		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for auto-synthesis", vService), id, taskLabel)

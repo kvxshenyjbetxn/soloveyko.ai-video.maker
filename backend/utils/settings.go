@@ -63,6 +63,10 @@ type PipelineSettings struct {
 	ElevenLabsUAStyle             float64 `json:"elevenLabsUAStyle,omitempty"`
 	ElevenLabsUASpeakerBoost      bool    `json:"elevenLabsUASpeakerBoost,omitempty"`
 	ElevenLabsUAModel             string  `json:"elevenLabsUAModel,omitempty"`
+	EdgeTTSVoiceID                string  `json:"edgeTTSVoiceID,omitempty"`
+	EdgeTTSRate                   string  `json:"edgeTTSRate,omitempty"`
+	EdgeTTSPitch                  string  `json:"edgeTTSPitch,omitempty"`
+	EdgeTTSVolume                 string  `json:"edgeTTSVolume,omitempty"`
 	TranslateControlEnabled       bool    `json:"translateControlEnabled"`
 	ControlCollapsed              bool    `json:"controlCollapsed"`
 

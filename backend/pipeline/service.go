@@ -21,6 +21,7 @@ type PipelineService struct {
 	googler         *api.GooglerService
 	elevenLabsImage *api.ElevenLabsImageService
 	localWhisper    *LocalWhisperService
+	edgeTTS         *api.EdgeTTSService
 
 	// Callbacks for UI updates
 	OnLog            func(level string, message string, details ...string)
@@ -46,6 +47,7 @@ func NewPipelineService(
 	googler *api.GooglerService,
 	elevenLabsImage *api.ElevenLabsImageService,
 	localWhisper *LocalWhisperService,
+	edgeTTS *api.EdgeTTSService,
 ) *PipelineService {
 	return &PipelineService{
 		settings:        settings,
@@ -58,6 +60,7 @@ func NewPipelineService(
 		googler:         googler,
 		elevenLabsImage: elevenLabsImage,
 		localWhisper:    localWhisper,
+		edgeTTS:         edgeTTS,
 	}
 }
 
