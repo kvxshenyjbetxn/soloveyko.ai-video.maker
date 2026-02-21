@@ -111,7 +111,9 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 				time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
 			}
 
+			s.elevenLabsSem <- struct{}{}
 			err = s.elevenLabs.Synthesize(vApiKey, processedText, vTemplate, voiceFilePath, id, taskLabel)
+			<-s.elevenLabsSem
 			if err == nil {
 				break
 			}
@@ -206,7 +208,9 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 				time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
 			}
 
+			s.elevenLabsUnlimSem <- struct{}{}
 			err = s.elevenLabsUnlim.Synthesize(vApiKey, processedText, vID, vSettings, voiceFilePath, id, taskLabel)
+			<-s.elevenLabsUnlimSem
 			if err == nil {
 				break
 			}
@@ -306,7 +310,9 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 				time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
 			}
 
+			s.elevenLabsUASem <- struct{}{}
 			err = s.elevenLabsUA.Synthesize(vApiKey, processedText, vID, modelID, vSettings, voiceFilePath, id, taskLabel)
+			<-s.elevenLabsUASem
 			if err == nil {
 				break
 			}

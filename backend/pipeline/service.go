@@ -33,6 +33,10 @@ type PipelineService struct {
 	OnImageDeleted   func(imgPath string)
 
 	pendingControl sync.Map // Map taskID -> chan string
+
+	elevenLabsSem      chan struct{}
+	elevenLabsUnlimSem chan struct{}
+	elevenLabsUASem    chan struct{}
 }
 
 // NewPipelineService creates a new PipelineService
@@ -50,17 +54,20 @@ func NewPipelineService(
 	edgeTTS *api.EdgeTTSService,
 ) *PipelineService {
 	return &PipelineService{
-		settings:        settings,
-		openRouter:      openRouter,
-		elevenLabs:      elevenLabs,
-		elevenLabsUnlim: elevenLabsUnlim,
-		elevenLabsUA:    elevenLabsUA,
-		voiceMaker:      voiceMaker,
-		pollinations:    pollinations,
-		googler:         googler,
-		elevenLabsImage: elevenLabsImage,
-		localWhisper:    localWhisper,
-		edgeTTS:         edgeTTS,
+		settings:           settings,
+		openRouter:         openRouter,
+		elevenLabs:         elevenLabs,
+		elevenLabsUnlim:    elevenLabsUnlim,
+		elevenLabsUA:       elevenLabsUA,
+		voiceMaker:         voiceMaker,
+		pollinations:       pollinations,
+		googler:            googler,
+		elevenLabsImage:    elevenLabsImage,
+		localWhisper:       localWhisper,
+		edgeTTS:            edgeTTS,
+		elevenLabsSem:      make(chan struct{}, 5),
+		elevenLabsUnlimSem: make(chan struct{}, 5),
+		elevenLabsUASem:    make(chan struct{}, 5),
 	}
 }
 
