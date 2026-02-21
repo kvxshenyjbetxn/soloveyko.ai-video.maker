@@ -21,6 +21,7 @@ type PipelineService struct {
 	googler         *api.GooglerService
 	elevenLabsImage *api.ElevenLabsImageService
 	localWhisper    *LocalWhisperService
+	amdWhisper      *AmdWhisperService
 	edgeTTS         *api.EdgeTTSService
 
 	// Callbacks for UI updates
@@ -51,6 +52,7 @@ func NewPipelineService(
 	googler *api.GooglerService,
 	elevenLabsImage *api.ElevenLabsImageService,
 	localWhisper *LocalWhisperService,
+	amdWhisper *AmdWhisperService,
 	edgeTTS *api.EdgeTTSService,
 ) *PipelineService {
 	return &PipelineService{
@@ -64,6 +66,7 @@ func NewPipelineService(
 		googler:            googler,
 		elevenLabsImage:    elevenLabsImage,
 		localWhisper:       localWhisper,
+		amdWhisper:         amdWhisper,
 		edgeTTS:            edgeTTS,
 		elevenLabsSem:      make(chan struct{}, 5),
 		elevenLabsUnlimSem: make(chan struct{}, 5),
@@ -75,6 +78,9 @@ func (s *PipelineService) SetContext(ctx context.Context) {
 	s.ctx = ctx
 	if s.localWhisper != nil {
 		s.localWhisper.SetContext(ctx)
+	}
+	if s.amdWhisper != nil {
+		s.amdWhisper.SetContext(ctx)
 	}
 }
 

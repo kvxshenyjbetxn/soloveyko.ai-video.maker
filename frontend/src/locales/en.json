@@ -283,9 +283,23 @@
         "max_tokens_unlimited": "Default (0)",
         "system_prompt": "System Prompt",
         "subtitle": {
+            "title": "Subtitle Settings",
             "size": "Font Size",
             "color": "Text Color",
-            "outline": "Outline Color"
+            "outline": "Outline Color",
+            "service": "Subtitle Service",
+            "max_len": "Max chars per line",
+            "services": {
+                "standard": "Whisper (Standard)",
+                "amd": "AMD Whisper (Windows/AMD only)"
+            },
+            "amd": {
+                "warning": "This service is only for Windows and AMD GPUs. It will be extracted to the app folder upon selection. Are you sure you want to install it?",
+                "install": "Install AMD Whisper",
+                "language": "Language ID (e.g. uk, en, ru)",
+                "models": "Available AMD Models",
+                "no_models": "No models found"
+            }
         },
         "hide_settings": "Hide Settings",
         "show_settings": "Show Settings",

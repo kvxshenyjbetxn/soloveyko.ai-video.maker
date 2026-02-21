@@ -34,6 +34,7 @@ type App struct {
 	galleryManager  *utils.GalleryManager
 	fileLogger      *utils.FileLogger
 	localWhisper    *pipeline.LocalWhisperService
+	amdWhisper      *pipeline.AmdWhisperService
 	edgeTTS         *api.EdgeTTSService
 }
 
@@ -58,9 +59,10 @@ func NewApp() *App {
 	}
 	app.galleryManager = utils.NewGalleryManager()
 	app.localWhisper = pipeline.NewLocalWhisperService()
+	app.amdWhisper = pipeline.NewAmdWhisperService()
 	app.edgeTTS = api.NewEdgeTTSService()
 
-	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper, app.edgeTTS)
+	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper, app.amdWhisper, app.edgeTTS)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -748,6 +750,30 @@ func (a *App) GetElevenLabsBotVoiceTemplates(apiKey string) ([]string, error) {
 // GetEdgeTTSVoices returns the list of available Microsoft Edge TTS voices
 func (a *App) GetEdgeTTSVoices() ([]api.EdgeTTSVoice, error) {
 	return a.edgeTTS.GetVoices()
+}
+
+// AmdWhisper Methods
+
+// IsAmdWhisperInstalled checks if the binary is already extracted
+func (a *App) IsAmdWhisperInstalled() bool {
+	return a.amdWhisper.IsInstalled()
+}
+
+// InstallAmdWhisper extracts the whisper-amd.zip
+func (a *App) InstallAmdWhisper() error {
+	a.LogToUI("INFO", "[AmdWhisper] Початок інсталяції сервісу AMD...")
+	err := a.amdWhisper.Install()
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[AmdWhisper] Помилка інсталяції: %v", err))
+		return err
+	}
+	a.LogToUI("SUCCESS", "[AmdWhisper] Сервіс AMD успішно встановлено")
+	return nil
+}
+
+// GetAmdWhisperModels returns the list of available models for AMD Whisper
+func (a *App) GetAmdWhisperModels() ([]string, error) {
+	return a.amdWhisper.GetAvailableModels()
 }
 
 // ProcessTask handles the execution of a single pipeline task

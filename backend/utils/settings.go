@@ -71,11 +71,12 @@ type PipelineSettings struct {
 	ControlCollapsed              bool    `json:"controlCollapsed"`
 
 	// Subtitle settings
-	SubtitleEnabled   bool   `json:"subtitleEnabled"`
-	SubtitleCollapsed bool   `json:"subtitleCollapsed"`
-	SubtitleService   string `json:"subtitleService,omitempty"`
-	SubtitleModel     string `json:"subtitleModel,omitempty"`
-	SubtitleMaxLen    int    `json:"subtitleMaxLen,omitempty"`
+	SubtitleEnabled     bool   `json:"subtitleEnabled"`
+	SubtitleCollapsed   bool   `json:"subtitleCollapsed"`
+	SubtitleService     string `json:"subtitleService,omitempty"`
+	SubtitleModel       string `json:"subtitleModel,omitempty"`
+	SubtitleAmdLanguage string `json:"subtitleAmdLanguage,omitempty"`
+	SubtitleMaxLen      int    `json:"subtitleMaxLen,omitempty"`
 
 	// Image settings
 	ImageEnabled                bool    `json:"imageEnabled"`

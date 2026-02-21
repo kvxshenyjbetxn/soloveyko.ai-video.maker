@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime';
 // @ts-ignore
-import { CheckSubtitleModel, DownloadSubtitleModel } from '../../../wailsjs/go/main/App';
+import {
+    CheckSubtitleModel,
+    DownloadSubtitleModel,
+    IsAmdWhisperInstalled,
+    InstallAmdWhisper,
+    GetAmdWhisperModels
+} from '../../../wailsjs/go/main/App';
+import { ConfirmModal } from '../ConfirmModal';
 
 interface SubtitleSectionProps {
     settings: any;
@@ -26,17 +33,25 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
     const [downloadProgress, setDownloadProgress] = useState(0);
     const [downloadStatus, setDownloadStatus] = useState('');
     const [modelExists, setModelExists] = useState(true);
+    const [amdInstalled, setAmdInstalled] = useState(false);
+    const [amdModels, setAmdModels] = useState<string[]>([]);
+    const [installingAmd, setInstallingAmd] = useState(false);
+    const [showAmdConfirm, setShowAmdConfirm] = useState(false);
 
     const models = ['tiny', 'base', 'small', 'medium', 'large-v1', 'large-v2', 'large-v3'];
     const services = [
-        { id: 'standard', name: 'Стандарт (Local Whisper)' },
-        { id: 'amd', name: 'AMD (в розробці)' },
+        { id: 'standard', name: t('pipeline.subtitle.services.standard') },
+        { id: 'amd', name: t('pipeline.subtitle.services.amd') },
         { id: 'assemblyai', name: 'AssemblyAI (в розробці)' }
     ];
 
     useEffect(() => {
-        if (settings.subtitleService === 'standard' && settings.subtitleModel) {
+        if (settings.subtitleModel && (settings.subtitleService === 'standard' || settings.subtitleService === 'amd')) {
             checkModel(settings.subtitleModel);
+        }
+
+        if (settings.subtitleService === 'amd') {
+            checkAmdStatus();
         }
     }, [settings.subtitleService, settings.subtitleModel]);
 
@@ -66,6 +81,22 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
         }
     };
 
+    const checkAmdStatus = async () => {
+        try {
+            const installed = await IsAmdWhisperInstalled();
+            setAmdInstalled(installed);
+            if (installed) {
+                const modelsList = await GetAmdWhisperModels();
+                setAmdModels(modelsList);
+                if (modelsList.length > 0 && !settings.subtitleModel) {
+                    handleChange('subtitleModel', modelsList[0]);
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     const handleDownload = async () => {
         if (!settings.subtitleModel) return;
         setDownloading(true);
@@ -76,6 +107,30 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
         } catch (e) {
             console.error(e);
             setDownloading(false);
+        }
+    };
+
+    const handleInstallAmd = async () => {
+        setShowAmdConfirm(true);
+    };
+
+    const confirmAmdInstall = async () => {
+        setShowAmdConfirm(false);
+        setInstallingAmd(true);
+        try {
+            await InstallAmdWhisper();
+            await checkAmdStatus();
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setInstallingAmd(false);
+        }
+    };
+
+    const handleServiceChange = (service: string) => {
+        handleChange('subtitleService', service);
+        if (service === 'amd') {
+            checkAmdStatus();
         }
     };
 
@@ -132,11 +187,11 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
             <div className={`stage-settings-content ${settings.subtitleCollapsed || !settings.subtitleEnabled ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     <div className="settings-control">
-                        <label className="settings-label">Сервіс транскрибації</label>
+                        <label className="settings-label">{t('pipeline.subtitle.service')}</label>
                         <select
                             className="settings-select"
                             value={settings.subtitleService || 'standard'}
-                            onChange={(e) => handleChange('subtitleService', e.target.value)}
+                            onChange={(e) => handleServiceChange(e.target.value)}
                         >
                             {services.map(s => (
                                 <option key={s.id} value={s.id}>{s.name}</option>
@@ -144,48 +199,35 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                         </select>
                     </div>
 
-                    {settings.subtitleService === 'standard' && (
+                    <div className="settings-control">
+                        <label className="settings-label">{t('pipeline.model')} (Whisper)</label>
+                        <select
+                            className="settings-select"
+                            value={settings.subtitleModel || 'base'}
+                            onChange={(e) => handleChange('subtitleModel', e.target.value)}
+                        >
+                            {models.map(m => (
+                                <option key={m} value={m}>{m} ({m === 'tiny' || m === 'base' ? 'швидко' : m === 'small' || m === 'medium' ? 'баланс' : 'повільно/якісно'})</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && (
                         <>
-                            <div className="settings-control">
-                                <label className="settings-label">Модель розпізнавання (Whisper)</label>
-                                <select
-                                    className="settings-select"
-                                    value={settings.subtitleModel || 'base'}
-                                    onChange={(e) => handleChange('subtitleModel', e.target.value)}
-                                >
-                                    {models.map(m => (
-                                        <option key={m} value={m}>{m} ({m === 'tiny' || m === 'base' ? 'швидко' : m === 'small' || m === 'medium' ? 'баланс' : 'повільно/якісно'})</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="settings-control">
-                                <label className="settings-label">Максимальна кількість символів у рядку</label>
-                                <div className="settings-slider-container">
-                                    <input
-                                        type="range"
-                                        min="10"
-                                        max="150"
-                                        step="1"
-                                        className="settings-slider"
-                                        value={settings.subtitleMaxLen || 40}
-                                        style={{ '--range-progress': `${((settings.subtitleMaxLen || 40) - 10) / (150 - 10) * 100}%` } as React.CSSProperties}
-                                        onChange={(e) => handleChange('subtitleMaxLen', parseInt(e.target.value))}
-                                    />
-                                    <span className="settings-slider-value">{settings.subtitleMaxLen || 40}</span>
-                                </div>
-                                <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
-                                    Менше значення = коротші субтитри (краще для Reels/Shorts)
-                                </div>
-                            </div>
-
                             {!modelExists && !downloading && (
                                 <div className="settings-control">
-                                    <div style={{ padding: '10px', backgroundColor: 'rgba(255, 170, 0, 0.1)', border: '1px solid rgba(255, 170, 0, 0.3)', borderRadius: '6px', fontSize: '12px', color: '#ffaa00' }}>
-                                        <div style={{ marginBottom: '8px' }}>Модель <b>{settings.subtitleModel}</b> не завантажена. Її необхідно завантажити для роботи транскрибації.</div>
+                                    <div style={{ padding: '12px', backgroundColor: 'rgba(255, 170, 0, 0.05)', border: '1px solid rgba(255, 170, 0, 0.2)', borderRadius: '10px', fontSize: '11px', color: '#ffaa00', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        <div style={{ lineHeight: '1.4' }}>Модель <b>{settings.subtitleModel}</b> не завантажена. Її необхідно завантажити для роботи транскрибації.</div>
                                         <button
                                             onClick={handleDownload}
-                                            style={{ background: '#ffaa00', color: '#000', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                            className="premium-button"
+                                            style={{ background: 'linear-gradient(135deg, #ffaa00 0%, #ff8800 100%)', boxShadow: '0 4px 15px rgba(255, 136, 0, 0.2)', height: '32px' }}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                <polyline points="7 10 12 15 17 10" />
+                                                <line x1="12" x2="12" y1="15" y2="3" />
+                                            </svg>
                                             Завантажити зараз
                                         </button>
                                     </div>
@@ -205,8 +247,85 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                             )}
                         </>
                     )}
+
+                    {settings.subtitleService === 'amd' && (
+                        <>
+                            {!amdInstalled ? (
+                                <div className="settings-control" style={{ marginTop: '8px' }}>
+                                    <div className="premium-button-glow">
+                                        <button
+                                            className="premium-button"
+                                            onClick={handleInstallAmd}
+                                            disabled={installingAmd}
+                                        >
+                                            {installingAmd ? (
+                                                <div className="spinner-tiny animate-spin" />
+                                            ) : (
+                                                <>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                        <polyline points="7 10 12 15 17 10" />
+                                                        <line x1="12" x2="12" y1="15" y2="3" />
+                                                    </svg>
+                                                    {t('pipeline.subtitle.amd.install')}
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="settings-control">
+                                        <label className="settings-label">{t('pipeline.subtitle.amd.language')}</label>
+                                        <input
+                                            type="text"
+                                            className="settings-input"
+                                            placeholder="uk"
+                                            value={settings.subtitleAmdLanguage || ''}
+                                            onChange={(e) => handleChange('subtitleAmdLanguage', e.target.value.toLowerCase().slice(0, 2))}
+                                        />
+                                    </div>
+                                </>
+                            )}
+                        </>
+                    )}
+
+                    {settings.subtitleService === 'standard' && (
+                        <div className="settings-control">
+                            <label className="settings-label">{t('pipeline.subtitle.max_len')}</label>
+                            <div className="settings-slider-container">
+                                <input
+                                    type="range"
+                                    min="10"
+                                    max="150"
+                                    step="1"
+                                    className="settings-slider"
+                                    value={settings.subtitleMaxLen || 40}
+                                    style={{ '--range-progress': `${((settings.subtitleMaxLen || 40) - 10) / (150 - 10) * 100}%` } as React.CSSProperties}
+                                    onChange={(e) => handleChange('subtitleMaxLen', parseInt(e.target.value))}
+                                />
+                                <span className="settings-slider-value">{settings.subtitleMaxLen || 40}</span>
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
+                                Менше значення = коротші субтитри (краще для Reels/Shorts)
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
+
+            <ConfirmModal
+                isOpen={showAmdConfirm}
+                onClose={() => setShowAmdConfirm(false)}
+                onConfirm={confirmAmdInstall}
+                title="AMD Whisper"
+                message={t('pipeline.subtitle.amd.warning')}
+                confirmText={t('common.add')}
+                cancelText={t('common.cancel')}
+                isDanger={false}
+                type="warning"
+            />
         </div>
     );
 };
+

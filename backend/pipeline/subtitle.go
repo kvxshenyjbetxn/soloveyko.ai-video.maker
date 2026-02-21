@@ -63,6 +63,32 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 
 		s.log("SUCCESS", "[LocalWhisper] Success: Subtitles saved to subtitle.srt", id, taskLabel)
 		s.emitStageStatus(id, "subtitle", "completed")
+	} else if sService == "amd" {
+		amdLang, _ := settings["subtitleAmdLanguage"].(string)
+		if amdLang == "" {
+			amdLang = pSettings.SubtitleAmdLanguage
+		}
+		if amdLang == "" {
+			amdLang = "uk"
+		}
+
+		result, err := s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, pSettings.SubtitleMaxLen)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed: %v", err), id, taskLabel)
+			s.emitStageStatus(id, "subtitle", "failed")
+			return err
+		}
+
+		// Write result to subtitle.srt
+		err = os.WriteFile(subtitleFilePath, []byte(result), 0644)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed to save subtitle: %v", err), id, taskLabel)
+			s.emitStageStatus(id, "subtitle", "failed")
+			return err
+		}
+
+		s.log("SUCCESS", "[AmdWhisper] Success: Subtitles saved to subtitle.srt", id, taskLabel)
+		s.emitStageStatus(id, "subtitle", "completed")
 	} else {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for subtitle generation", sService), id, taskLabel)
 		s.emitStageStatus(id, "subtitle", "completed")

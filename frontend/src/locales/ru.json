@@ -285,9 +285,23 @@
         "max_tokens_unlimited": "Стандарт (0)",
         "system_prompt": "Системный промт",
         "subtitle": {
+            "title": "Настройки субтитров",
             "size": "Размер шрифта",
             "color": "Цвет текста",
-            "outline": "Цвет контура"
+            "outline": "Цвет контура",
+            "service": "Сервис субтитров",
+            "max_len": "Макс. символов в строке",
+            "services": {
+                "standard": "Whisper (Стандартный)",
+                "amd": "AMD Whisper (Только Windows/AMD)"
+            },
+            "amd": {
+                "warning": "Этот сервис предназначен только для Windows и видеокарт AMD. При выборе он будет распакован в папку программы. Вы уверены, что хотите установить его?",
+                "install": "Установить AMD Whisper",
+                "language": "ID языка (напр. uk, en, ru)",
+                "models": "Доступные модели AMD",
+                "no_models": "Модели не найдены"
+            }
         },
         "hide_settings": "Скрыть настройки",
         "show_settings": "Показать настройки",
