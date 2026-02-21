@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"soloveyko/backend/bin"
+	"soloveyko/backend/utils"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -228,11 +229,10 @@ func (s *LocalWhisperService) EnsureWhisperCLI() (string, error) {
 	}
 
 	filesToExtract := []string{}
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		filesToExtract = append(filesToExtract, "whisper.zip", "ffmpeg.exe")
-	} else if runtime.GOOS == "darwin" {
-		filesToExtract = append(filesToExtract, "whisper", "ffmpeg")
-	} else {
+	default:
 		filesToExtract = append(filesToExtract, "whisper", "ffmpeg")
 	}
 
@@ -326,6 +326,7 @@ func (s *LocalWhisperService) TranscribeBase(audioFilePath string, modelName str
 	os.Remove(wavTempFile)
 
 	ffmpegCmd := exec.CommandContext(s.ctx, ffmpegExe, "-y", "-i", audioFilePath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wavTempFile)
+	utils.PrepareHiddenCmd(ffmpegCmd)
 	if err := ffmpegCmd.Run(); err != nil {
 		return "", fmt.Errorf("помилка конвертації аудіо: %w", err)
 	}
@@ -342,6 +343,7 @@ func (s *LocalWhisperService) TranscribeBase(audioFilePath string, modelName str
 	os.Remove(outputSrtBase + ".srt")
 
 	whisperCmd := exec.CommandContext(s.ctx, whisperExe, "-m", modelPath, "-l", "auto", "-f", wavTempFile, "-osrt", "-of", outputSrtBase)
+	utils.PrepareHiddenCmd(whisperCmd)
 	cmdOut, err := whisperCmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("помилка whisper (%v): %s", err, string(cmdOut))

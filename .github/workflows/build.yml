@@ -33,17 +33,13 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Universal Binary
-        run: |
-          # Встановлюємо права на виконання для бінарників перед збіркою
-          chmod +x backend/bin/* || true
-          wails build -platform darwin/universal -clean
+        run: wails build -platform darwin/universal -clean
 
       - name: Ad-hoc sign
         run: codesign --force --deep --sign - build/bin/soloveyko.app
 
       - name: Create correct .zip archive
         run: |
-          # Архівуємо ВСЮ папку .app, а не Contents
           cd build/bin
           zip -r ../${{ github.event.repository.name }}-macos-universal.zip *.app
 

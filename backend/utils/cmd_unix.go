@@ -17,3 +17,6 @@ func runHiddenCommand(name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	return cmd.Output()
 }
+
+// PrepareHiddenCmd на Unix-системах нічого не робить
+func PrepareHiddenCmd(cmd *exec.Cmd) {}
