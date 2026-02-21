@@ -141,20 +141,33 @@ func (s *LocalWhisperService) findWhisperExe(dir string) string {
 	filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() {
 			name := strings.ToLower(info.Name())
-			if name == "whisper-cli.exe" || name == "whisper.exe" || name == "main.exe" {
-				if name == "whisper-cli.exe" {
-					found = p
-					return filepath.SkipDir
+			// Windows: шукаємо .exe
+			if runtime.GOOS == "windows" {
+				if name == "whisper-cli.exe" || name == "whisper.exe" || name == "main.exe" {
+					if name == "whisper-cli.exe" {
+						found = p
+						return filepath.SkipDir
+					}
+					if found == "" {
+						found = p
+					}
 				}
-				if found == "" {
-					found = p
+			} else {
+				// Mac/Linux: шукаємо назви без розширення або з назвою whisper
+				if name == "whisper-cli" || name == "whisper" || name == "main" {
+					if name == "whisper-cli" {
+						found = p
+						return filepath.SkipDir
+					}
+					if found == "" {
+						found = p
+					}
 				}
 			}
 		}
 		return nil
 	})
 
-	// Якщо знайшли щось (пріоритетоно повертається вже знайдений cli або останній знайдений main.exe)
 	return found
 }
 
@@ -249,6 +262,10 @@ func (s *LocalWhisperService) EnsureWhisperCLI() (string, error) {
 		}
 
 		os.WriteFile(targetPath, data, 0755)
+		// Для Mac/Linux примусово встановлюємо права на виконання
+		if runtime.GOOS != "windows" {
+			os.Chmod(targetPath, 0755)
+		}
 
 		// Якщо це ZIP архів (для вінди) - розпакуємо
 		if strings.HasSuffix(name, ".zip") {

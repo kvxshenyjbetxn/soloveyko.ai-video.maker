@@ -51,6 +51,12 @@ func EnsureEngine(name string) (string, error) {
 	if _, err := io.Copy(dst, src); err != nil {
 		return "", err
 	}
+	dst.Close() // Закриваємо перед Chmod
+
+	// Примусово ставимо права на виконання для Mac/Linux
+	if runtime.GOOS != "windows" {
+		os.Chmod(targetPath, 0755)
+	}
 
 	return targetPath, nil
 }
