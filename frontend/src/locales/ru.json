@@ -37,6 +37,7 @@
         "montage_priority_normal": "Нормальный",
         "montage_cpu_cores": "Ограничение ядер (Affinity)",
         "montage_cpu_cores_desc": "Ограничивает FFmpeg определёнными ядрами. 0 = все ядра (авто). Только Windows.",
+        "under_development": "В разработке",
         "description": "Настройки производительности и лимитов одновременных операций.",
         "saving": "Сохранение..."
     },

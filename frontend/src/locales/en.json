@@ -37,6 +37,7 @@
         "montage_priority_normal": "Normal",
         "montage_cpu_cores": "CPU Core Limit (Affinity)",
         "montage_cpu_cores_desc": "Limits FFmpeg to specific CPU cores. 0 = all cores (auto). Windows only.",
+        "under_development": "Under Development",
         "description": "Performance settings and concurrent operation limits.",
         "saving": "Saving..."
     },

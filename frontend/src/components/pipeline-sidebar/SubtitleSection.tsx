@@ -187,18 +187,6 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
 
             <div className={`stage-settings-content ${settings.subtitleCollapsed || !settings.subtitleEnabled ? 'collapsed' : ''}`}>
                 <div className="settings-group">
-                    <div className="settings-control">
-                        <label className="settings-label">{t('pipeline.subtitle.service')}</label>
-                        <select
-                            className="settings-select"
-                            value={settings.subtitleService || 'standard'}
-                            onChange={(e) => handleServiceChange(e.target.value)}
-                        >
-                            {services.map(s => (
-                                <option key={s.id} value={s.id}>{s.name}</option>
-                            ))}
-                        </select>
-                    </div>
 
                     {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && (
                         <div className="settings-control">
