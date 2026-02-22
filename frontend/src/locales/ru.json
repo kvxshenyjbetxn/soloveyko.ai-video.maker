@@ -116,7 +116,7 @@
             "imageThresholdPlaceholder": "Например: 1000"
         },
         "openrouterSettings": {
-            "apikey": "API Ключ OpenRouter",
+            "apikey": "API Ключ",
             "keyNamePlaceholder": "Название ключа (напр. Основной)",
             "noKeys": "Нет добавленных ключей",
             "balance": "Баланс:",

@@ -107,7 +107,14 @@ export const Performance = () => {
                             </div>
                             <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                                 {(['standard', 'amd', 'assemblyai'] as const).map(s => (
-                                    <button key={s} onClick={() => { setSubtitleService(s); savePipelineField('subtitleService', s); }} style={btnStyle(subtitleService === s)}>
+                                    <button key={s} onClick={() => { 
+                                        setSubtitleService(s); 
+                                        savePipelineField('subtitleService', s); 
+                                        // Якщо AssemblyAI, форсуємо 5 у семафорі
+                                        if (s === 'assemblyai') {
+                                            handleSubtitleMaxChange(5);
+                                        }
+                                    }} style={btnStyle(subtitleService === s)}>
                                         {s === 'standard' ? 'Whisper' : s === 'amd' ? 'AMD' : 'AssemblyAI'}
                                     </button>
                                 ))}
@@ -117,23 +124,41 @@ export const Performance = () => {
                         <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: 0, opacity: 0.5 }} />
 
                         {/* Subtitle Concurrency Slider */}
-                        <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                    <span style={{ fontSize: '14px', fontWeight: 600 }}>{t('performanceTab.subtitle_max_concurrency')}</span>
-                                    <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', maxWidth: '400px', lineHeight: '1.4' }}>{t('performanceTab.subtitle_max_concurrency_desc')}</span>
+                        {subtitleService === 'assemblyai' ? (
+                            <div style={{ 
+                                padding: '15px', 
+                                background: 'rgba(0, 150, 255, 0.05)', 
+                                border: '1px solid rgba(0, 150, 255, 0.2)', 
+                                borderRadius: '8px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-primary)' }}>Fixed Limit</span>
+                                    <span style={{ fontSize: '11px', opacity: 0.7 }}>AssemblyAI has a server-side limit of 5 concurrent processes.</span>
                                 </div>
-                                <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)', minWidth: '30px', textAlign: 'right' }}>{subtitleMax}</div>
+                                <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)' }}>5</div>
                             </div>
-                            <input type="range" min="1" max="5" className="settings-slider" value={subtitleMax}
-                                onChange={(e) => handleSubtitleMaxChange(parseInt(e.target.value))}
-                                style={{ width: '100%', margin: 0, '--range-progress': `${subtitleProgress}%` } as React.CSSProperties} />
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', padding: '0 2px' }}>
-                                {[1, 2, 3, 4, 5].map(v => (
-                                    <span key={v} style={{ fontSize: '10px', color: subtitleMax === v ? 'var(--accent-primary)' : 'var(--text-tertiary)', fontWeight: subtitleMax === v ? 700 : 400, transition: 'all 0.2s ease' }}>{v}</span>
-                                ))}
+                        ) : (
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span style={{ fontSize: '14px', fontWeight: 600 }}>{t('performanceTab.subtitle_max_concurrency')}</span>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', maxWidth: '400px', lineHeight: '1.4' }}>{t('performanceTab.subtitle_max_concurrency_desc')}</span>
+                                    </div>
+                                    <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)', minWidth: '30px', textAlign: 'right' }}>{subtitleMax}</div>
+                                </div>
+                                <input type="range" min="1" max="5" className="settings-slider" value={subtitleMax}
+                                    onChange={(e) => handleSubtitleMaxChange(parseInt(e.target.value))}
+                                    style={{ width: '100%', margin: 0, '--range-progress': `${subtitleProgress}%` } as React.CSSProperties} />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', padding: '0 2px' }}>
+                                    {[1, 2, 3, 4, 5].map(v => (
+                                        <span key={v} style={{ fontSize: '10px', color: subtitleMax === v ? 'var(--accent-primary)' : 'var(--text-tertiary)', fontWeight: subtitleMax === v ? 700 : 400, transition: 'all 0.2s ease' }}>{v}</span>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
 

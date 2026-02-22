@@ -150,6 +150,7 @@ function App() {
             case 'settings.api.image.pollinationsai': return <PollinationsAI />;
             case 'settings.api.image.googler': return <Googler />;
             case 'settings.api.image.elevenlabsimage': return <ElevenLabsImage />;
+            case 'settings.api.assemblyai': return <AssemblyAI />;
             case 'settings.performance': return <Performance />;
             case 'settings.templates': return <Templates />;
 

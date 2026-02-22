@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useI18n } from '../../../../contexts/I18nContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
+import { useServices } from '../../../../contexts/ServiceContext';
 import '../../general.css';
 
 export const ElevenLabsUA = () => {
@@ -8,31 +9,38 @@ export const ElevenLabsUA = () => {
     const { accentColor } = useTheme();
 
     // @ts-ignore
-    const { GetElevenLabsUAKeys, SaveElevenLabsUAKeys } = window.go.main.App;
+    const { GetElevenLabsUAKeys, SaveElevenLabsUAKeys, SaveElevenLabsUAAlertThreshold } = window.go.main.App;
+    const { elevenLabsUABalances, refreshElevenLabsUABalance, loadingElevenLabsUA, elevenLabsUAThreshold, setElevenLabsUAThreshold } = useServices();
 
     const [keys, setKeys] = useState<any[]>([]);
     const [newName, setNewName] = useState('');
     const [newKey, setNewKey] = useState('');
+    const [threshold, setThreshold] = useState<string>('0');
     const [isLoaded, setIsLoaded] = useState(false);
+    const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     useEffect(() => {
         const loadKey = async () => {
-            if (GetElevenLabsUAKeys) {
-                const uaKeys = await GetElevenLabsUAKeys();
-                setKeys(uaKeys || []);
-            }
+            const uaKeys = await GetElevenLabsUAKeys();
+            setKeys(uaKeys || []);
+            setThreshold(elevenLabsUAThreshold.toString());
             setIsLoaded(true);
         };
         loadKey();
-    }, []);
+    }, [elevenLabsUAThreshold]);
 
     useEffect(() => {
         if (!isLoaded) return;
         const timer = setTimeout(() => {
-            if (SaveElevenLabsUAKeys) SaveElevenLabsUAKeys(keys);
+            SaveElevenLabsUAKeys(keys);
+            const numThreshold = parseFloat(threshold) || 0;
+            if (numThreshold !== elevenLabsUAThreshold) {
+                SaveElevenLabsUAAlertThreshold(numThreshold);
+                setElevenLabsUAThreshold(numThreshold);
+            }
         }, 1000);
         return () => clearTimeout(timer);
-    }, [keys, isLoaded]);
+    }, [keys, threshold, isLoaded]);
 
     const handleAddKey = () => {
         if (!newName.trim() || !newKey.trim()) return;
@@ -47,6 +55,21 @@ export const ElevenLabsUA = () => {
         setKeys(keys.filter(k => k.id !== id));
     };
 
+    const handleCheckBalance = async () => {
+        setStatusMsg(null);
+        if (keys.length === 0) return;
+        await SaveElevenLabsUAKeys(keys);
+        try {
+            await refreshElevenLabsUABalance();
+            setStatusMsg({ type: 'success', text: t('image.success') || 'Updated' });
+            setTimeout(() => setStatusMsg(null), 3000);
+        } catch (err: any) {
+            setStatusMsg({ type: 'error', text: err?.message || 'Error' });
+        }
+    };
+
+    const totalCharacters = Object.values(elevenLabsUABalances).reduce((acc: number, b) => acc + (b || 0), 0);
+
     return (
         <div className="content-wrapper animate-fade" style={{
             height: '100%',
@@ -57,6 +80,20 @@ export const ElevenLabsUA = () => {
             <div className="settings-container" style={{ maxWidth: '1000px', paddingBottom: '40px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
                     <h2 className="settings-title" style={{ margin: 0 }}>ElevenLabs UA</h2>
+                    {Object.keys(elevenLabsUABalances).length > 0 && (
+                        <div style={{
+                            padding: '10px 20px',
+                            borderRadius: '12px',
+                            background: 'rgba(76, 175, 80, 0.1)',
+                            border: '1px solid rgba(76, 175, 80, 0.2)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-end'
+                        }}>
+                            <span style={{ fontSize: '0.75em', opacity: 0.6, textTransform: 'uppercase' }}>{t('api.elevenlabsuaSettings.totalBalance') || 'Загальний баланс'}</span>
+                            <span style={{ fontSize: '1.4em', fontWeight: 'bold', color: '#4caf50' }}>{totalCharacters.toLocaleString()}</span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '30px' }}>
@@ -141,6 +178,13 @@ export const ElevenLabsUA = () => {
                                         <span style={{ fontSize: '0.8em', opacity: 0.4 }}>{k.key.substring(0, 5)}...{k.key.substring(k.key.length - 4)}</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                        <div style={{
+                                            color: (typeof elevenLabsUABalances[k.id] === 'number' && elevenLabsUAThreshold > 0 && elevenLabsUABalances[k.id]! < elevenLabsUAThreshold) ? '#ff5252' : '#4caf50',
+                                            fontWeight: '600',
+                                            fontSize: '0.9em'
+                                        }}>
+                                            {typeof elevenLabsUABalances[k.id] === 'number' ? `${elevenLabsUABalances[k.id]!.toLocaleString()} chars` : '...'}
+                                        </div>
                                         <button
                                             onClick={() => handleRemoveKey(k.id)}
                                             style={{ background: 'none', border: 'none', color: '#ff5252', cursor: 'pointer', opacity: 0.6, fontSize: '1.2em' }}
@@ -151,6 +195,58 @@ export const ElevenLabsUA = () => {
                                 </div>
                             ))
                         )}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                            onClick={handleCheckBalance}
+                            disabled={loadingElevenLabsUA || keys.length === 0}
+                            style={{
+                                padding: '10px 20px',
+                                borderRadius: '8px',
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                color: '#fff',
+                                cursor: 'pointer',
+                                fontWeight: '500',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                opacity: (loadingElevenLabsUA || keys.length === 0) ? 0.5 : 1
+                            }}
+                        >
+                            {loadingElevenLabsUA ? <div className="spinner-small" /> : <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>}
+                            {t('settings.voice.fetchBalance')}
+                        </button>
+                    </div>
+
+                    {statusMsg && (
+                        <div style={{ marginTop: '10px', color: statusMsg.type === 'success' ? '#4caf50' : '#ff5252', fontSize: '0.85em', textAlign: 'right', fontWeight: '500' }}>
+                            {statusMsg.text}
+                        </div>
+                    )}
+                </div>
+
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '30px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '20px', fontSize: '1.1em', opacity: 0.9 }}>{t('settings.voice.alertThreshold')}</h3>
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                        <input
+                            type="number"
+                            className="premium-input"
+                            style={{
+                                flex: 1,
+                                padding: '12px 16px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                background: 'rgba(0, 0, 0, 0.3)',
+                                color: '#fff',
+                                outline: 'none',
+                                fontSize: '0.95em'
+                            }}
+                            value={threshold}
+                            onChange={(e) => setThreshold(e.target.value)}
+                            placeholder={t('settings.voice.alertThresholdPlaceholder')}
+                        />
                     </div>
                 </div>
 
@@ -171,6 +267,10 @@ export const ElevenLabsUA = () => {
                     </div>
                 </div>
             </div>
+            <style>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+                .spinner-small { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; borderRadius: 50%; animation: spin 0.8s linear infinite; }
+            `}</style>
         </div>
     );
 };

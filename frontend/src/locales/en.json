@@ -116,7 +116,7 @@
             "imageThresholdPlaceholder": "e.g. 1000"
         },
         "openrouterSettings": {
-            "apikey": "OpenRouter API Key",
+            "apikey": "API Key",
             "keyNamePlaceholder": "Key name (e.g. Main)",
             "noKeys": "No keys added",
             "balance": "Balance:",

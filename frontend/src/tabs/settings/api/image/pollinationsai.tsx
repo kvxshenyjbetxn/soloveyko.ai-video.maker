@@ -91,7 +91,10 @@ export const PollinationsAI = () => {
 
     return (
         <div className="content-wrapper animate-fade" style={{ overflowY: 'auto' }}>
-            <div className="settings-container">
+            <div className="settings-container" style={{ maxWidth: '1000px', paddingBottom: '40px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+                    <h2 className="settings-title" style={{ margin: 0 }}>Pollinations AI</h2>
+                </div>
 
                 {/* API Key */}
                 <div className="settings-section">

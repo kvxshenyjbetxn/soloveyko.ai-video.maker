@@ -40,27 +40,6 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
         return ((val - min) / (max - min)) * 100;
     };
 
-    const selectStyle: React.CSSProperties = {
-        width: '100%',
-        padding: '8px 12px',
-        borderRadius: '8px',
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid var(--border-color)',
-        color: 'var(--text-primary)',
-        outline: 'none',
-        fontSize: '12px',
-        cursor: 'pointer',
-        appearance: 'none',
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'right 10px center'
-    };
-
-    const optionStyle = {
-        background: '#1a1a1a',
-        color: 'white'
-    };
-
     return (
         <div className={`pipeline-stage-container ${settings.montageCollapsed || !settings.montageEnabled ? 'is-collapsed' : ''}`}>
             <div
@@ -112,156 +91,156 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
             </div>
 
             <div className={`stage-settings-content ${settings.montageCollapsed || !settings.montageEnabled ? 'collapsed' : ''}`}>
-                <div className="settings-group" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className="settings-group">
 
                     {/* Resolution & FPS Row */}
-                    <div style={{ display: 'flex', gap: '12px' }}>
-                        <div className="setting-item" style={{ flex: 1 }}>
-                            <label className="setting-label" style={{ marginBottom: '8px', display: 'block' }}>
+                    <div className="settings-row">
+                        <div className="settings-control" style={{ flex: 1 }}>
+                            <label className="settings-label">
                                 {t('pipeline.montage.resolution')}
                             </label>
                             <select
-                                style={selectStyle}
+                                className="settings-select"
                                 value={settings.montageResolution || '1080p'}
                                 onChange={(e) => handleChange('montageResolution', e.target.value)}
                             >
                                 {RESOLUTIONS.map(res => (
-                                    <option key={res} value={res} style={optionStyle}>{res}</option>
+                                    <option key={res} value={res}>{res}</option>
                                 ))}
                             </select>
                         </div>
-                        <div className="setting-item" style={{ flex: 1 }}>
-                            <label className="setting-label" style={{ marginBottom: '8px', display: 'block' }}>
+                        <div className="settings-control" style={{ flex: 1 }}>
+                            <label className="settings-label">
                                 {t('pipeline.montage.fps')}
                             </label>
                             <select
-                                style={selectStyle}
+                                className="settings-select"
                                 value={settings.montageFPS || 30}
                                 onChange={(e) => handleChange('montageFPS', parseInt(e.target.value))}
                             >
                                 {FPS_OPTIONS.map(fps => (
-                                    <option key={fps} value={fps} style={optionStyle}>{fps} FPS</option>
+                                    <option key={fps} value={fps}>{fps} FPS</option>
                                 ))}
                             </select>
                         </div>
                     </div>
 
                     {/* Sway (Rocking) */}
-                    <div className="setting-item">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <label className="setting-label">{t('pipeline.montage.sway')}</label>
-                            <span className="setting-value">{(settings.montageSwayFactor || 1.0).toFixed(1)}x</span>
+                    <div className="settings-control">
+                        <label className="settings-label">{t('pipeline.montage.sway')}</label>
+                        <div className="settings-slider-container">
+                            <input
+                                type="range"
+                                min="0"
+                                max="3"
+                                step="0.1"
+                                className="settings-slider"
+                                value={settings.montageSwayFactor || 1.0}
+                                onChange={(e) => handleChange('montageSwayFactor', parseFloat(e.target.value))}
+                                style={{ '--range-progress': `${getProgress(settings.montageSwayFactor || 1.0, 0, 3)}%` } as React.CSSProperties}
+                            />
+                            <span className="settings-slider-value">{(settings.montageSwayFactor || 1.0).toFixed(1)}x</span>
                         </div>
-                        <input
-                            type="range"
-                            min="0"
-                            max="3"
-                            step="0.1"
-                            className="custom-slider"
-                            value={settings.montageSwayFactor || 1.0}
-                            onChange={(e) => handleChange('montageSwayFactor', parseFloat(e.target.value))}
-                            style={{ '--range-progress': `${getProgress(settings.montageSwayFactor || 1.0, 0, 3)}%` } as React.CSSProperties}
-                        />
                     </div>
 
                     {/* Zoom Intensity */}
-                    <div className="setting-item">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <label className="setting-label">{t('pipeline.montage.zoom')}</label>
-                            <span className="setting-value">{(settings.montageZoomFactor || 1.0).toFixed(1)}x</span>
+                    <div className="settings-control">
+                        <label className="settings-label">{t('pipeline.montage.zoom')}</label>
+                        <div className="settings-slider-container">
+                            <input
+                                type="range"
+                                min="0"
+                                max="3"
+                                step="0.1"
+                                className="settings-slider"
+                                value={settings.montageZoomFactor || 1.0}
+                                onChange={(e) => handleChange('montageZoomFactor', parseFloat(e.target.value))}
+                                style={{ '--range-progress': `${getProgress(settings.montageZoomFactor || 1.0, 0, 3)}%` } as React.CSSProperties}
+                            />
+                            <span className="settings-slider-value">{(settings.montageZoomFactor || 1.0).toFixed(1)}x</span>
                         </div>
-                        <input
-                            type="range"
-                            min="0"
-                            max="3"
-                            step="0.1"
-                            className="custom-slider"
-                            value={settings.montageZoomFactor || 1.0}
-                            onChange={(e) => handleChange('montageZoomFactor', parseFloat(e.target.value))}
-                            style={{ '--range-progress': `${getProgress(settings.montageZoomFactor || 1.0, 0, 3)}%` } as React.CSSProperties}
-                        />
                     </div>
 
                     {/* Internal Upscale Factor */}
-                    <div className="setting-item">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <label className="setting-label">{t('pipeline.montage.internal_upscale')}</label>
-                            <span className="setting-value">{(settings.montageUpscaleFactor || 2.0).toFixed(1)}x</span>
+                    <div className="settings-control">
+                        <label className="settings-label">{t('pipeline.montage.internal_upscale')}</label>
+                        <div className="settings-slider-container">
+                            <input
+                                type="range"
+                                min="1.0"
+                                max="3.0"
+                                step="0.1"
+                                className="settings-slider"
+                                value={settings.montageUpscaleFactor || 2.0}
+                                onChange={(e) => handleChange('montageUpscaleFactor', parseFloat(e.target.value))}
+                                style={{ '--range-progress': `${getProgress(settings.montageUpscaleFactor || 2.0, 1.0, 3.0)}%` } as React.CSSProperties}
+                            />
+                            <span className="settings-slider-value">{(settings.montageUpscaleFactor || 2.0).toFixed(1)}x</span>
                         </div>
-                        <input
-                            type="range"
-                            min="1.0"
-                            max="3.0"
-                            step="0.1"
-                            className="custom-slider"
-                            value={settings.montageUpscaleFactor || 2.0}
-                            onChange={(e) => handleChange('montageUpscaleFactor', parseFloat(e.target.value))}
-                            style={{ '--range-progress': `${getProgress(settings.montageUpscaleFactor || 2.0, 1.0, 3.0)}%` } as React.CSSProperties}
-                        />
                     </div>
 
                     {/* Transition Duration */}
-                    <div className="setting-item">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <label className="setting-label">{t('pipeline.montage.transitions')}</label>
-                            <span className="setting-value">{(settings.montageTransitionDuration || 0.5).toFixed(2)}s</span>
+                    <div className="settings-control">
+                        <label className="settings-label">{t('pipeline.montage.transitions')}</label>
+                        <div className="settings-slider-container">
+                            <input
+                                type="range"
+                                min="0.1"
+                                max="2"
+                                step="0.05"
+                                className="settings-slider"
+                                value={settings.montageTransitionDuration || 0.5}
+                                onChange={(e) => handleChange('montageTransitionDuration', parseFloat(e.target.value))}
+                                style={{ '--range-progress': `${getProgress(settings.montageTransitionDuration || 0.5, 0.1, 2)}%` } as React.CSSProperties}
+                            />
+                            <span className="settings-slider-value">{(settings.montageTransitionDuration || 0.5).toFixed(2)}s</span>
                         </div>
-                        <input
-                            type="range"
-                            min="0.1"
-                            max="2"
-                            step="0.05"
-                            className="custom-slider"
-                            value={settings.montageTransitionDuration || 0.5}
-                            onChange={(e) => handleChange('montageTransitionDuration', parseFloat(e.target.value))}
-                            style={{ '--range-progress': `${getProgress(settings.montageTransitionDuration || 0.5, 0.1, 2)}%` } as React.CSSProperties}
-                        />
                     </div>
 
                     {/* Transition Effect Selection */}
-                    <div className="setting-item">
-                        <label className="setting-label" style={{ marginBottom: '8px', display: 'block' }}>
+                    <div className="settings-control">
+                        <label className="settings-label">
                             {t('pipeline.montage.transition_effect')}
                         </label>
                         <select
-                            style={selectStyle}
+                            className="settings-select"
                             value={settings.montageTransitionEffect || 'fade'}
                             onChange={(e) => handleChange('montageTransitionEffect', e.target.value)}
                         >
                             {TRANSITION_EFFECTS.map(effect => (
-                                <option key={effect} value={effect} style={optionStyle}>{effect}</option>
+                                <option key={effect} value={effect}>{effect}</option>
                             ))}
                         </select>
                     </div>
 
                     {/* Encoding Preset */}
-                    <div className="setting-item">
-                        <label className="setting-label" style={{ marginBottom: '8px', display: 'block' }}>
+                    <div className="settings-control">
+                        <label className="settings-label">
                             {t('pipeline.montage.encoding_preset')}
                         </label>
                         <select
-                            style={selectStyle}
+                            className="settings-select"
                             value={settings.montageEncodingPreset || 'medium'}
                             onChange={(e) => handleChange('montageEncodingPreset', e.target.value)}
                         >
                             {ENCODING_PRESETS.map(preset => (
-                                <option key={preset} value={preset} style={optionStyle}>{preset}</option>
+                                <option key={preset} value={preset}>{preset}</option>
                             ))}
                         </select>
                     </div>
 
                     {/* Bitrate */}
-                    <div className="setting-item">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <label className="setting-label">{t('pipeline.montage.bitrate')}</label>
-                            <span className="setting-value">{settings.montageBitrate || 15} Mbps</span>
+                    <div className="settings-control">
+                        <label className="settings-label">{t('pipeline.montage.bitrate')}</label>
+                        <div className="settings-slider-container">
+                            <input
+                                type="range" min="1" max="50" step="1" className="settings-slider"
+                                value={settings.montageBitrate || 15}
+                                onChange={(e) => handleChange('montageBitrate', parseInt(e.target.value))}
+                                style={{ '--range-progress': `${getProgress(settings.montageBitrate || 15, 1, 50)}%` } as React.CSSProperties}
+                            />
+                            <span className="settings-slider-value">{settings.montageBitrate || 15} Mbps</span>
                         </div>
-                        <input
-                            type="range" min="1" max="50" step="1" className="custom-slider"
-                            value={settings.montageBitrate || 15}
-                            onChange={(e) => handleChange('montageBitrate', parseInt(e.target.value))}
-                            style={{ '--range-progress': `${getProgress(settings.montageBitrate || 15, 1, 50)}%` } as React.CSSProperties}
-                        />
                     </div>
 
                 </div>
