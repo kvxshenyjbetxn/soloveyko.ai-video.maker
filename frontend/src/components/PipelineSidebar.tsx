@@ -296,6 +296,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.imageCollapsed === undefined) s.imageCollapsed = true;
                 if (s.montageCollapsed === undefined) s.montageCollapsed = true;
                 if (s.montageEnabled === undefined) { s.montageEnabled = false; updated = true; }
+                if (s.montageIntroVideoEnabled === undefined) { s.montageIntroVideoEnabled = false; updated = true; }
+                if (s.montageIntroVideoPath === undefined) { s.montageIntroVideoPath = ""; updated = true; }
 
                 if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
                 if (s.rewriteTemperature === undefined) s.rewriteTemperature = 0.7;
@@ -460,7 +462,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         const montageFields = [
             'montageResolution', 'montageFPS', 'montageSwayFactor', 'montageZoomFactor',
             'montageUpscaleFactor', 'montageTransitionDuration', 'montageTransitionEffect',
-            'montageEncodingPreset', 'montageBitrate'
+            'montageEncodingPreset', 'montageBitrate', 'montageIntroVideoEnabled', 'montageIntroVideoPath'
         ];
         montageFields.forEach(f => { if (settings[f] !== undefined) templateData.montage[f] = settings[f]; });
 

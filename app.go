@@ -884,6 +884,16 @@ func (a *App) SelectImage() (string, error) {
 	})
 }
 
+// SelectVideo opens a file dialog to select a video file
+func (a *App) SelectVideo() (string, error) {
+	return wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{
+		Title: "Select Intro Video",
+		Filters: []wruntime.FileFilter{
+			{DisplayName: "Videos", Pattern: "*.mp4;*.mov;*.avi;*.mkv;*.webm"},
+		},
+	})
+}
+
 // GetImageAsBase64 returns base64 content of an image file for preview
 func (a *App) GetImageAsBase64(path string) (string, error) {
 	return utils.GetImageAsBase64(path)

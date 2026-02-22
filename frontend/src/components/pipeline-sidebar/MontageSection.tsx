@@ -92,6 +92,87 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
 
             <div className={`stage-settings-content ${settings.montageCollapsed || !settings.montageEnabled ? 'collapsed' : ''}`}>
                 <div className="settings-group">
+                    {/* Intro Video Setting */}
+                    <div className="settings-control">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.montage.intro_video_enabled')}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.montageIntroVideoEnabled || false}
+                                    onChange={(e) => handleChange('montageIntroVideoEnabled', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {settings.montageIntroVideoEnabled && (
+                        <div className="settings-control">
+                            <div
+                                onClick={async () => {
+                                    try {
+                                        const path = await (window as any).go.main.App.SelectVideo();
+                                        if (path) {
+                                            handleChange('montageIntroVideoPath', path);
+                                        }
+                                    } catch (err) {
+                                        console.error(err);
+                                    }
+                                }}
+                                style={{
+                                    width: '100%',
+                                    padding: '12px',
+                                    borderRadius: '10px',
+                                    border: settings.montageIntroVideoPath ? '1px solid var(--accent-color)' : '1px dashed var(--bg-tertiary)',
+                                    backgroundColor: settings.montageIntroVideoPath ? 'rgba(var(--accent-rgb), 0.05)' : 'var(--bg-secondary)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    position: 'relative',
+                                    overflow: 'hidden',
+                                    minHeight: '80px'
+                                }}
+                            >
+                                <div style={{
+                                    fontSize: '20px',
+                                    opacity: settings.montageIntroVideoPath ? 1 : 0.5,
+                                    filter: settings.montageIntroVideoPath ? 'drop-shadow(0 0 8px var(--accent-color))' : 'none',
+                                }}>
+                                    {settings.montageIntroVideoPath ? '🎬' : '📁'}
+                                </div>
+                                <div style={{
+                                    fontSize: '11px',
+                                    fontWeight: '600',
+                                    color: settings.montageIntroVideoPath ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    textAlign: 'center'
+                                }}>
+                                    {settings.montageIntroVideoPath
+                                        ? t('pipeline.montage.intro_video_change')
+                                        : t('pipeline.montage.intro_video_select')}
+                                </div>
+                                {settings.montageIntroVideoPath && (
+                                    <div style={{
+                                        fontSize: '9px',
+                                        color: 'var(--text-tertiary)',
+                                        maxWidth: '100%',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        opacity: 0.8
+                                    }}>
+                                        {settings.montageIntroVideoPath.split(/[\\/]/).pop()}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ margin: '12px 0', borderTop: '1px solid var(--border-color)', opacity: 0.5 }} />
 
                     {/* Resolution & FPS Row */}
                     <div className="settings-row">

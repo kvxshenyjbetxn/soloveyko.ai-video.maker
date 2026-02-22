@@ -273,6 +273,9 @@
             "parallel_streams": "Parallel Rendering Streams",
             "threads_per_process": "CPU Cores per FFmpeg Process",
             "threads_auto": "auto",
+            "intro_video_enabled": "Intro Video",
+            "intro_video_select": "Select Video",
+            "intro_video_change": "Change Video",
             "empty_description": "Here you can configure effects and transitions for the final video."
         },
         "image": {

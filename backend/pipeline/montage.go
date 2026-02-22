@@ -139,6 +139,15 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if upFactor < 1.0 {
 		upFactor = 1.0
 	}
+
+	// Overrides from settings map (e.g. from templates)
+	if val, ok := settings["montageIntroVideoEnabled"].(bool); ok {
+		pSettings.MontageIntroVideoEnabled = val
+	}
+	if val, ok := settings["montageIntroVideoPath"].(string); ok {
+		pSettings.MontageIntroVideoPath = val
+	}
+
 	upW := int(math.Round(float64(baseW) * upFactor))
 	upH := int(math.Round(float64(baseH) * upFactor))
 
@@ -160,6 +169,38 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 	var inputSpecs []inputSpec
 	var filterParts []string
+
+	introIdx := -1
+	introDur := 0.0
+	if pSettings.MontageIntroVideoEnabled && pSettings.MontageIntroVideoPath != "" {
+		if _, err := os.Stat(pSettings.MontageIntroVideoPath); err == nil {
+			introIdx = 0
+			introDur, _ = s.getDuration(ffprobePath, pSettings.MontageIntroVideoPath)
+			hasA := s.hasAudio(ffprobePath, pSettings.MontageIntroVideoPath)
+			inputSpecs = append(inputSpecs, inputSpec{loop: false, path: pSettings.MontageIntroVideoPath})
+
+			// Process intro video to match output format (Premium Blurred Background Fit)
+			vFilter := fmt.Sprintf(
+				"[0:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,boxblur=20:10[bg]; "+
+					"[0:v]scale=%d:%d:force_original_aspect_ratio=decrease[fg]; "+
+					"[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d[v_intro]",
+				baseW, baseH, baseW, baseH, baseW, baseH, fps)
+			aFilter := ""
+			if hasA {
+				aFilter = "[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a_intro]"
+			} else {
+				// No audio in intro? Generate silence
+				aFilter = fmt.Sprintf("anullsrc=r=44100:cl=stereo:d=%.6f,aformat=sample_fmts=fltp[a_intro]", introDur)
+			}
+			filterParts = append(filterParts, vFilter+"; "+aFilter)
+		}
+	}
+
+	visualOffset := 0
+	if introIdx != -1 {
+		visualOffset = 1
+	}
+
 	effectiveDurs := make([]float64, numFiles)
 
 	for i, relPath := range visualFiles {
@@ -167,7 +208,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		isVideo := videoExts[ext]
 		inputSpecs = append(inputSpecs, inputSpec{loop: !isVideo, path: relPath})
 
-		vIn := fmt.Sprintf("[%d:v]", i)
+		vIn := fmt.Sprintf("[%d:v]", i+visualOffset)
 		vOut := fmt.Sprintf("v%d_final", i)
 
 		if isVideo {
@@ -244,17 +285,52 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	// Subtitles
-	finalV := lastV
+	montageV := lastV
 	assPath := filepath.Join(finalDir, "subtitle.ass")
 	if _, err := os.Stat(assPath); err == nil {
-		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles='subtitle.ass'[v_sub]", finalV))
-		finalV = "v_sub"
+		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles='subtitle.ass'[v_sub]", montageV))
+		montageV = "v_sub"
 	}
 
-	// Final trim to exact audio duration
+	// Montage trim
 	filterParts = append(filterParts, fmt.Sprintf(
-		"[%s]trim=duration=%.6f,setpts=PTS-STARTPTS[v_final]", finalV, audioDur,
+		"[%s]trim=duration=%.6f,setpts=PTS-STARTPTS[v_montage_final]", montageV, audioDur,
 	))
+
+	finalV := "v_montage_final"
+	finalA := ""
+	audioIdx := len(inputSpecs) // voice.mp3 index
+	actualTransDur := 0.0
+
+	if introIdx != -1 {
+		// Prepare voice.mp3 audio to match intro audio
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[%d:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a_voice_res]",
+			audioIdx,
+		))
+
+		// Use transition if both parts are long enough
+		if transDur > 0 && introDur > transDur && audioDur > transDur {
+			actualTransDur = transDur
+			// Video transition (xfade)
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[v_intro][v_montage_final]xfade=transition=%s:duration=%.3f:offset=%.3f[v_total]",
+				transEffect, transDur, introDur-transDur,
+			))
+			// Audio transition (acrossfade)
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[a_intro][a_voice_res]acrossfade=d=%.3f[a_total]",
+				transDur,
+			))
+			finalV = "v_total"
+			finalA = "a_total"
+		} else {
+			// Fallback to simple concat
+			filterParts = append(filterParts, "[v_intro][v_montage_final]concat=n=2:v=1:a=0[v_total]; [a_intro][a_voice_res]concat=n=2:v=0:a=1[a_total]")
+			finalV = "v_total"
+			finalA = "a_total"
+		}
+	}
 
 	// Write filter script
 	fullGraph := strings.Join(filterParts, ";")
@@ -265,7 +341,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	// 6. Build FFmpeg command
 	bitrateStr := fmt.Sprintf("%dM", pSettings.MontageBitrate)
 	bufSize := fmt.Sprintf("%dM", pSettings.MontageBitrate*2)
-	audioIdx := numFiles
 
 	var cmdArgs []string
 	cmdArgs = append(cmdArgs, "-y", "-hide_banner", "-loglevel", "info", "-stats")
@@ -285,13 +360,17 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 	cmdArgs = append(cmdArgs, "-thread_queue_size", "4096", "-i", "voice.mp3")
 
-	// Filter + map
+	// Map
 	cmdArgs = append(cmdArgs,
 		"-filter_complex_script", "montage_script.txt",
-		"-map", "[v_final]",
-		"-map", fmt.Sprintf("%d:a", audioIdx),
-		"-c:v", videoCodec,
+		"-map", "["+finalV+"]",
 	)
+	if finalA != "" {
+		cmdArgs = append(cmdArgs, "-map", "["+finalA+"]")
+	} else {
+		cmdArgs = append(cmdArgs, "-map", fmt.Sprintf("%d:a", audioIdx))
+	}
+	cmdArgs = append(cmdArgs, "-c:v", videoCodec)
 
 	// Codec-specific quality args
 	switch videoCodec {
@@ -350,6 +429,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		return 0, nil, nil
 	})
 
+	totalDur := introDur + audioDur - actualTransDur
 	var lastPercent float64 = -1
 	lastLogTime := time.Now()
 
@@ -365,7 +445,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				m, _ := strconv.Atoi(timeMatch[2])
 				sVal, _ := strconv.ParseFloat(timeMatch[3], 64)
 				currentTime := float64(h*3600+m*60) + sVal
-				percent := math.Min((currentTime/audioDur)*100, 100)
+				percent := math.Min((currentTime/totalDur)*100, 100)
 				s.emitStageStatus(id, "montage", "running", fmt.Sprintf("%.1f%%", percent))
 				if s.OnTaskStatus != nil {
 					s.OnTaskStatus(id, "running", 80+int(percent*0.2))
@@ -415,6 +495,16 @@ func (s *PipelineService) getDuration(ffprobePath, path string) (float64, error)
 	var dur float64
 	_, err = fmt.Sscanf(strings.TrimSpace(string(out)), "%f", &dur)
 	return dur, err
+}
+
+func (s *PipelineService) hasAudio(ffprobePath, path string) bool {
+	if ffprobePath == "" {
+		return false
+	}
+	cmd := exec.Command(ffprobePath, "-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_type",
+		"-of", "csv=p=0", path)
+	out, _ := cmd.Output()
+	return strings.TrimSpace(string(out)) == "audio"
 }
 
 // getVideoSizeGB returns the size of the video file in GB using ffprobe.

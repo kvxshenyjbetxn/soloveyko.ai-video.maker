@@ -137,6 +137,8 @@ type PipelineSettings struct {
 	MontageThreadsPerProcess  int     `json:"montageThreadsPerProcess"`
 	MontageProcessPriority    string  `json:"montageProcessPriority"`
 	MontageCPUCores           int     `json:"montageCPUCores"`
+	MontageIntroVideoEnabled  bool    `json:"montageIntroVideoEnabled"`
+	MontageIntroVideoPath     string  `json:"montageIntroVideoPath,omitempty"`
 }
 
 type Settings struct {

@@ -278,6 +278,9 @@
       "parallel_streams": "Паралельних потоків",
       "threads_per_process": "Ядер на процес FFmpeg",
       "threads_auto": "авто",
+      "intro_video_enabled": "Відео на початку",
+      "intro_video_select": "Обрати відео",
+      "intro_video_change": "Змінити відео",
       "empty_description": "Тут ви можете налаштувати ефекти та переходи для фінального відео."
     },
     "image": {
