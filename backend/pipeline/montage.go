@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"soloveyko/backend/utils"
 	"strconv"
 	"strings"
@@ -57,9 +58,25 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if err != nil {
 		return fmt.Errorf("failed to ensure ffmpeg: %v", err)
 	}
-	ffprobePath, err := utils.EnsureEngine("ffprobe")
-	if err != nil {
-		return fmt.Errorf("failed to ensure ffprobe: %v", err)
+
+	// Try to find ffprobe in user's home bin first, then fallback to EnsureEngine
+	ffprobePath := ""
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		binaryName := "ffprobe"
+		if runtime.GOOS == "windows" {
+			binaryName += ".exe"
+		}
+		customPath := filepath.Join(homeDir, "bin", binaryName)
+		if _, err := os.Stat(customPath); err == nil {
+			ffprobePath = customPath
+		}
+	}
+
+	if ffprobePath == "" {
+		ffprobePath, err = utils.EnsureEngine("ffprobe")
+		if err != nil {
+			return fmt.Errorf("failed to ensure ffprobe: %v", err)
+		}
 	}
 
 	// 2. Identify inputs
@@ -373,7 +390,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	s.log("SUCCESS", "[Pipeline] Montage complete! Video saved: output.mp4", id, taskLabel)
-	s.emitStageStatus(id, "montage", "completed")
+
+	// Get video size in GB
+	videoWeight := s.getVideoSizeGB(ffprobePath, filepath.Join(finalDir, "output.mp4"))
+
+	s.emitStageStatus(id, "montage", "completed", videoWeight)
 	if s.OnTaskStatus != nil {
 		s.OnTaskStatus(id, "completed", 100)
 	}
@@ -382,6 +403,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 }
 
 func (s *PipelineService) getDuration(ffprobePath, path string) (float64, error) {
+	if ffprobePath == "" {
+		return 0, fmt.Errorf("ffprobe not found")
+	}
 	cmd := exec.Command(ffprobePath, "-v", "error", "-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1", path)
 	out, err := cmd.Output()
@@ -391,4 +415,38 @@ func (s *PipelineService) getDuration(ffprobePath, path string) (float64, error)
 	var dur float64
 	_, err = fmt.Sscanf(strings.TrimSpace(string(out)), "%f", &dur)
 	return dur, err
+}
+
+// getVideoSizeGB returns the size of the video file in GB using ffprobe.
+func (s *PipelineService) getVideoSizeGB(ffprobePath, path string) string {
+	sizeBytes := int64(0)
+
+	// Try ffprobe first
+	if ffprobePath != "" {
+		cmd := exec.Command(ffprobePath, "-v", "error", "-show_entries", "format=size",
+			"-of", "default=noprint_wrappers=1:nokey=1", path)
+		out, err := cmd.Output()
+		if err == nil {
+			sizeStr := strings.TrimSpace(string(out))
+			if val, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
+				sizeBytes = val
+			}
+		}
+	}
+
+	// Fallback to os.Stat if ffprobe failed or returned 0
+	if sizeBytes <= 0 {
+		info, err := os.Stat(path)
+		if err != nil {
+			return ""
+		}
+		sizeBytes = info.Size()
+	}
+
+	if sizeBytes <= 0 {
+		return ""
+	}
+
+	gb := float64(sizeBytes) / (1024 * 1024 * 1024)
+	return fmt.Sprintf("%.2f GB", gb)
 }

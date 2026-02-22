@@ -302,7 +302,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                     <span>{cleanStageLabel(t('pipeline.stage.montage'))}</span>
                                 </div>
                                 <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '11px', lineHeight: '1.4' }}>
-                                    {task.montageStatus === 'completed' ? t('queue.status_completed') :
+                                    {task.montageStatus === 'completed' ? (task.montageMsg || t('queue.status_completed')) :
                                         task.montageStatus === 'running' ? (
                                             task.montageMsg ? renderStatusLines(task.montageMsg, false) : t('queue.status_running')
                                         ) : task.montageStatus === 'waiting' ? t('queue.status_waiting') :
