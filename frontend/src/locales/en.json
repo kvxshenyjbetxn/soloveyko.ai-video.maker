@@ -338,7 +338,14 @@
             "max_connections_desc": "Global limit of simultaneous requests to OpenRouter. New requests will wait in queue."
         },
         "control": "Control",
-        "translate_control": "Translation Control"
+        "translate_control": "Translation Control",
+        "image_control": "Image Control",
+        "image_control_notification": {
+            "title": "Images Ready",
+            "message": "Image and video generation for all tasks is complete. Please go to the Gallery to review and edit before final montage.",
+            "go_to_gallery": "Go to Gallery"
+        },
+        "continue_processing": "Continue Processing"
     },
     "templatesTab": {
         "description": "Managing your pipeline templates.",

@@ -103,6 +103,11 @@ func NewApp() *App {
 			wruntime.EventsEmit(app.ctx, "requestControl", id, text)
 		}
 	}
+	app.pipeline.OnRequestImageControl = func(id string) {
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "requestImageControl", id)
+		}
+	}
 
 	orService.OnRequestStart = func(id string, taskLabel string, taskType string, keyName string, model string, temp float64, tokens int) {
 		app.LogToUI("INFO", fmt.Sprintf("[OpenRouter] [%s] Request | Key: %s | Model: %s | Temp: %.2f | Max Tokens: %v", strings.Title(taskType), keyName, model, temp, tokens), id, taskLabel)
@@ -788,6 +793,11 @@ func (a *App) ProcessTask(id string, taskNumber int, taskType string, content st
 // SubmitControlResult resumes a paused task with edited text
 func (a *App) SubmitControlResult(taskId string, content string) {
 	a.pipeline.SubmitControlResult(taskId, content)
+}
+
+// SubmitImageControlResult resumes a paused task after image review
+func (a *App) SubmitImageControlResult(taskId string) {
+	a.pipeline.SubmitImageControlResult(taskId)
 }
 
 // GetGalleryImages scans output directories and returns gallery data

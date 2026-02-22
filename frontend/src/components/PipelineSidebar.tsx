@@ -285,6 +285,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.voiceoverTemplatesCollapsed === undefined) s.voiceoverTemplatesCollapsed = true;
                 if (s.imageTemplatesCollapsed === undefined) s.imageTemplatesCollapsed = true;
                 if (s.controlCollapsed === undefined) s.controlCollapsed = true;
+                if (s.translateControlEnabled === undefined) { s.translateControlEnabled = false; updated = true; }
+                if (s.imageControlEnabled === undefined) { s.imageControlEnabled = false; updated = true; }
                 if (s.subtitleCollapsed === undefined) s.subtitleCollapsed = true;
                 if (s.imageCollapsed === undefined) s.imageCollapsed = true;
                 if (s.montageCollapsed === undefined) s.montageCollapsed = true;
@@ -390,6 +392,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         imageFields.forEach(field => { if (settings[field] !== undefined) commonSet[field] = settings[field]; });
 
         if (settings.translateControlEnabled !== undefined) commonSet.translateControlEnabled = settings.translateControlEnabled;
+        if (settings.imageControlEnabled !== undefined) commonSet.imageControlEnabled = settings.imageControlEnabled;
 
         await saveTemplate(type, name, { text: textSet, voiceover: voiceSet, common: commonSet });
     };

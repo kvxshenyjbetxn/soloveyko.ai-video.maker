@@ -63,7 +63,7 @@ type TabPath = string;
 
 function App() {
     const { t } = useI18n();
-    const { tasks, completionModal, closeCompletionModal } = useQueue();
+    const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification } = useQueue();
     const pendingCount = tasks.filter(t => t.status === 'pending').length;
     const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');
@@ -461,6 +461,20 @@ function App() {
                         console.error("Failed to open output folder:", e);
                     }
                 }}
+                isDanger={false}
+                type="info"
+            />
+
+            <ConfirmModal
+                isOpen={imageControlNotification.isOpen}
+                onClose={closeImageControlNotification}
+                onConfirm={() => {
+                    setCurrentPath('gallery');
+                    closeImageControlNotification();
+                }}
+                title={t('pipeline.image_control_notification.title')}
+                message={t('pipeline.image_control_notification.message')}
+                confirmText={t('pipeline.image_control_notification.go_to_gallery')}
                 isDanger={false}
                 type="info"
             />

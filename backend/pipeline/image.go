@@ -333,8 +333,6 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			s.emitStageStatus(id, "image", "failed", fmt.Sprintf("prompts: %d/%d\nimages: 0/%d\nvideos: 0/0", validPrompts, validPrompts, validPrompts))
 			return fmt.Errorf("failed to generate any images")
 		}
-
-		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: 0/0", validPrompts, validPrompts, successCount, validPrompts))
 	} else if iService == "googler" {
 		iApiKey := s.googler.GetAPIKey()
 
@@ -576,7 +574,6 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 
 		s.log("SUCCESS", fmt.Sprintf("[Pipeline] Image/Video stage DONE for %s. Success: %d/%d, Images: %d, Videos: %d", id, finalSuccess, validPrompts, finalImages, finalVideos), id, taskLabel)
-		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: %d/%d", validPrompts, validPrompts, finalImages, totalImages, finalVideos, totalVideos))
 	} else if iService == "elevenlabsimage" {
 		iKeyID, _ := settings["elevenLabsImageKeyID"].(string)
 		if iKeyID == "" {
@@ -654,8 +651,6 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			s.emitStageStatus(id, "image", "failed", fmt.Sprintf("prompts: %d/%d\nimages: 0/%d\nvideos: 0/0", validPrompts, validPrompts, validPrompts))
 			return fmt.Errorf("failed to generate any images")
 		}
-
-		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: 0/0", validPrompts, validPrompts, successCount, validPrompts))
 	} else if iService != "" {
 		s.log("WARN", fmt.Sprintf("[Pipeline] Image service %s is not yet implemented", iService), id, taskLabel)
 	} else {

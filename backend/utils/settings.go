@@ -68,6 +68,7 @@ type PipelineSettings struct {
 	EdgeTTSPitch                  string  `json:"edgeTTSPitch,omitempty"`
 	EdgeTTSVolume                 string  `json:"edgeTTSVolume,omitempty"`
 	TranslateControlEnabled       bool    `json:"translateControlEnabled"`
+	ImageControlEnabled           bool    `json:"imageControlEnabled"`
 	ControlCollapsed              bool    `json:"controlCollapsed"`
 
 	// Subtitle settings

@@ -26,13 +26,14 @@ type PipelineService struct {
 	assemblyAI      *api.AssemblyAIService
 
 	// Callbacks for UI updates
-	OnLog            func(level string, message string, details ...string)
-	OnStageStatus    func(id string, stage string, status string, message string)
-	OnTextResult     func(id string, resultText string)
-	OnRequestControl func(id string, text string)
-	OnTaskStatus     func(id string, status string, progress int)
-	OnImageGenerated func(taskName string, templateName string, imageName string, path string)
-	OnImageDeleted   func(imgPath string)
+	OnLog                 func(level string, message string, details ...string)
+	OnStageStatus         func(id string, stage string, status string, message string)
+	OnTextResult          func(id string, resultText string)
+	OnRequestControl      func(id string, text string)
+	OnRequestImageControl func(id string)
+	OnTaskStatus          func(id string, status string, progress int)
+	OnImageGenerated      func(taskName string, templateName string, imageName string, path string)
+	OnImageDeleted        func(imgPath string)
 
 	pendingControl sync.Map // Map taskID -> chan string
 
@@ -208,14 +209,14 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	// 3 & 4. Voiceover and Image Generation Stages logic in parallel
-	var stageWg sync.WaitGroup
+	var stagesWg sync.WaitGroup
 	var voiceErr error
 	var imageErr error
 	var subtitleErr error
 
-	stageWg.Add(1)
+	stagesWg.Add(1)
 	go func() {
-		defer stageWg.Done()
+		defer stagesWg.Done()
 		voiceErr = s.ProcessVoiceover(id, taskLabel, processedText, finalDir, settings, &pSettings)
 		if voiceErr != nil {
 			s.log("ERROR", fmt.Sprintf("[Pipeline] Voiceover stage failed: %v", voiceErr), id, taskLabel)
@@ -228,25 +229,67 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 	}()
 
-	stageWg.Add(1)
+	stagesWg.Add(1)
 	go func() {
-		defer stageWg.Done()
+		defer stagesWg.Done()
 		imageErr = s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings, taskName, templateDir)
 		if imageErr != nil {
 			s.log("ERROR", fmt.Sprintf("[Pipeline] Image stage failed: %v", imageErr), id, taskLabel)
+			return
+		}
+
+		// Image Control
+		iControlEnabled := pSettings.ImageControlEnabled
+		if val, ok := settings["imageControlEnabled"].(bool); ok {
+			iControlEnabled = val
+		}
+
+		if iControlEnabled {
+			s.emitStageStatus(id, "image", "waiting")
+			s.log("INFO", "[Control] Waiting for user image/video review...", id, taskLabel)
+
+			resChan := make(chan string)
+			s.pendingControl.Store(id+"_image", resChan)
+
+			if s.OnRequestImageControl != nil {
+				s.OnRequestImageControl(id)
+			}
+
+			// Block goroutine until result received or timeout/context cancel
+			select {
+			case <-resChan:
+				s.log("SUCCESS", "[Control] Images approved by user", id, taskLabel)
+				s.emitStageStatus(id, "image", "completed")
+			case <-s.ctx.Done():
+				s.log("INFO", "[Control] Task cancelled while waiting for image review", id, taskLabel)
+				return
+			}
+			s.pendingControl.Delete(id + "_image")
+		} else {
+			s.emitStageStatus(id, "image", "completed")
 		}
 	}()
 
-	stageWg.Wait()
+	stagesWg.Wait()
 
-	if voiceErr != nil || imageErr != nil {
+	if voiceErr != nil || imageErr != nil || subtitleErr != nil {
 		if voiceErr != nil {
 			return processedText, voiceErr
 		}
-		return processedText, imageErr
+		if imageErr != nil {
+			return processedText, imageErr
+		}
+		return processedText, subtitleErr
 	}
 
 	return processedText, nil
+}
+
+func (s *PipelineService) SubmitImageControlResult(id string) {
+	if val, ok := s.pendingControl.Load(id + "_image"); ok {
+		ch := val.(chan string)
+		ch <- "done"
+	}
 }
 
 func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]interface{} {
