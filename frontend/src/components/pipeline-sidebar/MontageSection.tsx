@@ -174,6 +174,149 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
 
                     <div style={{ margin: '12px 0', borderTop: '1px solid var(--border-color)', opacity: 0.5 }} />
 
+                    {/* Watermark Setting */}
+                    <div className="settings-control">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.montage.watermark_enabled')}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.montageWatermarkEnabled || false}
+                                    onChange={(e) => handleChange('montageWatermarkEnabled', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {settings.montageWatermarkEnabled && (
+                        <>
+                            <div className="settings-control">
+                                <div
+                                    onClick={async () => {
+                                        try {
+                                            const path = await (window as any).go.main.App.SelectImage();
+                                            if (path) {
+                                                handleChange('montageWatermarkPath', path);
+                                            }
+                                        } catch (err) {
+                                            console.error(err);
+                                        }
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        borderRadius: '10px',
+                                        border: settings.montageWatermarkPath ? '1px solid var(--accent-color)' : '1px dashed var(--bg-tertiary)',
+                                        backgroundColor: settings.montageWatermarkPath ? 'rgba(var(--accent-rgb), 0.05)' : 'var(--bg-secondary)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                        minHeight: '80px'
+                                    }}
+                                >
+                                    <div style={{
+                                        fontSize: '20px',
+                                        opacity: settings.montageWatermarkPath ? 1 : 0.5,
+                                        filter: settings.montageWatermarkPath ? 'drop-shadow(0 0 8px var(--accent-color))' : 'none',
+                                    }}>
+                                        {settings.montageWatermarkPath ? '🖼️' : '📁'}
+                                    </div>
+                                    <div style={{
+                                        fontSize: '11px',
+                                        fontWeight: '600',
+                                        color: settings.montageWatermarkPath ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                        textAlign: 'center'
+                                    }}>
+                                        {settings.montageWatermarkPath
+                                            ? t('pipeline.montage.watermark_change')
+                                            : t('pipeline.montage.watermark_select')}
+                                    </div>
+                                    {settings.montageWatermarkPath && (
+                                        <div style={{
+                                            fontSize: '9px',
+                                            color: 'var(--text-tertiary)',
+                                            maxWidth: '100%',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            opacity: 0.8
+                                        }}>
+                                            {settings.montageWatermarkPath.split(/[\\/]/).pop()}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.montage.watermark_position')}</label>
+                                <select
+                                    className="settings-select"
+                                    value={settings.montageWatermarkPosition || 'bottom-right'}
+                                    onChange={(e) => handleChange('montageWatermarkPosition', e.target.value)}
+                                >
+                                    <option value="top-left">{t('pipeline.montage.pos_top_left')}</option>
+                                    <option value="top-center">{t('pipeline.montage.pos_top_center')}</option>
+                                    <option value="top-right">{t('pipeline.montage.pos_top_right')}</option>
+                                    <option value="bottom-left">{t('pipeline.montage.pos_bottom_left')}</option>
+                                    <option value="bottom-center">{t('pipeline.montage.pos_bottom_center')}</option>
+                                    <option value="bottom-right">{t('pipeline.montage.pos_bottom_right')}</option>
+                                    <option value="center">{t('pipeline.montage.pos_center')}</option>
+                                </select>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.montage.watermark_opacity')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range" min="0.1" max="1.0" step="0.05" className="settings-slider"
+                                        value={settings.montageWatermarkOpacity || 0.8}
+                                        onChange={(e) => handleChange('montageWatermarkOpacity', parseFloat(e.target.value))}
+                                        style={{ '--range-progress': `${getProgress(settings.montageWatermarkOpacity || 0.8, 0.1, 1.0)}%` } as React.CSSProperties}
+                                    />
+                                    <span className="settings-slider-value">{(settings.montageWatermarkOpacity || 0.8).toFixed(2)}</span>
+                                </div>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.montage.watermark_scale')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range" min="5" max="50" step="1" className="settings-slider"
+                                        value={settings.montageWatermarkSize || 15}
+                                        onChange={(e) => handleChange('montageWatermarkSize', parseInt(e.target.value))}
+                                        style={{ '--range-progress': `${getProgress(settings.montageWatermarkSize || 15, 5, 50)}%` } as React.CSSProperties}
+                                    />
+                                    <span className="settings-slider-value">{settings.montageWatermarkSize || 15}%</span>
+                                </div>
+                            </div>
+
+                            {settings.montageIntroVideoEnabled && (
+                                <div className="settings-control">
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                        <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.montage.watermark_on_intro')}</label>
+                                        <label className="stage-switch small">
+                                            <input
+                                                type="checkbox"
+                                                checked={settings.montageWatermarkOnIntro || false}
+                                                onChange={(e) => handleChange('montageWatermarkOnIntro', e.target.checked)}
+                                            />
+                                            <span className="stage-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    <div style={{ margin: '12px 0', borderTop: '1px solid var(--border-color)', opacity: 0.5 }} />
+
                     {/* Resolution & FPS Row */}
                     <div className="settings-row">
                         <div className="settings-control" style={{ flex: 1 }}>

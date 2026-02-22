@@ -139,6 +139,12 @@ type PipelineSettings struct {
 	MontageCPUCores           int     `json:"montageCPUCores"`
 	MontageIntroVideoEnabled  bool    `json:"montageIntroVideoEnabled"`
 	MontageIntroVideoPath     string  `json:"montageIntroVideoPath,omitempty"`
+	MontageWatermarkEnabled   bool    `json:"montageWatermarkEnabled"`
+	MontageWatermarkPath      string  `json:"montageWatermarkPath,omitempty"`
+	MontageWatermarkPosition  string  `json:"montageWatermarkPosition"` // top-left, top-right, bottom-left, bottom-right, center
+	MontageWatermarkOpacity   float64 `json:"montageWatermarkOpacity"`
+	MontageWatermarkSize      int     `json:"montageWatermarkSize"` // percentage of width
+	MontageWatermarkOnIntro   bool    `json:"montageWatermarkOnIntro"`
 }
 
 type Settings struct {

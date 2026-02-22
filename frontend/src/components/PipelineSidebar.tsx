@@ -298,6 +298,12 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.montageEnabled === undefined) { s.montageEnabled = false; updated = true; }
                 if (s.montageIntroVideoEnabled === undefined) { s.montageIntroVideoEnabled = false; updated = true; }
                 if (s.montageIntroVideoPath === undefined) { s.montageIntroVideoPath = ""; updated = true; }
+                if (s.montageWatermarkEnabled === undefined) { s.montageWatermarkEnabled = false; updated = true; }
+                if (s.montageWatermarkPath === undefined) { s.montageWatermarkPath = ""; updated = true; }
+                if (s.montageWatermarkPosition === undefined) { s.montageWatermarkPosition = "bottom-right"; updated = true; }
+                if (s.montageWatermarkOpacity === undefined) { s.montageWatermarkOpacity = 0.8; updated = true; }
+                if (s.montageWatermarkSize === undefined) { s.montageWatermarkSize = 15; updated = true; }
+                if (s.montageWatermarkOnIntro === undefined) { s.montageWatermarkOnIntro = false; updated = true; }
 
                 if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
                 if (s.rewriteTemperature === undefined) s.rewriteTemperature = 0.7;
@@ -462,7 +468,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         const montageFields = [
             'montageResolution', 'montageFPS', 'montageSwayFactor', 'montageZoomFactor',
             'montageUpscaleFactor', 'montageTransitionDuration', 'montageTransitionEffect',
-            'montageEncodingPreset', 'montageBitrate', 'montageIntroVideoEnabled', 'montageIntroVideoPath'
+            'montageEncodingPreset', 'montageBitrate', 'montageIntroVideoEnabled', 'montageIntroVideoPath',
+            'montageWatermarkEnabled', 'montageWatermarkPath', 'montageWatermarkPosition', 'montageWatermarkOpacity', 'montageWatermarkSize', 'montageWatermarkOnIntro'
         ];
         montageFields.forEach(f => { if (settings[f] !== undefined) templateData.montage[f] = settings[f]; });
 

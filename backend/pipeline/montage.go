@@ -147,6 +147,26 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageIntroVideoPath"].(string); ok {
 		pSettings.MontageIntroVideoPath = val
 	}
+	if val, ok := settings["montageWatermarkEnabled"].(bool); ok {
+		pSettings.MontageWatermarkEnabled = val
+	}
+	if val, ok := settings["montageWatermarkPath"].(string); ok {
+		pSettings.MontageWatermarkPath = val
+	}
+	if val, ok := settings["montageWatermarkPosition"].(string); ok {
+		pSettings.MontageWatermarkPosition = val
+	}
+	if val, ok := settings["montageWatermarkOpacity"].(float64); ok {
+		pSettings.MontageWatermarkOpacity = val
+	}
+	if val, ok := settings["montageWatermarkSize"].(float64); ok {
+		pSettings.MontageWatermarkSize = int(val)
+	} else if val, ok := settings["montageWatermarkSize"].(int); ok {
+		pSettings.MontageWatermarkSize = val
+	}
+	if val, ok := settings["montageWatermarkOnIntro"].(bool); ok {
+		pSettings.MontageWatermarkOnIntro = val
+	}
 
 	upW := int(math.Round(float64(baseW) * upFactor))
 	upH := int(math.Round(float64(baseH) * upFactor))
@@ -171,6 +191,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	var filterParts []string
 
 	introIdx := -1
+	watermarkIdx := -1
 	introDur := 0.0
 	if pSettings.MontageIntroVideoEnabled && pSettings.MontageIntroVideoPath != "" {
 		if _, err := os.Stat(pSettings.MontageIntroVideoPath); err == nil {
@@ -183,8 +204,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			vFilter := fmt.Sprintf(
 				"[0:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,boxblur=20:10[bg]; "+
 					"[0:v]scale=%d:%d:force_original_aspect_ratio=decrease[fg]; "+
-					"[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d[v_intro]",
+					"[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d[v_intro_base]",
 				baseW, baseH, baseW, baseH, baseW, baseH, fps)
+
 			aFilter := ""
 			if hasA {
 				aFilter = "[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a_intro]"
@@ -292,6 +314,77 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		montageV = "v_sub"
 	}
 
+	// Watermark preparation (once for all uses)
+	wmAvailable := false
+	overlayX := "W-w-20"
+	overlayY := "H-h-20"
+	if pSettings.MontageWatermarkEnabled && pSettings.MontageWatermarkPath != "" {
+		if _, err := os.Stat(pSettings.MontageWatermarkPath); err == nil {
+			wmAvailable = true
+			watermarkIdx = len(inputSpecs)
+			inputSpecs = append(inputSpecs, inputSpec{loop: true, path: pSettings.MontageWatermarkPath})
+
+			wmScale := float64(pSettings.MontageWatermarkSize) / 100.0
+			wmOpacity := pSettings.MontageWatermarkOpacity
+			if wmOpacity <= 0 {
+				wmOpacity = 0.8
+			}
+
+			// Pre-process watermark: scale and opacity
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%d:v]scale=%d*%f:-1,format=rgba,colorchannelmixer=aa=%.3f[wm]",
+				watermarkIdx, baseW, wmScale, wmOpacity,
+			))
+
+			// Coordinates
+			switch pSettings.MontageWatermarkPosition {
+			case "top-left":
+				overlayX = "20"
+				overlayY = "20"
+			case "top-center":
+				overlayX = "(W-w)/2"
+				overlayY = "20"
+			case "top-right":
+				overlayX = "W-w-20"
+				overlayY = "20"
+			case "bottom-left":
+				overlayX = "20"
+				overlayY = "H-h-20"
+			case "bottom-center":
+				overlayX = "(W-w)/2"
+				overlayY = "H-h-20"
+			case "bottom-right":
+				overlayX = "W-w-20"
+				overlayY = "H-h-20"
+			case "center":
+				overlayX = "(W-w)/2"
+				overlayY = "(H-h)/2"
+			}
+		}
+	}
+
+	// Apply Watermark to Intro if enabled
+	finalIntroV := "v_intro_base"
+	if introIdx != -1 && wmAvailable && pSettings.MontageWatermarkOnIntro {
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[v_intro_base][wm]overlay=x=%s:y=%s:format=auto[v_intro_wm]",
+			overlayX, overlayY,
+		))
+		finalIntroV = "v_intro_wm"
+	} else if introIdx != -1 {
+		filterParts = append(filterParts, "[v_intro_base]copy[v_intro_final_processed]")
+		finalIntroV = "v_intro_final_processed"
+	}
+
+	// Apply Watermark to Montage
+	if wmAvailable {
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[%s][wm]overlay=x=%s:y=%s:format=auto[v_wm_final]",
+			montageV, overlayX, overlayY,
+		))
+		montageV = "v_wm_final"
+	}
+
 	// Montage trim
 	filterParts = append(filterParts, fmt.Sprintf(
 		"[%s]trim=duration=%.6f,setpts=PTS-STARTPTS[v_montage_final]", montageV, audioDur,
@@ -314,8 +407,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			actualTransDur = transDur
 			// Video transition (xfade)
 			filterParts = append(filterParts, fmt.Sprintf(
-				"[v_intro][v_montage_final]xfade=transition=%s:duration=%.3f:offset=%.3f[v_total]",
-				transEffect, transDur, introDur-transDur,
+				"[%s][v_montage_final]xfade=transition=%s:duration=%.3f:offset=%.3f[v_total]",
+				finalIntroV, transEffect, transDur, introDur-transDur,
 			))
 			// Audio transition (acrossfade)
 			filterParts = append(filterParts, fmt.Sprintf(
@@ -326,7 +419,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			finalA = "a_total"
 		} else {
 			// Fallback to simple concat
-			filterParts = append(filterParts, "[v_intro][v_montage_final]concat=n=2:v=1:a=0[v_total]; [a_intro][a_voice_res]concat=n=2:v=0:a=1[a_total]")
+			filterParts = append(filterParts, fmt.Sprintf("[%s][v_montage_final]concat=n=2:v=1:a=0[v_total]; [a_intro][a_voice_res]concat=n=2:v=0:a=1[a_total]", finalIntroV))
 			finalV = "v_total"
 			finalA = "a_total"
 		}
