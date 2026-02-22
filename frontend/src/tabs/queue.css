@@ -52,20 +52,24 @@
 .task-card-wrapper {
     display: flex;
     gap: 0;
-    transition: gap 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     align-items: flex-start;
+    /* Картка диктує висоту */
     max-width: 100%;
-    height: 340px;
-    /* Фіксована висота, щоб не розтягувалося вниз */
-    margin-bottom: 16px;
+    margin-bottom: 20px;
+    position: relative;
+    /* Для абсолютних логів */
+}
+
+.task-card-wrapper.expanded {
+    margin-right: 612px;
+    /* Резервуємо місце під лог (600px + 12px gap) */
 }
 
 
 .task-card {
     width: 280px;
-    height: 340px !important;
-    /* Force fixed height */
-    max-height: 340px !important;
+    height: auto !important;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-color);
     border-radius: 16px;
@@ -94,40 +98,30 @@
 
 /* Inline Log Panel */
 .task-inline-log {
-    width: 0;
-    height: 340px;
-    /* Співпадає з висотою картки */
+    width: 600px;
     opacity: 0;
-    margin-left: 0;
     visibility: hidden;
-    background: rgba(15, 15, 20, 0.6);
+    position: absolute;
+    /* ЛОГ НЕ ТЯГНЕ КАРТКУ ВНИЗ */
+    left: 292px;
+    /* 280px картка + 12px gap */
+    top: 0;
+    bottom: 0;
+    /* Рівно на висоту картки */
+    background: rgba(15, 15, 20, 0.98);
     border: 1px solid var(--border-color);
     border-radius: 16px;
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-        margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-        visibility 0.4s;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     backdrop-filter: blur(10px);
-}
-
-.task-card-wrapper.expanded {
-    height: 340px;
-    margin-bottom: 20px;
-}
-
-.task-card-wrapper.expanded .task-card {
-    height: 100% !important;
+    transition: opacity 0.3s ease, visibility 0.3s;
+    overflow: hidden;
+    z-index: 1;
 }
 
 .task-card-wrapper.expanded .task-inline-log {
-    width: 600px;
-    height: 100% !important;
     opacity: 1;
     visibility: visible;
-    margin-left: 12px;
 }
 
 .log-header {
@@ -149,6 +143,8 @@
 
 .log-content {
     flex: 1;
+    height: 0;
+    /* Цей фікс дозволяє логу не розтягувати картку, але заповнювати її висоту */
     padding: 15px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
@@ -296,10 +292,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    overflow-y: auto;
-    flex: 1;
     min-height: 0;
-    /* Important for flex-basis issues */
     padding-right: 4px;
 }
 

@@ -189,9 +189,13 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         const isImageEnabled = settings.imageEnabled === true;
         const isMontageEnabled = settings.montageEnabled === true;
 
+        const cleanStageLabel = (label: string) => label.replace(/^[\d\.A-Z]+\s*/, '');
+
         const mainLabel = isMainStageEnabled
             ? (task.type === 'translate' ? t('text.translate') : t('text.rewrite'))
             : t('text.original');
+
+        const displayMainLabel = cleanStageLabel(mainLabel);
 
         return (
             <div key={task.id} className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
@@ -204,7 +208,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                     )}
                     <div className="task-card-header">
                         <span className={`task-type-badge ${task.type}`}>
-                            {mainLabel}
+                            {displayMainLabel}
                         </span>
                         <button
                             className="remove-task-btn"
@@ -223,11 +227,11 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                     </div>
 
                     <div className="task-stages-list">
-                        {/* Етап 1: Текст */}
+                        {/* Текст */}
                         <div className={`task-stage-item status-${task.textStatus}`}>
                             <div className="stage-left">
                                 <LightbulbIcon />
-                                <span>{mainLabel}</span>
+                                <span>{displayMainLabel}</span>
                             </div>
                             <span className="stage-status-text badge-status">
                                 {task.textStatus === 'completed' ? `${task.resultLength || 0} chars` :
@@ -242,7 +246,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                             <div className={`task-stage-item status-${task.voiceStatus}`} style={{ marginTop: '4px' }}>
                                 <div className="stage-left">
                                     <VoiceIcon />
-                                    <span>{t('text.voiceover')}</span>
+                                    <span>{cleanStageLabel(t('text.voiceover'))}</span>
                                 </div>
                                 <span className="stage-status-text badge-status">
                                     {task.voiceStatus === 'completed' ? (task.voiceDuration || t('queue.voice_saved') || 'MP3 saved') :
@@ -253,28 +257,12 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                             </div>
                         )}
 
-                        {/* Етап 2.5: Субтитри (якщо увімкнено) */}
-                        {isSubtitleEnabled && (
-                            <div className={`task-stage-item status-${task.subtitleStatus}`} style={{ marginTop: '4px' }}>
-                                <div className="stage-left">
-                                    <SubtitleIcon />
-                                    <span>{t('pipeline.stage.subtitle')}</span>
-                                </div>
-                                <span className="stage-status-text badge-status">
-                                    {task.subtitleStatus === 'completed' ? (t('queue.subtitle_saved') || 'SRT збережено') :
-                                        task.subtitleStatus === 'running' ? (t('queue.status_running') || 'Transcribing...') :
-                                            task.subtitleStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                                task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
-                                </span>
-                            </div>
-                        )}
-
-                        {/* Етап 3: Картинки (якщо увімкнено) */}
+                        {/* Картинки */}
                         {isImageEnabled && (
                             <div className={`task-stage-item status-${task.imageStatus}`} style={{ marginTop: '4px' }}>
                                 <div className="stage-left">
                                     <ImageIcon />
-                                    <span>{t('pipeline.stage.image')}</span>
+                                    <span>{cleanStageLabel(t('pipeline.stage.image'))}</span>
                                 </div>
                                 <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '11px', lineHeight: '1.4' }}>
                                     {task.imageStatus === 'completed' ? (
@@ -290,12 +278,28 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                             </div>
                         )}
 
+                        {/* Субтитри */}
+                        {isSubtitleEnabled && (
+                            <div className={`task-stage-item status-${task.subtitleStatus}`} style={{ marginTop: '4px' }}>
+                                <div className="stage-left">
+                                    <SubtitleIcon />
+                                    <span>{cleanStageLabel(t('pipeline.stage.subtitle'))}</span>
+                                </div>
+                                <span className="stage-status-text badge-status">
+                                    {task.subtitleStatus === 'completed' ? (t('queue.subtitle_saved') || 'SRT збережено') :
+                                        task.subtitleStatus === 'running' ? (t('queue.status_running') || 'Transcribing...') :
+                                            task.subtitleStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
+                                                task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                </span>
+                            </div>
+                        )}
+
                         {/* Етап 5: Монтаж (якщо увімкнено) */}
                         {isMontageEnabled && (
                             <div className={`task-stage-item status-${task.montageStatus}`} style={{ marginTop: '4px' }}>
                                 <div className="stage-left">
                                     <MontageIcon />
-                                    <span>{t('pipeline.stage.montage')}</span>
+                                    <span>{cleanStageLabel(t('pipeline.stage.montage'))}</span>
                                 </div>
                                 <span className="stage-status-text badge-status">
                                     {task.montageStatus === 'completed' ? t('queue.status_completed') :
