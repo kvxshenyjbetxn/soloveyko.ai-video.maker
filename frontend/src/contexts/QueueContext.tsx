@@ -140,7 +140,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const uImgReq = EventsOn("requestImageControl", (id: string) => {
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingImageControl: true } : t));
         });
-        return () => { uStatus(); uStage(); uReq(); uImgReq(); };
+        const uTextResult = EventsOn("textResult", (id: string, length: number) => {
+            setTasks(prev => prev.map(t => t.id === id ? { ...t, resultLength: length } : t));
+        });
+        return () => { uStatus(); uStage(); uReq(); uImgReq(); uTextResult(); };
     }, []);
 
     useEffect(() => {

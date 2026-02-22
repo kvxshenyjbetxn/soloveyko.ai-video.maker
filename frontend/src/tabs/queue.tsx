@@ -235,8 +235,8 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                             </div>
                             <span className="stage-status-text badge-status">
                                 {task.textStatus === 'completed' ? `${task.resultLength || 0} chars` :
-                                    task.textStatus === 'running' ? `Processing...` :
-                                        task.textStatus === 'waiting' ? 'В черзі' :
+                                    task.textStatus === 'running' ? (t('queue.status_running') || 'Processing...') :
+                                        task.textStatus === 'waiting' ? (t('queue.status_waiting') || 'В черзі') :
                                             task.textStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                             </span>
                         </div>

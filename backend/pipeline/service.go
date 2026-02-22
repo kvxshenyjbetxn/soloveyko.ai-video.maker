@@ -161,6 +161,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		s.pendingControl.Delete(id)
 
 		s.log("SUCCESS", "[Control] Translation approved by user", id, taskLabel)
+		s.emitStageStatus(id, "text", "completed")
 		// Re-emit result length if it changed
 		if s.OnTextResult != nil {
 			s.OnTextResult(id, processedText)
