@@ -230,7 +230,7 @@
             }
         },
         "montage": {
-            "title": "4. Montage",
+            "title": "3. Montage",
             "empty_description": "Settings for this stage will be available in future updates"
         },
         "image": {
@@ -319,8 +319,8 @@
             "rewrite": "1. Rewrite",
             "voiceover": "2.A Voiceover",
             "image": "2.B Images",
-            "subtitle": "3. Subtitles",
-            "montage": "4. Montage",
+            "subtitle": "2.C Subtitles",
+            "montage": "3. Montage",
             "enabled": "Enabled",
             "disabled": "Disabled (original text)",
             "disabled_simple": "Disabled"

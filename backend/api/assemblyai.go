@@ -95,7 +95,7 @@ func (s *AssemblyAIService) Transcribe(ctx context.Context, audioFilePath string
 	}
 	req.Header.Set("Authorization", apiKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("помилка виконання запиту на завантаження: %w", err)
