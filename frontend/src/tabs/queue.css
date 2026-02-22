@@ -336,15 +336,21 @@
 .status-pending .voice-icon,
 .status-pending .image-icon,
 .status-pending .subtitle-icon,
-.status-pending .montage-icon,
+.status-pending .montage-icon {
+    color: #757575;
+    opacity: 0.5;
+}
+
 .status-waiting .lightbulb-icon,
 .status-waiting .voice-icon,
 .status-waiting .image-icon,
 .status-waiting .subtitle-icon,
 .status-waiting .montage-icon {
-    color: #757575;
-    opacity: 0.5;
+    color: #2196f3;
+    opacity: 0.8;
+    animation: blue-pulse 2s infinite;
 }
+
 
 .status-running .lightbulb-icon,
 .status-running .voice-icon,
@@ -392,6 +398,24 @@
     }
 }
 
+@keyframes blue-pulse {
+    0% {
+        opacity: 0.5;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+
+    100% {
+        opacity: 0.5;
+        transform: scale(1);
+    }
+}
+
+
 .stage-status-text {
     font-size: 11px;
     font-weight: 700;
@@ -423,8 +447,8 @@
 }
 
 .status-waiting .stage-status-text.badge-status {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-placeholder);
+    background: rgba(33, 150, 243, 0.1);
+    color: #2196f3;
 }
 
 .progress-bar-container {

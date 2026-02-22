@@ -552,6 +552,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     <MontageSection
                         settings={settings} handleChange={handleChange} setSettings={setSettings}
                     />
+
                 </div>
                 <SidebarFooter type={type} content={content} selectedTemplateIds={selectedTemplateIds} templates={templates} setIsModalOpen={setIsModalOpen} />
             </div>

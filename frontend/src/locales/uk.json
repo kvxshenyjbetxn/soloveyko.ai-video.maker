@@ -10,6 +10,13 @@
     "other": "Інше",
     "logs": "Лог"
   },
+  "performanceTab": {
+    "subtitle_block": "Субтитри",
+    "subtitle_max_concurrency": "Максимальна кількість одночасних завдань",
+    "subtitle_max_concurrency_desc": "Обмежує кількість одночасних запусків рушія субтитрів (Whisper/AMD).",
+    "description": "Налаштування продуктивності та лімітів одночасних операцій.",
+    "saving": "Збереження..."
+  },
   "logsTab": {
     "clear": "Очистити",
     "allLevels": "Всі рівні",
@@ -62,8 +69,7 @@
   "settings": {
     "general": "Загальні",
     "api": "API",
-    "montage": "Монтаж",
-    "subtitle": "Субтитри",
+    "performance": "Продуктивність",
     "templates": "Шаблони",
     "voice": {
       "apiKey": "API Ключ",

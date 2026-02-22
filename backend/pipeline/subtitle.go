@@ -45,6 +45,14 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle stage started. Service: %s, Model: %s", sService, sModel), id, taskLabel)
 	}
 
+	s.emitStageStatus(id, "subtitle", "waiting")
+	s.log("INFO", "[Pipeline] Waiting for subtitle engine slot...", id, taskLabel)
+
+	sem := s.getSubtitleSem()
+	sem <- struct{}{}
+	defer func() { <-sem }()
+
+	s.log("INFO", "[Pipeline] Subtitle engine slot acquired, starting transcription...", id, taskLabel)
 	s.emitStageStatus(id, "subtitle", "running")
 
 	var result string

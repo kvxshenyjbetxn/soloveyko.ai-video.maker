@@ -40,6 +40,9 @@ type PipelineService struct {
 	elevenLabsSem      chan struct{}
 	elevenLabsUnlimSem chan struct{}
 	elevenLabsUASem    chan struct{}
+	subtitleSem        chan struct{}
+	subtitleSemSize    int
+	subtitleSemMu      sync.Mutex
 }
 
 // NewPipelineService creates a new PipelineService
@@ -75,6 +78,8 @@ func NewPipelineService(
 		elevenLabsSem:      make(chan struct{}, 5),
 		elevenLabsUnlimSem: make(chan struct{}, 5),
 		elevenLabsUASem:    make(chan struct{}, 5),
+		subtitleSemSize:    settings.GetSubtitleMaxConnections(),
+		subtitleSem:        make(chan struct{}, settings.GetSubtitleMaxConnections()),
 	}
 }
 
@@ -313,4 +318,26 @@ func (s *PipelineService) SubmitControlResult(id string, text string) {
 		ch := val.(chan string)
 		ch <- text
 	}
+}
+
+func (s *PipelineService) UpdateSubtitleSemaphore(newSize int) {
+	s.subtitleSemMu.Lock()
+	defer s.subtitleSemMu.Unlock()
+
+	if newSize == s.subtitleSemSize {
+		return
+	}
+
+	// Just re-create the channel. Old tasks might still be using the old one,
+	// but the new tasks will respect the new limit.
+	// This is a simple but effective way to handle it for this app.
+	s.subtitleSem = make(chan struct{}, newSize)
+	s.subtitleSemSize = newSize
+	s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle semaphore updated to %d slots", newSize))
+}
+
+func (s *PipelineService) getSubtitleSem() chan struct{} {
+	s.subtitleSemMu.Lock()
+	defer s.subtitleSemMu.Unlock()
+	return s.subtitleSem
 }

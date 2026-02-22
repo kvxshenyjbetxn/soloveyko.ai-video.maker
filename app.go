@@ -166,6 +166,20 @@ func NewApp() *App {
 	return app
 }
 
+// GetSubtitleMaxConnections повертає ліміт одночасних запитів Субтитрів
+func (a *App) GetSubtitleMaxConnections() int {
+	return a.settings.GetSubtitleMaxConnections()
+}
+
+// SaveSubtitleMaxConnections встановлює ліміт одночасних запитів Субтитрів
+func (a *App) SaveSubtitleMaxConnections(max int) error {
+	err := a.settings.SetSubtitleMaxConnections(max)
+	if err == nil {
+		a.pipeline.UpdateSubtitleSemaphore(max)
+	}
+	return err
+}
+
 // GetSystemStats повертає поточну статистику системи
 func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 	return a.stats.GetSystemStats()

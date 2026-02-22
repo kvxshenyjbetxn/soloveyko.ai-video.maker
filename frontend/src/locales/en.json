@@ -10,6 +10,13 @@
         "other": "Other",
         "logs": "Logs"
     },
+    "performanceTab": {
+        "subtitle_block": "Subtitles",
+        "subtitle_max_concurrency": "Maximum concurrent tasks",
+        "subtitle_max_concurrency_desc": "Limits the number of simultaneous subtitle engine runs (Whisper/AMD).",
+        "description": "Performance settings and concurrent operation limits.",
+        "saving": "Saving..."
+    },
     "logsTab": {
         "clear": "Clear",
         "allLevels": "All Levels",
@@ -60,8 +67,7 @@
     "settings": {
         "general": "General",
         "api": "API",
-        "montage": "Montage",
-        "subtitle": "Subtitles",
+        "performance": "Performance",
         "templates": "Templates",
         "voice": {
             "apiKey": "API Key",

@@ -160,6 +160,7 @@ type Settings struct {
 	GooglerImageAlertThreshold    float64          `json:"googlerImageAlertThreshold"`
 	ElevenLabsImageKeys           []NamedAPIKey    `json:"elevenLabsImageKeys"`
 	ElevenLabsImageMaxConnections int              `json:"elevenLabsImageMaxConnections"`
+	SubtitleMaxConnections        int              `json:"subtitleMaxConnections"`
 	Pipeline                      PipelineSettings `json:"pipeline"`
 }
 
@@ -254,6 +255,9 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 	}
 	if settings.ElevenLabsImageMaxConnections <= 0 {
 		settings.ElevenLabsImageMaxConnections = 25
+	}
+	if settings.SubtitleMaxConnections <= 0 {
+		settings.SubtitleMaxConnections = 2
 	}
 	// Якщо список моделей взагалі nil (поле відсутнє в JSON), додаємо дефолтні.
 	// Якщо список порожній [], але не nil (користувач все видалив), не чіпаємо.
@@ -1162,5 +1166,25 @@ func (s *SettingsService) SavePipelineSettings(pipeline PipelineSettings) error 
 	}
 
 	settings.Pipeline = pipeline
+	return s.SaveSettings(settings)
+}
+
+// GetSubtitleMaxConnections повертає ліміт одночасних запитів Субтитрів
+func (s *SettingsService) GetSubtitleMaxConnections() int {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 2
+	}
+	return settings.SubtitleMaxConnections
+}
+
+// SetSubtitleMaxConnections встановлює ліміт одночасних запитів Субтитрів
+func (s *SettingsService) SetSubtitleMaxConnections(max int) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.SubtitleMaxConnections = max
 	return s.SaveSettings(settings)
 }

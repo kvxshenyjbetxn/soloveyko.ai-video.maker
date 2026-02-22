@@ -26,8 +26,7 @@ import { PollinationsAI } from './tabs/settings/api/image/pollinationsai';
 import { Googler } from './tabs/settings/api/image/googler';
 import { ElevenLabsImage } from './tabs/settings/api/image/elevenlabsimage';
 import { AssemblyAI } from './tabs/settings/api/assemblyai';
-import { Montage } from './tabs/settings/montage';
-import { Subtitle } from './tabs/settings/subtitle';
+import { Performance } from './tabs/settings/performance';
 import { Templates } from './tabs/settings/templates';
 import { Statistic } from './tabs/other/statistic';
 import { History } from './tabs/other/history';
@@ -151,9 +150,7 @@ function App() {
             case 'settings.api.image.pollinationsai': return <PollinationsAI />;
             case 'settings.api.image.googler': return <Googler />;
             case 'settings.api.image.elevenlabsimage': return <ElevenLabsImage />;
-            case 'settings.api.assemblyai': return <AssemblyAI />;
-            case 'settings.montage': return <Montage />;
-            case 'settings.subtitle': return <Subtitle />;
+            case 'settings.performance': return <Performance />;
             case 'settings.templates': return <Templates />;
 
             // Other tabs
@@ -203,10 +200,17 @@ function App() {
                         {t('settings.general')}
                     </div>
 
+                    <div
+                        className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'settings.performance' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('settings.performance')}
+                    >
+                        {t('settings.performance')}
+                    </div>
+
                     {/* API Section */}
                     <div className="sidebar-group">
                         <div
-                            className="sidebar-item animate-sidebar-item stagger-2 sidebar-parent"
+                            className="sidebar-item animate-sidebar-item stagger-3 sidebar-parent"
                             onClick={() => toggleMenu('api')}
                         >
                             <span>{t('settings.api')}</span>
@@ -310,19 +314,7 @@ function App() {
                     </div>
 
                     <div
-                        className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'settings.montage' ? 'active' : ''}`}
-                        onClick={() => setCurrentPath('settings.montage')}
-                    >
-                        {t('settings.montage')}
-                    </div>
-                    <div
-                        className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'settings.subtitle' ? 'active' : ''}`}
-                        onClick={() => setCurrentPath('settings.subtitle')}
-                    >
-                        {t('settings.subtitle')}
-                    </div>
-                    <div
-                        className={`sidebar-item animate-sidebar-item stagger-5 ${currentPath === 'settings.templates' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'settings.templates' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('settings.templates')}
                     >
                         {t('settings.templates')}
