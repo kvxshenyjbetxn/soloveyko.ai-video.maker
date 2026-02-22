@@ -62,12 +62,68 @@ export interface PipelineSettings {
     imageGooglerVideoCount: number;
     imageGooglerVideoUpscale: boolean;
 
+    imageService: string;
+    imageModel: string;
+    imageWidth: number;
+    imageHeight: number;
+    imageNoLogo: boolean;
+    imageEnhance: boolean;
+    imagePrompt: string;
+    imagePollinationsKeyID: string;
+    imageGooglerModel: string;
+    imageGooglerAspectRatio: string;
+    imageGooglerRemixEnabled: boolean;
+    imageGooglerReferenceImage: string;
+    imageGooglerRemixStrictMode: boolean;
+    imageOutputPath: string;
+    imagePipelineName: string;
+    imageTemplatesCollapsed: boolean;
+    imageCollapsed: boolean;
+    imageGenerationMethod: string;
+    imageGroupSentences: boolean;
+    imageSentenceLimit: number;
+    imagePromptModel: string;
+    imagePromptTemperature: number;
+    imagePromptMaxTokens: number;
+    elevenLabsImageKeyID: string;
+    elevenLabsImageAspectRatio: string;
+
+    subtitleEnabled: boolean;
+    subtitleCollapsed: boolean;
+    subtitleService: string;
+    subtitleModel: string;
+    subtitleAmdLanguage: string;
+    subtitleMaxLen: number;
+    subtitleColor: string;
+    subtitleSize: number;
+    subtitleFont: string;
+    subtitleFadeEnabled: boolean;
+    subtitleFadeIn: number;
+    subtitleFadeOut: number;
+
+    montageEnabled: boolean;
+    montageCollapsed: boolean;
+    montageResolution: string;
+    montageFPS: number;
+    montageSwayFactor: number;
+    montageZoomFactor: number;
+    montageUpscaleFactor: number;
+    montageTransitionDuration: number;
+    montageTransitionEffect: string;
+    montageEncodingPreset: string;
+    montageBitrate: number;
+
     sidebarWidth: number;
     apiCollapsed: boolean;
     pathCollapsed: boolean;
     templatesCollapsed: boolean;
     controlCollapsed: boolean;
     outputPath: string;
+    imageControlEnabled: boolean;
+    edgeTTSVoiceID: string;
+    edgeTTSRate: string;
+    edgeTTSPitch: string;
+    edgeTTSVolume: string;
 }
 
 export interface PipelineTemplate {

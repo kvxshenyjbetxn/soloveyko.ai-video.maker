@@ -13,6 +13,7 @@ interface ImageSectionProps {
     models: string[];
     renderValueOrInput: (field: string, value: number, isFloat: boolean) => React.ReactNode;
     setCurrentPath?: (path: string) => void;
+    elevenLabsImageKeys?: any[];
 }
 
 const ImageIcon = () => (
@@ -24,7 +25,7 @@ const ImageIcon = () => (
 );
 
 export const ImageSection: React.FC<ImageSectionProps> = ({
-    settings, handleChange, setSettings, fetchPollinationsModels, pollinationsModels, loadingPollinationsModels, estimatedChunks, content, models, renderValueOrInput, setCurrentPath
+    settings, handleChange, setSettings, fetchPollinationsModels, pollinationsModels, loadingPollinationsModels, estimatedChunks, content, models, renderValueOrInput, setCurrentPath, elevenLabsImageKeys
 }) => {
     const { t } = useI18n();
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);

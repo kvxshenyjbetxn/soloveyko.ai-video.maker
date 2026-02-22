@@ -263,6 +263,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     updated = true;
                 }
 
+                if (elevenLabsImageKeys.length > 0 && !s.elevenLabsImageKeyID) {
+                    s.elevenLabsImageKeyID = elevenLabsImageKeys[0].id;
+                    updated = true;
+                }
+
                 if (!s.rewriteEnabled) { s.rewriteEnabled = true; updated = true; }
                 if (s.voiceoverEnabled === undefined) { s.voiceoverEnabled = false; updated = true; }
 
@@ -326,6 +331,13 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (!s.subtitleService) { s.subtitleService = 'standard'; updated = true; }
                 if (!s.subtitleModel) { s.subtitleModel = 'base'; updated = true; }
                 if (s.subtitleEnabled === undefined) { s.subtitleEnabled = false; updated = true; }
+                if (s.subtitleMaxLen === undefined) s.subtitleMaxLen = 40;
+                if (s.subtitleFont === undefined) s.subtitleFont = 'Arial';
+                if (s.subtitleSize === undefined) s.subtitleSize = 24;
+                if (s.subtitleColor === undefined) s.subtitleColor = '#ffffff';
+                if (s.subtitleFadeEnabled === undefined) s.subtitleFadeEnabled = true;
+                if (s.subtitleFadeIn === undefined) s.subtitleFadeIn = 300;
+                if (s.subtitleFadeOut === undefined) s.subtitleFadeOut = 300;
 
                 if (!s.voiceoverService) { s.voiceoverService = 'elevenlabsbot'; updated = true; }
 
@@ -357,45 +369,110 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
     const handleSaveTemplate = async () => {
         const name = type === 'translate' ? settings.translatePipelineName : (type === 'rewrite' ? settings.rewritePipelineName : settings.voiceoverPipelineName);
-        const textSet: any = {};
-        const voiceSet: any = {};
-        const commonSet: any = {};
+        const templateData: any = {
+            api: {},
+            stages: {
+                [type]: type === 'translate' ? settings.translateEnabled : settings.rewriteEnabled,
+                voiceover: settings.voiceoverEnabled,
+                image: settings.imageEnabled,
+                subtitle: settings.subtitleEnabled,
+                montage: settings.montageEnabled
+            },
+            control: {
+                translate: settings.translateControlEnabled,
+                image: settings.imageControlEnabled
+            },
+            text: {},
+            voiceover: {
+                services: {}
+            },
+            image: {
+                services: {}
+            },
+            subtitle: {},
+            montage: {}
+        };
 
+        // 0. API Keys Group
+        const apiKeys = Object.keys(settings).filter(k => k.endsWith('KeyID'));
+        apiKeys.forEach(k => {
+            // Exclude irrelevant text pipeline keys
+            if (type === 'translate' && k === 'rewriteOpenRouterKeyID') return;
+            if (type === 'rewrite' && k === 'translateOpenRouterKeyID') return;
+
+            if (settings[k] !== undefined) templateData.api[k] = settings[k];
+        });
+
+        // 1. Text Pipeline Settings (Translate/Rewrite)
         Object.keys(settings).forEach(key => {
             if (key.startsWith(type)) {
-                if (key.endsWith('Collapsed') || key.endsWith('OutputPath') || key.endsWith('PipelineName') || key === 'translateControlEnabled') return;
-                textSet[key] = settings[key];
+                if (key.endsWith('Enabled') || key.endsWith('Collapsed') || key.endsWith('OutputPath') || key.endsWith('PipelineName') || key === 'translateControlEnabled' || key.endsWith('KeyID')) return;
+                templateData.text[key] = settings[key];
             }
         });
 
-        const voiceoverFields = [
-            'voiceoverEnabled', 'voiceoverService', 'voiceoverTemplate',
-            'voiceoverElevenLabsBotKeyID', 'voiceoverElevenLabsUnlimKeyID', 'voiceoverElevenLabsUAKeyID',
-            'elevenLabsUnlimVoiceID', 'elevenLabsUnlimStability', 'elevenLabsUnlimSimilarity', 'elevenLabsUnlimStyle', 'elevenLabsUnlimSpeakerBoost',
-            'elevenLabsUAVoiceID', 'elevenLabsUAStability', 'elevenLabsUASimilarity', 'elevenLabsUAStyle', 'elevenLabsUASpeakerBoost', 'elevenLabsUAModel',
-            'voiceoverVoiceMakerKeyID', 'voiceMakerVoiceID', 'voiceMakerLanguageCode', 'voiceMakerCharLimit'
-        ];
-        voiceoverFields.forEach(field => { if (settings[field] !== undefined) voiceSet[field] = settings[field]; });
+        // 2. Voiceover Settings
+        const voiceoverBaseFields = ['voiceoverService'];
+        voiceoverBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.voiceover[f] = settings[f]; });
 
+        // Voiceover Service Specific Groups
+        const voServices: any = {
+            elevenlabsbot: ['voiceoverTemplate'],
+            elevenlabsunlim: ['elevenLabsUnlimVoiceID', 'elevenLabsUnlimStability', 'elevenLabsUnlimSimilarity', 'elevenLabsUnlimStyle', 'elevenLabsUnlimSpeakerBoost'],
+            elevenlabsua: ['elevenLabsUAVoiceID', 'elevenLabsUAStability', 'elevenLabsUASimilarity', 'elevenLabsUAStyle', 'elevenLabsUASpeakerBoost', 'elevenLabsUAModel'],
+            voicemaker: ['voiceMakerVoiceID', 'voiceMakerLanguageCode', 'voiceMakerCharLimit'],
+            edgetts: ['edgeTTSVoiceID', 'edgeTTSRate', 'edgeTTSPitch', 'edgeTTSVolume']
+        };
+
+        Object.entries(voServices).forEach(([svc, fields]: [string, any]) => {
+            templateData.voiceover.services[svc] = {};
+            fields.forEach((f: string) => {
+                if (settings[f] !== undefined) templateData.voiceover.services[svc][f] = settings[f];
+            });
+        });
+
+        // 3. Image Settings
+        const imageBaseFields = ['imageService', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens'];
+        imageBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.image[f] = settings[f]; });
+
+        // Image Service Specific Groups
+        const imgServices: any = {
+            pollinations: ['imageModel', 'imageWidth', 'imageHeight', 'imageNoLogo', 'imageEnhance', 'imagePrompt'],
+            googler: ['imageGooglerModel', 'imageGooglerAspectRatio', 'imageGooglerRemixEnabled', 'imageGooglerReferenceImage', 'imageGooglerRemixStrictMode', 'imageGooglerVideoEnabled', 'imageGooglerVideoModel', 'imageGooglerVideoMode', 'imageGooglerVideoCount', 'imageGooglerVideoUpscale'],
+            elevenlabsimage: ['elevenLabsImageAspectRatio']
+        };
+
+        Object.entries(imgServices).forEach(([svc, fields]: [string, any]) => {
+            templateData.image.services[svc] = {};
+            fields.forEach((f: string) => {
+                if (settings[f] !== undefined) templateData.image.services[svc][f] = settings[f];
+            });
+        });
+
+        // 4. Subtitle Settings
         const subtitleFields = [
-            'subtitleEnabled', 'subtitleService', 'subtitleModel'
+            'subtitleService', 'subtitleModel', 'subtitleAmdLanguage', 'subtitleMaxLen',
+            'subtitleFont', 'subtitleSize', 'subtitleColor', 'subtitleFadeEnabled', 'subtitleFadeIn', 'subtitleFadeOut'
         ];
-        subtitleFields.forEach(field => { if (settings[field] !== undefined) commonSet[field] = settings[field]; });
+        subtitleFields.forEach(f => { if (settings[f] !== undefined) templateData.subtitle[f] = settings[f]; });
 
-        const imageFields = [
-            'imageEnabled', 'imageService', 'imageModel', 'imageWidth', 'imageHeight', 'imageNoLogo', 'imageEnhance', 'imagePrompt', 'imagePollinationsKeyID',
-            'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens',
-            'elevenLabsImageKeyID', 'elevenLabsImageAspectRatio', 'elevenLabsImagePortrait',
-            'imageGooglerModel', 'imageGooglerAspectRatio', 'imageGooglerRemixEnabled', 'imageGooglerReferenceImage', 'imageGooglerRemixStrictMode',
-            'imageGooglerVideoEnabled', 'imageGooglerVideoModel', 'imageGooglerVideoMode', 'imageGooglerVideoCount', 'imageGooglerVideoUpscale'
+        // 5. Montage Settings
+        const montageFields = [
+            'montageResolution', 'montageFPS', 'montageSwayFactor', 'montageZoomFactor',
+            'montageUpscaleFactor', 'montageTransitionDuration', 'montageTransitionEffect',
+            'montageEncodingPreset', 'montageBitrate'
         ];
-        imageFields.forEach(field => { if (settings[field] !== undefined) commonSet[field] = settings[field]; });
+        montageFields.forEach(f => { if (settings[f] !== undefined) templateData.montage[f] = settings[f]; });
 
-        if (settings.translateControlEnabled !== undefined) commonSet.translateControlEnabled = settings.translateControlEnabled;
-        if (settings.imageControlEnabled !== undefined) commonSet.imageControlEnabled = settings.imageControlEnabled;
+        // Cleanup empty objects
+        if (Object.keys(templateData.api).length === 0) delete templateData.api;
+        if (Object.keys(templateData.text).length === 0) delete templateData.text;
+        if (Object.keys(templateData.subtitle).length === 0) delete templateData.subtitle;
+        if (Object.keys(templateData.montage).length === 0) delete templateData.montage;
 
-        await saveTemplate(type, name, { text: textSet, voiceover: voiceSet, common: commonSet });
+        await saveTemplate(type, name, templateData);
     };
+
 
     const handleConfirmDelete = async () => {
         if (templateToDelete) {
@@ -405,6 +482,24 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         }
     };
 
+    /**
+     * Recursively flattens a nested object into a flat key-value map.
+     */
+    const flattenSettings = (obj: any): any => {
+        let result: any = {};
+        for (const i in obj) {
+            if ((typeof obj[i]) === 'object' && obj[i] !== null && !Array.isArray(obj[i])) {
+                const temp = flattenSettings(obj[i]);
+                for (const j in temp) {
+                    result[j] = temp[j];
+                }
+            } else {
+                result[i] = obj[i];
+            }
+        }
+        return result;
+    };
+
     const handleAddTask = (taskName: string) => {
         const relevantTemplateIds = selectedTemplateIds.filter(id => templates.find(t => t.id === id)?.type === type);
         if (relevantTemplateIds.length === 0) {
@@ -412,12 +507,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         } else {
             const tasksData = relevantTemplateIds.map(id => {
                 const template = templates.find(t => t.id === id);
-                let tplSettings = template?.settings;
-                if (tplSettings && (tplSettings.text || tplSettings.voiceover || tplSettings.common)) {
-                    tplSettings = { ...(tplSettings.text || {}), ...(tplSettings.voiceover || {}), ...(tplSettings.common || {}) };
-                }
-                return { settings: tplSettings, subName: template?.name };
-            }).filter(d => d.settings);
+                if (!template) return null;
+                const tplSettings = flattenSettings(template.settings);
+                return { settings: tplSettings, subName: template.name };
+            }).filter(d => d && d.settings);
             addTasks(type, content, tasksData as any, taskName);
             setSelectedTemplateIds([]);
         }
@@ -425,18 +518,22 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     };
 
     const applyTemplate = (tpl: any) => {
-        let applied = tpl.settings;
-        if (tpl.settings && (tpl.settings.text || tpl.settings.voiceover || tpl.settings.common)) {
-            applied = { ...(tpl.settings.text || {}), ...(tpl.settings.voiceover || {}), ...(tpl.settings.common || {}) };
-        }
+        const applied = flattenSettings(tpl.settings);
         setSettings((prev: any) => ({
             ...prev, ...applied,
-            sidebarWidth: prev.sidebarWidth, translateCollapsed: prev.translateCollapsed, rewriteCollapsed: prev.rewriteCollapsed,
-            apiCollapsed: prev.apiCollapsed, pathCollapsed: prev.pathCollapsed, templatesCollapsed: prev.templatesCollapsed,
-            translateTemplatesCollapsed: prev.translateTemplatesCollapsed, rewriteTemplatesCollapsed: prev.rewriteTemplatesCollapsed,
-            voiceoverTemplatesCollapsed: prev.voiceoverTemplatesCollapsed, controlCollapsed: prev.controlCollapsed,
+            sidebarWidth: prev.sidebarWidth,
+            translateCollapsed: prev.translateCollapsed,
+            rewriteCollapsed: prev.rewriteCollapsed,
+            apiCollapsed: prev.apiCollapsed,
+            pathCollapsed: prev.pathCollapsed,
+            templatesCollapsed: prev.templatesCollapsed,
+            translateTemplatesCollapsed: prev.translateTemplatesCollapsed,
+            rewriteTemplatesCollapsed: prev.rewriteTemplatesCollapsed,
+            voiceoverTemplatesCollapsed: prev.voiceoverTemplatesCollapsed,
+            controlCollapsed: prev.controlCollapsed,
         }));
     };
+
 
     const resize = useCallback((e: MouseEvent) => {
         if (isResizing && sidebarRef.current) {
@@ -569,6 +666,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                         fetchPollinationsModels={fetchPollinationsModels} pollinationsModels={pollinationsModels}
                         loadingPollinationsModels={loadingPollinationsModels} estimatedChunks={estimatedChunks}
                         content={content} models={models} renderValueOrInput={renderValueOrInput} setCurrentPath={setCurrentPath}
+                        elevenLabsImageKeys={elevenLabsImageKeys}
                     />
 
                     <SubtitleSection
