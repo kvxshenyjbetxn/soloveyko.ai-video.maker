@@ -22,9 +22,8 @@
     background: #5c6bc0;
     /* Indigo for Queue */
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     color: white;
     cursor: pointer;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
@@ -34,6 +33,13 @@
     right: 0;
     pointer-events: auto;
     z-index: 20;
+}
+
+.queue-monitor-circle svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+    transform: translate(2px, 1px);
 }
 
 .queue-monitor-circle:hover {

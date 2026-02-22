@@ -139,7 +139,7 @@ function App() {
             case 'text.translate': return <Translate setCurrentPath={setCurrentPath} />;
             case 'text.rewrite': return <Rewrite setCurrentPath={setCurrentPath} />;
             case 'queue': return <Queue setCurrentPath={setCurrentPath} />;
-            case 'gallery': return <Gallery />;
+            case 'gallery': return <Gallery setCurrentPath={setCurrentPath} />;
 
             // Settings tabs
             case 'settings.general': return <General />;

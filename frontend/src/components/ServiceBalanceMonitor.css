@@ -32,9 +32,8 @@
     height: 48px;
     background: var(--accent-secondary, #4caf50);
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     color: white;
     cursor: pointer;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
@@ -59,9 +58,10 @@
     pointer-events: none;
 }
 
-.balance-icon svg {
+.balance-monitor-toggle svg {
     width: 24px;
     height: 24px;
+    display: block;
 }
 
 /* Панель */

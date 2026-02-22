@@ -12,7 +12,7 @@ interface SelectedMedia {
     path: string;
 }
 
-export const Gallery = () => {
+export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => void }) => {
     const { t } = useI18n();
     const [tasks, setTasks] = useState<utils.GalleryTask[]>([]);
     const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
@@ -24,6 +24,13 @@ export const Gallery = () => {
 
     const { tasks: queueTasks, resumeImageControl } = useQueue();
     const isAwaitingControl = queueTasks.some(t => t.isAwaitingImageControl);
+
+    const handleContinueProcessing = async () => {
+        await resumeImageControl();
+        if (setCurrentPath) {
+            setCurrentPath('queue');
+        }
+    };
 
     const loadGallery = async () => {
         try {
@@ -165,7 +172,7 @@ export const Gallery = () => {
                             <div className="pulse-icon"></div>
                             <span>{t('pipeline.image_control_notification.title')}</span>
                         </div>
-                        <button className="btn-continue-processing" onClick={resumeImageControl}>
+                        <button className="btn-continue-processing" onClick={handleContinueProcessing}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}>
                                 <polyline points="9 10 4 15 9 20"></polyline>
                                 <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
