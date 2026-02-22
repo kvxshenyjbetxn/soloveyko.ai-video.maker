@@ -449,7 +449,33 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         if (!settings) return;
         const currentString = JSON.stringify(settings);
         if (currentString !== lastSavedRef.current) {
-            const timer = setTimeout(() => { SavePipelineSettings(settings); lastSavedRef.current = currentString; }, 500);
+            const timer = setTimeout(async () => {
+                // Fetch LATEST from file to avoid overwriting Performance tab settings
+                const saved = await GetPipelineSettings();
+
+                // Fields managed BY THE SIDEBAR (we only update these)
+                const sidebarManagedSettings = {
+                    ...settings
+                };
+
+                // Fields managed BY THE PERFORMANCE TAB (we strictly PRESERVE these from 'saved')
+                const performanceFields = [
+                    'montageVideoCodec',
+                    'montageThreadsPerProcess',
+                    'montageProcessPriority',
+                    'montageCPUCores'
+                ];
+
+                const merged = { ...sidebarManagedSettings } as any;
+                performanceFields.forEach(field => {
+                    if ((saved as any)[field] !== undefined) {
+                        merged[field] = (saved as any)[field];
+                    }
+                });
+
+                await SavePipelineSettings(merged);
+                lastSavedRef.current = currentString;
+            }, 500);
             return () => clearTimeout(timer);
         }
     }, [settings]);

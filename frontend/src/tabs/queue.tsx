@@ -301,12 +301,15 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                     <MontageIcon />
                                     <span>{cleanStageLabel(t('pipeline.stage.montage'))}</span>
                                 </div>
-                                <span className="stage-status-text badge-status">
+                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '11px', lineHeight: '1.4' }}>
                                     {task.montageStatus === 'completed' ? t('queue.status_completed') :
-                                        task.montageStatus === 'running' ? t('queue.status_running') :
-                                            task.montageStatus === 'waiting' ? t('queue.status_waiting') :
-                                                task.montageStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
-                                </span>
+                                        task.montageStatus === 'running' ? (
+                                            task.montageMsg ? renderStatusLines(task.montageMsg, false) : t('queue.status_running')
+                                        ) : task.montageStatus === 'waiting' ? t('queue.status_waiting') :
+                                            task.montageStatus === 'failed' ? (
+                                                task.montageMsg ? renderStatusLines(task.montageMsg, true) : t('queue.status_failed')
+                                            ) : t('queue.status_pending')}
+                                </div>
                             </div>
                         )}
                     </div>

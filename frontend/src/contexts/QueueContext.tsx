@@ -12,7 +12,7 @@ export interface QueueTask {
     status: TaskStatus; progress: number; resultLength?: number;
     isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; controlContent?: string;
     textStatus: TaskStatus; voiceStatus: TaskStatus; imageStatus: TaskStatus;
-    subtitleStatus: TaskStatus; montageStatus: TaskStatus;
+    subtitleStatus: TaskStatus; montageStatus: TaskStatus; montageMsg?: string;
     voiceDuration?: string; imagesMessage?: string; timestamp: number;
 }
 
@@ -53,7 +53,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             id: `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             name: subName ? `${fName} - ${subName}` : fName, folderName: fName, subName: subName || "",
             type, content, settings, status: 'pending', progress: 0, textStatus: 'pending', voiceStatus: 'pending',
-            imageStatus: 'pending', subtitleStatus: 'pending', montageStatus: 'pending', timestamp: Date.now()
+            imageStatus: 'pending', subtitleStatus: 'pending', montageStatus: 'pending', montageMsg: undefined, timestamp: Date.now()
         };
         setTasks(prev => [...prev, newTask]);
     }, [t]);
@@ -65,7 +65,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             id: `ts_${now}_${i}_${Math.random().toString(36).substr(2, 5)}`,
             name: d.subName ? `${fName} - ${d.subName}` : fName, folderName: fName, subName: d.subName || "",
             type, content, settings: d.settings, status: 'pending', progress: 0, textStatus: 'pending', voiceStatus: 'pending',
-            imageStatus: 'pending', subtitleStatus: 'pending', montageStatus: 'pending', taskNumber: i, timestamp: now
+            imageStatus: 'pending', subtitleStatus: 'pending', montageStatus: 'pending', montageMsg: undefined, taskNumber: i, timestamp: now
         }));
         setTasks(prev => [...prev, ...newItems]);
     }, [t]);
@@ -130,7 +130,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 else if (stage === 'voice') { up.voiceStatus = s; if (msg) up.voiceDuration = msg; }
                 else if (stage === 'image') { up.imageStatus = s; if (msg) up.imagesMessage = msg; }
                 else if (stage === 'subtitle') up.subtitleStatus = s;
-                else if (stage === 'montage') up.montageStatus = s;
+                else if (stage === 'montage') { up.montageStatus = s; if (msg) up.montageMsg = msg; }
                 return { ...t, ...up };
             }));
         });

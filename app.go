@@ -180,6 +180,30 @@ func (a *App) SaveSubtitleMaxConnections(max int) error {
 	return err
 }
 
+// GetMontageMaxConnections повертає ліміт одночасних запитів Монтажу
+func (a *App) GetMontageMaxConnections() int {
+	return a.settings.GetMontageMaxConnections()
+}
+
+// SaveMontageMaxConnections встановлює ліміт одночасних запитів Монтажу
+func (a *App) SaveMontageMaxConnections(max int) error {
+	err := a.settings.SetMontageMaxConnections(max)
+	if err == nil {
+		a.pipeline.UpdateMontageSemaphore(max)
+	}
+	return err
+}
+
+// GetMontageMode повертає режим монтажу
+func (a *App) GetMontageMode() string {
+	return a.settings.GetMontageMode()
+}
+
+// SaveMontageMode встановлює режим монтажу
+func (a *App) SaveMontageMode(mode string) error {
+	return a.settings.SetMontageMode(mode)
+}
+
 // GetSystemStats повертає поточну статистику системи
 func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 	return a.stats.GetSystemStats()

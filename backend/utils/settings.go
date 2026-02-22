@@ -122,8 +122,21 @@ type PipelineSettings struct {
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`
 
-	MontageEnabled   bool `json:"montageEnabled"`
-	MontageCollapsed bool `json:"montageCollapsed"`
+	MontageEnabled            bool    `json:"montageEnabled"`
+	MontageCollapsed          bool    `json:"montageCollapsed"`
+	MontageSwayFactor         float64 `json:"montageSwayFactor"`
+	MontageTransitionDuration float64 `json:"montageTransitionDuration"`
+	MontageTransitionEffect   string  `json:"montageTransitionEffect"`
+	MontageZoomFactor         float64 `json:"montageZoomFactor"`
+	MontageEncodingPreset     string  `json:"montageEncodingPreset"`
+	MontageBitrate            int     `json:"montageBitrate"`
+	MontageResolution         string  `json:"montageResolution"`
+	MontageFPS                int     `json:"montageFPS"`
+	MontageUpscaleFactor      float64 `json:"montageUpscaleFactor"`
+	MontageVideoCodec         string  `json:"montageVideoCodec"`
+	MontageThreadsPerProcess  int     `json:"montageThreadsPerProcess"`
+	MontageProcessPriority    string  `json:"montageProcessPriority"`
+	MontageCPUCores           int     `json:"montageCPUCores"`
 }
 
 type Settings struct {
@@ -161,6 +174,8 @@ type Settings struct {
 	ElevenLabsImageKeys           []NamedAPIKey    `json:"elevenLabsImageKeys"`
 	ElevenLabsImageMaxConnections int              `json:"elevenLabsImageMaxConnections"`
 	SubtitleMaxConnections        int              `json:"subtitleMaxConnections"`
+	MontageMaxConnections         int              `json:"montageMaxConnections"`
+	MontageMode                   string           `json:"montageMode"`
 	Pipeline                      PipelineSettings `json:"pipeline"`
 }
 
@@ -259,6 +274,48 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 	if settings.SubtitleMaxConnections <= 0 {
 		settings.SubtitleMaxConnections = 2
 	}
+	if settings.MontageMaxConnections <= 0 {
+		settings.MontageMaxConnections = 1
+	}
+	if settings.MontageMode == "" {
+		settings.MontageMode = "standard"
+	}
+	if settings.Pipeline.MontageTransitionDuration <= 0 {
+		settings.Pipeline.MontageTransitionDuration = 0.5
+	}
+	if settings.Pipeline.MontageTransitionEffect == "" {
+		settings.Pipeline.MontageTransitionEffect = "fade"
+	}
+	if settings.Pipeline.MontageSwayFactor == 0 {
+		settings.Pipeline.MontageSwayFactor = 1.0
+	}
+	if settings.Pipeline.MontageZoomFactor == 0 {
+		settings.Pipeline.MontageZoomFactor = 1.0
+	}
+	if settings.Pipeline.MontageEncodingPreset == "" {
+		settings.Pipeline.MontageEncodingPreset = "medium"
+	}
+	if settings.Pipeline.MontageBitrate <= 0 {
+		settings.Pipeline.MontageBitrate = 15
+	}
+	if settings.Pipeline.MontageResolution == "" {
+		settings.Pipeline.MontageResolution = "1080p"
+	}
+	if settings.Pipeline.MontageFPS <= 0 {
+		settings.Pipeline.MontageFPS = 30
+	}
+	if settings.Pipeline.MontageUpscaleFactor <= 0 {
+		settings.Pipeline.MontageUpscaleFactor = 2.0
+	}
+	if settings.Pipeline.MontageVideoCodec == "" {
+		settings.Pipeline.MontageVideoCodec = "cpu"
+	}
+	if settings.Pipeline.MontageProcessPriority == "" {
+		settings.Pipeline.MontageProcessPriority = "normal"
+	}
+	// MontageCPUCores = 0 means all cores (default)
+	// MontageThreadsPerProcess = 0 means auto (not set), so no default override needed
+
 	// Якщо список моделей взагалі nil (поле відсутнє в JSON), додаємо дефолтні.
 	// Якщо список порожній [], але не nil (користувач все видалив), не чіпаємо.
 	if settings.OpenRouterModels == nil {
@@ -1186,5 +1243,47 @@ func (s *SettingsService) SetSubtitleMaxConnections(max int) error {
 	}
 
 	settings.SubtitleMaxConnections = max
+	return s.SaveSettings(settings)
+}
+
+// GetMontageMaxConnections повертає ліміт одночасних запитів Монтажу
+func (s *SettingsService) GetMontageMaxConnections() int {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 1
+	}
+	if settings.MontageMaxConnections <= 0 {
+		return 1
+	}
+	return settings.MontageMaxConnections
+}
+
+// SetMontageMaxConnections встановлює ліміт одночасних запитів Монтажу
+func (s *SettingsService) SetMontageMaxConnections(max int) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.MontageMaxConnections = max
+	return s.SaveSettings(settings)
+}
+
+// GetMontageMode повертає режим монтажу (standard/experimental)
+func (s *SettingsService) GetMontageMode() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return "standard"
+	}
+	return settings.MontageMode
+}
+
+// SetMontageMode встановлює режим монтажу
+func (s *SettingsService) SetMontageMode(mode string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.MontageMode = mode
 	return s.SaveSettings(settings)
 }

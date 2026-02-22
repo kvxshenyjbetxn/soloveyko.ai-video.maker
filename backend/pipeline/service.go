@@ -43,6 +43,10 @@ type PipelineService struct {
 	subtitleSem        chan struct{}
 	subtitleSemSize    int
 	subtitleSemMu      sync.Mutex
+
+	montageSem     chan struct{}
+	montageSemSize int
+	montageSemMu   sync.Mutex
 }
 
 // NewPipelineService creates a new PipelineService
@@ -80,6 +84,8 @@ func NewPipelineService(
 		elevenLabsUASem:    make(chan struct{}, 5),
 		subtitleSemSize:    settings.GetSubtitleMaxConnections(),
 		subtitleSem:        make(chan struct{}, settings.GetSubtitleMaxConnections()),
+		montageSemSize:     settings.GetMontageMaxConnections(),
+		montageSem:         make(chan struct{}, settings.GetMontageMaxConnections()),
 	}
 }
 
@@ -165,7 +171,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		processedText = updatedText
 		s.pendingControl.Delete(id)
 
-		s.log("SUCCESS", "[Control] Translation approved by user", id, taskLabel)
+		s.log("SUCCESS", "[Control] Text approved.", id, taskLabel)
 		s.emitStageStatus(id, "text", "completed")
 		// Re-emit result length if it changed
 		if s.OnTextResult != nil {
@@ -264,7 +270,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 			// Block goroutine until result received or timeout/context cancel
 			select {
 			case <-resChan:
-				s.log("SUCCESS", "[Control] Images approved by user", id, taskLabel)
+				s.log("SUCCESS", "[Control] Media approved.", id, taskLabel)
 				s.emitStageStatus(id, "image", "completed")
 			case <-s.ctx.Done():
 				s.log("INFO", "[Control] Task cancelled while waiting for image review", id, taskLabel)
@@ -286,6 +292,13 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 			return processedText, imageErr
 		}
 		return processedText, subtitleErr
+	}
+
+	// 5. Montage Stage
+	montageErr := s.ProcessMontage(id, taskLabel, finalDir, settings, &pSettings)
+	if montageErr != nil {
+		s.log("ERROR", fmt.Sprintf("[Pipeline] Montage stage failed: %v", montageErr), id, taskLabel)
+		return processedText, montageErr
 	}
 
 	return processedText, nil
@@ -340,4 +353,23 @@ func (s *PipelineService) getSubtitleSem() chan struct{} {
 	s.subtitleSemMu.Lock()
 	defer s.subtitleSemMu.Unlock()
 	return s.subtitleSem
+}
+
+func (s *PipelineService) UpdateMontageSemaphore(newSize int) {
+	s.montageSemMu.Lock()
+	defer s.montageSemMu.Unlock()
+
+	if newSize == s.montageSemSize {
+		return
+	}
+
+	s.montageSem = make(chan struct{}, newSize)
+	s.montageSemSize = newSize
+	s.log("INFO", fmt.Sprintf("[Pipeline] Montage semaphore updated to %d slots", newSize))
+}
+
+func (s *PipelineService) getMontageSem() chan struct{} {
+	s.montageSemMu.Lock()
+	defer s.montageSemMu.Unlock()
+	return s.montageSem
 }
