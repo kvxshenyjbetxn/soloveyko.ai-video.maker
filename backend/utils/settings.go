@@ -41,7 +41,6 @@ type PipelineSettings struct {
 	VoiceoverElevenLabsBotKeyID   string  `json:"voiceoverElevenLabsBotKeyID,omitempty"`
 	VoiceoverCollapsed            bool    `json:"voiceoverCollapsed"`
 	VoiceoverEnabled              bool    `json:"voiceoverEnabled"`
-	VoiceoverOutputPath           string  `json:"voiceoverOutputPath,omitempty"`
 	VoiceoverPipelineName         string  `json:"voiceoverPipelineName,omitempty"`
 	VoiceoverTemplatesCollapsed   bool    `json:"voiceoverTemplatesCollapsed"`
 	VoiceoverService              string  `json:"voiceoverService,omitempty"`
@@ -105,7 +104,6 @@ type PipelineSettings struct {
 	ImageGooglerVideoMode       string  `json:"imageGooglerVideoMode,omitempty"`
 	ImageGooglerVideoCount      int     `json:"imageGooglerVideoCount,omitempty"`
 	ImageGooglerVideoUpscale    bool    `json:"imageGooglerVideoUpscale"`
-	ImageOutputPath             string  `json:"imageOutputPath,omitempty"`
 	ImagePipelineName           string  `json:"imagePipelineName,omitempty"`
 	ImageTemplatesCollapsed     bool    `json:"imageTemplatesCollapsed"`
 	ImageCollapsed              bool    `json:"imageCollapsed"`

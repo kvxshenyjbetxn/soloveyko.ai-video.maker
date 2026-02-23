@@ -280,13 +280,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (!s.rewriteEnabled) { s.rewriteEnabled = true; updated = true; }
                 if (s.voiceoverEnabled === undefined) { s.voiceoverEnabled = false; updated = true; }
 
-                if (!s.translateOutputPath || !s.rewriteOutputPath || !s.voiceoverOutputPath || !s.imageOutputPath) {
+                if (!s.translateOutputPath || !s.rewriteOutputPath) {
                     const def = await GetDefaultVideosPath();
                     if (def) {
                         if (!s.translateOutputPath) s.translateOutputPath = s.outputPath || def;
                         if (!s.rewriteOutputPath) s.rewriteOutputPath = s.outputPath || def;
-                        if (!s.voiceoverOutputPath) s.voiceoverOutputPath = s.outputPath || def;
-                        if (!s.imageOutputPath) s.imageOutputPath = s.outputPath || def;
                         updated = true;
                     }
                 }
@@ -428,8 +426,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             }
         });
 
-        // Also save major enabling flags for other stages so the template "knows" what it does
-        ['voiceoverEnabled', 'imageEnabled', 'subtitleEnabled', 'montageEnabled', 'translateControlEnabled', 'imageControlEnabled'].forEach(key => {
+        // Also save major enabling flags and OUTPUT PATHS so the template "knows" what it does
+        ['voiceoverEnabled', 'imageEnabled', 'subtitleEnabled', 'montageEnabled', 'translateControlEnabled', 'imageControlEnabled',
+            'translateOutputPath', 'rewriteOutputPath'
+        ].forEach(key => {
             if (settings[key] !== undefined) {
                 templateData.text[key] = settings[key];
             }
@@ -753,7 +753,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         try {
             const path = await SelectDirectory();
             if (path) {
-                const field = type === 'translate' ? 'translateOutputPath' : (type === 'rewrite' ? 'rewriteOutputPath' : 'voiceoverOutputPath');
+                // Only two main paths allowed: translate and rewrite. 
+                // Voiceover (if standalone) will use translate path by default.
+                const field = type === 'rewrite' ? 'rewriteOutputPath' : 'translateOutputPath';
                 handleChange(field, path);
             }
         } catch (err) { console.error("Failed to select path:", err); }

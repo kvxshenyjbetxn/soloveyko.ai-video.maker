@@ -20,7 +20,7 @@ export const PathSection: React.FC<PathSectionProps> = ({ type, settings, handle
     const isRewrite = type === 'rewrite';
     const isVoiceover = type === 'voiceover';
 
-    const outputPath = isTranslate ? settings?.translateOutputPath : (isRewrite ? settings?.rewriteOutputPath : (isVoiceover ? settings?.voiceoverOutputPath : settings?.imageOutputPath)) || '';
+    const outputPath = type === 'rewrite' ? settings?.rewriteOutputPath : settings?.translateOutputPath;
 
     return (
         <div className={`pipeline-stage-container ${settings.pathCollapsed ? 'is-collapsed' : ''}`}>

@@ -251,9 +251,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     useEffect(() => {
         if (!isProcessing || activeBatchRef.current.length === 0 || hasShownImageBatchNotificationRef.current) return;
         const bTasks = tasks.filter(t => activeBatchRef.current.includes(t.id));
-        const allReady = bTasks.every(t => t.isAwaitingImageControl || t.status === 'completed' || t.status === 'failed');
-        if (allReady && bTasks.some(t => t.isAwaitingImageControl)) {
-            hasShownImageBatchNotificationRef.current = true; setImageControlNotification({ isOpen: true });
+        const anyAwaiting = bTasks.some(t => t.isAwaitingImageControl);
+        if (anyAwaiting) {
+            hasShownImageBatchNotificationRef.current = true;
+            setImageControlNotification({ isOpen: true });
         }
     }, [tasks, isProcessing]);
 

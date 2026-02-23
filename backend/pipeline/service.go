@@ -236,7 +236,12 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	// 1.5 Control Stage (Only if not skipped)
-	if !shouldSkipText && pSettings.TranslateControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
+	tControlEnabled := pSettings.TranslateControlEnabled
+	if val, ok := settings["translateControlEnabled"].(bool); ok {
+		tControlEnabled = val
+	}
+
+	if !shouldSkipText && tControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
 		s.emitStageStatus(id, "text", "waiting")
 		s.log("INFO", "[Control] Waiting for user translation review...", id, taskLabel)
 
@@ -409,15 +414,56 @@ func (s *PipelineService) SubmitImageControlResult(id string) {
 
 func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]interface{} {
 	res := make(map[string]interface{})
-	for k, v := range m {
-		if sub, ok := v.(map[string]interface{}); ok {
-			for sk, sv := range sub {
-				res[sk] = sv
-			}
-		} else {
-			res[k] = v
+
+	// Спеціальний мапінг для блоків, де імена в JSON не збігаються з іменами в PipelineSettings
+	// або де є конфлікти імен (наприклад 'image')
+	if stages, ok := m["stages"].(map[string]interface{}); ok {
+		if val, ok := stages["image"].(bool); ok {
+			res["imageEnabled"] = val
+		}
+		if val, ok := stages["voiceover"].(bool); ok {
+			res["voiceoverEnabled"] = val
+		}
+		if val, ok := stages["subtitle"].(bool); ok {
+			res["subtitleEnabled"] = val
+		}
+		if val, ok := stages["translate"].(bool); ok {
+			res["translateEnabled"] = val
 		}
 	}
+
+	if control, ok := m["control"].(map[string]interface{}); ok {
+		if val, ok := control["image"].(bool); ok {
+			res["imageControlEnabled"] = val
+		}
+		if val, ok := control["translate"].(bool); ok {
+			res["translateControlEnabled"] = val
+		}
+	}
+
+	// Рекурсивна функція для розгортання всіх інших налаштувань
+	var flatten func(map[string]interface{})
+	flatten = func(current map[string]interface{}) {
+		for k, v := range current {
+			// Пропускаємо блоки, які ми вже опрацювали спеціальним чином
+			if k == "stages" || k == "control" {
+				continue
+			}
+
+			if sub, ok := v.(map[string]interface{}); ok {
+				// Якщо це блок 'services', ми заходимо в нього глибше
+				// Якщо це будь-який інший блок (наприклад 'image', 'voiceover'),
+				// ми розгортаємо його вміст у корінь, але також продовжуємо рекурсію
+				flatten(sub)
+			} else {
+				// Звичайне значення - копіюємо в результуючу мапу
+				// (Тут пізніші значення можуть перезаписувати ранні, якщо імена однакові)
+				res[k] = v
+			}
+		}
+	}
+
+	flatten(m)
 	return res
 }
 
@@ -572,13 +618,10 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 	pSettings := s.settings.GetPipelineSettings()
 	outPath, _ := settings[taskType+"OutputPath"].(string)
 	if outPath == "" {
-		switch taskType {
-		case "translate":
-			outPath = pSettings.TranslateOutputPath
-		case "rewrite":
+		if taskType == "rewrite" {
 			outPath = pSettings.RewriteOutputPath
-		case "voiceover":
-			outPath = pSettings.VoiceoverOutputPath
+		} else {
+			outPath = pSettings.TranslateOutputPath
 		}
 	}
 	if outPath == "" {
