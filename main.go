@@ -28,7 +28,7 @@ func main() {
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 
-		Resizable: true,
+		DisableResize: false,
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarDefault(),
 			Appearance:           mac.NSAppearanceNameDarkAqua,
