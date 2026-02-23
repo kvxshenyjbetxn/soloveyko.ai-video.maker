@@ -61,7 +61,7 @@ export const TemplatesSection: React.FC<TemplatesSectionProps> = ({
                             className="templates-settings-link"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                setCurrentPath('settings.templates');
+                                setCurrentPath('other.templates');
                             }}
                             title={t('settings.templates')}
                         >

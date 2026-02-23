@@ -118,7 +118,7 @@ function App() {
 
             // If we are in gallery and it becomes empty, redirect
             if (!exists && currentPath === 'gallery') {
-                setCurrentPath('settings.general');
+                setCurrentPath('other.statistic');
             }
         } catch (e) {
             console.error("Failed to check gallery:", e);
@@ -171,11 +171,11 @@ function App() {
             case 'settings.api.image.elevenlabsimage': return <ElevenLabsImage />;
             case 'settings.api.assemblyai': return <AssemblyAI />;
             case 'settings.performance': return <Performance />;
-            case 'settings.templates': return <Templates />;
 
             // Other tabs
             case 'other.statistic': return <Statistic />;
             case 'other.history': return <History />;
+            case 'other.templates': return <Templates />;
 
             // Logs tab
             case 'logs': return <Logs />;
@@ -334,12 +334,6 @@ function App() {
                         )}
                     </div>
 
-                    <div
-                        className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'settings.templates' ? 'active' : ''}`}
-                        onClick={() => setCurrentPath('settings.templates')}
-                    >
-                        {t('settings.templates')}
-                    </div>
                 </aside>
             );
         }
@@ -358,6 +352,12 @@ function App() {
                         onClick={() => setCurrentPath('other.history')}
                     >
                         {t('other.history')}
+                    </div>
+                    <div
+                        className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'other.templates' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('other.templates')}
+                    >
+                        {t('settings.templates')}
                     </div>
                 </aside>
             );

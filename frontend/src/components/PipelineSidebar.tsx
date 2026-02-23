@@ -747,6 +747,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     useEffect(() => {
         const width = isOpen ? (settings?.sidebarWidth || 320) : 0;
         document.documentElement.style.setProperty('--pipeline-sidebar-width', `${width}px`);
+        return () => {
+            document.documentElement.style.setProperty('--pipeline-sidebar-width', '0px');
+        };
     }, [isOpen, settings?.sidebarWidth]);
 
     const handleSelectPath = async () => {
