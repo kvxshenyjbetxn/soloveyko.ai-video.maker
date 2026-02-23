@@ -116,6 +116,7 @@ type PipelineSettings struct {
 	ElevenLabsImageKeyID        string  `json:"elevenLabsImageKeyID,omitempty"`
 	ElevenLabsImagePortrait     bool    `json:"elevenLabsImagePortrait"`
 	ElevenLabsImageAspectRatio  string  `json:"elevenLabsImageAspectRatio,omitempty"`
+	ImageSyncEnabled            bool    `json:"imageSyncEnabled"`
 
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`

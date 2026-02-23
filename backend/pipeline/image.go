@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -152,6 +153,10 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		s.log("WARN", "[Pipeline] No text segments found for image generation.", id, taskLabel)
 		return nil
 	}
+
+	// [SYNC] Save chunks to segments.json
+	chunksData, _ := json.MarshalIndent(chunks, "", "  ")
+	_ = os.WriteFile(filepath.Join(finalDir, "segments.json"), chunksData, 0644)
 
 	s.log("INFO", fmt.Sprintf("[Pipeline] Created %d segments for image instructions", len(chunks)), id, taskLabel)
 

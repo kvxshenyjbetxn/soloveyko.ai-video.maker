@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -86,21 +87,70 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	imagesDir := filepath.Join(finalDir, "images")
-	entries, err := os.ReadDir(imagesDir)
-	if err != nil {
-		return fmt.Errorf("failed to read images directory: %v", err)
-	}
 
 	videoExts := map[string]bool{".mp4": true, ".mkv": true, ".mov": true, ".avi": true, ".webm": true}
 	imageExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true}
 
-	var visualFiles []string
-	for _, entry := range entries {
-		ext := strings.ToLower(filepath.Ext(entry.Name()))
-		if videoExts[ext] || imageExts[ext] {
-			visualFiles = append(visualFiles, filepath.Join("images", entry.Name()))
+	// [SYNC] Determine total expected visual files
+	var segments []string
+	segmentsData, _ := os.ReadFile(filepath.Join(finalDir, "segments.json"))
+	_ = json.Unmarshal(segmentsData, &segments)
+	numSegments := len(segments)
+	if numSegments == 0 {
+		numSegments = 1 // Fallback
+	}
+
+	// Try to determine image_count (multiplication factor)
+	imageCount := 0
+	files, _ := os.ReadDir(imagesDir)
+	for _, f := range files {
+		if !f.IsDir() {
+			imageCount++
 		}
 	}
+	totalExpected := imageCount
+	if totalExpected < numSegments {
+		totalExpected = numSegments
+	}
+
+	var visualFiles []string
+	var lastValidFile string
+	for i := 1; i <= totalExpected; i++ {
+		found := false
+		// Order of preference: video, then images
+		prefixes := []string{fmt.Sprintf("%d", i)}
+		exts := []string{".mp4", ".png", ".jpg", ".jpeg", ".webp", ".webm", ".mov", ".avi", ".mkv"}
+
+		for _, ext := range exts {
+			file := prefixes[0] + ext
+			path := filepath.Join(imagesDir, file)
+			if _, err := os.Stat(path); err == nil {
+				visualFiles = append(visualFiles, filepath.Join("images", file))
+				lastValidFile = filepath.Join("images", file)
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			if lastValidFile != "" {
+				visualFiles = append(visualFiles, lastValidFile)
+				s.log("WARN", fmt.Sprintf("[Montage] File %d not found, reusing %s", i, lastValidFile), id, taskLabel)
+			} else {
+				// Search for ANY valid file in the folder to use as fallback
+				for _, f := range files {
+					ext := strings.ToLower(filepath.Ext(f.Name()))
+					if videoExts[ext] || imageExts[ext] {
+						visualFiles = append(visualFiles, filepath.Join("images", f.Name()))
+						lastValidFile = filepath.Join("images", f.Name())
+						found = true
+						break
+					}
+				}
+			}
+		}
+	}
+
 	if len(visualFiles) == 0 {
 		return fmt.Errorf("no visual files found in %s", imagesDir)
 	}
@@ -120,8 +170,37 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if numFiles <= 1 {
 		transDur = 0
 	}
-	totalTransLoss := float64(numFiles-1) * transDur
-	clipDur := (audioDur + totalTransLoss) / float64(numFiles)
+
+	effectiveDurs := make([]float64, numFiles)
+	if pSettings.ImageSyncEnabled {
+		s.log("INFO", "[Montage] Synchronous Mode enabled, calculating timings...", id, taskLabel)
+		timings, err := utils.GetImageTimings(finalDir, audioDur, numFiles)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[Montage] Sync failed: %v. Falling back to equal distribution.", err), id, taskLabel)
+			clipDur := (audioDur + float64(numFiles-1)*transDur) / float64(numFiles)
+			for i := range effectiveDurs {
+				effectiveDurs[i] = clipDur
+			}
+		} else {
+			for i, t := range timings {
+				if i < numFiles {
+					// We add transDur to each effective duration because xfade consumes it
+					effectiveDurs[i] = t.Duration + transDur
+				}
+			}
+			// Special handling for first and last to avoid over-calculating total duration
+			if len(effectiveDurs) > 0 {
+				effectiveDurs[0] -= transDur / 2
+				effectiveDurs[len(effectiveDurs)-1] -= transDur / 2
+			}
+		}
+	} else {
+		totalTransLoss := float64(numFiles-1) * transDur
+		clipDur := (audioDur + totalTransLoss) / float64(numFiles)
+		for i := range effectiveDurs {
+			effectiveDurs[i] = clipDur
+		}
+	}
 
 	baseW, baseH := 1920, 1080
 	switch pSettings.MontageResolution {
@@ -188,8 +267,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	procPriority := pSettings.MontageProcessPriority
 	cpuCores := pSettings.MontageCPUCores
 
-	s.log("INFO", fmt.Sprintf("[Montage] Codec: %s | Priority: %s | CPUCores: %d | Clips: %d | clipDur: %.2fs",
-		videoCodec, procPriority, cpuCores, numFiles, clipDur), id, taskLabel)
+	s.log("INFO", fmt.Sprintf("[Montage] Codec: %s | Priority: %s | CPUCores: %d | Clips: %d",
+		videoCodec, procPriority, cpuCores, numFiles), id, taskLabel)
 
 	// 5. Build filter graph — single-pass
 	type inputSpec struct {
@@ -233,30 +312,41 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		visualOffset = 1
 	}
 
-	effectiveDurs := make([]float64, numFiles)
-
-	for i, relPath := range visualFiles {
-		ext := strings.ToLower(filepath.Ext(relPath))
+	for idx, vFile := range visualFiles {
+		ext := strings.ToLower(filepath.Ext(vFile))
 		isVideo := videoExts[ext]
-		inputSpecs = append(inputSpecs, inputSpec{loop: !isVideo, path: relPath})
+		inputSpecs = append(inputSpecs, inputSpec{loop: !isVideo, path: vFile})
 
-		vIn := fmt.Sprintf("[%d:v]", i+visualOffset)
-		vOut := fmt.Sprintf("v%d_final", i)
+		vIn := fmt.Sprintf("[%d:v]", idx+visualOffset)
+		vOut := fmt.Sprintf("v%d_final", idx)
 
 		if isVideo {
-			actualDur, _ := s.getDuration(ffprobePath, filepath.Join(finalDir, relPath))
-			if actualDur <= 0 {
-				actualDur = clipDur
+			actualDur, _ := s.getDuration(ffprobePath, filepath.Join(finalDir, vFile))
+			requiredDur := effectiveDurs[idx]
+			if actualDur > 0 && actualDur < requiredDur {
+				// Apply Boomerang Effect
+				s.log("INFO", fmt.Sprintf("[Montage] [%d] Applying boomerang (actual: %.2fs, req: %.2fs)", idx, actualDur, requiredDur), id, taskLabel)
+				filterParts = append(filterParts, fmt.Sprintf(
+					"[%d:v]trim=duration=%.6f,setpts=PTS-STARTPTS[f%d_1];"+
+						"[f%d_1]split=2[pts%d_a][pts%d_b];"+
+						"[pts%d_b]reverse,setpts=PTS-STARTPTS[b%d_wd];"+
+						"[pts%d_a][b%d_wd]concat=n=2:v=1[v%d_boom];"+
+						"[v%d_boom]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+					idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, baseW, baseH, baseW, baseH, fps, requiredDur, vOut,
+				))
+			} else {
+				if actualDur <= 0 {
+					actualDur = requiredDur
+				}
+				effDur := math.Min(actualDur, requiredDur)
+				filterParts = append(filterParts, fmt.Sprintf(
+					"%strim=duration=%.6f,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,setpts=PTS-STARTPTS[%s]",
+					vIn, effDur, baseW, baseH, baseW, baseH, fps, vOut,
+				))
 			}
-			effDur := math.Min(actualDur, clipDur)
-			effectiveDurs[i] = effDur
-			filterParts = append(filterParts, fmt.Sprintf(
-				"%strim=duration=%.6f,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,setpts=PTS-STARTPTS[%s]",
-				vIn, effDur, baseW, baseH, baseW, baseH, fps, vOut,
-			))
-		} else {
-			effectiveDurs[i] = clipDur
-			vUp := fmt.Sprintf("v%d_up", i)
+		} else { // Image
+			requiredDur := effectiveDurs[idx]
+			vUp := fmt.Sprintf("v%d_up", idx)
 
 			// Scale to upscaled resolution
 			filterParts = append(filterParts, fmt.Sprintf(
@@ -273,7 +363,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			if zoomFactor > 0 {
 				zAmp := 0.15 * zoomFactor
 				zExpr = fmt.Sprintf("%.3f+%.3f*(1-cos(6.283*((on/%d)/%.6f)))/2",
-					baseZoomVal, zAmp, fps, clipDur)
+					baseZoomVal, zAmp, fps, requiredDur)
 			} else {
 				zExpr = fmt.Sprintf("%.3f", baseZoomVal)
 			}
@@ -292,7 +382,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				yExpr = "ih/2-(ih/zoom/2)"
 			}
 
-			dFrames := int(clipDur*float64(fps)) + 5
+			dFrames := int(requiredDur*float64(fps)) + 5
 			filterParts = append(filterParts, fmt.Sprintf(
 				"[%s]zoompan=z='%s':x='%s':y='%s':d=%d:s=%dx%d:fps=%d,setpts=PTS-STARTPTS[%s]",
 				vUp, zExpr, xExpr, yExpr, dFrames, baseW, baseH, fps, vOut,

@@ -198,6 +198,23 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             </div>
                         )}
                     </div>
+
+                    <div className="settings-control" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.sync_enabled') || 'Синхронний режим (SRT)'}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.imageSyncEnabled || false}
+                                    onChange={(e) => handleChange('imageSyncEnabled', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                            {t('pipeline.image.sync_desc') || 'Зміна картинок відбуватиметься синхронно з вимовою тексту (через SRT)'}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="settings-group">
