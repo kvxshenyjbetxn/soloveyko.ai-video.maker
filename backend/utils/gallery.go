@@ -113,3 +113,8 @@ func (m *GalleryManager) RemoveImage(imgPath string) {
 		}
 	}
 }
+func (m *GalleryManager) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tasks = make(map[string]map[string][]GalleryImage)
+}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
-import { ProcessTask, SubmitControlResult, SubmitImageControlResult, SubmitExistingFilesResult } from '../../wailsjs/go/main/App';
+import { ProcessTask, SubmitControlResult, SubmitImageControlResult, SubmitExistingFilesResult, ClearGallery } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { useToast } from './ToastContext';
 import { useI18n } from './I18nContext';
@@ -143,7 +143,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }, [t]);
 
     const removeTask = useCallback((id: string) => setTasks(prev => prev.filter(t => t.id !== id)), []);
-    const clearQueue = useCallback(() => { setTasks([]); setIsProcessing(false); }, []);
+    const clearQueue = useCallback(() => {
+        setTasks([]);
+        setIsProcessing(false);
+        ClearGallery();
+    }, []);
 
     const resumeTask = async (id: string, text: string) => {
         setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: false, content: text } : t));

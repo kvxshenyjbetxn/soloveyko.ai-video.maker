@@ -958,6 +958,14 @@ func (a *App) DeleteGalleryImage(imgPath string) bool {
 	return true
 }
 
+// ClearGallery clears all images from memory
+func (a *App) ClearGallery() {
+	a.galleryManager.Clear()
+	if a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "galleryUpdate")
+	}
+}
+
 // DeleteGalleryImages removes multiple images
 func (a *App) DeleteGalleryImages(imgPaths []string) int {
 	successCount := 0
