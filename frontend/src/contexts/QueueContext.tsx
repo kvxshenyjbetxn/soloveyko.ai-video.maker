@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
-import { ProcessTask, SubmitControlResult, SubmitImageControlResult } from '../../wailsjs/go/main/App';
+import { ProcessTask, SubmitControlResult, SubmitImageControlResult, SubmitExistingFilesResult } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { useToast } from './ToastContext';
 import { useI18n } from './I18nContext';
@@ -10,7 +10,8 @@ export interface QueueTask {
     id: string; taskNumber?: number; name: string; folderName: string; subName: string;
     type: 'translate' | 'rewrite' | 'voiceover'; content: string; settings: any;
     status: TaskStatus; progress: number; resultLength?: number;
-    isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; controlContent?: string;
+    isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; isAwaitingExistingFilesCheck?: boolean; controlContent?: string;
+    existingFilesData?: any;
     textStatus: TaskStatus; voiceStatus: TaskStatus; imageStatus: TaskStatus;
     subtitleStatus: TaskStatus; montageStatus: TaskStatus; montageMsg?: string;
     voiceDuration?: string; imagesMessage?: string; timestamp: number;
@@ -20,11 +21,13 @@ interface QueueContextType {
     tasks: QueueTask[]; isProcessing: boolean;
     completionModal: { isOpen: boolean; duration: string; taskCount: number; };
     imageControlNotification: { isOpen: boolean; };
-    addTasks: (type: any, content: string, tasksData: any[], name?: string) => void;
-    addTask: (type: any, content: string, settings: any, name?: string, subName?: string) => void;
+    addTasks: (type: any, content: string, tasksData: any[], name?: string, skippedStages?: string[]) => void;
+    addTask: (type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any) => void;
     removeTask: (id: string) => void; clearQueue: () => void; startQueue: () => Promise<void>;
+    getNextTaskName: () => string;
     updateTaskStatus: (id: string, s: TaskStatus, p?: number, l?: number) => void;
     resumeTask: (id: string, text: string) => Promise<void>; resumeImageControl: () => Promise<void>;
+    resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
     closeCompletionModal: () => void; closeImageControlNotification: () => void;
 }
 
@@ -47,26 +50,95 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setTasks(prev => prev.map(t => t.id === id ? { ...t, status, progress: progress ?? t.progress, resultLength: resultLength ?? t.resultLength } : t));
     }, []);
 
-    const addTask = useCallback((type: any, content: string, settings: any, name?: string, subName?: string) => {
+    const getNextTaskName = useCallback(() => {
+        return `${t('queue.task_default_name')} ${taskCounterRef.current}`;
+    }, [t]);
+
+    const addTask = useCallback((type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any) => {
         const nr = taskCounterRef.current++; const fName = name?.trim() || `${t('queue.task_default_name')} ${nr}`;
+
+        let imgMsg = "";
+        if (existingData?.imageCount > 0 || existingData?.videoCount > 0 || existingData?.promptCount > 0) {
+            const parts = [];
+            if (existingData.promptCount > 0) parts.push(`prompts: ${existingData.promptCount}`);
+            if (existingData.imageCount > 0) parts.push(`images: ${existingData.imageCount}`);
+            if (existingData.videoCount > 0) parts.push(`videos: ${existingData.videoCount}`);
+            imgMsg = parts.join('\n');
+        }
+
+        const effectiveSkip = (skippedStages && existingData && existingData.foundStages)
+            ? skippedStages.filter(s => existingData.foundStages.includes(s))
+            : skippedStages;
+
         const newTask: QueueTask = {
             id: `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             name: subName ? `${fName} - ${subName}` : fName, folderName: fName, subName: subName || "",
-            type, content, settings, status: 'pending', progress: 0, textStatus: 'pending', voiceStatus: 'pending',
-            imageStatus: 'pending', subtitleStatus: 'pending', montageStatus: 'pending', montageMsg: undefined, timestamp: Date.now()
+            type, content, status: 'pending', progress: 0,
+            textStatus: effectiveSkip?.includes('text') ? 'completed' : 'pending',
+            voiceStatus: effectiveSkip?.includes('voice') ? 'completed' : 'pending',
+            imageStatus: effectiveSkip?.includes('image') ? 'completed' : 'pending',
+            subtitleStatus: effectiveSkip?.includes('subtitle') ? 'completed' : 'pending',
+            montageStatus: 'pending', montageMsg: undefined, timestamp: Date.now(),
+            settings: {
+                ...settings,
+                skippedStages: effectiveSkip,
+                voiceoverEnabled: effectiveSkip?.includes('voice') ? true : settings.voiceoverEnabled,
+                imageEnabled: effectiveSkip?.includes('image') ? true : settings.imageEnabled,
+                subtitleEnabled: effectiveSkip?.includes('subtitle') ? true : settings.subtitleEnabled,
+                montageEnabled: effectiveSkip?.includes('montage') ? true : settings.montageEnabled,
+            },
+            resultLength: existingData?.textChars || 0,
+            voiceDuration: existingData?.voiceDuration || "",
+            imagesMessage: imgMsg
         };
         setTasks(prev => [...prev, newTask]);
     }, [t]);
 
-    const addTasks = useCallback((type: any, content: string, tasksData: any[], name?: string) => {
+    const addTasks = useCallback((type: any, content: string, tasksData: any[], name?: string, skippedStages?: string[]) => {
         const nr = taskCounterRef.current++; const fName = name?.trim() || `${t('queue.task_default_name')} ${nr}`;
         const now = Date.now();
-        const newItems: QueueTask[] = tasksData.map((d, i) => ({
-            id: `ts_${now}_${i}_${Math.random().toString(36).substr(2, 5)}`,
-            name: d.subName ? `${fName} - ${d.subName}` : fName, folderName: fName, subName: d.subName || "",
-            type, content, settings: d.settings, status: 'pending', progress: 0, textStatus: 'pending', voiceStatus: 'pending',
-            imageStatus: 'pending', subtitleStatus: 'pending', montageStatus: 'pending', montageMsg: undefined, taskNumber: i, timestamp: now
-        }));
+
+        const newItems: QueueTask[] = tasksData.map((d, i) => {
+            const existingData = d.existing;
+            // For batch adding, skippedStages is the union of all found stages.
+            // We MUST intersect it with this specific task's foundStages to avoid marking
+            // non-existent files as "completed" for templates that don't have them.
+            const effectiveSkip = (skippedStages && existingData && existingData.foundStages)
+                ? skippedStages.filter(s => existingData.foundStages.includes(s))
+                : skippedStages;
+
+            let imgMsg = "";
+            if (existingData?.imageCount > 0 || existingData?.videoCount > 0 || existingData?.promptCount > 0) {
+                const parts = [];
+                if (existingData.promptCount > 0) parts.push(`prompts: ${existingData.promptCount}`);
+                if (existingData.imageCount > 0) parts.push(`images: ${existingData.imageCount}`);
+                if (existingData.videoCount > 0) parts.push(`videos: ${existingData.videoCount}`);
+                imgMsg = parts.join('\n');
+            }
+
+            return {
+                id: `ts_${now}_${i}_${Math.random().toString(36).substr(2, 5)}`,
+                name: d.subName ? `${fName} - ${d.subName}` : fName, folderName: fName, subName: d.subName || "",
+                type, content,
+                settings: {
+                    ...d.settings,
+                    skippedStages: effectiveSkip,
+                    voiceoverEnabled: effectiveSkip?.includes('voice') ? true : d.settings.voiceoverEnabled,
+                    imageEnabled: effectiveSkip?.includes('image') ? true : d.settings.imageEnabled,
+                    subtitleEnabled: effectiveSkip?.includes('subtitle') ? true : d.settings.subtitleEnabled,
+                    montageEnabled: effectiveSkip?.includes('montage') ? true : d.settings.montageEnabled,
+                },
+                status: 'pending', progress: 0,
+                textStatus: effectiveSkip?.includes('text') ? 'completed' : 'pending',
+                voiceStatus: effectiveSkip?.includes('voice') ? 'completed' : 'pending',
+                imageStatus: effectiveSkip?.includes('image') ? 'completed' : 'pending',
+                subtitleStatus: effectiveSkip?.includes('subtitle') ? 'completed' : 'pending',
+                montageStatus: 'pending', montageMsg: undefined, taskNumber: i, timestamp: now,
+                resultLength: existingData?.textChars || 0,
+                voiceDuration: existingData?.voiceDuration || "",
+                imagesMessage: imgMsg
+            };
+        });
         setTasks(prev => [...prev, ...newItems]);
     }, [t]);
 
@@ -86,6 +158,19 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         for (const id of ids) await SubmitImageControlResult(id);
     };
 
+    const resumeWithExistingFiles = async (id: string, skipStages: string[]) => {
+        setTasks(prev => prev.map(t => {
+            if (t.id !== id) return t;
+            const up: any = { isAwaitingExistingFilesCheck: false };
+            if (skipStages.includes('text')) up.textStatus = 'completed';
+            if (skipStages.includes('voice')) up.voiceStatus = 'completed';
+            if (skipStages.includes('subtitle')) up.subtitleStatus = 'completed';
+            if (skipStages.includes('image')) up.imageStatus = 'completed';
+            return { ...t, ...up };
+        }));
+        await SubmitExistingFilesResult(id, skipStages);
+    };
+
     const startQueue = useCallback(async () => {
         if (isProcessing) return;
         const pending = tasks.filter(t => t.status === 'pending');
@@ -97,8 +182,14 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         hasShownImageBatchNotificationRef.current = false;
 
         setTasks(prev => prev.map(t => pendingIds.includes(t.id) ? {
-            ...t, status: 'waiting', textStatus: 'waiting', voiceStatus: 'waiting',
-            imageStatus: 'waiting', subtitleStatus: 'waiting', montageStatus: 'waiting', progress: 0
+            ...t,
+            status: 'waiting',
+            textStatus: t.textStatus === 'pending' ? 'waiting' : t.textStatus,
+            voiceStatus: t.voiceStatus === 'pending' ? 'waiting' : t.voiceStatus,
+            imageStatus: t.imageStatus === 'pending' ? 'waiting' : t.imageStatus,
+            subtitleStatus: t.subtitleStatus === 'pending' ? 'waiting' : t.subtitleStatus,
+            montageStatus: t.montageStatus === 'pending' ? 'waiting' : t.montageStatus,
+            progress: 0
         } : t));
 
         const run = async () => {
@@ -140,10 +231,13 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const uImgReq = EventsOn("requestImageControl", (id: string) => {
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingImageControl: true } : t));
         });
+        const uFilesReq = EventsOn("requestExistingFilesCheck", (data: any) => {
+            setTasks(prev => prev.map(t => t.id === data.id ? { ...t, isAwaitingExistingFilesCheck: true, existingFilesData: data } : t));
+        });
         const uTextResult = EventsOn("textResult", (id: string, length: number) => {
             setTasks(prev => prev.map(t => t.id === id ? { ...t, resultLength: length } : t));
         });
-        return () => { uStatus(); uStage(); uReq(); uImgReq(); uTextResult(); };
+        return () => { uStatus(); uStage(); uReq(); uImgReq(); uFilesReq(); uTextResult(); };
     }, []);
 
     useEffect(() => {
@@ -158,8 +252,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return (
         <QueueContext.Provider value={{
             tasks, isProcessing, completionModal, imageControlNotification,
-            addTasks, addTask, removeTask, clearQueue, startQueue,
-            updateTaskStatus, resumeTask, resumeImageControl, closeCompletionModal, closeImageControlNotification
+            addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
+            updateTaskStatus, resumeTask, resumeImageControl, resumeWithExistingFiles, closeCompletionModal, closeImageControlNotification
         }}>{children}</QueueContext.Provider>
     );
 };

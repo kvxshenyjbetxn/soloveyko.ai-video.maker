@@ -71,7 +71,16 @@
     "task_default_name": "Завдання",
     "voice_saved": "MP3 збережено",
     "subtitle_saved": "SRT збережено",
-    "control_title": "ПЕРЕВІРКА ТЕКСТУ"
+    "control_title": "ПЕРЕВІРКА ТЕКСТУ",
+    "existing_files_found": "Знайдено готові файли",
+    "existing_files_found_count": "Знайдено результати для {{count}} шаблонів",
+    "existing_files_message": "В папці завдання знайдені вже готові результати. Ви хочете використати їх та пропустити відповідні етапи генерації?",
+    "image_saved": "{{images}} картинок\n{{videos}} відео",
+    "image_prompts": "{{count}} промтів",
+    "image_photos": "{{count}} фото",
+    "image_videos": "{{count}} відео",
+    "chars": "{{count}} симв.",
+    "chars_short": "симв."
   },
   "gallery": {
     "title": "Медіа Галерея",
@@ -416,7 +425,8 @@
       "message": "Генерацію зображень та відео для всіх завдань завершено. Будь ласка, перейдіть до Галереї для перевірки та редагування перед фінальним монтажем.",
       "go_to_gallery": "Перейти до Галереї"
     },
-    "continue_processing": "Продовжити обробку"
+    "continue_processing": "Продовжити обробку",
+    "task_added_success": "Завдання додано в чергу"
   },
   "templatesTab": {
     "description": "Тут ви можете керувати вашими шаблонами пайплайнів.",
@@ -441,6 +451,10 @@
     "value": "Значення",
     "select_template": "Оберіть шаблон...",
     "refresh": "Оновити",
-    "loading": "Завантаження..."
+    "loading": "Завантаження...",
+    "yes": "Так",
+    "no": "Ні",
+    "ready": "Готово",
+    "default": "За замовчуванням"
   }
 }

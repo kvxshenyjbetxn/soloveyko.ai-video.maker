@@ -69,7 +69,12 @@
         "task_default_name": "Task",
         "voice_saved": "MP3 Saved",
         "subtitle_saved": "SRT Saved",
-        "control_title": "TEXT CHECK"
+        "control_title": "TEXT CHECK",
+        "existing_files_found": "Existing Files Found",
+        "existing_files_message": "Ready-made results were found in the task folder. Do you want to use them and skip the corresponding generation stages?",
+        "image_saved": "{{images}} images\n{{videos}} videos",
+        "chars": "{{count}} chars",
+        "chars_short": "chars"
     },
     "gallery": {
         "title": "Media Gallery",
@@ -408,7 +413,8 @@
             "message": "Image and video generation for all tasks is complete. Please go to the Gallery to review and edit before final montage.",
             "go_to_gallery": "Go to Gallery"
         },
-        "continue_processing": "Continue Processing"
+        "continue_processing": "Continue Processing",
+        "task_added_success": "Task added to queue"
     },
     "templatesTab": {
         "description": "Managing your pipeline templates.",
@@ -433,6 +439,10 @@
         "value": "Value",
         "select_template": "Select template...",
         "refresh": "Refresh",
-        "loading": "Loading..."
+        "loading": "Loading...",
+        "yes": "Yes",
+        "no": "No",
+        "ready": "Ready",
+        "default": "Default"
     }
 }

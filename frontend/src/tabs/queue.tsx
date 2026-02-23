@@ -5,6 +5,7 @@ import './queue.css';
 import { useQueue, QueueTask } from '../contexts/QueueContext';
 import { useLogger } from '../contexts/LoggerContext';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { ExistingFilesModal } from '../components/ExistingFilesModal';
 
 interface QueueProps {
     setCurrentPath?: (path: string) => void;
@@ -120,7 +121,7 @@ const renderStatusLines = (message: string, isFinished: boolean) => {
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles } = useQueue();
     const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
 
@@ -234,7 +235,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                 <span>{displayMainLabel}</span>
                             </div>
                             <span className="stage-status-text badge-status">
-                                {task.textStatus === 'completed' ? `${task.resultLength || 0} chars` :
+                                {task.textStatus === 'completed' ? (t('queue.chars', { count: task.resultLength || 0 }) || `${task.resultLength || 0} chars`) :
                                     task.textStatus === 'running' ? (t('queue.status_running') || 'Processing...') :
                                         task.textStatus === 'waiting' ? (t('queue.status_waiting') || 'В черзі') :
                                             task.textStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
@@ -264,9 +265,10 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                     <ImageIcon />
                                     <span>{cleanStageLabel(t('pipeline.stage.image'))}</span>
                                 </div>
-                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '11px', lineHeight: '1.4' }}>
+                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
+
                                     {task.imageStatus === 'completed' ? (
-                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : (t('queue.image_saved') || 'Images Gen.')
+                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : (t('queue.status_completed') || 'Completed')
                                     ) : task.imageStatus === 'running' ? (
                                         task.imagesMessage ? renderStatusLines(task.imagesMessage, false) : (t('queue.status_running') || 'Generating...')
                                     ) : task.imageStatus === 'waiting' ? (
@@ -301,7 +303,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                     <MontageIcon />
                                     <span>{cleanStageLabel(t('pipeline.stage.montage'))}</span>
                                 </div>
-                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '11px', lineHeight: '1.4' }}>
+                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
                                     {task.montageStatus === 'completed' ? (task.montageMsg || t('queue.status_completed')) :
                                         task.montageStatus === 'running' ? (
                                             task.montageMsg ? renderStatusLines(task.montageMsg, false) : t('queue.status_running')
@@ -406,6 +408,15 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                 title={confirmModal.title}
                 message={confirmModal.message}
             />
+
+            {tasks.some(t => t.isAwaitingExistingFilesCheck) && (
+                <ExistingFilesModal
+                    isOpen={true}
+                    data={tasks.find(t => t.isAwaitingExistingFilesCheck)?.existingFilesData}
+                    onConfirm={(skip) => resumeWithExistingFiles(tasks.find(t => t.isAwaitingExistingFilesCheck)!.id, skip)}
+                    onCancel={() => resumeWithExistingFiles(tasks.find(t => t.isAwaitingExistingFilesCheck)!.id, [])}
+                />
+            )}
         </div>
     );
 };

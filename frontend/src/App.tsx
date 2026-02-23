@@ -11,6 +11,7 @@ import { GetPipelineSettings, OpenPath } from '../wailsjs/go/main/App';
 // Import all tab components
 import { Translate } from './tabs/text/translate';
 import { Rewrite } from './tabs/text/rewrite';
+import { HistorySidebar } from './components/HistorySidebar';
 import { Queue } from './tabs/queue';
 import { Gallery } from './tabs/gallery';
 import { General } from './tabs/settings/general';
@@ -67,6 +68,24 @@ function App() {
     const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');
     const initLogRef = useRef(false);
+
+    useEffect(() => {
+        // @ts-ignore
+        const unsub = window.runtime?.EventsOn("applyHistoryEntry", (entry: any) => {
+            const targetPath = `text.${entry.type}`;
+            if (currentPath !== targetPath) {
+                setCurrentPath(targetPath);
+                // Re-emit after a short delay to ensure component is mounted and listening
+                setTimeout(() => {
+                    // @ts-ignore
+                    window.runtime?.EventsEmit("applyHistoryEntry", entry);
+                }, 300);
+            }
+        });
+        return () => {
+            if (unsub) unsub();
+        };
+    }, [currentPath]);
 
     useEffect(() => {
         if (!initLogRef.current) {
@@ -187,6 +206,7 @@ function App() {
                     >
                         {t('text.rewrite')}
                     </div>
+                    <HistorySidebar />
                 </aside>
             );
         }

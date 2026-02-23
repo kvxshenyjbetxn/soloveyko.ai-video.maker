@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { PipelineSidebar } from '../../components/PipelineSidebar';
+// @ts-ignore
+import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
 export const Rewrite = ({ setCurrentPath }: { setCurrentPath?: (path: string) => void }) => {
     const { t } = useI18n();
@@ -8,6 +10,19 @@ export const Rewrite = ({ setCurrentPath }: { setCurrentPath?: (path: string) =>
     const [isDragging, setIsDragging] = useState(false);
     const [showPipelineSettings, setShowPipelineSettings] = useState(true);
     const dragCounter = useRef(0);
+    const textRef = useRef(""); // To access current text in event listener if needed, but setState is fine
+
+    useEffect(() => {
+        // @ts-ignore
+        const unsub = EventsOn("applyHistoryEntry", (entry: any) => {
+            if (entry.type === 'rewrite') {
+                setText(entry.content);
+            }
+        });
+        return () => {
+            if (unsub) unsub();
+        };
+    }, []);
 
 
     const updateText = (e: React.ChangeEvent<HTMLTextAreaElement>) => {

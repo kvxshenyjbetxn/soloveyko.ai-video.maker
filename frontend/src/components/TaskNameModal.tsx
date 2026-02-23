@@ -16,10 +16,10 @@ export const TaskNameModal: React.FC<TaskNameModalProps> = ({ isOpen, onClose, o
 
     useEffect(() => {
         if (isOpen) {
-            setName("");
+            setName(defaultName || "");
             setTimeout(() => inputRef.current?.focus(), 100);
         }
-    }, [isOpen]);
+    }, [isOpen, defaultName]);
 
     if (!isOpen) return null;
 

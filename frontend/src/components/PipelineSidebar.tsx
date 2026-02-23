@@ -2,14 +2,18 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import './PipelineSidebar.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useQueue } from '../contexts/QueueContext';
+import { useToast } from '../contexts/ToastContext';
 import { useServices } from '../contexts/ServiceContext';
 import { useTemplates } from '../contexts/TemplateContext';
 // @ts-ignore
-import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices, GetPollinationsImageModels, GetPollinationsSavedModels, SavePollinationsModels, GetEdgeTTSVoices } from '../../wailsjs/go/main/App';
+import { GetPipelineSettings, SavePipelineSettings, GetOpenRouterSavedModels, SelectDirectory, GetDefaultVideosPath, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices, GetPollinationsImageModels, GetPollinationsSavedModels, SavePollinationsModels, GetEdgeTTSVoices, CheckExistingTask, CheckExistingTasks, AddToHistory } from '../../wailsjs/go/main/App';
+// @ts-ignore
+import { EventsOn } from '../../wailsjs/runtime/runtime';
 import voicemakerVoicesData from '../assets/voicemaker_voices.json';
 
 import { TaskNameModal } from './TaskNameModal';
 import { ConfirmModal } from './ConfirmModal';
+import { ExistingFilesModal } from './ExistingFilesModal';
 
 // Pipeline Sidebar Modules
 import { SidebarHeader } from './pipeline-sidebar/SidebarHeader';
@@ -34,7 +38,8 @@ interface PipelineSidebarProps {
 
 export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, onToggle, content, setCurrentPath }) => {
     const { t } = useI18n();
-    const { addTasks, addTask } = useQueue();
+    const { showToast } = useToast();
+    const { addTasks, addTask, getNextTaskName } = useQueue();
     const { openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys, elevenLabsImageKeys } = useServices();
     const [settings, setSettings] = useState<any>(null);
     const [models, setModels] = useState<string[]>([]);
@@ -42,6 +47,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [editingField, setEditingField] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [templateToDelete, setTemplateToDelete] = useState<any | null>(null);
+    const [existingFilesData, setExistingFilesData] = useState<any>(null);
+    const [pendingTaskName, setPendingTaskName] = useState<string>("");
+    const [pendingContent, setPendingContent] = useState<string>("");
+    const [historyOverride, setHistoryOverride] = useState<{ content: string, templateIds: string[], taskName: string } | null>(null);
     const { templates, saveTemplate, removeTemplate, selectedTemplateIds, setSelectedTemplateIds } = useTemplates();
     const [voiceTemplates, setVoiceTemplates] = useState<string[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -363,23 +372,18 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         init();
     }, [type]);
 
-    useEffect(() => {
-        document.documentElement.style.setProperty('--sidebar-toggle-width', '36px');
-        return () => { document.documentElement.style.setProperty('--sidebar-toggle-width', '0px'); };
-    }, []);
 
-    useEffect(() => {
-        const width = isOpen ? (settings?.sidebarWidth || 320) : 0;
-        document.documentElement.style.setProperty('--pipeline-sidebar-width', `${width}px`);
-        return () => { document.documentElement.style.setProperty('--pipeline-sidebar-width', '0px'); };
-    }, [settings?.sidebarWidth, isOpen]);
+
+
+
+
 
     const handleChange = (field: string, value: any) => {
         setSettings((prev: any) => ({ ...prev, [field]: value }));
     };
 
     const handleSaveTemplate = async () => {
-        const name = type === 'translate' ? settings.translatePipelineName : (type === 'rewrite' ? settings.rewritePipelineName : settings.voiceoverPipelineName);
+        const name = (type === 'translate' ? settings.translatePipelineName : (type === 'rewrite' ? settings.rewritePipelineName : settings.voiceoverPipelineName)) || `Template ${templates.length + 1}`;
         const templateData: any = {
             api: {},
             stages: {
@@ -417,7 +421,16 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         // 1. Text Pipeline Settings (Translate/Rewrite)
         Object.keys(settings).forEach(key => {
             if (key.startsWith(type)) {
-                if (key.endsWith('Enabled') || key.endsWith('Collapsed') || key.endsWith('OutputPath') || key.endsWith('PipelineName') || key === 'translateControlEnabled' || key.endsWith('KeyID')) return;
+                // We EXCLUDE Collapsed UI state, but INCLUDE Enabled, OutputPath and PipelineName
+                // so the search for existing files and loading works correctly.
+                if (key.endsWith('Collapsed') || key.endsWith('KeyID')) return;
+                templateData.text[key] = settings[key];
+            }
+        });
+
+        // Also save major enabling flags for other stages so the template "knows" what it does
+        ['voiceoverEnabled', 'imageEnabled', 'subtitleEnabled', 'montageEnabled', 'translateControlEnabled', 'imageControlEnabled'].forEach(key => {
+            if (settings[key] !== undefined) {
                 templateData.text[key] = settings[key];
             }
         });
@@ -500,40 +513,137 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
      */
     const flattenSettings = (obj: any): any => {
         let result: any = {};
-        for (const i in obj) {
-            if ((typeof obj[i]) === 'object' && obj[i] !== null && !Array.isArray(obj[i])) {
-                const temp = flattenSettings(obj[i]);
-                for (const j in temp) {
-                    result[j] = temp[j];
+        if (!obj) return result;
+
+        // 1. Recursive flattening
+        const flatten = (o: any) => {
+            for (const i in o) {
+                if ((typeof o[i]) === 'object' && o[i] !== null && !Array.isArray(o[i])) {
+                    flatten(o[i]);
+                } else {
+                    result[i] = o[i];
                 }
-            } else {
-                result[i] = obj[i];
             }
+        };
+        flatten(obj);
+
+        // 2. Specialized mapping for "stages" group to "Enabled" fields used in the UI
+        if (obj.stages) {
+            if (obj.stages.voiceover !== undefined) result.voiceoverEnabled = obj.stages.voiceover;
+            if (obj.stages.image !== undefined) result.imageEnabled = obj.stages.image;
+            if (obj.stages.subtitle !== undefined) result.subtitleEnabled = obj.stages.subtitle;
+            if (obj.stages.montage !== undefined) result.montageEnabled = obj.stages.montage;
+            if (obj.stages.translate !== undefined) result.translateEnabled = obj.stages.translate;
+            if (obj.stages.rewrite !== undefined) result.rewriteEnabled = obj.stages.rewrite;
         }
+
+        // 3. Specialized mapping for "control" group
+        if (obj.control) {
+            if (obj.control.translate !== undefined) result.translateControlEnabled = obj.control.translate;
+            if (obj.control.image !== undefined) result.imageControlEnabled = obj.control.image;
+        }
+
         return result;
     };
 
-    const handleAddTask = (taskName: string) => {
-        const relevantTemplateIds = selectedTemplateIds.filter(id => templates.find(t => t.id === id)?.type === type);
+    const handleAddTask = useCallback(async (taskName: string, overrideContent?: string, overrideTemplateIds?: string[], isDirectFromHistory: boolean = false) => {
+        if (!settings) {
+            showToast(t('common.error') || 'Settings not ready', 'error');
+            return;
+        }
+        setIsModalOpen(false);
+        const resolvedName = taskName.trim() || getNextTaskName();
+
+        // Use override params if provided (direct call), otherwise use state (modal call from history), otherwise use defaults
+        const finalContent = overrideContent !== undefined ? overrideContent : (historyOverride ? historyOverride.content : content);
+        const finalTemplateIds = overrideTemplateIds !== undefined ? overrideTemplateIds : (historyOverride ? historyOverride.templateIds : selectedTemplateIds);
+        const isFromHistory = isDirectFromHistory || !!historyOverride;
+
+        // Clear history override for next time
+        setHistoryOverride(null);
+
+        // 1. Побудуємо список усіх завдань, які плануємо додати
+        const relevantTemplateIds = finalTemplateIds.filter(id => templates.find(t => t.id === id)?.type === type);
+        const tasksToCheck: any[] = [];
+
         if (relevantTemplateIds.length === 0) {
-            addTask(type, content, settings, taskName);
+            tasksToCheck.push({ taskName: resolvedName, taskType: type, subName: "", settings: settings });
+        } else {
+            relevantTemplateIds.forEach(id => {
+                const template = templates.find(t => t.id === id);
+                if (template) {
+                    const tplSettings = flattenSettings(template.settings);
+                    tasksToCheck.push({ taskName: resolvedName, taskType: type, subName: template.name, settings: tplSettings });
+                }
+            });
+        }
+
+        // 2. Перевірка на вже існуючі файли для кожного завдання
+        try {
+            const results = await CheckExistingTasks(tasksToCheck);
+
+            // Record to history if NOT applying from history itself
+            if (!isFromHistory) {
+                const templatesUsed = relevantTemplateIds.length === 0
+                    ? [t('common.default') || "Default"]
+                    : relevantTemplateIds.map(id => templates.find(tpl => tpl.id === id)?.name).filter(Boolean) as string[];
+
+                try {
+                    await AddToHistory(resolvedName, type, templatesUsed, finalContent);
+                } catch (historyErr) {
+                    console.error("History recording failed:", historyErr);
+                }
+            }
+
+            if (results && results.length > 0) {
+                setExistingFilesData(results); // Тепер це масив
+                setPendingTaskName(resolvedName);
+                setPendingContent(finalContent);
+                return;
+            }
+        } catch (err) {
+            console.error("CheckExistingTasks failed:", err);
+        }
+
+        proceedAddTask(resolvedName, [], undefined, overrideTemplateIds, finalContent);
+
+        // Show success toast
+        showToast(t('pipeline.task_added_success') || 'Task added to queue', 'success');
+    }, [settings, type, content, templates, selectedTemplateIds, historyOverride, getNextTaskName, showToast, t]);
+
+    const proceedAddTask = useCallback((taskName: string, skippedStages: string[], existingDataArray?: any[], overrideTemplateIds?: string[], overrideContent?: string) => {
+        const finalTemplateIds = overrideTemplateIds !== undefined ? overrideTemplateIds : selectedTemplateIds;
+        const finalContent = overrideContent !== undefined ? overrideContent : content;
+        const relevantTemplateIds = finalTemplateIds.filter(id => templates.find(t => t.id === id)?.type === type);
+
+        if (relevantTemplateIds.length === 0) {
+            const existing = existingDataArray?.find(d => d.id === "");
+            addTask(type, finalContent, settings, taskName, "", skippedStages, existing);
         } else {
             const tasksData = relevantTemplateIds.map(id => {
                 const template = templates.find(t => t.id === id);
                 if (!template) return null;
                 const tplSettings = flattenSettings(template.settings);
-                return { settings: tplSettings, subName: template.name };
+                const existing = existingDataArray?.find(d => d.id === template.name);
+                return { settings: tplSettings, subName: template.name, existing };
             }).filter(d => d && d.settings);
-            addTasks(type, content, tasksData as any, taskName);
-            setSelectedTemplateIds([]);
+
+            // addTasks usually handles a batch. Each item in tasksData can have its own existingData.
+            // QueueContext.addTasks needs to be slightly adjusted if we want individual existing data for each item in the batch.
+            // Actually, currently addTasks takes one existingData for the whole batch (which was a bug if templates have different paths).
+            addTasks(type, finalContent, tasksData as any, taskName, skippedStages);
+            if (overrideTemplateIds === undefined) {
+                setSelectedTemplateIds([]);
+            }
         }
-        setIsModalOpen(false);
-    };
+    }, [type, content, settings, templates, selectedTemplateIds, addTask, addTasks, setSelectedTemplateIds]);
 
     const applyTemplate = (tpl: any) => {
         const applied = flattenSettings(tpl.settings);
+        const nameField = type === 'translate' ? 'translatePipelineName' : (type === 'rewrite' ? 'rewritePipelineName' : 'voiceoverPipelineName');
         setSettings((prev: any) => ({
             ...prev, ...applied,
+            [nameField]: tpl.name,
             sidebarWidth: prev.sidebarWidth,
             translateCollapsed: prev.translateCollapsed,
             rewriteCollapsed: prev.rewriteCollapsed,
@@ -600,6 +710,44 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             window.removeEventListener('mouseup', () => setIsResizing(false));
         };
     }, [isResizing, resize]);
+
+    useEffect(() => {
+        // @ts-ignore
+        const unsub = EventsOn("applyHistoryEntry", (entry: any) => {
+            if (entry.type === type) {
+                if (!settings) {
+                    console.warn("[Sidebar] Settings not ready, cannot apply history entry");
+                    return;
+                }
+                // Find template IDs by names
+                const matchedIds: string[] = [];
+                if (entry.templates && entry.templates.length > 0) {
+                    entry.templates.forEach((tplName: string) => {
+                        const tpl = templates.find(t => t.name === tplName && t.type === type);
+                        if (tpl) matchedIds.push(tpl.id);
+                    });
+                }
+
+                setSelectedTemplateIds(matchedIds);
+
+                // Skip the modal and call handleAddTask directly
+                handleAddTask(entry.taskName, entry.content, matchedIds, true);
+            }
+        });
+        return () => {
+            if (unsub) unsub();
+        };
+    }, [type, templates, settings, handleAddTask, setSelectedTemplateIds]);
+
+    useEffect(() => {
+        document.documentElement.style.setProperty('--sidebar-toggle-width', '36px');
+        return () => { document.documentElement.style.setProperty('--sidebar-toggle-width', '0px'); };
+    }, []);
+
+    useEffect(() => {
+        const width = isOpen ? (settings?.sidebarWidth || 320) : 0;
+        document.documentElement.style.setProperty('--pipeline-sidebar-width', `${width}px`);
+    }, [isOpen, settings?.sidebarWidth]);
 
     const handleSelectPath = async () => {
         try {
@@ -694,7 +842,23 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 <SidebarFooter type={type} content={content} selectedTemplateIds={selectedTemplateIds} templates={templates} setIsModalOpen={setIsModalOpen} />
             </div>
 
-            <TaskNameModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onConfirm={handleAddTask} />
+            <TaskNameModal
+                isOpen={isModalOpen}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setHistoryOverride(null);
+                }}
+                onConfirm={handleAddTask}
+                defaultName={historyOverride?.taskName}
+            />
+            {existingFilesData && (
+                <ExistingFilesModal
+                    isOpen={true}
+                    data={existingFilesData}
+                    onConfirm={(skip: string[]) => { proceedAddTask(pendingTaskName, skip, existingFilesData, undefined, pendingContent); setExistingFilesData(null); }}
+                    onCancel={() => { proceedAddTask(pendingTaskName, [], existingFilesData, undefined, pendingContent); setExistingFilesData(null); }}
+                />
+            )}
             <button className={`sidebar-floating-toggle ${isOpen ? 'is-open' : ''}`} onClick={onToggle} title={isOpen ? t('pipeline.hide_settings') : t('pipeline.show_settings')}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
             </button>

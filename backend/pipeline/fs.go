@@ -24,3 +24,20 @@ func (s *PipelineService) SaveTextResult(finalDir string, taskType string, conte
 	filePath := filepath.Join(finalDir, fileName)
 	return os.WriteFile(filePath, []byte(content), 0644)
 }
+
+// LoadTextResult loads the processed text from a file
+func (s *PipelineService) LoadTextResult(finalDir string, taskType string) (string, error) {
+	fileName := "result.txt"
+	switch taskType {
+	case "translate":
+		fileName = "translation.txt"
+	case "rewrite":
+		fileName = "rewrite.txt"
+	}
+	filePath := filepath.Join(finalDir, fileName)
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}

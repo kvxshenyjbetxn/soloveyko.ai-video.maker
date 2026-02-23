@@ -36,6 +36,7 @@ type App struct {
 	localWhisper    *pipeline.LocalWhisperService
 	amdWhisper      *pipeline.AmdWhisperService
 	edgeTTS         *api.EdgeTTSService
+	history         *utils.HistoryService
 }
 
 // NewApp creates a new App application struct
@@ -61,6 +62,7 @@ func NewApp() *App {
 	app.localWhisper = pipeline.NewLocalWhisperService()
 	app.amdWhisper = pipeline.NewAmdWhisperService()
 	app.edgeTTS = api.NewEdgeTTSService()
+	app.history = utils.NewHistoryService()
 
 	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper, app.amdWhisper, app.edgeTTS, app.assemblyAI)
 
@@ -106,6 +108,11 @@ func NewApp() *App {
 	app.pipeline.OnRequestImageControl = func(id string) {
 		if app.ctx != nil {
 			wruntime.EventsEmit(app.ctx, "requestImageControl", id)
+		}
+	}
+	app.pipeline.OnRequestExistingFilesCheck = func(data pipeline.ExistingFilesData) {
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "requestExistingFilesCheck", data)
 		}
 	}
 
@@ -833,9 +840,66 @@ func (a *App) SubmitControlResult(taskId string, content string) {
 	a.pipeline.SubmitControlResult(taskId, content)
 }
 
+// CheckExistingTask checks if a folder already exists and contains relevant files
+// CheckExistingTasks checks multiple tasks (usually from multiple templates) for existing files
+func (a *App) CheckExistingTasks(tasks []map[string]interface{}) ([]pipeline.ExistingFilesData, error) {
+	results := make([]pipeline.ExistingFilesData, 0)
+	for _, t := range tasks {
+		taskName, _ := t["taskName"].(string)
+		taskType, _ := t["taskType"].(string)
+		subName, _ := t["subName"].(string)
+		settings, _ := t["settings"].(map[string]interface{})
+
+		if taskName == "" {
+			continue
+		}
+
+		finalDir := a.pipeline.ResolveFinalDir(taskName, taskType, subName, settings)
+		a.LogToUI("INFO", fmt.Sprintf("[Check] Checking directory for %s - %s: %s", taskName, subName, finalDir))
+
+		if _, err := os.Stat(finalDir); err == nil {
+			data := a.pipeline.CheckExistingFiles("check", finalDir, taskType)
+			if len(data.FoundStages) > 0 {
+				data.ID = subName // Use subName as ID to identify which template this is
+				results = append(results, data)
+			}
+		}
+	}
+
+	if len(results) > 0 {
+		return results, nil
+	}
+	return nil, nil
+}
+
+func (a *App) CheckExistingTask(taskName string, taskType string, settings map[string]interface{}, subName string) (*pipeline.ExistingFilesData, error) {
+	if taskName == "" {
+		return nil, nil
+	}
+
+	finalDir := a.pipeline.ResolveFinalDir(taskName, taskType, subName, settings)
+	a.LogToUI("INFO", fmt.Sprintf("[Check] Checking directory: %s", finalDir))
+
+	if _, err := os.Stat(finalDir); err == nil {
+		data := a.pipeline.CheckExistingFiles("check", finalDir, taskType)
+		a.LogToUI("INFO", fmt.Sprintf("[Check] Found stages: %v", data.FoundStages))
+		if len(data.FoundStages) > 0 {
+			return &data, nil
+		}
+	} else {
+		a.LogToUI("INFO", "[Check] Directory does not exist")
+	}
+	return nil, nil
+}
+
 // SubmitImageControlResult resumes a paused task after image review
 func (a *App) SubmitImageControlResult(taskId string) {
 	a.pipeline.SubmitImageControlResult(taskId)
+}
+
+// SubmitExistingFilesResult resumes a task after existing files check
+func (a *App) SubmitExistingFilesResult(id string, skipStages []string) {
+	a.pipeline.SubmitExistingFilesResult(id, skipStages)
 }
 
 // GetGalleryImages scans output directories and returns gallery data
@@ -887,11 +951,25 @@ func (a *App) SelectImage() (string, error) {
 // SelectVideo opens a file dialog to select a video file
 func (a *App) SelectVideo() (string, error) {
 	return wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{
-		Title: "Select Intro Video",
+		Title: "Select Video File",
 		Filters: []wruntime.FileFilter{
 			{DisplayName: "Videos", Pattern: "*.mp4;*.mov;*.avi;*.mkv;*.webm"},
 		},
 	})
+}
+
+// AddToHistory adds a new entry to the task history
+func (a *App) AddToHistory(name string, taskType string, templates []string, content string) error {
+	err := a.history.AddEntry(name, taskType, templates, content)
+	if err == nil && a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "historyUpdate")
+	}
+	return err
+}
+
+// GetHistory returns the task history (last 2 days)
+func (a *App) GetHistory() ([]utils.HistoryEntry, error) {
+	return a.history.GetHistory()
 }
 
 // GetImageAsBase64 returns base64 content of an image file for preview

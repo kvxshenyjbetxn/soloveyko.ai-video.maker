@@ -184,57 +184,74 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		promptTemplate = pSettings.ImagePrompt
 	}
 
-	s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: 0/%d", len(chunks)))
-	prompts := make([]string, len(chunks))
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var genError error
-	var generatedPromptsCount int
-
-	s.log("INFO", fmt.Sprintf("[Pipeline] Generating %d prompts via OpenRouter (%s)...", len(chunks), orModel), id, taskLabel)
-	for i, chunk := range chunks {
-		wg.Add(1)
-		go func(index int, textChunk string) {
-			defer wg.Done()
-			var fullPrompt string
-			if strings.Contains(promptTemplate, "{{content}}") {
-				fullPrompt = strings.ReplaceAll(promptTemplate, "{{content}}", textChunk)
-			} else {
-				fullPrompt = promptTemplate + "\n\n" + textChunk
-			}
-
-			// We use OpenRouter's internal Chat which handles rate limiting/semaphore automatically
-			res, err := s.openRouter.Chat(id, taskLabel, "image_prompt", orKeyName, orApiKey, orModel, fullPrompt, temp, tokens)
-
-			mu.Lock()
-			if err != nil {
-				if genError == nil {
-					genError = err
-				}
-			} else {
-				prompts[index] = strings.TrimSpace(res)
-				generatedPromptsCount++
-				s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d", generatedPromptsCount, len(chunks)))
-			}
-			mu.Unlock()
-		}(i, chunk)
-	}
-	wg.Wait()
-
-	if genError != nil {
-		s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to generate some image prompts: %v", genError), id, taskLabel)
-		s.emitStageStatus(id, "image", "failed")
-		return genError
-	}
-
-	// Save prompts to file
 	promptsFilePath := filepath.Join(finalDir, "prompts.txt")
-	promptsContent := strings.Join(prompts, "\n\n--------------------\n\n")
-	err := os.WriteFile(promptsFilePath, []byte(promptsContent), 0644)
-	if err != nil {
-		s.log("WARN", fmt.Sprintf("[Pipeline] Failed to save prompts.txt: %v", err), id, taskLabel)
-	} else {
-		s.log("SUCCESS", fmt.Sprintf("[Pipeline] Saved generated prompts to %s", promptsFilePath), id, taskLabel)
+	prompts := make([]string, len(chunks))
+	loadedExisting := false
+
+	if info, err := os.Stat(promptsFilePath); err == nil && !info.IsDir() {
+		content, err := os.ReadFile(promptsFilePath)
+		if err == nil {
+			pStrs := strings.Split(string(content), "\n\n--------------------\n\n")
+			if len(pStrs) == len(chunks) {
+				prompts = pStrs
+				loadedExisting = true
+				s.log("INFO", "[Pipeline] Loaded existing image prompts from prompts.txt", id, taskLabel)
+				s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d", len(chunks), len(chunks)))
+			}
+		}
+	}
+
+	if !loadedExisting {
+		s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: 0/%d", len(chunks)))
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		var genError error
+		var generatedPromptsCount int
+
+		s.log("INFO", fmt.Sprintf("[Pipeline] Generating %d prompts via OpenRouter (%s)...", len(chunks), orModel), id, taskLabel)
+		for i, chunk := range chunks {
+			wg.Add(1)
+			go func(index int, textChunk string) {
+				defer wg.Done()
+				var fullPrompt string
+				if strings.Contains(promptTemplate, "{{content}}") {
+					fullPrompt = strings.ReplaceAll(promptTemplate, "{{content}}", textChunk)
+				} else {
+					fullPrompt = promptTemplate + "\n\n" + textChunk
+				}
+
+				// We use OpenRouter's internal Chat which handles rate limiting/semaphore automatically
+				res, err := s.openRouter.Chat(id, taskLabel, "image_prompt", orKeyName, orApiKey, orModel, fullPrompt, temp, tokens)
+
+				mu.Lock()
+				if err != nil {
+					if genError == nil {
+						genError = err
+					}
+				} else {
+					prompts[index] = strings.TrimSpace(res)
+					generatedPromptsCount++
+					s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d", generatedPromptsCount, len(chunks)))
+				}
+				mu.Unlock()
+			}(i, chunk)
+		}
+		wg.Wait()
+
+		if genError != nil {
+			s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to generate some image prompts: %v", genError), id, taskLabel)
+			s.emitStageStatus(id, "image", "failed")
+			return genError
+		}
+
+		// Save prompts to file
+		promptsContent := strings.Join(prompts, "\n\n--------------------\n\n")
+		err := os.WriteFile(promptsFilePath, []byte(promptsContent), 0644)
+		if err != nil {
+			s.log("WARN", fmt.Sprintf("[Pipeline] Failed to save prompts.txt: %v", err), id, taskLabel)
+		} else {
+			s.log("SUCCESS", fmt.Sprintf("[Pipeline] Saved generated prompts to %s", promptsFilePath), id, taskLabel)
+		}
 	}
 
 	// Create images dir
