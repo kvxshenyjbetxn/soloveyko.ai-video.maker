@@ -28,7 +28,29 @@ interface SystemStats {
 export const SystemMonitor = () => {
     const { t } = useI18n();
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isPinned, setIsPinned] = useState(false);
     const [stats, setStats] = useState<SystemStats | null>(null);
+
+    React.useEffect(() => {
+        // @ts-ignore
+        if (window.runtime) {
+            // @ts-ignore
+            const unsub = window.runtime.EventsOn("monitor-opened", (id: string) => {
+                if (id !== 'system' && !isPinned) {
+                    setIsExpanded(false);
+                }
+            });
+            return () => unsub();
+        }
+    }, [isPinned]);
+
+    const handleExpand = (val: boolean) => {
+        setIsExpanded(val);
+        if (val) {
+            // @ts-ignore
+            window.runtime?.EventsEmit("monitor-opened", 'system');
+        }
+    };
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -55,13 +77,25 @@ export const SystemMonitor = () => {
     };
 
     return (
-        <div className={`system-monitor ${isExpanded ? 'expanded' : 'collapsed'}`}>
+        <div className={`system-monitor ${isExpanded ? 'expanded' : 'collapsed'} ${isPinned ? 'pinned' : ''}`}>
             <div className="monitor-container">
                 {/* Панель моніторигу */}
                 <div className="monitor-panel">
                     <div className="monitor-header">
                         <h3>{t('systemMonitor.cpu')} & {t('systemMonitor.ram')}</h3>
-                        <button className="close-btn" onClick={() => setIsExpanded(false)}>&times;</button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <button
+                                className={`pin-btn ${isPinned ? 'active' : ''}`}
+                                onClick={() => setIsPinned(!isPinned)}
+                                title={isPinned ? t('common.unpin') : t('common.pin')}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="12" y1="17" x2="12" y2="22"></line>
+                                    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.79-.9A2 2 0 0 1 15 10.76V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3v4.76a2 2 0 0 1-1.11 1.79l-1.79.9A2 2 0 0 0 5 15.24Z"></path>
+                                </svg>
+                            </button>
+                            <button className="close-btn" onClick={() => setIsExpanded(false)}>&times;</button>
+                        </div>
                     </div>
 
                     <div className="monitor-content">
@@ -144,7 +178,7 @@ export const SystemMonitor = () => {
                 </div>
 
                 {/* Кнопка перемикання */}
-                <div className="monitor-toggle" onClick={() => setIsExpanded(!isExpanded)} title="System Monitor">
+                <div className="monitor-toggle" onClick={() => handleExpand(!isExpanded)} title="System Monitor">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
                     </svg>

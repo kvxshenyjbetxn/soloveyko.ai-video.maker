@@ -7,6 +7,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
 //go:embed all:frontend/dist
@@ -26,6 +27,14 @@ func main() {
 			Handler: utils.NewFileLoader(),
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+
+		Resizable: true,
+		Mac: &mac.Options{
+			TitleBar:             mac.TitleBarDefault(),
+			Appearance:           mac.NSAppearanceNameDarkAqua,
+			WebviewIsTransparent: true,
+			WindowIsTranslucent:  true,
+		},
 
 		OnStartup: app.startup,
 		Bind: []interface{}{

@@ -11,6 +11,28 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
     const { t } = useI18n();
     const { tasks, removeTask, startQueue, isProcessing } = useQueue();
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isPinned, setIsPinned] = useState(false);
+
+    React.useEffect(() => {
+        // @ts-ignore
+        if (window.runtime) {
+            // @ts-ignore
+            const unsub = window.runtime.EventsOn("monitor-opened", (id: string) => {
+                if (id !== 'queue' && !isPinned) {
+                    setIsExpanded(false);
+                }
+            });
+            return () => unsub();
+        }
+    }, [isPinned]);
+
+    const handleExpand = (val: boolean) => {
+        setIsExpanded(val);
+        if (val) {
+            // @ts-ignore
+            window.runtime?.EventsEmit("monitor-opened", 'queue');
+        }
+    };
 
     if (tasks.length === 0) return null;
 
@@ -18,12 +40,22 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
     const pendingTasksCount = tasks.filter(t => t.status === 'pending').length;
 
     return (
-        <div className={`queue-monitor-wrapper ${isExpanded ? 'expanded' : ''}`}>
+        <div className={`queue-monitor-wrapper ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`}>
             {/* Expanded Panel */}
             <div className={`queue-mini-panel`}>
                 <div className="queue-mini-header">
                     <span className="queue-mini-title">{t('tabs.queue')}</span>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <button
+                            className={`pin-btn ${isPinned ? 'active' : ''}`}
+                            onClick={() => setIsPinned(!isPinned)}
+                            title={isPinned ? t('common.unpin') : t('common.pin')}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="17" x2="12" y2="22"></line>
+                                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.79-.9A2 2 0 0 1 15 10.76V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3v4.76a2 2 0 0 1-1.11 1.79l-1.79.9A2 2 0 0 0 5 15.24Z"></path>
+                            </svg>
+                        </button>
                         <button
                             className={`mini-start-btn ${isProcessing ? 'processing' : ''}`}
                             onClick={(e) => {
@@ -93,7 +125,7 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
             {/* Floating Circle Button */}
             <div
                 className={`queue-monitor-circle ${runningTasks > 0 ? 'is-running' : ''}`}
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={() => handleExpand(!isExpanded)}
             >
                 {pendingTasksCount > 0 && <div className="queue-count-badge">{pendingTasksCount}</div>}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 18H18" /><path d="M6 12H18" /><path d="M6 6H18" /><circle cx="3" cy="6" r="1" /><circle cx="3" cy="12" r="1" /><circle cx="3" cy="18" r="1" /></svg>
