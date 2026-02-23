@@ -135,17 +135,51 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		iLimit = float64(pSettings.ImageSentenceLimit)
 	}
 
+	iInitialCount := 0
+	if val, ok := settings["imageInitialSentenceCount"].(float64); ok {
+		iInitialCount = int(val)
+	} else if pSettings.ImageInitialSentenceCount > 0 {
+		iInitialCount = pSettings.ImageInitialSentenceCount
+	}
+
+	// For lines mode, if initial count is set, we treat it as starting individual lines,
+	// and we force grouping for the rest to make the dynamic start meaningful.
+	if iGenMethod == "lines" && iInitialCount > 0 {
+		iGroup = true
+	}
+
 	s.log("INFO", fmt.Sprintf("[Pipeline] Image chunking method: %s", iGenMethod), id, taskLabel)
 
-	var chunks []string
+	var baseSegments []string
 	if iGenMethod == "lines" {
-		chunks = splitIntoLines(processedText)
+		baseSegments = splitIntoLines(processedText)
 	} else {
-		sentences := splitIntoSentences(processedText)
+		baseSegments = splitIntoSentences(processedText)
+	}
+
+	var chunks []string
+	if iInitialCount > 0 && len(baseSegments) > 0 {
+		// First N segments as individual chunks
+		count := iInitialCount
+		if count > len(baseSegments) {
+			count = len(baseSegments)
+		}
+		chunks = append(chunks, baseSegments[:count]...)
+		remaining := baseSegments[count:]
+
+		// Remaining segments grouped by limit
+		if len(remaining) > 0 {
+			if iGroup {
+				chunks = append(chunks, groupSentences(remaining, int(iLimit))...)
+			} else {
+				chunks = append(chunks, remaining...)
+			}
+		}
+	} else {
 		if iGroup {
-			chunks = groupSentences(sentences, int(iLimit))
+			chunks = groupSentences(baseSegments, int(iLimit))
 		} else {
-			chunks = sentences
+			chunks = baseSegments
 		}
 	}
 

@@ -189,31 +189,51 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         const method = settings.imageGenerationMethod || 'lines';
         const group = settings.imageGroupSentences;
         const limit = settings.imageSentenceLimit ?? 1000;
+        const initialCount = settings.imageInitialSentenceCount ?? 0;
 
+        let baseSegments: string[] = [];
         if (method === 'lines') {
-            return content.split('\n').map(l => l.trim()).filter(l => l).length;
+            baseSegments = content.split('\n').map(l => l.trim()).filter(l => l);
         } else {
             const matches = content.match(/[^.!?]+[.!?]*/g) || [];
-            const sentences = matches.map(s => s.trim()).filter(s => s);
-            if (!group) return sentences.length;
-
-            let chunksNum = 0;
-            let currentLen = 0;
-
-            for (const sentence of sentences) {
-                if (currentLen === 0) {
-                    currentLen = sentence.length;
-                } else if (currentLen + 1 + sentence.length <= limit) {
-                    currentLen += 1 + sentence.length;
-                } else {
-                    chunksNum++;
-                    currentLen = sentence.length;
-                }
-            }
-            if (currentLen > 0) chunksNum++;
-            return chunksNum;
+            baseSegments = matches.map(s => s.trim()).filter(s => s);
         }
-    }, [content, settings?.imageGenerationMethod, settings?.imageGroupSentences, settings?.imageSentenceLimit]);
+
+        if (baseSegments.length === 0) return 0;
+
+        let chunksNum = 0;
+        let segmentsToProcess = baseSegments;
+
+        if (initialCount > 0) {
+            const count = Math.min(initialCount, baseSegments.length);
+            chunksNum += count;
+            segmentsToProcess = baseSegments.slice(count);
+        }
+
+        if (segmentsToProcess.length > 0) {
+            // For lines mode, force grouping if initialCount > 0, to match backend logic
+            const shouldGroup = (method === 'lines') ? (initialCount > 0) : group;
+
+            if (!shouldGroup) {
+                chunksNum += segmentsToProcess.length;
+            } else {
+                let currentLen = 0;
+                for (const segment of segmentsToProcess) {
+                    if (currentLen === 0) {
+                        currentLen = segment.length;
+                    } else if (currentLen + 1 + segment.length <= limit) {
+                        currentLen += 1 + segment.length;
+                    } else {
+                        chunksNum++;
+                        currentLen = segment.length;
+                    }
+                }
+                if (currentLen > 0) chunksNum++;
+            }
+        }
+
+        return chunksNum;
+    }, [content, settings?.imageGenerationMethod, settings?.imageGroupSentences, settings?.imageSentenceLimit, settings?.imageInitialSentenceCount]);
 
     useEffect(() => {
         if (!settings) return;
@@ -456,7 +476,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         });
 
         // 3. Image Settings
-        const imageBaseFields = ['imageService', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens'];
+        const imageBaseFields = ['imageService', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens'];
         imageBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.image[f] = settings[f]; });
 
         // Image Service Specific Groups

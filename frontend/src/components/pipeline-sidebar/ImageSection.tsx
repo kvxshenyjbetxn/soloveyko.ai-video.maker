@@ -145,7 +145,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                         </div>
                     </div>
 
-                    {settings.imageGenerationMethod !== 'lines' && (
+                    {settings.imageGenerationMethod === 'sentences' && (
                         <div className="settings-control">
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                 <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.group_limit') || 'Группировать по лимиту символов'}</label>
@@ -166,7 +166,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
 
                             {settings.imageGroupSentences && (
                                 <div className="settings-slider-container" style={{ marginTop: '8px' }}>
-                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{t('pipeline.image.symbol_limit') || 'Лимит символов:'} {settings.imageSentenceLimit ?? 1000}</span>
+                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{t('pipeline.image.symbol_limit') || 'Ліміт символів:'} {settings.imageSentenceLimit ?? 1000}</span>
                                     <input
                                         type="range"
                                         className="settings-slider"
@@ -182,6 +182,28 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                         </div>
                     )}
 
+                    {(settings.imageGenerationMethod === 'lines' || (settings.imageGenerationMethod === 'sentences' && settings.imageGroupSentences)) && (
+                        <div className="settings-control" style={{ marginTop: '12px' }}>
+                            <label className="settings-label">{t('pipeline.image.initial_sentences') || 'Динамічний початок (речень)'}</label>
+                            <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                {t('pipeline.image.initial_sentences_desc') || 'Вкажіть кількість перших частин, які будуть нарізані по одному (без групування)'}
+                            </div>
+                            <div className="settings-slider-container">
+                                <input
+                                    type="range"
+                                    className="settings-slider"
+                                    min="0"
+                                    max="20"
+                                    step="1"
+                                    value={settings.imageInitialSentenceCount ?? 0}
+                                    style={{ '--range-progress': `${((settings.imageInitialSentenceCount ?? 0) / 20) * 100}%` } as React.CSSProperties}
+                                    onChange={(e) => handleChange('imageInitialSentenceCount', parseInt(e.target.value))}
+                                />
+                                <span style={{ fontSize: '12px', minWidth: '24px', textAlign: 'right', fontWeight: 500 }}>{settings.imageInitialSentenceCount ?? 0}</span>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="settings-control">
                         <label className="settings-label">{t('pipeline.image.prompt') || 'Промт для інструкцій'}</label>
                         <textarea
@@ -191,6 +213,9 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             onChange={(e) => handleChange('imagePrompt', e.target.value)}
                             placeholder={t('pipeline.image.prompt_placeholder') || 'Введіть промт...'}
                         />
+                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                            {t('pipeline.rewrite.prompt_placeholder')?.split('...').pop()?.trim() || 'Використовуйте {{content}} для вставки тексту'}
+                        </div>
                         {content && content.trim() !== '' && (
                             <div style={{ fontSize: '11px', color: 'var(--accent-primary)', marginTop: '8px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>

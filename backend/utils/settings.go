@@ -111,6 +111,7 @@ type PipelineSettings struct {
 	ImageGenerationMethod       string  `json:"imageGenerationMethod,omitempty"`
 	ImageGroupSentences         bool    `json:"imageGroupSentences"`
 	ImageSentenceLimit          int     `json:"imageSentenceLimit,omitempty"`
+	ImageInitialSentenceCount   int     `json:"imageInitialSentenceCount,omitempty"`
 	ImagePromptModel            string  `json:"imagePromptModel,omitempty"`
 	ImagePromptTemperature      float64 `json:"imagePromptTemperature,omitempty"`
 	ImagePromptMaxTokens        int     `json:"imagePromptMaxTokens,omitempty"`
