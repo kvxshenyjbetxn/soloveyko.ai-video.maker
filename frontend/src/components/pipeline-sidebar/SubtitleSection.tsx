@@ -281,26 +281,52 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                         </>
                     )}
 
-                    {settings.subtitleService === 'standard' && (
-                        <div className="settings-control">
-                            <label className="settings-label">{t('pipeline.subtitle.max_len')}</label>
-                            <div className="settings-slider-container">
-                                <input
-                                    type="range"
-                                    min="10"
-                                    max="150"
-                                    step="1"
-                                    className="settings-slider"
-                                    value={settings.subtitleMaxLen || 40}
-                                    style={{ '--range-progress': `${((settings.subtitleMaxLen || 40) - 10) / (150 - 10) * 100}%` } as React.CSSProperties}
-                                    onChange={(e) => handleChange('subtitleMaxLen', parseInt(e.target.value))}
-                                />
-                                <span className="settings-slider-value">{settings.subtitleMaxLen || 40}</span>
-                            </div>
-                            <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
-                                Менше значення = коротші субтитри (краще для Reels/Shorts)
-                            </div>
-                        </div>
+                    {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd' || settings.subtitleService === 'assemblyai') && (
+                        <>
+                            {settings.subtitleService === 'standard' && (
+                                <div className="settings-control">
+                                    <label className="settings-label">{t('pipeline.subtitle.max_len')}</label>
+                                    <div className="settings-slider-container">
+                                        <input
+                                            type="range"
+                                            min="10"
+                                            max="150"
+                                            step="1"
+                                            className="settings-slider"
+                                            value={settings.subtitleMaxLen || 40}
+                                            style={{ '--range-progress': `${((settings.subtitleMaxLen || 40) - 10) / (150 - 10) * 100}%` } as React.CSSProperties}
+                                            onChange={(e) => handleChange('subtitleMaxLen', parseInt(e.target.value))}
+                                        />
+                                        <span className="settings-slider-value">{settings.subtitleMaxLen || 40}</span>
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
+                                        {t('pipeline.subtitle.max_len_desc')}
+                                    </div>
+                                </div>
+                            )}
+
+                            {settings.subtitleService === 'amd' && (
+                                <div className="settings-control">
+                                    <label className="settings-label">{t('pipeline.subtitle.max_words')}</label>
+                                    <div className="settings-slider-container">
+                                        <input
+                                            type="range"
+                                            min="1"
+                                            max="30"
+                                            step="1"
+                                            className="settings-slider"
+                                            value={settings.subtitleMaxWords || 10}
+                                            style={{ '--range-progress': `${((settings.subtitleMaxWords || 10) - 1) / (30 - 1) * 100}%` } as React.CSSProperties}
+                                            onChange={(e) => handleChange('subtitleMaxWords', parseInt(e.target.value))}
+                                        />
+                                        <span className="settings-slider-value">{settings.subtitleMaxWords || 10}</span>
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
+                                        {t('pipeline.subtitle.max_words_desc')}
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     {/* Styling Settings */}

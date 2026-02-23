@@ -77,6 +77,7 @@ type PipelineSettings struct {
 	SubtitleModel       string `json:"subtitleModel,omitempty"`
 	SubtitleAmdLanguage string `json:"subtitleAmdLanguage,omitempty"`
 	SubtitleMaxLen      int    `json:"subtitleMaxLen,omitempty"`
+	SubtitleMaxWords    int    `json:"subtitleMaxWords,omitempty"`
 	SubtitleColor       string `json:"subtitleColor,omitempty"`
 	SubtitleSize        int    `json:"subtitleSize,omitempty"`
 	SubtitleFont        string `json:"subtitleFont,omitempty"`
@@ -238,6 +239,7 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				RewriteEnabled:       true,
 				VoiceoverEnabled:     false,
 				SubtitleMaxLen:       40,
+				SubtitleMaxWords:     10,
 				SubtitleColor:        "#ffffff",
 				SubtitleSize:         24,
 				SubtitleFont:         "Arial",
@@ -406,6 +408,9 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				Key:  settings.ElevenLabsImageAPIKey,
 			},
 		}
+	}
+	if settings.Pipeline.SubtitleMaxWords <= 0 {
+		settings.Pipeline.SubtitleMaxWords = 10
 	}
 
 	return &settings, nil

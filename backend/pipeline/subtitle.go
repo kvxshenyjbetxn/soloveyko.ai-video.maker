@@ -75,7 +75,7 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			amdLang = "uk"
 		}
 
-		result, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, pSettings.SubtitleMaxLen)
+		result, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")

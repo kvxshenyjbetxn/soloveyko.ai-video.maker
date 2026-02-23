@@ -4,15 +4,65 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 )
+
+type subtitleBlock struct {
+	start string
+	end   string
+	text  []string
+}
 
 // SrtToAss converts SRT subtitle content to ASS format using provided settings
 func SrtToAss(srtContent string, settings *PipelineSettings) (string, error) {
-	// Simple SRT parsing regex
-	re := regexp.MustCompile(`(?m)^(\d+)\s*\r?\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\r?\n([\s\S]*?)(?:\r?\n\r?\n|$)`)
-	matches := re.FindAllStringSubmatch(srtContent, -1)
+	// Robust SRT parsing
+	lines := strings.Split(strings.ReplaceAll(srtContent, "\r\n", "\n"), "\n")
 
-	if len(matches) == 0 {
+	var blocks []subtitleBlock
+	currentIdx := -1
+
+	timeRegex := regexp.MustCompile(`(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})`)
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			// Don't reset currentIdx on empty lines, SRT can have empty lines in text
+			// though it's rare. Usually empty line = end of block.
+			// To be safe, we only start a new block on timestamp.
+			continue
+		}
+
+		match := timeRegex.FindStringSubmatch(line)
+		if len(match) > 0 {
+			blocks = append(blocks, subtitleBlock{
+				start: match[1],
+				end:   match[2],
+				text:  []string{},
+			})
+			currentIdx = len(blocks) - 1
+			continue
+		}
+
+		// Check if line is just a number (index)
+		isNumeric := true
+		for _, r := range line {
+			if !unicode.IsDigit(r) {
+				isNumeric = false
+				break
+			}
+		}
+
+		if isNumeric {
+			currentIdx = -1 // Close current block, as numbers mark the start of a new SRT block
+			continue
+		}
+
+		if currentIdx != -1 {
+			blocks[currentIdx].text = append(blocks[currentIdx].text, line)
+		}
+	}
+
+	if len(blocks) == 0 {
 		return "", fmt.Errorf("no valid SRT blocks found")
 	}
 
@@ -62,15 +112,95 @@ func SrtToAss(srtContent string, settings *PipelineSettings) (string, error) {
 		fadeTag = fmt.Sprintf("{\\fad(%d,%d)}", settings.SubtitleFadeIn, settings.SubtitleFadeOut)
 	}
 
-	for _, match := range matches {
-		start := formatSrtTimeToAss(match[2])
-		end := formatSrtTimeToAss(match[3])
-		text := cleanSrtText(match[4])
+	var processedBlocks []subtitleBlock
+	maxWords := 10
+	if settings != nil && settings.SubtitleMaxWords > 0 {
+		maxWords = settings.SubtitleMaxWords
+	}
 
-		sb.WriteString(fmt.Sprintf("Dialogue: 0,%s,%s,Default,,0,0,0,,%s%s\n", start, end, fadeTag, text))
+	// Apply word splitting logic ONLY for AMD Whisper as requested by user
+	isAmd := settings != nil && settings.SubtitleService == "amd"
+
+	for _, b := range blocks {
+		text := strings.Join(b.text, " ")
+		words := strings.Fields(text)
+
+		if !isAmd || len(words) <= maxWords {
+			processedBlocks = append(processedBlocks, b)
+			continue
+		}
+
+		// Split complex blocks (only for AMD)
+		splitBlocks := splitBlockRecursive(b, maxWords)
+		processedBlocks = append(processedBlocks, splitBlocks...)
+	}
+
+	for _, b := range processedBlocks {
+		start := formatSrtTimeToAss(b.start)
+		end := formatSrtTimeToAss(b.end)
+		text := cleanSrtText(strings.Join(b.text, " "))
+
+		if text != "" {
+			sb.WriteString(fmt.Sprintf("Dialogue: 0,%s,%s,Default,,0,0,0,,%s%s\n", start, end, fadeTag, text))
+		}
 	}
 
 	return sb.String(), nil
+}
+
+func splitBlockRecursive(b subtitleBlock, maxWords int) []subtitleBlock {
+	text := strings.Join(b.text, " ")
+	words := strings.Fields(text)
+
+	if len(words) <= maxWords {
+		return []subtitleBlock{b}
+	}
+
+	// Split off the first maxWords
+	part1Words := words[:maxWords]
+	part2Words := words[maxWords:]
+
+	totalWords := len(words)
+	startSec := srtTimeToSeconds(b.start)
+	endSec := srtTimeToSeconds(b.end)
+	duration := endSec - startSec
+
+	// Duration proportional to words
+	part1Dur := (float64(len(part1Words)) / float64(totalWords)) * duration
+	splitTimeSec := startSec + part1Dur
+
+	splitTimeSrt := secondsToSrtTime(splitTimeSec)
+
+	part1 := subtitleBlock{
+		start: b.start,
+		end:   splitTimeSrt,
+		text:  []string{strings.Join(part1Words, " ")},
+	}
+	part2 := subtitleBlock{
+		start: splitTimeSrt,
+		end:   b.end,
+		text:  []string{strings.Join(part2Words, " ")},
+	}
+
+	result := []subtitleBlock{part1}
+	result = append(result, splitBlockRecursive(part2, maxWords)...)
+	return result
+}
+
+func srtTimeToSeconds(srtTime string) float64 {
+	// HH:MM:SS,mmm
+	var h, m, s int
+	var ms int
+	fmt.Sscanf(srtTime, "%d:%d:%d,%d", &h, &m, &s, &ms)
+	return float64(h)*3600 + float64(m)*60 + float64(s) + float64(ms)/1000.0
+}
+
+func secondsToSrtTime(totalSec float64) string {
+	h := int(totalSec / 3600)
+	m := int((totalSec - float64(h*3600)) / 60)
+	s := int(totalSec - float64(h*3600) - float64(m*60))
+	ms := int((totalSec - float64(int(totalSec))) * 1000)
+	return fmt.Sprintf("%02d:%02d:%02d,%03d", h, m, s, ms)
 }
 
 // hexToAssColor converts #RRGGBB or #RRGGBBAA to &HAABBGGRR
@@ -84,14 +214,10 @@ func hexToAssColor(hex string) string {
 		return fmt.Sprintf("&H00%s%s%s", b, g, r)
 	} else if len(hex) == 8 {
 		// RRGGBBAA -> &HAABBGGRR
-		// Note: ASS alpha is 00 for opaque, FF for transparent. CSS is the opposite.
 		r := hex[0:2]
 		g := hex[2:4]
 		b := hex[4:6]
 		a := hex[6:8]
-		// Convert CSS alpha to ASS alpha (roughly)
-		// We'll just simplify and keep it opaque or use provided alpha if needed,
-		// but usually users expect hex to be opaque in these cases.
 		return fmt.Sprintf("&H%s%s%s%s", a, b, g, r)
 	}
 	return "&H00FFFFFF"
@@ -112,9 +238,17 @@ func formatSrtTimeToAss(srtTime string) string {
 	// Convert ms (3 digits) to centiseconds (2 digits)
 	cs := ms[:2]
 
-	// Remove leading zero from hours if present
-	if len(hms) > 0 && hms[0] == '0' {
-		hms = hms[1:]
+	// Remove EVERY leading zero from hours part to get H: instead of HH:
+	// But only for the very first part
+	hmsParts := strings.Split(hms, ":")
+	if len(hmsParts) == 3 {
+		h := hmsParts[0]
+		// Trim leading zeros, but keep one zero if the string becomes empty
+		h = strings.TrimLeft(h, "0")
+		if h == "" {
+			h = "0"
+		}
+		return fmt.Sprintf("%s:%s:%s.%s", h, hmsParts[1], hmsParts[2], cs)
 	}
 
 	return fmt.Sprintf("%s.%s", hms, cs)
@@ -132,7 +266,7 @@ func cleanSrtText(text string) string {
 	// Trim whitespace
 	text = strings.TrimSpace(text)
 
-	// Final clean up of dual \N or multiple spaces
+	// Final clean up of multiple spaces
 	for strings.Contains(text, "  ") {
 		text = strings.ReplaceAll(text, "  ", " ")
 	}

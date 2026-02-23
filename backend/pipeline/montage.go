@@ -174,7 +174,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	effectiveDurs := make([]float64, numFiles)
 	if pSettings.ImageSyncEnabled {
 		s.log("INFO", "[Montage] Synchronous Mode enabled, calculating timings...", id, taskLabel)
-		timings, err := utils.GetImageTimings(finalDir, audioDur, numFiles)
+		timings, err := utils.GetImageTimings(finalDir, audioDur, numFiles, visualFiles, taskLabel)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[Montage] Sync failed: %v. Falling back to equal distribution.", err), id, taskLabel)
 			clipDur := (audioDur + float64(numFiles-1)*transDur) / float64(numFiles)

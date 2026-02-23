@@ -3,17 +3,21 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
+	"unicode"
 )
 
 type ImageTiming struct {
-	Index    int     `json:"index"`
-	Start    float64 `json:"start"`
-	End      float64 `json:"end"`
-	Duration float64 `json:"duration"`
+	Index      int     `json:"index"`
+	Start      float64 `json:"start"`
+	End        float64 `json:"end"`
+	Duration   float64 `json:"duration"`
+	Confidence float64 `json:"confidence"`
 }
 
 type SrtBlock struct {
@@ -31,34 +35,220 @@ func parseSrtTime(timeStr string) float64 {
 }
 
 func ParseSrt(content string) []SrtBlock {
-	re := regexp.MustCompile(`(?m)^(\d+)\s*\r?\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\r?\n([\s\S]*?)(?:\r?\n\r?\n|$)`)
-	matches := re.FindAllStringSubmatch(content, -1)
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
 	var blocks []SrtBlock
-	for _, m := range matches {
-		idx := 0
-		fmt.Sscanf(m[1], "%d", &idx)
-		blocks = append(blocks, SrtBlock{
-			Index: idx,
-			Start: parseSrtTime(m[2]),
-			End:   parseSrtTime(m[3]),
-			Text:  strings.TrimSpace(m[4]),
-		})
+	currentIdx := -1
+	timeRegex := regexp.MustCompile(`(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})`)
+	blockIdx := 0
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		match := timeRegex.FindStringSubmatch(line)
+		if len(match) > 0 {
+			blockIdx++
+			blocks = append(blocks, SrtBlock{
+				Index: blockIdx,
+				Start: parseSrtTime(match[1]),
+				End:   parseSrtTime(match[2]),
+				Text:  "",
+			})
+			currentIdx = len(blocks) - 1
+			continue
+		}
+
+		// Check if line is just a number (index)
+		isNumeric := true
+		for _, r := range line {
+			if !unicode.IsDigit(r) {
+				isNumeric = false
+				break
+			}
+		}
+
+		if isNumeric {
+			currentIdx = -1 // Close current block, as numbers mark the start of a new SRT block
+			continue
+		}
+
+		if currentIdx != -1 {
+			if blocks[currentIdx].Text != "" {
+				blocks[currentIdx].Text += " "
+			}
+			blocks[currentIdx].Text += line
+		}
 	}
 	return blocks
 }
 
-func normalizeText(t string) string {
-	t = strings.ToLower(t)
-	reg := regexp.MustCompile(`[^\w\s]`)
-	t = reg.ReplaceAllString(t, "")
-	return strings.Join(strings.Fields(t), " ")
+// normalizeTextWithMapping returns normalized text and a map of normalized rune index to original rune index
+func normalizeTextWithMapping(text string) (string, []int) {
+	var normalizedRunes []rune
+	var mapping []int
+
+	// Punctuation to remove
+	punctuation := `!"#$%&'()*+,./:;<=>?@[\\]^_{|}~。！？、，；：""''【】（）…·؟،؛।॥「」『』〈〉《》〔〕`
+	puncSet := make(map[rune]bool)
+	for _, r := range punctuation {
+		puncSet[r] = true
+	}
+
+	runes := []rune(text)
+	for i, r := range runes {
+		c := r
+		if r == '-' || r == '—' || puncSet[r] || unicode.IsSpace(r) {
+			c = ' '
+		}
+		c = unicode.ToLower(c)
+
+		if c == ' ' {
+			if len(normalizedRunes) > 0 && normalizedRunes[len(normalizedRunes)-1] == ' ' {
+				continue
+			}
+			if len(normalizedRunes) == 0 {
+				continue
+			}
+		}
+
+		normalizedRunes = append(normalizedRunes, c)
+		mapping = append(mapping, i)
+	}
+
+	// Trim trailing space
+	if len(normalizedRunes) > 0 && normalizedRunes[len(normalizedRunes)-1] == ' ' {
+		normalizedRunes = normalizedRunes[:len(normalizedRunes)-1]
+		mapping = mapping[:len(mapping)-1]
+	}
+
+	return string(normalizedRunes), mapping
 }
 
-func GetImageTimings(finalDir string, audioDur float64, totalImages int) ([]ImageTiming, error) {
+type charToTime struct {
+	CharStart int // Rune index
+	CharEnd   int // Rune index
+	TimeStart float64
+	TimeEnd   float64
+}
+
+func buildTextStream(blocks []SrtBlock) (string, []charToTime) {
+	var streamRunes []rune
+	var timeMap []charToTime
+	currentChar := 0
+
+	for _, b := range blocks {
+		text := strings.TrimSpace(b.Text)
+		if text == "" {
+			continue
+		}
+
+		if len(streamRunes) > 0 {
+			streamRunes = append(streamRunes, ' ')
+			currentChar++
+		}
+
+		bRunes := []rune(text)
+		startChar := currentChar
+		streamRunes = append(streamRunes, bRunes...)
+		currentChar += len(bRunes)
+		endChar := currentChar
+
+		timeMap = append(timeMap, charToTime{
+			CharStart: startChar,
+			CharEnd:   endChar,
+			TimeStart: b.Start,
+			TimeEnd:   b.End,
+		})
+	}
+	return string(streamRunes), timeMap
+}
+
+func charToTimeAt(pos int, timeMap []charToTime, blocks []SrtBlock) float64 {
+	if len(timeMap) == 0 {
+		return 0
+	}
+	for _, entry := range timeMap {
+		if pos >= entry.CharStart && pos < entry.CharEnd {
+			segmentLen := entry.CharEnd - entry.CharStart
+			segmentDur := entry.TimeEnd - entry.TimeStart
+			if segmentLen > 0 {
+				ratio := float64(pos-entry.CharStart) / float64(segmentLen)
+				return entry.TimeStart + ratio*segmentDur
+			}
+			return entry.TimeStart
+		}
+	}
+	if pos >= timeMap[len(timeMap)-1].CharEnd {
+		return timeMap[len(timeMap)-1].TimeEnd
+	}
+	return timeMap[0].TimeStart
+}
+
+func findSegmentInStream(segment string, stream string, startFrom int) (int, int, float64) {
+	if segment == "" {
+		return -1, -1, 0
+	}
+
+	streamRunes := []rune(stream)
+	segmentRunes := []rune(segment)
+
+	if startFrom >= len(streamRunes) {
+		return -1, -1, 0
+	}
+
+	searchArea := streamRunes[startFrom:]
+
+	// Exact match using runes
+	for i := 0; i <= len(searchArea)-len(segmentRunes); i++ {
+		match := true
+		for j := 0; j < len(segmentRunes); j++ {
+			if searchArea[i+j] != segmentRunes[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return startFrom + i, startFrom + i + len(segmentRunes), 1.0
+		}
+	}
+
+	// Fuzzy match: if first and last words match exactly
+	segWords := strings.Fields(segment)
+	if len(segWords) < 1 {
+		return -1, -1, 0
+	}
+
+	firstWordRunes := []rune(segWords[0])
+	lastWordRunes := []rune(segWords[len(segWords)-1])
+
+	// Find first word
+	for i := 0; i <= len(searchArea)-len(firstWordRunes); i++ {
+		if string(searchArea[i:i+len(firstWordRunes)]) == segWords[0] {
+			// Find last word after first word
+			searchAfterFirst := searchArea[i+len(firstWordRunes):]
+			for j := 0; j <= len(searchAfterFirst)-len(lastWordRunes); j++ {
+				if string(searchAfterFirst[j:j+len(lastWordRunes)]) == segWords[len(segWords)-1] {
+					matchLen := len(firstWordRunes) + j + len(lastWordRunes)
+					confidence := 0.7
+					if math.Abs(float64(matchLen-len(segmentRunes))) < float64(len(segmentRunes))*0.3 {
+						confidence = 0.8
+					}
+					return startFrom + i, startFrom + i + matchLen, confidence
+				}
+			}
+		}
+	}
+
+	return -1, -1, 0
+}
+
+func GetImageTimings(finalDir string, audioDur float64, totalImages int, visualFiles []string, taskLabel string) ([]ImageTiming, error) {
 	segmentsPath := filepath.Join(finalDir, "segments.json")
 	srtPath := filepath.Join(finalDir, "subtitle.srt")
 
-	// Fallback logic
+	// Fallback function
 	defaultTimings := func() []ImageTiming {
 		var timings []ImageTiming
 		if totalImages <= 0 {
@@ -80,7 +270,6 @@ func GetImageTimings(finalDir string, audioDur float64, totalImages int) ([]Imag
 	if err != nil {
 		return defaultTimings(), nil
 	}
-
 	var segments []string
 	if err := json.Unmarshal(segmentsData, &segments); err != nil {
 		return defaultTimings(), nil
@@ -90,113 +279,123 @@ func GetImageTimings(finalDir string, audioDur float64, totalImages int) ([]Imag
 	if err != nil {
 		return defaultTimings(), nil
 	}
-
 	blocks := ParseSrt(string(srtData))
 	if len(blocks) == 0 {
 		return defaultTimings(), nil
 	}
 
-	var segmentTimings []ImageTiming
-	lastBlockIdx := 0
+	stream, timeMap := buildTextStream(blocks)
+	streamNorm, streamMapping := normalizeTextWithMapping(stream)
 
-	for i, seg := range segments {
-		normSeg := normalizeText(seg)
-		if normSeg == "" {
+	matches := make([]*ImageTiming, len(segments))
+	lastSearchStart := 0 // Rune index
+	anchorThreshold := 0.65
+
+	for i, segment := range segments {
+		segNorm, _ := normalizeTextWithMapping(segment)
+		if segNorm == "" {
 			continue
 		}
 
-		start := -1.0
-		end := -1.0
+		startChar, endChar, confidence := findSegmentInStream(segNorm, streamNorm, lastSearchStart)
+		if startChar != -1 && confidence >= anchorThreshold {
+			// Map back (indices are rune indices)
+			if startChar >= len(streamMapping) || endChar-1 >= len(streamMapping) {
+				continue
+			}
+			origStart := streamMapping[startChar]
+			origEnd := streamMapping[endChar-1] + 1
 
-		// Find start block
-		for j := lastBlockIdx; j < len(blocks); j++ {
-			normBlock := normalizeText(blocks[j].Text)
-			// Check if segment starts in this block or block contains first few words
-			words := strings.Fields(normSeg)
-			if len(words) > 0 {
-				firstWord := words[0]
-				if strings.Contains(normBlock, firstWord) {
-					start = blocks[j].Start
-					lastBlockIdx = j
-					break
+			startTime := charToTimeAt(origStart, timeMap, blocks)
+			endTime := charToTimeAt(origEnd, timeMap, blocks)
+
+			if endTime <= startTime {
+				endTime = startTime + 0.5
+			}
+
+			matches[i] = &ImageTiming{
+				Index:      i,
+				Start:      startTime,
+				End:        endTime,
+				Duration:   endTime - startTime,
+				Confidence: confidence,
+			}
+			lastSearchStart = endChar
+		}
+	}
+
+	// Interpolation
+	var finalTimings []ImageTiming
+	prevValidEnd := 0.0
+
+	i := 0
+	for i < len(segments) {
+		if matches[i] != nil {
+			current := *matches[i]
+			if current.Start < prevValidEnd {
+				current.Start = prevValidEnd
+				if current.End <= current.Start {
+					current.End = current.Start + 0.5
 				}
+				current.Duration = current.End - current.Start
 			}
-		}
-
-		if start == -1.0 {
-			if len(segmentTimings) > 0 {
-				start = segmentTimings[len(segmentTimings)-1].End
-			} else {
-				start = 0
+			finalTimings = append(finalTimings, current)
+			prevValidEnd = current.End
+			i++
+		} else {
+			// Gap
+			gapStartIdx := i
+			gapEndIdx := i
+			for gapEndIdx < len(segments) && matches[gapEndIdx] == nil {
+				gapEndIdx++
 			}
-		}
 
-		// Find end block
-		// We look ahead to see where the segment ends
-		for j := lastBlockIdx; j < len(blocks); j++ {
-			normBlock := normalizeText(blocks[j].Text)
-			words := strings.Fields(normSeg)
-			if len(words) > 0 {
-				lastWord := words[len(words)-1]
-				if strings.Contains(normBlock, lastWord) {
-					end = blocks[j].End
-					lastBlockIdx = j
-					// But we should check if its followed by other words of the segment in subsequent blocks?
-					// For simplicity, we'll take the first one we find.
+			nextValidStart := audioDur
+			if gapEndIdx < len(segments) {
+				nextValidStart = matches[gapEndIdx].Start
+			}
+
+			timeBudget := math.Max(0, nextValidStart-prevValidEnd)
+			numMissing := gapEndIdx - gapStartIdx
+
+			// Distribute budget
+			var gapTotalTextLen int
+			for k := gapStartIdx; k < gapEndIdx; k++ {
+				n, _ := normalizeTextWithMapping(segments[k])
+				gapTotalTextLen += len(n)
+			}
+			if gapTotalTextLen == 0 {
+				gapTotalTextLen = 1
+			}
+
+			currentCursor := prevValidEnd
+			for k := gapStartIdx; k < gapEndIdx; k++ {
+				n, _ := normalizeTextWithMapping(segments[k])
+				weight := float64(len(n)) / float64(gapTotalTextLen)
+				if len(n) == 0 {
+					weight = 1.0 / float64(numMissing)
 				}
+				dur := timeBudget * weight
+				finalTimings = append(finalTimings, ImageTiming{
+					Index:    k,
+					Start:    currentCursor,
+					End:      currentCursor + dur,
+					Duration: dur,
+				})
+				currentCursor += dur
 			}
+			prevValidEnd = currentCursor
+			i = gapEndIdx
 		}
-
-		if end <= start {
-			// If we didn't find end or its invalid, try to estimate from next segment start or end of audio
-			if i < len(segments)-1 {
-				// We'll fix it in the next pass or just use a default gap
-				end = start + 5.0
-			} else {
-				end = audioDur
-			}
-		}
-
-		segmentTimings = append(segmentTimings, ImageTiming{
-			Index:    i,
-			Start:    start,
-			End:      end,
-			Duration: end - start,
-		})
 	}
 
-	// Refine timings to ensure no overlaps and no gaps
-	for i := 0; i < len(segmentTimings); i++ {
-		if i > 0 {
-			if segmentTimings[i].Start < segmentTimings[i-1].End {
-				segmentTimings[i].Start = segmentTimings[i-1].End
-			}
-			if segmentTimings[i].Start > segmentTimings[i-1].End {
-				// Fill gap by extending previous
-				segmentTimings[i-1].End = segmentTimings[i].Start
-				segmentTimings[i-1].Duration = segmentTimings[i-1].End - segmentTimings[i-1].Start
-			}
-		}
-		if segmentTimings[i].End <= segmentTimings[i].Start {
-			segmentTimings[i].End = segmentTimings[i].Start + 0.1
-		}
-		segmentTimings[i].Duration = segmentTimings[i].End - segmentTimings[i].Start
+	// Refine to ensure exact match with audioDur
+	if len(finalTimings) > 0 {
+		finalTimings[len(finalTimings)-1].End = audioDur
+		finalTimings[len(finalTimings)-1].Duration = finalTimings[len(finalTimings)-1].End - finalTimings[len(finalTimings)-1].Start
 	}
 
-	// Ensure last one ends at audioDur
-	if len(segmentTimings) > 0 {
-		segmentTimings[len(segmentTimings)-1].End = audioDur
-		segmentTimings[len(segmentTimings)-1].Duration = segmentTimings[len(segmentTimings)-1].End - segmentTimings[len(segmentTimings)-1].Start
-	}
-
-	// Now distribute timings if there are more images than segments (image_count > 1)
-	// Or if some segments were grouped? Wait, segments correspond to prompts.
-	// 1 segment = 1 prompt = (image_count) images.
-
-	// Let's check how many images we actually have.
-	// If totalImages != len(segments), we need to adapt.
-	// Usually totalImages = len(segments) * image_count.
-
+	// Handle multiple images per segment (imageCount > 1)
 	imageCount := 1
 	if len(segments) > 0 {
 		imageCount = totalImages / len(segments)
@@ -205,41 +404,120 @@ func GetImageTimings(finalDir string, audioDur float64, totalImages int) ([]Imag
 		imageCount = 1
 	}
 
-	var finalTimings []ImageTiming
-	for _, st := range segmentTimings {
-		subClipDur := st.Duration / float64(imageCount)
+	var results []ImageTiming
+	for _, st := range finalTimings {
+		subDur := st.Duration / float64(imageCount)
 		for j := 0; j < imageCount; j++ {
-			finalTimings = append(finalTimings, ImageTiming{
-				Index:    len(finalTimings),
-				Start:    st.Start + float64(j)*subClipDur,
-				End:      st.Start + float64(j+1)*subClipDur,
-				Duration: subClipDur,
+			results = append(results, ImageTiming{
+				Index:    len(results),
+				Start:    st.Start + float64(j)*subDur,
+				End:      st.Start + float64(j+1)*subDur,
+				Duration: subDur,
 			})
 		}
 	}
 
-	// If we still have a mismatch in count, fill the rest with default equal distribution or stretch last
-	if len(finalTimings) < totalImages {
+	// Final cap/pad
+	if len(results) < totalImages {
 		lastEnd := 0.0
-		if len(finalTimings) > 0 {
-			lastEnd = finalTimings[len(finalTimings)-1].End
+		if len(results) > 0 {
+			lastEnd = results[len(results)-1].End
 		}
-		remaining := totalImages - len(finalTimings)
-		gap := (audioDur - lastEnd) / float64(remaining)
-		if gap <= 0 {
-			gap = 0.1
+		rem := totalImages - len(results)
+		dur := (audioDur - lastEnd) / float64(rem)
+		if dur < 0.1 {
+			dur = 0.1
 		}
-		for i := 0; i < remaining; i++ {
-			finalTimings = append(finalTimings, ImageTiming{
-				Index:    len(finalTimings),
-				Start:    lastEnd + float64(i)*gap,
-				End:      lastEnd + float64(i+1)*gap,
-				Duration: gap,
+		for k := 0; k < rem; k++ {
+			results = append(results, ImageTiming{
+				Index:    len(results),
+				Start:    lastEnd + float64(k)*dur,
+				End:      lastEnd + float64(k+1)*dur,
+				Duration: dur,
 			})
 		}
-	} else if len(finalTimings) > totalImages {
-		finalTimings = finalTimings[:totalImages]
+	} else if len(results) > totalImages {
+		results = results[:totalImages]
 	}
 
-	return finalTimings, nil
+	// Generate human-readable sync debug report
+	var syncLog strings.Builder
+	formatSyncTime := func(seconds float64) string {
+		m := int(seconds / 60)
+		s := int(math.Floor(seconds)) % 60
+		cs := int(math.Round((seconds - math.Floor(seconds)) * 100))
+		if cs == 100 {
+			cs = 0
+			s++
+			if s == 60 {
+				s = 0
+				m++
+			}
+		}
+		return fmt.Sprintf("%02d:%02d.%02d", m, s, cs)
+	}
+
+	totalConf := 0.0
+	confCount := 0
+	for _, m := range matches {
+		if m != nil {
+			totalConf += m.Confidence
+			confCount++
+		}
+	}
+	avgConf := 0
+	if confCount > 0 {
+		avgConf = int((totalConf / float64(confCount)) * 100)
+	}
+
+	syncLog.WriteString("====================================================================================================\n")
+	syncLog.WriteString("SYNCHRONIZATION DEBUG REPORT\n")
+	syncLog.WriteString(fmt.Sprintf("Generated: %s\n", time.Now().Format("2006-01-02 15:04:05")))
+	syncLog.WriteString(fmt.Sprintf("Task: %s\n", taskLabel))
+	syncLog.WriteString("====================================================================================================\n\n")
+
+	syncLog.WriteString("SUMMARY\n")
+	syncLog.WriteString("--------------------------------------------------\n")
+	syncLog.WriteString(fmt.Sprintf("Total Segments: %d\n", len(segments)))
+	syncLog.WriteString(fmt.Sprintf("Final Visuals:  %d\n", totalImages))
+	syncLog.WriteString(fmt.Sprintf("Total Duration: %s (%.2fs)\n", formatSyncTime(audioDur), audioDur))
+	syncLog.WriteString(fmt.Sprintf("Avg Confidence: %d%%\n\n", avgConf))
+
+	syncLog.WriteString("DETAILED SYNCHRONIZATION TABLE\n")
+	syncLog.WriteString("====================================================================================================\n")
+	syncLog.WriteString(fmt.Sprintf("%-5s%-21s%-21s%-21s%-9s%-s\n", "#", "Image", "Display Time", "Subtitle Match", "Conf", "Text Segment"))
+	syncLog.WriteString("----------------------------------------------------------------------------------------------------\n")
+
+	for i, r := range results {
+		// Find which segment this image belongs to
+		segIdx := i / imageCount
+		if segIdx >= len(segments) {
+			segIdx = len(segments) - 1
+		}
+
+		imgName := "n/a"
+		if i < len(visualFiles) {
+			imgName = filepath.Base(visualFiles[i])
+		}
+
+		displayTime := fmt.Sprintf("%s - %s", formatSyncTime(r.Start), formatSyncTime(r.End))
+
+		subMatch := "EST"
+		confStr := "EST"
+		if segIdx < len(matches) && matches[segIdx] != nil {
+			m := matches[segIdx]
+			subMatch = fmt.Sprintf("%s - %s", formatSyncTime(m.Start), formatSyncTime(m.End))
+			confStr = fmt.Sprintf("%d%%", int(m.Confidence*100))
+		}
+
+		text := strings.ReplaceAll(segments[segIdx], "\n", " ")
+
+		syncLog.WriteString(fmt.Sprintf("%-5d%-21s%-21s%-21s%-9s%-s\n",
+			i+1, imgName, displayTime, subMatch, confStr, text))
+	}
+
+	debugPath := filepath.Join(finalDir, "sync_debug.txt")
+	_ = os.WriteFile(debugPath, []byte(syncLog.String()), 0644)
+
+	return results, nil
 }
