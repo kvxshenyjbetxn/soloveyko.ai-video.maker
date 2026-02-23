@@ -75,8 +75,37 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		iEnabled = pSettings.ImageEnabled
 	}
 
+	var shouldSkipImage bool
+	if val, ok := settings["skippedStages"]; ok {
+		if slice, ok := val.([]interface{}); ok {
+			for _, v := range slice {
+				if str, ok := v.(string); ok {
+					if str == "image" {
+						shouldSkipImage = true
+						break
+					}
+				}
+			}
+		}
+	}
+
+	var shouldRegeneratePrompts bool
+	if val, ok := settings["skippedStages"]; ok {
+		if slice, ok := val.([]interface{}); ok {
+			if len(slice) == 0 {
+				shouldRegeneratePrompts = true
+			}
+		}
+	}
+
 	if !iEnabled {
 		s.log("INFO", "[Pipeline] Image stage is disabled, skipping.", id, taskLabel)
+		return nil
+	}
+
+	if shouldSkipImage {
+		s.log("INFO", "[Pipeline] Skipping image stage as requested by user, not using existing files.", id, taskLabel)
+		s.emitStageStatus(id, "image", "completed")
 		return nil
 	}
 
@@ -184,20 +213,31 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		promptTemplate = pSettings.ImagePrompt
 	}
 
-	promptsFilePath := filepath.Join(finalDir, "prompts.txt")
-	prompts := make([]string, len(chunks))
-	loadedExisting := false
+	var loadedExisting bool
+	var prompts []string
+	var promptsFilePath string
 
-	if info, err := os.Stat(promptsFilePath); err == nil && !info.IsDir() {
-		content, err := os.ReadFile(promptsFilePath)
-		if err == nil {
-			pStrs := strings.Split(string(content), "\n\n--------------------\n\n")
-			if len(pStrs) == len(chunks) {
-				prompts = pStrs
-				loadedExisting = true
-				s.log("INFO", "[Pipeline] Loaded existing image prompts from prompts.txt", id, taskLabel)
-				s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d", len(chunks), len(chunks)))
+	if shouldRegeneratePrompts {
+		s.log("INFO", "[Pipeline] User requested to regenerate all files, will not load existing prompts.", id, taskLabel)
+		promptsFilePath = filepath.Join(finalDir, "prompts.txt")
+		prompts = make([]string, len(chunks))
+	} else {
+		promptsFilePath = filepath.Join(finalDir, "prompts.txt")
+
+		if info, err := os.Stat(promptsFilePath); err == nil && !info.IsDir() {
+			content, err := os.ReadFile(promptsFilePath)
+			if err == nil {
+				pStrs := strings.Split(string(content), "\n\n--------------------\n\n")
+				if len(pStrs) == len(chunks) {
+					prompts = pStrs
+					loadedExisting = true
+					s.log("INFO", "[Pipeline] Loaded existing image prompts from prompts.txt", id, taskLabel)
+					s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d", len(chunks), len(chunks)))
+				}
 			}
+		}
+		if !loadedExisting {
+			prompts = make([]string, len(chunks))
 		}
 	}
 
