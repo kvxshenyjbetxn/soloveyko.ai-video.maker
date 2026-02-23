@@ -192,7 +192,14 @@
     "stats": {
         "characters": "Characters:",
         "words": "Words:",
-        "paragraphs": "Paragraphs:"
+        "paragraphs": "Paragraphs:",
+        "last_30_days": "30 Days",
+        "all_time": "All Time",
+        "total_videos": "Total Videos",
+        "avg_time": "Avg. Time",
+        "last_30_days_count": "In 30 Days",
+        "production_graph": "Video Production Graph",
+        "clear_stats": "Clear Statistics"
     },
     "general": {
         "language": "Interface Language",

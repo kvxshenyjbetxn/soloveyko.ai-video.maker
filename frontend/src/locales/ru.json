@@ -191,7 +191,14 @@
     "stats": {
         "characters": "Символы:",
         "words": "Слова:",
-        "paragraphs": "Абзацы:"
+        "paragraphs": "Абзацы:",
+        "last_30_days": "30 дней",
+        "all_time": "Все время",
+        "total_videos": "Всего видео",
+        "avg_time": "Среднее время",
+        "last_30_days_count": "За 30 дней",
+        "production_graph": "График производства видео",
+        "clear_stats": "Очистить статистику"
     },
     "general": {
         "language": "Язык интерфейса",

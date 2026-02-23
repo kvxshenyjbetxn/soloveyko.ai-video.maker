@@ -198,7 +198,14 @@
   "stats": {
     "characters": "Символи:",
     "words": "Слова:",
-    "paragraphs": "Абзаци:"
+    "paragraphs": "Абзаци:",
+    "last_30_days": "30 днів",
+    "all_time": "Весь час",
+    "total_videos": "Всього відео",
+    "avg_time": "Середній час",
+    "last_30_days_count": "За 30 днів",
+    "production_graph": "Графік виробництва відео",
+    "clear_stats": "Очистити статистику"
   },
   "general": {
     "language": "Мова інтерфейсу",

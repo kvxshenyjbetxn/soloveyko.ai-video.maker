@@ -9,6 +9,7 @@ import (
 	"soloveyko/backend/utils"
 	"strings"
 	"sync"
+	"time"
 )
 
 // PipelineService handles the execution of multi-stage tasks
@@ -38,7 +39,7 @@ type PipelineService struct {
 	OnImageGenerated            func(taskName string, templateName string, imageName string, path string)
 	OnImageDeleted              func(imgPath string)
 	OnRequestExistingFilesCheck func(data ExistingFilesData)
-	OnPipelineSuccess           func(id string, taskName string, taskType string, subName string, original string, processed string, settings map[string]interface{})
+	OnPipelineSuccess           func(id string, taskName string, taskType string, subName string, original string, processed string, settings map[string]interface{}, duration float64)
 
 	pendingControl sync.Map // Map taskID -> chan string
 	pendingSkip    sync.Map // Map taskID -> chan []string
@@ -139,6 +140,7 @@ func (s *PipelineService) emitStageStatus(id string, stage string, status string
 }
 
 func (s *PipelineService) runPipeline(id string, taskLabel string, taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
+	startTime := time.Now()
 	s.log("INFO", fmt.Sprintf("[Pipeline] runPipeline started. Type: %s, ID: %s", taskType, id), id, taskLabel)
 	s.log("INFO", "[Pipeline] Task started and pre-processing...", id, taskLabel)
 	pSettings := s.settings.GetPipelineSettings()
@@ -399,7 +401,8 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	if s.OnPipelineSuccess != nil {
-		s.OnPipelineSuccess(id, taskName, taskType, subName, content, processedText, settings)
+		duration := time.Since(startTime).Seconds()
+		s.OnPipelineSuccess(id, taskName, taskType, subName, content, processedText, settings, duration)
 	}
 
 	return processedText, nil

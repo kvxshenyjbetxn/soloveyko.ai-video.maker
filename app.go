@@ -38,6 +38,7 @@ type App struct {
 	edgeTTS         *api.EdgeTTSService
 	history         *utils.HistoryService
 	fullHistory     *utils.FullHistoryService
+	productionStats *utils.ProductionStatsService
 }
 
 // NewApp creates a new App application struct
@@ -65,6 +66,7 @@ func NewApp() *App {
 	app.edgeTTS = api.NewEdgeTTSService()
 	app.history = utils.NewHistoryService()
 	app.fullHistory = utils.NewFullHistoryService()
+	app.productionStats = utils.NewProductionStatsService()
 
 	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper, app.amdWhisper, app.edgeTTS, app.assemblyAI)
 
@@ -117,7 +119,7 @@ func NewApp() *App {
 			wruntime.EventsEmit(app.ctx, "requestExistingFilesCheck", data)
 		}
 	}
-	app.pipeline.OnPipelineSuccess = func(id string, taskName string, taskType string, subName string, original string, processed string, settings map[string]interface{}) {
+	app.pipeline.OnPipelineSuccess = func(id string, taskName string, taskType string, subName string, original string, processed string, settings map[string]interface{}, duration float64) {
 		tpls := []string{}
 		if subName != "" {
 			tpls = append(tpls, subName)
@@ -144,7 +146,12 @@ func NewApp() *App {
 			stages = append(stages, "montage")
 		}
 
-		_ = app.fullHistory.AddEntry(taskName, taskType, tpls, stages, original, processed)
+		_ = app.fullHistory.AddEntry(taskName, taskType, tpls, stages, original, processed, duration)
+
+		// Record stats only if it was a video production (montage stage carried out)
+		if val, ok := settings["montageEnabled"].(bool); ok && val {
+			app.productionStats.RecordCompletion(taskType, duration)
+		}
 		if app.ctx != nil {
 			wruntime.EventsEmit(app.ctx, "fullHistoryUpdate")
 		}
@@ -1028,8 +1035,8 @@ func (a *App) DeleteFullHistoryEntry(id string) error {
 	return a.fullHistory.DeleteEntry(id)
 }
 
-func (a *App) AddFullHistoryEntry(name string, taskType string, templates []string, stages []string, original string, processed string) error {
-	return a.fullHistory.AddEntry(name, taskType, templates, stages, original, processed)
+func (a *App) AddFullHistoryEntry(name string, taskType string, templates []string, stages []string, original string, processed string, duration float64) error {
+	return a.fullHistory.AddEntry(name, taskType, templates, stages, original, processed, duration)
 }
 
 // GetImageAsBase64 returns base64 content of an image file for preview
@@ -1047,4 +1054,11 @@ func (a *App) DownloadSubtitleModel(modelName string) error {
 	a.localWhisper.SetContext(a.ctx)
 	_, err := a.localWhisper.GetModelPath(modelName)
 	return err
+}
+func (a *App) GetProductionStats(days int) *utils.UIStatsResponse {
+	return a.productionStats.GetStats(days)
+}
+
+func (a *App) ClearProductionStats() {
+	a.productionStats.ClearData()
 }

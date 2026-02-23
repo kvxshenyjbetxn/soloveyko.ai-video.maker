@@ -20,6 +20,7 @@ type FullHistoryEntry struct {
 	ProcessedText string   `json:"processedText"`
 	Timestamp     int64    `json:"timestamp"` // Unix timestamp
 	FormattedDate string   `json:"formattedDate"`
+	Duration      float64  `json:"duration"` // Execution time in seconds
 }
 
 type FullHistoryService struct {
@@ -43,7 +44,7 @@ func NewFullHistoryService() *FullHistoryService {
 }
 
 // AddEntry saves a full history entry as a separate JSON file
-func (s *FullHistoryService) AddEntry(name string, taskType string, templates []string, stages []string, original string, processed string) error {
+func (s *FullHistoryService) AddEntry(name string, taskType string, templates []string, stages []string, original string, processed string, duration float64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -60,6 +61,7 @@ func (s *FullHistoryService) AddEntry(name string, taskType string, templates []
 		ProcessedText: processed,
 		Timestamp:     now.Unix(),
 		FormattedDate: now.Format(time.RFC3339),
+		Duration:      duration,
 	}
 
 	fileName := fmt.Sprintf("%s.json", id)
@@ -90,6 +92,7 @@ type HistoryMetadata struct {
 	Stages        []string `json:"stages"`
 	Timestamp     int64    `json:"timestamp"`
 	FormattedDate string   `json:"formattedDate"`
+	Duration      float64  `json:"duration"`
 }
 
 func (s *FullHistoryService) GetEntries() ([]HistoryMetadata, error) {
@@ -126,6 +129,7 @@ func (s *FullHistoryService) GetEntries() ([]HistoryMetadata, error) {
 			Stages:        full.Stages,
 			Timestamp:     full.Timestamp,
 			FormattedDate: full.FormattedDate,
+			Duration:      full.Duration,
 		})
 	}
 
