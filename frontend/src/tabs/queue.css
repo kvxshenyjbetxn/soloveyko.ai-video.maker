@@ -68,12 +68,12 @@
 
 
 .task-card {
-    width: 280px;
+    width: 240px;
     height: auto !important;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-color);
     border-radius: 16px;
-    padding: 20px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -103,8 +103,8 @@
     visibility: hidden;
     position: absolute;
     /* ЛОГ НЕ ТЯГНЕ КАРТКУ ВНИЗ */
-    left: 292px;
-    /* 280px картка + 12px gap */
+    left: 252px;
+    /* 240px картка + 12px gap */
     top: 0;
     bottom: 0;
     /* Рівно на висоту картки */
@@ -262,7 +262,7 @@
 }
 
 .task-card-name {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 800;
     color: var(--text-primary);
     margin-bottom: 8px;
@@ -272,11 +272,11 @@
 }
 
 .task-content-preview {
-    font-size: 14px;
+    font-size: 12px;
     line-height: 1.5;
     color: var(--text-primary);
     font-weight: 600;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     display: -webkit-box;
     -webkit-line-clamp: 3;
     line-clamp: 3;
@@ -309,10 +309,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: 6px 10px;
     background: rgba(255, 255, 255, 0.02);
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 11px;
     color: var(--text-secondary);
 }
 

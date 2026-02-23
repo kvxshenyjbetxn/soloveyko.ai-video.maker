@@ -29,7 +29,7 @@
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     position: absolute;
-    bottom: 0;
+    bottom: 4px;
     right: 0;
     pointer-events: auto;
     z-index: 20;
@@ -129,7 +129,7 @@
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
     color: var(--text-primary);
     position: absolute;
-    bottom: 0;
+    bottom: 5px;
     right: 0;
     pointer-events: auto;
     margin-bottom: 0;
