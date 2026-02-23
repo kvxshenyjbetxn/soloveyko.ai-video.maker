@@ -51,6 +51,41 @@ func (m *GalleryManager) AddImage(taskName, templateName, imageName, imgPath str
 	m.tasks[taskName][templateName] = append(m.tasks[taskName][templateName], image)
 }
 
+// naturalLess compares two strings using natural sort order (e.g. "2.jpg" < "10.jpg")
+func naturalLess(s1, s2 string) bool {
+	i, j := 0, 0
+	for i < len(s1) && j < len(s2) {
+		c1, c2 := s1[i], s2[j]
+		if (c1 >= '0' && c1 <= '9') && (c2 >= '0' && c2 <= '9') {
+			// Extract numbers
+			n1 := ""
+			for i < len(s1) && s1[i] >= '0' && s1[i] <= '9' {
+				n1 += string(s1[i])
+				i++
+			}
+			n2 := ""
+			for j < len(s2) && s2[j] >= '0' && s2[j] <= '9' {
+				n2 += string(s2[j])
+				j++
+			}
+			// Compare numbers by length first, then by value
+			if len(n1) != len(n2) {
+				return len(n1) < len(n2)
+			}
+			if n1 != n2 {
+				return n1 < n2
+			}
+		} else {
+			if c1 != c2 {
+				return c1 < c2
+			}
+			i++
+			j++
+		}
+	}
+	return len(s1) < len(s2)
+}
+
 func (m *GalleryManager) GetGalleryData() []GalleryTask {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -63,9 +98,9 @@ func (m *GalleryManager) GetGalleryData() []GalleryTask {
 			var copies []GalleryImage
 			copies = append(copies, imgs...)
 
-			// sort images by name
+			// sort images by name naturally
 			sort.Slice(copies, func(i, j int) bool {
-				return copies[i].Name < copies[j].Name
+				return naturalLess(copies[i].Name, copies[j].Name)
 			})
 
 			templates = append(templates, GalleryTemplate{
@@ -74,9 +109,9 @@ func (m *GalleryManager) GetGalleryData() []GalleryTask {
 			})
 		}
 
-		// Sort templates
+		// Sort templates naturally
 		sort.Slice(templates, func(i, j int) bool {
-			return templates[i].Name < templates[j].Name
+			return naturalLess(templates[i].Name, templates[j].Name)
 		})
 
 		results = append(results, GalleryTask{
@@ -85,9 +120,9 @@ func (m *GalleryManager) GetGalleryData() []GalleryTask {
 		})
 	}
 
-	// Sort tasks
+	// Sort tasks naturally
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].Name < results[j].Name
+		return naturalLess(results[i].Name, results[j].Name)
 	})
 
 	return results

@@ -324,15 +324,16 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			actualDur, _ := s.getDuration(ffprobePath, filepath.Join(finalDir, vFile))
 			requiredDur := effectiveDurs[idx]
 			if actualDur > 0 && actualDur < requiredDur {
-				// Apply Boomerang Effect
-				s.log("INFO", fmt.Sprintf("[Montage] [%d] Applying boomerang (actual: %.2fs, req: %.2fs)", idx, actualDur, requiredDur), id, taskLabel)
+				// Apply Boomerang Effect with infinite looping
+				s.log("INFO", fmt.Sprintf("[Montage] [%d] Applying boomerang loop (actual: %.2fs, req: %.2fs)", idx, actualDur, requiredDur), id, taskLabel)
+				loopFrames := int(actualDur * 2 * float64(fps))
 				filterParts = append(filterParts, fmt.Sprintf(
 					"[%d:v]trim=duration=%.6f,setpts=PTS-STARTPTS[f%d_1];"+
 						"[f%d_1]split=2[pts%d_a][pts%d_b];"+
 						"[pts%d_b]reverse,setpts=PTS-STARTPTS[b%d_wd];"+
 						"[pts%d_a][b%d_wd]concat=n=2:v=1[v%d_boom];"+
-						"[v%d_boom]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
-					idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, baseW, baseH, baseW, baseH, fps, requiredDur, vOut,
+						"[v%d_boom]loop=loop=-1:size=%d:start=0,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+					idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, loopFrames, baseW, baseH, baseW, baseH, fps, requiredDur, vOut,
 				))
 			} else {
 				if actualDur <= 0 {
@@ -661,9 +662,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	cmd := exec.Command(ffmpegPath, cmdArgs...)
 	cmd.Dir = finalDir
 
-	// Log the command for debugging
-	s.log("INFO", fmt.Sprintf("[Montage] Running ffmpeg: %s %s", ffmpegPath, strings.Join(cmdArgs, " ")), id, taskLabel)
-
 	// Apply process priority BEFORE start (Windows: CreationFlags; macOS: ignored here)
 	setProcPriority(cmd, procPriority)
 
@@ -748,6 +746,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	s.emitStageStatus(id, "montage", "completed", videoWeight)
 	if s.OnTaskStatus != nil {
 		s.OnTaskStatus(id, "completed", 100)
+	}
+
+	// Clean up temporary files as requested by user
+	tempFiles := []string{"subtitle.srt", "segments.json", "montage_script.txt"}
+	for _, f := range tempFiles {
+		_ = os.Remove(filepath.Join(finalDir, f))
 	}
 
 	return nil
