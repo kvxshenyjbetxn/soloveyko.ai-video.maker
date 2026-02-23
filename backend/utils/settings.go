@@ -145,6 +145,9 @@ type PipelineSettings struct {
 	MontageWatermarkOpacity   float64 `json:"montageWatermarkOpacity"`
 	MontageWatermarkSize      int     `json:"montageWatermarkSize"` // percentage of width
 	MontageWatermarkOnIntro   bool    `json:"montageWatermarkOnIntro"`
+	MontageOverlayEnabled     bool    `json:"montageOverlayEnabled"`
+	MontageOverlayPath        string  `json:"montageOverlayPath,omitempty"`
+	MontageOverlayOnIntro     bool    `json:"montageOverlayOnIntro"`
 }
 
 type Settings struct {

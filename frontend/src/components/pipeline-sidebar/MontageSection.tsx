@@ -191,6 +191,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
 
                     {settings.montageWatermarkEnabled && (
                         <>
+                            {/* ... existing watermark controls ... */}
                             <div className="settings-control">
                                 <div
                                     onClick={async () => {
@@ -253,7 +254,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                     )}
                                 </div>
                             </div>
-
+                            {/* ... remaining watermark controls ... */}
                             <div className="settings-control">
                                 <label className="settings-label">{t('pipeline.montage.watermark_position')}</label>
                                 <select
@@ -306,6 +307,106 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                                 type="checkbox"
                                                 checked={settings.montageWatermarkOnIntro || false}
                                                 onChange={(e) => handleChange('montageWatermarkOnIntro', e.target.checked)}
+                                            />
+                                            <span className="stage-slider"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    <div style={{ margin: '12px 0', borderTop: '1px solid var(--border-color)', opacity: 0.5 }} />
+
+                    {/* Overlay Effects Setting */}
+                    <div className="settings-control">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.montage.overlay_enabled')}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.montageOverlayEnabled || false}
+                                    onChange={(e) => handleChange('montageOverlayEnabled', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {settings.montageOverlayEnabled && (
+                        <>
+                            <div className="settings-control">
+                                <div
+                                    onClick={async () => {
+                                        try {
+                                            const path = await (window as any).go.main.App.SelectVideo();
+                                            if (path) {
+                                                handleChange('montageOverlayPath', path);
+                                            }
+                                        } catch (err) {
+                                            console.error(err);
+                                        }
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        borderRadius: '10px',
+                                        border: settings.montageOverlayPath ? '1px solid var(--accent-color)' : '1px dashed var(--bg-tertiary)',
+                                        backgroundColor: settings.montageOverlayPath ? 'rgba(var(--accent-rgb), 0.05)' : 'var(--bg-secondary)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                        minHeight: '80px'
+                                    }}
+                                >
+                                    <div style={{
+                                        fontSize: '20px',
+                                        opacity: settings.montageOverlayPath ? 1 : 0.5,
+                                        filter: settings.montageOverlayPath ? 'drop-shadow(0 0 8px var(--accent-color))' : 'none',
+                                    }}>
+                                        {settings.montageOverlayPath ? '✨' : '📁'}
+                                    </div>
+                                    <div style={{
+                                        fontSize: '11px',
+                                        fontWeight: '600',
+                                        color: settings.montageOverlayPath ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                        textAlign: 'center'
+                                    }}>
+                                        {settings.montageOverlayPath
+                                            ? t('pipeline.montage.overlay_change')
+                                            : t('pipeline.montage.overlay_select')}
+                                    </div>
+                                    {settings.montageOverlayPath && (
+                                        <div style={{
+                                            fontSize: '9px',
+                                            color: 'var(--text-tertiary)',
+                                            maxWidth: '100%',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            opacity: 0.8
+                                        }}>
+                                            {settings.montageOverlayPath.split(/[\\/]/).pop()}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {settings.montageIntroVideoEnabled && (
+                                <div className="settings-control">
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                        <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.montage.overlay_on_intro')}</label>
+                                        <label className="stage-switch small">
+                                            <input
+                                                type="checkbox"
+                                                checked={settings.montageOverlayOnIntro || false}
+                                                onChange={(e) => handleChange('montageOverlayOnIntro', e.target.checked)}
                                             />
                                             <span className="stage-slider"></span>
                                         </label>

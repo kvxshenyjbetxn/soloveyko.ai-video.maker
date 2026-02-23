@@ -304,6 +304,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.montageWatermarkOpacity === undefined) { s.montageWatermarkOpacity = 0.8; updated = true; }
                 if (s.montageWatermarkSize === undefined) { s.montageWatermarkSize = 15; updated = true; }
                 if (s.montageWatermarkOnIntro === undefined) { s.montageWatermarkOnIntro = false; updated = true; }
+                if (s.montageOverlayEnabled === undefined) { s.montageOverlayEnabled = false; updated = true; }
+                if (s.montageOverlayPath === undefined) { s.montageOverlayPath = ""; updated = true; }
+                if (s.montageOverlayOnIntro === undefined) { s.montageOverlayOnIntro = false; updated = true; }
 
                 if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
                 if (s.rewriteTemperature === undefined) s.rewriteTemperature = 0.7;
@@ -469,7 +472,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             'montageResolution', 'montageFPS', 'montageSwayFactor', 'montageZoomFactor',
             'montageUpscaleFactor', 'montageTransitionDuration', 'montageTransitionEffect',
             'montageEncodingPreset', 'montageBitrate', 'montageIntroVideoEnabled', 'montageIntroVideoPath',
-            'montageWatermarkEnabled', 'montageWatermarkPath', 'montageWatermarkPosition', 'montageWatermarkOpacity', 'montageWatermarkSize', 'montageWatermarkOnIntro'
+            'montageWatermarkEnabled', 'montageWatermarkPath', 'montageWatermarkPosition', 'montageWatermarkOpacity', 'montageWatermarkSize', 'montageWatermarkOnIntro',
+            'montageOverlayEnabled', 'montageOverlayPath', 'montageOverlayOnIntro'
         ];
         montageFields.forEach(f => { if (settings[f] !== undefined) templateData.montage[f] = settings[f]; });
 

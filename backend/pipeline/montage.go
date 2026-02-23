@@ -167,6 +167,15 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageWatermarkOnIntro"].(bool); ok {
 		pSettings.MontageWatermarkOnIntro = val
 	}
+	if val, ok := settings["montageOverlayEnabled"].(bool); ok {
+		pSettings.MontageOverlayEnabled = val
+	}
+	if val, ok := settings["montageOverlayPath"].(string); ok {
+		pSettings.MontageOverlayPath = val
+	}
+	if val, ok := settings["montageOverlayOnIntro"].(bool); ok {
+		pSettings.MontageOverlayOnIntro = val
+	}
 
 	upW := int(math.Round(float64(baseW) * upFactor))
 	upH := int(math.Round(float64(baseH) * upFactor))
@@ -184,8 +193,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	// 5. Build filter graph — single-pass
 	type inputSpec struct {
-		loop bool
-		path string
+		loop       bool
+		path       string
+		streamLoop bool
 	}
 	var inputSpecs []inputSpec
 	var filterParts []string
@@ -214,7 +224,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				// No audio in intro? Generate silence
 				aFilter = fmt.Sprintf("anullsrc=r=44100:cl=stereo:d=%.6f,aformat=sample_fmts=fltp[a_intro]", introDur)
 			}
-			filterParts = append(filterParts, vFilter+"; "+aFilter)
+			filterParts = append(filterParts, vFilter, aFilter)
 		}
 	}
 
@@ -363,27 +373,97 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
-	// Apply Watermark to Intro if enabled
-	finalIntroV := "v_intro_base"
-	if introIdx != -1 && wmAvailable && pSettings.MontageWatermarkOnIntro {
-		filterParts = append(filterParts, fmt.Sprintf(
-			"[v_intro_base][wm]overlay=x=%s:y=%s:format=auto[v_intro_wm]",
-			overlayX, overlayY,
-		))
-		finalIntroV = "v_intro_wm"
-	} else if introIdx != -1 {
-		filterParts = append(filterParts, "[v_intro_base]copy[v_intro_final_processed]")
-		finalIntroV = "v_intro_final_processed"
+	// Overlay preparation
+	overlayAvailable := false
+	overlayIdx := -1
+	if pSettings.MontageOverlayEnabled && pSettings.MontageOverlayPath != "" {
+		if _, err := os.Stat(pSettings.MontageOverlayPath); err == nil {
+			overlayAvailable = true
+			overlayIdx = len(inputSpecs)
+
+			ext := strings.ToLower(filepath.Ext(pSettings.MontageOverlayPath))
+			isOverlayVideo := videoExts[ext]
+			inputSpecs = append(inputSpecs, inputSpec{
+				loop:       !isOverlayVideo,
+				path:       pSettings.MontageOverlayPath,
+				streamLoop: isOverlayVideo,
+			})
+
+			// Pre-process overlay: scale to fit video
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%d:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=rgba[ovl]",
+				overlayIdx, baseW, baseH, baseW, baseH,
+			))
+		}
 	}
 
-	// Apply Watermark to Montage
+	// Split streams for double use (intro + montage) if needed
+	wmMontageTag := "wm"
+	wmIntroTag := ""
+	if wmAvailable {
+		if introIdx != -1 && pSettings.MontageWatermarkOnIntro {
+			filterParts = append(filterParts, "[wm]split[wm_montage][wm_intro]")
+			wmMontageTag = "wm_montage"
+			wmIntroTag = "wm_intro"
+		}
+	}
+
+	ovlMontageTag := "ovl"
+	ovlIntroTag := ""
+	if overlayAvailable {
+		if introIdx != -1 && pSettings.MontageOverlayOnIntro {
+			filterParts = append(filterParts, "[ovl]split[ovl_montage][ovl_intro]")
+			ovlMontageTag = "ovl_montage"
+			ovlIntroTag = "ovl_intro"
+		}
+	}
+
+	// Apply Watermark & Overlay to Intro
+	finalIntroV := "v_intro_base"
+	if introIdx != -1 {
+		currentV := "v_intro_base"
+		// Watermark
+		if wmAvailable && pSettings.MontageWatermarkOnIntro && wmIntroTag != "" {
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%s][%s]overlay=x=%s:y=%s:format=yuv420:shortest=1[v_intro_wm]",
+				currentV, wmIntroTag, overlayX, overlayY,
+			))
+			currentV = "v_intro_wm"
+		}
+		// Overlay
+		if overlayAvailable && pSettings.MontageOverlayOnIntro && ovlIntroTag != "" {
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%s][%s]overlay=x=0:y=0:format=yuv420:shortest=1[v_intro_ovl]",
+				currentV, ovlIntroTag,
+			))
+			currentV = "v_intro_ovl"
+		}
+
+		if currentV != "v_intro_base" {
+			finalIntroV = currentV
+		} else {
+			filterParts = append(filterParts, "[v_intro_base]copy[v_intro_final_processed]")
+			finalIntroV = "v_intro_final_processed"
+		}
+	}
+
+	// Apply Watermark & Overlay to Montage
+	currentMontageV := montageV
 	if wmAvailable {
 		filterParts = append(filterParts, fmt.Sprintf(
-			"[%s][wm]overlay=x=%s:y=%s:format=auto[v_wm_final]",
-			montageV, overlayX, overlayY,
+			"[%s][%s]overlay=x=%s:y=%s:format=yuv420:shortest=1[v_wm_montage]",
+			currentMontageV, wmMontageTag, overlayX, overlayY,
 		))
-		montageV = "v_wm_final"
+		currentMontageV = "v_wm_montage"
 	}
+	if overlayAvailable {
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[%s][%s]overlay=x=0:y=0:format=yuv420:shortest=1[v_ovl_montage]",
+			currentMontageV, ovlMontageTag,
+		))
+		currentMontageV = "v_ovl_montage"
+	}
+	montageV = currentMontageV
 
 	// Montage trim
 	filterParts = append(filterParts, fmt.Sprintf(
@@ -427,6 +507,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	// Write filter script
 	fullGraph := strings.Join(filterParts, ";")
+	// Log full graph for debugging
+	s.log("INFO", fmt.Sprintf("[Montage] Filter Graph Length: %d characters", len(fullGraph)), id, taskLabel)
 	if err := os.WriteFile(filepath.Join(finalDir, "montage_script.txt"), []byte(fullGraph), 0644); err != nil {
 		return fmt.Errorf("failed to write filter script: %v", err)
 	}
@@ -448,6 +530,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		cmdArgs = append(cmdArgs, "-thread_queue_size", "4096")
 		if spec.loop {
 			cmdArgs = append(cmdArgs, "-loop", "1")
+		}
+		if spec.streamLoop {
+			cmdArgs = append(cmdArgs, "-stream_loop", "-1")
 		}
 		cmdArgs = append(cmdArgs, "-i", spec.path)
 	}
@@ -485,6 +570,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	cmd := exec.Command(ffmpegPath, cmdArgs...)
 	cmd.Dir = finalDir
+
+	// Log the command for debugging
+	s.log("INFO", fmt.Sprintf("[Montage] Running ffmpeg: %s %s", ffmpegPath, strings.Join(cmdArgs, " ")), id, taskLabel)
 
 	// Apply process priority BEFORE start (Windows: CreationFlags; macOS: ignored here)
 	setProcPriority(cmd, procPriority)
