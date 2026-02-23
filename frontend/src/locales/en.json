@@ -310,6 +310,8 @@
         },
         "image": {
             "title": "Image Settings",
+            "sync_enabled": "Sync with subtitles",
+            "sync_desc": "Automatically adjust the duration of each frame to the time of the corresponding segment in the subtitles. If disabled, duration will be distributed evenly.",
             "service": "Service",
             "model": "Model",
             "width": "Width",

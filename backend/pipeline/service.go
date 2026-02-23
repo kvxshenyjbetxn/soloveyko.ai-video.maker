@@ -243,6 +243,10 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		tControlEnabled = val
 	}
 
+	if val, ok := settings["imageSyncEnabled"].(bool); ok {
+		pSettings.ImageSyncEnabled = val
+	}
+
 	if !shouldSkipText && tControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
 		s.emitStageStatus(id, "text", "waiting")
 		s.log("INFO", "[Control] Waiting for user translation review...", id, taskLabel)
