@@ -37,6 +37,7 @@ type App struct {
 	amdWhisper      *pipeline.AmdWhisperService
 	edgeTTS         *api.EdgeTTSService
 	history         *utils.HistoryService
+	fullHistory     *utils.FullHistoryService
 }
 
 // NewApp creates a new App application struct
@@ -63,6 +64,7 @@ func NewApp() *App {
 	app.amdWhisper = pipeline.NewAmdWhisperService()
 	app.edgeTTS = api.NewEdgeTTSService()
 	app.history = utils.NewHistoryService()
+	app.fullHistory = utils.NewFullHistoryService()
 
 	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper, app.amdWhisper, app.edgeTTS, app.assemblyAI)
 
@@ -113,6 +115,38 @@ func NewApp() *App {
 	app.pipeline.OnRequestExistingFilesCheck = func(data pipeline.ExistingFilesData) {
 		if app.ctx != nil {
 			wruntime.EventsEmit(app.ctx, "requestExistingFilesCheck", data)
+		}
+	}
+	app.pipeline.OnPipelineSuccess = func(id string, taskName string, taskType string, subName string, original string, processed string, settings map[string]interface{}) {
+		tpls := []string{}
+		if subName != "" {
+			tpls = append(tpls, subName)
+		}
+
+		stages := []string{}
+		switch taskType {
+		case "translate":
+			stages = append(stages, "translate")
+		case "rewrite":
+			stages = append(stages, "rewrite")
+		}
+
+		if val, ok := settings["voiceoverEnabled"].(bool); ok && val {
+			stages = append(stages, "voiceover")
+		}
+		if val, ok := settings["imageEnabled"].(bool); ok && val {
+			stages = append(stages, "image")
+		}
+		if val, ok := settings["subtitleEnabled"].(bool); ok && val {
+			stages = append(stages, "subtitles")
+		}
+		if val, ok := settings["montageEnabled"].(bool); ok && val {
+			stages = append(stages, "montage")
+		}
+
+		_ = app.fullHistory.AddEntry(taskName, taskType, tpls, stages, original, processed)
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "fullHistoryUpdate")
 		}
 	}
 
@@ -970,6 +1004,24 @@ func (a *App) AddToHistory(name string, taskType string, templates []string, con
 // GetHistory returns the task history (last 2 days)
 func (a *App) GetHistory() ([]utils.HistoryEntry, error) {
 	return a.history.GetHistory()
+}
+
+// Full History Methods (30 days)
+
+func (a *App) GetFullHistory() ([]utils.HistoryMetadata, error) {
+	return a.fullHistory.GetEntries()
+}
+
+func (a *App) GetFullHistoryEntry(id string) (*utils.FullHistoryEntry, error) {
+	return a.fullHistory.GetEntry(id)
+}
+
+func (a *App) DeleteFullHistoryEntry(id string) error {
+	return a.fullHistory.DeleteEntry(id)
+}
+
+func (a *App) AddFullHistoryEntry(name string, taskType string, templates []string, stages []string, original string, processed string) error {
+	return a.fullHistory.AddEntry(name, taskType, templates, stages, original, processed)
 }
 
 // GetImageAsBase64 returns base64 content of an image file for preview

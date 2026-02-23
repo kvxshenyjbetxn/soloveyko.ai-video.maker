@@ -192,6 +192,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             progress: 0
         } : t));
 
+        // Use a small timeout to let the state update propagate before starting Go processes
+        // to avoid race conditions with immediate 'completed' events.
+        await new Promise(resolve => setTimeout(resolve, 50));
+
         const run = async () => {
             const promises = pending.map(async (task) => {
                 try {

@@ -329,6 +329,10 @@
     border-top: 1px solid var(--border-color);
     padding-top: 10px;
     background-color: rgba(0, 0, 0, 0.1);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .history-header {
@@ -341,6 +345,7 @@
     font-size: 13px;
     font-weight: 600;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
 }
 
 .history-header:hover {
@@ -351,10 +356,11 @@
 .history-list {
     display: flex;
     flex-direction: column;
-    max-height: 350px;
+    flex: 1;
     overflow-y: auto;
     padding: 8px 0;
     gap: 4px;
+    min-height: 0;
 }
 
 .no-history-mini {

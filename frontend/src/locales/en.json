@@ -416,6 +416,23 @@
         "continue_processing": "Continue Processing",
         "task_added_success": "Task added to queue"
     },
+    "historyTab": {
+        "description": "Long-term history of your completed tasks (30 days).",
+        "empty": "No history entries yet.",
+        "details": "Task Details",
+        "original": "Original Text",
+        "processed": "Processed Text",
+        "stages": "Executed Stages",
+        "delete_confirm": "Are you sure you want to delete this history entry?"
+    },
+    "stages": {
+        "translate": "Translation",
+        "rewrite": "Rewrite",
+        "voiceover": "Voiceover",
+        "image": "Images",
+        "subtitles": "Subtitles",
+        "montage": "Montage"
+    },
     "templatesTab": {
         "description": "Managing your pipeline templates.",
         "delete_confirm": "Are you sure you want to delete this template?",

@@ -38,6 +38,7 @@ type PipelineService struct {
 	OnImageGenerated            func(taskName string, templateName string, imageName string, path string)
 	OnImageDeleted              func(imgPath string)
 	OnRequestExistingFilesCheck func(data ExistingFilesData)
+	OnPipelineSuccess           func(id string, taskName string, taskType string, subName string, original string, processed string, settings map[string]interface{})
 
 	pendingControl sync.Map // Map taskID -> chan string
 	pendingSkip    sync.Map // Map taskID -> chan []string
@@ -138,6 +139,8 @@ func (s *PipelineService) emitStageStatus(id string, stage string, status string
 }
 
 func (s *PipelineService) runPipeline(id string, taskLabel string, taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
+	s.log("INFO", fmt.Sprintf("[Pipeline] runPipeline started. Type: %s, ID: %s", taskType, id), id, taskLabel)
+	s.log("INFO", "[Pipeline] Task started and pre-processing...", id, taskLabel)
 	pSettings := s.settings.GetPipelineSettings()
 
 	if taskType != "translate" && taskType != "rewrite" && taskType != "voiceover" {
@@ -145,6 +148,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	finalDir := s.ResolveFinalDir(taskName, taskType, subName, settings)
+	s.log("INFO", fmt.Sprintf("[Pipeline] Final directory resolved: %s", finalDir), id, taskLabel)
 	templateDir := subName
 	if templateDir == "" {
 		pipelineName, _ := settings[taskType+"PipelineName"].(string)
@@ -154,7 +158,9 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 	}
 	var skippedStages []string
+	hasSkippedInfo := false
 	if val, ok := settings["skippedStages"]; ok {
+		hasSkippedInfo = true
 		if slice, ok := val.([]interface{}); ok {
 			for _, v := range slice {
 				if str, ok := v.(string); ok {
@@ -164,7 +170,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 	}
 
-	if len(skippedStages) == 0 {
+	if !hasSkippedInfo {
 		if _, err := os.Stat(finalDir); err == nil {
 			data := s.CheckExistingFiles(id, finalDir, taskType)
 			if len(data.FoundStages) > 0 {
@@ -172,6 +178,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 				s.pendingSkip.Store(id, resChan)
 
 				if s.OnRequestExistingFilesCheck != nil {
+					s.log("INFO", "[Pipeline] Requesting user confirmation for existing files...", id, taskLabel)
 					s.OnRequestExistingFilesCheck(data)
 				}
 
@@ -185,6 +192,8 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 				s.pendingSkip.Delete(id)
 			}
 		}
+	} else {
+		s.log("INFO", fmt.Sprintf("[Pipeline] Using pre-defined skipped stages: %v", skippedStages), id, taskLabel)
 	}
 
 	if s.OnTaskStatus != nil {
@@ -384,6 +393,10 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		return processedText, montageErr
 	}
 
+	if s.OnPipelineSuccess != nil {
+		s.OnPipelineSuccess(id, taskName, taskType, subName, content, processedText, settings)
+	}
+
 	return processedText, nil
 }
 
@@ -555,6 +568,7 @@ func (s *PipelineService) SubmitExistingFilesResult(id string, skipStages []stri
 }
 
 func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subName string, settings map[string]interface{}) string {
+	s.log("INFO", fmt.Sprintf("[Resolve] Resolving directory for %s, Type: %s, Sub: %s", taskName, taskType, subName))
 	pSettings := s.settings.GetPipelineSettings()
 	outPath, _ := settings[taskType+"OutputPath"].(string)
 	if outPath == "" {

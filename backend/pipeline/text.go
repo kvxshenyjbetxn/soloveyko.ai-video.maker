@@ -26,6 +26,7 @@ func (s *PipelineService) ProcessText(id string, taskLabel string, taskType stri
 	}
 
 	if !shouldProcessText {
+		s.log("INFO", "[OpenRouter] Text processing disabled, using original content", id, taskLabel)
 		s.emitStageStatus(id, "text", "completed")
 		return content, false, nil
 	}
