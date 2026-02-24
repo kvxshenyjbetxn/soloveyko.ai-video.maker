@@ -13,6 +13,13 @@ type NamedAPIKey struct {
 	Key  string `json:"key"`
 }
 
+type OverlayTrigger struct {
+	Phrase string `json:"phrase"`
+	Path   string `json:"path"`
+	X      int    `json:"x"`
+	Y      int    `json:"y"`
+}
+
 type PipelineSettings struct {
 	TranslateModel                string  `json:"translateModel,omitempty"`
 	TranslatePrompt               string  `json:"translatePrompt,omitempty"`
@@ -123,32 +130,34 @@ type PipelineSettings struct {
 	// Keep outputPath for migration if needed
 	OutputPath string `json:"outputPath,omitempty"`
 
-	MontageEnabled            bool    `json:"montageEnabled"`
-	MontageCollapsed          bool    `json:"montageCollapsed"`
-	MontageSwayFactor         float64 `json:"montageSwayFactor"`
-	MontageTransitionDuration float64 `json:"montageTransitionDuration"`
-	MontageTransitionEffect   string  `json:"montageTransitionEffect"`
-	MontageZoomFactor         float64 `json:"montageZoomFactor"`
-	MontageEncodingPreset     string  `json:"montageEncodingPreset"`
-	MontageBitrate            int     `json:"montageBitrate"`
-	MontageResolution         string  `json:"montageResolution"`
-	MontageFPS                int     `json:"montageFPS"`
-	MontageUpscaleFactor      float64 `json:"montageUpscaleFactor"`
-	MontageVideoCodec         string  `json:"montageVideoCodec"`
-	MontageThreadsPerProcess  int     `json:"montageThreadsPerProcess"`
-	MontageProcessPriority    string  `json:"montageProcessPriority"`
-	MontageCPUCores           int     `json:"montageCPUCores"`
-	MontageIntroVideoEnabled  bool    `json:"montageIntroVideoEnabled"`
-	MontageIntroVideoPath     string  `json:"montageIntroVideoPath,omitempty"`
-	MontageWatermarkEnabled   bool    `json:"montageWatermarkEnabled"`
-	MontageWatermarkPath      string  `json:"montageWatermarkPath,omitempty"`
-	MontageWatermarkPosition  string  `json:"montageWatermarkPosition"` // top-left, top-right, bottom-left, bottom-right, center
-	MontageWatermarkOpacity   float64 `json:"montageWatermarkOpacity"`
-	MontageWatermarkSize      int     `json:"montageWatermarkSize"` // percentage of width
-	MontageWatermarkOnIntro   bool    `json:"montageWatermarkOnIntro"`
-	MontageOverlayEnabled     bool    `json:"montageOverlayEnabled"`
-	MontageOverlayPath        string  `json:"montageOverlayPath,omitempty"`
-	MontageOverlayOnIntro     bool    `json:"montageOverlayOnIntro"`
+	MontageEnabled                bool             `json:"montageEnabled"`
+	MontageCollapsed              bool             `json:"montageCollapsed"`
+	MontageSwayFactor             float64          `json:"montageSwayFactor"`
+	MontageTransitionDuration     float64          `json:"montageTransitionDuration"`
+	MontageTransitionEffect       string           `json:"montageTransitionEffect"`
+	MontageZoomFactor             float64          `json:"montageZoomFactor"`
+	MontageEncodingPreset         string           `json:"montageEncodingPreset"`
+	MontageBitrate                int              `json:"montageBitrate"`
+	MontageResolution             string           `json:"montageResolution"`
+	MontageFPS                    int              `json:"montageFPS"`
+	MontageUpscaleFactor          float64          `json:"montageUpscaleFactor"`
+	MontageVideoCodec             string           `json:"montageVideoCodec"`
+	MontageThreadsPerProcess      int              `json:"montageThreadsPerProcess"`
+	MontageProcessPriority        string           `json:"montageProcessPriority"`
+	MontageCPUCores               int              `json:"montageCPUCores"`
+	MontageIntroVideoEnabled      bool             `json:"montageIntroVideoEnabled"`
+	MontageIntroVideoPath         string           `json:"montageIntroVideoPath,omitempty"`
+	MontageWatermarkEnabled       bool             `json:"montageWatermarkEnabled"`
+	MontageWatermarkPath          string           `json:"montageWatermarkPath,omitempty"`
+	MontageWatermarkPosition      string           `json:"montageWatermarkPosition"` // top-left, top-right, bottom-left, bottom-right, center
+	MontageWatermarkOpacity       float64          `json:"montageWatermarkOpacity"`
+	MontageWatermarkSize          int              `json:"montageWatermarkSize"` // percentage of width
+	MontageWatermarkOnIntro       bool             `json:"montageWatermarkOnIntro"`
+	MontageOverlayEnabled         bool             `json:"montageOverlayEnabled"`
+	MontageOverlayPath            string           `json:"montageOverlayPath,omitempty"`
+	MontageOverlayOnIntro         bool             `json:"montageOverlayOnIntro"`
+	MontageOverlayTriggersEnabled bool             `json:"montageOverlayTriggersEnabled"`
+	MontageOverlayTriggers        []OverlayTrigger `json:"montageOverlayTriggers,omitempty"`
 }
 
 type Settings struct {

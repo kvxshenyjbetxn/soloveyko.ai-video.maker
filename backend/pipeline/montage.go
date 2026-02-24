@@ -255,6 +255,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageOverlayOnIntro"].(bool); ok {
 		pSettings.MontageOverlayOnIntro = val
 	}
+	if val, ok := settings["montageOverlayTriggersEnabled"].(bool); ok {
+		pSettings.MontageOverlayTriggersEnabled = val
+	}
+	// We don't usually override MontageOverlayTriggers from template as it's a slice/complex object,
+	// but we could if needed.
 
 	upW := int(math.Round(float64(baseW) * upFactor))
 	upH := int(math.Round(float64(baseH) * upFactor))
@@ -488,6 +493,55 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
+	// Trigger-based overlays
+	type triggerInfo struct {
+		phrase    string
+		path      string
+		startTime float64
+		idx       int
+		x         int
+		y         int
+	}
+	var activeTriggers []triggerInfo
+	if pSettings.MontageOverlayTriggersEnabled && len(pSettings.MontageOverlayTriggers) > 0 {
+		for _, tr := range pSettings.MontageOverlayTriggers {
+			if tr.Phrase == "" || tr.Path == "" {
+				continue
+			}
+			if _, err := os.Stat(tr.Path); err != nil {
+				s.log("WARN", fmt.Sprintf("[Montage] Trigger path not found: %s", tr.Path), id, taskLabel)
+				continue
+			}
+
+			startT := s.findTextTiming(assPath, tr.Phrase)
+			if startT != nil {
+				s.log("INFO", fmt.Sprintf("[Montage] Found trigger '%s' at %.2fs", tr.Phrase, *startT), id, taskLabel)
+				tIdx := len(inputSpecs)
+				ext := strings.ToLower(filepath.Ext(tr.Path))
+				isTrVideo := videoExts[ext]
+				inputSpecs = append(inputSpecs, inputSpec{
+					loop:       !isTrVideo,
+					path:       tr.Path,
+					streamLoop: false, // Triggers play once? Or loop for duration?
+					// In python it's overlay=...:enable='between(t,start,end)'.
+					// We'll play once or loop for a fixed duration if image.
+				})
+
+				activeTriggers = append(activeTriggers, triggerInfo{
+					phrase:    tr.Phrase,
+					path:      tr.Path,
+					startTime: *startT,
+					idx:       tIdx,
+					x:         tr.X,
+					y:         tr.Y,
+				})
+			} else {
+				s.log("INFO", fmt.Sprintf("[Montage] Trigger phrase '%s' not found in subtitles", tr.Phrase), id, taskLabel)
+			}
+		}
+	}
+	s.log("INFO", fmt.Sprintf("[Montage] Active triggers found: %d", len(activeTriggers)), id, taskLabel)
+
 	// Split streams for double use (intro + montage) if needed
 	wmMontageTag := "wm"
 	wmIntroTag := ""
@@ -554,6 +608,43 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		))
 		currentMontageV = "v_ovl_montage"
 	}
+
+	for i, tr := range activeTriggers {
+		trDur := 3.0 // Default 3s for images
+		ext := strings.ToLower(filepath.Ext(tr.path))
+		isTrVideo := videoExts[ext]
+		if isTrVideo {
+			d, _ := s.getDuration(ffprobePath, tr.path)
+			if d > 0 {
+				trDur = d
+			}
+		}
+
+		// 1. Pre-process trigger: scale, crop, format, and setpts (delay)
+		trigProcessedLabel := fmt.Sprintf("v_trig_ready_%d", i)
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[%d:v]format=yuva420p,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setpts=PTS-STARTPTS+%.3f/TB[%s]",
+			tr.idx, baseW, baseH, baseW, baseH, tr.startTime, trigProcessedLabel,
+		))
+
+		// 2. Apply overlay
+		outLabel := fmt.Sprintf("v_tr_%d", i)
+		enableExpr := fmt.Sprintf("between(t,%.3f,%.3f)", tr.startTime, tr.startTime+trDur)
+		if isTrVideo {
+			// For videos, we can also use eof_action=pass
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%s][%s]overlay=x=%d:y=%d:eof_action=pass:enable='%s'[%s]",
+				currentMontageV, trigProcessedLabel, tr.x, tr.y, enableExpr, outLabel,
+			))
+		} else {
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%s][%s]overlay=x=%d:y=%d:enable='%s'[%s]",
+				currentMontageV, trigProcessedLabel, tr.x, tr.y, enableExpr, outLabel,
+			))
+		}
+		currentMontageV = outLabel
+	}
+
 	montageV = currentMontageV
 
 	// Montage trim
@@ -598,8 +689,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	// Write filter script
 	fullGraph := strings.Join(filterParts, ";")
-	// Log full graph for debugging
-	s.log("INFO", fmt.Sprintf("[Montage] Filter Graph Length: %d characters", len(fullGraph)), id, taskLabel)
+	s.log("INFO", fmt.Sprintf("[Montage] Filter Graph Length: %d characters, Labels: %d", len(fullGraph), len(filterParts)), id, taskLabel)
 	if err := os.WriteFile(filepath.Join(finalDir, "montage_script.txt"), []byte(fullGraph), 0644); err != nil {
 		return fmt.Errorf("failed to write filter script: %v", err)
 	}
@@ -814,4 +904,85 @@ func (s *PipelineService) getVideoSizeGB(ffprobePath, path string) string {
 
 	gb := float64(sizeBytes) / (1024 * 1024 * 1024)
 	return fmt.Sprintf("%.2f GB", gb)
+}
+
+func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64 {
+	data, err := os.ReadFile(assPath)
+	if err != nil {
+		return nil
+	}
+
+	normalize := func(t string) string {
+		t = strings.ToLower(t)
+		t = strings.ReplaceAll(t, "ё", "е")
+		// Replace all non-word characters (punctuation, special chars) with a space
+		reg := regexp.MustCompile(`[^\p{L}\p{N}]+`)
+		t = reg.ReplaceAllString(t, " ")
+		// Normalize whitespace
+		return strings.Join(strings.Fields(t), " ")
+	}
+
+	phrase = normalize(phrase)
+	if phrase == "" {
+		return nil
+	}
+
+	lines := strings.Split(string(data), "\n")
+
+	type segment struct {
+		start float64
+		text  string
+	}
+	var segments []segment
+	var fullBuffer strings.Builder
+	var charToSeg []int
+
+	// Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Text
+	re := regexp.MustCompile(`Dialogue: \d+,(\d+:\d+:\d+\.\d+),(\d+:\d+:\d+\.\d+),.*,,(.*)`)
+	tagRe := regexp.MustCompile(`\{.*?\}`)
+
+	for _, line := range lines {
+		matches := re.FindStringSubmatch(line)
+		if len(matches) > 3 {
+			startTimeStr := matches[1]
+			text := matches[3]
+			text = tagRe.ReplaceAllString(text, "")
+
+			// Parse time 0:00:01.00
+			parts := strings.Split(startTimeStr, ":")
+			if len(parts) == 3 {
+				h, _ := strconv.ParseFloat(parts[0], 64)
+				m, _ := strconv.ParseFloat(parts[1], 64)
+				sec, _ := strconv.ParseFloat(parts[2], 64)
+				startT := h*3600 + m*60 + sec
+
+				cleaned := normalize(text)
+				if cleaned == "" {
+					continue
+				}
+
+				segIdx := len(segments)
+				segments = append(segments, segment{start: startT, text: cleaned})
+
+				// Map each byte of this cleaned segment to its start time
+				for i := 0; i < len(cleaned); i++ {
+					fullBuffer.WriteByte(cleaned[i])
+					charToSeg = append(charToSeg, segIdx)
+				}
+				// Add space between segments to avoid merging words
+				fullBuffer.WriteByte(' ')
+				charToSeg = append(charToSeg, segIdx)
+			}
+		}
+	}
+
+	fullText := fullBuffer.String()
+	idx := strings.Index(fullText, phrase)
+	if idx != -1 && idx < len(charToSeg) {
+		// Found it! Return the start time of the segment where the phrase starts
+		segIdx := charToSeg[idx]
+		return &segments[segIdx].start
+	}
+
+	return nil
 }

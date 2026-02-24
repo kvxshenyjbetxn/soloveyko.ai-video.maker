@@ -418,6 +418,176 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
 
                     <div style={{ margin: '12px 0', borderTop: '1px solid var(--border-color)', opacity: 0.5 }} />
 
+                    {/* Overlay Triggers Setting */}
+                    <div className="settings-control">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.montage.overlay_triggers_enabled')}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.montageOverlayTriggersEnabled || false}
+                                    onChange={(e) => handleChange('montageOverlayTriggersEnabled', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {settings.montageOverlayTriggersEnabled && (
+                        <div className="overlay-triggers-container" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
+                            {(settings.montageOverlayTriggers || []).map((trigger: any, index: number) => (
+                                <div key={index} className="trigger-item" style={{
+                                    padding: '12px',
+                                    borderRadius: '10px',
+                                    backgroundColor: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border-color)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '10px',
+                                    position: 'relative'
+                                }}>
+                                    <button
+                                        onClick={() => {
+                                            const newTriggers = [...settings.montageOverlayTriggers];
+                                            newTriggers.splice(index, 1);
+                                            handleChange('montageOverlayTriggers', newTriggers);
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '8px',
+                                            right: '8px',
+                                            background: 'none',
+                                            border: 'none',
+                                            color: 'var(--text-tertiary)',
+                                            cursor: 'pointer',
+                                            padding: '4px',
+                                            borderRadius: '4px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.2s'
+                                        }}
+                                        className="trigger-remove-btn"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                                    </button>
+
+                                    <div className="settings-control" style={{ marginBottom: 0 }}>
+                                        <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.overlay_triggers_phrase')}</label>
+                                        <input
+                                            type="text"
+                                            className="settings-input"
+                                            value={trigger.phrase || ''}
+                                            onChange={(e) => {
+                                                const newTriggers = [...settings.montageOverlayTriggers];
+                                                newTriggers[index] = { ...trigger, phrase: e.target.value };
+                                                handleChange('montageOverlayTriggers', newTriggers);
+                                            }}
+                                            placeholder="..."
+                                        />
+                                    </div>
+
+                                    <div className="settings-control" style={{ marginBottom: 0 }}>
+                                        <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.overlay_triggers_path')}</label>
+                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                            <input
+                                                type="text"
+                                                className="settings-input"
+                                                value={trigger.path || ''}
+                                                readOnly
+                                                style={{ flex: 1, cursor: 'default' }}
+                                            />
+                                            <button
+                                                className="secondary-button small"
+                                                onClick={async () => {
+                                                    try {
+                                                        const path = await (window as any).go.main.App.SelectVideo();
+                                                        if (path) {
+                                                            const newTriggers = [...settings.montageOverlayTriggers];
+                                                            newTriggers[index] = { ...trigger, path: path };
+                                                            handleChange('montageOverlayTriggers', newTriggers);
+                                                        }
+                                                    } catch (err) {
+                                                        console.error(err);
+                                                    }
+                                                }}
+                                                style={{ padding: '0 10px', borderRadius: '8px', minWidth: '40px' }}
+                                            >
+                                                📁
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="settings-row" style={{ gap: '10px' }}>
+                                        <div className="settings-control" style={{ flex: 1, marginBottom: 0 }}>
+                                            <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.overlay_triggers_x')}</label>
+                                            <input
+                                                type="number"
+                                                className="settings-input"
+                                                value={trigger.x || 0}
+                                                onChange={(e) => {
+                                                    const newTriggers = [...settings.montageOverlayTriggers];
+                                                    newTriggers[index] = { ...trigger, x: parseInt(e.target.value) || 0 };
+                                                    handleChange('montageOverlayTriggers', newTriggers);
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="settings-control" style={{ flex: 1, marginBottom: 0 }}>
+                                            <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.overlay_triggers_y')}</label>
+                                            <input
+                                                type="number"
+                                                className="settings-input"
+                                                value={trigger.y || 0}
+                                                onChange={(e) => {
+                                                    const newTriggers = [...settings.montageOverlayTriggers];
+                                                    newTriggers[index] = { ...trigger, y: parseInt(e.target.value) || 0 };
+                                                    handleChange('montageOverlayTriggers', newTriggers);
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+
+                            <button
+                                className="secondary-button"
+                                onClick={() => {
+                                    const newTriggers = [...(settings.montageOverlayTriggers || []), { phrase: '', path: '', x: 0, y: 0 }];
+                                    handleChange('montageOverlayTriggers', newTriggers);
+                                }}
+                                style={{
+                                    width: '100%',
+                                    padding: '10px',
+                                    borderRadius: '10px',
+                                    fontSize: '12px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
+                                    border: '1px solid var(--border-color)',
+                                    backgroundColor: 'var(--bg-secondary)',
+                                    color: 'var(--text-primary)',
+                                    fontWeight: 500,
+                                    transition: 'all 0.2s',
+                                    marginTop: '4px'
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)';
+                                    e.currentTarget.style.borderColor = 'var(--accent-primary)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'var(--bg-secondary)';
+                                    e.currentTarget.style.borderColor = 'var(--border-color)';
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5v14" /></svg>
+                                {t('pipeline.montage.overlay_triggers_add')}
+                            </button>
+                        </div>
+                    )}
+
+                    <div style={{ margin: '12px 0', borderTop: '1px solid var(--border-color)', opacity: 0.5 }} />
+
                     {/* Resolution & FPS Row */}
                     <div className="settings-row">
                         <div className="settings-control" style={{ flex: 1 }}>
