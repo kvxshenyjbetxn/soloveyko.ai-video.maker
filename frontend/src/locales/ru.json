@@ -8,7 +8,8 @@
         "gallery": "Галерея",
         "settings": "Настройки",
         "other": "Прочее",
-        "logs": "Лог"
+        "logs": "Лог",
+        "google": "Google"
     },
     "performanceTab": {
         "subtitle_block": "Субтитры",
@@ -170,6 +171,20 @@
             "serviceTitle": "Audio Transcription Service",
             "configured": "Configured",
             "notConfigured": "Not Configured"
+        },
+        "googleSettings": {
+            "title": "Google Интеграция",
+            "spreadsheetUrl": "URL Google Таблицы",
+            "spreadsheetUrlPlaceholder": "Вставьте ссылку на таблицу...",
+            "filter": "Фильтр поиска (ключевое слово)",
+            "filterPlaceholder": "Например: A:В работе & B:\\d",
+            "saveSuccess": "Настройки Google сохранены",
+            "parse": "Парсить таблицу",
+            "parsing": "Парсинг...",
+            "no_results": "Ничего не найдено по фильтру",
+            "found": "Найдено: {{count}}",
+            "copy_content": "Копировать контент",
+            "open_link": "Открыть ссылку"
         }
     },
     "voice": {

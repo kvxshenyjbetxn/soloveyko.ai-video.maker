@@ -170,7 +170,7 @@ func (s *OpenRouterService) Chat(id string, taskLabel string, taskType string, k
 		s.OnRequestStart(id, taskLabel, taskType, keyName, model, temperature, maxTokens)
 	}
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: 300 * time.Second}
 
 	reqBody := ChatRequest{
 		Model: model,

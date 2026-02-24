@@ -8,7 +8,8 @@
         "gallery": "Gallery",
         "settings": "Settings",
         "other": "Other",
-        "logs": "Logs"
+        "logs": "Logs",
+        "google": "Google Sheets"
     },
     "performanceTab": {
         "subtitle_block": "Subtitles",
@@ -113,6 +114,7 @@
         "voice": "Voice",
         "image": "Image",
         "assemblyai": "AssemblyAI",
+        "google": "Google Sheets",
         "googlerSettings": {
             "apikey": "Googler API Key",
             "videoAlertThreshold": "Video Threshold (per hour)",
@@ -171,6 +173,20 @@
             "serviceTitle": "Audio Transcription Service",
             "configured": "Configured",
             "notConfigured": "Not Configured"
+        },
+        "googleSettings": {
+            "title": "Google Integration",
+            "spreadsheetUrl": "Google Spreadsheet URL",
+            "spreadsheetUrlPlaceholder": "Paste spreadsheet link...",
+            "filter": "Search Filter (keyword)",
+            "filterPlaceholder": "e.g. A:In progress & B:\\d",
+            "saveSuccess": "Google settings saved",
+            "parse": "Parse Spreadsheet",
+            "parsing": "Parsing...",
+            "no_results": "Nothing found by filter",
+            "found": "Found: {{count}}",
+            "copy_content": "Copy Content",
+            "open_link": "Open Link"
         }
     },
     "voice": {

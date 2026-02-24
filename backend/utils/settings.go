@@ -198,6 +198,8 @@ type Settings struct {
 	MontageMaxConnections         int              `json:"montageMaxConnections"`
 	MontageMode                   string           `json:"montageMode"`
 	Pipeline                      PipelineSettings `json:"pipeline"`
+	GoogleSheetURL                string           `json:"googleSheetURL"`
+	GoogleFilter                  string           `json:"googleFilter"`
 }
 
 type SettingsService struct {
@@ -1310,5 +1312,43 @@ func (s *SettingsService) SetMontageMode(mode string) error {
 	}
 
 	settings.MontageMode = mode
+	return s.SaveSettings(settings)
+}
+
+// GetGoogleSheetURL повертає URL гугл таблиці
+func (s *SettingsService) GetGoogleSheetURL() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.GoogleSheetURL
+}
+
+// SetGoogleSheetURL зберігає URL гугл таблиці
+func (s *SettingsService) SetGoogleSheetURL(url string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GoogleSheetURL = url
+	return s.SaveSettings(settings)
+}
+
+// GetGoogleFilter повертає фільтр для гугл таблиці
+func (s *SettingsService) GetGoogleFilter() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.GoogleFilter
+}
+
+// SetGoogleFilter зберігає фільтр для гугл таблиці
+func (s *SettingsService) SetGoogleFilter(filter string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GoogleFilter = filter
 	return s.SaveSettings(settings)
 }

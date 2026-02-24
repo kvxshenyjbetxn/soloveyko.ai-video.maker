@@ -16,7 +16,11 @@ export const Translate = ({ setCurrentPath }: { setCurrentPath?: (path: string) 
         // @ts-ignore
         const unsub = EventsOn("applyHistoryEntry", (entry: any) => {
             if (entry.type === 'translate') {
-                setText(entry.content);
+                if (entry.replace) {
+                    setText(entry.content);
+                } else {
+                    setText(prev => prev ? prev + "\n" + entry.content : entry.content);
+                }
             }
         });
         return () => {

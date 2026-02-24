@@ -168,7 +168,7 @@ func buildTextStream(blocks []SrtBlock) (string, []charToTime) {
 	return string(streamRunes), timeMap
 }
 
-func charToTimeAt(pos int, timeMap []charToTime, blocks []SrtBlock) float64 {
+func charToTimeAt(pos int, timeMap []charToTime) float64 {
 	if len(timeMap) == 0 {
 		return 0
 	}
@@ -372,8 +372,8 @@ func GetImageTimings(finalDir string, audioDur float64, totalImages int, visualF
 			origStart := streamMapping[startChar]
 			origEnd := streamMapping[endChar-1] + 1
 
-			startTime := charToTimeAt(origStart, timeMap, blocks)
-			endTime := charToTimeAt(origEnd, timeMap, blocks)
+			startTime := charToTimeAt(origStart, timeMap)
+			endTime := charToTimeAt(origEnd, timeMap)
 
 			if endTime <= startTime {
 				endTime = startTime + 0.5

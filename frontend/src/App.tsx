@@ -32,6 +32,8 @@ import { Templates } from './tabs/settings/templates';
 import { Statistic } from './tabs/other/statistic';
 import { History } from './tabs/other/history';
 import { Logs } from './tabs/logs';
+import { GoogleIntegration } from './tabs/settings/api/google_integration';
+import { GoogleMonitor } from './components/GoogleMonitor';
 
 // Simple Icons (SVG)
 const ScriptIcon = () => (
@@ -170,6 +172,7 @@ function App() {
             case 'settings.api.image.googler': return <Googler />;
             case 'settings.api.image.elevenlabsimage': return <ElevenLabsImage />;
             case 'settings.api.assemblyai': return <AssemblyAI />;
+            case 'settings.api.google': return <GoogleIntegration />;
             case 'settings.performance': return <Performance />;
 
             // Other tabs
@@ -330,6 +333,12 @@ function App() {
                                 >
                                     {t('api.assemblyai')}
                                 </div>
+                                <div
+                                    className={`sidebar-item animate-sidebar-item stagger-5 ${currentPath === 'settings.api.google' ? 'active' : ''}`}
+                                    onClick={() => setCurrentPath('settings.api.google')}
+                                >
+                                    {t('tabs.google')}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -452,6 +461,7 @@ function App() {
                 <SystemMonitor />
                 <ServiceBalanceMonitor navigateTo={setCurrentPath} />
                 <QueueMonitor navigateTo={setCurrentPath} />
+                <GoogleMonitor navigateTo={setCurrentPath} currentPath={currentPath} />
             </div>
 
             <ConfirmModal

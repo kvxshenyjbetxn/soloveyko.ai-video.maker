@@ -8,7 +8,8 @@
     "gallery": "Галерея",
     "settings": "Налаштування",
     "other": "Інше",
-    "logs": "Лог"
+    "logs": "Лог",
+    "google": "Google Таблиці"
   },
   "performanceTab": {
     "subtitle_block": "Субтитри",
@@ -119,6 +120,7 @@
     "voice": "Озвучка",
     "image": "Зображення",
     "assemblyai": "AssemblyAI",
+    "google": "Google Таблиці",
     "googlerSettings": {
       "apikey": "Googler API Key",
       "videoAlertThreshold": "Поріг відео (в годину)",
@@ -177,6 +179,20 @@
       "serviceTitle": "Audio Transcription Service",
       "configured": "Configured",
       "notConfigured": "Not Configured"
+    },
+    "googleSettings": {
+      "title": "Google Інтеграція",
+      "spreadsheetUrl": "URL Google Таблиці",
+      "spreadsheetUrlPlaceholder": "Вставте посилання на таблицю...",
+      "filter": "Фільтр пошуку (ключове слово)",
+      "filterPlaceholder": "Наприклад: A:В роботі & B:\\d",
+      "saveSuccess": "Налаштування Google збережено",
+      "parse": "Парсити таблицю",
+      "parsing": "Парсинг...",
+      "no_results": "Нічого не знайдено за фільтром",
+      "found": "Знайдено: {{count}}",
+      "copy_content": "Копіювати вміст документу",
+      "open_link": "Відкрити посилання"
     }
   },
   "voice": {

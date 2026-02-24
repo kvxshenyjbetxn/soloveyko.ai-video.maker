@@ -662,13 +662,15 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 		}
 	}
 
-	finalDir := filepath.Join(outPath, taskName, templateDir)
+	safeTaskName := utils.SanitizeFilename(taskName)
+	safeTemplateDir := utils.SanitizeFilename(templateDir)
+	finalDir := filepath.Join(outPath, safeTaskName, safeTemplateDir)
 
 	// Backward compatibility check: if Default dir doesn't exist OR is empty, check parent
 	if templateDir == "Default" {
 		dataPrimary := s.CheckExistingFiles("tmp", finalDir, taskType)
 		if len(dataPrimary.FoundStages) == 0 {
-			parentDir := filepath.Join(outPath, taskName)
+			parentDir := filepath.Join(outPath, safeTaskName)
 			dataParent := s.CheckExistingFiles("tmp", parentDir, taskType)
 			if len(dataParent.FoundStages) > 0 {
 				return parentDir

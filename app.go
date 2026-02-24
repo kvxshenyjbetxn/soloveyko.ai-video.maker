@@ -39,6 +39,7 @@ type App struct {
 	history         *utils.HistoryService
 	fullHistory     *utils.FullHistoryService
 	productionStats *utils.ProductionStatsService
+	googleParser    *api.GoogleParserService
 }
 
 // NewApp creates a new App application struct
@@ -59,6 +60,7 @@ func NewApp() *App {
 		elevenLabsUA:    api.NewElevenLabsUAService(settings),
 		assemblyAI:      api.NewAssemblyAIService(settings),
 		templates:       utils.NewTemplateService(),
+		googleParser:    api.NewGoogleParserService(),
 	}
 	app.galleryManager = utils.NewGalleryManager()
 	app.localWhisper = pipeline.NewLocalWhisperService()
@@ -1061,4 +1063,40 @@ func (a *App) GetProductionStats(days int) *utils.UIStatsResponse {
 
 func (a *App) ClearProductionStats() {
 	a.productionStats.ClearData()
+}
+
+// Google Parser Methods
+
+func (a *App) GetGoogleSheetURL() string {
+	return a.settings.GetGoogleSheetURL()
+}
+
+func (a *App) SaveGoogleSheetURL(url string) error {
+	return a.settings.SetGoogleSheetURL(url)
+}
+
+func (a *App) GetGoogleFilter() string {
+	return a.settings.GetGoogleFilter()
+}
+
+func (a *App) SaveGoogleFilter(filter string) error {
+	return a.settings.SetGoogleFilter(filter)
+}
+
+func (a *App) ParseGoogleSheet() ([]api.GoogleParserRow, error) {
+	url := a.settings.GetGoogleSheetURL()
+	filter := a.settings.GetGoogleFilter()
+	if url == "" {
+		return nil, fmt.Errorf("Google Sheet URL is not configured")
+	}
+
+	a.LogToUI("INFO", "[Google] Starting parsing sheet...", "google", "Google Parser")
+	results, err := a.googleParser.ParseWithFilter(url, filter)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Google] Parsing failed: %v", err), "google", "Google Parser")
+		return nil, err
+	}
+
+	a.LogToUI("SUCCESS", fmt.Sprintf("[Google] Successfully parsed %d rows", len(results)), "google", "Google Parser")
+	return results, nil
 }

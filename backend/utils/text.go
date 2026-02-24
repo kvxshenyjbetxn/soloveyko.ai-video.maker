@@ -158,3 +158,26 @@ func RandomString(n int) string {
 	}
 	return string(b)
 }
+
+// SanitizeFilename removes illegal characters from a string so it can be used as a directory or file name.
+func SanitizeFilename(name string) string {
+	// Illegal characters in Windows: < > : " / \ | ? *
+	illegal := []string{"<", ">", ":", "\"", "/", "\\", "|", "?", "*"}
+	for _, char := range illegal {
+		name = strings.ReplaceAll(name, char, " ")
+	}
+	// Trim results and handle empty or extremely long names
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "Untitled"
+	}
+
+	// Limit length to avoid MAX_PATH issues on Windows (usually 260 total)
+	// 120 chars for a folder name is plenty
+	runes := []rune(name)
+	if len(runes) > 120 {
+		name = string(runes[:120])
+	}
+
+	return strings.TrimSpace(name)
+}
