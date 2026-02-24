@@ -324,10 +324,17 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 		wg.Wait()
 
+		if generatedPromptsCount == 0 && len(chunks) > 0 {
+			if genError != nil {
+				s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to generate ANY image prompts: %v", genError), id, taskLabel)
+				s.emitStageStatus(id, "image", "failed")
+				return genError
+			}
+			return fmt.Errorf("no prompts were generated")
+		}
+
 		if genError != nil {
-			s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to generate some image prompts: %v", genError), id, taskLabel)
-			s.emitStageStatus(id, "image", "failed")
-			return genError
+			s.log("WARN", fmt.Sprintf("[Pipeline] Some image prompts failed to generate, but continuing with %d successful ones. Last error: %v", generatedPromptsCount, genError), id, taskLabel)
 		}
 
 		// Save prompts to file
