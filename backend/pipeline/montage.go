@@ -922,20 +922,19 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64
 		return strings.Join(strings.Fields(t), " ")
 	}
 
-	phrase = normalize(phrase)
-	if phrase == "" {
+	phraseNormalized := normalize(phrase)
+	targetWords := strings.Fields(phraseNormalized)
+	if len(targetWords) == 0 {
 		return nil
 	}
 
 	lines := strings.Split(string(data), "\n")
 
-	type segment struct {
-		start float64
+	type subWord struct {
 		text  string
+		start float64
 	}
-	var segments []segment
-	var fullBuffer strings.Builder
-	var charToSeg []int
+	var subWords []subWord
 
 	// Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Text
 	re := regexp.MustCompile(`Dialogue: \d+,(\d+:\d+:\d+\.\d+),(\d+:\d+:\d+\.\d+),.*,,(.*)`)
@@ -957,31 +956,61 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64
 				startT := h*3600 + m*60 + sec
 
 				cleaned := normalize(text)
-				if cleaned == "" {
-					continue
+				words := strings.Fields(cleaned)
+				for _, w := range words {
+					subWords = append(subWords, subWord{text: w, start: startT})
 				}
-
-				segIdx := len(segments)
-				segments = append(segments, segment{start: startT, text: cleaned})
-
-				// Map each byte of this cleaned segment to its start time
-				for i := 0; i < len(cleaned); i++ {
-					fullBuffer.WriteByte(cleaned[i])
-					charToSeg = append(charToSeg, segIdx)
-				}
-				// Add space between segments to avoid merging words
-				fullBuffer.WriteByte(' ')
-				charToSeg = append(charToSeg, segIdx)
 			}
 		}
 	}
 
-	fullText := fullBuffer.String()
-	idx := strings.Index(fullText, phrase)
-	if idx != -1 && idx < len(charToSeg) {
-		// Found it! Return the start time of the segment where the phrase starts
-		segIdx := charToSeg[idx]
-		return &segments[segIdx].start
+	if len(subWords) < len(targetWords) {
+		return nil
+	}
+
+	// Fuzzy matching: sliding window
+	// If 75% of target words are found in a sequence with small gaps
+	threshold := 0.75
+	if len(targetWords) <= 2 {
+		threshold = 1.0 // For very short phrases, require exact match
+	}
+
+	for i := 0; i <= len(subWords)-len(targetWords); i++ {
+		matchCount := 0
+		currentSubIdx := i
+
+		for _, tw := range targetWords {
+			// Look for tw in subWords starting from currentSubIdx, with a small lookahead (skip up to 2 words)
+			found := false
+			limit := currentSubIdx + 3
+			if limit > len(subWords) {
+				limit = len(subWords)
+			}
+
+			for j := currentSubIdx; j < limit; j++ {
+				// We can use Levenshtein or simple equality here.
+				// Since we normalized (removed punctuation, lower case), simple equality is quite good.
+				if subWords[j].text == tw {
+					matchCount++
+					currentSubIdx = j + 1
+					found = true
+					break
+				}
+			}
+			if !found {
+				// Move currentSubIdx slightly even if not found to keep searching next target word
+				currentSubIdx++
+			}
+			if currentSubIdx >= len(subWords) {
+				break
+			}
+		}
+
+		similarity := float64(matchCount) / float64(len(targetWords))
+		if similarity >= threshold {
+			// Found a match!
+			return &subWords[i].start
+		}
 	}
 
 	return nil
