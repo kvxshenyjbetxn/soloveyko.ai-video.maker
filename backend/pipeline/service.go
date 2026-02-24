@@ -54,6 +54,8 @@ type PipelineService struct {
 	montageSem     chan struct{}
 	montageSemSize int
 	montageSemMu   sync.Mutex
+
+	edgeTTSSem chan struct{}
 }
 
 // NewPipelineService creates a new PipelineService
@@ -93,6 +95,7 @@ func NewPipelineService(
 		subtitleSem:        make(chan struct{}, settings.GetSubtitleMaxConnections()),
 		montageSemSize:     settings.GetMontageMaxConnections(),
 		montageSem:         make(chan struct{}, settings.GetMontageMaxConnections()),
+		edgeTTSSem:         make(chan struct{}, 5),
 	}
 }
 
@@ -229,6 +232,10 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	if err != nil {
+		s.emitStageStatus(id, "text", "failed")
+		if s.OnTaskStatus != nil {
+			s.OnTaskStatus(id, "failed", 0)
+		}
 		return "", err
 	}
 
@@ -388,6 +395,9 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	stagesWg.Wait()
 
 	if voiceErr != nil || imageErr != nil || subtitleErr != nil {
+		if s.OnTaskStatus != nil {
+			s.OnTaskStatus(id, "failed", 0)
+		}
 		if voiceErr != nil {
 			return processedText, voiceErr
 		}
@@ -401,12 +411,20 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	montageErr := s.ProcessMontage(id, taskLabel, finalDir, settings, &pSettings)
 	if montageErr != nil {
 		s.log("ERROR", fmt.Sprintf("[Pipeline] Montage stage failed: %v", montageErr), id, taskLabel)
+		s.emitStageStatus(id, "montage", "failed")
+		if s.OnTaskStatus != nil {
+			s.OnTaskStatus(id, "failed", 0)
+		}
 		return processedText, montageErr
 	}
 
 	if s.OnPipelineSuccess != nil {
 		duration := time.Since(startTime).Seconds()
 		s.OnPipelineSuccess(id, taskName, taskType, subName, content, processedText, settings, duration)
+	}
+
+	if s.OnTaskStatus != nil {
+		s.OnTaskStatus(id, "completed", 100)
 	}
 
 	return processedText, nil

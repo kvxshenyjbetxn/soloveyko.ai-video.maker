@@ -204,8 +204,6 @@ func findSegmentInStream(segment string, stream string, startFrom int) (int, int
 		return -1, -1, 0
 	}
 
-	// We'll search in a sliding window of words in the stream
-	// To do this accurately, we need to know the start/end char index of each word in the stream
 	type wordPos struct {
 		text  string
 		start int
@@ -235,7 +233,6 @@ func findSegmentInStream(segment string, stream string, startFrom int) (int, int
 			}
 		}
 	}
-	// Final word
 	if wordStart != -1 {
 		streamWords = append(streamWords, wordPos{
 			text:  currentWord.String(),
@@ -245,7 +242,6 @@ func findSegmentInStream(segment string, stream string, startFrom int) (int, int
 	}
 
 	if len(streamWords) < len(targetWords) {
-		// Fallback for very short streams or long segments: try exact substring
 		idx := strings.Index(string(streamRunes[startFrom:]), segment)
 		if idx != -1 {
 			return startFrom + idx, startFrom + idx + len([]rune(segment)), 1.0
@@ -253,7 +249,7 @@ func findSegmentInStream(segment string, stream string, startFrom int) (int, int
 		return -1, -1, 0
 	}
 
-	threshold := 0.70 // Slightly lower for long segments in sync mode
+	threshold := 0.60
 	if len(targetWords) <= 2 {
 		threshold = 1.0
 	}
@@ -262,34 +258,29 @@ func findSegmentInStream(segment string, stream string, startFrom int) (int, int
 	bestMatchEnd := -1
 	maxConfidence := 0.0
 
-	// Sliding window through streamWords
 	for i := 0; i <= len(streamWords)-len(targetWords); i++ {
 		matchCount := 0
 		lastWordIdx := -1
-
-		lookahead := 3 // Allow skipping up to 2 words
 		currentIdx := i
 
 		for _, tw := range targetWords {
-			found := false
+			lookahead := 6
 			limit := currentIdx + lookahead
 			if limit > len(streamWords) {
 				limit = len(streamWords)
 			}
 
+			foundWord := false
 			for j := currentIdx; j < limit; j++ {
-				if streamWords[j].text == tw {
+				if IsWordSimilar(streamWords[j].text, tw, 0.4) {
 					matchCount++
 					lastWordIdx = j
 					currentIdx = j + 1
-					found = true
+					foundWord = true
 					break
 				}
 			}
-			if !found {
-				currentIdx++
-			}
-			if currentIdx >= len(streamWords) {
+			if currentIdx >= len(streamWords) && !foundWord {
 				break
 			}
 		}
@@ -298,8 +289,11 @@ func findSegmentInStream(segment string, stream string, startFrom int) (int, int
 		if confidence >= threshold && confidence > maxConfidence {
 			maxConfidence = confidence
 			bestMatchStart = streamWords[i].start
-			bestMatchEnd = streamWords[lastWordIdx].end
-			// If we found a perfect match or very high confidence, stop early to maintain sequential search
+			if lastWordIdx != -1 {
+				bestMatchEnd = streamWords[lastWordIdx].end
+			} else {
+				bestMatchEnd = streamWords[i].end
+			}
 			if confidence >= 0.9 {
 				break
 			}

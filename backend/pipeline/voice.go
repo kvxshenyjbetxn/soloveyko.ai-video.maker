@@ -439,6 +439,10 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		s.log("SUCCESS", fmt.Sprintf("[VoiceMaker] Success: Voice saved to voice.mp3 (%s)", duration), id, taskLabel)
 		s.emitStageStatus(id, "voice", "completed", duration)
 	} else if vService == "edgetts" {
+		var err error
+		backoffs := []int{5, 10, 15}
+		maxRetries := 3
+
 		vID, _ := settings["edgeTTSVoiceID"].(string)
 		if vID == "" {
 			vID = pSettings.EdgeTTSVoiceID
@@ -454,25 +458,77 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		s.emitStageStatus(id, "voice", "running")
 		voiceFilePath := filepath.Join(finalDir, "voice.mp3")
 
-		var err error
-		backoffs := []int{5, 10, 15}
-		maxRetries := 3
+		// Edge TTS has a 10-minute limit. Cyrillic characters are 2 bytes, so we use runes for accurate counting.
+		// We use a safer limit of 6,000 characters per chunk as 10,000 runes was still too close to the limit.
+		charLimit := 6000
+		totalRunes := len([]rune(processedText))
+		chunks := utils.SplitTextByChunks(processedText, charLimit)
 
-		for attempt := 0; attempt <= maxRetries; attempt++ {
-			if attempt > 0 {
-				s.log("WARN", fmt.Sprintf("[EdgeTTS] Retry attempt %d/%d after %ds...", attempt, maxRetries, backoffs[attempt-1]), id, taskLabel)
-				time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
-			}
+		if len(chunks) > 1 {
+			s.log("INFO", fmt.Sprintf("[EdgeTTS] Text is long (%d characters), splitting into %d chunks...", totalRunes, len(chunks)), id, taskLabel)
+		}
 
-			err = s.edgeTTS.Synthesize(processedText, vID, rate, pitch, volume, voiceFilePath, id, taskLabel)
-			if err == nil {
-				break
+		tempDir := filepath.Join(finalDir, "temp_edgetts")
+		os.MkdirAll(tempDir, 0755)
+
+		chunkFiles := make([]string, len(chunks))
+		var wg sync.WaitGroup
+		var firstErr error
+		var errOnce sync.Once
+
+		for i, chunk := range chunks {
+			wg.Add(1)
+			go func(idx int, text string) {
+				defer wg.Done()
+
+				// Global semaphore to limit concurrent Edge TTS connections (limit 5)
+				s.edgeTTSSem <- struct{}{}
+				defer func() { <-s.edgeTTSSem }()
+
+				if firstErr != nil {
+					return
+				}
+
+				chunkPath := filepath.Join(tempDir, fmt.Sprintf("chunk_%03d.mp3", idx))
+				s.log("INFO", fmt.Sprintf("[EdgeTTS] Synthesizing chunk %d/%d (%d characters)...", idx+1, len(chunks), len([]rune(text))), id, taskLabel)
+
+				var chunkErr error
+				for attempt := 0; attempt <= maxRetries; attempt++ {
+					if attempt > 0 {
+						s.log("WARN", fmt.Sprintf("[EdgeTTS] Chunk %d retry %d/%d after %ds...", idx+1, attempt, maxRetries, backoffs[attempt-1]), id, taskLabel)
+						time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
+					}
+
+					chunkErr = s.edgeTTS.Synthesize(text, vID, rate, pitch, volume, chunkPath, id, taskLabel)
+					if chunkErr == nil {
+						chunkFiles[idx] = chunkPath
+						s.log("INFO", fmt.Sprintf("[EdgeTTS] Chunk %d/%d successfully synthesized", idx+1, len(chunks)), id, taskLabel)
+						return
+					}
+					s.log("ERROR", fmt.Sprintf("[EdgeTTS] Chunk %d attempt %d failed: %v", idx+1, attempt+1, chunkErr), id, taskLabel)
+				}
+
+				errOnce.Do(func() {
+					firstErr = chunkErr
+				})
+			}(i, chunk)
+		}
+
+		wg.Wait()
+
+		if firstErr == nil {
+			if len(chunkFiles) > 1 {
+				s.log("INFO", "[EdgeTTS] Merging audio chunks...", id, taskLabel)
+				err = s.mergeAudioFiles(chunkFiles, voiceFilePath)
+			} else if len(chunkFiles) == 1 {
+				err = os.Rename(chunkFiles[0], voiceFilePath)
 			}
-			s.log("ERROR", fmt.Sprintf("[EdgeTTS] Attempt %d failed: %v", attempt+1, err), id, taskLabel)
+		} else {
+			err = firstErr
 		}
 
 		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[EdgeTTS] All 3 retry attempts failed. Final Error: %v", err), id, taskLabel)
+			s.log("ERROR", fmt.Sprintf("[EdgeTTS] Synthesis failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "voice", "failed")
 			return err
 		}

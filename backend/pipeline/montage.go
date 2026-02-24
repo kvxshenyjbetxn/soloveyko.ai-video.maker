@@ -17,7 +17,7 @@ import (
 )
 
 // resolveCodec probes the preferred GPU codec, falls back to libx264.
-func resolveCodec(ffmpegPath string, preferred string) string {
+func (s *PipelineService) resolveCodec(ffmpegPath string, preferred string, id string, taskLabel string) string {
 	codecMap := map[string]string{
 		"nvidia": "h264_nvenc",
 		"amd":    "h264_amf",
@@ -25,16 +25,26 @@ func resolveCodec(ffmpegPath string, preferred string) string {
 	}
 	codec, ok := codecMap[preferred]
 	if !ok || preferred == "cpu" || preferred == "" {
+		s.log("INFO", fmt.Sprintf("[Montage] Using CPU (libx264) codec (preferred: %s)", preferred), id, taskLabel)
 		return "libx264"
 	}
+
+	// Probe command: small test encode
+	// 128x128 is safer than 16x16 for some hardware encoders
 	cmd := exec.Command(ffmpegPath,
 		"-y", "-hide_banner", "-loglevel", "error",
-		"-f", "lavfi", "-i", "color=black:s=16x16:d=0.1",
+		"-f", "lavfi", "-i", "color=black:s=128x128:d=0.1",
+		"-pix_fmt", "yuv420p",
 		"-c:v", codec, "-f", "null", "-",
 	)
-	if err := cmd.Run(); err != nil {
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		s.log("WARN", fmt.Sprintf("[Montage] Preferred GPU codec %s (%s) failed probe: %v\nOutput: %s\nFalling back to libx264.", preferred, codec, err, string(output)), id, taskLabel)
 		return "libx264"
 	}
+
+	s.log("SUCCESS", fmt.Sprintf("[Montage] Verified GPU codec: %s (%s)", preferred, codec), id, taskLabel)
 	return codec
 }
 
@@ -268,7 +278,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	zoomFactor := pSettings.MontageZoomFactor
 	transEffect := pSettings.MontageTransitionEffect
 	threadsPerProcess := pSettings.MontageThreadsPerProcess
-	videoCodec := resolveCodec(ffmpegPath, pSettings.MontageVideoCodec)
+	videoCodec := s.resolveCodec(ffmpegPath, pSettings.MontageVideoCodec, id, taskLabel)
 	procPriority := pSettings.MontageProcessPriority
 	cpuCores := pSettings.MontageCPUCores
 
@@ -968,9 +978,8 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64
 		return nil
 	}
 
-	// Fuzzy matching: sliding window
-	// If 75% of target words are found in a sequence with small gaps
-	threshold := 0.75
+	// If 60% of target words are found in a sequence with small gaps
+	threshold := 0.60
 	if len(targetWords) <= 2 {
 		threshold = 1.0 // For very short phrases, require exact match
 	}
@@ -980,30 +989,24 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64
 		currentSubIdx := i
 
 		for _, tw := range targetWords {
-			// Look for tw in subWords starting from currentSubIdx, with a small lookahead (skip up to 2 words)
-			found := false
-			limit := currentSubIdx + 3
+			// Increase lookahead to handle more skips (like numbers vs words)
+			lookahead := 6
+			limit := currentSubIdx + lookahead
 			if limit > len(subWords) {
 				limit = len(subWords)
 			}
 
 			for j := currentSubIdx; j < limit; j++ {
-				// We can use Levenshtein or simple equality here.
-				// Since we normalized (removed punctuation, lower case), simple equality is quite good.
-				if subWords[j].text == tw {
+				// Use Levenshtein-based similarity (40% threshold)
+				if utils.IsWordSimilar(subWords[j].text, tw, 0.4) {
 					matchCount++
 					currentSubIdx = j + 1
-					found = true
 					break
 				}
 			}
-			if !found {
-				// Move currentSubIdx slightly even if not found to keep searching next target word
-				currentSubIdx++
-			}
-			if currentSubIdx >= len(subWords) {
-				break
-			}
+			// CRITICAL FIX: Do NOT increment currentSubIdx here if word is not found.
+			// This allows us to search for the NEXT target word starting from the SAME position
+			// in case the previous target word simply doesn't exist in the transcription.
 		}
 
 		similarity := float64(matchCount) / float64(len(targetWords))
