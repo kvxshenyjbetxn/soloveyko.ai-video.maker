@@ -342,6 +342,19 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	procPriority := pSettings.MontageProcessPriority
 	cpuCores := pSettings.MontageCPUCores
 
+	// Helper for relative paths
+	getRel := func(p string) string {
+		if p == "" {
+			return p
+		}
+		if rel, err := filepath.Rel(finalDir, p); err == nil {
+			if !strings.HasPrefix(rel, "..") {
+				return rel
+			}
+		}
+		return p
+	}
+
 	s.log("INFO", fmt.Sprintf("[Montage] Codec: %s | Priority: %s | CPUCores: %d | Clips: %d",
 		videoCodec, procPriority, cpuCores, numFiles), id, taskLabel)
 
@@ -362,7 +375,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			introIdx = 0
 			introDur, _ = s.getDuration(ffprobePath, pSettings.MontageIntroVideoPath)
 			hasA := s.hasAudio(ffprobePath, pSettings.MontageIntroVideoPath)
-			inputSpecs = append(inputSpecs, inputSpec{loop: false, path: pSettings.MontageIntroVideoPath})
+			inputSpecs = append(inputSpecs, inputSpec{loop: false, path: getRel(pSettings.MontageIntroVideoPath)})
 
 			// Process intro video to match output format (Premium Blurred Background Fit)
 			vFilter := fmt.Sprintf(
@@ -390,10 +403,10 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	for idx, vFile := range visualFiles {
 		ext := strings.ToLower(filepath.Ext(vFile))
 		isVideo := videoExts[ext]
-		inputSpecs = append(inputSpecs, inputSpec{loop: !isVideo, path: vFile})
-
 		vIn := fmt.Sprintf("[%d:v]", idx+visualOffset)
 		vOut := fmt.Sprintf("v%d_final", idx)
+		relVFile := getRel(vFile)
+		inputSpecs = append(inputSpecs, inputSpec{loop: !isVideo, path: relVFile})
 
 		if isVideo {
 			actualDur, _ := s.getDuration(ffprobePath, filepath.Join(finalDir, vFile))
@@ -407,7 +420,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						"[f%d_1]split=2[pts%d_a][pts%d_b];"+
 						"[pts%d_b]reverse,setpts=PTS-STARTPTS[b%d_wd];"+
 						"[pts%d_a][b%d_wd]concat=n=2:v=1[v%d_boom];"+
-						"[v%d_boom]loop=loop=-1:size=%d:start=0,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+						"[v%d_boom]loop=loop=-1:size=%d:start=0,scale=%d:%d,scale=1.08*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
 					idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, loopFrames, baseW, baseH, baseW, baseH, fps, requiredDur, vOut,
 				))
 			} else {
@@ -416,7 +429,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				}
 				effDur := math.Min(actualDur, requiredDur)
 				filterParts = append(filterParts, fmt.Sprintf(
-					"%strim=duration=%.6f,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,settb=AVTB,setpts=PTS-STARTPTS[%s]",
+					"%strim=duration=%.6f,scale=%d:%d,scale=1.08*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,setpts=PTS-STARTPTS[%s]",
 					vIn, effDur, baseW, baseH, baseW, baseH, fps, vOut,
 				))
 			}
@@ -535,7 +548,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		if _, err := os.Stat(pSettings.MontageWatermarkPath); err == nil {
 			wmAvailable = true
 			watermarkIdx = len(inputSpecs)
-			inputSpecs = append(inputSpecs, inputSpec{loop: true, path: pSettings.MontageWatermarkPath})
+			inputSpecs = append(inputSpecs, inputSpec{loop: true, path: getRel(pSettings.MontageWatermarkPath)})
 
 			wmScale := float64(pSettings.MontageWatermarkSize) / 100.0
 			wmOpacity := pSettings.MontageWatermarkOpacity
@@ -588,7 +601,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			isOverlayVideo := videoExts[ext]
 			inputSpecs = append(inputSpecs, inputSpec{
 				loop:       !isOverlayVideo,
-				path:       pSettings.MontageOverlayPath,
+				path:       getRel(pSettings.MontageOverlayPath),
 				streamLoop: isOverlayVideo,
 			})
 
@@ -628,7 +641,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				isTrVideo := videoExts[ext]
 				inputSpecs = append(inputSpecs, inputSpec{
 					loop:       !isTrVideo,
-					path:       tr.Path,
+					path:       getRel(tr.Path),
 					streamLoop: false, // Triggers play once? Or loop for duration?
 					// In python it's overlay=...:enable='between(t,start,end)'.
 					// We'll play once or loop for a fixed duration if image.
