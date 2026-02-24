@@ -3,6 +3,7 @@ package utils
 import (
 	"net/url"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -145,4 +146,15 @@ func IsWordSimilar(s1, s2 string, threshold float64) bool {
 		return true
 	}
 	return float64(dist)/float64(maxLen) <= threshold
+}
+
+// RandomString generates a random string of a given length
+func RandomString(n int) string {
+	var letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[time.Now().UnixNano()%int64(len(letters))]
+		time.Sleep(1 * time.Nanosecond) // Slight delay to ensure different nano values
+	}
+	return string(b)
 }

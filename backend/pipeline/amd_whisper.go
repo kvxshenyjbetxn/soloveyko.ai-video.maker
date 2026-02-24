@@ -172,9 +172,17 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 		})
 	}
 
-	wavTempFile := filepath.Join(os.TempDir(), "temp_whisper_amd_input.wav")
+	// Use unique temp files to avoid collisions during concurrent batch processing
+	tempSuffix := strings.ReplaceAll(filepath.Base(audioFilePath), ".", "_")
+	if len(tempSuffix) > 20 {
+		tempSuffix = tempSuffix[:20]
+	}
+	// Add random string to be extra safe
+	tempSuffix += "_" + utils.RandomString(5)
+
+	wavTempFile := filepath.Join(os.TempDir(), fmt.Sprintf("whisper_amd_%s_in.wav", tempSuffix))
 	defer os.Remove(wavTempFile)
-	os.Remove(wavTempFile)
+	_ = os.Remove(wavTempFile)
 
 	ffmpegCmd := exec.CommandContext(s.ctx, ffmpegExe, "-y", "-i", audioFilePath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wavTempFile)
 	utils.PrepareHiddenCmd(ffmpegCmd)
@@ -189,17 +197,11 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 		})
 	}
 
-	outputSrtBase := filepath.Join(os.TempDir(), "temp_whisper_amd_output")
-	defer os.Remove(outputSrtBase + ".srt")
-	os.Remove(outputSrtBase + ".srt")
-
 	if language == "" {
 		language = "uk" // Default
 	}
 
-	// AMD Whisper CLI doesn't support -of in some versions.
-	// By default it saves to [input_file].srt if -osrt is present.
-	// Removing all extra parameters to test stability.
+	// AMD Whisper CLI saves to [input_file].srt if -osrt is present.
 	args := []string{
 		"-m", modelPath,
 		"-l", language,
@@ -215,8 +217,10 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 	}
 
 	// Output file is [wavTempFile].srt OR [wavTempFile-without-extension].srt
+	// Or even [wavTempFile-without-extension].[lang].srt depending on version
 	expectedSrt1 := wavTempFile + ".srt"
 	expectedSrt2 := strings.TrimSuffix(wavTempFile, filepath.Ext(wavTempFile)) + ".srt"
+	expectedSrt3 := strings.TrimSuffix(wavTempFile, filepath.Ext(wavTempFile)) + "." + language + ".srt"
 
 	var srtBytes []byte
 	var foundPath string
@@ -227,14 +231,21 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 	} else if b, err := os.ReadFile(expectedSrt2); err == nil {
 		srtBytes = b
 		foundPath = expectedSrt2
+	} else if b, err := os.ReadFile(expectedSrt3); err == nil {
+		srtBytes = b
+		foundPath = expectedSrt3
 	}
 
 	if srtBytes == nil {
-		return "", fmt.Errorf("не вдалося знайти файл субтитрів AMD Whisper (перевірено %s та %s)", expectedSrt1, expectedSrt2)
+		outputSnippet := string(cmdOut)
+		if len(outputSnippet) > 1000 {
+			outputSnippet = "..." + outputSnippet[len(outputSnippet)-1000:]
+		}
+		return "", fmt.Errorf("не вдалося знайти файл субтитрів AMD Whisper.\nПошук проводився: %s, %s, %s\n\nЛог роботи:\n%s", expectedSrt1, expectedSrt2, expectedSrt3, outputSnippet)
 	}
 
 	if foundPath != "" {
-		defer os.Remove(foundPath)
+		_ = os.Remove(foundPath)
 	}
 
 	return string(srtBytes), nil
