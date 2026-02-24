@@ -349,46 +349,41 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	stagesWg.Add(1)
 	go func() {
 		defer stagesWg.Done()
-		if shouldSkipImage {
-			s.log("INFO", "[Pipeline] Skipping image stage, using existing files.", id, taskLabel)
-			s.emitStageStatus(id, "image", "completed")
-		} else {
-			imageErr = s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings, taskName, templateDir)
-			if imageErr != nil {
-				s.log("ERROR", fmt.Sprintf("[Pipeline] Image stage failed: %v", imageErr), id, taskLabel)
+		imageErr = s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings, taskName, templateDir)
+		if imageErr != nil {
+			s.log("ERROR", fmt.Sprintf("[Pipeline] Image stage failed: %v", imageErr), id, taskLabel)
+			return
+		}
+
+		// Image Control
+		iControlEnabled := pSettings.ImageControlEnabled
+		if val, ok := settings["imageControlEnabled"].(bool); ok {
+			iControlEnabled = val
+		}
+
+		if iControlEnabled && !shouldSkipImage {
+			s.emitStageStatus(id, "image", "waiting")
+			s.log("INFO", "[Control] Waiting for user image/video review...", id, taskLabel)
+
+			resChan := make(chan string)
+			s.pendingControl.Store(id+"_image", resChan)
+
+			if s.OnRequestImageControl != nil {
+				s.OnRequestImageControl(id)
+			}
+
+			// Block goroutine until result received or timeout/context cancel
+			select {
+			case <-resChan:
+				s.log("SUCCESS", "[Control] Media approved.", id, taskLabel)
+				s.emitStageStatus(id, "image", "completed")
+			case <-s.ctx.Done():
+				s.log("INFO", "[Control] Task cancelled while waiting for image review", id, taskLabel)
 				return
 			}
-
-			// Image Control
-			iControlEnabled := pSettings.ImageControlEnabled
-			if val, ok := settings["imageControlEnabled"].(bool); ok {
-				iControlEnabled = val
-			}
-
-			if iControlEnabled {
-				s.emitStageStatus(id, "image", "waiting")
-				s.log("INFO", "[Control] Waiting for user image/video review...", id, taskLabel)
-
-				resChan := make(chan string)
-				s.pendingControl.Store(id+"_image", resChan)
-
-				if s.OnRequestImageControl != nil {
-					s.OnRequestImageControl(id)
-				}
-
-				// Block goroutine until result received or timeout/context cancel
-				select {
-				case <-resChan:
-					s.log("SUCCESS", "[Control] Media approved.", id, taskLabel)
-					s.emitStageStatus(id, "image", "completed")
-				case <-s.ctx.Done():
-					s.log("INFO", "[Control] Task cancelled while waiting for image review", id, taskLabel)
-					return
-				}
-				s.pendingControl.Delete(id + "_image")
-			} else {
-				s.emitStageStatus(id, "image", "completed")
-			}
+			s.pendingControl.Delete(id + "_image")
+		} else {
+			s.emitStageStatus(id, "image", "completed")
 		}
 	}()
 

@@ -331,20 +331,23 @@ func GetImageTimings(finalDir string, audioDur float64, totalImages int, visualF
 
 	segmentsData, err := os.ReadFile(segmentsPath)
 	if err != nil {
-		return defaultTimings(), nil
+		return defaultTimings(), fmt.Errorf("segments.json not found: %w", err)
 	}
 	var segments []string
 	if err := json.Unmarshal(segmentsData, &segments); err != nil {
-		return defaultTimings(), nil
+		return defaultTimings(), fmt.Errorf("failed to parse segments.json: %w", err)
+	}
+	if len(segments) == 0 {
+		return defaultTimings(), fmt.Errorf("segments.json is empty")
 	}
 
 	srtData, err := os.ReadFile(srtPath)
 	if err != nil {
-		return defaultTimings(), nil
+		return defaultTimings(), fmt.Errorf("subtitle.srt not found: %w", err)
 	}
 	blocks := ParseSrt(string(srtData))
 	if len(blocks) == 0 {
-		return defaultTimings(), nil
+		return defaultTimings(), fmt.Errorf("no subtitle blocks found in SRT")
 	}
 
 	stream, timeMap := buildTextStream(blocks)

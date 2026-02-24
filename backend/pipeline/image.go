@@ -104,12 +104,6 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		return nil
 	}
 
-	if shouldSkipImage {
-		s.log("INFO", "[Pipeline] Skipping image stage as requested by user, not using existing files.", id, taskLabel)
-		s.emitStageStatus(id, "image", "completed")
-		return nil
-	}
-
 	iService, _ := settings["imageService"].(string)
 	if iService == "" {
 		iService = pSettings.ImageService
@@ -199,7 +193,15 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 	chunksData, _ := json.MarshalIndent(chunks, "", "  ")
 	_ = os.WriteFile(filepath.Join(finalDir, "segments.json"), chunksData, 0644)
 
-	s.log("INFO", fmt.Sprintf("[Pipeline] Created %d segments for image instructions", len(chunks)), id, taskLabel)
+	s.log("INFO", fmt.Sprintf("[Pipeline] Created/Updated %d segments for synchronization", len(chunks)), id, taskLabel)
+
+	if shouldSkipImage {
+		s.log("INFO", "[Pipeline] Skipping image generation as requested (using existing files), but segments were updated for synchronization.", id, taskLabel)
+		s.emitStageStatus(id, "image", "completed")
+		return nil
+	}
+
+	s.log("INFO", fmt.Sprintf("[Pipeline] Image instructions: %d chunks", len(chunks)), id, taskLabel)
 
 	// Fetch OpenRouter API Key for prompt generation
 	orKeyID, _ := settings[taskType+"OpenRouterKeyID"].(string)

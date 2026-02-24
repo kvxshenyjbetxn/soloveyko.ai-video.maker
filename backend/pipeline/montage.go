@@ -206,6 +206,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 					}
 				}
 			}
+			s.log("SUCCESS", fmt.Sprintf("[Montage] Successfully calculated synchronous timings for %d clips.", numFiles), id, taskLabel)
 		}
 	} else {
 		if isFadeFast {
@@ -960,12 +961,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	s.emitStageStatus(id, "montage", "completed", videoWeight)
 	if s.OnTaskStatus != nil {
 		s.OnTaskStatus(id, "completed", 100)
-	}
-
-	// Clean up temporary files as requested by user
-	tempFiles := []string{"subtitle.srt", "segments.json", "montage_script.txt"}
-	for _, f := range tempFiles {
-		_ = os.Remove(filepath.Join(finalDir, f))
 	}
 
 	return nil
