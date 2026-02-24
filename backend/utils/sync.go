@@ -96,6 +96,9 @@ func normalizeTextWithMapping(text string) (string, []int) {
 		puncSet[r] = true
 	}
 
+	text = strings.ReplaceAll(text, "ё", "е")
+	text = strings.ReplaceAll(text, "Ё", "Е")
+
 	runes := []rune(text)
 	for i, r := range runes {
 		c := r
@@ -192,53 +195,119 @@ func findSegmentInStream(segment string, stream string, startFrom int) (int, int
 	}
 
 	streamRunes := []rune(stream)
-	segmentRunes := []rune(segment)
-
 	if startFrom >= len(streamRunes) {
 		return -1, -1, 0
 	}
 
-	searchArea := streamRunes[startFrom:]
-
-	// Exact match using runes
-	for i := 0; i <= len(searchArea)-len(segmentRunes); i++ {
-		match := true
-		for j := 0; j < len(segmentRunes); j++ {
-			if searchArea[i+j] != segmentRunes[j] {
-				match = false
-				break
-			}
-		}
-		if match {
-			return startFrom + i, startFrom + i + len(segmentRunes), 1.0
-		}
-	}
-
-	// Fuzzy match: if first and last words match exactly
-	segWords := strings.Fields(segment)
-	if len(segWords) < 1 {
+	targetWords := strings.Fields(segment)
+	if len(targetWords) == 0 {
 		return -1, -1, 0
 	}
 
-	firstWordRunes := []rune(segWords[0])
-	lastWordRunes := []rune(segWords[len(segWords)-1])
+	// We'll search in a sliding window of words in the stream
+	// To do this accurately, we need to know the start/end char index of each word in the stream
+	type wordPos struct {
+		text  string
+		start int
+		end   int
+	}
+	var streamWords []wordPos
 
-	// Find first word
-	for i := 0; i <= len(searchArea)-len(firstWordRunes); i++ {
-		if string(searchArea[i:i+len(firstWordRunes)]) == segWords[0] {
-			// Find last word after first word
-			searchAfterFirst := searchArea[i+len(firstWordRunes):]
-			for j := 0; j <= len(searchAfterFirst)-len(lastWordRunes); j++ {
-				if string(searchAfterFirst[j:j+len(lastWordRunes)]) == segWords[len(segWords)-1] {
-					matchLen := len(firstWordRunes) + j + len(lastWordRunes)
-					confidence := 0.7
-					if math.Abs(float64(matchLen-len(segmentRunes))) < float64(len(segmentRunes))*0.3 {
-						confidence = 0.8
-					}
-					return startFrom + i, startFrom + i + matchLen, confidence
-				}
+	currentWord := strings.Builder{}
+	wordStart := -1
+
+	for i := startFrom; i < len(streamRunes); i++ {
+		r := streamRunes[i]
+		if !unicode.IsSpace(r) {
+			if wordStart == -1 {
+				wordStart = i
+			}
+			currentWord.WriteRune(r)
+		} else {
+			if wordStart != -1 {
+				streamWords = append(streamWords, wordPos{
+					text:  currentWord.String(),
+					start: wordStart,
+					end:   i,
+				})
+				currentWord.Reset()
+				wordStart = -1
 			}
 		}
+	}
+	// Final word
+	if wordStart != -1 {
+		streamWords = append(streamWords, wordPos{
+			text:  currentWord.String(),
+			start: wordStart,
+			end:   len(streamRunes),
+		})
+	}
+
+	if len(streamWords) < len(targetWords) {
+		// Fallback for very short streams or long segments: try exact substring
+		idx := strings.Index(string(streamRunes[startFrom:]), segment)
+		if idx != -1 {
+			return startFrom + idx, startFrom + idx + len([]rune(segment)), 1.0
+		}
+		return -1, -1, 0
+	}
+
+	threshold := 0.70 // Slightly lower for long segments in sync mode
+	if len(targetWords) <= 2 {
+		threshold = 1.0
+	}
+
+	bestMatchStart := -1
+	bestMatchEnd := -1
+	maxConfidence := 0.0
+
+	// Sliding window through streamWords
+	for i := 0; i <= len(streamWords)-len(targetWords); i++ {
+		matchCount := 0
+		lastWordIdx := -1
+
+		lookahead := 3 // Allow skipping up to 2 words
+		currentIdx := i
+
+		for _, tw := range targetWords {
+			found := false
+			limit := currentIdx + lookahead
+			if limit > len(streamWords) {
+				limit = len(streamWords)
+			}
+
+			for j := currentIdx; j < limit; j++ {
+				if streamWords[j].text == tw {
+					matchCount++
+					lastWordIdx = j
+					currentIdx = j + 1
+					found = true
+					break
+				}
+			}
+			if !found {
+				currentIdx++
+			}
+			if currentIdx >= len(streamWords) {
+				break
+			}
+		}
+
+		confidence := float64(matchCount) / float64(len(targetWords))
+		if confidence >= threshold && confidence > maxConfidence {
+			maxConfidence = confidence
+			bestMatchStart = streamWords[i].start
+			bestMatchEnd = streamWords[lastWordIdx].end
+			// If we found a perfect match or very high confidence, stop early to maintain sequential search
+			if confidence >= 0.9 {
+				break
+			}
+		}
+	}
+
+	if maxConfidence >= threshold {
+		return bestMatchStart, bestMatchEnd, maxConfidence
 	}
 
 	return -1, -1, 0
