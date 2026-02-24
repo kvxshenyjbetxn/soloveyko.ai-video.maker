@@ -160,9 +160,10 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			}
 		}
 	}
-
-	if len(visualFiles) == 0 {
-		return fmt.Errorf("no visual files found in %s", imagesDir)
+	numFiles := len(visualFiles)
+	s.log("INFO", fmt.Sprintf("[Montage] Total visual files to process: %d", numFiles), id, taskLabel)
+	if numFiles == 0 {
+		return fmt.Errorf("no visual files found for montage")
 	}
 
 	// 3. Get Audio Duration
@@ -175,11 +176,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	// 4. Settings
-	numFiles := len(visualFiles)
 	transDur := pSettings.MontageTransitionDuration
 	if numFiles <= 1 {
 		transDur = 0
 	}
+
+	isFadeFast := pSettings.MontageTransitionEffect == "fade_fast"
 
 	effectiveDurs := make([]float64, numFiles)
 	if pSettings.ImageSyncEnabled {
@@ -187,28 +189,41 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		timings, err := utils.GetImageTimings(finalDir, audioDur, numFiles, visualFiles, taskLabel)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[Montage] Sync failed: %v. Falling back to equal distribution.", err), id, taskLabel)
-			clipDur := (audioDur + float64(numFiles-1)*transDur) / float64(numFiles)
+			clipDur := audioDur / float64(numFiles)
+			if !isFadeFast {
+				clipDur = (audioDur + float64(numFiles-1)*transDur) / float64(numFiles)
+			}
 			for i := range effectiveDurs {
 				effectiveDurs[i] = clipDur
 			}
 		} else {
 			for i, t := range timings {
 				if i < numFiles {
-					// We add transDur to each effective duration because xfade consumes it
-					effectiveDurs[i] = t.Duration + transDur
+					effectiveDurs[i] = t.Duration
+					if !isFadeFast {
+						// We add transDur to each effective duration because xfade consumes it
+						effectiveDurs[i] += transDur
+					}
 				}
 			}
 			// Special handling for first and last to avoid over-calculating total duration
-			if len(effectiveDurs) > 0 {
+			if len(effectiveDurs) > 0 && !isFadeFast {
 				effectiveDurs[0] -= transDur / 2
 				effectiveDurs[len(effectiveDurs)-1] -= transDur / 2
 			}
 		}
 	} else {
-		totalTransLoss := float64(numFiles-1) * transDur
-		clipDur := (audioDur + totalTransLoss) / float64(numFiles)
-		for i := range effectiveDurs {
-			effectiveDurs[i] = clipDur
+		if isFadeFast {
+			clipDur := audioDur / float64(numFiles)
+			for i := range effectiveDurs {
+				effectiveDurs[i] = clipDur
+			}
+		} else {
+			totalTransLoss := float64(numFiles-1) * transDur
+			clipDur := (audioDur + totalTransLoss) / float64(numFiles)
+			for i := range effectiveDurs {
+				effectiveDurs[i] = clipDur
+			}
 		}
 	}
 
@@ -277,6 +292,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	swayFactor := pSettings.MontageSwayFactor
 	zoomFactor := pSettings.MontageZoomFactor
 	transEffect := pSettings.MontageTransitionEffect
+	if transEffect == "" {
+		transEffect = "fade"
+	}
 	threadsPerProcess := pSettings.MontageThreadsPerProcess
 	videoCodec := s.resolveCodec(ffmpegPath, pSettings.MontageVideoCodec, id, taskLabel)
 	procPriority := pSettings.MontageProcessPriority
@@ -308,15 +326,15 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			vFilter := fmt.Sprintf(
 				"[0:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,boxblur=20:10[bg]; "+
 					"[0:v]scale=%d:%d:force_original_aspect_ratio=decrease[fg]; "+
-					"[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d[v_intro_base]",
+					"[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d,settb=AVTB[v_intro_base]",
 				baseW, baseH, baseW, baseH, baseW, baseH, fps)
 
 			aFilter := ""
 			if hasA {
 				aFilter = "[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a_intro]"
 			} else {
-				// No audio in intro? Generate silence
-				aFilter = fmt.Sprintf("anullsrc=r=44100:cl=stereo:d=%.6f,aformat=sample_fmts=fltp[a_intro]", introDur)
+				filterParts = append(filterParts, fmt.Sprintf("anullsrc=r=44100:cl=stereo:d=%.6f,aformat=sample_fmts=fltp[a_intro_silence]", introDur))
+				aFilter = "[a_intro_silence]copy[a_intro]"
 			}
 			filterParts = append(filterParts, vFilter, aFilter)
 		}
@@ -347,7 +365,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						"[f%d_1]split=2[pts%d_a][pts%d_b];"+
 						"[pts%d_b]reverse,setpts=PTS-STARTPTS[b%d_wd];"+
 						"[pts%d_a][b%d_wd]concat=n=2:v=1[v%d_boom];"+
-						"[v%d_boom]loop=loop=-1:size=%d:start=0,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+						"[v%d_boom]loop=loop=-1:size=%d:start=0,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
 					idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, loopFrames, baseW, baseH, baseW, baseH, fps, requiredDur, vOut,
 				))
 			} else {
@@ -356,7 +374,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				}
 				effDur := math.Min(actualDur, requiredDur)
 				filterParts = append(filterParts, fmt.Sprintf(
-					"%strim=duration=%.6f,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,setpts=PTS-STARTPTS[%s]",
+					"%strim=duration=%.6f,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,format=yuv420p,setsar=1,fps=%d,settb=AVTB,setpts=PTS-STARTPTS[%s]",
 					vIn, effDur, baseW, baseH, baseW, baseH, fps, vOut,
 				))
 			}
@@ -398,27 +416,64 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				yExpr = "ih/2-(ih/zoom/2)"
 			}
 
-			dFrames := int(requiredDur*float64(fps)) + 5
 			filterParts = append(filterParts, fmt.Sprintf(
-				"[%s]zoompan=z='%s':x='%s':y='%s':d=%d:s=%dx%d:fps=%d,setpts=PTS-STARTPTS[%s]",
-				vUp, zExpr, xExpr, yExpr, dFrames, baseW, baseH, fps, vOut,
+				"[%s]zoompan=z='%s':x='%s':y='%s':d=1:s=%dx%d:fps=%d,scale=%d:%d,fps=%d,format=yuv420p,setsar=1,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+				vUp, zExpr, xExpr, yExpr, baseW, baseH, fps, baseW, baseH, fps, requiredDur, vOut,
 			))
 		}
 	}
 
-	// Transitions (xfade) — per-clip effectiveDurs for correct offsets
-	lastV := "v0_final"
-	if numFiles > 1 {
-		currentOffset := effectiveDurs[0] - transDur
-		for i := 1; i < numFiles; i++ {
-			nextV := fmt.Sprintf("v%d_final", i)
-			targetV := fmt.Sprintf("v_m%d", i)
+	// Transitions — per-clip effectiveDurs for correct offsets
+	lastV := ""
+	if isFadeFast {
+		s.log("INFO", "[Montage] Using Fast Fade (fade in/out + concat) transition", id, taskLabel)
+		var concatParts []string
+		for i := 0; i < numFiles; i++ {
+			vIn := fmt.Sprintf("v%d_final", i)
+			vOut := fmt.Sprintf("v%d_faded", i)
+			dur := effectiveDurs[i]
+
+			// Apply fade in and fade out
+			// Only fade in if not the first clip? Or always?
+			// The user said "затуханием и проявлением" (fade out and fade in).
+			// Limit fade duration to 40% of clip duration to prevent disappearing images
+			safeFade := transDur / 2
+			if safeFade > dur*0.4 {
+				safeFade = dur * 0.4
+			}
+
+			fadeInDur := safeFade
+			fadeOutSt := dur - safeFade
+			if fadeOutSt < 0 {
+				fadeOutSt = 0
+			}
+			fadeOutDur := safeFade
+
 			filterParts = append(filterParts, fmt.Sprintf(
-				"[%s][%s]xfade=transition=%s:duration=%.3f:offset=%.3f[%s]",
-				lastV, nextV, transEffect, transDur, currentOffset, targetV,
+				"[%s]fade=t=in:st=0:d=%.3f,fade=t=out:st=%.3f:d=%.3f[%s]",
+				vIn, fadeInDur, fadeOutSt, fadeOutDur, vOut,
 			))
-			lastV = targetV
-			currentOffset += effectiveDurs[i] - transDur
+			concatParts = append(concatParts, fmt.Sprintf("[%s]", vOut))
+			lastV = vOut
+		}
+		if numFiles > 1 {
+			filterParts = append(filterParts, fmt.Sprintf("%sconcat=n=%d:v=1:a=0[v_montage_raw]", strings.Join(concatParts, ""), numFiles))
+			lastV = "v_montage_raw"
+		}
+	} else {
+		lastV = "v0_final"
+		if numFiles > 1 {
+			currentOffset := effectiveDurs[0] - transDur
+			for i := 1; i < numFiles; i++ {
+				nextV := fmt.Sprintf("v%d_final", i)
+				targetV := fmt.Sprintf("v_m%d", i)
+				filterParts = append(filterParts, fmt.Sprintf(
+					"[%s][%s]xfade=transition=%s:duration=%.3f:offset=%.3f[%s]",
+					lastV, nextV, transEffect, transDur, currentOffset, targetV,
+				))
+				lastV = targetV
+				currentOffset += effectiveDurs[i] - transDur
+			}
 		}
 	}
 
@@ -597,8 +652,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		if currentV != "v_intro_base" {
 			finalIntroV = currentV
 		} else {
-			filterParts = append(filterParts, "[v_intro_base]copy[v_intro_final_processed]")
-			finalIntroV = "v_intro_final_processed"
+			finalIntroV = "v_intro_base"
 		}
 	}
 
@@ -677,10 +731,14 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		// Use transition if both parts are long enough
 		if transDur > 0 && introDur > transDur && audioDur > transDur {
 			actualTransDur = transDur
+			introTransEffect := transEffect
+			if introTransEffect == "fade_fast" {
+				introTransEffect = "fade"
+			}
 			// Video transition (xfade)
 			filterParts = append(filterParts, fmt.Sprintf(
 				"[%s][v_montage_final]xfade=transition=%s:duration=%.3f:offset=%.3f[v_total]",
-				finalIntroV, transEffect, transDur, introDur-transDur,
+				finalIntroV, introTransEffect, transDur, introDur-transDur,
 			))
 			// Audio transition (acrossfade)
 			filterParts = append(filterParts, fmt.Sprintf(
@@ -691,7 +749,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			finalA = "a_total"
 		} else {
 			// Fallback to simple concat
-			filterParts = append(filterParts, fmt.Sprintf("[%s][v_montage_final]concat=n=2:v=1:a=0[v_total]; [a_intro][a_voice_res]concat=n=2:v=0:a=1[a_total]", finalIntroV))
+			filterParts = append(filterParts, fmt.Sprintf("[%s][v_montage_final]concat=n=2:v=1:a=0[v_total]", finalIntroV))
+			filterParts = append(filterParts, "[a_intro][a_voice_res]concat=n=2:v=0:a=1[a_total]")
 			finalV = "v_total"
 			finalA = "a_total"
 		}

@@ -14,7 +14,7 @@ const MontageIcon = () => (
 );
 
 const TRANSITION_EFFECTS = [
-    "fade", "wipeleft", "wiperight", "wipeup", "wipedown",
+    "fade_fast", "fade", "wipeleft", "wiperight", "wipeup", "wipedown",
     "slideleft", "slideright", "slideup", "slidedown", "circlecrop",
     "rectcrop", "distance", "fadeblack", "fadewhite", "radial",
     "smoothleft", "smoothright", "smoothup", "smoothdown",
@@ -703,7 +703,11 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                             onChange={(e) => handleChange('montageTransitionEffect', e.target.value)}
                         >
                             {TRANSITION_EFFECTS.map(effect => (
-                                <option key={effect} value={effect}>{effect}</option>
+                                <option key={effect} value={effect}>
+                                    {effect === "fade_fast"
+                                        ? `fade (${t('pipeline.montage.transition_fast')})`
+                                        : `${effect} (${t('pipeline.montage.transition_slow')})`}
+                                </option>
                             ))}
                         </select>
                     </div>

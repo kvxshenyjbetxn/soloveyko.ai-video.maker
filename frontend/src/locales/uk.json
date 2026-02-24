@@ -284,6 +284,8 @@
       "title": "3. Монтаж",
       "sway": "Покачування (Rocking)",
       "transitions": "Тривалість переходу (сек)",
+      "transition_fast": "швидко",
+      "transition_slow": "повільно / накладання",
       "transition_effect": "Тип переходу",
       "zoom": "Інтенсивність зуму (Zoom)",
       "resolution": "Роздільна здатність",

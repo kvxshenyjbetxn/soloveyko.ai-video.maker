@@ -275,6 +275,8 @@
             "title": "3. Монтаж",
             "sway": "Покачивание (Rocking)",
             "transitions": "Длительность перехода (сек)",
+            "transition_fast": "быстро",
+            "transition_slow": "медленно / наложение",
             "transition_effect": "Тип перехода",
             "zoom": "Интенсивность зума (Zoom)",
             "resolution": "Разрешение видео",
