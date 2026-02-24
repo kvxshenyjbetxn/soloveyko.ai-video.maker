@@ -206,11 +206,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 					}
 				}
 			}
-			// Special handling for first and last to avoid over-calculating total duration
-			if len(effectiveDurs) > 0 && !isFadeFast {
-				effectiveDurs[0] -= transDur / 2
-				effectiveDurs[len(effectiveDurs)-1] -= transDur / 2
-			}
 		}
 	} else {
 		if isFadeFast {
@@ -245,6 +240,54 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	// Overrides from settings map (e.g. from templates)
+	if val, ok := settings["montageSwayFactor"].(float64); ok {
+		pSettings.MontageSwayFactor = val
+	}
+	if val, ok := settings["montageTransitionDuration"].(float64); ok {
+		pSettings.MontageTransitionDuration = val
+	}
+	if val, ok := settings["montageTransitionEffect"].(string); ok {
+		pSettings.MontageTransitionEffect = val
+	}
+	if val, ok := settings["montageZoomFactor"].(float64); ok {
+		pSettings.MontageZoomFactor = val
+	}
+	if val, ok := settings["montageEncodingPreset"].(string); ok {
+		pSettings.MontageEncodingPreset = val
+	}
+	if val, ok := settings["montageBitrate"].(float64); ok {
+		pSettings.MontageBitrate = int(val)
+	} else if val, ok := settings["montageBitrate"].(int); ok {
+		pSettings.MontageBitrate = val
+	}
+	if val, ok := settings["montageResolution"].(string); ok {
+		pSettings.MontageResolution = val
+	}
+	if val, ok := settings["montageFPS"].(float64); ok {
+		pSettings.MontageFPS = int(val)
+	} else if val, ok := settings["montageFPS"].(int); ok {
+		pSettings.MontageFPS = val
+	}
+	if val, ok := settings["montageUpscaleFactor"].(float64); ok {
+		pSettings.MontageUpscaleFactor = val
+	}
+	if val, ok := settings["montageVideoCodec"].(string); ok {
+		pSettings.MontageVideoCodec = val
+	}
+	if val, ok := settings["montageThreadsPerProcess"].(float64); ok {
+		pSettings.MontageThreadsPerProcess = int(val)
+	} else if val, ok := settings["montageThreadsPerProcess"].(int); ok {
+		pSettings.MontageThreadsPerProcess = val
+	}
+	if val, ok := settings["montageProcessPriority"].(string); ok {
+		pSettings.MontageProcessPriority = val
+	}
+	if val, ok := settings["montageCPUCores"].(float64); ok {
+		pSettings.MontageCPUCores = int(val)
+	} else if val, ok := settings["montageCPUCores"].(int); ok {
+		pSettings.MontageCPUCores = val
+	}
+
 	if val, ok := settings["montageIntroVideoEnabled"].(bool); ok {
 		pSettings.MontageIntroVideoEnabled = val
 	}
@@ -283,8 +326,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageOverlayTriggersEnabled"].(bool); ok {
 		pSettings.MontageOverlayTriggersEnabled = val
 	}
-	// We don't usually override MontageOverlayTriggers from template as it's a slice/complex object,
-	// but we could if needed.
+	// Note: MontageOverlayTriggers list is complex and currently not overridden from template map.
 
 	upW := int(math.Round(float64(baseW) * upFactor))
 	upH := int(math.Round(float64(baseH) * upFactor))
@@ -578,7 +620,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				continue
 			}
 
-			startT := s.findTextTiming(assPath, tr.Phrase)
+			startT := s.findTextTiming(assPath, tr.Phrase, taskLabel)
 			if startT != nil {
 				s.log("INFO", fmt.Sprintf("[Montage] Found trigger '%s' at %.2fs", tr.Phrase, *startT), id, taskLabel)
 				tIdx := len(inputSpecs)
@@ -975,7 +1017,7 @@ func (s *PipelineService) getVideoSizeGB(ffprobePath, path string) string {
 	return fmt.Sprintf("%.2f GB", gb)
 }
 
-func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64 {
+func (s *PipelineService) findTextTiming(assPath string, phrase string, taskLabel string) *float64 {
 	data, err := os.ReadFile(assPath)
 	if err != nil {
 		return nil
@@ -1002,6 +1044,7 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64
 	type subWord struct {
 		text  string
 		start float64
+		end   float64
 	}
 	var subWords []subWord
 
@@ -1013,21 +1056,38 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64
 		matches := re.FindStringSubmatch(line)
 		if len(matches) > 3 {
 			startTimeStr := matches[1]
+			endTimeStr := matches[2]
 			text := matches[3]
+			// Clean ASS tags and common line break tags
 			text = tagRe.ReplaceAllString(text, "")
+			text = strings.ReplaceAll(text, "\\N", " ")
+			text = strings.ReplaceAll(text, "\\n", " ")
+			text = strings.ReplaceAll(text, "\\h", " ")
 
-			// Parse time 0:00:01.00
-			parts := strings.Split(startTimeStr, ":")
-			if len(parts) == 3 {
-				h, _ := strconv.ParseFloat(parts[0], 64)
-				m, _ := strconv.ParseFloat(parts[1], 64)
-				sec, _ := strconv.ParseFloat(parts[2], 64)
-				startT := h*3600 + m*60 + sec
+			parseTime := func(tStr string) float64 {
+				parts := strings.Split(tStr, ":")
+				if len(parts) == 3 {
+					h, _ := strconv.ParseFloat(parts[0], 64)
+					m, _ := strconv.ParseFloat(parts[1], 64)
+					sec, _ := strconv.ParseFloat(parts[2], 64)
+					return h*3600 + m*60 + sec
+				}
+				return 0
+			}
 
-				cleaned := normalize(text)
-				words := strings.Fields(cleaned)
-				for _, w := range words {
-					subWords = append(subWords, subWord{text: w, start: startT})
+			startT := parseTime(startTimeStr)
+			endT := parseTime(endTimeStr)
+
+			cleaned := normalize(text)
+			words := strings.Fields(cleaned)
+			if len(words) > 0 {
+				wordDur := (endT - startT) / float64(len(words))
+				for i, w := range words {
+					subWords = append(subWords, subWord{
+						text:  w,
+						start: startT + float64(i)*wordDur,
+						end:   startT + float64(i+1)*wordDur,
+					})
 				}
 			}
 		}
@@ -1037,18 +1097,18 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64
 		return nil
 	}
 
-	// If 60% of target words are found in a sequence with small gaps
+	// Use exact match threshold if possible
 	threshold := 0.60
 	if len(targetWords) <= 2 {
-		threshold = 1.0 // For very short phrases, require exact match
+		threshold = 1.0
 	}
 
 	for i := 0; i <= len(subWords)-len(targetWords); i++ {
 		matchCount := 0
 		currentSubIdx := i
+		firstMatchIdx := -1
 
 		for _, tw := range targetWords {
-			// Increase lookahead to handle more skips (like numbers vs words)
 			lookahead := 6
 			limit := currentSubIdx + lookahead
 			if limit > len(subWords) {
@@ -1056,24 +1116,24 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string) *float64
 			}
 
 			for j := currentSubIdx; j < limit; j++ {
-				// Use Levenshtein-based similarity (40% threshold)
 				if utils.IsWordSimilar(subWords[j].text, tw, 0.4) {
 					matchCount++
 					currentSubIdx = j + 1
+					if firstMatchIdx == -1 {
+						firstMatchIdx = j
+					}
 					break
 				}
 			}
-			// CRITICAL FIX: Do NOT increment currentSubIdx here if word is not found.
-			// This allows us to search for the NEXT target word starting from the SAME position
-			// in case the previous target word simply doesn't exist in the transcription.
 		}
 
 		similarity := float64(matchCount) / float64(len(targetWords))
-		if similarity >= threshold {
-			// Found a match!
-			return &subWords[i].start
+		if similarity >= threshold && firstMatchIdx != -1 {
+			s.log("INFO", fmt.Sprintf("[Montage] Trigger match found: '%s' (similarity: %.0f%%) at %.3fs", phrase, similarity*100, subWords[firstMatchIdx].start), "", taskLabel)
+			return &subWords[firstMatchIdx].start
 		}
 	}
 
+	s.log("WARN", fmt.Sprintf("[Montage] Trigger phrase not found after full scan: '%s'", phrase), "", taskLabel)
 	return nil
 }
