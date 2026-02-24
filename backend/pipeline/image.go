@@ -159,14 +159,21 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 	var chunks []string
 	if iInitialCount > 0 && len(baseSegments) > 0 {
-		// First N segments as individual chunks
-		count := iInitialCount
-		if count > len(baseSegments) {
-			count = len(baseSegments)
-		}
-		chunks = append(chunks, baseSegments[:count]...)
-		remaining := baseSegments[count:]
+		// First N dynamic segments, but each must be at least 50 chars
+		currentBaseIdx := 0
+		for dynamicChunkIdx := 0; dynamicChunkIdx < iInitialCount && currentBaseIdx < len(baseSegments); dynamicChunkIdx++ {
+			currentChunk := baseSegments[currentBaseIdx]
+			currentBaseIdx++
 
+			// Merge next segments until we hit 50 chars (hook/dynamic start constraint)
+			for len([]rune(currentChunk)) < 50 && currentBaseIdx < len(baseSegments) {
+				currentChunk += " " + baseSegments[currentBaseIdx]
+				currentBaseIdx++
+			}
+			chunks = append(chunks, currentChunk)
+		}
+
+		remaining := baseSegments[currentBaseIdx:]
 		// Remaining segments grouped by limit
 		if len(remaining) > 0 {
 			if iGroup {
