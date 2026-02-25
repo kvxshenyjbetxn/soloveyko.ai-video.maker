@@ -71,8 +71,13 @@ func GetAudioDuration(path string) (string, error) {
 
 // FormatDuration форматує секунди у зручний для читання вигляд
 func FormatDuration(seconds float64) string {
-	minutes := int(seconds) / 60
+	hrs := int(seconds) / 3600
+	minutes := (int(seconds) % 3600) / 60
 	secs := int(seconds) % 60
+
+	if hrs > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", hrs, minutes, secs)
+	}
 	if minutes > 0 {
 		return fmt.Sprintf("%d:%02d", minutes, secs)
 	}

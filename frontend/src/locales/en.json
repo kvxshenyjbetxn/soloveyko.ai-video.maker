@@ -517,6 +517,9 @@
         "ready": "Ready",
         "default": "Default",
         "pin": "Pin",
-        "unpin": "Unpin"
+        "unpin": "Unpin",
+        "unit_h": "h",
+        "unit_m": "m",
+        "unit_s": "s"
     }
 }

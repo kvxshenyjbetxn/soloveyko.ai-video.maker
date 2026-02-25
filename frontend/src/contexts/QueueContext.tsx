@@ -212,7 +212,14 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             try { await Promise.all(promises); } finally {
                 setIsProcessing(false); activeBatchRef.current = [];
                 const dur = Math.round((Date.now() - startTime) / 1000);
-                setTimeout(() => setCompletionModal({ isOpen: true, taskCount: pending.length, duration: dur > 60 ? `${Math.floor(dur / 60)}хв ${dur % 60}с` : `${dur}с` }), 800);
+                const h = Math.floor(dur / 3600);
+                const m = Math.floor((dur % 3600) / 60);
+                const s = dur % 60;
+                let durStr = "";
+                if (h > 0) durStr = `${h}${t('common.unit_h')} ${m}${t('common.unit_m')} ${s}${t('common.unit_s')}`;
+                else if (m > 0) durStr = `${m}${t('common.unit_m')} ${s}${t('common.unit_s')}`;
+                else durStr = `${s}${t('common.unit_s')}`;
+                setTimeout(() => setCompletionModal({ isOpen: true, taskCount: pending.length, duration: durStr }), 800);
             }
         };
         run();
