@@ -370,6 +370,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (!s.subtitleModel) { s.subtitleModel = 'base'; updated = true; }
                 if (s.subtitleEnabled === undefined) { s.subtitleEnabled = false; updated = true; }
                 if (s.subtitleMaxLen === undefined) s.subtitleMaxLen = 40;
+                if (s.subtitleMaxWords === undefined) s.subtitleMaxWords = 10;
+                if (s.subtitleAmdLanguage === undefined) s.subtitleAmdLanguage = 'uk';
                 if (s.subtitleFont === undefined) s.subtitleFont = 'Arial';
                 if (s.subtitleSize === undefined) s.subtitleSize = 24;
                 if (s.subtitleColor === undefined) s.subtitleColor = '#ffffff';
@@ -495,7 +497,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
         // 4. Subtitle Settings
         const subtitleFields = [
-            'subtitleService', 'subtitleModel', 'subtitleAmdLanguage', 'subtitleMaxLen',
+            'subtitleService', 'subtitleModel', 'subtitleAmdLanguage', 'subtitleMaxLen', 'subtitleMaxWords',
             'subtitleFont', 'subtitleSize', 'subtitleColor', 'subtitleFadeEnabled', 'subtitleFadeIn', 'subtitleFadeOut'
         ];
         subtitleFields.forEach(f => { if (settings[f] !== undefined) templateData.subtitle[f] = settings[f]; });

@@ -33,6 +33,38 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		sModel = "base"
 	}
 
+	// Apply template overrides to pSettings so they are used in saveSubtitles -> SrtToAss
+	if val, ok := settings["subtitleMaxWords"].(float64); ok {
+		pSettings.SubtitleMaxWords = int(val)
+	} else if val, ok := settings["subtitleMaxWords"].(int); ok {
+		pSettings.SubtitleMaxWords = val
+	}
+
+	if val, ok := settings["subtitleAmdLanguage"].(string); ok && val != "" {
+		pSettings.SubtitleAmdLanguage = val
+	}
+
+	// Also Font/Color/Size if needed
+	if val, ok := settings["subtitleFont"].(string); ok && val != "" {
+		pSettings.SubtitleFont = val
+	}
+	if val, ok := settings["subtitleSize"].(float64); ok && val > 0 {
+		pSettings.SubtitleSize = int(val)
+	} else if val, ok := settings["subtitleSize"].(int); ok && val > 0 {
+		pSettings.SubtitleSize = val
+	}
+	if val, ok := settings["subtitleColor"].(string); ok && val != "" {
+		pSettings.SubtitleColor = val
+	}
+	if val, ok := settings["subtitleFadeEnabled"].(bool); ok {
+		pSettings.SubtitleFadeEnabled = val
+	}
+	if val, ok := settings["subtitleMaxLen"].(float64); ok && val > 0 {
+		pSettings.SubtitleMaxLen = int(val)
+	} else if val, ok := settings["subtitleMaxLen"].(int); ok && val > 0 {
+		pSettings.SubtitleMaxLen = val
+	}
+
 	voiceFilePath := filepath.Join(finalDir, "voice.mp3")
 	if _, err := os.Stat(voiceFilePath); os.IsNotExist(err) {
 		s.log("WARN", "[Pipeline] No voice.mp3 found for subtitle generation.", id, taskLabel)
