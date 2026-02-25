@@ -9,8 +9,16 @@ import (
 	"soloveyko/backend/utils"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+// ControlAction represents an action from the UI control editor
+type ControlAction struct {
+	Action   string                 `json:"action"`   // "confirm", "regenerate", "cancel_queue"
+	Text     string                 `json:"text"`     // Updated text
+	Settings map[string]interface{} `json:"settings"` // Updated settings for regeneration
+}
 
 // PipelineService handles the execution of multi-stage tasks
 type PipelineService struct {
@@ -56,6 +64,7 @@ type PipelineService struct {
 	montageSemMu   sync.Mutex
 
 	edgeTTSSem chan struct{}
+	cancelled  atomic.Bool
 }
 
 // NewPipelineService creates a new PipelineService
@@ -142,7 +151,18 @@ func (s *PipelineService) emitStageStatus(id string, stage string, status string
 	}
 }
 
+func (s *PipelineService) CancelProcessing() {
+	s.cancelled.Store(true)
+}
+
+func (s *PipelineService) ResetCancellation() {
+	s.cancelled.Store(false)
+}
+
 func (s *PipelineService) runPipeline(id string, taskLabel string, taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
+	if s.cancelled.Load() {
+		return "", fmt.Errorf("queue execution cancelled")
+	}
 	startTime := time.Now()
 	s.log("INFO", fmt.Sprintf("[Pipeline] runPipeline started. Type: %s, ID: %s", taskType, id), id, taskLabel)
 	s.log("INFO", "[Pipeline] Task started and pre-processing...", id, taskLabel)
@@ -213,69 +233,113 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 	}
 
-	// 1. Text Stage
+	// 1. Text Stage Loop
 	processedText := ""
 	orSuccess := false
 	var err error
 
-	if shouldSkipText {
-		s.log("INFO", "[Pipeline] Skipping text stage, loading existing result...", id, taskLabel)
-		processedText, err = s.LoadTextResult(finalDir, taskType)
-		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to load existing text: %v. Running generation anyway.", err), id, taskLabel)
-			processedText, orSuccess, err = s.ProcessText(id, taskLabel, taskType, content, settings, &pSettings)
+	for {
+		if s.cancelled.Load() {
+			return "", fmt.Errorf("queue execution cancelled")
+		}
+
+		if shouldSkipText {
+			s.log("INFO", "[Pipeline] Skipping text stage, loading existing result...", id, taskLabel)
+			processedText, err = s.LoadTextResult(finalDir, taskType)
+			if err != nil {
+				s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to load existing text: %v. Running generation anyway.", err), id, taskLabel)
+				processedText, orSuccess, err = s.ProcessText(id, taskLabel, taskType, content, settings, &pSettings)
+			} else {
+				s.emitStageStatus(id, "text", "completed")
+			}
 		} else {
-			s.emitStageStatus(id, "text", "completed")
-		}
-	} else {
-		processedText, orSuccess, err = s.ProcessText(id, taskLabel, taskType, content, settings, &pSettings)
-	}
-
-	if err != nil {
-		s.emitStageStatus(id, "text", "failed")
-		if s.OnTaskStatus != nil {
-			s.OnTaskStatus(id, "failed", 0)
-		}
-		return "", err
-	}
-
-	// Emit text result immediately after processing
-	if s.OnTextResult != nil {
-		s.OnTextResult(id, processedText)
-	}
-
-	// 1.5 Control Stage (Only if not skipped)
-	tControlEnabled := pSettings.TranslateControlEnabled
-	if val, ok := settings["translateControlEnabled"].(bool); ok {
-		tControlEnabled = val
-	}
-
-	if val, ok := settings["imageSyncEnabled"].(bool); ok {
-		pSettings.ImageSyncEnabled = val
-	}
-
-	if !shouldSkipText && tControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
-		s.emitStageStatus(id, "text", "waiting")
-		s.log("INFO", "[Control] Waiting for user translation review...", id, taskLabel)
-
-		resChan := make(chan string)
-		s.pendingControl.Store(id, resChan)
-
-		if s.OnRequestControl != nil {
-			s.OnRequestControl(id, processedText)
+			processedText, orSuccess, err = s.ProcessText(id, taskLabel, taskType, content, settings, &pSettings)
 		}
 
-		// Block until result received
-		updatedText := <-resChan
-		processedText = updatedText
-		s.pendingControl.Delete(id)
+		if err != nil {
+			s.emitStageStatus(id, "text", "failed")
+			if s.OnTaskStatus != nil {
+				s.OnTaskStatus(id, "failed", 0)
+			}
+			return "", err
+		}
 
-		s.log("SUCCESS", "[Control] Text approved.", id, taskLabel)
-		s.emitStageStatus(id, "text", "completed")
-		// Re-emit result length if it changed
+		// Emit text result immediately after processing
 		if s.OnTextResult != nil {
 			s.OnTextResult(id, processedText)
 		}
+
+		// 1.5 Control Stage (Only if not skipped)
+		tControlEnabled := pSettings.TranslateControlEnabled
+		if val, ok := settings["translateControlEnabled"].(bool); ok {
+			tControlEnabled = val
+		}
+
+		if val, ok := settings["imageSyncEnabled"].(bool); ok {
+			pSettings.ImageSyncEnabled = val
+		}
+
+		if !shouldSkipText && tControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
+			s.emitStageStatus(id, "text", "waiting")
+			s.log("INFO", "[Control] Waiting for user translation review...", id, taskLabel)
+
+			resChan := make(chan *ControlAction)
+			s.pendingControl.Store(id, resChan)
+
+			if s.OnRequestControl != nil {
+				s.OnRequestControl(id, processedText)
+			}
+
+			// Block until result received
+			var action *ControlAction
+			select {
+			case action = <-resChan:
+				// received action
+			case <-s.ctx.Done():
+				s.pendingControl.Delete(id)
+				return "", fmt.Errorf("task cancelled")
+			}
+			s.pendingControl.Delete(id)
+
+			if action.Action == "cancel_queue" {
+				s.log("WARN", "[Control] Queue cancellation requested by user.", id, taskLabel)
+				s.CancelProcessing()
+				return "", fmt.Errorf("queue execution cancelled")
+			}
+
+			if action.Action == "cancel" {
+				s.log("WARN", "[Control] Task cancellation requested by user.", id, taskLabel)
+				return "", fmt.Errorf("task execution cancelled")
+			}
+
+			if action.Action == "regenerate" {
+				s.log("INFO", "[Control] Regeneration requested by user.", id, taskLabel)
+				if action.Settings != nil {
+					// Update local settings for the next iteration
+					for k, v := range action.Settings {
+						settings[k] = v
+					}
+					// Also update pSettings if necessary (some fields are mirrored)
+					if val, ok := action.Settings["translateControlEnabled"].(bool); ok {
+						pSettings.TranslateControlEnabled = val
+					}
+				}
+				// Loop back to regenerate
+				continue
+			}
+
+			// Default: "confirm"
+			processedText = action.Text
+			s.log("SUCCESS", "[Control] Text approved.", id, taskLabel)
+			s.emitStageStatus(id, "text", "completed")
+			// Re-emit result length if it changed
+			if s.OnTextResult != nil {
+				s.OnTextResult(id, processedText)
+			}
+		}
+
+		// If we reached here, it means we don't need to regenerate
+		break
 	}
 
 	// 2. FS Stage - Prepare Directory (Already determined as finalDir)
@@ -599,11 +663,19 @@ func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]i
 	return res
 }
 
-// SubmitControlResult resumes a paused pipeline with updated text
+// SubmitControlResult resumes a paused pipeline with updated text (legacy/simple confirm)
 func (s *PipelineService) SubmitControlResult(id string, text string) {
+	s.SubmitControlAction(id, &ControlAction{
+		Action: "confirm",
+		Text:   text,
+	})
+}
+
+// SubmitControlAction sends a complex control response to the pipeline
+func (s *PipelineService) SubmitControlAction(id string, action *ControlAction) {
 	if val, ok := s.pendingControl.Load(id); ok {
-		ch := val.(chan string)
-		ch <- text
+		ch := val.(chan *ControlAction)
+		ch <- action
 	}
 }
 

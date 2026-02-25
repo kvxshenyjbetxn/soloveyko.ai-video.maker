@@ -6,6 +6,8 @@ import { useQueue, QueueTask } from '../contexts/QueueContext';
 import { useLogger } from '../contexts/LoggerContext';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ExistingFilesModal } from '../components/ExistingFilesModal';
+// @ts-ignore
+import { GetOpenRouterSavedModels } from '../../wailsjs/go/main/App';
 
 interface QueueProps {
     setCurrentPath?: (path: string) => void;
@@ -42,8 +44,30 @@ const MontageIcon = () => (
 );
 
 const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: string, text: string) => void }) => {
+    const { regenerateTask, cancelTask } = useQueue();
     const [text, setText] = useState(task.controlContent || '');
     const [isFullScreen, setIsFullScreen] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+
+    // Settings state
+    const [prompt, setPrompt] = useState(task.settings?.translatePrompt || task.settings?.rewritePrompt || '');
+    const [model, setModel] = useState(task.settings?.translateModel || task.settings?.rewriteModel || '');
+    const [temperature, setTemperature] = useState(task.settings?.temperature || 0.7);
+    const [maxTokens, setMaxTokens] = useState(task.settings?.maxTokens || 2000);
+    const [savedModels, setSavedModels] = useState<string[]>([]);
+
+    useEffect(() => {
+        const fetchModels = async () => {
+            try {
+                const models = await GetOpenRouterSavedModels();
+                if (models) setSavedModels(models);
+            } catch (err) {
+                console.error("Failed to fetch OpenRouter models:", err);
+            }
+        };
+        fetchModels();
+    }, []);
+
     const { t } = useI18n();
 
     const origLen = task.content?.length || 0;
@@ -84,7 +108,86 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
                     onChange={(e) => setText(e.target.value)}
                     autoFocus
                 />
+
+                {showSettings && (
+                    <div className="control-settings-menu animate-fade-in">
+                        <div className="settings-grid">
+                            <div className="settings-field">
+                                <label>{t('queue.prompt_label')}</label>
+                                <textarea
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    className="premium-scrollbar"
+                                />
+                            </div>
+                            <div className="settings-row">
+                                <div className="settings-field">
+                                    <label>{t('queue.model_label')}</label>
+                                    {savedModels.length > 0 ? (
+                                        <select value={model} onChange={(e) => setModel(e.target.value)}>
+                                            {savedModels.map(m => (
+                                                <option key={m} value={m}>{m}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <input type="text" value={model} onChange={(e) => setModel(e.target.value)} />
+                                    )}
+                                </div>
+                                <div className="settings-field">
+                                    <label>{t('queue.temp_label')}</label>
+                                    <input type="number" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value))} />
+                                </div>
+                                <div className="settings-field">
+                                    <label>{t('queue.max_tokens_label')}</label>
+                                    <input type="number" value={maxTokens} onChange={(e) => setMaxTokens(parseInt(e.target.value, 10))} />
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            className="apply-regenerate-btn"
+                            onClick={() => {
+                                const newSettings = { ...task.settings };
+                                if (task.type === 'translate') {
+                                    newSettings.translatePrompt = prompt;
+                                    newSettings.translateModel = model;
+                                } else {
+                                    newSettings.rewritePrompt = prompt;
+                                    newSettings.rewriteModel = model;
+                                }
+                                newSettings.temperature = temperature;
+                                newSettings.maxTokens = maxTokens;
+                                regenerateTask(task.id, text, newSettings);
+                            }}
+                        >
+                            {t('queue.apply_and_regenerate')}
+                        </button>
+                    </div>
+                )}
+
                 <div className="control-actions">
+                    <div style={{ flex: 1 }} />
+
+                    <button className="control-cancel-btn" onClick={() => cancelTask(task.id)} title={t('common.cancel')}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
+                        {isFullScreen && <span>{t('common.cancel')}</span>}
+                    </button>
+
+                    <button className="control-settings-btn" onClick={() => {
+                        if (!isFullScreen) {
+                            setIsFullScreen(true);
+                            setShowSettings(true);
+                        } else {
+                            setShowSettings(!showSettings);
+                        }
+                    }} title={t('queue.edit_settings')}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+                    </button>
+
+                    <button className="control-regen-btn" onClick={() => regenerateTask(task.id, text)} title={t('queue.regenerate')}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                        {isFullScreen && <span>{t('queue.regenerate')}</span>}
+                    </button>
+
                     <button className="control-ok-btn" onClick={() => onConfirm(task.id, text)}>
                         OK
                     </button>
@@ -121,7 +224,7 @@ const renderStatusLines = (message: string, isFinished: boolean) => {
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, cancelQueue } = useQueue();
     const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
 

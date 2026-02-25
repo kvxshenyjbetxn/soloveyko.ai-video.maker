@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
-import { ProcessTask, SubmitControlResult, SubmitImageControlResult, SubmitExistingFilesResult, ClearGallery } from '../../wailsjs/go/main/App';
+import { ProcessTask, SubmitImageControlResult, SubmitExistingFilesResult, ClearGallery, SendControlAction, CancelQueue, ResetQueueCancellation } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { useToast } from './ToastContext';
 import { useI18n } from './I18nContext';
@@ -26,7 +26,11 @@ interface QueueContextType {
     removeTask: (id: string) => void; clearQueue: () => void; startQueue: () => Promise<void>;
     getNextTaskName: () => string;
     updateTaskStatus: (id: string, s: TaskStatus, p?: number, l?: number) => void;
-    resumeTask: (id: string, text: string) => Promise<void>; resumeImageControl: () => Promise<void>;
+    resumeTask: (id: string, text: string) => Promise<void>;
+    regenerateTask: (id: string, text: string, settings?: any) => Promise<void>;
+    cancelTask: (id: string) => Promise<void>;
+    cancelQueue: () => Promise<void>;
+    resumeImageControl: () => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
     closeCompletionModal: () => void; closeImageControlNotification: () => void;
 }
@@ -151,7 +155,23 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const resumeTask = async (id: string, text: string) => {
         setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: false, content: text } : t));
-        await SubmitControlResult(id, text);
+        await SendControlAction(id, "confirm", text, {});
+    };
+
+    const regenerateTask = async (id: string, text: string, settings?: any) => {
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: false, status: 'running', textStatus: 'running' } : t));
+        await SendControlAction(id, "regenerate", text, settings || {});
+    };
+
+    const cancelTask = async (id: string) => {
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: false, status: 'failed', textStatus: 'failed' } : t));
+        await SendControlAction(id, "cancel", "", {});
+    };
+
+    const cancelQueue = async () => {
+        await CancelQueue();
+        setTasks(prev => prev.map(t => (t.status === 'running' || t.status === 'waiting') ? { ...t, status: 'failed' } : t));
+        setIsProcessing(false);
     };
 
     const resumeImageControl = async () => {
@@ -181,6 +201,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         if (pending.length === 0) return;
 
         setIsProcessing(true); const startTime = Date.now();
+        await ResetQueueCancellation();
         const pendingIds = pending.map(t => t.id);
         activeBatchRef.current = pendingIds;
         hasShownImageBatchNotificationRef.current = false;
@@ -283,7 +304,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         <QueueContext.Provider value={{
             tasks, isProcessing, completionModal, imageControlNotification,
             addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
-            updateTaskStatus, resumeTask, resumeImageControl, resumeWithExistingFiles, closeCompletionModal, closeImageControlNotification
+            updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeWithExistingFiles, closeCompletionModal, closeImageControlNotification
         }}>{children}</QueueContext.Provider>
     );
 };

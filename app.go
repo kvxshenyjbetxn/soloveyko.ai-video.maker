@@ -878,9 +878,29 @@ func (a *App) ProcessTask(id string, taskNumber int, taskType string, content st
 	return a.pipeline.ProcessTask(id, taskNumber, taskType, content, settings, taskName, subName)
 }
 
-// SubmitControlResult resumes a paused task with edited text
+// SubmitControlResult resumes a paused task with edited text (legacy/simple confirm)
 func (a *App) SubmitControlResult(taskId string, content string) {
 	a.pipeline.SubmitControlResult(taskId, content)
+}
+
+// SendControlAction sends a complex action to a paused task
+func (a *App) SendControlAction(id string, action string, text string, settings map[string]interface{}) {
+	a.pipeline.SubmitControlAction(id, &pipeline.ControlAction{
+		Action:   action,
+		Text:     text,
+		Settings: settings,
+	})
+}
+
+// CancelQueue cancels all currently running pipeline tasks
+func (a *App) CancelQueue() {
+	a.pipeline.CancelProcessing()
+	a.LogToUI("WARN", "[Queue] Queue cancellation requested. All pending tasks will fail.")
+}
+
+// ResetQueueCancellation allows starting new tasks after a previous cancellation
+func (a *App) ResetQueueCancellation() {
+	a.pipeline.ResetCancellation()
 }
 
 // CheckExistingTask checks if a folder already exists and contains relevant files

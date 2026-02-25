@@ -81,7 +81,15 @@
     "image_photos": "{{count}} фото",
     "image_videos": "{{count}} відео",
     "chars": "{{count}} симв.",
-    "chars_short": "симв."
+    "chars_short": "симв.",
+    "regenerate": "Перегенерувати",
+    "edit_settings": "Налаштування",
+    "cancel_queue": "Відмінити чергу",
+    "prompt_label": "Промт",
+    "model_label": "Модель",
+    "temp_label": "Температура",
+    "max_tokens_label": "Макс. токенів",
+    "apply_and_regenerate": "Застосувати та перегенерувати"
   },
   "gallery": {
     "title": "Медіа Галерея",

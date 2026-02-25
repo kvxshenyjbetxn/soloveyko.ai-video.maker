@@ -75,7 +75,15 @@
         "existing_files_message": "В папке задачи найдены уже готовые результаты. Вы хотите использовать их и пропустить соответствующие этапы генерации?",
         "image_saved": "{{images}} картинок\n{{videos}} видео",
         "chars": "{{count}} симв.",
-        "chars_short": "симв."
+        "chars_short": "симв.",
+        "regenerate": "Перегенерувати",
+        "edit_settings": "Настройки",
+        "cancel_queue": "Отменить очередь",
+        "prompt_label": "Промт",
+        "model_label": "Модель",
+        "temp_label": "Температура",
+        "max_tokens_label": "Макс. токенов",
+        "apply_and_regenerate": "Применить и перегенерувати"
     },
     "gallery": {
         "title": "Медиа Галерея",

@@ -34,6 +34,42 @@
     color: white;
 }
 
+.cancel-queue-header-btn {
+    background: rgba(255, 82, 82, 0.15);
+    color: #ff5252;
+    border: 1px solid rgba(255, 82, 82, 0.4);
+    padding: 6px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    animation: pulse-red-border 2s infinite;
+}
+
+.cancel-queue-header-btn:hover {
+    background: #ff5252;
+    color: white;
+    transform: scale(1.02);
+}
+
+@keyframes pulse-red-border {
+    0% {
+        border-color: rgba(255, 82, 82, 0.4);
+        box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.2);
+    }
+
+    50% {
+        border-color: rgba(255, 82, 82, 0.8);
+        box-shadow: 0 0 10px 0 rgba(255, 82, 82, 0.4);
+    }
+
+    100% {
+        border-color: rgba(255, 82, 82, 0.4);
+        box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.2);
+    }
+}
+
 .queue-container {
     flex: 1;
     overflow-y: auto;
@@ -631,7 +667,7 @@
 .control-textarea {
     flex: 1;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 2px solid var(--accent-primary);
     border-radius: 8px;
     padding: 10px;
     color: var(--text-primary);
@@ -650,12 +686,179 @@
 }
 
 .control-textarea:focus {
-    border-color: #ffeb3b;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 15px rgba(255, 0, 195, 0.25);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .control-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 10px;
+    align-items: center;
+}
+
+.control-cancel-btn {
+    background: rgba(255, 82, 82, 0.1);
+    color: #ff5252;
+    border: 1px solid rgba(255, 82, 82, 0.2);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.control-cancel-btn:hover {
+    background: rgba(255, 82, 82, 0.2);
+    border-color: #ff5252;
+}
+
+.control-regen-btn {
+    background: rgba(33, 150, 243, 0.1);
+    color: #2196f3;
+    border: 1px solid rgba(33, 150, 243, 0.2);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.control-regen-btn:hover {
+    background: rgba(33, 150, 243, 0.2);
+    border-color: #2196f3;
+}
+
+.control-settings-btn {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.control-settings-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+}
+
+/* Settings Menu */
+.control-settings-menu {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border-left: 3px solid var(--accent-primary);
+}
+
+.settings-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.settings-field label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-placeholder);
+    letter-spacing: 0.5px;
+}
+
+.settings-field textarea,
+.settings-field input {
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-field select {
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.settings-field select option {
+    background: #1a1a1a;
+    color: white;
+}
+
+.settings-field textarea {
+    min-height: 60px;
+    resize: vertical;
+}
+
+.settings-field input:focus,
+.settings-field select:focus,
+.settings-field textarea:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 4px rgba(255, 0, 195, 0.25);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.settings-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 12px;
+}
+
+.apply-regenerate-btn {
+    width: 100%;
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    padding: 8px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.apply-regenerate-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 0, 195, 0.3);
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease;
 }
 
 .control-ok-btn {

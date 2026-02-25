@@ -75,7 +75,15 @@
         "existing_files_message": "Ready-made results were found in the task folder. Do you want to use them and skip the corresponding generation stages?",
         "image_saved": "{{images}} images\n{{videos}} videos",
         "chars": "{{count}} chars",
-        "chars_short": "chars"
+        "chars_short": "chars",
+        "regenerate": "Regenerate",
+        "edit_settings": "Settings",
+        "cancel_queue": "Cancel Queue",
+        "prompt_label": "Prompt",
+        "model_label": "Model",
+        "temp_label": "Temperature",
+        "max_tokens_label": "Max Tokens",
+        "apply_and_regenerate": "Apply and Regenerate"
     },
     "gallery": {
         "title": "Media Gallery",
