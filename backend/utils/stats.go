@@ -33,7 +33,9 @@ type SystemStats struct {
 	Disks      []DiskInfo `json:"disks"`
 }
 
-type StatsService struct{}
+type StatsService struct {
+	cachedGPUNames []string
+}
 
 func NewStatsService() *StatsService {
 	return &StatsService{}
@@ -80,7 +82,7 @@ func (s *StatsService) GetSystemStats() (*SystemStats, error) {
 	// GPU
 	switch runtime.GOOS {
 	case "windows":
-		stats.GPUs = getWindowsGPUs()
+		stats.GPUs = s.getWindowsGPUs()
 	case "darwin":
 		stats.GPUs = []GPUData{{Name: getMacGPUInfo(), Percent: 0}}
 	default:
@@ -90,38 +92,45 @@ func (s *StatsService) GetSystemStats() (*SystemStats, error) {
 	return stats, nil
 }
 
-func getWindowsGPUs() []GPUData {
+func (s *StatsService) getWindowsGPUs() []GPUData {
 	var gpus []GPUData
 
-	// 1. Try to get names via PowerShell
-	psNamesCmd := "(Get-CimInstance Win32_VideoController).Name"
-	out, err := runHiddenCommand("powershell", "-Command", psNamesCmd)
-	if err == nil {
-		lines := strings.Split(string(out), "\n")
-		for _, line := range lines {
-			name := strings.TrimSpace(line)
-			// Cleanup name
-			name = strings.Map(func(r rune) rune {
-				if r < 32 || r > 126 && r < 160 {
-					if r == '\n' || r == '\r' || r == '\t' {
+	// 1. Try to get names (cached or via PowerShell)
+	if len(s.cachedGPUNames) > 0 {
+		for _, name := range s.cachedGPUNames {
+			gpus = append(gpus, GPUData{Name: name, Percent: 0})
+		}
+	} else {
+		psNamesCmd := "(Get-CimInstance Win32_VideoController).Name"
+		out, err := runHiddenCommand("powershell", "-Command", psNamesCmd)
+		if err == nil {
+			lines := strings.Split(string(out), "\n")
+			for _, line := range lines {
+				name := strings.TrimSpace(line)
+				// Cleanup name
+				name = strings.Map(func(r rune) rune {
+					if r < 32 || r > 126 && r < 160 {
+						if r == '\n' || r == '\r' || r == '\t' {
+							return -1
+						}
 						return -1
 					}
-					return -1
-				}
-				return r
-			}, name)
+					return r
+				}, name)
 
-			if name != "" {
-				// Avoid duplicates
-				duplicate := false
-				for _, g := range gpus {
-					if g.Name == name {
-						duplicate = true
-						break
+				if name != "" {
+					// Avoid duplicates
+					duplicate := false
+					for _, g := range gpus {
+						if g.Name == name {
+							duplicate = true
+							break
+						}
 					}
-				}
-				if !duplicate {
-					gpus = append(gpus, GPUData{Name: name, Percent: 0})
+					if !duplicate {
+						gpus = append(gpus, GPUData{Name: name, Percent: 0})
+						s.cachedGPUNames = append(s.cachedGPUNames, name)
+					}
 				}
 			}
 		}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../contexts/I18nContext';
 import './queue.css';
@@ -6,6 +6,7 @@ import { useQueue, QueueTask } from '../contexts/QueueContext';
 import { useLogger } from '../contexts/LoggerContext';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ExistingFilesModal } from '../components/ExistingFilesModal';
+import { VirtualLogList } from '../components/VirtualLogList';
 // @ts-ignore
 import { GetOpenRouterSavedModels } from '../../wailsjs/go/main/App';
 
@@ -49,7 +50,6 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
     const [isFullScreen, setIsFullScreen] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
 
-    // Settings state
     const [prompt, setPrompt] = useState(task.settings?.translatePrompt || task.settings?.rewritePrompt || '');
     const [model, setModel] = useState(task.settings?.translateModel || task.settings?.rewriteModel || '');
     const [temperature, setTemperature] = useState(task.settings?.temperature || 0.7);
@@ -166,12 +166,10 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
 
                 <div className="control-actions">
                     <div style={{ flex: 1 }} />
-
                     <button className="control-cancel-btn" onClick={() => cancelTask(task.id)} title={t('common.cancel')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
                         {isFullScreen && <span>{t('common.cancel')}</span>}
                     </button>
-
                     <button className="control-settings-btn" onClick={() => {
                         if (!isFullScreen) {
                             setIsFullScreen(true);
@@ -182,24 +180,17 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
                     }} title={t('queue.edit_settings')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
                     </button>
-
                     <button className="control-regen-btn" onClick={() => regenerateTask(task.id, text)} title={t('queue.regenerate')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
                         {isFullScreen && <span>{t('queue.regenerate')}</span>}
                     </button>
-
-                    <button className="control-ok-btn" onClick={() => onConfirm(task.id, text)}>
-                        OK
-                    </button>
+                    <button className="control-ok-btn" onClick={() => onConfirm(task.id, text)}>OK</button>
                 </div>
             </div>
         </div>
     );
 
-    if (isFullScreen) {
-        return createPortal(editorContent, document.body);
-    }
-
+    if (isFullScreen) return createPortal(editorContent, document.body);
     return editorContent;
 };
 
@@ -222,242 +213,185 @@ const renderStatusLines = (message: string, isFinished: boolean) => {
     });
 };
 
+const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, isProcessing, t, resumeTask, logs }: any) => {
+    const settings = task.settings || {};
+    const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
+    const isVoiceEnabled = settings.voiceoverEnabled === true;
+    const isSubtitleEnabled = settings.subtitleEnabled === true;
+    const isImageEnabled = settings.imageEnabled === true;
+    const isMontageEnabled = settings.montageEnabled === true;
+
+    const cleanStageLabel = (label: string) => label.replace(/^[\d\.A-Z]+\s*/, '');
+
+    const mainLabel = isMainStageEnabled
+        ? (task.type === 'translate' ? t('text.translate') : t('text.rewrite'))
+        : t('text.original');
+
+    const displayMainLabel = cleanStageLabel(mainLabel);
+    const taskLogs = useMemo(() => logs.filter((l: any) => l.taskId === task.id), [logs, task.id]);
+
+    return (
+        <div className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
+            <div
+                className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${task.isAwaitingControl ? 'awaiting-control' : ''}`}
+                onClick={() => !task.isAwaitingControl && onToggle(task.id)}
+            >
+                {task.isAwaitingControl && (
+                    <ControlEditor task={task} onConfirm={resumeTask} />
+                )}
+                <div className="task-card-header">
+                    <span className={`task-type-badge ${task.type}`}>
+                        {displayMainLabel}
+                    </span>
+                    <button
+                        className="remove-task-btn"
+                        disabled={isProcessing}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onRemove(task.id);
+                        }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                </div>
+
+                <div className="task-card-name" title={task.name}>{task.name}</div>
+
+                <div className="task-stages-list">
+                    <div className={`task-stage-item status-${task.textStatus}`}>
+                        <div className="stage-left"><LightbulbIcon /><span>{displayMainLabel}</span></div>
+                        <span className="stage-status-text badge-status">
+                            {task.textStatus === 'completed' ? (t('queue.chars', { count: task.resultLength || 0 }) || `${task.resultLength || 0} chars`) :
+                                task.textStatus === 'running' ? (t('queue.status_running') || 'Processing...') :
+                                    task.textStatus === 'waiting' ? (t('queue.status_waiting') || 'В черзі') :
+                                        task.textStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                        </span>
+                    </div>
+
+                    {isVoiceEnabled && (
+                        <div className={`task-stage-item status-${task.voiceStatus}`} style={{ marginTop: '4px' }}>
+                            <div className="stage-left"><VoiceIcon /><span>{cleanStageLabel(t('text.voiceover'))}</span></div>
+                            <span className="stage-status-text badge-status">
+                                {task.voiceStatus === 'completed' ? (task.voiceDuration || t('queue.voice_saved') || 'MP3 saved') :
+                                    task.voiceStatus === 'running' ? (t('queue.status_running') || 'Synthesizing...') :
+                                        task.voiceStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
+                                            task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                            </span>
+                        </div>
+                    )}
+
+                    {isImageEnabled && (
+                        <div className={`task-stage-item status-${task.imageStatus}`} style={{ marginTop: '4px' }}>
+                            <div className="stage-left"><ImageIcon /><span>{cleanStageLabel(t('pipeline.stage.image'))}</span></div>
+                            <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
+                                {task.imageStatus === 'completed' ? (
+                                    task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : (t('queue.status_completed') || 'Completed')
+                                ) : task.imageStatus === 'running' ? (
+                                    task.imagesMessage ? renderStatusLines(task.imagesMessage, false) : (t('queue.status_running') || 'Generating...')
+                                ) : task.imageStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
+                                    task.imageStatus === 'failed' ? (
+                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
+                                    ) : t('queue.status_pending')}
+                            </div>
+                        </div>
+                    )}
+
+                    {isSubtitleEnabled && (
+                        <div className={`task-stage-item status-${task.subtitleStatus}`} style={{ marginTop: '4px' }}>
+                            <div className="stage-left"><SubtitleIcon /><span>{cleanStageLabel(t('pipeline.stage.subtitle'))}</span></div>
+                            <span className="stage-status-text badge-status">
+                                {task.subtitleStatus === 'completed' ? (t('queue.subtitle_saved') || 'SRT збережено') :
+                                    task.subtitleStatus === 'running' ? (t('queue.status_running') || 'Transcribing...') :
+                                        task.subtitleStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
+                                            task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                            </span>
+                        </div>
+                    )}
+
+                    {isMontageEnabled && (
+                        <div className={`task-stage-item status-${task.montageStatus}`} style={{ marginTop: '4px' }}>
+                            <div className="stage-left"><MontageIcon /><span>{cleanStageLabel(t('pipeline.stage.montage'))}</span></div>
+                            <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
+                                {task.montageStatus === 'completed' ? (task.montageMsg || t('queue.status_completed')) :
+                                    task.montageStatus === 'running' ? (
+                                        task.montageMsg ? renderStatusLines(task.montageMsg, false) : t('queue.status_running')
+                                    ) : task.montageStatus === 'waiting' ? t('queue.status_waiting') :
+                                        task.montageStatus === 'failed' ? (
+                                            task.montageMsg ? renderStatusLines(task.montageMsg, true) : t('queue.status_failed')
+                                        ) : t('queue.status_pending')}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {task.status === 'running' && (
+                    <div className="progress-bar-container">
+                        <div className="progress-bar-fill" style={{ width: `${task.progress}%` }}></div>
+                    </div>
+                )}
+
+                <div className="task-card-footer">{new Date(task.timestamp).toLocaleTimeString()}</div>
+            </div>
+
+            <div className="task-inline-log" onClick={(e) => e.stopPropagation()}>
+                <div className="log-header"><span className="log-title">{t('tabs.logs')}</span></div>
+                <div className="log-content premium-scrollbar" style={{ overflow: 'hidden' }}>
+                    {taskLogs.length === 0 ? (
+                        <div className="log-empty">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></svg>
+                            <span>{t('logsTab.empty')}</span>
+                        </div>
+                    ) : (
+                        <VirtualLogList
+                            logs={taskLogs}
+                            rowHeight={20}
+                            renderRow={(log: any) => (
+                                <div key={log.id} className={`task-log-entry level-${log.level.toLowerCase()}`} style={{ height: '20px', display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                    <span className="task-log-time">{log.timestamp.toLocaleTimeString()}</span>
+                                    <span className="task-log-message" style={{ textOverflow: 'ellipsis', overflow: 'hidden' }}>{log.message}</span>
+                                </div>
+                            )}
+                        />
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+});
+
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, cancelQueue } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles } = useQueue();
     const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
+    const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message?: string; onConfirm: () => void; }>({ isOpen: false, title: '', onConfirm: () => { } });
 
-    // Custom Modal State
-    const [confirmModal, setConfirmModal] = useState<{
-        isOpen: boolean;
-        title: string;
-        message?: string;
-        onConfirm: () => void;
-    }>({
-        isOpen: false,
-        title: '',
-        onConfirm: () => { }
-    });
-
-    // Redirect if last task is removed
     useEffect(() => {
         if (tasks.length === 0 && setCurrentPath) {
-            const timer = setTimeout(() => {
-                setCurrentPath('text.translate');
-            }, 300);
+            const timer = setTimeout(() => setCurrentPath('text.translate'), 300);
             return () => clearTimeout(timer);
         }
     }, [tasks.length, setCurrentPath]);
 
-    const handleClearQueue = () => {
+    const handleClearQueue = useCallback(() => {
         if (isProcessing) return;
         setConfirmModal({
-            isOpen: true,
-            title: t('queue.clear_all'),
-            message: t('queue.delete_all_confirm'),
-            onConfirm: () => {
-                clearQueue();
-                if (setCurrentPath) setCurrentPath('text.translate');
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-            }
+            isOpen: true, title: t('queue.clear_all'), message: t('queue.delete_all_confirm'),
+            onConfirm: () => { clearQueue(); if (setCurrentPath) setCurrentPath('text.translate'); setConfirmModal(prev => ({ ...prev, isOpen: false })); }
         });
-    };
+    }, [isProcessing, clearQueue, setCurrentPath, t]);
 
-    const handleRemoveTask = (id: string) => {
+    const handleRemoveTask = useCallback((id: string) => {
         if (isProcessing) return;
         setConfirmModal({
-            isOpen: true,
-            title: t('common.delete'),
-            message: t('queue.delete_confirm'),
-            onConfirm: () => {
-                removeTask(id);
-                setConfirmModal(prev => ({ ...prev, isOpen: false }));
-            }
+            isOpen: true, title: t('common.delete'), message: t('queue.delete_confirm'),
+            onConfirm: () => { removeTask(id); setConfirmModal(prev => ({ ...prev, isOpen: false })); }
         });
-    };
+    }, [isProcessing, removeTask, t]);
 
-    const toggleExpand = (id: string) => {
-        setExpandedTaskIds(prev =>
-            prev.includes(id) ? prev.filter(tid => tid !== id) : [...prev, id]
-        );
-    };
-
-    const renderTaskItem = (task: QueueTask) => {
-        const isExpanded = expandedTaskIds.includes(task.id);
-        const settings = task.settings || {};
-
-        const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
-        const isVoiceEnabled = settings.voiceoverEnabled === true;
-        const isSubtitleEnabled = settings.subtitleEnabled === true;
-        const isImageEnabled = settings.imageEnabled === true;
-        const isMontageEnabled = settings.montageEnabled === true;
-
-        const cleanStageLabel = (label: string) => label.replace(/^[\d\.A-Z]+\s*/, '');
-
-        const mainLabel = isMainStageEnabled
-            ? (task.type === 'translate' ? t('text.translate') : t('text.rewrite'))
-            : t('text.original');
-
-        const displayMainLabel = cleanStageLabel(mainLabel);
-
-        return (
-            <div key={task.id} className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
-                <div
-                    className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${task.isAwaitingControl ? 'awaiting-control' : ''}`}
-                    onClick={() => !task.isAwaitingControl && toggleExpand(task.id)}
-                >
-                    {task.isAwaitingControl && (
-                        <ControlEditor task={task} onConfirm={resumeTask} />
-                    )}
-                    <div className="task-card-header">
-                        <span className={`task-type-badge ${task.type}`}>
-                            {displayMainLabel}
-                        </span>
-                        <button
-                            className="remove-task-btn"
-                            disabled={isProcessing}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveTask(task.id);
-                            }}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                        </button>
-                    </div>
-
-                    <div className="task-card-name" title={task.name}>
-                        {task.name}
-                    </div>
-
-                    <div className="task-stages-list">
-                        {/* Текст */}
-                        <div className={`task-stage-item status-${task.textStatus}`}>
-                            <div className="stage-left">
-                                <LightbulbIcon />
-                                <span>{displayMainLabel}</span>
-                            </div>
-                            <span className="stage-status-text badge-status">
-                                {task.textStatus === 'completed' ? (t('queue.chars', { count: task.resultLength || 0 }) || `${task.resultLength || 0} chars`) :
-                                    task.textStatus === 'running' ? (t('queue.status_running') || 'Processing...') :
-                                        task.textStatus === 'waiting' ? (t('queue.status_waiting') || 'В черзі') :
-                                            task.textStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
-                            </span>
-                        </div>
-
-                        {/* Етап 2: Озвучка (якщо увімкнено) */}
-                        {isVoiceEnabled && (
-                            <div className={`task-stage-item status-${task.voiceStatus}`} style={{ marginTop: '4px' }}>
-                                <div className="stage-left">
-                                    <VoiceIcon />
-                                    <span>{cleanStageLabel(t('text.voiceover'))}</span>
-                                </div>
-                                <span className="stage-status-text badge-status">
-                                    {task.voiceStatus === 'completed' ? (task.voiceDuration || t('queue.voice_saved') || 'MP3 saved') :
-                                        task.voiceStatus === 'running' ? (t('queue.status_running') || 'Synthesizing...') :
-                                            task.voiceStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                                task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
-                                </span>
-                            </div>
-                        )}
-
-                        {/* Картинки */}
-                        {isImageEnabled && (
-                            <div className={`task-stage-item status-${task.imageStatus}`} style={{ marginTop: '4px' }}>
-                                <div className="stage-left">
-                                    <ImageIcon />
-                                    <span>{cleanStageLabel(t('pipeline.stage.image'))}</span>
-                                </div>
-                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
-
-                                    {task.imageStatus === 'completed' ? (
-                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : (t('queue.status_completed') || 'Completed')
-                                    ) : task.imageStatus === 'running' ? (
-                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, false) : (t('queue.status_running') || 'Generating...')
-                                    ) : task.imageStatus === 'waiting' ? (
-                                        t('queue.status_waiting') || 'Waiting'
-                                    ) : task.imageStatus === 'failed' ? (
-                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
-                                    ) : t('queue.status_pending')}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Субтитри */}
-                        {isSubtitleEnabled && (
-                            <div className={`task-stage-item status-${task.subtitleStatus}`} style={{ marginTop: '4px' }}>
-                                <div className="stage-left">
-                                    <SubtitleIcon />
-                                    <span>{cleanStageLabel(t('pipeline.stage.subtitle'))}</span>
-                                </div>
-                                <span className="stage-status-text badge-status">
-                                    {task.subtitleStatus === 'completed' ? (t('queue.subtitle_saved') || 'SRT збережено') :
-                                        task.subtitleStatus === 'running' ? (t('queue.status_running') || 'Transcribing...') :
-                                            task.subtitleStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                                task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
-                                </span>
-                            </div>
-                        )}
-
-                        {/* Етап 5: Монтаж (якщо увімкнено) */}
-                        {isMontageEnabled && (
-                            <div className={`task-stage-item status-${task.montageStatus}`} style={{ marginTop: '4px' }}>
-                                <div className="stage-left">
-                                    <MontageIcon />
-                                    <span>{cleanStageLabel(t('pipeline.stage.montage'))}</span>
-                                </div>
-                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
-                                    {task.montageStatus === 'completed' ? (task.montageMsg || t('queue.status_completed')) :
-                                        task.montageStatus === 'running' ? (
-                                            task.montageMsg ? renderStatusLines(task.montageMsg, false) : t('queue.status_running')
-                                        ) : task.montageStatus === 'waiting' ? t('queue.status_waiting') :
-                                            task.montageStatus === 'failed' ? (
-                                                task.montageMsg ? renderStatusLines(task.montageMsg, true) : t('queue.status_failed')
-                                            ) : t('queue.status_pending')}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {task.status === 'running' && (
-                        <div className="progress-bar-container">
-                            <div
-                                className="progress-bar-fill"
-                                style={{ width: `${task.progress}%` }}
-                            ></div>
-                        </div>
-                    )}
-
-                    <div className="task-card-footer">
-                        {new Date(task.timestamp).toLocaleTimeString()}
-                    </div>
-                </div>
-
-                <div className="task-inline-log" onClick={(e) => e.stopPropagation()}>
-                    <div className="log-header">
-                        <span className="log-title">{t('tabs.logs')}</span>
-                    </div>
-                    <div className="log-content premium-scrollbar">
-                        {logs.filter(l => l.taskId === task.id).length === 0 ? (
-                            <div className="log-empty">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></svg>
-                                <span>{t('logsTab.empty')}</span>
-                            </div>
-                        ) : (
-                            <div className="task-logs-list">
-                                {logs.filter(l => l.taskId === task.id).map(log => (
-                                    <div key={log.id} className={`task-log-entry level-${log.level.toLowerCase()}`}>
-                                        <span className="task-log-time">{log.timestamp.toLocaleTimeString()}</span>
-                                        <span className="task-log-message">{log.message}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
-    };
+    const toggleExpand = useCallback((id: string) => {
+        setExpandedTaskIds(prev => prev.includes(id) ? prev.filter(tid => tid !== id) : [...prev, id]);
+    }, []);
 
     return (
         <div className="content-wrapper animate-fade">
@@ -465,27 +399,11 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                 <div className="queue-title">ЧЕРГА ЗАВДАНЬ</div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                     {tasks.length > 0 && (
-                        <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing}>
-                            {t('queue.clear_all') || 'Clear All'}
-                        </button>
+                        <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing}>{t('queue.clear_all') || 'Clear All'}</button>
                     )}
                     {tasks.length > 0 && (
-                        <button
-                            className={`start-queue-btn ${isProcessing ? 'processing' : ''}`}
-                            onClick={startQueue}
-                            disabled={isProcessing}
-                        >
-                            {isProcessing ? (
-                                <>
-                                    <div className="spinner-small" />
-                                    <span>{t('queue.processing')}</span>
-                                </>
-                            ) : (
-                                <>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                                    <span>{t('queue.start')}</span>
-                                </>
-                            )}
+                        <button className={`start-queue-btn ${isProcessing ? 'processing' : ''}`} onClick={startQueue} disabled={isProcessing}>
+                            {isProcessing ? (<><div className="spinner-small" /><span>{t('queue.processing')}</span></>) : (<><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg><span>{t('queue.start')}</span></>)}
                         </button>
                     )}
                 </div>
@@ -499,19 +417,24 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                     </div>
                 ) : (
                     <div className="tasks-list">
-                        {tasks.map(renderTaskItem)}
+                        {tasks.map(task => (
+                            <TaskItem
+                                key={task.id}
+                                task={task}
+                                isExpanded={expandedTaskIds.includes(task.id)}
+                                onToggle={toggleExpand}
+                                onRemove={handleRemoveTask}
+                                isProcessing={isProcessing}
+                                t={t}
+                                resumeTask={resumeTask}
+                                logs={logs}
+                            />
+                        ))}
                     </div>
                 )}
             </div>
 
-            <ConfirmModal
-                isOpen={confirmModal.isOpen}
-                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
-                onConfirm={confirmModal.onConfirm}
-                title={confirmModal.title}
-                message={confirmModal.message}
-            />
-
+            <ConfirmModal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} onConfirm={confirmModal.onConfirm} title={confirmModal.title} message={confirmModal.message} />
             {tasks.some(t => t.isAwaitingExistingFilesCheck) && (
                 <ExistingFilesModal
                     isOpen={true}

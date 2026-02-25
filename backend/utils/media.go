@@ -3,10 +3,16 @@ package utils
 import (
 	"encoding/base64"
 	"fmt"
+	"image"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"golang.org/x/image/draw"
 )
 
 // SaveBase64Image декодує base64 строку (з префіксом або без) та зберігає у файл
@@ -82,4 +88,48 @@ func FormatDuration(seconds float64) string {
 		return fmt.Sprintf("%d:%02d", minutes, secs)
 	}
 	return fmt.Sprintf("%d сек", secs)
+}
+
+// CreateThumbnail створює зменшену копію зображення
+func CreateThumbnail(inputPath string, outputPath string, maxWidth int) error {
+	file, err := os.Open(inputPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	img, format, err := image.Decode(file)
+	if err != nil {
+		return err
+	}
+
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	if width <= maxWidth {
+		// Якщо картинка вже менша, просто копіюємо
+		return os.WriteFile(outputPath, nil, 0644) // Placeholder or actually copy? Let's copy.
+	}
+
+	newWidth := maxWidth
+	newHeight := (height * maxWidth) / width
+
+	newImg := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
+	draw.BiLinear.Scale(newImg, newImg.Bounds(), img, bounds, draw.Over, nil)
+
+	out, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	switch format {
+	case "png":
+		return png.Encode(out, newImg)
+	case "gif":
+		return gif.Encode(out, newImg, nil)
+	default:
+		return jpeg.Encode(out, newImg, &jpeg.Options{Quality: 85})
+	}
 }

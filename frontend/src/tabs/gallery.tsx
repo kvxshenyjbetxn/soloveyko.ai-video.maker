@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import { GetGalleryImages } from '../../wailsjs/go/main/App';
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
+import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { utils } from '../../wailsjs/go/models';
 import { useQueue } from '../contexts/QueueContext';
 import './gallery.css';
@@ -11,6 +11,74 @@ interface SelectedMedia {
     url: string;
     path: string;
 }
+
+// Memoized Card Component
+const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick, onSelectionToggle, onDelete }: any) => {
+    const isVideo = img.url.toLowerCase().endsWith('.mp4');
+
+    return (
+        <div className={`gallery-card ${isSelected ? 'selected' : ''}`}
+            onClick={() => onCardClick(img)}>
+            <div className="media-container">
+                {isVideo ? (
+                    <video
+                        src={img.url}
+                        muted
+                        loop
+                        playsInline
+                        onMouseEnter={e => e.currentTarget.play()}
+                        onMouseLeave={e => {
+                            e.currentTarget.pause();
+                            e.currentTarget.currentTime = 0;
+                        }}
+                    />
+                ) : (
+                    <img src={`${img.url}?thumb=1`} alt={img.name} loading="lazy" />
+                )}
+                <div className="media-overlay">
+                    <button className="card-delete-btn" onClick={e => onDelete(img.path, e)}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></svg>
+                    </button>
+                    <div className={`card-checkbox ${isSelected ? 'checked' : ''}`} onClick={e => onSelectionToggle(img.path, e)}>
+                        {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
+                    </div>
+                </div>
+            </div>
+            <div className="media-info"><span className="media-name">{img.name}</span></div>
+        </div>
+    );
+});
+
+// Memoized Template Section
+const TemplateSection = React.memo(({ tpl, taskName, isCollapsed, onToggle, isSelectionMode, selectedPaths, onCardClick, onSelectionToggle, onDelete }: any) => {
+    return (
+        <div className={`template-section ${isCollapsed ? 'is-collapsed' : ''}`}>
+            <div className="template-header" onClick={onToggle}>
+                <div className="template-name">
+                    <svg className="section-icon-minor" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
+                    {tpl.name}
+                    <span className="section-count">{tpl.images?.length || 0}</span>
+                </div>
+                <svg className={`collapse-chevron-minor ${isCollapsed ? 'collapsed' : ''}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+            </div>
+            <div className="template-collapsible-wrapper">
+                <div className="template-content gallery-grid">
+                    {tpl.images.map((img: any, idx: number) => (
+                        <GalleryCard
+                            key={img.path || idx}
+                            img={img}
+                            isSelected={selectedPaths.has(img.path)}
+                            isSelectionMode={isSelectionMode}
+                            onCardClick={onCardClick}
+                            onSelectionToggle={onSelectionToggle}
+                            onDelete={onDelete}
+                        />
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+});
 
 export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => void }) => {
     const { t } = useI18n();
@@ -23,7 +91,7 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
     const [isSelectionMode, setIsSelectionMode] = useState(false);
 
     const { tasks: queueTasks, resumeImageControl } = useQueue();
-    const isAwaitingControl = queueTasks.some(t => t.isAwaitingImageControl);
+    const isAwaitingControl = useMemo(() => queueTasks.some(t => t.isAwaitingImageControl), [queueTasks]);
 
     const handleContinueProcessing = async () => {
         await resumeImageControl();
@@ -32,19 +100,17 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
         }
     };
 
-    const loadGallery = async () => {
+    const loadGallery = useCallback(async () => {
         try {
             setLoading(true);
             const data = await GetGalleryImages();
             setTasks(data || []);
-            const wr = (window as any).runtime;
-            if (wr) wr.EventsEmit('galleryUpdate');
         } catch (error) {
             console.error('Failed to load gallery:', error);
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         loadGallery();
@@ -63,18 +129,18 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
             uStage();
             uUpdate();
         };
-    }, []);
+    }, [loadGallery]);
 
-    const toggleTask = (taskName: string) => {
+    const toggleTask = useCallback((taskName: string) => {
         setCollapsedTasks(prev => {
             const newSet = new Set(prev);
             if (newSet.has(taskName)) newSet.delete(taskName);
             else newSet.add(taskName);
             return newSet;
         });
-    };
+    }, []);
 
-    const toggleTemplate = (taskName: string, templateName: string) => {
+    const toggleTemplate = useCallback((taskName: string, templateName: string) => {
         const key = `${taskName}_${templateName}`;
         setCollapsedTemplates(prev => {
             const newSet = new Set(prev);
@@ -82,9 +148,9 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
             else newSet.add(key);
             return newSet;
         });
-    };
+    }, []);
 
-    const toggleImageSelection = (path: string, e?: React.MouseEvent) => {
+    const toggleImageSelection = useCallback((path: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
         setSelectedPaths(prev => {
             const newSet = new Set(prev);
@@ -94,17 +160,17 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
             else setIsSelectionMode(true);
             return newSet;
         });
-    };
+    }, []);
 
-    const handleDeleteImage = async (path: string, e?: React.MouseEvent) => {
+    const handleDeleteImage = useCallback(async (path: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
         const app = (window as any).go.main.App;
         const success = await app.DeleteGalleryImage(path);
         if (success) {
             loadGallery();
-            if (selectedMedia?.path === path) setSelectedMedia(null);
+            setSelectedMedia(prev => (prev?.path === path ? null : prev));
         }
-    };
+    }, [loadGallery]);
 
     const handleBulkDelete = async () => {
         if (selectedPaths.size === 0) return;
@@ -115,21 +181,31 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
         loadGallery();
     };
 
-    const clearSelection = () => {
+    const clearSelection = useCallback(() => {
         setSelectedPaths(new Set());
         setIsSelectionMode(false);
-    };
-
-    const flatImages = tasks.reduce((acc: any[], task) => {
-        task.templates?.forEach(tpl => {
-            tpl.images?.forEach(img => {
-                acc.push({ ...img, taskName: task.name, templateName: tpl.name });
-            });
-        });
-        return acc;
     }, []);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const flatImages = useMemo(() => {
+        return tasks.reduce((acc: any[], task) => {
+            task.templates?.forEach(tpl => {
+                tpl.images?.forEach(img => {
+                    acc.push({ ...img, taskName: task.name, templateName: tpl.name });
+                });
+            });
+            return acc;
+        }, []);
+    }, [tasks]);
+
+    const onCardClick = useCallback((img: any) => {
+        if (isSelectionMode) {
+            toggleImageSelection(img.path);
+        } else {
+            setSelectedMedia({ name: img.name, url: img.url, path: img.path });
+        }
+    }, [isSelectionMode, toggleImageSelection]);
+
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (!selectedMedia) return;
         if (e.key === 'Escape') { setSelectedMedia(null); return; }
         const currentIndex = flatImages.findIndex(img => img.url === selectedMedia.url);
@@ -144,12 +220,12 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
             handleDeleteImage(selectedMedia.path);
         }
-    };
+    }, [selectedMedia, flatImages, handleDeleteImage]);
 
     useEffect(() => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedMedia, flatImages]);
+    }, [handleKeyDown]);
 
     return (
         <div className="content-wrapper animate-fade gallery-page">
@@ -207,7 +283,7 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
                 ) : (
                     <div className="gallery-tasks">
                         {tasks.map((task, tIndex) => (
-                            <div key={tIndex} className={`task-section ${collapsedTasks.has(task.name) ? 'is-collapsed' : ''}`}>
+                            <div key={task.name || tIndex} className={`task-section ${collapsedTasks.has(task.name) ? 'is-collapsed' : ''}`}>
                                 <div className="task-header" onClick={() => toggleTask(task.name)}>
                                     <div className="task-name">
                                         <svg className="section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
@@ -218,42 +294,20 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
                                 </div>
                                 <div className="task-collapsible-wrapper">
                                     <div className="task-content">
-                                        {task.templates.map((tpl, tmpIndex) => {
-                                            const cKey = `${task.name}_${tpl.name}`;
-                                            return (
-                                                <div key={tmpIndex} className={`template-section ${collapsedTemplates.has(cKey) ? 'is-collapsed' : ''}`}>
-                                                    <div className="template-header" onClick={() => toggleTemplate(task.name, tpl.name)}>
-                                                        <div className="template-name">
-                                                            <svg className="section-icon-minor" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
-                                                            {tpl.name}
-                                                            <span className="section-count">{tpl.images?.length || 0}</span>
-                                                        </div>
-                                                        <svg className={`collapse-chevron-minor ${collapsedTemplates.has(cKey) ? 'collapsed' : ''}`} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
-                                                    </div>
-                                                    <div className="template-collapsible-wrapper">
-                                                        <div className="template-content gallery-grid">
-                                                            {tpl.images.map((img, imgIndex) => (
-                                                                <div key={imgIndex} className={`gallery-card ${selectedPaths.has(img.path) ? 'selected' : ''}`}
-                                                                    onClick={() => isSelectionMode ? toggleImageSelection(img.path) : setSelectedMedia({ name: img.name, url: img.url, path: img.path })}>
-                                                                    <div className="media-container">
-                                                                        {img.url.toLowerCase().endsWith('.mp4') ? (
-                                                                            <video src={img.url} muted loop playsInline onMouseEnter={e => e.currentTarget.play()} onMouseLeave={e => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }} />
-                                                                        ) : (<img src={img.url} alt={img.name} loading="lazy" />)}
-                                                                        <div className="media-overlay">
-                                                                            <button className="card-delete-btn" onClick={e => handleDeleteImage(img.path, e)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></svg></button>
-                                                                            <div className={`card-checkbox ${selectedPaths.has(img.path) ? 'checked' : ''}`} onClick={e => toggleImageSelection(img.path, e)}>
-                                                                                {selectedPaths.has(img.path) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="media-info"><span className="media-name">{img.name}</span></div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
+                                        {task.templates.map((tpl, tmpIndex) => (
+                                            <TemplateSection
+                                                key={`${task.name}_${tpl.name}` || tmpIndex}
+                                                tpl={tpl}
+                                                taskName={task.name}
+                                                isCollapsed={collapsedTemplates.has(`${task.name}_${tpl.name}`)}
+                                                onToggle={() => toggleTemplate(task.name, tpl.name)}
+                                                isSelectionMode={isSelectionMode}
+                                                selectedPaths={selectedPaths}
+                                                onCardClick={onCardClick}
+                                                onSelectionToggle={toggleImageSelection}
+                                                onDelete={handleDeleteImage}
+                                            />
+                                        ))}
                                     </div>
                                 </div>
                             </div>

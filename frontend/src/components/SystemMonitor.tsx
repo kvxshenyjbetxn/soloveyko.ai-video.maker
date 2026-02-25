@@ -78,9 +78,9 @@ export const SystemMonitor = () => {
         };
 
         fetchStats();
-        const interval = setInterval(fetchStats, 3000);
+        const interval = setInterval(fetchStats, isExpanded ? 3000 : 10000);
         return () => clearInterval(interval);
-    }, []);
+    }, [isExpanded]);
 
     const formatBytes = (bytes: number) => {
         if (bytes === 0) return '0 Bytes';

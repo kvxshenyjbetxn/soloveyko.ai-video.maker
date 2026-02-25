@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import { useLogger, LogLevel } from '../contexts/LoggerContext';
+import { VirtualLogList } from '../components/VirtualLogList';
 import './Logs.css';
 
 export const Logs = () => {
@@ -12,7 +13,7 @@ export const Logs = () => {
     const [searchQuery, setSearchQuery] = useState('');
 
     const filteredLogs = useMemo(() => {
-        let result = logs;
+        let result = [...logs]; // Create a copy to sort safely
 
         // Filter by Level
         if (filterLevel !== 'ALL') {
@@ -38,7 +39,7 @@ export const Logs = () => {
         });
     }, [logs, filterLevel, sortOrder, searchQuery]);
 
-    const getLevelColor = (level: LogLevel) => {
+    const getLevelColor = useCallback((level: LogLevel) => {
         switch (level) {
             case 'INFO': return '#ffffff';   // White
             case 'SUCCESS': return '#69f0ae'; // Light Green
@@ -47,7 +48,38 @@ export const Logs = () => {
             case 'DEBUG': return '#b0bec5';   // Blue Grey
             default: return 'var(--text-secondary)';
         }
-    };
+    }, []);
+
+    const renderLogRow = useCallback((log: any) => {
+        const levelColor = getLevelColor(log.level as LogLevel);
+        return (
+            <div key={log.id} className="log-row" style={{ color: levelColor, height: '24px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                <span style={{ opacity: 0.5, minWidth: '85px', fontSize: '11px' }}>
+                    {log.timestamp.toLocaleTimeString()}
+                </span>
+                <span style={{ fontWeight: '800', minWidth: '70px', fontSize: '11px' }}>
+                    [{log.level}]
+                </span>
+                {log.taskLabel && (
+                    <span className="task-label-badge" style={{
+                        background: 'rgba(92, 107, 192, 0.2)',
+                        color: '#5c6bc0',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        marginRight: '8px',
+                        fontWeight: 'bold',
+                        border: '1px solid rgba(92, 107, 192, 0.3)'
+                    }}>
+                        {log.taskLabel}
+                    </span>
+                )}
+                <span style={{ fontSize: '13px', fontWeight: 500, textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                    {log.message}
+                </span>
+            </div>
+        );
+    }, [getLevelColor]);
 
 
     return (
@@ -107,49 +139,25 @@ export const Logs = () => {
                     backgroundColor: 'var(--bg-secondary)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '4px',
-                    padding: '16px',
+                    padding: '8px',
                     fontFamily: 'var(--font-mono)',
                     fontSize: '12px',
                     color: 'var(--text-secondary)',
                     flex: 1,
-                    overflowY: 'auto'
+                    overflow: 'hidden'
                 }}>
                     {filteredLogs.length === 0 ? (
-                        <div style={{ color: 'var(--text-placeholder)', fontStyle: 'italic' }}>{t('logsTab.empty')}</div>
+                        <div style={{ color: 'var(--text-placeholder)', fontStyle: 'italic', padding: '8px' }}>{t('logsTab.empty')}</div>
                     ) : (
-                        filteredLogs.map(log => {
-                            const levelColor = getLevelColor(log.level);
-                            return (
-                                <div key={log.id} className="log-row" style={{ color: levelColor }}>
-                                    <span style={{ opacity: 0.5, minWidth: '85px', fontSize: '11px' }}>
-                                        {log.timestamp.toLocaleTimeString()}
-                                    </span>
-                                    <span style={{ fontWeight: '800', minWidth: '70px', fontSize: '11px' }}>
-                                        [{log.level}]
-                                    </span>
-                                    {log.taskLabel && (
-                                        <span className="task-label-badge" style={{
-                                            background: 'rgba(92, 107, 192, 0.2)',
-                                            color: '#5c6bc0',
-                                            padding: '1px 6px',
-                                            borderRadius: '4px',
-                                            fontSize: '10px',
-                                            marginRight: '8px',
-                                            fontWeight: 'bold',
-                                            border: '1px solid rgba(92, 107, 192, 0.3)'
-                                        }}>
-                                            {log.taskLabel}
-                                        </span>
-                                    )}
-                                    <span style={{ fontSize: '13px', fontWeight: 500 }}>
-                                        {log.message}
-                                    </span>
-                                </div>
-                            );
-                        })
+                        <VirtualLogList
+                            logs={filteredLogs}
+                            rowHeight={24}
+                            renderRow={renderLogRow}
+                        />
                     )}
                 </div>
             </div>
         </div>
     );
 };
+
