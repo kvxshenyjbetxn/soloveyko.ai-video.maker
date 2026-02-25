@@ -1,0 +1,170 @@
+import React from 'react';
+import { useI18n } from '../../contexts/I18nContext';
+import './CustomStagesSection.css';
+
+interface CustomStage {
+    id: string;
+    name: string;
+    prompt: string;
+    dataSource: string;
+    enabled: boolean;
+}
+
+interface CustomStagesSectionProps {
+    settings: any;
+    handleChange: (field: string, value: any) => void;
+}
+
+const LayersIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="12 2 2 7 12 12 22 7 12 2" />
+        <polyline points="2 17 12 22 22 17" />
+        <polyline points="2 12 12 17 22 12" />
+    </svg>
+);
+
+const TrashIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </svg>
+);
+
+export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settings, handleChange }) => {
+    const { t } = useI18n();
+    const stages = settings.customStages || [];
+    const isCollapsed = settings.customStagesCollapsed;
+
+    const toggleCollapse = () => {
+        handleChange('customStagesCollapsed', !isCollapsed);
+    };
+
+    const handleAddStage = () => {
+        const newStage: CustomStage = {
+            id: Math.random().toString(36).substr(2, 9),
+            name: `Stage ${stages.length + 1}`,
+            prompt: "Summarize: {{content}}",
+            dataSource: 'text',
+            enabled: true
+        };
+        handleChange('customStages', [...stages, newStage]);
+        if (isCollapsed) handleChange('customStagesCollapsed', false);
+    };
+
+    const handleUpdateStage = (id: string, field: keyof CustomStage, value: any) => {
+        const newStages = stages.map((s: CustomStage) => s.id === id ? { ...s, [field]: value } : s);
+        handleChange('customStages', newStages);
+    };
+
+    const handleDeleteStage = (id: string) => {
+        if (window.confirm(t('pipeline.custom_stages.delete_confirm'))) {
+            const newStages = stages.filter((s: CustomStage) => s.id !== id);
+            handleChange('customStages', newStages);
+        }
+    };
+
+    return (
+        <div className={`pipeline-stage-container ${isCollapsed ? 'is-collapsed' : ''}`}>
+            <div className="pipeline-stage-header" onClick={toggleCollapse}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                    <svg
+                        className={`stage-chevron ${isCollapsed ? 'rotated' : ''}`}
+                        xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                        <path d="m6 9 6 6 6-6" />
+                    </svg>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '8px',
+                        background: 'rgba(var(--accent-rgb), 0.1)',
+                        color: 'var(--accent-color)',
+                        transition: 'all 0.3s'
+                    }}>
+                        <LayersIcon />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span className="pipeline-stage-title">{t('pipeline.custom_stages.title')}</span>
+                        <span className="stage-status-text">
+                            {settings.customStagesEnabled ? `${stages.length} ${t('common.ready')}` : t('common.disabled')}
+                        </span>
+                    </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label className="stage-switch" onClick={(e) => e.stopPropagation()}>
+                        <input
+                            type="checkbox"
+                            checked={settings.customStagesEnabled}
+                            onChange={(e) => handleChange('customStagesEnabled', e.target.checked)}
+                        />
+                        <span className="stage-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
+                <div className="custom-stages-list">
+                    {stages.map((stage: CustomStage) => (
+                        <div key={stage.id} className="custom-stage-item">
+                            <div className="custom-stage-header">
+                                <input
+                                    type="text"
+                                    className="custom-stage-name-input"
+                                    value={stage.name}
+                                    onChange={(e) => handleUpdateStage(stage.id, 'name', e.target.value)}
+                                    placeholder={t('pipeline.custom_stages.stage_name')}
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <label className="stage-switch" onClick={(e) => e.stopPropagation()}>
+                                        <input
+                                            type="checkbox"
+                                            checked={stage.enabled}
+                                            onChange={(e) => handleUpdateStage(stage.id, 'enabled', e.target.checked)}
+                                        />
+                                        <span className="stage-slider"></span>
+                                    </label>
+                                    <button
+                                        className="delete-stage-btn"
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteStage(stage.id); }}
+                                    >
+                                        <TrashIcon />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.custom_stages.data_source')}</label>
+                                <select
+                                    className="settings-select"
+                                    value={stage.dataSource}
+                                    onChange={(e) => handleUpdateStage(stage.id, 'dataSource', e.target.value)}
+                                >
+                                    <option value="text">{t('pipeline.custom_stages.source_text')}</option>
+                                    <option value="taskName">{t('pipeline.custom_stages.source_task_name')}</option>
+                                </select>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.custom_stages.prompt')}</label>
+                                <textarea
+                                    className="settings-textarea"
+                                    style={{ height: '80px' }}
+                                    value={stage.prompt}
+                                    onChange={(e) => handleUpdateStage(stage.id, 'prompt', e.target.value)}
+                                    placeholder={t('pipeline.custom_stages.prompt_placeholder')}
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                <button className="add-stage-btn" onClick={handleAddStage}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    {t('pipeline.custom_stages.add_stage')}
+                </button>
+            </div>
+        </div>
+    );
+};

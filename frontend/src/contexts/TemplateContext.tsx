@@ -3,6 +3,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { GetTemplates, AddTemplate, DeleteTemplate, UpdateTemplate } from '../../wailsjs/go/main/App';
 import { useToast } from './ToastContext';
 
+export interface CustomStage {
+    id: string;
+    name: string;
+    prompt: string;
+    dataSource: string;
+    enabled: boolean;
+}
+
 export interface PipelineSettings {
     translateModel: string;
     translatePrompt: string;
@@ -124,6 +132,9 @@ export interface PipelineSettings {
     edgeTTSRate: string;
     edgeTTSPitch: string;
     edgeTTSVolume: string;
+    customStages: CustomStage[];
+    customStagesEnabled: boolean;
+    customStagesCollapsed: boolean;
 }
 
 export interface PipelineTemplate {

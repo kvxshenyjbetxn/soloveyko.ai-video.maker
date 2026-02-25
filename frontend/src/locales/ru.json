@@ -460,7 +460,18 @@
             "go_to_gallery": "Перейти в Галерею"
         },
         "continue_processing": "Продолжить обработку",
-        "task_added_success": "Задание добавлено в очередь"
+        "task_added_success": "Задание добавлено в очередь",
+        "custom_stages": {
+            "title": "Кастомные этапы",
+            "add_stage": "Добавить этап",
+            "stage_name": "Название этапа",
+            "data_source": "Источник данных",
+            "prompt": "Промт этапа",
+            "prompt_placeholder": "Используйте {{content}} для вставки текста",
+            "source_text": "Текст",
+            "source_task_name": "Название задания",
+            "delete_confirm": "Удалить этот этап?"
+        }
     },
     "historyTab": {
         "description": "Долгосрочная история ваших завершенных задач (30 дней).",

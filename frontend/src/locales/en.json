@@ -458,7 +458,18 @@
             "go_to_gallery": "Go to Gallery"
         },
         "continue_processing": "Continue Processing",
-        "task_added_success": "Task added to queue"
+        "task_added_success": "Task added to queue",
+        "custom_stages": {
+            "title": "Custom Stages",
+            "add_stage": "Add Stage",
+            "stage_name": "Stage Name",
+            "data_source": "Data Source",
+            "prompt": "Stage Prompt",
+            "prompt_placeholder": "Use {{content}} to insert text",
+            "source_text": "Text",
+            "source_task_name": "Task Name",
+            "delete_confirm": "Delete this stage?"
+        }
     },
     "historyTab": {
         "description": "Long-term history of your completed tasks (30 days).",

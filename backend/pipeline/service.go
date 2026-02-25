@@ -298,6 +298,9 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		s.SaveTextResult(finalDir, taskType, processedText)
 	}
 
+	// 1.6 Custom Stages (Background)
+	go s.ProcessCustomStages(id, taskLabel, taskName, content, processedText, finalDir, settings, &pSettings)
+
 	shouldSkipVoice := false
 	shouldSkipSubtitle := false
 	shouldSkipImage := false
@@ -423,6 +426,115 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	return processedText, nil
+}
+
+func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskName string, originalText string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) {
+	var stages []utils.CustomStage
+	if val, ok := settings["customStages"]; ok {
+		if slice, ok := val.([]interface{}); ok {
+			for _, v := range slice {
+				if m, ok := v.(map[string]interface{}); ok {
+					stage := utils.CustomStage{}
+					if id, ok := m["id"].(string); ok {
+						stage.ID = id
+					}
+					if name, ok := m["name"].(string); ok {
+						stage.Name = name
+					}
+					if prompt, ok := m["prompt"].(string); ok {
+						stage.Prompt = prompt
+					}
+					if ds, ok := m["dataSource"].(string); ok {
+						stage.DataSource = ds
+					}
+					if en, ok := m["enabled"].(bool); ok {
+						stage.Enabled = en
+					}
+					stages = append(stages, stage)
+				}
+			}
+		}
+	}
+
+	var enabled bool
+	if val, ok := settings["customStagesEnabled"]; ok {
+		if b, ok := val.(bool); ok {
+			enabled = b
+		}
+	}
+
+	if !enabled || len(stages) == 0 {
+		return
+	}
+
+	s.log("INFO", fmt.Sprintf("[Custom] Processing %d custom stages...", len(stages)), id, taskLabel)
+
+	// Get API Key for Custom Stages (using Translate keys as fallback)
+	var apiKey string
+	keyID, _ := settings["translateOpenRouterKeyID"].(string)
+	keys := s.settings.GetOpenRouterKeys()
+	keyName := "Default"
+	for _, k := range keys {
+		if k.ID == keyID {
+			apiKey = k.Key
+			keyName = k.Name
+			break
+		}
+	}
+	if apiKey == "" && len(keys) > 0 {
+		apiKey = keys[0].Key
+		keyName = keys[0].Name
+	}
+
+	if apiKey == "" {
+		s.log("WARN", "[Custom] API key not found, skipping custom stages", id, taskLabel)
+		return
+	}
+
+	model, _ := settings["translateModel"].(string)
+	temp, _ := settings["translateTemperature"].(float64)
+
+	for _, stage := range stages {
+		if !stage.Enabled {
+			continue
+		}
+
+		s.log("INFO", fmt.Sprintf("[Custom] Running stage: %s", stage.Name), id, taskLabel)
+
+		var sourceContent string
+		switch stage.DataSource {
+		case "taskName":
+			sourceContent = taskName
+		default:
+			sourceContent = processedText
+		}
+
+		var fullPrompt string
+		if strings.Contains(stage.Prompt, "{{content}}") {
+			fullPrompt = strings.ReplaceAll(stage.Prompt, "{{content}}", sourceContent)
+		} else {
+			fullPrompt = stage.Prompt + "\n\n" + sourceContent
+		}
+
+		result, err := s.openRouter.Chat(id, taskLabel, "custom", keyName, apiKey, model, fullPrompt, temp, 0)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[Custom] Stage %s failed: %v", stage.Name, err), id, taskLabel)
+			continue
+		}
+
+		// Save result to file
+		safeName := utils.SanitizeFilename(stage.Name)
+		if safeName == "" {
+			safeName = "custom_stage_" + stage.ID
+		}
+		savePath := filepath.Join(finalDir, safeName+".txt")
+		err = os.WriteFile(savePath, []byte(result), 0644)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[Custom] Failed to save result for %s: %v", stage.Name, err), id, taskLabel)
+		} else {
+			s.log("SUCCESS", fmt.Sprintf("[Custom] Stage %s completed, saved to %s", stage.Name, safeName+".txt"), id, taskLabel)
+		}
+	}
 }
 
 func (s *PipelineService) SubmitImageControlResult(id string) {

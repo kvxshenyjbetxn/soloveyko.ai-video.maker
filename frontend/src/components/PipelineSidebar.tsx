@@ -26,6 +26,7 @@ import { VoiceoverSection } from './pipeline-sidebar/VoiceoverSection';
 import { SubtitleSection } from './pipeline-sidebar/SubtitleSection';
 import { ImageSection } from './pipeline-sidebar/ImageSection';
 import { MontageSection } from './pipeline-sidebar/MontageSection';
+import { CustomStagesSection } from './pipeline-sidebar/CustomStagesSection';
 import { SidebarFooter } from './pipeline-sidebar/SidebarFooter';
 
 interface PipelineSidebarProps {
@@ -331,9 +332,12 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.montageWatermarkOpacity === undefined) { s.montageWatermarkOpacity = 0.8; updated = true; }
                 if (s.montageWatermarkSize === undefined) { s.montageWatermarkSize = 15; updated = true; }
                 if (s.montageWatermarkOnIntro === undefined) { s.montageWatermarkOnIntro = false; updated = true; }
-                if (s.montageOverlayEnabled === undefined) { s.montageOverlayEnabled = false; updated = true; }
                 if (s.montageOverlayPath === undefined) { s.montageOverlayPath = ""; updated = true; }
                 if (s.montageOverlayOnIntro === undefined) { s.montageOverlayOnIntro = false; updated = true; }
+
+                if (s.customStages === undefined) { s.customStages = []; updated = true; }
+                if (s.customStagesEnabled === undefined) { s.customStagesEnabled = true; updated = true; }
+                if (s.customStagesCollapsed === undefined) { s.customStagesCollapsed = true; updated = true; }
 
                 if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
                 if (s.rewriteTemperature === undefined) s.rewriteTemperature = 0.7;
@@ -425,7 +429,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 services: {}
             },
             subtitle: {},
-            montage: {}
+            montage: {},
+            customStages: settings.customStages || [],
+            customStagesEnabled: settings.customStagesEnabled || false,
+            customStagesCollapsed: settings.customStagesCollapsed || false
         };
 
         // 0. API Keys Group
@@ -502,6 +509,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         ];
         subtitleFields.forEach(f => { if (settings[f] !== undefined) templateData.subtitle[f] = settings[f]; });
 
+        // 6. Custom Stages
+        templateData.customStages = settings.customStages || [];
+        templateData.customStagesEnabled = settings.customStagesEnabled || false;
+        templateData.customStagesCollapsed = settings.customStagesCollapsed || false;
+
         // 5. Montage Settings
         const montageFields = [
             'montageResolution', 'montageFPS', 'montageSwayFactor', 'montageZoomFactor',
@@ -557,6 +569,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             if (obj.stages.montage !== undefined) result.montageEnabled = obj.stages.montage;
             if (obj.stages.translate !== undefined) result.translateEnabled = obj.stages.translate;
             if (obj.stages.rewrite !== undefined) result.rewriteEnabled = obj.stages.rewrite;
+        }
+
+        if (obj.customStages) {
+            result.customStages = obj.customStages;
         }
 
         // 3. Specialized mapping for "control" group
@@ -676,6 +692,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             rewriteTemplatesCollapsed: prev.rewriteTemplatesCollapsed,
             voiceoverTemplatesCollapsed: prev.voiceoverTemplatesCollapsed,
             controlCollapsed: prev.controlCollapsed,
+            customStages: applied.customStages ?? prev.customStages,
+            customStagesEnabled: applied.customStagesEnabled ?? prev.customStagesEnabled,
+            customStagesCollapsed: applied.customStagesCollapsed ?? prev.customStagesCollapsed,
         }));
     };
 
@@ -840,7 +859,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     <PathSection type={type} settings={settings} handleChange={handleChange} handleSelectPath={handleSelectPath} />
 
                     {(type === 'translate' || type === 'rewrite') && (
-                        <TextSection type={type} settings={settings} handleChange={handleChange} models={models} renderValueOrInput={renderValueOrInput} setCurrentPath={setCurrentPath} />
+                        <>
+                            <TextSection type={type} settings={settings} handleChange={handleChange} models={models} renderValueOrInput={renderValueOrInput} setCurrentPath={setCurrentPath} />
+                            <CustomStagesSection settings={settings} handleChange={handleChange} />
+                        </>
                     )}
 
                     <VoiceoverSection

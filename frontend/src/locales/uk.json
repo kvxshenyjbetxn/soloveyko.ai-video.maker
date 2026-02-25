@@ -470,7 +470,18 @@
       "go_to_gallery": "Перейти до Галереї"
     },
     "continue_processing": "Продовжити обробку",
-    "task_added_success": "Завдання додано в чергу"
+    "task_added_success": "Завдання додано в чергу",
+    "custom_stages": {
+      "title": "Кастомні етапи",
+      "add_stage": "Додати етап",
+      "stage_name": "Назва етапу",
+      "data_source": "Джерело даних",
+      "prompt": "Промт етапу",
+      "prompt_placeholder": "Використовуйте {{content}} для вставки тексту",
+      "source_text": "Текст",
+      "source_task_name": "Назва завдання",
+      "delete_confirm": "Видалити цей етап?"
+    }
   },
   "historyTab": {
     "description": "Довгострокова історія ваших завершених завдань (30 днів).",

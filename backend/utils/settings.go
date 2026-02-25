@@ -20,6 +20,14 @@ type OverlayTrigger struct {
 	Y      int    `json:"y"`
 }
 
+type CustomStage struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Prompt     string `json:"prompt"`
+	DataSource string `json:"dataSource"` // original, processed, taskName
+	Enabled    bool   `json:"enabled"`
+}
+
 type PipelineSettings struct {
 	TranslateModel                string  `json:"translateModel,omitempty"`
 	TranslatePrompt               string  `json:"translatePrompt,omitempty"`
@@ -161,6 +169,10 @@ type PipelineSettings struct {
 	MontageOverlayOnIntro         bool             `json:"montageOverlayOnIntro"`
 	MontageOverlayTriggersEnabled bool             `json:"montageOverlayTriggersEnabled"`
 	MontageOverlayTriggers        []OverlayTrigger `json:"montageOverlayTriggers,omitempty"`
+
+	CustomStages          []CustomStage `json:"customStages,omitempty"`
+	CustomStagesEnabled   bool          `json:"customStagesEnabled"`
+	CustomStagesCollapsed bool          `json:"customStagesCollapsed"`
 }
 
 type Settings struct {
