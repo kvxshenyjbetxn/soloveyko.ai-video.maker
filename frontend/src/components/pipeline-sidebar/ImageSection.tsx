@@ -204,7 +204,39 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                         </div>
                     )}
 
+                    <div className="settings-control" style={{ borderTop: '1px solid var(--border-color)', marginTop: '12px', paddingTop: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.determine_characters') || 'Визначити персонажів'}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.imageDetermineCharacters || false}
+                                    onChange={(e) => handleChange('imageDetermineCharacters', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                            {t('pipeline.image.determine_characters_desc') || 'Автоматично визначити опис персонажів із тексту для використання в промптах'}
+                        </div>
+
+                        {settings.imageDetermineCharacters && (
+                            <div className="settings-control" style={{ marginTop: '12px' }}>
+                                <label className="settings-label">{t('pipeline.image.determine_characters_prompt') || 'Промт для визначення персонажів'}</label>
+                                <textarea
+                                    className="settings-textarea"
+                                    style={{ height: '80px', resize: 'vertical' }}
+                                    value={settings.imageDetermineCharactersPrompt || ''}
+                                    onChange={(e) => handleChange('imageDetermineCharactersPrompt', e.target.value)}
+                                    placeholder={t('pipeline.image.determine_characters_prompt_desc') || 'Введіть промт для визначення персонажів...'}
+                                />
+                            </div>
+                        )}
+                    </div>
+
+
                     <div className="settings-control">
+
                         <label className="settings-label">{t('pipeline.image.prompt') || 'Промт для інструкцій'}</label>
                         <textarea
                             className="settings-textarea"
@@ -214,8 +246,9 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             placeholder={t('pipeline.image.prompt_placeholder') || 'Введіть промт...'}
                         />
                         <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                            {t('pipeline.rewrite.prompt_placeholder')?.split('...').pop()?.trim() || 'Використовуйте {{content}} для вставки тексту'}
+                            {t('pipeline.image.prompt_placeholder')?.split('...').pop()?.trim() || 'Використовуйте {{content}} для вставки тексту'}
                         </div>
+
                         {content && content.trim() !== '' && (
                             <div style={{ fontSize: '11px', color: 'var(--accent-primary)', marginTop: '8px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>

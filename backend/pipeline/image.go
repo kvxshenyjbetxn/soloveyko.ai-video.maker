@@ -261,6 +261,33 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		promptTemplate = pSettings.ImagePrompt
 	}
 
+	// [CHARACTER DETECTION]
+	detChars, ok := settings["imageDetermineCharacters"].(bool)
+	if !ok {
+		detChars = pSettings.ImageDetermineCharacters
+	}
+	if detChars && strings.Contains(promptTemplate, "{{characters}}") {
+		detPrompt, _ := settings["imageDetermineCharactersPrompt"].(string)
+		if detPrompt == "" {
+			detPrompt = pSettings.ImageDetermineCharactersPrompt
+		}
+
+		if detPrompt != "" {
+			s.log("INFO", "[Pipeline] Determining characters from text...", id, taskLabel)
+			s.emitStageStatus(id, "image", "running", "determining characters...")
+
+			// We use the same model, temp and tokens as for prompt generation
+			charRes, err := s.openRouter.Chat(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, detPrompt+"\n\n"+processedText, temp, tokens)
+			if err != nil {
+				s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to determine characters: %v", err), id, taskLabel)
+			} else {
+				charDesc := strings.TrimSpace(charRes)
+				s.log("SUCCESS", "[Pipeline] Characters determined and added to instruction template", id, taskLabel)
+				promptTemplate = strings.ReplaceAll(promptTemplate, "{{characters}}", charDesc)
+			}
+		}
+	}
+
 	var loadedExisting bool
 	var prompts []string
 	var promptsFilePath string

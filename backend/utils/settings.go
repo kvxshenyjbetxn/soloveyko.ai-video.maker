@@ -93,41 +93,44 @@ type PipelineSettings struct {
 	SubtitleFadeOut     int    `json:"subtitleFadeOut,omitempty"`
 
 	// Image settings
-	ImageEnabled                bool    `json:"imageEnabled"`
-	ImageService                string  `json:"imageService,omitempty"`
-	ImageModel                  string  `json:"imageModel,omitempty"`
-	ImageWidth                  int     `json:"imageWidth,omitempty"`
-	ImageHeight                 int     `json:"imageHeight,omitempty"`
-	ImageNoLogo                 bool    `json:"imageNoLogo"`
-	ImageEnhance                bool    `json:"imageEnhance"`
-	ImagePrompt                 string  `json:"imagePrompt,omitempty"`
-	ImagePollinationsKeyID      string  `json:"imagePollinationsKeyID,omitempty"`
-	ImageGooglerModel           string  `json:"imageGooglerModel,omitempty"`
-	ImageGooglerAspectRatio     string  `json:"imageGooglerAspectRatio,omitempty"`
-	ImageGooglerRemixEnabled    bool    `json:"imageGooglerRemixEnabled"`
-	ImageGooglerReferenceImage  string  `json:"imageGooglerReferenceImage,omitempty"`
-	ImageGooglerRemixStrictMode bool    `json:"imageGooglerRemixStrictMode"`
-	ImageGooglerVideoEnabled    bool    `json:"imageGooglerVideoEnabled"`
-	ImageGooglerVideoModel      string  `json:"imageGooglerVideoModel,omitempty"`
-	ImageGooglerVideoMode       string  `json:"imageGooglerVideoMode,omitempty"`
-	ImageGooglerVideoCount      int     `json:"imageGooglerVideoCount,omitempty"`
-	ImageGooglerVideoUpscale    bool    `json:"imageGooglerVideoUpscale"`
-	ImagePipelineName           string  `json:"imagePipelineName,omitempty"`
-	ImageTemplatesCollapsed     bool    `json:"imageTemplatesCollapsed"`
-	ImageCollapsed              bool    `json:"imageCollapsed"`
-	ImageGenerationMethod       string  `json:"imageGenerationMethod,omitempty"`
-	ImageGroupSentences         bool    `json:"imageGroupSentences"`
-	ImageSentenceLimit          int     `json:"imageSentenceLimit,omitempty"`
-	ImageInitialSentenceCount   int     `json:"imageInitialSentenceCount,omitempty"`
-	ImagePromptModel            string  `json:"imagePromptModel,omitempty"`
-	ImagePromptTemperature      float64 `json:"imagePromptTemperature,omitempty"`
-	ImagePromptMaxTokens        int     `json:"imagePromptMaxTokens,omitempty"`
-	ElevenLabsImageKeyID        string  `json:"elevenLabsImageKeyID,omitempty"`
-	ElevenLabsImagePortrait     bool    `json:"elevenLabsImagePortrait"`
-	ElevenLabsImageAspectRatio  string  `json:"elevenLabsImageAspectRatio,omitempty"`
-	ImageSyncEnabled            bool    `json:"imageSyncEnabled"`
+	ImageEnabled                   bool    `json:"imageEnabled"`
+	ImageService                   string  `json:"imageService,omitempty"`
+	ImageModel                     string  `json:"imageModel,omitempty"`
+	ImageWidth                     int     `json:"imageWidth,omitempty"`
+	ImageHeight                    int     `json:"imageHeight,omitempty"`
+	ImageNoLogo                    bool    `json:"imageNoLogo"`
+	ImageEnhance                   bool    `json:"imageEnhance"`
+	ImagePrompt                    string  `json:"imagePrompt,omitempty"`
+	ImagePollinationsKeyID         string  `json:"imagePollinationsKeyID,omitempty"`
+	ImageGooglerModel              string  `json:"imageGooglerModel,omitempty"`
+	ImageGooglerAspectRatio        string  `json:"imageGooglerAspectRatio,omitempty"`
+	ImageGooglerRemixEnabled       bool    `json:"imageGooglerRemixEnabled"`
+	ImageGooglerReferenceImage     string  `json:"imageGooglerReferenceImage,omitempty"`
+	ImageGooglerRemixStrictMode    bool    `json:"imageGooglerRemixStrictMode"`
+	ImageGooglerVideoEnabled       bool    `json:"imageGooglerVideoEnabled"`
+	ImageGooglerVideoModel         string  `json:"imageGooglerVideoModel,omitempty"`
+	ImageGooglerVideoMode          string  `json:"imageGooglerVideoMode,omitempty"`
+	ImageGooglerVideoCount         int     `json:"imageGooglerVideoCount,omitempty"`
+	ImageGooglerVideoUpscale       bool    `json:"imageGooglerVideoUpscale"`
+	ImagePipelineName              string  `json:"imagePipelineName,omitempty"`
+	ImageTemplatesCollapsed        bool    `json:"imageTemplatesCollapsed"`
+	ImageCollapsed                 bool    `json:"imageCollapsed"`
+	ImageGenerationMethod          string  `json:"imageGenerationMethod,omitempty"`
+	ImageGroupSentences            bool    `json:"imageGroupSentences"`
+	ImageSentenceLimit             int     `json:"imageSentenceLimit,omitempty"`
+	ImageInitialSentenceCount      int     `json:"imageInitialSentenceCount,omitempty"`
+	ImagePromptModel               string  `json:"imagePromptModel,omitempty"`
+	ImagePromptTemperature         float64 `json:"imagePromptTemperature,omitempty"`
+	ImagePromptMaxTokens           int     `json:"imagePromptMaxTokens,omitempty"`
+	ElevenLabsImageKeyID           string  `json:"elevenLabsImageKeyID,omitempty"`
+	ElevenLabsImagePortrait        bool    `json:"elevenLabsImagePortrait"`
+	ElevenLabsImageAspectRatio     string  `json:"elevenLabsImageAspectRatio,omitempty"`
+	ImageSyncEnabled               bool    `json:"imageSyncEnabled"`
+	ImageDetermineCharacters       bool    `json:"imageDetermineCharacters"`
+	ImageDetermineCharactersPrompt string  `json:"imageDetermineCharactersPrompt,omitempty"`
 
 	// Keep outputPath for migration if needed
+
 	OutputPath string `json:"outputPath,omitempty"`
 
 	MontageEnabled                bool             `json:"montageEnabled"`
