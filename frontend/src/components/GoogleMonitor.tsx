@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './GoogleMonitor.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -18,19 +18,34 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
     const [results, setResults] = useState<any[]>([]);
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [isPinned, setIsPinned] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         // @ts-ignore
         if (window.runtime) {
             // @ts-ignore
             const unsub = window.runtime.EventsOn("monitor-opened", (id: string) => {
-                if (id !== 'google') {
+                if (id !== 'google' && !isPinned) {
                     setIsExpanded(false);
                 }
             });
             return () => unsub();
         }
-    }, []);
+    }, [isPinned]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node) && isExpanded && !isPinned) {
+                setIsExpanded(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isExpanded, isPinned]);
 
     const handleExpand = (val: boolean) => {
         setIsExpanded(val);
@@ -75,12 +90,12 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
     };
 
     return (
-        <div className={`google-monitor-wrapper ${isExpanded ? 'expanded' : ''}`}>
+        <div className={`google-monitor-wrapper ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`} ref={wrapperRef}>
             {/* Expanded Panel */}
             <div className="google-mini-panel">
                 <div className="google-mini-header">
                     <span className="google-mini-title">Google Sheets</span>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div className="google-header-controls">
                         <button
                             className={`mini-refresh-btn ${isParsing ? 'spinning' : ''}`}
                             onClick={handleRefresh}
@@ -91,7 +106,17 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                                 <path d="M21 2v6h-6m-9 10H3v-6m18.1-1.9a9 9 0 1 1-2.2-4.9M3.9 16.1a9 9 0 0 1 2.2 4.9" />
                             </svg>
                         </button>
-                        <button className="google-close-btn" onClick={() => setIsExpanded(false)}>×</button>
+                        <button
+                            className={`pin-btn ${isPinned ? 'active' : ''}`}
+                            onClick={() => setIsPinned(!isPinned)}
+                            title={isPinned ? t('common.unpin') : t('common.pin')}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="17" x2="12" y2="22"></line>
+                                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.79-.9A2 2 0 0 1 15 10.76V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3v4.76a2 2 0 0 1-1.11 1.79l-1.79.9A2 2 0 0 0 5 15.24Z"></path>
+                            </svg>
+                        </button>
+                        <button className="google-close-btn" onClick={() => setIsExpanded(false)}>&times;</button>
                     </div>
                 </div>
 

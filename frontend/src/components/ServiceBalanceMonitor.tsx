@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './ServiceBalanceMonitor.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useServices } from '../contexts/ServiceContext';
@@ -24,10 +24,12 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         googlerVideoThreshold,
         googlerImageThreshold,
         elevenLabsImageUsage, refreshElevenLabsImageUsage,
-        refreshAllBalances
+        refreshAllBalances,
+        autoRefresh, setAutoRefresh
     } = useServices();
     const [isExpanded, setIsExpanded] = useState(false);
     const [isPinned, setIsPinned] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
         // @ts-ignore
@@ -41,6 +43,19 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
             return () => unsub();
         }
     }, [isPinned]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node) && isExpanded && !isPinned) {
+                setIsExpanded(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isExpanded, isPinned]);
 
     const handleExpand = (val: boolean) => {
         setIsExpanded(val);
@@ -102,7 +117,7 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
     };
 
     return (
-        <div className={`service-balance-monitor ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`}>
+        <div className={`service-balance-monitor ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`} ref={wrapperRef}>
             <div className="balance-monitor-container">
                 {/* Panel */}
                 <div className="balance-monitor-panel">
@@ -130,6 +145,19 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                             >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
+                                </svg>
+                            </button>
+                            <button
+                                className={`auto-refresh-btn ${autoRefresh ? 'active' : ''}`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAutoRefresh(!autoRefresh);
+                                }}
+                                title={autoRefresh ? t('balanceMonitor.autoRefreshOff') || 'Вимкнути автооновлення' : t('balanceMonitor.autoRefreshOn') || 'Увімкнути автооновлення'}
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <polyline points="12 6 12 12 16 14" />
                                 </svg>
                             </button>
                             <button className="balance-close-btn" onClick={() => setIsExpanded(false)}>&times;</button>

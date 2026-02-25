@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './QueueMonitor.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useQueue } from '../contexts/QueueContext';
@@ -12,6 +12,7 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
     const { tasks, removeTask, startQueue, isProcessing } = useQueue();
     const [isExpanded, setIsExpanded] = useState(false);
     const [isPinned, setIsPinned] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
         // @ts-ignore
@@ -25,6 +26,19 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
             return () => unsub();
         }
     }, [isPinned]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node) && isExpanded && !isPinned) {
+                setIsExpanded(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isExpanded, isPinned]);
 
     const handleExpand = (val: boolean) => {
         setIsExpanded(val);
@@ -40,7 +54,7 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
     const pendingTasksCount = tasks.filter(t => t.status === 'pending').length;
 
     return (
-        <div className={`queue-monitor-wrapper ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`}>
+        <div className={`queue-monitor-wrapper ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`} ref={wrapperRef}>
             {/* Expanded Panel */}
             <div className={`queue-mini-panel`}>
                 <div className="queue-mini-header">

@@ -250,7 +250,9 @@
         "videoTotal": "Видео",
         "imageTotal": "Фото",
         "refreshAll": "Обновить всё",
-        "total": "Total"
+        "autoRefreshOn": "Включить автообновление (каждую минуту)",
+        "autoRefreshOff": "Выключить автообновление",
+        "total": "Всего"
     },
     "pipeline": {
         "translate": {
@@ -504,6 +506,8 @@
         "yes": "Да",
         "no": "Нет",
         "ready": "Готово",
-        "default": "По умолчанию"
+        "default": "По умолчанию",
+        "pin": "Закрепить",
+        "unpin": "Открепить"
     }
 }

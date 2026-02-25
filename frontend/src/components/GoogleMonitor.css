@@ -11,6 +11,15 @@
     flex-shrink: 0;
 }
 
+.google-monitor-wrapper.expanded {
+    width: 320px;
+}
+
+.google-monitor-wrapper.pinned .google-monitor-circle {
+    box-shadow: 0 0 15px rgba(var(--accent-secondary-rgb, 76, 175, 80), 0.4);
+    border: 2px solid rgba(var(--accent-secondary-rgb, 76, 175, 80), 0.6);
+}
+
 .google-monitor-circle {
     width: 48px;
     height: 48px;
@@ -38,6 +47,52 @@
     transform: scale(0) rotate(90deg);
     opacity: 0;
     pointer-events: none;
+}
+
+.mini-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pin-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.pin-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.pin-btn.active {
+    background: rgba(var(--accent-secondary-rgb, 76, 175, 80), 0.2);
+    border-color: var(--accent-secondary, #4caf50);
+    color: var(--accent-secondary, #4caf50);
+}
+
+.google-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary, #b0b0b0);
+    font-size: 24px;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+    padding: 0 4px;
+}
+
+.google-close-btn:hover {
+    color: #ff4d4d;
 }
 
 .google-count-badge {
@@ -90,7 +145,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 20px;
+}
+
+.google-header-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
 .google-mini-title {

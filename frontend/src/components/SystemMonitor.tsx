@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import './SystemMonitor.css';
 
@@ -30,6 +30,7 @@ export const SystemMonitor = () => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isPinned, setIsPinned] = useState(false);
     const [stats, setStats] = useState<SystemStats | null>(null);
+    const wrapperRef = useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
         // @ts-ignore
@@ -43,6 +44,19 @@ export const SystemMonitor = () => {
             return () => unsub();
         }
     }, [isPinned]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node) && isExpanded && !isPinned) {
+                setIsExpanded(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isExpanded, isPinned]);
 
     const handleExpand = (val: boolean) => {
         setIsExpanded(val);
@@ -77,7 +91,7 @@ export const SystemMonitor = () => {
     };
 
     return (
-        <div className={`system-monitor ${isExpanded ? 'expanded' : 'collapsed'} ${isPinned ? 'pinned' : ''}`}>
+        <div className={`system-monitor ${isExpanded ? 'expanded' : 'collapsed'} ${isPinned ? 'pinned' : ''}`} ref={wrapperRef}>
             <div className="monitor-container">
                 {/* Панель моніторигу */}
                 <div className="monitor-panel">

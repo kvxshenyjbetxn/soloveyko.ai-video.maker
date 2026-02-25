@@ -54,6 +54,8 @@ interface ServiceContextType {
     googlerMaxVideos: number;
     setGooglerMaxVideos: (val: number) => void;
     refreshAllBalances: () => Promise<void>;
+    autoRefresh: boolean;
+    setAutoRefresh: (val: boolean) => void;
 }
 
 const ServiceContext = createContext<ServiceContextType>({
@@ -113,6 +115,8 @@ const ServiceContext = createContext<ServiceContextType>({
     elevenLabsImageUsage: { active_threads: 0, max_threads: 0 },
     refreshElevenLabsImageUsage: async () => { },
     refreshAllBalances: async () => { },
+    autoRefresh: false,
+    setAutoRefresh: () => { }
 });
 
 export const useServices = () => useContext(ServiceContext);
@@ -134,6 +138,8 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [voiceMakerBalances, setVoiceMakerBalances] = useState<Record<string, number | null>>({});
     const [voiceMakerKeys, setVoiceMakerKeys] = useState<any[]>([]);
     const [loadingVoiceMaker, setLoadingVoiceMaker] = useState(false);
+
+    const [autoRefresh, setAutoRefresh] = useState(false);
     const [googlerUsage, setGooglerUsage] = useState<any>({
         account_limits: { video_generation_threads_allowed: 0, img_generation_threads_allowed: 0, video_gen_per_hour_limit: 0, img_gen_per_hour_limit: 0, prompt_tokens_per_hour_limit: 0 },
         current_usage: { active_threads: { video_threads: 0, image_threads: 0 }, hourly_usage: { image_generation: 0, video_generation: 0, prompt_generation: 0 } },
@@ -362,6 +368,18 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, []);
 
+    useEffect(() => {
+        let interval: any;
+        if (autoRefresh) {
+            interval = setInterval(() => {
+                refreshAllBalances();
+            }, 60000); // 1 minute
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [autoRefresh]);
+
     const refreshVoiceMakerBalance = async () => {
         if (loadingVoiceMaker) return;
         setLoadingVoiceMaker(true);
@@ -465,7 +483,9 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setGooglerMaxImages,
             googlerMaxVideos,
             setGooglerMaxVideos,
-            refreshAllBalances
+            refreshAllBalances,
+            autoRefresh,
+            setAutoRefresh
         }}>
             {children}
         </ServiceContext.Provider>

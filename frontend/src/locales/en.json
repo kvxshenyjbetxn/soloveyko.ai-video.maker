@@ -251,6 +251,8 @@
         "videoTotal": "Video",
         "imageTotal": "Images",
         "refreshAll": "Refresh All",
+        "autoRefreshOn": "Turn on auto-refresh (every minute)",
+        "autoRefreshOff": "Turn off auto-refresh",
         "total": "Total"
     },
     "pipeline": {
@@ -502,6 +504,8 @@
         "yes": "Yes",
         "no": "No",
         "ready": "Ready",
-        "default": "Default"
+        "default": "Default",
+        "pin": "Pin",
+        "unpin": "Unpin"
     }
 }
