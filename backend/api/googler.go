@@ -60,7 +60,7 @@ func (f *FlexibleFloat64) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	// Спробуємо розпарсити як об'єкт {"used": X} або {"count": X}
+	// Спробуємо розпарсити як об'єкт {"used": X}, {"count": X} або {"current_usage": X}
 	var obj map[string]float64
 	if err := json.Unmarshal(data, &obj); err == nil {
 		if val, ok := obj["used"]; ok {
@@ -68,6 +68,10 @@ func (f *FlexibleFloat64) UnmarshalJSON(data []byte) error {
 			return nil
 		}
 		if val, ok := obj["count"]; ok {
+			*f = FlexibleFloat64(val)
+			return nil
+		}
+		if val, ok := obj["current_usage"]; ok {
 			*f = FlexibleFloat64(val)
 			return nil
 		}
