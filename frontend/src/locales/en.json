@@ -107,6 +107,101 @@
         "api": "API",
         "performance": "Performance",
         "templates": "Templates",
+        "text": {
+            "enabled": "Enabled",
+            "model": "Model",
+            "temperature": "Temperature",
+            "maxTokens": "Max Tokens",
+            "prompt": "Prompt",
+            "translate_model": "Translation Model",
+            "translate_temperature": "Translation Temperature",
+            "translate_max_tokens": "Translation Max Tokens",
+            "translate_prompt": "Translation Prompt",
+            "translate_control": "Translation Control",
+            "image_control": "Image Control",
+            "rewrite_model": "Rewrite Model",
+            "rewrite_temperature": "Rewrite Temperature",
+            "rewrite_max_tokens": "Rewrite Max Tokens",
+            "rewrite_prompt": "Rewrite Prompt"
+        },
+        "voiceover": {
+            "enabled": "Enabled",
+            "service": "Service",
+            "template": "Voice / Template"
+        },
+        "image": {
+            "enabled": "Enabled",
+            "service": "Image Service",
+            "model": "Pollinations: Model",
+            "width": "Pollinations: Width",
+            "height": "Pollinations: Height",
+            "prompt": "Prompt (image description)",
+            "generationMethod": "Generation Method",
+            "group": "Group sentences",
+            "initial_count": "Initial count",
+            "limit": "Sentence limit",
+            "prompt_model": "Prompt Gen: Model",
+            "prompt_temp": "Prompt Gen: Temperature",
+            "prompt_tokens": "Prompt Gen: Max Tokens",
+            "characters": {
+                "enabled": "Determine Characters",
+                "prompt": "Character Determination Prompt"
+            },
+            "googler": {
+                "model": "Googler: Model",
+                "video": "Googler: Video Animation"
+            }
+        },
+        "subtitle": {
+            "enabled": "Enabled",
+            "service": "Service",
+            "model": "Model",
+            "amd": {
+                "language": "Language (AMD)"
+            },
+            "font": "Font",
+            "size": "Size",
+            "color": "Color",
+            "max_len": "Max line length",
+            "fade_enabled": "Smooth Fade",
+            "fade_in": "Fade In (ms)",
+            "fade_out": "Fade Out (ms)"
+        },
+        "montage": {
+            "enabled": "Enabled",
+            "resolution": "Resolution",
+            "fps": "FPS",
+            "sway": "Sway",
+            "zoom": "Zoom",
+            "internal_upscale": "Internal Upscale",
+            "intro_enabled": "Intro Enabled",
+            "intro_path": "Intro Path",
+            "watermark_enabled": "Watermark Enabled",
+            "watermark_path": "Watermark Path",
+            "watermark_opacity": "Watermark Opacity",
+            "watermark_size": "Watermark Size (%)",
+            "overlay_enabled": "Overlay Enabled",
+            "overlay_path": "Overlay Path",
+            "transitions": "Transitions Duration",
+            "transition_effect": "Transition Effect",
+            "encoding_preset": "Encoding Preset",
+            "bitrate": "Bitrate"
+        },
+        "paths": {
+            "output": "Output Folder"
+        },
+        "api_keys": {
+            "openrouter": "OpenRouter Key",
+            "elevenlabs_bot": "ElevenLabs Bot",
+            "elevenlabs_ua": "ElevenLabs UA",
+            "elevenlabs_unlim": "ElevenLabs Unlim",
+            "elevenlabs_image": "ElevenLabs Image",
+            "voicemaker": "VoiceMaker Key",
+            "pollinations": "Pollinations Key",
+            "openai": "OpenAI Key",
+            "anthropic": "Anthropic Key",
+            "google": "Google Key"
+        },
         "voice": {
             "apiKey": "API Key",
             "apiKeyPlaceholder": "Enter your X-API-Key...",
@@ -293,6 +388,34 @@
                 "voicemaker": "VoiceMaker",
                 "edgetts": "Edge TTS (Free)"
             },
+            "elevenlabsbot": {
+                "template": "ElevenLabs Bot: Template"
+            },
+            "elevenlabsunlim": {
+                "voice_id": "ElevenLabs Unlim: Voice ID",
+                "stability": "ElevenLabs Unlim: Stability",
+                "similarity": "ElevenLabs Unlim: Similarity",
+                "style": "ElevenLabs Unlim: Style",
+                "speaker_boost": "ElevenLabs Unlim: Speaker Boost"
+            },
+            "elevenlabsua": {
+                "voice_id": "ElevenLabs UA: Voice ID",
+                "stability": "ElevenLabs UA: Stability",
+                "similarity": "ElevenLabs UA: Similarity",
+                "style": "ElevenLabs UA: Style",
+                "speaker_boost": "ElevenLabs UA: Speaker Boost",
+                "model": "ElevenLabs UA: Model"
+            },
+            "voicemaker": {
+                "voice_id": "VoiceMaker: Voice",
+                "char_limit": "VoiceMaker: Char Limit"
+            },
+            "edgetts": {
+                "voice_id": "EdgeTTS: Voice",
+                "rate": "EdgeTTS: Rate",
+                "pitch": "EdgeTTS: Pitch",
+                "volume": "EdgeTTS: Volume"
+            },
             "placeholders": {
                 "select_voice": "Select voice..."
             }
@@ -394,7 +517,11 @@
             "ai": "AI Parameters",
             "prompt": "Prompt Parameters",
             "provider": "Provider Parameters",
-            "subtitles": "Subtitle Style"
+            "api": "API Key Selection",
+            "path": "Paths",
+            "subtitles": "Subtitle Style",
+            "control": "Control",
+            "custom_stages": "Custom Stages"
         },
         "model": "Model",
         "model.default": "Default (GPT-4o)",
@@ -528,6 +655,8 @@
         "unpin": "Unpin",
         "unit_h": "h",
         "unit_m": "m",
-        "unit_s": "s"
+        "unit_s": "s",
+        "stage": "Pipeline Stage",
+        "select": "Select..."
     }
 }

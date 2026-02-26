@@ -113,6 +113,101 @@
     "api": "API",
     "performance": "Продуктивність",
     "templates": "Шаблони",
+    "text": {
+      "enabled": "Увімкнено",
+      "model": "Модель",
+      "temperature": "Температура",
+      "maxTokens": "Макс. токенів",
+      "prompt": "Промт",
+      "translate_model": "Модель перекладу",
+      "translate_temperature": "Температура перекладу",
+      "translate_max_tokens": "Макс. токенів перекладу",
+      "translate_prompt": "Промт перекладу",
+      "translate_control": "Контроль перекладу",
+      "image_control": "Контроль зображень",
+      "rewrite_model": "Модель рерайту",
+      "rewrite_temperature": "Температура рерайту",
+      "rewrite_max_tokens": "Макс. токенів рерайту",
+      "rewrite_prompt": "Промт рерайту"
+    },
+    "voiceover": {
+      "enabled": "Увімкнено",
+      "service": "Сервіс",
+      "template": "Голос / Шаблон"
+    },
+    "image": {
+      "enabled": "Увімкнено",
+      "service": "Сервіс зображень",
+      "model": "Pollinations: Модель",
+      "width": "Pollinations: Ширина",
+      "height": "Pollinations: Висота",
+      "prompt": "Промт (опис картинок)",
+      "generationMethod": "Метод генерації",
+      "group": "Групувати речення",
+      "initial_count": "Початкова кількість",
+      "limit": "Ліміт речень",
+      "prompt_model": "Генерація промтів: Модель",
+      "prompt_temp": "Генерація промтів: Температура",
+      "prompt_tokens": "Генерація промтів: Макс. токенів",
+      "characters": {
+        "enabled": "Визначення персонажів",
+        "prompt": "Промт для визначення"
+      },
+      "googler": {
+        "model": "Googler: Модель",
+        "video": "Googler: Анімація картинок"
+      }
+    },
+    "subtitle": {
+      "enabled": "Увімкнено",
+      "service": "Сервіс",
+      "model": "Модель",
+      "amd": {
+        "language": "Мова (AMD)"
+      },
+      "font": "Шрифт",
+      "size": "Розмір",
+      "color": "Колір",
+      "max_len": "Макс. довжина рядка",
+      "fade_enabled": "Плавна поява",
+      "fade_in": "Поява (мс)",
+      "fade_out": "Зникнення (мс)"
+    },
+    "montage": {
+      "enabled": "Увімкнено",
+      "resolution": "Роздільна здатність",
+      "fps": "FPS",
+      "sway": "Покачування",
+      "zoom": "Зум",
+      "internal_upscale": "Внутрішній апскейл",
+      "intro_enabled": "Увімкнути інтро",
+      "intro_path": "Шлях до інтро",
+      "watermark_enabled": "Водяний знак",
+      "watermark_path": "Шлях до знака",
+      "watermark_opacity": "Прозорість знака",
+      "watermark_size": "Розмір знака (%)",
+      "overlay_enabled": "Оверлей",
+      "overlay_path": "Шлях до оверлею",
+      "transitions": "Тривалість переходу",
+      "transition_effect": "Ефект переходу",
+      "encoding_preset": "Пресет кодування",
+      "bitrate": "Бітрейт"
+    },
+    "paths": {
+      "output": "Вихідна папка"
+    },
+    "api_keys": {
+      "openrouter": "OpenRouter (Ключ)",
+      "elevenlabs_bot": "ElevenLabs Bot (Ключ)",
+      "elevenlabs_ua": "ElevenLabs UA (Ключ)",
+      "elevenlabs_unlim": "ElevenLabs Unlim (Ключ)",
+      "elevenlabs_image": "ElevenLabs Image (Ключ)",
+      "voicemaker": "VoiceMaker (Ключ)",
+      "pollinations": "Pollinations (Ключ)",
+      "openai": "OpenAI Key",
+      "anthropic": "Anthropic Key",
+      "google": "Google Key"
+    },
     "voice": {
       "apiKey": "API Ключ",
       "apiKeyPlaceholder": "Введіть ваші X-API-Key...",
@@ -302,6 +397,34 @@
         "voicemaker": "VoiceMaker",
         "edgetts": "Edge TTS (Безкоштовно)"
       },
+      "elevenlabsbot": {
+        "template": "ElevenLabs Bot: Шаблон"
+      },
+      "elevenlabsunlim": {
+        "voice_id": "ElevenLabs Unlim: Voice ID",
+        "stability": "ElevenLabs Unlim: Стабільність",
+        "similarity": "ElevenLabs Unlim: Схожість",
+        "style": "ElevenLabs Unlim: Експресія",
+        "speaker_boost": "ElevenLabs Unlim: Підсилення дикції"
+      },
+      "elevenlabsua": {
+        "voice_id": "ElevenLabs UA: Voice ID",
+        "stability": "ElevenLabs UA: Стабільність",
+        "similarity": "ElevenLabs UA: Схожість",
+        "style": "ElevenLabs UA: Експресія",
+        "speaker_boost": "ElevenLabs UA: Підсилення дикції",
+        "model": "ElevenLabs UA: Модель"
+      },
+      "voicemaker": {
+        "voice_id": "VoiceMaker: Голос",
+        "char_limit": "VoiceMaker: Ліміт символів"
+      },
+      "edgetts": {
+        "voice_id": "EdgeTTS: Голос",
+        "rate": "EdgeTTS: Швидкість",
+        "pitch": "EdgeTTS: Висота",
+        "volume": "EdgeTTS: Гучність"
+      },
       "placeholders": {
         "select_voice": "Виберіть голос..."
       }
@@ -404,8 +527,10 @@
       "prompt": "Параметри промту",
       "provider": "Параметри провайдера",
       "api": "Вибір API ключа",
-      "path": "Шлях збереження",
-      "subtitles": "Стиль субтитрів"
+      "path": "Шляхи",
+      "subtitles": "Стиль субтитрів",
+      "control": "Контроль",
+      "custom_stages": "Кастомні етапи"
     },
     "model": "Модель",
     "model.default": "За замовчуванням (GPT-4o)",
@@ -540,6 +665,8 @@
     "unpin": "Відкріпити",
     "unit_h": "год",
     "unit_m": "хв",
-    "unit_s": "с"
+    "unit_s": "с",
+    "stage": "Етап пайплайну",
+    "select": "Вибрати..."
   }
 }

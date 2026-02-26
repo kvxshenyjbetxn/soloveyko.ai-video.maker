@@ -69,7 +69,7 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
             <div className={`stage-settings-content ${settings.apiCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     <div className="settings-control">
-                        <label className="settings-label">OpenRouter Key</label>
+                        <label className="settings-label">{t('settings.api_keys.openrouter')}</label>
                         <select
                             className="settings-select"
                             value={selectedApiKeyID}
@@ -97,7 +97,7 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                     </div>
 
                     <div className="settings-control">
-                        <label className="settings-label">ElevenLabs Bot Key</label>
+                        <label className="settings-label">{t('settings.api_keys.elevenlabs_bot')}</label>
                         <select
                             className="settings-select"
                             value={selectedElevenLabsBotKeyID}
@@ -129,7 +129,7 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                     </div>
 
                     <div className="settings-control">
-                        <label className="settings-label">ElevenLabs Unlim Key</label>
+                        <label className="settings-label">{t('settings.api_keys.elevenlabs_unlim')}</label>
                         <select
                             className="settings-select"
                             value={settings.voiceoverElevenLabsUnlimKeyID}
@@ -154,7 +154,7 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                     </div>
 
                     <div className="settings-control">
-                        <label className="settings-label">ElevenLabs UA Key</label>
+                        <label className="settings-label">{t('settings.api_keys.elevenlabs_ua')}</label>
                         <select
                             className="settings-select"
                             value={settings.voiceoverElevenLabsUAKeyID}
@@ -179,7 +179,7 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                     </div>
 
                     <div className="settings-control">
-                        <label className="settings-label">VoiceMaker Key</label>
+                        <label className="settings-label">{t('settings.api_keys.voicemaker')}</label>
                         <select
                             className="settings-select"
                             value={settings.voiceoverVoiceMakerKeyID}
@@ -207,7 +207,7 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                     </div>
 
                     <div className="settings-control">
-                        <label className="settings-label">Pollinations Key</label>
+                        <label className="settings-label">{t('settings.api_keys.pollinations')}</label>
                         <select
                             className="settings-select"
                             value={settings.imagePollinationsKeyID}
@@ -232,7 +232,7 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                     </div>
 
                     <div className="settings-control">
-                        <label className="settings-label">ElevenLabs Image Key</label>
+                        <label className="settings-label">{t('settings.api_keys.elevenlabs_image')}</label>
                         <select
                             className="settings-select"
                             value={settings.elevenLabsImageKeyID || ''}

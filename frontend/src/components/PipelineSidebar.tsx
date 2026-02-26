@@ -298,6 +298,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     updated = true;
                 }
 
+                if (elevenLabsUnlimKeys.length > 0 && !s.voiceoverElevenLabsUnlimKeyID) {
+                    s.voiceoverElevenLabsUnlimKeyID = elevenLabsUnlimKeys[0].id;
+                    updated = true;
+                }
+
                 if (!s.rewriteEnabled) { s.rewriteEnabled = true; updated = true; }
                 if (s.voiceoverEnabled === undefined) { s.voiceoverEnabled = false; updated = true; }
 

@@ -107,6 +107,101 @@
         "api": "API",
         "performance": "Производительность",
         "templates": "Шаблоны",
+        "text": {
+            "enabled": "Включено",
+            "model": "Модель",
+            "temperature": "Температура",
+            "maxTokens": "Макс. токенов",
+            "prompt": "Промт",
+            "translate_model": "Модель перевода",
+            "translate_temperature": "Температура перевода",
+            "translate_max_tokens": "Макс. токенов перевода",
+            "translate_prompt": "Промт перевода",
+            "translate_control": "Контроль перевода",
+            "image_control": "Контроль изображений",
+            "rewrite_model": "Модель рерайта",
+            "rewrite_temperature": "Температура рерайта",
+            "rewrite_max_tokens": "Макс. токенов рерайта",
+            "rewrite_prompt": "Промт рерайта"
+        },
+        "voiceover": {
+            "enabled": "Включено",
+            "service": "Сервис",
+            "template": "Голос / Шаблон"
+        },
+        "image": {
+            "enabled": "Включено",
+            "service": "Сервис изображений",
+            "model": "Pollinations: Модель",
+            "width": "Pollinations: Ширина",
+            "height": "Pollinations: Высота",
+            "prompt": "Промт (описание картинок)",
+            "generationMethod": "Метод генерации",
+            "group": "Группировать предложения",
+            "initial_count": "Начальное количество",
+            "limit": "Лимит предложений",
+            "prompt_model": "Генерация промтов: Модель",
+            "prompt_temp": "Генерация промтов: Температура",
+            "prompt_tokens": "Генерация промтов: Макс. токенов",
+            "characters": {
+                "enabled": "Определение персонажей",
+                "prompt": "Промт для определения"
+            },
+            "googler": {
+                "model": "Googler: Модель",
+                "video": "Googler: Анимация картинок"
+            }
+        },
+        "subtitle": {
+            "enabled": "Включено",
+            "service": "Сервис",
+            "model": "Модель",
+            "amd": {
+                "language": "Язык (AMD)"
+            },
+            "font": "Шрифт",
+            "size": "Размер",
+            "color": "Цвет",
+            "max_len": "Макс. длина строки",
+            "fade_enabled": "Плавное появление",
+            "fade_in": "Появление (мс)",
+            "fade_out": "Исчезновение (мс)"
+        },
+        "montage": {
+            "enabled": "Включено",
+            "resolution": "Разрешение",
+            "fps": "FPS",
+            "sway": "Покачивание",
+            "zoom": "Зум",
+            "internal_upscale": "Внутренний апскейл",
+            "intro_enabled": "Включить интро",
+            "intro_path": "Путь к интро",
+            "watermark_enabled": "Водяной знак",
+            "watermark_path": "Путь к знаку",
+            "watermark_opacity": "Прозрачность знака",
+            "watermark_size": "Размер знака (%)",
+            "overlay_enabled": "Оверлей",
+            "overlay_path": "Путь к оверлею",
+            "transitions": "Длительность перехода",
+            "transition_effect": "Эффект перехода",
+            "encoding_preset": "Пресет кодирования",
+            "bitrate": "Битрейт"
+        },
+        "paths": {
+            "output": "Выходная папка"
+        },
+        "api_keys": {
+            "openrouter": "OpenRouter (Ключ)",
+            "elevenlabs_bot": "ElevenLabs Bot (Ключ)",
+            "elevenlabs_ua": "ElevenLabs UA (Ключ)",
+            "elevenlabs_unlim": "ElevenLabs Unlim (Ключ)",
+            "elevenlabs_image": "ElevenLabs Image (Ключ)",
+            "voicemaker": "VoiceMaker (Ключ)",
+            "pollinations": "Pollinations (Ключ)",
+            "openai": "OpenAI Key",
+            "anthropic": "Anthropic Key",
+            "google": "Google Key"
+        },
         "voice": {
             "apiKey": "API Ключ",
             "apiKeyPlaceholder": "Введите ваш X-API-Key...",
@@ -292,6 +387,34 @@
                 "voicemaker": "VoiceMaker",
                 "edgetts": "Edge TTS (Бесплатно)"
             },
+            "elevenlabsbot": {
+                "template": "ElevenLabs Bot: Шаблон"
+            },
+            "elevenlabsunlim": {
+                "voice_id": "ElevenLabs Unlim: Voice ID",
+                "stability": "ElevenLabs Unlim: Стабильность",
+                "similarity": "ElevenLabs Unlim: Сходство",
+                "style": "ElevenLabs Unlim: Экспрессия",
+                "speaker_boost": "ElevenLabs Unlim: Усиление дикции"
+            },
+            "elevenlabsua": {
+                "voice_id": "ElevenLabs UA: Voice ID",
+                "stability": "ElevenLabs UA: Стабильность",
+                "similarity": "ElevenLabs UA: Сходство",
+                "style": "ElevenLabs UA: Экспрессия",
+                "speaker_boost": "ElevenLabs UA: Усиление дикции",
+                "model": "ElevenLabs UA: Модель"
+            },
+            "voicemaker": {
+                "voice_id": "VoiceMaker: Голос",
+                "char_limit": "VoiceMaker: Лимит символов"
+            },
+            "edgetts": {
+                "voice_id": "EdgeTTS: Голос",
+                "rate": "EdgeTTS: Скорость",
+                "pitch": "EdgeTTS: Высота",
+                "volume": "EdgeTTS: Громкость"
+            },
             "placeholders": {
                 "select_voice": "Выберите голос..."
             }
@@ -394,8 +517,10 @@
             "prompt": "Параметры промта",
             "provider": "Параметры провайдера",
             "api": "Выбор API ключа",
-            "path": "Путь сохранения",
-            "subtitles": "Стиль субтитров"
+            "path": "Пути",
+            "subtitles": "Стиль субтитров",
+            "control": "Контроль",
+            "custom_stages": "Кастомные этапы"
         },
         "model": "Модель",
         "model.default": "По умолчанию (GPT-4o)",
@@ -530,6 +655,8 @@
         "unpin": "Открепить",
         "unit_h": "ч",
         "unit_m": "мин",
-        "unit_s": "с"
+        "unit_s": "с",
+        "stage": "Этап пайплайна",
+        "select": "Выбрать..."
     }
 }

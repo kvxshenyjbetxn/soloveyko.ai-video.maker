@@ -4,7 +4,9 @@ import { useTemplates, PipelineTemplate } from '../../contexts/TemplateContext';
 import { useServices } from '../../contexts/ServiceContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 // @ts-ignore
-import { GetOpenRouterSavedModels, SelectDirectory } from '../../../wailsjs/go/main/App';
+import { GetOpenRouterSavedModels, SelectDirectory, SelectVideo, SelectImage, GetPollinationsSavedModels, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices, GetPipelineSettings, GetOpenRouterKeys, GetElevenLabsBotKeys, GetElevenLabsUAKeys, GetElevenLabsUnlimKeys, GetVoiceMakerKeys, GetPollinationsKeys, GetElevenLabsImageKeys, GetEdgeTTSVoices } from '../../../wailsjs/go/main/App';
+import { MASS_EDITOR_BLOCKS, MassEditorSetting } from './MassEditorData';
+import voicemakerVoicesData from '../../assets/voicemaker_voices.json';
 import './templates.css';
 
 export const Templates = () => {
@@ -15,16 +17,95 @@ export const Templates = () => {
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
     const [models, setModels] = useState<string[]>([]);
+    const [pollinationsModels, setPollinationsModels] = useState<string[]>([]);
+    const [voiceTemplates, setVoiceTemplates] = useState<string[]>([]);
+    const [voiceMakerVoices, setVoiceMakerVoices] = useState<any[]>([]);
+    const [edgeTTSVoices, setEdgeTTSVoices] = useState<any[]>([]);
+
+    const normalizeVoices = (data: any[]) => {
+        if (!data || data.length === 0) return [];
+        // Handle cases where data might be nested under 'default'
+        const arrayData = (data as any).default || (Array.isArray(data) ? data : []);
+
+        if (arrayData.length > 0 && arrayData[0].Voices && Array.isArray(arrayData[0].Voices)) {
+            const flat: any[] = [];
+            arrayData.forEach((langGroup: any) => {
+                langGroup.Voices.forEach((voiceId: string) => {
+                    flat.push({
+                        VoiceId: voiceId,
+                        LanguageName: langGroup.Language,
+                        LanguageCode: langGroup.LanguageCode || 'multi-lang',
+                        VoiceWebname: voiceId.split('-').pop() || voiceId,
+                    });
+                });
+            });
+            return flat;
+        }
+        return Array.isArray(arrayData) ? arrayData : [];
+    };
+
+    // Key Lists
+    const [orKeys, setOrKeys] = useState<any[]>([]);
+    const [elBotKeys, setElBotKeys] = useState<any[]>([]);
+    const [elUAKeys, setElUAKeys] = useState<any[]>([]);
+    const [elUnlimKeys, setElUnlimKeys] = useState<any[]>([]);
+    const [vmKeys, setVmKeys] = useState<any[]>([]);
+    const [polKeys, setPolKeys] = useState<any[]>([]);
+    const [elImgKeys, setElImgKeys] = useState<any[]>([]);
 
     useEffect(() => {
-        const fetchModels = async () => {
-            const m = await GetOpenRouterSavedModels();
-            setModels(m || []);
+        const fetchData = async () => {
+            const or = await GetOpenRouterSavedModels();
+            setModels(or || []);
+
+            const pol = await GetPollinationsSavedModels();
+            setPollinationsModels(pol || []);
+
+            // Keys
+            setOrKeys(await GetOpenRouterKeys() || []);
+            setElBotKeys(await GetElevenLabsBotKeys() || []);
+            setElUAKeys(await GetElevenLabsUAKeys() || []);
+            setElUnlimKeys(await GetElevenLabsUnlimKeys() || []);
+            setVmKeys(await GetVoiceMakerKeys() || []);
+            setPolKeys(await GetPollinationsKeys() || []);
+            setElImgKeys(await GetElevenLabsImageKeys() || []);
+
+            // For ElevenLabs Bot, we need to find the active key first
+            const settings = await GetPipelineSettings();
+            if (settings?.voiceoverElevenLabsBotKeyID) {
+                const keyObj = (await GetElevenLabsBotKeys())?.find((k: any) => k.id === settings.voiceoverElevenLabsBotKeyID);
+                if (keyObj) {
+                    const vt = await GetElevenLabsBotVoiceTemplates(keyObj.key);
+                    setVoiceTemplates(vt || []);
+                }
+            }
+
+            // For VoiceMaker
+            const initialVoices = normalizeVoices(voicemakerVoicesData || []);
+            setVoiceMakerVoices(initialVoices);
+
+            if (settings?.voiceoverVoiceMakerKeyID) {
+                const keys = await (window as any).go.main.App.GetVoiceMakerKeys();
+                const keyObj = keys?.find((k: any) => k.id === settings.voiceoverVoiceMakerKeyID);
+                if (keyObj) {
+                    const vv = await GetVoiceMakerVoices(keyObj.key);
+                    if (vv && vv.length > 0) {
+                        setVoiceMakerVoices(normalizeVoices(vv));
+                    }
+                }
+            }
+
+            // EdgeTTS
+            try {
+                const ev = await GetEdgeTTSVoices();
+                setEdgeTTSVoices(ev || []);
+            } catch (e) { }
         };
-        fetchModels();
+        fetchData();
     }, []);
 
     // Bulk Edit State
+    const [selectedBlockId, setSelectedBlockId] = useState<string>('');
     const [bulkParam, setBulkParam] = useState<string>('');
     const [bulkValue, setBulkValue] = useState<any>('');
 
@@ -33,12 +114,16 @@ export const Templates = () => {
         [templates, selectedIds]);
 
     const canBulkEdit = useMemo(() => {
-        if (selectedIds.length === 0) return false;
-        const firstType = selectedTemplates[0]?.type;
-        return selectedTemplates.every(t => t.type === firstType);
-    }, [selectedIds, selectedTemplates]);
+        return selectedIds.length > 0;
+    }, [selectedIds]);
 
-    const selectedType = selectedTemplates[0]?.type;
+    const selectedBlock = useMemo(() =>
+        MASS_EDITOR_BLOCKS.find(b => b.id === selectedBlockId),
+        [selectedBlockId]);
+
+    const selectedSetting = useMemo(() =>
+        selectedBlock?.settings.find(s => s.id === bulkParam),
+        [selectedBlock, bulkParam]);
 
     const handleDelete = async () => {
         if (templateToDelete) {
@@ -72,55 +157,56 @@ export const Templates = () => {
         }
     };
 
+    const ALL_SETTINGS = useMemo(() => {
+        return MASS_EDITOR_BLOCKS.flatMap(b => b.settings);
+    }, []);
+
     const handleBulkApply = async () => {
         if (!bulkParam || bulkValue === undefined) return;
 
+        const setDeep = (obj: any, path: string, value: any) => {
+            const parts = path.split('.');
+            let current = obj;
+            for (let i = 0; i < parts.length - 1; i++) {
+                if (!current[parts[i]]) current[parts[i]] = {};
+                current = current[parts[i]];
+            }
+            current[parts[parts.length - 1]] = value;
+        };
+
         for (const tpl of selectedTemplates) {
-            const newSettings = {
-                ...tpl.settings,
-                [bulkParam]: bulkValue
-            };
+            const newSettings = { ...tpl.settings };
+            const setting = ALL_SETTINGS.find(s => (s as any).id === bulkParam);
+            const path = (setting as any)?.path;
 
-            const cleanSettings: any = {};
+            let finalValue = bulkValue;
 
-            if (tpl.type === 'translate') {
-                cleanSettings.translateModel = newSettings.translateModel || "";
-                cleanSettings.translatePrompt = newSettings.translatePrompt || "";
-                cleanSettings.translateTemperature = newSettings.translateTemperature || 0;
-                cleanSettings.translateMaxTokens = newSettings.translateMaxTokens || 0;
-                cleanSettings.translateOpenRouterKeyID = newSettings.translateOpenRouterKeyID || "";
-                cleanSettings.translateEnabled = newSettings.translateEnabled === undefined ? true : newSettings.translateEnabled;
-                cleanSettings.translatePipelineName = newSettings.translatePipelineName || '';
-                cleanSettings.translateOutputPath = newSettings.translateOutputPath || '';
-            } else {
-                cleanSettings.rewriteModel = newSettings.rewriteModel || "";
-                cleanSettings.rewritePrompt = newSettings.rewritePrompt || "";
-                cleanSettings.rewriteTemperature = newSettings.rewriteTemperature || 0;
-                cleanSettings.rewriteMaxTokens = newSettings.rewriteMaxTokens || 0;
-                cleanSettings.rewriteOpenRouterKeyID = newSettings.rewriteOpenRouterKeyID || "";
-                cleanSettings.rewriteEnabled = newSettings.rewriteEnabled === undefined ? true : newSettings.rewriteEnabled;
-                cleanSettings.rewritePipelineName = newSettings.rewritePipelineName || '';
-                cleanSettings.rewriteOutputPath = newSettings.rewriteOutputPath || '';
+            // EdgeTTS Formatting
+            if (bulkParam === 'edgeTTSRate') {
+                finalValue = (bulkValue >= 0 ? "+" : "") + bulkValue + "%";
+            } else if (bulkParam === 'edgeTTSPitch') {
+                finalValue = (bulkValue >= 0 ? "+" : "") + bulkValue + "Hz";
+            } else if (bulkParam === 'edgeTTSVolume') {
+                finalValue = (bulkValue >= 0 ? "+" : "") + bulkValue + "%";
             }
 
-            await updateTemplate(tpl.id, tpl.name, cleanSettings);
+            if (path) {
+                setDeep(newSettings, path, finalValue);
+            } else {
+                newSettings[bulkParam] = finalValue;
+            }
+
+            // Sync global output path to both pipelines
+            if (bulkParam === 'outputPath') {
+                newSettings.translateOutputPath = finalValue;
+                newSettings.rewriteOutputPath = finalValue;
+            }
+
+            await updateTemplate(tpl.id, tpl.name, newSettings);
         }
         setIsBulkEditOpen(false);
         setBulkParam('');
         setBulkValue('');
-    };
-
-    const getEditableParams = () => {
-        if (!selectedType) return [];
-        const prefix = selectedType;
-        return [
-            { id: `${prefix}Model`, label: t('pipeline.model') },
-            { id: `${prefix}Temperature`, label: t('pipeline.temperature') },
-            { id: `${prefix}MaxTokens`, label: t('pipeline.max_tokens') },
-            { id: `${prefix}Prompt`, label: t('pipeline.system_prompt') },
-            { id: `${prefix}OpenRouterKeyID`, label: t('pipeline.group.api') },
-            { id: `${prefix}OutputPath`, label: t('pipeline.group.path') },
-        ];
     };
 
     return (
@@ -155,7 +241,7 @@ export const Templates = () => {
                         <div className="loading-templates">
                             <div className="loader"></div>
                         </div>
-                    ) : templates.length === 0 ? (
+                    ) : templates && templates.length === 0 ? (
                         <div className="empty-templates">
                             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.3">
                                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -235,76 +321,171 @@ export const Templates = () => {
                         {t('templatesTab.selected_count', { count: selectedIds.length })}
                     </div>
 
+                    {/* Block Selection */}
                     <div className="panel-group">
-                        <label className="panel-label">{t('templatesTab.select_param')}</label>
+                        <label className="panel-label">{t('common.stage') || 'Блок'}</label>
                         <select
                             className="panel-select"
-                            value={bulkParam}
+                            value={selectedBlockId}
                             onChange={(e) => {
-                                setBulkParam(e.target.value);
+                                setSelectedBlockId(e.target.value);
+                                setBulkParam('');
                                 setBulkValue('');
                             }}
                         >
-                            <option value="">-- {t('templatesTab.select_param')} --</option>
-                            {getEditableParams().map(p => (
-                                <option key={p.id} value={p.id}>{p.label}</option>
+                            <option value="">-- {t('common.select') || 'Select'} --</option>
+                            {MASS_EDITOR_BLOCKS.map(block => (
+                                <option key={block.id} value={block.id}>{t(block.labelKey)}</option>
                             ))}
                         </select>
                     </div>
 
-                    {bulkParam && (
+                    {/* Parameter Selection */}
+                    {selectedBlock && (
+                        <div className="panel-group">
+                            <label className="panel-label">{t('templatesTab.select_param')}</label>
+                            <select
+                                className="panel-select"
+                                value={bulkParam}
+                                onChange={(e) => {
+                                    const paramId = e.target.value;
+                                    setBulkParam(paramId);
+                                    const setting = selectedBlock.settings.find(s => s.id === paramId);
+                                    if (setting?.type === 'switch') {
+                                        setBulkValue(false);
+                                    } else {
+                                        setBulkValue('');
+                                    }
+                                }}
+                            >
+                                <option value="">-- {t('templatesTab.select_param')} --</option>
+                                {selectedBlock.settings.map(p => (
+                                    <option key={p.id} value={p.id}>{t(p.labelKey) || p.labelKey}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Value Selection */}
+                    {selectedSetting && (
                         <div className="panel-group">
                             <label className="panel-label">{t('common.value') || 'Value'}</label>
-                            {bulkParam.includes('Model') ? (
+                            {selectedSetting.type === 'select' ? (
                                 <select
                                     className="panel-select"
                                     value={bulkValue}
                                     onChange={(e) => setBulkValue(e.target.value)}
                                 >
-                                    <option value="">-- {t('pipeline.model')} --</option>
-                                    {models.map(m => (
-                                        <option key={m} value={m}>{m}</option>
+                                    <option value="">-- {t('common.select') || 'Select'} --</option>
+                                    {selectedSetting.options?.map(opt => (
+                                        <option key={opt.value} value={opt.value}>
+                                            {t(opt.label) || opt.label}
+                                        </option>
+                                    ))}
+                                    {/* Handle Dynamic Models */}
+                                    {(selectedSetting as MassEditorSetting).dynamicModels === 'openrouter' && models.map(m => (
+                                        <option key={`or-${m}`} value={m}>{m}</option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicModels === 'pollinations' && pollinationsModels.map(m => (
+                                        <option key={`pol-${m}`} value={m}>{m}</option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicModels === 'elevenlabsbot' && voiceTemplates.map(m => (
+                                        <option key={`el-${m}`} value={m}>{m}</option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicModels === 'voicemaker' && voiceMakerVoices.map(v => (
+                                        <option key={`vm-${v.VoiceId}`} value={v.VoiceId}>
+                                            {v.VoiceWebname} ({v.LanguageName})
+                                        </option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicModels === 'edgetts' && edgeTTSVoices.map(m => (
+                                        <option key={`edge-${m.ShortName}`} value={m.ShortName}>{m.FriendlyName || m.ShortName}</option>
+                                    ))}
+
+                                    {/* Dynamic Keys */}
+                                    {(selectedSetting as MassEditorSetting).dynamicKeys === 'openrouter' && orKeys.map(k => (
+                                        <option key={`orkey-${k.id}`} value={k.id}>{k.name}</option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicKeys === 'elevenlabsbot' && elBotKeys.map(k => (
+                                        <option key={`elbotkey-${k.id}`} value={k.id}>{k.name}</option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicKeys === 'elevenlabsua' && elUAKeys.map(k => (
+                                        <option key={`eluakey-${k.id}`} value={k.id}>{k.name}</option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicKeys === 'elevenlabsunlim' && elUnlimKeys.map(k => (
+                                        <option key={`elunlimkey-${k.id}`} value={k.id}>{k.name}</option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicKeys === 'voicemaker' && vmKeys.map(k => (
+                                        <option key={`vmkey-${k.id}`} value={k.id}>{k.name}</option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicKeys === 'pollinations' && polKeys.map(k => (
+                                        <option key={`polkey-${k.id}`} value={k.id}>{k.name}</option>
+                                    ))}
+                                    {(selectedSetting as MassEditorSetting).dynamicKeys === 'elevenlabsimage' && elImgKeys.map(k => (
+                                        <option key={`elimgkey-${k.id}`} value={k.id}>{k.name}</option>
                                     ))}
                                 </select>
-                            ) : bulkParam.includes('Temperature') ? (
+                            ) : selectedSetting.type === 'slider' ? (
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                     <input
                                         type="range"
-                                        min="0"
-                                        max="2"
-                                        step="0.1"
-                                        value={bulkValue || 0.7}
+                                        min={selectedSetting.min ?? 0}
+                                        max={selectedSetting.max ?? 1}
+                                        step={selectedSetting.step ?? 0.1}
+                                        value={bulkValue || 0}
                                         onChange={(e) => setBulkValue(parseFloat(e.target.value))}
                                         className="panel-slider"
                                     />
-                                    <span className="slider-value">{bulkValue || 0.7}</span>
+                                    <span className="slider-value">
+                                        {bulkValue || 0}
+                                        {selectedSetting.dynamicModels === 'edgetts-r' && '%'}
+                                        {selectedSetting.dynamicModels === 'edgetts-p' && 'Hz'}
+                                        {selectedSetting.dynamicModels === 'edgetts-v' && '%'}
+                                    </span>
                                 </div>
-                            ) : bulkParam.includes('MaxTokens') ? (
+                            ) : selectedSetting.type === 'switch' ? (
+                                <label className="stage-switch">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkValue}
+                                        onChange={(e) => setBulkValue(e.target.checked)}
+                                    />
+                                    <span className="stage-slider"></span>
+                                </label>
+                            ) : selectedSetting.type === 'color' ? (
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <div style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '6px',
+                                        backgroundColor: bulkValue || '#ffffff',
+                                        border: '2px solid var(--border-color)',
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                        cursor: 'pointer'
+                                    }}>
+                                        <input
+                                            type="color"
+                                            value={bulkValue || '#ffffff'}
+                                            onChange={(e) => setBulkValue(e.target.value)}
+                                            style={{ position: 'absolute', top: '-5px', left: '-5px', width: '50px', height: '50px', cursor: 'pointer', opacity: 0 }}
+                                        />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="panel-input"
+                                        style={{ fontFamily: 'monospace', fontSize: '11px', textTransform: 'uppercase', width: '100px' }}
+                                        value={bulkValue || '#ffffff'}
+                                        onChange={(e) => setBulkValue(e.target.value)}
+                                    />
+                                </div>
+                            ) : selectedSetting.type === 'number' ? (
                                 <input
                                     type="number"
                                     className="panel-input"
                                     value={bulkValue}
-                                    onChange={(e) => setBulkValue(parseInt(e.target.value))}
+                                    onChange={(e) => setBulkValue(parseFloat(e.target.value))}
                                 />
-                            ) : bulkParam.includes('Prompt') ? (
-                                <textarea
-                                    className="panel-textarea"
-                                    value={bulkValue}
-                                    onChange={(e) => setBulkValue(e.target.value)}
-                                    rows={5}
-                                />
-                            ) : bulkParam.includes('OpenRouterKeyID') ? (
-                                <select
-                                    className="panel-select"
-                                    value={bulkValue}
-                                    onChange={(e) => setBulkValue(e.target.value)}
-                                >
-                                    <option value="">{t('api.openrouterSettings.noKeys')}</option>
-                                    {openRouterKeys.map(k => (
-                                        <option key={k.id} value={k.id}>{k.name}</option>
-                                    ))}
-                                </select>
-                            ) : bulkParam.includes('OutputPath') ? (
+                            ) : selectedSetting.type === 'path' ? (
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <input
                                         className="panel-input"
@@ -316,15 +497,29 @@ export const Templates = () => {
                                     <button
                                         className="panel-button"
                                         onClick={async () => {
-                                            const path = await SelectDirectory();
+                                            let path = "";
+                                            if (selectedSetting.id.includes('Watermark') || selectedSetting.id.includes('Image')) {
+                                                path = await SelectImage();
+                                            } else if (selectedSetting.id.includes('Intro') || selectedSetting.id.includes('Overlay')) {
+                                                path = await SelectVideo();
+                                            } else {
+                                                path = await SelectDirectory();
+                                            }
                                             if (path) setBulkValue(path);
                                         }}
                                         style={{ padding: '8px 12px', background: 'var(--accent-primary)', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                                     >
-                                        ...
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                                     </button>
                                 </div>
-                            ) : null}
+                            ) : (
+                                <input
+                                    type="text"
+                                    className="panel-input"
+                                    value={bulkValue}
+                                    onChange={(e) => setBulkValue(e.target.value)}
+                                />
+                            )}
                         </div>
                     )}
                 </div>
