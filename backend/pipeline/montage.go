@@ -421,7 +421,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						"[f%d_1]split=2[pts%d_a][pts%d_b];"+
 						"[pts%d_b]reverse,setpts=PTS-STARTPTS[b%d_wd];"+
 						"[pts%d_a][b%d_wd]concat=n=2:v=1[v%d_boom];"+
-						"[v%d_boom]loop=loop=-1:size=%d:start=0,scale=%d:%d,scale=1.08*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+						"[v%d_boom]loop=loop=-1:size=%d:start=0,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
 					idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, loopFrames, baseW, baseH, baseW, baseH, fps, requiredDur, vOut,
 				))
 			} else {
@@ -430,7 +430,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				}
 				effDur := math.Min(actualDur, requiredDur)
 				filterParts = append(filterParts, fmt.Sprintf(
-					"%strim=duration=%.6f,scale=%d:%d,scale=1.08*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,setpts=PTS-STARTPTS[%s]",
+					"%strim=duration=%.6f,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,setpts=PTS-STARTPTS[%s]",
 					vIn, effDur, baseW, baseH, baseW, baseH, fps, vOut,
 				))
 			}
