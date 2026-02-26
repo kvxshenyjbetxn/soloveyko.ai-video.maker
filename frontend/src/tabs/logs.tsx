@@ -50,33 +50,74 @@ export const Logs = () => {
         }
     }, []);
 
+    const copyToClipboard = useCallback((text: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(text);
+        const target = e.currentTarget as HTMLElement;
+        const originalBg = target.style.backgroundColor;
+        target.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
+        setTimeout(() => {
+            target.style.backgroundColor = originalBg;
+        }, 200);
+    }, []);
+
     const renderLogRow = useCallback((log: any) => {
         const levelColor = getLevelColor(log.level as LogLevel);
         return (
-            <div key={log.id} className="log-row" style={{ color: levelColor, height: '24px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                <span style={{ opacity: 0.5, minWidth: '85px', fontSize: '11px' }}>
+            <div
+                key={log.id}
+                className="log-row"
+                title={log.message}
+                onClick={(e) => copyToClipboard(log.message, e)}
+                style={{
+                    color: levelColor,
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 8px',
+                    borderBottom: '1px solid rgba(255,255,255,0.02)',
+                    boxSizing: 'border-box',
+                    gap: '8px',
+                    cursor: 'copy'
+                }}
+            >
+                <span style={{ opacity: 0.5, minWidth: '80px', fontSize: '11px', flexShrink: 0 }}>
                     {log.timestamp.toLocaleTimeString()}
                 </span>
-                <span style={{ fontWeight: '800', minWidth: '70px', fontSize: '11px' }}>
+                <span style={{ fontWeight: '800', minWidth: '65px', fontSize: '11px', flexShrink: 0 }}>
                     [{log.level}]
                 </span>
-                {log.taskLabel && (
-                    <span className="task-label-badge" style={{
-                        background: 'rgba(92, 107, 192, 0.2)',
-                        color: '#5c6bc0',
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        fontSize: '10px',
-                        marginRight: '8px',
-                        fontWeight: 'bold',
-                        border: '1px solid rgba(92, 107, 192, 0.3)'
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1, height: '100%' }}>
+                    {log.taskLabel && (
+                        <span className="task-label-badge" style={{
+                            background: 'rgba(92, 107, 192, 0.2)',
+                            color: '#5c6bc0',
+                            padding: '1px 6px',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            border: '1px solid rgba(92, 107, 192, 0.3)',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0
+                        }}>
+                            {log.taskLabel}
+                        </span>
+                    )}
+                    <span style={{
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        wordBreak: 'break-word',
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: '1.2',
+                        maxHeight: '28px',
+                        overflow: 'hidden',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical'
                     }}>
-                        {log.taskLabel}
+                        {log.message}
                     </span>
-                )}
-                <span style={{ fontSize: '13px', fontWeight: 500, textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                    {log.message}
-                </span>
+                </div>
             </div>
         );
     }, [getLevelColor]);
@@ -151,7 +192,7 @@ export const Logs = () => {
                     ) : (
                         <VirtualLogList
                             logs={filteredLogs}
-                            rowHeight={24}
+                            rowHeight={32}
                             renderRow={renderLogRow}
                         />
                     )}

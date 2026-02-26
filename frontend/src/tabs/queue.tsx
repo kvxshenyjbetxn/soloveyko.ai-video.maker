@@ -344,11 +344,43 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, isProcessin
                     ) : (
                         <VirtualLogList
                             logs={taskLogs}
-                            rowHeight={20}
+                            rowHeight={28}
                             renderRow={(log: any) => (
-                                <div key={log.id} className={`task-log-entry level-${log.level.toLowerCase()}`} style={{ height: '20px', display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                    <span className="task-log-time">{log.timestamp.toLocaleTimeString()}</span>
-                                    <span className="task-log-message" style={{ textOverflow: 'ellipsis', overflow: 'hidden' }}>{log.message}</span>
+                                <div
+                                    key={log.id}
+                                    className={`task-log-entry level-${log.level.toLowerCase()}`}
+                                    title={log.message}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(log.message);
+                                        const target = e.currentTarget as HTMLElement;
+                                        const originalBg = target.style.backgroundColor;
+                                        target.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
+                                        setTimeout(() => { target.style.backgroundColor = originalBg; }, 200);
+                                    }}
+                                    style={{
+                                        height: '28px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '0 8px',
+                                        boxSizing: 'border-box',
+                                        borderBottom: '1px solid rgba(255,255,255,0.02)',
+                                        cursor: 'copy'
+                                    }}
+                                >
+                                    <span className="task-log-time" style={{ minWidth: '65px', fontSize: '10px', flexShrink: 0 }}>{log.timestamp.toLocaleTimeString()}</span>
+                                    <span className="task-log-message" style={{
+                                        wordBreak: 'break-word',
+                                        whiteSpace: 'pre-wrap',
+                                        fontSize: '11px',
+                                        lineHeight: '1.2',
+                                        maxHeight: '24px',
+                                        overflow: 'hidden',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical'
+                                    }}>{log.message}</span>
                                 </div>
                             )}
                         />
