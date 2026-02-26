@@ -1009,11 +1009,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	// Get video size in GB
 	videoWeight := s.getVideoSizeGB(ffprobePath, filepath.Join(finalDir, outputFile))
 
-	// Register in gallery
-	if s.OnImageGenerated != nil {
-		s.OnImageGenerated(taskName, subName, outputFile, filepath.Join(finalDir, outputFile))
-	}
-
 	s.emitStageStatus(id, "montage", "completed", videoWeight)
 	if s.OnTaskStatus != nil {
 		s.OnTaskStatus(id, "completed", 100)

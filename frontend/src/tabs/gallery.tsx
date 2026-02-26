@@ -94,6 +94,13 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
     const isAwaitingControl = useMemo(() => queueTasks.some(t => t.isAwaitingImageControl), [queueTasks]);
 
     const handleContinueProcessing = async () => {
+        // Force hide gallery tab via event before switching
+        // @ts-ignore
+        if (window.runtime) {
+            // @ts-ignore
+            window.runtime.EventsEmit("hideGallery");
+        }
+
         await resumeImageControl();
         if (setCurrentPath) {
             setCurrentPath('queue');

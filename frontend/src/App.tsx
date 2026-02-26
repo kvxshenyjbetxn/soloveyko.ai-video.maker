@@ -110,12 +110,27 @@ function App() {
     };
 
     const [hasImages, setHasImages] = useState(false);
+    const [isGalleryHiddenManually, setIsGalleryHiddenManually] = useState(false);
 
     const checkGallery = async () => {
         try {
             // @ts-ignore
             const data = await window.go.main.App.GetGalleryImages();
             const exists = data && data.length > 0;
+
+            // If there are no images, reset the manual hide flag
+            if (!exists) {
+                setHasImages(false);
+                setIsGalleryHiddenManually(false);
+                return;
+            }
+
+            // If it was manually hidden, keep it hidden even if images exist
+            if (isGalleryHiddenManually) {
+                setHasImages(false);
+                return;
+            }
+
             setHasImages(exists);
 
             // If we are in gallery and it becomes empty, redirect
@@ -127,10 +142,16 @@ function App() {
         }
     };
 
+    // Reset manual hide when starting a new task process
+    useEffect(() => {
+        if (getMainTab(currentPath) === 'text') {
+            setIsGalleryHiddenManually(false);
+        }
+    }, [currentPath]);
+
     useEffect(() => {
         checkGallery();
 
-        // Слухаємо лише специфічну подію для галереї
         // @ts-ignore
         if (window.runtime) {
             // @ts-ignore
@@ -138,11 +159,19 @@ function App() {
                 checkGallery();
             });
 
+            // Forcing hide gallery tab when we proceed to montage
+            // @ts-ignore
+            const unsubHide = window.runtime.EventsOn("hideGallery", () => {
+                setIsGalleryHiddenManually(true);
+                setHasImages(false);
+            });
+
             return () => {
                 unsubGallery();
+                unsubHide();
             };
         }
-    }, []);
+    }, [isGalleryHiddenManually]);
 
     // Використовуємо зміни в черзі для оновлення галереї замість Wails Events, 
     // щоб уникнути конфліктів відписки (відписується одразу для всіх)
