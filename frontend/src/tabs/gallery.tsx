@@ -10,11 +10,13 @@ interface SelectedMedia {
     name: string;
     url: string;
     path: string;
+    prompt?: string;
 }
 
 // Memoized Card Component
 const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick, onSelectionToggle, onDelete }: any) => {
     const isVideo = img.url.toLowerCase().endsWith('.mp4');
+    const [showPrompt, setShowPrompt] = useState(false);
 
     return (
         <div className={`gallery-card ${isSelected ? 'selected' : ''}`}
@@ -35,10 +37,51 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
                 ) : (
                     <img src={`${img.url}?thumb=1`} alt={img.name} loading="lazy" />
                 )}
+
+                {showPrompt && img.prompt && (
+                    <div
+                        className="card-prompt-overlay animate-fade"
+                        onClick={e => e.stopPropagation()}
+                        onMouseDown={e => e.stopPropagation()}
+                        onMouseUp={e => e.stopPropagation()}
+                    >
+                        <div className="prompt-header">
+                            <span className="prompt-label">Prompt</span>
+                            <div className="prompt-header-actions">
+                                <button
+                                    className="prompt-copy-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(img.prompt);
+                                    }}
+                                    title="Copy Prompt"
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                                </button>
+                                <button className="prompt-close-btn-mini" onClick={() => setShowPrompt(false)}>&times;</button>
+                            </div>
+                        </div>
+                        <div className="prompt-content premium-scrollbar">
+                            {img.prompt}
+                        </div>
+                    </div>
+                )}
+
                 <div className="media-overlay">
-                    <button className="card-delete-btn" onClick={e => onDelete(img.path, e)}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></svg>
-                    </button>
+                    <div className="overlay-top-actions">
+                        <button className="card-delete-btn" onClick={e => onDelete(img.path, e)}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></svg>
+                        </button>
+                        {img.prompt && (
+                            <button
+                                className={`card-prompt-btn ${showPrompt ? 'active' : ''}`}
+                                onClick={e => { e.stopPropagation(); setShowPrompt(!showPrompt); }}
+                                title="Show Generation Prompt"
+                            >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                            </button>
+                        )}
+                    </div>
                     <div className={`card-checkbox ${isSelected ? 'checked' : ''}`} onClick={e => onSelectionToggle(img.path, e)}>
                         {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
                     </div>
@@ -208,7 +251,7 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
         if (isSelectionMode) {
             toggleImageSelection(img.path);
         } else {
-            setSelectedMedia({ name: img.name, url: img.url, path: img.path });
+            setSelectedMedia({ name: img.name, url: img.url, path: img.path, prompt: img.prompt });
         }
     }, [isSelectionMode, toggleImageSelection]);
 
@@ -220,10 +263,10 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
 
         if (e.key === 'ArrowRight' && currentIndex < flatImages.length - 1) {
             const next = flatImages[currentIndex + 1];
-            setSelectedMedia({ name: next.name, url: next.url, path: next.path });
+            setSelectedMedia({ name: next.name, url: next.url, path: next.path, prompt: next.prompt });
         } else if (e.key === 'ArrowLeft' && currentIndex > 0) {
             const prev = flatImages[currentIndex - 1];
-            setSelectedMedia({ name: prev.name, url: prev.url, path: prev.path });
+            setSelectedMedia({ name: prev.name, url: prev.url, path: prev.path, prompt: prev.prompt });
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
             handleDeleteImage(selectedMedia.path);
         }

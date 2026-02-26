@@ -461,7 +461,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			} else {
 				successCount++
 				if s.OnImageGenerated != nil {
-					s.OnImageGenerated(taskName, subName, imgName, imgPath)
+					s.OnImageGenerated(taskName, subName, imgName, imgPath, prompt)
 				}
 				s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: 0/0", validPrompts, validPrompts, successCount, validPrompts))
 				s.log("SUCCESS", fmt.Sprintf("[Pollinations] Success: Generated %s", imgName), id, taskLabel)
@@ -627,7 +627,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 						successCount++
 						videosCount++
 						if s.OnImageGenerated != nil {
-							s.OnImageGenerated(taskName, subName, vidName, vidPath)
+							s.OnImageGenerated(taskName, subName, vidName, vidPath, p)
 						}
 						s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: %d/%d", validPrompts, validPrompts, imagesCount, totalImages, videosCount, totalVideos))
 						s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Video generation: %s", idx, vidName), id, taskLabel)
@@ -654,7 +654,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				imgMu.Lock()
 				imagesCount++
 				if s.OnImageGenerated != nil {
-					s.OnImageGenerated(taskName, subName, imgName, imgPath)
+					s.OnImageGenerated(taskName, subName, imgName, imgPath, p)
 				}
 				// If we DON'T plan to animate it, it's a final success now
 				if !(isVideo && iVideoMode == "image") {
@@ -690,7 +690,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 						_ = os.Remove(imgPath)
 
 						if s.OnImageGenerated != nil {
-							s.OnImageGenerated(taskName, subName, vidName, vidPath)
+							s.OnImageGenerated(taskName, subName, vidName, vidPath, p)
 						}
 						s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: %d/%d", validPrompts, validPrompts, imagesCount, totalImages, videosCount, totalVideos))
 						s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Video animation: %s", idx, vidName), id, taskLabel)
@@ -776,7 +776,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 					successCount++
 					imagesCount++
 					if s.OnImageGenerated != nil {
-						s.OnImageGenerated(taskName, subName, imgName, imgPath)
+						s.OnImageGenerated(taskName, subName, imgName, imgPath, p)
 					}
 					s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: 0/0", validPrompts, validPrompts, imagesCount, validPrompts))
 					s.log("SUCCESS", fmt.Sprintf("[ElevenLabs Image] Success: Generated and saved %s", imgName), id, taskLabel)

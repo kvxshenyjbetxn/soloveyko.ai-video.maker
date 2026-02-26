@@ -86,8 +86,8 @@ func NewApp() *App {
 		}
 	}
 
-	app.pipeline.OnImageGenerated = func(taskName, templateName, imageName, imgPath string) {
-		app.galleryManager.AddImage(taskName, templateName, imageName, imgPath)
+	app.pipeline.OnImageGenerated = func(taskName, templateName, imageName, imgPath, prompt string) {
+		app.galleryManager.AddImage(taskName, templateName, imageName, imgPath, prompt)
 		if app.ctx != nil {
 			wruntime.EventsEmit(app.ctx, "galleryUpdate")
 		}
