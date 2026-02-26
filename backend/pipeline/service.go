@@ -470,7 +470,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	// 5. Montage Stage
-	montageErr := s.ProcessMontage(id, taskLabel, finalDir, settings, &pSettings)
+	montageErr := s.ProcessMontage(id, taskLabel, finalDir, settings, &pSettings, taskName, subName)
 	if montageErr != nil {
 		s.log("ERROR", fmt.Sprintf("[Pipeline] Montage stage failed: %v", montageErr), id, taskLabel)
 		s.emitStageStatus(id, "montage", "failed")

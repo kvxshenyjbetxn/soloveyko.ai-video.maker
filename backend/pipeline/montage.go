@@ -49,7 +49,7 @@ func (s *PipelineService) resolveCodec(ffmpegPath string, preferred string, id s
 }
 
 // ProcessMontage handles the final video rendering stage (single-pass FFmpeg).
-func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
+func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings, taskName string, subName string) error {
 	if !pSettings.MontageEnabled {
 		return nil
 	}
@@ -358,6 +358,57 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	s.log("INFO", fmt.Sprintf("[Montage] Codec: %s | Priority: %s | CPUCores: %d | Clips: %d",
 		videoCodec, procPriority, cpuCores, numFiles), id, taskLabel)
+
+	// Build final filename: TaskName + TemplateName
+	limit := 180
+	tplName := subName
+	if tplName == "" || tplName == "Default" {
+		tplName = ""
+	}
+
+	sanitize := func(sStr string) string {
+		illegal := []rune{'<', '>', ':', '"', '/', '\\', '|', '?', '*'}
+		res := strings.Map(func(r rune) rune {
+			for _, il := range illegal {
+				if r == il {
+					return ' '
+				}
+			}
+			return r
+		}, strings.TrimSpace(sStr))
+		// Remove trailing dots and spaces (Windows/macOS issues)
+		return strings.TrimRight(res, ". ")
+	}
+
+	safeTask := sanitize(taskName)
+	safeTpl := sanitize(tplName)
+
+	if safeTask == "" {
+		safeTask = "Task"
+	}
+
+	var finalBaseName string
+	if safeTpl != "" {
+		tplRunes := []rune(safeTpl)
+		availableForTask := limit - len(tplRunes) - 3
+		if availableForTask < 20 {
+			availableForTask = 20
+		}
+		taskRunes := []rune(safeTask)
+		if len(taskRunes) > availableForTask {
+			safeTask = string(taskRunes[:availableForTask])
+		}
+		finalBaseName = strings.TrimRight(safeTask, ". ") + " - " + safeTpl
+	} else {
+		taskRunes := []rune(safeTask)
+		if len(taskRunes) > limit {
+			safeTask = string(taskRunes[:limit])
+		}
+		finalBaseName = strings.TrimRight(safeTask, ". ")
+	}
+
+	outputFile := strings.TrimSpace(finalBaseName) + ".mp4"
+	s.log("INFO", fmt.Sprintf("[Montage] Output file will be: %s", outputFile), id, taskLabel)
 
 	// 5. Build filter graph — single-pass
 	type inputSpec struct {
@@ -871,7 +922,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	cmdArgs = append(cmdArgs,
 		"-pix_fmt", "yuv420p",
 		"-r", strconv.Itoa(fps),
-		"output.mp4",
+		outputFile,
 	)
 
 	cmd := exec.Command(ffmpegPath, cmdArgs...)
@@ -953,10 +1004,15 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		return fmt.Errorf("ffmpeg failed: %v", err)
 	}
 
-	s.log("SUCCESS", "[Pipeline] Montage complete! Video saved: output.mp4", id, taskLabel)
+	s.log("SUCCESS", fmt.Sprintf("[Pipeline] Montage complete! Video saved: %s", outputFile), id, taskLabel)
 
 	// Get video size in GB
-	videoWeight := s.getVideoSizeGB(ffprobePath, filepath.Join(finalDir, "output.mp4"))
+	videoWeight := s.getVideoSizeGB(ffprobePath, filepath.Join(finalDir, outputFile))
+
+	// Register in gallery
+	if s.OnImageGenerated != nil {
+		s.OnImageGenerated(taskName, subName, outputFile, filepath.Join(finalDir, outputFile))
+	}
 
 	s.emitStageStatus(id, "montage", "completed", videoWeight)
 	if s.OnTaskStatus != nil {
