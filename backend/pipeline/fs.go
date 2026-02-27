@@ -3,11 +3,14 @@ package pipeline
 import (
 	"os"
 	"path/filepath"
+	"soloveyko/backend/utils"
 )
 
 // EnsureDirectory creates the task directory structure
 func (s *PipelineService) EnsureDirectory(outPath string, taskName string, templateDir string) (string, error) {
-	finalDir := filepath.Join(outPath, taskName, templateDir)
+	safeTask := utils.SanitizeFilename(taskName)
+	safeTemplate := utils.SanitizeFilename(templateDir)
+	finalDir := filepath.Join(outPath, safeTask, safeTemplate)
 	err := os.MkdirAll(finalDir, 0755)
 	return finalDir, err
 }

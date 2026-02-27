@@ -39,7 +39,6 @@ func (s *PipelineService) resolveCodec(ffmpegPath string, preferred string, id s
 	)
 	utils.PrepareHiddenCmd(cmd)
 
-
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		s.log("WARN", fmt.Sprintf("[Montage] Preferred GPU codec %s (%s) failed probe: %v\nOutput: %s\nFalling back to libx264.", preferred, codec, err, string(output)), id, taskLabel)
@@ -368,22 +367,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		tplName = ""
 	}
 
-	sanitize := func(sStr string) string {
-		illegal := []rune{'<', '>', ':', '"', '/', '\\', '|', '?', '*'}
-		res := strings.Map(func(r rune) rune {
-			for _, il := range illegal {
-				if r == il {
-					return ' '
-				}
-			}
-			return r
-		}, strings.TrimSpace(sStr))
-		// Remove trailing dots and spaces (Windows/macOS issues)
-		return strings.TrimRight(res, ". ")
-	}
-
-	safeTask := sanitize(taskName)
-	safeTpl := sanitize(tplName)
+	safeTask := utils.SanitizeFilename(taskName)
+	safeTpl := utils.SanitizeFilename(tplName)
 
 	if safeTask == "" {
 		safeTask = "Task"

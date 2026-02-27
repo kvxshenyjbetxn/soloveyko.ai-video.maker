@@ -162,12 +162,21 @@ func RandomString(n int) string {
 // SanitizeFilename removes illegal characters from a string so it can be used as a directory or file name.
 func SanitizeFilename(name string) string {
 	// Illegal characters in Windows: < > : " / \ | ? *
-	illegal := []string{"<", ">", ":", "\"", "/", "\\", "|", "?", "*"}
+	// Also adding some other potentially problematic characters and different types of colons/slashes
+	illegal := []string{"<", ">", ":", "\"", "/", "\\", "|", "?", "*", "\r", "\n", "\t", "：", "／", "＼"}
 	for _, char := range illegal {
 		name = strings.ReplaceAll(name, char, " ")
 	}
-	// Trim results and handle empty or extremely long names
+
+	// Trim results
 	name = strings.TrimSpace(name)
+
+	// Remove trailing dots and spaces (Windows/macOS issues)
+	// NTFS/FAT don't like filenames ending with a dot or space
+	for strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
+		name = strings.TrimRight(name, ". ")
+	}
+
 	if name == "" {
 		return "Untitled"
 	}
@@ -177,7 +186,15 @@ func SanitizeFilename(name string) string {
 	runes := []rune(name)
 	if len(runes) > 120 {
 		name = string(runes[:120])
+		// Re-trim in case truncation created new trailing dots/spaces
+		for strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
+			name = strings.TrimRight(name, ". ")
+		}
 	}
 
-	return strings.TrimSpace(name)
+	if name == "" {
+		return "Untitled"
+	}
+
+	return name
 }
