@@ -37,6 +37,8 @@ func (s *PipelineService) resolveCodec(ffmpegPath string, preferred string, id s
 		"-pix_fmt", "yuv420p",
 		"-c:v", codec, "-f", "null", "-",
 	)
+	utils.PrepareHiddenCmd(cmd)
+
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -926,6 +928,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	)
 
 	cmd := exec.Command(ffmpegPath, cmdArgs...)
+	utils.PrepareHiddenCmd(cmd)
+
 	cmd.Dir = finalDir
 
 	// Apply process priority BEFORE start (Windows: CreationFlags; macOS: ignored here)
@@ -1023,6 +1027,8 @@ func (s *PipelineService) getDuration(ffprobePath, path string) (float64, error)
 	}
 	cmd := exec.Command(ffprobePath, "-v", "error", "-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1", path)
+	utils.PrepareHiddenCmd(cmd)
+
 	out, err := cmd.Output()
 	if err != nil {
 		return 0, err
@@ -1038,6 +1044,8 @@ func (s *PipelineService) hasAudio(ffprobePath, path string) bool {
 	}
 	cmd := exec.Command(ffprobePath, "-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_type",
 		"-of", "csv=p=0", path)
+	utils.PrepareHiddenCmd(cmd)
+
 	out, _ := cmd.Output()
 	return strings.TrimSpace(string(out)) == "audio"
 }
@@ -1050,6 +1058,8 @@ func (s *PipelineService) getVideoSizeGB(ffprobePath, path string) string {
 	if ffprobePath != "" {
 		cmd := exec.Command(ffprobePath, "-v", "error", "-show_entries", "format=size",
 			"-of", "default=noprint_wrappers=1:nokey=1", path)
+		utils.PrepareHiddenCmd(cmd)
+
 		out, err := cmd.Output()
 		if err == nil {
 			sizeStr := strings.TrimSpace(string(out))

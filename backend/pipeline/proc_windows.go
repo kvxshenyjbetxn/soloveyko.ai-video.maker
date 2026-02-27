@@ -25,7 +25,7 @@ func setProcPriority(cmd *exec.Cmd, priority string) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
-	cmd.SysProcAttr.CreationFlags = flag
+	cmd.SysProcAttr.CreationFlags |= flag
 }
 
 // setProcAffinity limits FFmpeg to first N CPU cores using Windows SetProcessAffinityMask.
