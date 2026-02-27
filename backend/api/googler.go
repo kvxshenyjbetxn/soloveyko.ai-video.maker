@@ -250,13 +250,25 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 			}
 		}
 
-		maxAttempts := 3
-		for attempt := 1; attempt <= maxAttempts; attempt++ {
+		for attempt := 1; ; attempt++ {
 			if attempt > 1 {
-				if s.OnLog != nil {
-					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying %s (%d/%d) in 5s...", currentModel, attempt, maxAttempts))
+				waitTime := 5 * time.Second
+				isRateLimit := lastErr != nil && (strings.Contains(lastErr.Error(), "(429)") || strings.Contains(strings.ToLower(lastErr.Error()), "rate limit"))
+
+				if isRateLimit {
+					waitTime = 5 * time.Minute
+					if s.OnLog != nil {
+						s.OnLog("WARN", fmt.Sprintf("[Googler] Image (%s) rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", currentModel, attempt))
+					}
+				} else {
+					if attempt > 3 {
+						break // Exit retry loop for non-429 errors after 3 attempts
+					}
+					if s.OnLog != nil {
+						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying %s (%d/3) in 5s...", currentModel, attempt))
+					}
 				}
-				time.Sleep(5 * time.Second)
+				time.Sleep(waitTime)
 			}
 
 			err := s.generateImageOnce(apiKey, currentModel, prompt, apiRatio, outputPath)
@@ -291,6 +303,7 @@ func (s *GooglerService) isRetryable(err error) bool {
 		strings.Contains(errMsg, "no video") ||
 		strings.Contains(errMsg, "internal error") ||
 		strings.Contains(errMsg, "rate limit") ||
+		strings.Contains(errMsg, "429") ||
 		strings.Contains(errMsg, "connection") ||
 		strings.Contains(errMsg, "500") ||
 		strings.Contains(errMsg, "502") ||
@@ -431,21 +444,33 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 	imgSem, _ := s.ensureSemaphores()
 	imgSem <- struct{}{}
 	defer func() { <-imgSem }()
-
-	maxAttempts := 3
-
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	var lastErr error
+	for attempt := 1; ; attempt++ {
 		if attempt > 1 {
-			if s.OnLog != nil {
-				s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying remix (%d/%d) in 5s...", attempt, maxAttempts))
+			waitTime := 5 * time.Second
+			isRateLimit := lastErr != nil && (strings.Contains(lastErr.Error(), "(429)") || strings.Contains(strings.ToLower(lastErr.Error()), "rate limit"))
+
+			if isRateLimit {
+				waitTime = 5 * time.Minute
+				if s.OnLog != nil {
+					s.OnLog("WARN", fmt.Sprintf("[Googler] Remix rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", attempt))
+				}
+			} else {
+				if attempt > 3 {
+					break // Exit retry loop for non-429 errors after 3 attempts
+				}
+				if s.OnLog != nil {
+					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying remix (%d/3) in 5s...", attempt))
+				}
 			}
-			time.Sleep(5 * time.Second)
+			time.Sleep(waitTime)
 		}
 
 		err := s.remixImageOnce(apiKey, prompt, referenceImages, aspectRatio, strictMode, outputPath)
 		if err == nil {
 			return nil
 		}
+		lastErr = err
 
 		if !s.isRetryable(err) {
 			break
@@ -583,13 +608,25 @@ func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt strin
 	for i := startIndex; i < len(allModels); i++ {
 		currentModel := allModels[i]
 
-		maxAttempts := 3
-		for attempt := 1; attempt <= maxAttempts; attempt++ {
+		for attempt := 1; ; attempt++ {
 			if attempt > 1 {
-				if s.OnLog != nil {
-					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying video (%s) [%d/%d] in 5s...", currentModel, attempt, maxAttempts))
+				waitTime := 5 * time.Second
+				isRateLimit := lastErr != nil && (strings.Contains(lastErr.Error(), "(429)") || strings.Contains(strings.ToLower(lastErr.Error()), "rate limit"))
+
+				if isRateLimit {
+					waitTime = 5 * time.Minute
+					if s.OnLog != nil {
+						s.OnLog("WARN", fmt.Sprintf("[Googler] Video (%s) rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", currentModel, attempt))
+					}
+				} else {
+					if attempt > 3 {
+						break // Exit retry loop for non-429 errors after 3 attempts
+					}
+					if s.OnLog != nil {
+						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying video (%s) [%d/3] in 5s...", currentModel, attempt))
+					}
 				}
-				time.Sleep(5 * time.Second)
+				time.Sleep(waitTime)
 			}
 
 			err := s.generateVideoOnce(apiKey, currentModel, prompt, imageBase64, aspectRatio, upscale, outputPath)
