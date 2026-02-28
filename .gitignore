@@ -38,3 +38,4 @@ test_mac
 scripts/simple_boomerang.ps1
 task.md
 test.memory/
+text_splitter_tool/
