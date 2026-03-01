@@ -324,7 +324,6 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             )}
                         </div>
                     </div>
-                    \n
 
                     <div className="settings-control">
 
