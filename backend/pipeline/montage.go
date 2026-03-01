@@ -882,7 +882,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	// Inputs
 	for _, spec := range inputSpecs {
-		cmdArgs = append(cmdArgs, "-thread_queue_size", "4096")
+		// Removed -thread_queue_size 4096 here to save 24 chars per file.
+		// For 600 files, this saves ~15,000 characters, bypassing Windows 32KB command limit!
 		if spec.loop {
 			cmdArgs = append(cmdArgs, "-loop", "1")
 		}
@@ -891,7 +892,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 		cmdArgs = append(cmdArgs, "-i", spec.path)
 	}
-	cmdArgs = append(cmdArgs, "-thread_queue_size", "4096", "-i", "voice.mp3")
+	cmdArgs = append(cmdArgs, "-i", "voice.mp3")
 
 	// Map
 	cmdArgs = append(cmdArgs,

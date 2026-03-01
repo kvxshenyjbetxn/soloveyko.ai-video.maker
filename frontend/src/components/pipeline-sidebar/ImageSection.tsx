@@ -170,11 +170,11 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                     <input
                                         type="range"
                                         className="settings-slider"
-                                        min="100"
+                                        min="50"
                                         max="5000"
-                                        step="100"
+                                        step="50"
                                         value={settings.imageSentenceLimit ?? 1000}
-                                        style={{ '--range-progress': `${((settings.imageSentenceLimit ?? 1000) - 100) / 4900 * 100}%`, marginTop: '8px', width: '100%' } as React.CSSProperties}
+                                        style={{ '--range-progress': `${((settings.imageSentenceLimit ?? 1000) - 50) / 4950 * 100}%`, marginTop: '8px', width: '100%' } as React.CSSProperties}
                                         onChange={(e) => handleChange('imageSentenceLimit', parseInt(e.target.value))}
                                     />
                                 </div>
@@ -193,10 +193,10 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                     type="range"
                                     className="settings-slider"
                                     min="0"
-                                    max="20"
+                                    max="100"
                                     step="1"
                                     value={settings.imageInitialSentenceCount ?? 0}
-                                    style={{ '--range-progress': `${((settings.imageInitialSentenceCount ?? 0) / 20) * 100}%` } as React.CSSProperties}
+                                    style={{ '--range-progress': `${((settings.imageInitialSentenceCount ?? 0) / 100) * 100}%` } as React.CSSProperties}
                                     onChange={(e) => handleChange('imageInitialSentenceCount', parseInt(e.target.value))}
                                 />
                                 <span style={{ fontSize: '12px', minWidth: '24px', textAlign: 'right', fontWeight: 500 }}>{settings.imageInitialSentenceCount ?? 0}</span>
