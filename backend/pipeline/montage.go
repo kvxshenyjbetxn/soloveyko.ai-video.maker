@@ -229,6 +229,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
+	// Ensure the last clip is slightly longer to avoid "freezing" before audio ends.
+	// The final trim=duration=audioDur will cut it to the exact length.
+	if numFiles > 0 {
+		effectiveDurs[numFiles-1] += 0.5
+	}
+
 	baseW, baseH := 1920, 1080
 	switch pSettings.MontageResolution {
 	case "720p":
