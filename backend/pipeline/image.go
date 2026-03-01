@@ -678,31 +678,31 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 		// PHASE 1: Generate all media (Images and Videos) in parallel
 		validIdx := 0
-		for _, prompt := range prompts {
+		for absoluteIdx, prompt := range prompts {
 			if len(prompt) == 0 {
 				continue
 			}
-			currentIdx := validIdx
+			currentValidIdx := validIdx
 			validIdx++
 
 			imageWg.Add(1)
-			go func(idx int, p string) {
+			go func(aIdx int, vIdx int, p string) {
 				defer imageWg.Done()
 
-				isVideo := iVideoEnabled && idx < iVideoCount
-				imgName := fmt.Sprintf("%d.png", idx+1)
-				vidName := fmt.Sprintf("%d.mp4", idx+1)
+				isVideo := iVideoEnabled && vIdx < iVideoCount
+				imgName := fmt.Sprintf("%d.png", aIdx+1)
+				vidName := fmt.Sprintf("%d.mp4", aIdx+1)
 				imgPath := filepath.Join(imagesDir, imgName)
 				vidPath := filepath.Join(imagesDir, vidName)
 
 				// Case A: Text-to-Video
 				if isVideo && iVideoMode == "text" {
-					s.log("INFO", fmt.Sprintf("[Googler] [%d] START Text-to-Video: %s...", idx, vidName), id, taskLabel)
+					s.log("INFO", fmt.Sprintf("[Googler] [%d] START Text-to-Video: %s...", aIdx, vidName), id, taskLabel)
 					err := s.googler.GenerateVideo(iApiKey, iVideoModel, p, "", iRatio, iVideoUpscale, vidPath)
 
 					imgMu.Lock()
 					if err != nil {
-						s.log("ERROR", fmt.Sprintf("[Googler] [%d] Video %s failed: %v", idx, vidName, err), id, taskLabel)
+						s.log("ERROR", fmt.Sprintf("[Googler] [%d] Video %s failed: %v", aIdx, vidName, err), id, taskLabel)
 					} else {
 						successCount++
 						videosCount++
@@ -710,14 +710,14 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 							s.OnImageGenerated(taskName, subName, vidName, vidPath, p)
 						}
 						s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: %d/%d", validPrompts, validPrompts, imagesCount, totalImages, videosCount, totalVideos))
-						s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Video generation: %s", idx, vidName), id, taskLabel)
+						s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Video generation: %s", aIdx, vidName), id, taskLabel)
 					}
 					imgMu.Unlock()
 					return
 				}
 
 				// Case B: Generate Image (either as final OR as base for animation)
-				s.log("INFO", fmt.Sprintf("[Googler] [%d] START Image generation: %s...", idx, imgName), id, taskLabel)
+				s.log("INFO", fmt.Sprintf("[Googler] [%d] START Image generation: %s...", aIdx, imgName), id, taskLabel)
 				var err error
 				if len(refImages) > 0 {
 					err = s.googler.RemixImage(iApiKey, p, refImages, iRatio, iStrictMode, imgPath)
@@ -726,7 +726,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				}
 
 				if err != nil {
-					s.log("ERROR", fmt.Sprintf("[Googler] [%d] Image %s failed: %v", idx, imgName, err), id, taskLabel)
+					s.log("ERROR", fmt.Sprintf("[Googler] [%d] Image %s failed: %v", aIdx, imgName, err), id, taskLabel)
 					return // Task failed for this segment
 				}
 
@@ -741,15 +741,15 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 					successCount++
 				}
 				s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: %d/%d", validPrompts, validPrompts, imagesCount, totalImages, videosCount, totalVideos))
-				s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Image generation: %s", idx, imgName), id, taskLabel)
+				s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Image generation: %s", aIdx, imgName), id, taskLabel)
 				imgMu.Unlock()
 
 				// Case C: If Image-to-Video, animate IMMEDIATELY
 				if isVideo && iVideoMode == "image" {
-					s.log("INFO", fmt.Sprintf("[Googler] [%d] START Video animation: %s from %s...", idx, vidName, imgName), id, taskLabel)
+					s.log("INFO", fmt.Sprintf("[Googler] [%d] START Video animation: %s from %s...", aIdx, vidName, imgName), id, taskLabel)
 					b64, err := utils.GetImageAsBase64(imgPath)
 					if err != nil {
-						s.log("ERROR", fmt.Sprintf("[Googler] [%d] Failed to read image for animation %s: %v", idx, imgName, err), id, taskLabel)
+						s.log("ERROR", fmt.Sprintf("[Googler] [%d] Failed to read image for animation %s: %v", aIdx, imgName, err), id, taskLabel)
 						return
 					}
 
@@ -757,7 +757,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 					imgMu.Lock()
 					if err != nil {
-						s.log("ERROR", fmt.Sprintf("[Googler] [%d] Video animation failed: %v", idx, err), id, taskLabel)
+						s.log("ERROR", fmt.Sprintf("[Googler] [%d] Video animation failed: %v", aIdx, err), id, taskLabel)
 					} else {
 						// Video success!
 						// Note: we Keep imagesCount as is (reflecting total images generated)
@@ -773,11 +773,11 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 							s.OnImageGenerated(taskName, subName, vidName, vidPath, p)
 						}
 						s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: %d/%d", validPrompts, validPrompts, imagesCount, totalImages, videosCount, totalVideos))
-						s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Video animation: %s", idx, vidName), id, taskLabel)
+						s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Video animation: %s", aIdx, vidName), id, taskLabel)
 					}
 					imgMu.Unlock()
 				}
-			}(currentIdx, prompt)
+			}(absoluteIdx, currentValidIdx, prompt)
 		}
 		imageWg.Wait()
 

@@ -196,37 +196,65 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         if (method === 'lines') {
             baseSegments = content.split('\n').map(l => l.trim()).filter(l => l);
         } else {
-            const matches = content.match(/[^.!?]+[.!?]*/g) || [];
-            baseSegments = matches.map(s => s.trim()).filter(s => s);
+            // Updated splitter to match Go backend precisely
+            const splitSentences = (text: string) => {
+                const sentences: string[] = [];
+                let current = "";
+                const chars = [...text];
+                for (let i = 0; i < chars.length; i++) {
+                    current += chars[i];
+                    if (chars[i] === '.' || chars[i] === '!' || chars[i] === '?') {
+                        if (i + 1 === chars.length || " \n\t\r".includes(chars[i + 1])) {
+                            sentences.push(current.trim());
+                            current = "";
+                        }
+                    }
+                }
+                if (current.trim()) sentences.push(current.trim());
+                return sentences.filter(s => s);
+            };
+            baseSegments = splitSentences(content);
         }
 
         if (baseSegments.length === 0) return 0;
 
         let chunksNum = 0;
-        let segmentsToProcess = baseSegments;
+        let currentBaseIdx = 0;
 
+        // Backend initialCount logic with 50 chars constraint
         if (initialCount > 0) {
-            const count = Math.min(initialCount, baseSegments.length);
-            chunksNum += count;
-            segmentsToProcess = baseSegments.slice(count);
+            for (let dynamicChunkIdx = 0; dynamicChunkIdx < initialCount && currentBaseIdx < baseSegments.length; dynamicChunkIdx++) {
+                let currentChunk = baseSegments[currentBaseIdx];
+                currentBaseIdx++;
+
+                // Merge next segments until we hit 50 chars (hook/dynamic start constraint)
+                while ([...currentChunk].length < 50 && currentBaseIdx < baseSegments.length) {
+                    currentChunk += " " + baseSegments[currentBaseIdx];
+                    currentBaseIdx++;
+                }
+                chunksNum++;
+            }
         }
 
-        if (segmentsToProcess.length > 0) {
-            // For lines mode, force grouping if initialCount > 0, to match backend logic
-            const shouldGroup = (method === 'lines') ? (initialCount > 0) : group;
+        const remaining = baseSegments.slice(currentBaseIdx);
+
+        if (remaining.length > 0) {
+            // For lines mode, if initial count is set, backend forces grouping for the rest
+            const shouldGroup = (method === 'lines' && initialCount > 0) || (method === 'sentences' && group);
 
             if (!shouldGroup) {
-                chunksNum += segmentsToProcess.length;
+                chunksNum += remaining.length;
             } else {
                 let currentLen = 0;
-                for (const segment of segmentsToProcess) {
+                for (const segment of remaining) {
+                    const segLen = [...segment].length;
                     if (currentLen === 0) {
-                        currentLen = segment.length;
-                    } else if (currentLen + 1 + segment.length <= limit) {
-                        currentLen += 1 + segment.length;
+                        currentLen = segLen;
+                    } else if (currentLen + 1 + segLen <= limit) {
+                        currentLen += 1 + segLen;
                     } else {
                         chunksNum++;
-                        currentLen = segment.length;
+                        currentLen = segLen;
                     }
                 }
                 if (currentLen > 0) chunksNum++;
