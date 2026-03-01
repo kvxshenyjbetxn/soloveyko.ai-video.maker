@@ -644,6 +644,7 @@
     },
     "common": {
         "save": "Save",
+        "open_folder": "Open Folder",
         "saving": "Saving...",
         "add": "Add",
         "cancel": "Cancel",

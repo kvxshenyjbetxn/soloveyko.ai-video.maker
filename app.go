@@ -955,6 +955,11 @@ func (a *App) CheckExistingTask(taskName string, taskType string, settings map[s
 	return nil, nil
 }
 
+// ResolveTaskDir returns the final directory for a task
+func (a *App) ResolveTaskDir(taskName string, taskType string, subName string, settings map[string]interface{}) string {
+	return a.pipeline.ResolveFinalDir(taskName, taskType, subName, settings)
+}
+
 // SubmitImageControlResult resumes a paused task after image review
 func (a *App) SubmitImageControlResult(taskId string) {
 	a.pipeline.SubmitImageControlResult(taskId)

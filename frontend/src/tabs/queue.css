@@ -297,14 +297,65 @@
     background: rgba(255, 82, 82, 0.1);
 }
 
-.task-card-name {
+.task-card-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.open-folder-task-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-placeholder);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.open-folder-task-btn:hover {
+    color: var(--accent-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.task-card-name-container {
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.task-card-folder-name {
     font-size: 14px;
     font-weight: 800;
     color: var(--text-primary);
-    margin-bottom: 8px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.task-card-sub-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-placeholder);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.task-card-sub-name svg {
+    opacity: 0.5;
+    flex-shrink: 0;
+}
+
+.task-card-name {
+    display: none; /* Replaced by container above */
 }
 
 .task-content-preview {

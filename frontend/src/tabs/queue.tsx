@@ -8,7 +8,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { ExistingFilesModal } from '../components/ExistingFilesModal';
 import { VirtualLogList } from '../components/VirtualLogList';
 // @ts-ignore
-import { GetOpenRouterSavedModels } from '../../wailsjs/go/main/App';
+import { GetOpenRouterSavedModels, GetPipelineSettings, OpenPath, ResolveTaskDir } from '../../wailsjs/go/main/App';
 
 interface QueueProps {
     setCurrentPath?: (path: string) => void;
@@ -42,6 +42,10 @@ const MontageIcon = () => (
     <svg className="montage-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
     </svg>
+);
+
+const FolderIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
 );
 
 const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: string, text: string) => void }) => {
@@ -213,7 +217,7 @@ const renderStatusLines = (message: string, isFinished: boolean) => {
     });
 };
 
-const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, isProcessing, t, resumeTask, logs }: any) => {
+const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, isProcessing, t, resumeTask, logs }: any) => {
     const settings = task.settings || {};
     const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
     const isVoiceEnabled = settings.voiceoverEnabled === true;
@@ -243,19 +247,39 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, isProcessin
                     <span className={`task-type-badge ${task.type}`}>
                         {displayMainLabel}
                     </span>
-                    <button
-                        className="remove-task-btn"
-                        disabled={isProcessing}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onRemove(task.id);
-                        }}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                    </button>
+                    <div className="task-card-header-actions">
+                        <button
+                            className="open-folder-task-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenFolder(task);
+                            }}
+                            title={t('common.open_folder') || 'Open folder'}
+                        >
+                            <FolderIcon />
+                        </button>
+                        <button
+                            className="remove-task-btn"
+                            disabled={isProcessing}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onRemove(task.id);
+                            }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                        </button>
+                    </div>
                 </div>
 
-                <div className="task-card-name" title={task.name}>{task.name}</div>
+                <div className="task-card-name-container">
+                    <div className="task-card-folder-name" title={task.folderName}>{task.folderName}</div>
+                    {task.subName && (
+                        <div className="task-card-sub-name" title={task.subName}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            {task.subName}
+                        </div>
+                    )}
+                </div>
 
                 <div className="task-stages-list">
                     <div className={`task-stage-item status-${task.textStatus}`}>
@@ -425,6 +449,17 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         setExpandedTaskIds(prev => prev.includes(id) ? prev.filter(tid => tid !== id) : [...prev, id]);
     }, []);
 
+    const handleOpenFolder = useCallback(async (task: QueueTask) => {
+        try {
+            const path = await ResolveTaskDir(task.folderName, task.type, task.subName, task.settings || {});
+            if (path) {
+                await OpenPath(path);
+            }
+        } catch (err) {
+            console.error("Failed to open task folder:", err);
+        }
+    }, []);
+
     return (
         <div className="content-wrapper animate-fade">
             <div className="queue-header">
@@ -456,6 +491,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                 isExpanded={expandedTaskIds.includes(task.id)}
                                 onToggle={toggleExpand}
                                 onRemove={handleRemoveTask}
+                                onOpenFolder={handleOpenFolder}
                                 isProcessing={isProcessing}
                                 t={t}
                                 resumeTask={resumeTask}
