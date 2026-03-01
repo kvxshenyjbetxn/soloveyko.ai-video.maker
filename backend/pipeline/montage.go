@@ -51,7 +51,12 @@ func (s *PipelineService) resolveCodec(ffmpegPath string, preferred string, id s
 
 // ProcessMontage handles the final video rendering stage (single-pass FFmpeg).
 func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings, taskName string, subName string) error {
-	if !pSettings.MontageEnabled {
+	montageEnabled := pSettings.MontageEnabled
+	if val, ok := settings["montageEnabled"].(bool); ok {
+		montageEnabled = val
+	}
+
+	if !montageEnabled {
 		return nil
 	}
 

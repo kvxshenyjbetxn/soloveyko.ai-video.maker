@@ -128,6 +128,9 @@ type PipelineSettings struct {
 	ImageSentenceLimit             int     `json:"imageSentenceLimit,omitempty"`
 	ImageInitialSentenceCount      int     `json:"imageInitialSentenceCount,omitempty"`
 	ImagePromptModel               string  `json:"imagePromptModel,omitempty"`
+	ImageMode                      string  `json:"imageMode,omitempty"`
+	ImageMemoryType                string  `json:"imageMemoryType,omitempty"`
+	ImageMemoryChars               int     `json:"imageMemoryChars,omitempty"`
 	ImagePromptTemperature         float64 `json:"imagePromptTemperature,omitempty"`
 	ImagePromptMaxTokens           int     `json:"imagePromptMaxTokens,omitempty"`
 	ElevenLabsImageKeyID           string  `json:"elevenLabsImageKeyID,omitempty"`
@@ -276,6 +279,9 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				SidebarWidth:         320,
 				MontageEnabled:       false,
 				MontageCollapsed:     true,
+				ImageMode:            "normal",
+				ImageMemoryType:      "primitive",
+				ImageMemoryChars:     1000,
 			},
 		}, nil
 	}
@@ -354,6 +360,16 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 	}
 	// MontageCPUCores = 0 means all cores (default)
 	// MontageThreadsPerProcess = 0 means auto (not set), so no default override needed
+
+	if settings.Pipeline.ImageMode == "" {
+		settings.Pipeline.ImageMode = "normal"
+	}
+	if settings.Pipeline.ImageMemoryType == "" {
+		settings.Pipeline.ImageMemoryType = "primitive"
+	}
+	if settings.Pipeline.ImageMemoryChars <= 0 {
+		settings.Pipeline.ImageMemoryChars = 1000
+	}
 
 	// Якщо список моделей взагалі nil (поле відсутнє в JSON), додаємо дефолтні.
 	// Якщо список порожній [], але не nil (користувач все видалив), не чіпаємо.

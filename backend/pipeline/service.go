@@ -626,6 +626,12 @@ func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]i
 		if val, ok := stages["translate"].(bool); ok {
 			res["translateEnabled"] = val
 		}
+		if val, ok := stages["montage"].(bool); ok {
+			res["montageEnabled"] = val
+		}
+		if val, ok := stages["rewrite"].(bool); ok {
+			res["rewriteEnabled"] = val
+		}
 	}
 
 	if control, ok := m["control"].(map[string]interface{}); ok {

@@ -128,8 +128,21 @@ export const MASS_EDITOR_BLOCKS: MassEditorBlock[] = [
             { id: 'imagePromptModel', labelKey: 'settings.image.prompt_model', type: 'select', dynamicModels: 'openrouter', path: 'image.imagePromptModel' },
             { id: 'imagePromptTemperature', labelKey: 'settings.image.prompt_temp', type: 'slider', min: 0, max: 2, step: 0.1, path: 'image.imagePromptTemperature' },
             { id: 'imagePromptMaxTokens', labelKey: 'settings.image.prompt_tokens', type: 'number', path: 'image.imagePromptMaxTokens' },
-            { id: 'imageDetermineCharacters', labelKey: 'settings.image.characters.enabled', type: 'switch', path: 'image.imageDetermineCharacters' },
-            { id: 'imageDetermineCharactersPrompt', labelKey: 'settings.image.characters.prompt', type: 'input', path: 'image.imageDetermineCharactersPrompt' },
+            {
+                id: 'imageMode', labelKey: 'pipeline.image.mode', type: 'select', options: [
+                    { value: 'normal', label: 'pipeline.image.mode_normal' },
+                    { value: 'memory', label: 'pipeline.image.mode_memory' },
+                ], path: 'image.imageMode'
+            },
+            {
+                id: 'imageMemoryType', labelKey: 'pipeline.image.memory_type', type: 'select', options: [
+                    { value: 'primitive', label: 'pipeline.image.memory_type_primitive' },
+                    { value: 'external', label: 'pipeline.image.memory_type_external' },
+                ], path: 'image.imageMemoryType'
+            },
+            { id: 'imageMemoryChars', labelKey: 'pipeline.image.memory_chars', type: 'number', path: 'image.imageMemoryChars' },
+            { id: 'imageDetermineCharacters', labelKey: 'pipeline.image.determine_characters', type: 'switch', path: 'image.imageDetermineCharacters' },
+            { id: 'imageDetermineCharactersPrompt', labelKey: 'pipeline.image.determine_characters_prompt', type: 'input', path: 'image.imageDetermineCharactersPrompt' },
             // Googler specific
             {
                 id: 'imageGooglerModel', labelKey: 'settings.image.googler.model', type: 'select', options: [

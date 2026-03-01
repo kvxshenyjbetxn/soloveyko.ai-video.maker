@@ -136,6 +136,29 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		iInitialCount = pSettings.ImageInitialSentenceCount
 	}
 
+	iMode, _ := settings["imageMode"].(string)
+	if iMode == "" {
+		iMode = pSettings.ImageMode
+	}
+	if iMode == "" {
+		iMode = "normal"
+	}
+
+	iMemType, _ := settings["imageMemoryType"].(string)
+	if iMemType == "" {
+		iMemType = pSettings.ImageMemoryType
+	}
+	if iMemType == "" {
+		iMemType = "primitive"
+	}
+
+	iMemChars := 1000
+	if val, ok := settings["imageMemoryChars"].(float64); ok && val > 0 {
+		iMemChars = int(val)
+	} else if pSettings.ImageMemoryChars > 0 {
+		iMemChars = pSettings.ImageMemoryChars
+	}
+
 	// For lines mode, if initial count is set, we treat it as starting individual lines,
 	// and we force grouping for the rest to make the dynamic start meaningful.
 	if iGenMethod == "lines" && iInitialCount > 0 {
@@ -274,7 +297,11 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 		if detPrompt != "" {
 			s.log("INFO", "[Pipeline] Determining characters from text...", id, taskLabel)
-			s.emitStageStatus(id, "image", "running", "determining characters...")
+			statusText := "determining characters..."
+			if iMode == "memory" {
+				statusText = "recalling context..."
+			}
+			s.emitStageStatus(id, "image", "running", statusText)
 
 			// We use the same model, temp and tokens as for prompt generation
 			charRes, err := s.openRouter.Chat(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, detPrompt+"\n\n"+processedText, temp, tokens)
@@ -318,6 +345,41 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 	if !loadedExisting {
 		s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: 0/%d", len(chunks)))
+
+		memoryContexts := make([]string, len(chunks))
+		if iMode == "memory" && iMemType == "primitive" {
+			currentPos := 0
+			for idx, chunk := range chunks {
+				pos := strings.Index(processedText[currentPos:], chunk)
+				if pos >= 0 {
+					absolutePos := currentPos + pos
+					textBefore := processedText[:absolutePos]
+
+					runesBefore := []rune(textBefore)
+					if len(runesBefore) > iMemChars {
+						cutoffIndex := len(runesBefore) - iMemChars
+						for cutoffIndex < len(runesBefore) {
+							r := runesBefore[cutoffIndex]
+							if r == '.' || r == '!' || r == '?' || r == '\n' {
+								if r == '\n' {
+									cutoffIndex++
+								}
+								break
+							}
+							cutoffIndex++
+						}
+						if cutoffIndex < len(runesBefore) {
+							memoryContexts[idx] = strings.TrimSpace(string(runesBefore[cutoffIndex:]))
+						}
+					} else {
+						memoryContexts[idx] = strings.TrimSpace(textBefore)
+					}
+
+					currentPos = absolutePos + len(chunk)
+				}
+			}
+		}
+
 		var wg sync.WaitGroup
 		var mu sync.Mutex
 		var genError error
@@ -334,6 +396,24 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				} else {
 					fullPrompt = promptTemplate + "\n\n" + textChunk
 				}
+
+				if iMode == "memory" && iMemType == "primitive" {
+					contextText := memoryContexts[index]
+					if contextText != "" {
+						contextStr := contextText + "\n\n"
+						if strings.Contains(fullPrompt, "{{memory}}") {
+							fullPrompt = strings.ReplaceAll(fullPrompt, "{{memory}}", contextStr)
+						} else {
+							fullPrompt = contextStr + fullPrompt
+						}
+					} else {
+						fullPrompt = strings.ReplaceAll(fullPrompt, "{{memory}}", "")
+					}
+				}
+
+				// Final placeholder cleanup
+				fullPrompt = strings.ReplaceAll(fullPrompt, "{{memory}}", "")
+				fullPrompt = strings.ReplaceAll(fullPrompt, "{{characters}}", "")
 
 				// We use OpenRouter's internal Chat which handles rate limiting/semaphore automatically
 				res, err := s.openRouter.Chat(id, taskLabel, "image_prompt", orKeyName, orApiKey, orModel, fullPrompt, temp, tokens)

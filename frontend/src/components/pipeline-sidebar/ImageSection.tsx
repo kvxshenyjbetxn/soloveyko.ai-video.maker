@@ -205,35 +205,126 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                     )}
 
                     <div className="settings-control" style={{ borderTop: '1px solid var(--border-color)', marginTop: '12px', paddingTop: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.determine_characters') || 'Визначити персонажів'}</label>
-                            <label className="stage-switch small">
-                                <input
-                                    type="checkbox"
-                                    checked={settings.imageDetermineCharacters || false}
-                                    onChange={(e) => handleChange('imageDetermineCharacters', e.target.checked)}
-                                />
-                                <span className="stage-slider"></span>
-                            </label>
-                        </div>
-                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
-                            {t('pipeline.image.determine_characters_desc') || 'Автоматично визначити опис персонажів із тексту для використання в промптах'}
+                        <label className="settings-label">{t('pipeline.image.mode') || 'Режим'}</label>
+                        <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px', marginBottom: '12px' }}>
+                            <button
+                                className={`method-toggle-btn ${(settings.imageMode || 'normal') === 'normal' ? 'active' : ''}`}
+                                onClick={() => handleChange('imageMode', 'normal')}
+                                style={{
+                                    flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                    background: (settings.imageMode || 'normal') === 'normal' ? 'var(--bg-primary)' : 'transparent',
+                                    color: (settings.imageMode || 'normal') === 'normal' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    fontSize: '12px', fontWeight: (settings.imageMode || 'normal') === 'normal' ? 500 : 400,
+                                    boxShadow: (settings.imageMode || 'normal') === 'normal' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {t('pipeline.image.mode_normal') || 'Звичайний'}
+                            </button>
+                            <button
+                                className={`method-toggle-btn ${settings.imageMode === 'memory' ? 'active' : ''}`}
+                                onClick={() => handleChange('imageMode', 'memory')}
+                                style={{
+                                    flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                    background: settings.imageMode === 'memory' ? 'var(--bg-primary)' : 'transparent',
+                                    color: settings.imageMode === 'memory' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    fontSize: '12px', fontWeight: settings.imageMode === 'memory' ? 500 : 400,
+                                    boxShadow: settings.imageMode === 'memory' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {t('pipeline.image.mode_memory') || 'Пам\'ять'}
+                            </button>
                         </div>
 
-                        {settings.imageDetermineCharacters && (
-                            <div className="settings-control" style={{ marginTop: '12px' }}>
-                                <label className="settings-label">{t('pipeline.image.determine_characters_prompt') || 'Промт для визначення персонажів'}</label>
-                                <textarea
-                                    className="settings-textarea"
-                                    style={{ height: '80px', resize: 'vertical' }}
-                                    value={settings.imageDetermineCharactersPrompt || ''}
-                                    onChange={(e) => handleChange('imageDetermineCharactersPrompt', e.target.value)}
-                                    placeholder={t('pipeline.image.determine_characters_prompt_desc') || 'Введіть промт для визначення персонажів...'}
-                                />
-                            </div>
-                        )}
+                        <div className="settings-control">
+                            {settings.imageMode === 'memory' && (
+                                <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px', marginBottom: '12px' }}>
+                                    <button
+                                        className={`method-toggle-btn ${(settings.imageMemoryType || 'primitive') === 'primitive' ? 'active' : ''}`}
+                                        onClick={() => handleChange('imageMemoryType', 'primitive')}
+                                        style={{
+                                            flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                            background: (settings.imageMemoryType || 'primitive') === 'primitive' ? 'var(--bg-primary)' : 'transparent',
+                                            color: (settings.imageMemoryType || 'primitive') === 'primitive' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                            fontSize: '12px', fontWeight: (settings.imageMemoryType || 'primitive') === 'primitive' ? 500 : 400,
+                                            boxShadow: (settings.imageMemoryType || 'primitive') === 'primitive' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        {t('pipeline.image.memory_type_primitive') || 'Примітивно'}
+                                    </button>
+                                    <button
+                                        className={`method-toggle-btn ${settings.imageMemoryType === 'external' ? 'active' : ''}`}
+                                        onClick={() => handleChange('imageMemoryType', 'external')}
+                                        style={{
+                                            flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                            background: settings.imageMemoryType === 'external' ? 'var(--bg-primary)' : 'transparent',
+                                            color: settings.imageMemoryType === 'external' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                            fontSize: '12px', fontWeight: settings.imageMemoryType === 'external' ? 500 : 400,
+                                            boxShadow: settings.imageMemoryType === 'external' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        {t('pipeline.image.memory_type_external') || 'Сторонні сервіси'}
+                                    </button>
+                                </div>
+                            )}
+
+                            {((settings.imageMode || 'normal') === 'normal' || ((settings.imageMode === 'memory') && (settings.imageMemoryType || 'primitive') === 'primitive')) && (
+                                <>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: settings.imageMode === 'memory' ? '4px' : '0' }}>
+                                        <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.determine_characters') || 'Визначити персонажів'}</label>
+                                        <label className="stage-switch small">
+                                            <input
+                                                type="checkbox"
+                                                checked={settings.imageDetermineCharacters || false}
+                                                onChange={(e) => handleChange('imageDetermineCharacters', e.target.checked)}
+                                            />
+                                            <span className="stage-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                                        {t('pipeline.image.determine_characters_desc') || 'Автоматично визначити опис персонажів із тексту для використання в промптах'}
+                                    </div>
+
+                                    {settings.imageDetermineCharacters && (
+                                        <div className="settings-control" style={{ marginTop: '12px' }}>
+                                            <label className="settings-label">{t('pipeline.image.determine_characters_prompt') || 'Промт для визначення персонажів'}</label>
+                                            <textarea
+                                                className="settings-textarea"
+                                                style={{ height: '80px', resize: 'vertical' }}
+                                                value={settings.imageDetermineCharactersPrompt || ''}
+                                                onChange={(e) => handleChange('imageDetermineCharactersPrompt', e.target.value)}
+                                                placeholder={t('pipeline.image.determine_characters_prompt_desc') || 'Введіть промт для визначення персонажів...'}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {settings.imageMode === 'memory' && (
+                                        <div className="settings-slider-container" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
+                                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{t('pipeline.image.memory_chars') || "Кількість символів пам'яті:"} {settings.imageMemoryChars ?? 1000}</span>
+                                            <input
+                                                type="range"
+                                                className="settings-slider"
+                                                min="500"
+                                                max="5000"
+                                                step="100"
+                                                value={settings.imageMemoryChars ?? 1000}
+                                                style={{ '--range-progress': `${((settings.imageMemoryChars ?? 1000) - 500) / 4500 * 100}%`, marginTop: '8px', width: '100%' } as React.CSSProperties}
+                                                onChange={(e) => handleChange('imageMemoryChars', parseInt(e.target.value))}
+                                            />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
-
+                    \n
 
                     <div className="settings-control">
 

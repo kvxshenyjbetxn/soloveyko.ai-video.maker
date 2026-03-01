@@ -93,6 +93,11 @@ export interface PipelineSettings {
     imagePromptModel: string;
     imagePromptTemperature: number;
     imagePromptMaxTokens: number;
+    imageMode: string;
+    imageMemoryType: string;
+    imageMemoryChars: number;
+    imageDetermineCharacters: boolean;
+    imageDetermineCharactersPrompt: string;
     elevenLabsImageKeyID: string;
     elevenLabsImageAspectRatio: string;
 

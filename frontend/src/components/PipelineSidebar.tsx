@@ -352,6 +352,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.imagePromptModel === undefined) s.imagePromptModel = modelList.length > 0 ? modelList[0] : "";
                 if (s.imagePromptTemperature === undefined) s.imagePromptTemperature = 0.7;
                 if (s.imagePromptMaxTokens === undefined) s.imagePromptMaxTokens = 0;
+                if (s.imageMode === undefined) s.imageMode = "normal";
+                if (s.imageMemoryType === undefined) s.imageMemoryType = "primitive";
+                if (s.imageMemoryChars === undefined) s.imageMemoryChars = 1000;
+                if (s.imageDetermineCharacters === undefined) s.imageDetermineCharacters = false;
+                if (s.imageDetermineCharactersPrompt === undefined) s.imageDetermineCharactersPrompt = "";
 
                 if (s.imageWidth === undefined) s.imageWidth = 1920;
                 if (s.imageHeight === undefined) s.imageHeight = 1080;
@@ -490,7 +495,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         });
 
         // 3. Image Settings
-        const imageBaseFields = ['imageService', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersPrompt'];
+        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersPrompt'];
         imageBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.image[f] = settings[f]; });
 
         // Image Service Specific Groups
@@ -580,11 +585,16 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             result.customStages = obj.customStages;
         }
 
-        // 3. Specialized mapping for "control" group
         if (obj.control) {
             if (obj.control.translate !== undefined) result.translateControlEnabled = obj.control.translate;
             if (obj.control.image !== undefined) result.imageControlEnabled = obj.control.image;
         }
+
+        // Backward compatibility for old templates
+        if (result.imageMode === undefined) result.imageMode = 'normal';
+        if (result.imageMemoryType === undefined) result.imageMemoryType = 'primitive';
+        if (result.imageMemoryChars === undefined) result.imageMemoryChars = 1000;
+        if (result.imageDetermineCharacters === undefined) result.imageDetermineCharacters = false;
 
         return result;
     };
@@ -683,6 +693,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
     const applyTemplate = (tpl: any) => {
         const applied = flattenSettings(tpl.settings);
+
         const nameField = type === 'translate' ? 'translatePipelineName' : (type === 'rewrite' ? 'rewritePipelineName' : 'voiceoverPipelineName');
         setSettings((prev: any) => ({
             ...prev, ...applied,
