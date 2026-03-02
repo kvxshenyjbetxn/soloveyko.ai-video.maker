@@ -980,7 +980,24 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 <ExistingFilesModal
                     isOpen={true}
                     data={existingFilesData}
-                    onConfirm={(skip: string[]) => { proceedAddTask(pendingTaskName, skip, existingFilesData, undefined, pendingContent); setExistingFilesData(null); }}
+                    onConfirm={(skip: string[]) => {
+                        // If some found stages are NOT in the final 'skip' list,
+                        // it means the user wants to regenerate them.
+                        const allFound = new Set<string>();
+                        existingFilesData.forEach((d: any) => (d.foundStages || []).forEach((s: string) => allFound.add(s)));
+
+                        const regenOverrides: Record<string, any> = {};
+                        if (allFound.has('voice') && !skip.includes('voice')) regenOverrides.voiceoverRegenerate = true;
+                        if (allFound.has('image') && !skip.includes('image')) {
+                            regenOverrides.imageRegeneratePrompts = true;
+                            regenOverrides.imageGooglerRegenerateImages = true;
+                            regenOverrides.imageElevenLabsImageRegenerate = true;
+                        }
+                        if (allFound.has('subtitle') && !skip.includes('subtitle')) regenOverrides.subtitleRegenerate = true;
+
+                        proceedAddTask(pendingTaskName, skip, existingFilesData, undefined, pendingContent, regenOverrides);
+                        setExistingFilesData(null);
+                    }}
                     onCancel={() => {
                         const regenOverrides = {
                             imageRegeneratePrompts: true,
