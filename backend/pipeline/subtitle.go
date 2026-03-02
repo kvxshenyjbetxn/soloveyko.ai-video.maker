@@ -71,6 +71,16 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		return nil
 	}
 
+	subtitleSrtPath := filepath.Join(finalDir, "subtitle.srt")
+	subtitleAssPath := filepath.Join(finalDir, "subtitle.ass")
+	if _, errSrt := os.Stat(subtitleSrtPath); errSrt == nil {
+		if _, errAss := os.Stat(subtitleAssPath); errAss == nil {
+			s.log("INFO", "[Pipeline] Subtitles already exist (SRT and ASS), skipping generation.", id, taskLabel)
+			s.emitStageStatus(id, "subtitle", "completed")
+			return nil
+		}
+	}
+
 	if sService == "assemblyai" {
 		s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle stage started. Service: %s", sService), id, taskLabel)
 	} else {

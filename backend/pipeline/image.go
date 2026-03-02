@@ -165,6 +165,31 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		iGroup = true
 	}
 
+	// Determine directories early
+	imagesDir := filepath.Join(finalDir, "images")
+	promptsFilePath := filepath.Join(finalDir, "prompts.txt")
+
+	// [AGGRESSIVE RESTORE CHECK]
+	// If images already exist, we skip the heavy prep (Character Detection, API prompt generation)
+	// and either skip the stage entirely or only generate missing pieces.
+	hasExistingImages := false
+	if info, err := os.Stat(imagesDir); err == nil && info.IsDir() {
+		files, _ := os.ReadDir(imagesDir)
+		for _, f := range files {
+			if !f.IsDir() {
+				ext := strings.ToLower(filepath.Ext(f.Name()))
+				if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".mp4" {
+					hasExistingImages = true
+					break
+				}
+			}
+		}
+	}
+
+	if hasExistingImages && !shouldRegeneratePrompts && !shouldSkipImage {
+		s.log("INFO", "[Pipeline] Existing images found in 'images' folder. Activating Restore Mode: Skipping heavy prep.", id, taskLabel)
+	}
+
 	s.log("INFO", fmt.Sprintf("[Pipeline] Image chunking method: %s", iGenMethod), id, taskLabel)
 
 	var baseSegments []string
@@ -215,24 +240,59 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 	// [SYNC] Save chunks to segments.json
 	chunksData, _ := json.MarshalIndent(chunks, "", "  ")
 	_ = os.WriteFile(filepath.Join(finalDir, "segments.json"), chunksData, 0644)
+	s.log("INFO", fmt.Sprintf("[Pipeline] Updated %d segments for synchronization", len(chunks)), id, taskLabel)
 
-	s.log("INFO", fmt.Sprintf("[Pipeline] Created/Updated %d segments for synchronization", len(chunks)), id, taskLabel)
-
+	// If the user explicitly requested to skip the stage in the modal
 	if shouldSkipImage {
-		s.log("INFO", "[Pipeline] Skipping image generation as requested (using existing files), but segments were updated for synchronization.", id, taskLabel)
+		s.log("INFO", "[Pipeline] Skipping image generation as requested (using existing files).", id, taskLabel)
 		s.emitStageStatus(id, "image", "completed")
 		return nil
+	}
+
+	// [FULL STAGE SKIP]
+	// If we have images for every chunk and a prompts file, we skip everything.
+	if hasExistingImages && !shouldRegeneratePrompts {
+		allFound := true
+		countImg := 0
+		countVid := 0
+		for i := 1; i <= len(chunks); i++ {
+			found := false
+			paths := []string{
+				filepath.Join(imagesDir, fmt.Sprintf("%d.png", i)),
+				filepath.Join(imagesDir, fmt.Sprintf("%d.mp4", i)),
+				filepath.Join(finalDir, fmt.Sprintf("%d.png", i)),
+				filepath.Join(finalDir, fmt.Sprintf("%d.mp4", i)),
+			}
+			for _, p := range paths {
+				if st, err := os.Stat(p); err == nil && !st.IsDir() {
+					found = true
+					if strings.HasSuffix(p, ".mp4") {
+						countVid++
+					} else {
+						countImg++
+					}
+					break
+				}
+			}
+			if !found {
+				allFound = false
+				break
+			}
+		}
+
+		if allFound {
+			s.log("SUCCESS", fmt.Sprintf("[Pipeline] All %d assets found (Images: %d, Videos: %d). Skipping generation.", len(chunks), countImg, countVid), id, taskLabel)
+			s.emitStageStatus(id, "image", "completed", fmt.Sprintf("images: %d\nvideos: %d", countImg, countVid))
+			return nil
+		}
 	}
 
 	s.log("INFO", fmt.Sprintf("[Pipeline] Image instructions: %d chunks", len(chunks)), id, taskLabel)
 
 	// Fetch OpenRouter API Key for prompt generation
 	orKeyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
-
 	orKeys := s.settings.GetOpenRouterKeys()
 	var orApiKey, orKeyName string
-
-	// First try to match the selected key
 	for _, k := range orKeys {
 		if k.ID == orKeyID {
 			orApiKey = k.Key
@@ -240,13 +300,10 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			break
 		}
 	}
-
-	// Fallback to first available key
 	if orApiKey == "" && len(orKeys) > 0 {
 		orApiKey = orKeys[0].Key
 		orKeyName = orKeys[0].Name
 	}
-
 	if orApiKey == "" {
 		s.log("ERROR", "[Pipeline] OpenRouter API Key missing! Required for interpreting prompts.", id, taskLabel)
 		return fmt.Errorf("OpenRouter API Key required")
@@ -257,12 +314,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		orModel = pSettings.ImagePromptModel
 	}
 	if orModel == "" {
-		orModels := s.settings.GetOpenRouterModels()
-		if len(orModels) > 0 {
-			orModel = orModels[0]
-		} else {
-			orModel = "google/gemini-2.5-flash"
-		}
+		orModel = "google/gemini-2.0-flash"
 	}
 
 	temp := 0.7
@@ -271,7 +323,6 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 	} else if pSettings.ImagePromptTemperature > 0 {
 		temp = pSettings.ImagePromptTemperature
 	}
-
 	tokens := 0
 	if val, ok := settings["imagePromptMaxTokens"].(float64); ok {
 		tokens = int(val)
@@ -284,61 +335,61 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		promptTemplate = pSettings.ImagePrompt
 	}
 
-	// [CHARACTER DETECTION]
-	detChars, ok := settings["imageDetermineCharacters"].(bool)
-	if !ok {
-		detChars = pSettings.ImageDetermineCharacters
-	}
-	if detChars && strings.Contains(promptTemplate, "{{characters}}") {
-		detPrompt, _ := settings["imageDetermineCharactersPrompt"].(string)
-		if detPrompt == "" {
-			detPrompt = pSettings.ImageDetermineCharactersPrompt
+	// [CHARACTER DETECTION] - Skip if we have images and are not regenerating
+	if !hasExistingImages || shouldRegeneratePrompts {
+		detChars, ok := settings["imageDetermineCharacters"].(bool)
+		if !ok {
+			detChars = pSettings.ImageDetermineCharacters
 		}
-
-		if detPrompt != "" {
-			s.log("INFO", "[Pipeline] Determining characters from text...", id, taskLabel)
-			statusText := "determining characters..."
-			if iMode == "memory" {
-				statusText = "recalling context..."
+		if detChars && strings.Contains(promptTemplate, "{{characters}}") {
+			detPrompt, _ := settings["imageDetermineCharactersPrompt"].(string)
+			if detPrompt == "" {
+				detPrompt = pSettings.ImageDetermineCharactersPrompt
 			}
-			s.emitStageStatus(id, "image", "running", statusText)
-
-			// We use the same model, temp and tokens as for prompt generation
-			charRes, err := s.openRouter.Chat(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, detPrompt+"\n\n"+processedText, temp, tokens)
-			if err != nil {
-				s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to determine characters: %v", err), id, taskLabel)
-			} else {
-				charDesc := strings.TrimSpace(charRes)
-				s.log("SUCCESS", "[Pipeline] Characters determined and added to instruction template", id, taskLabel)
-				promptTemplate = strings.ReplaceAll(promptTemplate, "{{characters}}", charDesc)
+			if detPrompt != "" {
+				s.log("INFO", "[Pipeline] Determining characters from text...", id, taskLabel)
+				s.emitStageStatus(id, "image", "running", "determining characters...")
+				charRes, err := s.openRouter.Chat(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, detPrompt+"\n\n"+processedText, temp, tokens)
+				if err != nil {
+					s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to determine characters: %v", err), id, taskLabel)
+				} else {
+					charDesc := strings.TrimSpace(charRes)
+					s.log("SUCCESS", "[Pipeline] Characters determined and added to instruction template", id, taskLabel)
+					promptTemplate = strings.ReplaceAll(promptTemplate, "{{characters}}", charDesc)
+				}
 			}
 		}
+	} else {
+		// Restore Mode: Remove placeholder even if we don't detect
+		promptTemplate = strings.ReplaceAll(promptTemplate, "{{characters}}", "")
 	}
 
 	var loadedExisting bool
 	var prompts []string
-	var promptsFilePath string
 
 	if shouldRegeneratePrompts {
 		s.log("INFO", "[Pipeline] User requested to regenerate all files, will not load existing prompts.", id, taskLabel)
-		promptsFilePath = filepath.Join(finalDir, "prompts.txt")
 		prompts = make([]string, len(chunks))
 	} else {
-		promptsFilePath = filepath.Join(finalDir, "prompts.txt")
-
-		if info, err := os.Stat(promptsFilePath); err == nil && !info.IsDir() {
-			content, err := os.ReadFile(promptsFilePath)
-			if err == nil {
-				pStrs := strings.Split(string(content), "\n\n--------------------\n\n")
-				if len(pStrs) == len(chunks) {
-					prompts = pStrs
-					loadedExisting = true
-					s.log("INFO", "[Pipeline] Loaded existing image prompts from prompts.txt", id, taskLabel)
-					s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d", len(chunks), len(chunks)))
+		if content, err := os.ReadFile(promptsFilePath); err == nil {
+			pStrs := strings.Split(string(content), "\n\n--------------------\n\n")
+			prompts = make([]string, len(chunks))
+			count := 0
+			for i := 0; i < len(chunks) && i < len(pStrs); i++ {
+				prompts[i] = strings.TrimSpace(pStrs[i])
+				if prompts[i] != "" {
+					count++
 				}
 			}
+			if count >= len(chunks) {
+				loadedExisting = true
+				s.log("INFO", "[Pipeline] Loaded all existing image prompts from prompts.txt", id, taskLabel)
+				s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d", len(chunks), len(chunks)))
+			} else if count > 0 {
+				s.log("INFO", fmt.Sprintf("[Pipeline] Loaded %d/%d existing image prompts, will generate missing ones.", count, len(chunks)), id, taskLabel)
+			}
 		}
-		if !loadedExisting {
+		if !loadedExisting && len(prompts) == 0 {
 			prompts = make([]string, len(chunks))
 		}
 	}
@@ -386,7 +437,21 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		var generatedPromptsCount int
 
 		s.log("INFO", fmt.Sprintf("[Pipeline] Generating %d prompts via OpenRouter (%s)...", len(chunks), orModel), id, taskLabel)
+		// Update initial count for already loaded prompts
+		loadedCount := 0
+		for _, p := range prompts {
+			if p != "" {
+				loadedCount++
+			}
+		}
+		generatedPromptsCount = loadedCount
+
 		for i, chunk := range chunks {
+			// Skip if already loaded from file
+			if prompts[i] != "" {
+				continue
+			}
+
 			wg.Add(1)
 			go func(index int, textChunk string) {
 				defer wg.Done()
@@ -457,7 +522,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 	}
 
 	// Create images dir
-	imagesDir := filepath.Join(finalDir, "images")
+	imagesDir = filepath.Join(finalDir, "images")
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
 		return fmt.Errorf("failed to create images dir: %v", err)
 	}
@@ -520,7 +585,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 		s.log("INFO", fmt.Sprintf("[Pipeline] Image Generation started. Service: %s, Model: %s", iService, iModel), id, taskLabel)
 		s.log("INFO", fmt.Sprintf("[Pollinations] Model: %s, Size: %dx%d, NoLogo: %t, Enhance: %t", iModel, int(iWidth), int(iHeight), iNoLogo, iEnhance), id, taskLabel)
-		s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: 0/%d\nvideos: 0/0", validPrompts, validPrompts, validPrompts))
+		s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: 0\nvideos: 0", validPrompts))
 
 		successCount := 0
 		for i, prompt := range prompts {
@@ -533,6 +598,14 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			imgName := fmt.Sprintf("%d.png", i+1)
 			imgPath := filepath.Join(imagesDir, imgName)
 
+			// Check if file already exists
+			if _, err := os.Stat(imgPath); err == nil {
+				s.log("INFO", fmt.Sprintf("[Pollinations] Image %s already exists, skipping generation.", imgName), id, taskLabel)
+				successCount++
+				s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: %d\nvideos: 0", validPrompts, successCount))
+				continue
+			}
+
 			s.log("INFO", fmt.Sprintf("[Pollinations] Sending request for Image %s...", imgName), id, taskLabel)
 			err := s.pollinations.GenerateImage(iApiKey, prompt, iModel, int(iWidth), int(iHeight), iNoLogo, iEnhance, imgPath)
 			if err != nil {
@@ -543,13 +616,13 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				if s.OnImageGenerated != nil {
 					s.OnImageGenerated(taskName, subName, imgName, imgPath, prompt)
 				}
-				s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: 0/0", validPrompts, validPrompts, successCount, validPrompts))
+				s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: %d\nvideos: 0", validPrompts, successCount))
 				s.log("SUCCESS", fmt.Sprintf("[Pollinations] Success: Generated %s", imgName), id, taskLabel)
 			}
 		}
 
 		if validPrompts > 0 && successCount == 0 {
-			s.emitStageStatus(id, "image", "failed", fmt.Sprintf("prompts: %d/%d\nimages: 0/%d\nvideos: 0/0", validPrompts, validPrompts, validPrompts))
+			s.emitStageStatus(id, "image", "failed", fmt.Sprintf("prompts: %d\nimages: 0\nvideos: 0", validPrompts))
 			return fmt.Errorf("failed to generate any images")
 		}
 	} else if iService == "googler" {
@@ -668,7 +741,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		} else {
 			s.log("INFO", fmt.Sprintf("[Googler] Model: %s, Aspect Ratio: %s", iModel, iRatio), id, taskLabel)
 		}
-		s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: 0/%d\nvideos: 0/%d", validPrompts, validPrompts, totalImages, totalVideos))
+		s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: 0\nvideos: 0", validPrompts))
 
 		successCount := 0
 		imagesCount := 0
@@ -695,6 +768,35 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				imgPath := filepath.Join(imagesDir, imgName)
 				vidPath := filepath.Join(imagesDir, vidName)
 
+				// Skip if already exists
+				if isVideo {
+					if _, err := os.Stat(vidPath); err == nil {
+						imgMu.Lock()
+						s.log("INFO", fmt.Sprintf("[Googler] [%d] Video %s already exists, skipping.", aIdx, vidName), id, taskLabel)
+						successCount++
+						videosCount++
+						if s.OnImageGenerated != nil {
+							s.OnImageGenerated(taskName, subName, vidName, vidPath, p)
+						}
+						s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: %d\nvideos: %d", validPrompts, imagesCount, videosCount))
+						imgMu.Unlock()
+						return
+					}
+				} else {
+					if _, err := os.Stat(imgPath); err == nil {
+						imgMu.Lock()
+						s.log("INFO", fmt.Sprintf("[Googler] [%d] Image %s already exists, skipping.", aIdx, imgName), id, taskLabel)
+						successCount++
+						imagesCount++
+						if s.OnImageGenerated != nil {
+							s.OnImageGenerated(taskName, subName, imgName, imgPath, p)
+						}
+						s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: %d\nvideos: %d", validPrompts, imagesCount, videosCount))
+						imgMu.Unlock()
+						return
+					}
+				}
+
 				// Case A: Text-to-Video
 				if isVideo && iVideoMode == "text" {
 					s.log("INFO", fmt.Sprintf("[Googler] [%d] START Text-to-Video: %s...", aIdx, vidName), id, taskLabel)
@@ -709,7 +811,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 						if s.OnImageGenerated != nil {
 							s.OnImageGenerated(taskName, subName, vidName, vidPath, p)
 						}
-						s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: %d/%d", validPrompts, validPrompts, imagesCount, totalImages, videosCount, totalVideos))
+						s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: %d\nvideos: %d", validPrompts, imagesCount, videosCount))
 						s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Video generation: %s", aIdx, vidName), id, taskLabel)
 					}
 					imgMu.Unlock()
@@ -788,7 +890,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		imgMu.Unlock()
 
 		if validPrompts > 0 && finalSuccess == 0 {
-			s.emitStageStatus(id, "image", "failed", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: %d/%d", validPrompts, validPrompts, finalImages, totalImages, finalVideos, totalVideos))
+			s.emitStageStatus(id, "image", "failed", fmt.Sprintf("prompts: %d\nimages: %d\nvideos: %d", validPrompts, finalImages, finalVideos))
 			return fmt.Errorf("failed to generate any media")
 		}
 
@@ -828,7 +930,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 		s.log("INFO", fmt.Sprintf("[Pipeline] Image Generation started. Service: %s", iService), id, taskLabel)
 		s.log("INFO", fmt.Sprintf("[ElevenLabs Image] Aspect Ratio: %s", iRatio), id, taskLabel)
-		s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: 0/%d\nvideos: 0/0", validPrompts, validPrompts, validPrompts))
+		s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: 0\nvideos: 0", validPrompts))
 
 		successCount := 0
 		imagesCount := 0
@@ -846,6 +948,20 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				imgName := fmt.Sprintf("%d.png", idx+1)
 				imgPath := filepath.Join(imagesDir, imgName)
 
+				// Check if file already exists
+				if _, err := os.Stat(imgPath); err == nil {
+					imgMu.Lock()
+					s.log("INFO", fmt.Sprintf("[ElevenLabs Image] Image %s already exists, skipping generation.", imgName), id, taskLabel)
+					successCount++
+					imagesCount++ // Increment imagesCount as well for existing images
+					if s.OnImageGenerated != nil {
+						s.OnImageGenerated(taskName, subName, imgName, imgPath, p)
+					}
+					s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: %d\nvideos: 0", validPrompts, imagesCount))
+					imgMu.Unlock()
+					return // Use return to exit the goroutine
+				}
+
 				s.log("INFO", fmt.Sprintf("[ElevenLabs Image] Sending request for Image %s | Ratio: %s", imgName, iRatio), id, taskLabel)
 				err := s.elevenLabsImage.GenerateImage(iApiKey, p, iRatio, imgPath)
 
@@ -858,7 +974,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 					if s.OnImageGenerated != nil {
 						s.OnImageGenerated(taskName, subName, imgName, imgPath, p)
 					}
-					s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d/%d\nimages: %d/%d\nvideos: 0/0", validPrompts, validPrompts, imagesCount, validPrompts))
+					s.emitStageStatus(id, "image", "running", fmt.Sprintf("prompts: %d\nimages: %d\nvideos: 0", validPrompts, imagesCount))
 					s.log("SUCCESS", fmt.Sprintf("[ElevenLabs Image] Success: Generated and saved %s", imgName), id, taskLabel)
 				}
 				imgMu.Unlock()
@@ -867,7 +983,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		imageWg.Wait()
 
 		if validPrompts > 0 && successCount == 0 {
-			s.emitStageStatus(id, "image", "failed", fmt.Sprintf("prompts: %d/%d\nimages: 0/%d\nvideos: 0/0", validPrompts, validPrompts, validPrompts))
+			s.emitStageStatus(id, "image", "failed", fmt.Sprintf("prompts: %d\nimages: 0\nvideos: 0", validPrompts))
 			return fmt.Errorf("failed to generate any images")
 		}
 	} else if iService != "" {

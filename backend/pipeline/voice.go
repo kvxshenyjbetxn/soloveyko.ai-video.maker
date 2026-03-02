@@ -25,6 +25,14 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		return nil
 	}
 
+	voiceFilePath := filepath.Join(finalDir, "voice.mp3")
+	if _, err := os.Stat(voiceFilePath); err == nil {
+		s.log("INFO", "[Pipeline] voice.mp3 already exists, skipping synthesis.", id, taskLabel)
+		duration, _ := utils.GetAudioDuration(voiceFilePath)
+		s.emitStageStatus(id, "voice", "completed", duration)
+		return nil
+	}
+
 	vService, _ := settings["voiceoverService"].(string)
 	if vService == "" {
 		vService = pSettings.VoiceoverService

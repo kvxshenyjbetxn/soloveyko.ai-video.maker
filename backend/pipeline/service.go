@@ -185,6 +185,38 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 	var skippedStages []string
 	hasSkippedInfo := false
+
+	// Sync template-specific settings to our local pSettings copy
+	// We MUST be strict here: if a template is used (subName != ""), we prioritize its settings.
+	// If the template doesn't have these keys, we should probably default to disabled/empty
+	// for THIS task to avoid leakage from global settings.
+	if val, ok := settings["customStagesEnabled"].(bool); ok {
+		pSettings.CustomStagesEnabled = val
+	} else if subName != "" {
+		// If template is used but flag is missing, default to false for safety
+		pSettings.CustomStagesEnabled = false
+	}
+
+	if val, ok := settings["customStages"]; ok {
+		if slice, ok := val.([]interface{}); ok {
+			var stages []utils.CustomStage
+			for _, v := range slice {
+				if m, ok := v.(map[string]interface{}); ok {
+					var stage utils.CustomStage
+					jsonData, _ := json.Marshal(m)
+					json.Unmarshal(jsonData, &stage)
+					if stage.ID != "" {
+						stages = append(stages, stage)
+					}
+				}
+			}
+			pSettings.CustomStages = stages
+		}
+	} else if subName != "" {
+		// If template is used but stages are missing, clear them to avoid global inheritance
+		pSettings.CustomStages = []utils.CustomStage{}
+	}
+
 	if val, ok := settings["skippedStages"]; ok {
 		hasSkippedInfo = true
 		if slice, ok := val.([]interface{}); ok {
@@ -198,7 +230,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 
 	if !hasSkippedInfo {
 		if _, err := os.Stat(finalDir); err == nil {
-			data := s.CheckExistingFiles(id, finalDir, taskType)
+			data := s.CheckExistingFiles(id, finalDir, taskType, settings)
 			if len(data.FoundStages) > 0 {
 				resChan := make(chan []string)
 				s.pendingSkip.Store(id, resChan)
@@ -221,6 +253,8 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	} else {
 		s.log("INFO", fmt.Sprintf("[Pipeline] Using pre-defined skipped stages: %v", skippedStages), id, taskLabel)
 	}
+
+	settings["skippedStages"] = skippedStages
 
 	if s.OnTaskStatus != nil {
 		s.OnTaskStatus(id, "running", 5)
@@ -494,30 +528,11 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 }
 
 func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskType string, taskName string, originalText string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) {
-	var stages []utils.CustomStage
-	if val, ok := settings["customStages"]; ok {
-		if slice, ok := val.([]interface{}); ok {
-			for _, v := range slice {
-				if m, ok := v.(map[string]interface{}); ok {
-					var stage utils.CustomStage
-					jsonData, _ := json.Marshal(m)
-					json.Unmarshal(jsonData, &stage)
-					stages = append(stages, stage)
-				}
-			}
-		}
-	}
-
-	var enabled bool
-	if val, ok := settings["customStagesEnabled"]; ok {
-		if b, ok := val.(bool); ok {
-			enabled = b
-		}
-	}
-
-	if !enabled || len(stages) == 0 {
+	if !pSettings.CustomStagesEnabled || len(pSettings.CustomStages) == 0 {
 		return
 	}
+
+	stages := pSettings.CustomStages
 
 	s.log("INFO", fmt.Sprintf("[Custom] Processing %d custom stages...", len(stages)), id, taskLabel)
 
@@ -562,6 +577,19 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskT
 			continue
 		}
 
+		// Calculate safe name early for file existence check
+		safeName := utils.SanitizeFilename(stage.Name)
+		if safeName == "" {
+			safeName = "custom_stage_" + stage.ID
+		}
+
+		// Check if file already exists
+		savePath := filepath.Join(finalDir, safeName+".txt")
+		if _, err := os.Stat(savePath); err == nil {
+			s.log("INFO", fmt.Sprintf("[Custom] Stage %s already exists (%s), skipping generation.", stage.Name, safeName+".txt"), id, taskLabel)
+			continue
+		}
+
 		s.log("INFO", fmt.Sprintf("[Custom] Running stage: %s", stage.Name), id, taskLabel)
 
 		var sourceContent string
@@ -597,11 +625,6 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskT
 		}
 
 		// Save result to file
-		safeName := utils.SanitizeFilename(stage.Name)
-		if safeName == "" {
-			safeName = "custom_stage_" + stage.ID
-		}
-		savePath := filepath.Join(finalDir, safeName+".txt")
 		err = os.WriteFile(savePath, []byte(result), 0644)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[Custom] Failed to save result for %s: %v", stage.Name, err), id, taskLabel)
@@ -744,9 +767,10 @@ type ExistingFilesData struct {
 	PromptCount   int      `json:"promptCount"`
 	TextChars     int      `json:"textChars"`
 	VoiceDuration string   `json:"voiceDuration"`
+	CustomCount   int      `json:"customCount"`
 }
 
-func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskType string) ExistingFilesData {
+func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskType string, settings map[string]interface{}) ExistingFilesData {
 	data := ExistingFilesData{
 		ID:          id,
 		FoundStages: []string{},
@@ -823,6 +847,42 @@ func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskTyp
 		data.FoundStages = append(data.FoundStages, "image")
 	}
 
+	// 5. Check Custom Stages
+	if settings != nil {
+		if val, ok := settings["customStages"]; ok {
+			var stages []utils.CustomStage
+			if slice, ok := val.([]interface{}); ok {
+				for _, v := range slice {
+					if m, ok := v.(map[string]interface{}); ok {
+						var cs utils.CustomStage
+						jsonData, _ := json.Marshal(m)
+						json.Unmarshal(jsonData, &cs)
+						stages = append(stages, cs)
+					}
+				}
+			}
+
+			foundCustom := 0
+			for _, cs := range stages {
+				if !cs.Enabled {
+					continue
+				}
+				safeName := utils.SanitizeFilename(cs.Name)
+				if safeName == "" {
+					safeName = "custom_stage_" + cs.ID
+				}
+				p := filepath.Join(finalDir, safeName+".txt")
+				if info, err := os.Stat(p); err == nil && !info.IsDir() {
+					foundCustom++
+				}
+			}
+			if foundCustom > 0 {
+				data.CustomCount = foundCustom
+				data.FoundStages = append(data.FoundStages, "custom")
+			}
+		}
+	}
+
 	return data
 }
 
@@ -868,10 +928,10 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 
 	// Backward compatibility check: if Default dir doesn't exist OR is empty, check parent
 	if templateDir == "Default" {
-		dataPrimary := s.CheckExistingFiles("tmp", finalDir, taskType)
+		dataPrimary := s.CheckExistingFiles("tmp", finalDir, taskType, settings)
 		if len(dataPrimary.FoundStages) == 0 {
 			parentDir := filepath.Join(outPath, safeTaskName)
-			dataParent := s.CheckExistingFiles("tmp", parentDir, taskType)
+			dataParent := s.CheckExistingFiles("tmp", parentDir, taskType, settings)
 			if len(dataParent.FoundStages) > 0 {
 				return parentDir
 			}

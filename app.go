@@ -921,7 +921,7 @@ func (a *App) CheckExistingTasks(tasks []map[string]interface{}) ([]pipeline.Exi
 		a.LogToUI("INFO", fmt.Sprintf("[Check] Checking directory for %s - %s: %s", taskName, subName, finalDir))
 
 		if _, err := os.Stat(finalDir); err == nil {
-			data := a.pipeline.CheckExistingFiles("check", finalDir, taskType)
+			data := a.pipeline.CheckExistingFiles("check", finalDir, taskType, settings)
 			if len(data.FoundStages) > 0 {
 				data.ID = subName // Use subName as ID to identify which template this is
 				results = append(results, data)
@@ -944,7 +944,7 @@ func (a *App) CheckExistingTask(taskName string, taskType string, settings map[s
 	a.LogToUI("INFO", fmt.Sprintf("[Check] Checking directory: %s", finalDir))
 
 	if _, err := os.Stat(finalDir); err == nil {
-		data := a.pipeline.CheckExistingFiles("check", finalDir, taskType)
+		data := a.pipeline.CheckExistingFiles("check", finalDir, taskType, settings)
 		a.LogToUI("INFO", fmt.Sprintf("[Check] Found stages: %v", data.FoundStages))
 		if len(data.FoundStages) > 0 {
 			return &data, nil
