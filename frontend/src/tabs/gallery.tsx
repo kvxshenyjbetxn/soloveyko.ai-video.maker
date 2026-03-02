@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import { GetGalleryImages } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
@@ -20,17 +20,46 @@ import { RegenerateModal } from '../components/RegenerateModal';
 const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick, onSelectionToggle, onDelete, onRegenerate, isRegenerating }: any) => {
     const isVideo = img.url.toLowerCase().endsWith('.mp4');
     const [showPrompt, setShowPrompt] = useState(false);
+    const [isInView, setIsInView] = useState(false);
+    const cardRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setIsInView(true);
+                    observer.unobserve(entry.target);
+                }
+            },
+            { rootMargin: '200px' } // Load slightly before they come into view
+        );
+
+        if (cardRef.current) {
+            observer.observe(cardRef.current);
+        }
+
+        return () => {
+            if (cardRef.current) {
+                observer.unobserve(cardRef.current);
+            }
+        };
+    }, []);
 
     return (
-        <div className={`gallery-card ${isSelected ? 'selected' : ''}`}
+        <div ref={cardRef} className={`gallery-card ${isSelected ? 'selected' : ''}`}
             onClick={() => onCardClick(img)}>
             <div className="media-container">
-                {isVideo ? (
+                {!isInView ? (
+                    <div className="media-placeholder">
+                        <div className="spinner-small"></div>
+                    </div>
+                ) : isVideo ? (
                     <video
                         src={`${img.url}?v=${Date.now()}`}
                         muted
                         loop
                         playsInline
+                        preload="metadata"
                         onMouseEnter={e => e.currentTarget.play()}
                         onMouseLeave={e => {
                             e.currentTarget.pause();

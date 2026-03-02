@@ -303,6 +303,8 @@ func (s *GooglerService) isRetryable(err error) bool {
 		strings.Contains(errMsg, "no video") ||
 		strings.Contains(errMsg, "internal error") ||
 		strings.Contains(errMsg, "rate limit") ||
+		strings.Contains(errMsg, "tool error") ||
+		strings.Contains(errMsg, "api error") ||
 		strings.Contains(errMsg, "429") ||
 		strings.Contains(errMsg, "connection") ||
 		strings.Contains(errMsg, "500") ||

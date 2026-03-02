@@ -364,6 +364,24 @@
     transform: scale(1.05);
 }
 
+.media-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1a1a1e;
+}
+
+.spinner-small {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(var(--accent-primary-rgb), 0.1);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
 .card-loading-spinner {
     position: absolute;
     top: 0;
