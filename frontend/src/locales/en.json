@@ -671,6 +671,7 @@
         "loading": "Loading...",
         "yes": "Yes",
         "no": "No",
+        "no_all": "No",
         "ready": "Ready",
         "default": "Default",
         "pin": "Pin",
