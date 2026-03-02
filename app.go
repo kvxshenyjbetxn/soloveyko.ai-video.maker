@@ -975,6 +975,11 @@ func (a *App) GetGalleryImages() []utils.GalleryTask {
 	return a.galleryManager.GetGalleryData()
 }
 
+// RegenerateGalleryImage regenerates a single image in the gallery
+func (a *App) RegenerateGalleryImage(imgPath string, prompt string, service string, settings map[string]interface{}) (string, error) {
+	return a.pipeline.RegenerateImage(imgPath, prompt, service, settings)
+}
+
 // DeleteGalleryImage removes an image from session memory and deletes the file from disk
 func (a *App) DeleteGalleryImage(imgPath string) bool {
 	// 1. Remove from Memory

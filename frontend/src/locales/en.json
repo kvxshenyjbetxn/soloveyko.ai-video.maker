@@ -93,7 +93,20 @@
         "refresh": "Refresh",
         "delete_confirm": "Delete this image from disk?",
         "delete_bulk_confirm": "Delete selected images from disk?",
-        "selected": "Selected"
+        "selected": "Selected",
+        "regenerate": "Regenerate",
+        "regenerate_modal": {
+            "title": "Regenerate Media",
+            "service": "Service",
+            "prompt": "Prompt",
+            "generate": "Generate",
+            "pollinations_model": "Pollinations Model",
+            "googler_model": "Googler Model",
+            "aspect_ratio": "Aspect Ratio",
+            "reference_image": "Style Reference",
+            "select_image": "Select Image",
+            "change_image": "Change Image"
+        }
     },
     "text": {
         "translate": "Translate",

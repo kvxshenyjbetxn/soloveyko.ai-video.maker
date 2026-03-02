@@ -991,3 +991,155 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 	return nil
 }
+
+// RegenerateImage regenerates a single image/video for a given gallery path
+func (s *PipelineService) RegenerateImage(imgPath string, prompt string, service string, settings map[string]interface{}) (string, error) {
+	s.log("INFO", fmt.Sprintf("[Regenerate] Starting for: %s", filepath.Base(imgPath)), "", "Regeneration")
+
+	// Determine directories
+	imagesDir := filepath.Dir(imgPath)
+	// TaskName and SubName are harder to guess, so we use placeholders or try to deduce
+	// Path is usually .../Outputs/{TaskName}/{SubName}/images/{Name}.png
+	parentDir := filepath.Dir(imagesDir)
+	subName := filepath.Base(parentDir)
+	taskDir := filepath.Dir(parentDir)
+	taskName := filepath.Base(taskDir)
+
+	// Determine target extension
+	targetExt := ".png"
+	if service == "googler" {
+		isVid, _ := settings["imageGooglerVideoEnabled"].(bool)
+		if isVid {
+			targetExt = ".mp4"
+		}
+	}
+
+	// Determine new path
+	currentExt := filepath.Ext(imgPath)
+	imgBase := strings.TrimSuffix(filepath.Base(imgPath), currentExt)
+	newPath := filepath.Join(imagesDir, imgBase+targetExt)
+
+	// If path changed (e.g. png -> mp4), remove old one
+	if filepath.Clean(newPath) != filepath.Clean(imgPath) {
+		os.Remove(imgPath)
+		if s.OnImageDeleted != nil {
+			s.OnImageDeleted(imgPath)
+		}
+	}
+
+	var err error
+	switch service {
+	case "pollinations":
+		err = s.regeneratePollinations(prompt, settings, newPath)
+	case "googler":
+		err = s.regenerateGoogler(imgPath, prompt, settings, newPath)
+	case "elevenlabs":
+		err = s.regenerateElevenLabs(prompt, settings, newPath)
+	default:
+		return "", fmt.Errorf("unknown service: %s", service)
+	}
+
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[Regenerate] Failed: %v", err), "", "Regeneration")
+		return "", err
+	}
+
+	s.log("SUCCESS", fmt.Sprintf("[Regenerate] Completed: %s", filepath.Base(newPath)), "", "Regeneration")
+
+	// Trigger UI update
+	if s.OnImageGenerated != nil {
+		s.OnImageGenerated(taskName, subName, filepath.Base(newPath), newPath, prompt)
+	}
+
+	return newPath, nil
+}
+
+func (s *PipelineService) regeneratePollinations(prompt string, settings map[string]interface{}, outPath string) error {
+	iKeyID, _ := settings["imagePollinationsKeyID"].(string)
+	iApiKey := ""
+	iKeys := s.settings.GetPollinationsKeys()
+	for _, k := range iKeys {
+		if k.ID == iKeyID {
+			iApiKey = k.Key
+			break
+		}
+	}
+	if iApiKey == "" && len(iKeys) > 0 {
+		iApiKey = iKeys[0].Key
+	}
+
+	iModel, _ := settings["imageModel"].(string)
+	iWidth, _ := settings["imageWidth"].(float64)
+	if iWidth == 0 {
+		iWidth = 1920
+	}
+	iHeight, _ := settings["imageHeight"].(float64)
+	if iHeight == 0 {
+		iHeight = 1080
+	}
+	iNoLogo, _ := settings["imageNoLogo"].(bool)
+	iEnhance, _ := settings["imageEnhance"].(bool)
+
+	s.log("INFO", fmt.Sprintf("[Pollinations] Regenerating with model: %s, size: %dx%d", iModel, int(iWidth), int(iHeight)), "", "Regeneration")
+	return s.pollinations.GenerateImage(iApiKey, prompt, iModel, int(iWidth), int(iHeight), iNoLogo, iEnhance, outPath)
+}
+
+func (s *PipelineService) regenerateGoogler(imgPath string, prompt string, settings map[string]interface{}, outPath string) error {
+	iApiKey := s.googler.GetAPIKey()
+	iModel, _ := settings["imageGooglerModel"].(string)
+	iRatio, _ := settings["imageGooglerAspectRatio"].(string)
+	if iRatio == "" {
+		iRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE"
+	}
+
+	iVideoEnabled, _ := settings["imageGooglerVideoEnabled"].(bool)
+	iVideoModel, _ := settings["imageGooglerVideoModel"].(string)
+	iVideoUpscale, _ := settings["imageGooglerVideoUpscale"].(bool)
+	iRefImage, _ := settings["imageGooglerReferenceImage"].(string)
+	iStrictMode, _ := settings["imageGooglerRemixStrictMode"].(bool)
+
+	// Build reference images for remix or animation
+	var refImages []bapi.ReferenceImage
+	if iRefImage != "" && iModel == "whisk" {
+		b64, err := utils.GetImageAsBase64(iRefImage)
+		if err == nil {
+			refImages = append(refImages, bapi.ReferenceImage{
+				Category: "MEDIA_CATEGORY_STYLE",
+				Image:    b64,
+			})
+		}
+	}
+
+	if iVideoEnabled {
+		// If video enabled, we use current image as SOURCE if it's there
+		sourceB64 := ""
+		if imgPath != "" && !strings.Contains(strings.ToLower(filepath.Ext(imgPath)), ".mp4") {
+			b64, err := utils.GetImageAsBase64(imgPath)
+			if err == nil {
+				sourceB64 = b64
+			}
+		}
+
+		s.log("INFO", fmt.Sprintf("[Googler] Regenerating Video. Model: %s, Ratio: %s, FromImage: %v", iVideoModel, iRatio, sourceB64 != ""), "", "Regeneration")
+		return s.googler.GenerateVideo(iApiKey, iVideoModel, prompt, sourceB64, iRatio, iVideoUpscale, outPath)
+	} else {
+		if len(refImages) > 0 {
+			s.log("INFO", fmt.Sprintf("[Googler] Regenerating Image (Remix). Model: %s, Ratio: %s", iModel, iRatio), "", "Regeneration")
+			return s.googler.RemixImage(iApiKey, prompt, refImages, iRatio, iStrictMode, outPath)
+		} else {
+			s.log("INFO", fmt.Sprintf("[Googler] Regenerating Image. Model: %s, Ratio: %s", iModel, iRatio), "", "Regeneration")
+			return s.googler.GenerateImage(iApiKey, iModel, prompt, iRatio, outPath)
+		}
+	}
+}
+
+func (s *PipelineService) regenerateElevenLabs(prompt string, settings map[string]interface{}, outPath string) error {
+	iApiKey := s.elevenLabsImage.GetAPIKey() // Use default key if not provided in settings
+	iRatio, _ := settings["elevenLabsImageAspectRatio"].(string)
+	if iRatio == "" {
+		iRatio = "landscape"
+	}
+
+	s.log("INFO", fmt.Sprintf("[ElevenLabs] Regenerating Image. Ratio: %s", iRatio), "", "Regeneration")
+	return s.elevenLabsImage.GenerateImage(iApiKey, prompt, iRatio, outPath)
+}

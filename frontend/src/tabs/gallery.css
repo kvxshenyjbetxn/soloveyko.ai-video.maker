@@ -135,6 +135,27 @@
     transition: all 0.2s ease;
 }
 
+.bulk-btn-regenerate {
+    background: var(--accent-primary, #ff00c3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 4px 12px rgba(var(--accent-primary-rgb), 0.3);
+    transition: all 0.2s ease;
+}
+
+.bulk-btn-regenerate:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(var(--accent-primary-rgb), 0.5);
+}
+
 .bulk-btn-delete:hover {
     background: #ef4444;
     transform: translateY(-1px);
@@ -341,7 +362,30 @@
 .gallery-card:hover .media-container img,
 .gallery-card:hover .media-container video {
     transform: scale(1.05);
-    /* Легкий зум без сильного кропу */
+}
+
+.card-loading-spinner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+    border-radius: 12px;
+}
+
+.spinner-medium {
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    animation: spin 0.8s linear infinite;
 }
 
 .media-overlay {
@@ -412,6 +456,26 @@
 
 .card-prompt-btn:hover,
 .card-prompt-btn.active {
+    background: var(--accent-primary);
+    transform: scale(1.1);
+}
+
+.card-regenerate-btn {
+    background: rgba(var(--accent-primary-rgb), 0.8);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+}
+
+.card-regenerate-btn:hover {
     background: var(--accent-primary);
     transform: scale(1.1);
 }
@@ -665,10 +729,10 @@
     border-radius: 20px;
     padding: 12px 20px;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1);
-    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: gallerySlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes slideUp {
+@keyframes gallerySlideUp {
     from {
         transform: translate(-50%, 50px);
         opacity: 0;

@@ -99,7 +99,20 @@
     "refresh": "Оновити",
     "delete_confirm": "Видалити це зображення з диска?",
     "delete_bulk_confirm": "Видалити обрані зображення з диска?",
-    "selected": "Обрано"
+    "selected": "Обрано",
+    "regenerate": "Перегенерувати",
+    "regenerate_modal": {
+      "title": "Перегенерація зображення",
+      "service": "Сервіс",
+      "prompt": "Опис (Промт)",
+      "generate": "Генерувати",
+      "pollinations_model": "Модель Pollinations",
+      "googler_model": "Модель Googler",
+      "aspect_ratio": "Співвідношення сторін",
+      "reference_image": "Зображення для стилю",
+      "select_image": "Обрати картинку",
+      "change_image": "Змінити картинку"
+    }
   },
   "text": {
     "translate": "Переклад",

@@ -33,6 +33,9 @@ interface QueueContextType {
     resumeImageControl: () => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
     closeCompletionModal: () => void; closeImageControlNotification: () => void;
+    regeneratingPaths: Set<string>;
+    addRegeneratingPath: (path: string) => void;
+    removeRegeneratingPath: (path: string) => void;
 }
 
 const QueueContext = createContext<QueueContextType | undefined>(undefined);
@@ -49,6 +52,23 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const closeCompletionModal = () => setCompletionModal(prev => ({ ...prev, isOpen: false }));
     const closeImageControlNotification = () => setImageControlNotification({ isOpen: false });
+    const [regeneratingPaths, setRegeneratingPaths] = useState<Set<string>>(new Set());
+
+    const addRegeneratingPath = useCallback((path: string) => {
+        setRegeneratingPaths(prev => {
+            const next = new Set(prev);
+            next.add(path);
+            return next;
+        });
+    }, []);
+
+    const removeRegeneratingPath = useCallback((path: string) => {
+        setRegeneratingPaths(prev => {
+            const next = new Set(prev);
+            next.delete(path);
+            return next;
+        });
+    }, []);
 
     const updateTaskStatus = useCallback((id: string, status: TaskStatus, progress?: number, resultLength?: number) => {
         setTasks(prev => prev.map(t => t.id === id ? { ...t, status, progress: progress ?? t.progress, resultLength: resultLength ?? t.resultLength } : t));
@@ -304,7 +324,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         <QueueContext.Provider value={{
             tasks, isProcessing, completionModal, imageControlNotification,
             addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
-            updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeWithExistingFiles, closeCompletionModal, closeImageControlNotification
+            updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeWithExistingFiles, closeCompletionModal, closeImageControlNotification,
+            regeneratingPaths, addRegeneratingPath, removeRegeneratingPath
         }}>{children}</QueueContext.Provider>
     );
 };

@@ -42,6 +42,16 @@ func (m *GalleryManager) AddImage(taskName, templateName, imageName, imgPath, pr
 		m.tasks[taskName] = make(map[string][]GalleryImage)
 	}
 
+	// Remove any existing entries for this path within the template to avoid duplicates
+	existingImages := m.tasks[taskName][templateName]
+	filteredImages := make([]GalleryImage, 0, len(existingImages))
+	for _, img := range existingImages {
+		if img.Path != imgPath {
+			filteredImages = append(filteredImages, img)
+		}
+	}
+	m.tasks[taskName][templateName] = filteredImages
+
 	urlPath := filepath.ToSlash(imgPath)
 	image := GalleryImage{
 		Name:   imageName,

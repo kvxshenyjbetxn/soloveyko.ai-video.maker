@@ -13,8 +13,11 @@ interface SelectedMedia {
     prompt?: string;
 }
 
+import { RegenerateModal } from '../components/RegenerateModal';
+
+
 // Memoized Card Component
-const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick, onSelectionToggle, onDelete }: any) => {
+const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick, onSelectionToggle, onDelete, onRegenerate, isRegenerating }: any) => {
     const isVideo = img.url.toLowerCase().endsWith('.mp4');
     const [showPrompt, setShowPrompt] = useState(false);
 
@@ -24,7 +27,7 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
             <div className="media-container">
                 {isVideo ? (
                     <video
-                        src={img.url}
+                        src={`${img.url}?v=${Date.now()}`}
                         muted
                         loop
                         playsInline
@@ -35,7 +38,13 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
                         }}
                     />
                 ) : (
-                    <img src={`${img.url}?thumb=1`} alt={img.name} loading="lazy" />
+                    <img src={`${img.url}?thumb=1&v=${Date.now()}`} alt={img.name} loading="lazy" />
+                )}
+
+                {isRegenerating && (
+                    <div className="card-loading-spinner">
+                        <div className="spinner-medium"></div>
+                    </div>
                 )}
 
                 {showPrompt && img.prompt && (
@@ -81,6 +90,9 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
                             </button>
                         )}
+                        <button className="card-regenerate-btn" onClick={e => onRegenerate(img, e)} title="Regenerate">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>
+                        </button>
                     </div>
                     <div className={`card-checkbox ${isSelected ? 'checked' : ''}`} onClick={e => onSelectionToggle(img.path, e)}>
                         {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>}
@@ -93,7 +105,7 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
 });
 
 // Memoized Template Section
-const TemplateSection = React.memo(({ tpl, taskName, isCollapsed, onToggle, isSelectionMode, selectedPaths, onCardClick, onSelectionToggle, onDelete }: any) => {
+const TemplateSection = React.memo(({ tpl, taskName, isCollapsed, onToggle, isSelectionMode, selectedPaths, onCardClick, onSelectionToggle, onDelete, onRegenerate, regeneratingPaths }: any) => {
     return (
         <div className={`template-section ${isCollapsed ? 'is-collapsed' : ''}`}>
             <div className="template-header" onClick={onToggle}>
@@ -115,6 +127,8 @@ const TemplateSection = React.memo(({ tpl, taskName, isCollapsed, onToggle, isSe
                             onCardClick={onCardClick}
                             onSelectionToggle={onSelectionToggle}
                             onDelete={onDelete}
+                            onRegenerate={onRegenerate}
+                            isRegenerating={regeneratingPaths?.has(img.path)}
                         />
                     ))}
                 </div>
@@ -133,7 +147,12 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
     const [loading, setLoading] = useState(true);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
 
-    const { tasks: queueTasks, resumeImageControl } = useQueue();
+    // Regeneration modal state
+    const [isRegModalOpen, setIsRegModalOpen] = useState(false);
+    const [regMedia, setRegMedia] = useState<any>(null);
+    const [isBulkReg, setIsBulkReg] = useState(false);
+
+    const { tasks: queueTasks, resumeImageControl, regeneratingPaths, addRegeneratingPath, removeRegeneratingPath } = useQueue();
     const isAwaitingControl = useMemo(() => queueTasks.some(t => t.isAwaitingImageControl), [queueTasks]);
 
     const handleContinueProcessing = async () => {
@@ -255,6 +274,51 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
         }
     }, [isSelectionMode, toggleImageSelection]);
 
+    const handleOpenRegenerate = useCallback((img: any, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setRegMedia(img);
+        setIsBulkReg(false);
+        setIsRegModalOpen(true);
+    }, []);
+
+    const handleOpenBulkRegenerate = useCallback(() => {
+        if (selectedPaths.size === 0) return;
+        const firstPath = Array.from(selectedPaths)[0];
+        const firstMedia = flatImages.find(img => img.path === firstPath);
+        setRegMedia(firstMedia || null);
+        setIsBulkReg(true);
+        setIsRegModalOpen(true);
+    }, [selectedPaths, flatImages]);
+
+    const handleRegenerateAction = useCallback(async (prompt: string, service: string, settings: any) => {
+        const pathsToRegenerate = isBulkReg ? Array.from(selectedPaths) : [regMedia?.path].filter(Boolean);
+        if (pathsToRegenerate.length === 0) return;
+
+        const promises = pathsToRegenerate.map(async (path) => {
+            addRegeneratingPath(path);
+            try {
+                const app = (window as any).go.main.App;
+                let finalPrompt = prompt;
+                if (isBulkReg) {
+                    const imgObj = flatImages.find(i => i.path === path);
+                    finalPrompt = imgObj?.prompt || "";
+                }
+                await app.RegenerateGalleryImage(path, finalPrompt, service, settings);
+            } catch (e) {
+                console.error(`Regeneration failed for ${path}:`, e);
+            } finally {
+                removeRegeneratingPath(path);
+            }
+        });
+
+        await Promise.all(promises);
+
+        loadGallery();
+        if (isBulkReg) {
+            clearSelection();
+        }
+    }, [isBulkReg, regMedia, selectedPaths, flatImages, loadGallery, clearSelection, addRegeneratingPath, removeRegeneratingPath]);
+
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (!selectedMedia) return;
         if (e.key === 'Escape') { setSelectedMedia(null); return; }
@@ -292,7 +356,7 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
             </div>
 
             {isAwaitingControl && (
-                <div className="gallery-continue-bar animate-slide-up">
+                <div className="gallery-continue-bar">
                     <div className="continue-content">
                         <div className="continue-info">
                             <div className="pulse-icon"></div>
@@ -316,6 +380,10 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
                         <span>{t('gallery.selected') || 'Selected'}: <strong>{selectedPaths.size}</strong></span>
                     </div>
                     <div className="bulk-buttons">
+                        <button className="bulk-btn-regenerate" onClick={handleOpenBulkRegenerate}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
+                            {t('gallery.regenerate_modal.generate')}
+                        </button>
                         <button className="bulk-btn-cancel" onClick={clearSelection}>{t('common.cancel')}</button>
                         <button className="bulk-btn-delete" onClick={handleBulkDelete}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></svg>
@@ -356,6 +424,8 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
                                                 onCardClick={onCardClick}
                                                 onSelectionToggle={toggleImageSelection}
                                                 onDelete={handleDeleteImage}
+                                                onRegenerate={handleOpenRegenerate}
+                                                regeneratingPaths={regeneratingPaths}
                                             />
                                         ))}
                                     </div>
@@ -389,6 +459,15 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
                     </div>
                 </div>
             )}
+
+            <RegenerateModal
+                isOpen={isRegModalOpen}
+                onClose={() => setIsRegModalOpen(false)}
+                onConfirm={handleRegenerateAction}
+                imagePath={regMedia?.path}
+                initialPrompt={regMedia?.prompt}
+                isBulk={isBulkReg}
+            />
         </div>
     );
 };
