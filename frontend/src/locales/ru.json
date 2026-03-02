@@ -609,6 +609,8 @@
             "prompt_placeholder": "Используйте {{content}} для вставки текста",
             "source_text": "Текст",
             "source_task_name": "Название задания",
+            "default_model": "Модель по умолчанию",
+            "default_temp": "Температура по умолчанию",
             "delete_confirm": "Удалить этот этап?"
         }
     },

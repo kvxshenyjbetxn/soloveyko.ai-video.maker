@@ -619,6 +619,8 @@
       "prompt_placeholder": "Використовуйте {{content}} для вставки тексту",
       "source_text": "Текст",
       "source_task_name": "Назва завдання",
+      "default_model": "Модель за замовчуванням",
+      "default_temp": "Температура за замовчуванням",
       "delete_confirm": "Видалити цей етап?"
     }
   },

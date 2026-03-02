@@ -367,6 +367,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.montageWatermarkOnIntro === undefined) { s.montageWatermarkOnIntro = false; updated = true; }
                 if (s.montageOverlayPath === undefined) { s.montageOverlayPath = ""; updated = true; }
                 if (s.montageOverlayOnIntro === undefined) { s.montageOverlayOnIntro = false; updated = true; }
+                if (s.montageOverlayTriggersEnabled === undefined) { s.montageOverlayTriggersEnabled = false; updated = true; }
+                if (s.montageOverlayTriggers === undefined) { s.montageOverlayTriggers = []; updated = true; }
 
                 if (s.customStages === undefined) { s.customStages = []; updated = true; }
                 if (s.customStagesEnabled === undefined) { s.customStagesEnabled = true; updated = true; }
@@ -552,6 +554,10 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         templateData.customStagesEnabled = settings.customStagesEnabled || false;
         templateData.customStagesCollapsed = settings.customStagesCollapsed || false;
 
+        // 7. Montage Triggers
+        templateData.montageOverlayTriggers = settings.montageOverlayTriggers || [];
+        templateData.montageOverlayTriggersEnabled = settings.montageOverlayTriggersEnabled || false;
+
         // 5. Montage Settings
         const montageFields = [
             'montageResolution', 'montageFPS', 'montageSwayFactor', 'montageZoomFactor',
@@ -585,44 +591,47 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
      */
     const flattenSettings = (obj: any): any => {
         let result: any = {};
-        if (!obj) return result;
+        if (!obj || typeof obj !== 'object') return result;
 
         // 1. Recursive flattening
         const flatten = (o: any) => {
+            if (!o || typeof o !== 'object') return;
             for (const i in o) {
-                if ((typeof o[i]) === 'object' && o[i] !== null && !Array.isArray(o[i])) {
-                    flatten(o[i]);
+                const val = o[i];
+                if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+                    flatten(val);
                 } else {
-                    result[i] = o[i];
+                    result[i] = val;
                 }
             }
         };
         flatten(obj);
 
         // 2. Specialized mapping for "stages" group to "Enabled" fields used in the UI
-        if (obj.stages) {
-            if (obj.stages.voiceover !== undefined) result.voiceoverEnabled = obj.stages.voiceover;
-            if (obj.stages.image !== undefined) result.imageEnabled = obj.stages.image;
-            if (obj.stages.subtitle !== undefined) result.subtitleEnabled = obj.stages.subtitle;
-            if (obj.stages.montage !== undefined) result.montageEnabled = obj.stages.montage;
-            if (obj.stages.translate !== undefined) result.translateEnabled = obj.stages.translate;
-            if (obj.stages.rewrite !== undefined) result.rewriteEnabled = obj.stages.rewrite;
+        if (obj.stages && typeof obj.stages === 'object') {
+            const s = obj.stages;
+            if (s.voiceover !== undefined) result.voiceoverEnabled = s.voiceover;
+            if (s.image !== undefined) result.imageEnabled = s.image;
+            if (s.subtitle !== undefined) result.subtitleEnabled = s.subtitle;
+            if (s.montage !== undefined) result.montageEnabled = s.montage;
+            if (s.translate !== undefined) result.translateEnabled = s.translate;
+            if (s.rewrite !== undefined) result.rewriteEnabled = s.rewrite;
         }
 
-        if (obj.customStages) {
-            result.customStages = obj.customStages;
-        }
-
-        if (obj.control) {
+        // 3. Control section mapping
+        if (obj.control && typeof obj.control === 'object') {
             if (obj.control.translate !== undefined) result.translateControlEnabled = obj.control.translate;
             if (obj.control.image !== undefined) result.imageControlEnabled = obj.control.image;
         }
 
-        // Backward compatibility for old templates
-        if (result.imageMode === undefined) result.imageMode = 'normal';
-        if (result.imageMemoryType === undefined) result.imageMemoryType = 'primitive';
-        if (result.imageMemoryChars === undefined) result.imageMemoryChars = 1000;
-        if (result.imageDetermineCharacters === undefined) result.imageDetermineCharacters = false;
+        // Explicitly handle arrays (they should be arrays, not flattened)
+        if (obj.customStages && Array.isArray(obj.customStages)) result.customStages = obj.customStages;
+        if (obj.montageOverlayTriggers && Array.isArray(obj.montageOverlayTriggers)) {
+            result.montageOverlayTriggers = obj.montageOverlayTriggers;
+        } else if (obj.montage && typeof obj.montage === 'object' && Array.isArray(obj.montage.montageOverlayTriggers)) {
+            // Compatibility for templates that saved them inside montage object
+            result.montageOverlayTriggers = obj.montage.montageOverlayTriggers;
+        }
 
         return result;
     };
@@ -720,26 +729,43 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     }, [type, content, settings, templates, selectedTemplateIds, addTask, addTasks, setSelectedTemplateIds]);
 
     const applyTemplate = (tpl: any) => {
+        if (!tpl || !tpl.settings) return;
         const applied = flattenSettings(tpl.settings);
-
         const nameField = type === 'translate' ? 'translatePipelineName' : (type === 'rewrite' ? 'rewritePipelineName' : 'voiceoverPipelineName');
-        setSettings((prev: any) => ({
-            ...prev, ...applied,
-            [nameField]: tpl.name,
-            sidebarWidth: prev.sidebarWidth,
-            translateCollapsed: prev.translateCollapsed,
-            rewriteCollapsed: prev.rewriteCollapsed,
-            apiCollapsed: prev.apiCollapsed,
-            pathCollapsed: prev.pathCollapsed,
-            templatesCollapsed: prev.templatesCollapsed,
-            translateTemplatesCollapsed: prev.translateTemplatesCollapsed,
-            rewriteTemplatesCollapsed: prev.rewriteTemplatesCollapsed,
-            voiceoverTemplatesCollapsed: prev.voiceoverTemplatesCollapsed,
-            controlCollapsed: prev.controlCollapsed,
-            customStages: applied.customStages ?? prev.customStages,
-            customStagesEnabled: applied.customStagesEnabled ?? prev.customStagesEnabled,
-            customStagesCollapsed: applied.customStagesCollapsed ?? prev.customStagesCollapsed,
-        }));
+
+        setSettings((prev: any) => {
+            if (!prev) return { ...applied, [nameField]: tpl.name };
+
+            // Filter: only keep primitives or arrays. Never objects (to prevent corruption)
+            const cleanApplied: any = {};
+            Object.keys(applied).forEach(k => {
+                const v = applied[k];
+                if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+                    cleanApplied[k] = v;
+                }
+            });
+
+            return {
+                ...prev,
+                ...cleanApplied,
+                [nameField]: tpl.name,
+                sidebarWidth: prev.sidebarWidth,
+                translateCollapsed: prev.translateCollapsed,
+                rewriteCollapsed: prev.rewriteCollapsed,
+                apiCollapsed: prev.apiCollapsed,
+                pathCollapsed: prev.pathCollapsed,
+                templatesCollapsed: prev.templatesCollapsed,
+                translateTemplatesCollapsed: prev.translateTemplatesCollapsed,
+                rewriteTemplatesCollapsed: prev.rewriteTemplatesCollapsed,
+                voiceoverTemplatesCollapsed: prev.voiceoverTemplatesCollapsed,
+                controlCollapsed: prev.controlCollapsed,
+                // Ensure values are RESET to defaults if missing in template, not carried over from previous state
+                customStages: cleanApplied.customStages ?? [],
+                customStagesEnabled: cleanApplied.customStagesEnabled ?? false,
+                montageOverlayTriggers: cleanApplied.montageOverlayTriggers ?? [],
+                montageOverlayTriggersEnabled: cleanApplied.montageOverlayTriggersEnabled ?? false,
+            };
+        });
     };
 
 
@@ -849,26 +875,33 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         } catch (err) { console.error("Failed to select path:", err); }
     };
 
-    const renderValueOrInput = (field: string, value: number, isFloat: boolean) => {
+    const renderValueOrInput = (field: string, value: any, isFloat: boolean) => {
+        const safeVal = (val: any) => {
+            if (typeof val === 'number') return val;
+            const parsed = parseFloat(val);
+            return isNaN(parsed) ? 0 : parsed;
+        };
+
+        const numValue = safeVal(value);
         if (editingField === field) {
             return (
                 <input
-                    autoFocus className="settings-value-input" type="number" defaultValue={value} step={isFloat ? "0.1" : "500"}
+                    autoFocus className="settings-value-input" type="number" defaultValue={numValue} step={isFloat ? "0.1" : "500"}
                     onBlur={(e) => {
                         setEditingField(null);
                         let val = parseFloat(e.target.value);
-                        if (isNaN(val)) val = value;
+                        if (isNaN(val)) val = numValue;
                         handleChange(field, val);
                     }}
                     onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                 />
             );
         }
-        let displayValue: string | number = isFloat ? value.toFixed(1) : value;
-        if (!isFloat && value === 0 && field.includes('MaxTokens')) displayValue = t('pipeline.max_tokens_unlimited');
+        let displayValue: string | number = isFloat ? numValue.toFixed(1) : numValue;
+        if (!isFloat && numValue === 0 && field.includes('MaxTokens')) displayValue = t('pipeline.max_tokens_unlimited');
         return (
             <span className="settings-slider-value" onClick={(e) => { e.stopPropagation(); setEditingField(field); }}
-                style={!isFloat && value === 0 ? { minWidth: '80px', fontSize: '10px' } : {}}>
+                style={!isFloat && numValue === 0 ? { minWidth: '80px', fontSize: '10px' } : {}}>
                 {displayValue}
             </span>
         );
@@ -905,7 +938,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     {(type === 'translate' || type === 'rewrite') && (
                         <>
                             <TextSection type={type} settings={settings} handleChange={handleChange} models={models} renderValueOrInput={renderValueOrInput} setCurrentPath={setCurrentPath} />
-                            <CustomStagesSection settings={settings} handleChange={handleChange} />
+                            <CustomStagesSection settings={settings} handleChange={handleChange} models={models} />
                         </>
                     )}
 

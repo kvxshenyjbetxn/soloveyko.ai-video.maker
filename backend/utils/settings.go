@@ -21,11 +21,14 @@ type OverlayTrigger struct {
 }
 
 type CustomStage struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Prompt     string `json:"prompt"`
-	DataSource string `json:"dataSource"` // original, processed, taskName
-	Enabled    bool   `json:"enabled"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Prompt      string  `json:"prompt"`
+	DataSource  string  `json:"dataSource"` // original, processed, taskName
+	Model       string  `json:"model"`
+	Temperature float64 `json:"temperature"`
+	MaxTokens   int     `json:"maxTokens"`
+	Enabled     bool    `json:"enabled"`
 }
 
 type PipelineSettings struct {

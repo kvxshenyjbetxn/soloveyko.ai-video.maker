@@ -7,12 +7,16 @@ interface CustomStage {
     name: string;
     prompt: string;
     dataSource: string;
+    model: string;
+    temperature: number;
+    maxTokens: number;
     enabled: boolean;
 }
 
 interface CustomStagesSectionProps {
     settings: any;
     handleChange: (field: string, value: any) => void;
+    models: string[];
 }
 
 const LayersIcon = () => (
@@ -29,7 +33,7 @@ const TrashIcon = () => (
     </svg>
 );
 
-export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settings, handleChange }) => {
+export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settings, handleChange, models }) => {
     const { t } = useI18n();
     const stages = settings.customStages || [];
     const isCollapsed = settings.customStagesCollapsed;
@@ -44,6 +48,9 @@ export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settin
             name: `Stage ${stages.length + 1}`,
             prompt: "Summarize: {{content}}",
             dataSource: 'text',
+            model: '',
+            temperature: 0,
+            maxTokens: 0,
             enabled: true
         };
         handleChange('customStages', [...stages, newStage]);
@@ -145,6 +152,56 @@ export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settin
                                     <option value="text">{t('pipeline.custom_stages.source_text')}</option>
                                     <option value="taskName">{t('pipeline.custom_stages.source_task_name')}</option>
                                 </select>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.model')}</label>
+                                <select
+                                    className="settings-select"
+                                    value={stage.model || ''}
+                                    onChange={(e) => handleUpdateStage(stage.id, 'model', e.target.value)}
+                                >
+                                    <option value="">{t('pipeline.custom_stages.default_model')}</option>
+                                    {models.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.temperature')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range"
+                                        className="settings-slider"
+                                        min="0"
+                                        max="2"
+                                        step="0.1"
+                                        value={stage.temperature || 0}
+                                        style={{ '--range-progress': `${((stage.temperature || 0) / 2) * 100}%` } as React.CSSProperties}
+                                        onChange={(e) => handleUpdateStage(stage.id, 'temperature', parseFloat(e.target.value))}
+                                    />
+                                    <span className="settings-slider-value">
+                                        {(!stage.temperature || stage.temperature === 0)
+                                            ? t('pipeline.custom_stages.default_temp')
+                                            : (Number(stage.temperature) || 0).toFixed(1)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.max_tokens')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range"
+                                        className="settings-slider"
+                                        min="0"
+                                        max="128000"
+                                        step="500"
+                                        value={stage.maxTokens || 0}
+                                        style={{ '--range-progress': `${((stage.maxTokens || 0) / 128000) * 100}%` } as React.CSSProperties}
+                                        onChange={(e) => handleUpdateStage(stage.id, 'maxTokens', parseInt(e.target.value))}
+                                    />
+                                    <span className="settings-slider-value">{stage.maxTokens === 0 ? t('pipeline.max_tokens_unlimited') : stage.maxTokens}</span>
+                                </div>
                             </div>
 
                             <div className="settings-control">

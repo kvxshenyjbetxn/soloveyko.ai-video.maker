@@ -609,6 +609,8 @@
             "prompt_placeholder": "Use {{content}} to insert text",
             "source_text": "Text",
             "source_task_name": "Task Name",
+            "default_model": "Default model",
+            "default_temp": "Default temperature",
             "delete_confirm": "Delete this stage?"
         }
     },

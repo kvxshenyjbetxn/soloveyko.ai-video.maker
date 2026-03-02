@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -363,7 +364,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 
 	// 1.6 Custom Stages (Background)
-	go s.ProcessCustomStages(id, taskLabel, taskName, content, processedText, finalDir, settings, &pSettings)
+	go s.ProcessCustomStages(id, taskLabel, taskType, taskName, content, processedText, finalDir, settings, &pSettings)
 
 	shouldSkipVoice := false
 	shouldSkipSubtitle := false
@@ -492,28 +493,15 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	return processedText, nil
 }
 
-func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskName string, originalText string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) {
+func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskType string, taskName string, originalText string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) {
 	var stages []utils.CustomStage
 	if val, ok := settings["customStages"]; ok {
 		if slice, ok := val.([]interface{}); ok {
 			for _, v := range slice {
 				if m, ok := v.(map[string]interface{}); ok {
-					stage := utils.CustomStage{}
-					if id, ok := m["id"].(string); ok {
-						stage.ID = id
-					}
-					if name, ok := m["name"].(string); ok {
-						stage.Name = name
-					}
-					if prompt, ok := m["prompt"].(string); ok {
-						stage.Prompt = prompt
-					}
-					if ds, ok := m["dataSource"].(string); ok {
-						stage.DataSource = ds
-					}
-					if en, ok := m["enabled"].(bool); ok {
-						stage.Enabled = en
-					}
+					var stage utils.CustomStage
+					jsonData, _ := json.Marshal(m)
+					json.Unmarshal(jsonData, &stage)
 					stages = append(stages, stage)
 				}
 			}
@@ -533,9 +521,14 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskN
 
 	s.log("INFO", fmt.Sprintf("[Custom] Processing %d custom stages...", len(stages)), id, taskLabel)
 
-	// Get API Key for Custom Stages (using Translate keys as fallback)
+	// Get API Key for Custom Stages (using task-specific key)
 	var apiKey string
-	keyID, _ := settings["translateOpenRouterKeyID"].(string)
+	keyField := "translateOpenRouterKeyID"
+	if taskType == "rewrite" {
+		keyField = "rewriteOpenRouterKeyID"
+	}
+	keyID, _ := settings[keyField].(string)
+
 	keys := s.settings.GetOpenRouterKeys()
 	keyName := "Default"
 	for _, k := range keys {
@@ -555,8 +548,14 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskN
 		return
 	}
 
-	model, _ := settings["translateModel"].(string)
-	temp, _ := settings["translateTemperature"].(float64)
+	defaultModel, _ := settings["translateModel"].(string)
+	if taskType == "rewrite" {
+		defaultModel, _ = settings["rewriteModel"].(string)
+	}
+	defaultTemp, _ := settings["translateTemperature"].(float64)
+	if taskType == "rewrite" {
+		defaultTemp, _ = settings["rewriteTemperature"].(float64)
+	}
 
 	for _, stage := range stages {
 		if !stage.Enabled {
@@ -580,7 +579,18 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskN
 			fullPrompt = stage.Prompt + "\n\n" + sourceContent
 		}
 
-		result, err := s.openRouter.Chat(id, taskLabel, "custom", keyName, apiKey, model, fullPrompt, temp, 0)
+		// Use per-stage settings if available
+		useModel := stage.Model
+		if useModel == "" {
+			useModel = defaultModel
+		}
+		useTemp := stage.Temperature
+		if useTemp == 0 {
+			useTemp = defaultTemp
+		}
+		useMaxTokens := stage.MaxTokens
+
+		result, err := s.openRouter.Chat(id, taskLabel, "custom", keyName, apiKey, useModel, fullPrompt, useTemp, useMaxTokens)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[Custom] Stage %s failed: %v", stage.Name, err), id, taskLabel)
 			continue

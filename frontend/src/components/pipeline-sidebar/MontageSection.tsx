@@ -281,7 +281,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                         onChange={(e) => handleChange('montageWatermarkOpacity', parseFloat(e.target.value))}
                                         style={{ '--range-progress': `${getProgress(settings.montageWatermarkOpacity || 0.8, 0.1, 1.0)}%` } as React.CSSProperties}
                                     />
-                                    <span className="settings-slider-value">{(settings.montageWatermarkOpacity || 0.8).toFixed(2)}</span>
+                                    <span className="settings-slider-value">{(Number(settings.montageWatermarkOpacity) || 0.8).toFixed(2)}</span>
                                 </div>
                             </div>
 
@@ -634,7 +634,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                 onChange={(e) => handleChange('montageSwayFactor', parseFloat(e.target.value))}
                                 style={{ '--range-progress': `${getProgress(settings.montageSwayFactor || 1.0, 0, 3)}%` } as React.CSSProperties}
                             />
-                            <span className="settings-slider-value">{(settings.montageSwayFactor || 1.0).toFixed(1)}x</span>
+                            <span className="settings-slider-value">{(Number(settings.montageSwayFactor) || 1.0).toFixed(1)}x</span>
                         </div>
                     </div>
 
@@ -652,7 +652,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                 onChange={(e) => handleChange('montageZoomFactor', parseFloat(e.target.value))}
                                 style={{ '--range-progress': `${getProgress(settings.montageZoomFactor || 1.0, 0, 3)}%` } as React.CSSProperties}
                             />
-                            <span className="settings-slider-value">{(settings.montageZoomFactor || 1.0).toFixed(1)}x</span>
+                            <span className="settings-slider-value">{(Number(settings.montageZoomFactor) || 1.0).toFixed(1)}x</span>
                         </div>
                     </div>
 
@@ -670,7 +670,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                 onChange={(e) => handleChange('montageUpscaleFactor', parseFloat(e.target.value))}
                                 style={{ '--range-progress': `${getProgress(settings.montageUpscaleFactor || 2.0, 1.0, 3.0)}%` } as React.CSSProperties}
                             />
-                            <span className="settings-slider-value">{(settings.montageUpscaleFactor || 2.0).toFixed(1)}x</span>
+                            <span className="settings-slider-value">{(Number(settings.montageUpscaleFactor) || 2.0).toFixed(1)}x</span>
                         </div>
                     </div>
 
@@ -688,7 +688,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                 onChange={(e) => handleChange('montageTransitionDuration', parseFloat(e.target.value))}
                                 style={{ '--range-progress': `${getProgress(settings.montageTransitionDuration || 0.5, 0.1, 2)}%` } as React.CSSProperties}
                             />
-                            <span className="settings-slider-value">{(settings.montageTransitionDuration || 0.5).toFixed(2)}s</span>
+                            <span className="settings-slider-value">{(Number(settings.montageTransitionDuration) || 0.5).toFixed(2)}s</span>
                         </div>
                     </div>
 
