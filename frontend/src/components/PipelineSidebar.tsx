@@ -701,26 +701,25 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         showToast(t('pipeline.task_added_success') || 'Task added to queue', 'success');
     }, [settings, type, content, templates, selectedTemplateIds, historyOverride, getNextTaskName, showToast, t]);
 
-    const proceedAddTask = useCallback((taskName: string, skippedStages: string[], existingDataArray?: any[], overrideTemplateIds?: string[], overrideContent?: string) => {
+    const proceedAddTask = useCallback((taskName: string, skippedStages: string[], existingDataArray?: any[], overrideTemplateIds?: string[], overrideContent?: string, settingsOverrides?: any) => {
         const finalTemplateIds = overrideTemplateIds !== undefined ? overrideTemplateIds : selectedTemplateIds;
         const finalContent = overrideContent !== undefined ? overrideContent : content;
         const relevantTemplateIds = finalTemplateIds.filter(id => templates.find(t => t.id === id)?.type === type);
 
         if (relevantTemplateIds.length === 0) {
             const existing = existingDataArray?.find(d => d.id === "");
-            addTask(type, finalContent, settings, taskName, "", skippedStages, existing);
+            const finalSettings = settingsOverrides ? { ...settings, ...settingsOverrides } : settings;
+            addTask(type, finalContent, finalSettings, taskName, "", skippedStages, existing);
         } else {
             const tasksData = relevantTemplateIds.map(id => {
                 const template = templates.find(t => t.id === id);
                 if (!template) return null;
-                const tplSettings = flattenSettings(template.settings);
+                const flattened = flattenSettings(template.settings);
+                const tplSettings = settingsOverrides ? { ...flattened, ...settingsOverrides } : flattened;
                 const existing = existingDataArray?.find(d => d.id === template.name);
                 return { settings: tplSettings, subName: template.name, existing };
             }).filter(d => d && d.settings);
 
-            // addTasks usually handles a batch. Each item in tasksData can have its own existingData.
-            // QueueContext.addTasks needs to be slightly adjusted if we want individual existing data for each item in the batch.
-            // Actually, currently addTasks takes one existingData for the whole batch (which was a bug if templates have different paths).
             addTasks(type, finalContent, tasksData as any, taskName, skippedStages);
             if (overrideTemplateIds === undefined) {
                 setSelectedTemplateIds([]);
@@ -982,7 +981,17 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     isOpen={true}
                     data={existingFilesData}
                     onConfirm={(skip: string[]) => { proceedAddTask(pendingTaskName, skip, existingFilesData, undefined, pendingContent); setExistingFilesData(null); }}
-                    onCancel={() => { proceedAddTask(pendingTaskName, [], existingFilesData, undefined, pendingContent); setExistingFilesData(null); }}
+                    onCancel={() => {
+                        const regenOverrides = {
+                            imageRegeneratePrompts: true,
+                            imageGooglerRegenerateImages: true,
+                            voiceoverRegenerate: true,
+                            subtitleRegenerate: true,
+                            imageElevenLabsImageRegenerate: true
+                        };
+                        proceedAddTask(pendingTaskName, [], existingFilesData, undefined, pendingContent, regenOverrides);
+                        setExistingFilesData(null);
+                    }}
                 />
             )}
             <button className={`sidebar-floating-toggle ${isOpen ? 'is-open' : ''}`} onClick={onToggle} title={isOpen ? t('pipeline.hide_settings') : t('pipeline.show_settings')}>

@@ -71,11 +71,12 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		return nil
 	}
 
+	regenerate, _ := settings["subtitleRegenerate"].(bool)
 	subtitleSrtPath := filepath.Join(finalDir, "subtitle.srt")
 	subtitleAssPath := filepath.Join(finalDir, "subtitle.ass")
-	if _, errSrt := os.Stat(subtitleSrtPath); errSrt == nil {
+	if _, errSrt := os.Stat(subtitleSrtPath); errSrt == nil && !regenerate {
 		if _, errAss := os.Stat(subtitleAssPath); errAss == nil {
-			s.log("INFO", "[Pipeline] Subtitles already exist (SRT and ASS), skipping generation.", id, taskLabel)
+			s.log("INFO", "[Pipeline] Subtitles already exist (SRT and ASS), skipping generation (Restore Mode).", id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "completed")
 			return nil
 		}

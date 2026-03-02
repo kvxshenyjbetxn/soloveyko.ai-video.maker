@@ -54,6 +54,17 @@ export const Templates = () => {
     const [elImgKeys, setElImgKeys] = useState<any[]>([]);
 
     useEffect(() => {
+        if (isBulkEditOpen) {
+            document.documentElement.style.setProperty('--pipeline-sidebar-width', '380px');
+        } else {
+            document.documentElement.style.setProperty('--pipeline-sidebar-width', '0px');
+        }
+        return () => {
+            document.documentElement.style.setProperty('--pipeline-sidebar-width', '0px');
+        };
+    }, [isBulkEditOpen]);
+
+    useEffect(() => {
         const fetchData = async () => {
             const or = await GetOpenRouterSavedModels();
             setModels(or || []);

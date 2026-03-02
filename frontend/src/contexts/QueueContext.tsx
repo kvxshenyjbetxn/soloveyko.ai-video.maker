@@ -64,10 +64,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         let imgMsg = "";
         if (existingData?.imageCount > 0 || existingData?.videoCount > 0 || existingData?.promptCount > 0) {
             const parts = [];
-            if (existingData.promptCount > 0) parts.push(`prompts: ${existingData.promptCount}`);
-            if (existingData.imageCount > 0) parts.push(`images: ${existingData.imageCount}`);
-            if (existingData.videoCount > 0) parts.push(`videos: ${existingData.videoCount}`);
-            imgMsg = parts.join('\n');
+            if (existingData.promptCount > 0) parts.push(`p:${existingData.promptCount}`);
+            if (existingData.imageCount > 0) parts.push(`i:${existingData.imageCount}`);
+            if (existingData.videoCount > 0) parts.push(`v:${existingData.videoCount}`);
+            imgMsg = parts.join(' ');
         }
 
         const effectiveSkip = (skippedStages && existingData && existingData.foundStages)
@@ -114,10 +114,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             let imgMsg = "";
             if (existingData?.imageCount > 0 || existingData?.videoCount > 0 || existingData?.promptCount > 0) {
                 const parts = [];
-                if (existingData.promptCount > 0) parts.push(`prompts: ${existingData.promptCount}`);
-                if (existingData.imageCount > 0) parts.push(`images: ${existingData.imageCount}`);
-                if (existingData.videoCount > 0) parts.push(`videos: ${existingData.videoCount}`);
-                imgMsg = parts.join('\n');
+                if (existingData.promptCount > 0) parts.push(`p:${existingData.promptCount}`);
+                if (existingData.imageCount > 0) parts.push(`i:${existingData.imageCount}`);
+                if (existingData.videoCount > 0) parts.push(`v:${existingData.videoCount}`);
+                imgMsg = parts.join(' ');
             }
 
             return {
