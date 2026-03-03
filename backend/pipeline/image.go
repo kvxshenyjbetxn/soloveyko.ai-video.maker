@@ -76,15 +76,22 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		iEnabled = pSettings.ImageEnabled
 	}
 
+	// Robust detection of skipped stages (Restore choice from modal)
 	var shouldSkipImage bool
 	if val, ok := settings["skippedStages"]; ok {
-		if slice, ok := val.([]interface{}); ok {
-			for _, v := range slice {
-				if str, ok := v.(string); ok {
-					if str == "image" {
-						shouldSkipImage = true
-						break
-					}
+		switch s := val.(type) {
+		case []string:
+			for _, st := range s {
+				if st == "image" {
+					shouldSkipImage = true
+					break
+				}
+			}
+		case []interface{}:
+			for _, st := range s {
+				if str, ok := st.(string); ok && str == "image" {
+					shouldSkipImage = true
+					break
 				}
 			}
 		}
@@ -239,16 +246,25 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 	_ = os.WriteFile(filepath.Join(finalDir, "segments.json"), chunksData, 0644)
 	s.log("INFO", fmt.Sprintf("[Pipeline] Updated %d segments for synchronization", len(chunks)), id, taskLabel)
 
-	// If the user explicitly requested to skip the stage in the modal
+	// [USER RESTORE SKIP]
 	if shouldSkipImage {
-		s.log("INFO", "[Pipeline] Skipping image generation as requested (using existing files).", id, taskLabel)
-		s.emitStageStatus(id, "image", "completed")
+		s.log("INFO", "[Pipeline] Restore Mode: Using existing images/videos as-is. Sync updated.", id, taskLabel)
+		// Get actual counts of what was restored to show the user
+		data := s.CheckExistingFiles(id, finalDir, taskType, settings)
+		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("p:%d i:%d v:%d", data.PromptCount, data.ImageCount, data.VideoCount))
 		return nil
 	}
 
 	// [FULL STAGE SKIP]
 	// If we have images for every chunk and a prompts file, we skip everything.
-	if hasExistingImages && !shouldRegeneratePrompts {
+	// BUT: if we are coming from the restoration modal (skippedStages exists in settings)
+	// AND shouldSkipImage is false, we MUST re-process (don't auto-skip).
+	isFromModal := false
+	if _, ok := settings["skippedStages"]; ok {
+		isFromModal = true
+	}
+
+	if (!isFromModal) && hasExistingImages && !shouldRegeneratePrompts {
 		allFound := true
 		countImg := 0
 		countVid := 0
@@ -257,8 +273,6 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			paths := []string{
 				filepath.Join(imagesDir, fmt.Sprintf("%d.png", i)),
 				filepath.Join(imagesDir, fmt.Sprintf("%d.mp4", i)),
-				filepath.Join(finalDir, fmt.Sprintf("%d.png", i)),
-				filepath.Join(finalDir, fmt.Sprintf("%d.mp4", i)),
 			}
 			for _, p := range paths {
 				if st, err := os.Stat(p); err == nil && !st.IsDir() {
@@ -278,7 +292,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 
 		if allFound {
-			s.log("SUCCESS", fmt.Sprintf("[Pipeline] All %d assets found (i:%d, v:%d). Stage skip active (Restore Mode).", len(chunks), countImg, countVid), id, taskLabel)
+			s.log("SUCCESS", fmt.Sprintf("[Pipeline] All %d assets found (i:%d, v:%d). Auto-skipping.", len(chunks), countImg, countVid), id, taskLabel)
 			s.emitStageStatus(id, "image", "completed", fmt.Sprintf("i:%d v:%d", countImg, countVid))
 			return nil
 		}
