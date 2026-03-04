@@ -17,6 +17,7 @@ func GetHardwareID() string {
 
 	if runtime.GOOS == "windows" {
 		cmd := exec.Command("reg", "query", `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography`, "/v", "MachineGuid")
+		PrepareHiddenCmd(cmd)
 		out, err := cmd.CombinedOutput()
 		if err == nil {
 			re := regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
@@ -27,6 +28,7 @@ func GetHardwareID() string {
 		}
 	} else if runtime.GOOS == "darwin" {
 		cmd := exec.Command("ioreg", "-rd1", "-c", "IOPlatformExpertDevice")
+		PrepareHiddenCmd(cmd)
 		out, err := cmd.CombinedOutput()
 		if err == nil {
 			re := regexp.MustCompile(`"IOPlatformUUID" = "([^"]+)"`)

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useServices } from '../../contexts/ServiceContext';
@@ -9,6 +9,20 @@ export const General = () => {
     const { t, locale, setLocale } = useI18n();
     const { theme, setTheme, accentColor, setAccentColor } = useTheme();
     const colorInputRef = useRef<HTMLInputElement>(null);
+    const [version, setVersion] = useState<string>('...');
+
+    useEffect(() => {
+        const fetchVersion = async () => {
+            try {
+                // @ts-ignore
+                const v = await window.go.main.App.GetAppVersion();
+                setVersion(v);
+            } catch (err) {
+                console.error("Failed to fetch version:", err);
+            }
+        };
+        fetchVersion();
+    }, []);
 
     const presets = ['#0078d4', '#ff4500', '#32cd32', '#9370db', '#ff1493', '#ffd700', '#ffffff'];
 
@@ -103,7 +117,7 @@ export const General = () => {
                 </div>
 
                 <div className="version-info" style={{ marginTop: 'auto', opacity: 0.5, fontSize: '0.85rem', textAlign: 'center', padding: '20px' }}>
-                    Soloveyko AI v0.28.0
+                    Soloveyko AI v{version}
                 </div>
             </div>
         </div>

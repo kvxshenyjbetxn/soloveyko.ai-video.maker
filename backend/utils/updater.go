@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -19,7 +18,6 @@ type UpdateManifest struct {
 	Version     string `json:"version"`
 	URL         string `json:"url"`
 	Notes       string `json:"notes"`
-	Checksum    string `json:"checksum"` // SHA-256
 	ReleaseDate string `json:"release_date"`
 }
 
@@ -31,7 +29,7 @@ type UpdateManager struct {
 func NewUpdateManager(currentVersion string) *UpdateManager {
 	return &UpdateManager{
 		CurrentVersion: currentVersion,
-		ManifestURL:    "https://raw.githubusercontent.com/USER/REPO/main/updates.json", // ТPlaceholder, змініть на свій
+		ManifestURL:    "https://new-project-combain-server-production.up.railway.app/latest_version",
 	}
 }
 
@@ -152,30 +150,6 @@ func (m *UpdateManager) Download(url string, progressChan chan int) (string, err
 	return tmpFile.Name(), nil
 }
 
-func VerifyChecksum(filePath, expectedChecksum string) error {
-	if expectedChecksum == "" {
-		return nil
-	}
-
-	f, err := os.Open(filePath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return err
-	}
-
-	actualChecksum := hex.EncodeToString(h.Sum(nil))
-	if !strings.EqualFold(actualChecksum, expectedChecksum) {
-		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedChecksum, actualChecksum)
-	}
-
-	return nil
-}
-
 func (m *UpdateManager) Apply(pkgPath string) error {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -194,51 +168,125 @@ func (m *UpdateManager) Apply(pkgPath string) error {
 
 func (m *UpdateManager) applyWindows(pkgPath, exePath string) error {
 	destDir := filepath.Dir(exePath)
-	batchPath := filepath.Join(os.TempDir(), "soloveyko_update.bat")
+	exeName := filepath.Base(exePath)
 
-	// Створюємо батнік для заміни файлів
-	// 1. Чекаємо поки процес завершиться
-	// 2. Розпаковуємо (потрібен powershell для нативності)
-	// 3. Замінюємо
-	// 4. Запускаємо нову версію
-	// 5. Видаляємо себе
+	userConfig, _ := os.UserConfigDir()
+	updateWorkDir := filepath.Join(userConfig, "SoloveykoAI", "update")
+	os.RemoveAll(updateWorkDir)
+	os.MkdirAll(updateWorkDir, 0755)
+
+	extractDir := filepath.Join(updateWorkDir, "files")
+	os.MkdirAll(extractDir, 0755)
+
+	batchPath := filepath.Join(updateWorkDir, "run.bat")
 
 	batchContent := fmt.Sprintf(`@echo off
+setlocal enabledelayedexpansion
+title Soloveyko AI Update Tool
+
+echo.
+echo ========================================
+echo   Soloveyko AI Update System
+echo ========================================
+echo.
+
+echo [1/4] Closing application...
+taskkill /F /IM "%s" /T > nul 2>&1
 timeout /t 2 /nobreak > nul
-powershell -Command "Expand-Archive -Path '%s' -DestinationPath '%s' -Force"
+
+echo [2/4] Extracting files...
+powershell -NoProfile -Command "Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force"
 if errorlevel 1 goto error
-start "" "%s"
-del /f /q "%s"
-exit
+
+echo [3/4] Installing...
+:: Robocopy копіює все з розпакованої папки в папку програми
+robocopy "%s" "%s" /E /IS /MOVE /R:3 /W:2 > nul
+if errorlevel 8 goto error
+
+echo [4/4] Starting Soloveyko AI...
+:: Використовуємо PowerShell для надійного пошуку та запуску EXE (на випадок вкладених папок)
+powershell -NoProfile -Command "$exe = Get-ChildItem -Path '%s' -Filter '%s' -Recurse | Select-Object -First 1; if ($exe) { Start-Process $exe.FullName }"
+
+echo.
+echo [DONE] Update successful!
+goto cleanup
+
 :error
-echo Update failed. Please try again or download manually.
+echo.
+echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+echo !! ERROR: Installation failed         !!
+echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+echo.
 pause
 exit
-`, pkgPath, destDir, exePath, batchPath)
+
+:cleanup
+:: Видаляємо темп через 3 секунди фоном
+start /b "" cmd /c "timeout /t 3 > nul & rd /s /q \"%s\""
+exit
+`, exeName, pkgPath, extractDir, extractDir, destDir, destDir, exeName, updateWorkDir)
 
 	err := os.WriteFile(batchPath, []byte(batchContent), 0644)
 	if err != nil {
 		return err
 	}
 
-	cmd := exec.Command("cmd", "/c", "start", "/min", batchPath)
+	// Запускаємо батнік як прихований процес
+	cmd := exec.Command("cmd", "/c", batchPath)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	return cmd.Start()
 }
 
 func (m *UpdateManager) applyMacOS(pkgPath, exePath string) error {
-	// Для Mac зазвичай додаток у .app бандлі
-	// exePath повертає шлях до бінарника всередині MacOS/
-	// Нам потрібно замінити весь бандл або просто бінарник, якщо це портативна версія
+	// На Mac exePath зазвичай вказує на Contents/MacOS/soloveyko всередині .app
+	// Нам потрібно знайти шлях до самої папки .app для правильної заміни
+	appPath := exePath
+	if idx := strings.Index(exePath, ".app/Contents/MacOS"); idx != -1 {
+		appPath = exePath[:idx+4]
+	}
 
 	shPath := filepath.Join(os.TempDir(), "soloveyko_update.sh")
-	destDir := filepath.Dir(exePath)
 
+	// Створюємо скрипт для Mac
+	// 1. Чекаємо поки додаток закриється
+	// 2. Розпаковуємо у тимчасову папку
+	// 3. Шукаємо .app або файли
+	// 4. Знімаємо карантин (xattr)
+	// 5. Замінюємо та запускаємо через 'open'
 	shContent := fmt.Sprintf(`#!/bin/bash
 sleep 2
-unzip -o "%s" -d "%s"
-open "%s"
+
+EXTRACT_DIR="/tmp/soloveyko_update_$(date +%%s)"
+mkdir -p "$EXTRACT_DIR"
+
+unzip -q -o "%s" -d "$EXTRACT_DIR"
+
+# Шукаємо .app бандл у розпакованих файлах (глибина до 2 рівнів)
+NEW_APP=$(find "$EXTRACT_DIR" -maxdepth 2 -name "*.app" -type d | head -n 1)
+
+if [ -n "$NEW_APP" ]; then
+    echo "Found .app bundle: $NEW_APP"
+    # Знімаємо карантин macOS (важливо для завантажених файлів)
+    xattr -rd com.apple.quarantine "$NEW_APP" 2>/dev/null
+    
+    # Видаляємо стару версію та копіюємо нову
+    rm -rf "%s"
+    cp -R "$NEW_APP" "%s"
+    
+    # Запускаємо через open, щоб GUI підхопився правильно
+    open "%s"
+else
+    echo "No .app bundle found, trying binary replacement"
+    # Якщо це просто бінарник, копіюємо його
+    cp -f "$EXTRACT_DIR/"* "$(dirname "%s")/" 2>/dev/null
+    chmod +x "%s"
+    open "%s"
+fi
+
+# Чистимо за собою
+rm -rf "$EXTRACT_DIR"
 rm -- "$0"
-`, pkgPath, destDir, exePath)
+`, pkgPath, appPath, appPath, appPath, exePath, exePath, appPath)
 
 	err := os.WriteFile(shPath, []byte(shContent), 0755)
 	if err != nil {

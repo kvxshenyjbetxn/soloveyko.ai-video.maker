@@ -324,7 +324,7 @@ func (a *App) CheckForUpdates(manifestURL string) (*utils.UpdateManifest, error)
 }
 
 // DownloadUpdate downloads the update package and reports progress via events
-func (a *App) DownloadUpdate(url string, expectedChecksum string) (string, error) {
+func (a *App) DownloadUpdate(url string) (string, error) {
 	progressChan := make(chan int)
 
 	// Start progress monitoring in a goroutine
@@ -338,20 +338,12 @@ func (a *App) DownloadUpdate(url string, expectedChecksum string) (string, error
 
 	defer close(progressChan)
 
-	path, err := a.updater.Download(url, progressChan)
+	pkgPath, err := a.updater.Download(url, progressChan)
 	if err != nil {
 		return "", err
 	}
 
-	// Verify checksum
-	if expectedChecksum != "" {
-		if err := utils.VerifyChecksum(path, expectedChecksum); err != nil {
-			os.Remove(path)
-			return "", err
-		}
-	}
-
-	return path, nil
+	return pkgPath, nil
 }
 
 // ApplyUpdate runs the update script and restarts the app
@@ -416,6 +408,7 @@ func (a *App) OpenPath(path string) {
 	}
 
 	if cmd != nil {
+		utils.PrepareHiddenCmd(cmd)
 		cmd.Run()
 	}
 }
