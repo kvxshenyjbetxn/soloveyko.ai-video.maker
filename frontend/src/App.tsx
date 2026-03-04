@@ -36,6 +36,8 @@ import { Logs } from './tabs/logs';
 import { GoogleIntegration } from './tabs/settings/api/google_integration';
 import NotificationsSettings from './tabs/settings/notifications';
 import { GoogleMonitor } from './components/GoogleMonitor';
+import { UpdateModal } from './components/UpdateModal';
+import { utils as models } from '../wailsjs/go/models';
 
 // Simple Icons (SVG)
 const ScriptIcon = () => (
@@ -74,6 +76,23 @@ function App() {
     const [isLoadingAuth, setIsLoadingAuth] = useState(true);
     const [authError, setAuthError] = useState<string | undefined>(undefined);
 
+    // Update State
+    const [updateManifest, setUpdateManifest] = useState<models.UpdateManifest | null>(null);
+    const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+
+    const checkUpdates = async () => {
+        try {
+            // @ts-ignore
+            const manifest = await window.go.main.App.CheckForUpdates("");
+            if (manifest) {
+                setUpdateManifest(manifest);
+                setIsUpdateModalOpen(true);
+            }
+        } catch (e) {
+            console.error("Update check failed:", e);
+        }
+    };
+
     useEffect(() => {
         const checkAuth = async () => {
             try {
@@ -87,6 +106,7 @@ function App() {
                         setAuthResponse(response);
                         sessionStorage.setItem('current_auth_key', key);
                         if (response.telegram_id) sessionStorage.setItem('telegram_id', response.telegram_id.toString());
+                        checkUpdates();
                     }
                 }
             } catch (e: any) {
@@ -113,6 +133,7 @@ function App() {
             // @ts-ignore
             await window.go.main.App.ClearAuthKey();
         }
+        checkUpdates();
     };
 
     const handleLogout = async () => {
@@ -596,6 +617,14 @@ function App() {
                 isDanger={false}
                 type="info"
             />
+
+            {updateManifest && (
+                <UpdateModal
+                    isOpen={isUpdateModalOpen}
+                    manifest={updateManifest}
+                    onClose={() => setIsUpdateModalOpen(false)}
+                />
+            )}
         </div>
     )
 }

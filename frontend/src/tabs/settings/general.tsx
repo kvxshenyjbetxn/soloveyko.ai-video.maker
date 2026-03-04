@@ -101,6 +101,10 @@ export const General = () => {
                         </button>
                     </div>
                 </div>
+
+                <div className="version-info" style={{ marginTop: 'auto', opacity: 0.5, fontSize: '0.85rem', textAlign: 'center', padding: '20px' }}>
+                    Soloveyko AI v0.28.0
+                </div>
             </div>
         </div>
     );

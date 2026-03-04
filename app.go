@@ -42,6 +42,7 @@ type App struct {
 	googleParser    *api.GoogleParserService
 	authService     *api.AuthService
 	telegramService *api.TelegramService
+	updater         *utils.UpdateManager
 }
 
 // NewApp creates a new App application struct
@@ -65,6 +66,7 @@ func NewApp() *App {
 		googleParser:    api.NewGoogleParserService(),
 		authService:     api.NewAuthService(),
 		telegramService: api.NewTelegramService(),
+		updater:         utils.NewUpdateManager(utils.AppVersion),
 	}
 	app.galleryManager = utils.NewGalleryManager()
 	app.localWhisper = pipeline.NewLocalWhisperService()
@@ -309,6 +311,59 @@ func (a *App) EmitStageStatus(id string, stage string, status string, message st
 	if a.ctx != nil {
 		wruntime.EventsEmit(a.ctx, "stageStatus", id, stage, status, message)
 	}
+}
+
+// GetAppVersion returns the current application version
+func (a *App) GetAppVersion() string {
+	return utils.AppVersion
+}
+
+// CheckForUpdates checks for application updates
+func (a *App) CheckForUpdates(manifestURL string) (*utils.UpdateManifest, error) {
+	return a.updater.Check(manifestURL)
+}
+
+// DownloadUpdate downloads the update package and reports progress via events
+func (a *App) DownloadUpdate(url string, expectedChecksum string) (string, error) {
+	progressChan := make(chan int)
+
+	// Start progress monitoring in a goroutine
+	go func() {
+		for progress := range progressChan {
+			if a.ctx != nil {
+				wruntime.EventsEmit(a.ctx, "updateProgress", progress)
+			}
+		}
+	}()
+
+	defer close(progressChan)
+
+	path, err := a.updater.Download(url, progressChan)
+	if err != nil {
+		return "", err
+	}
+
+	// Verify checksum
+	if expectedChecksum != "" {
+		if err := utils.VerifyChecksum(path, expectedChecksum); err != nil {
+			os.Remove(path)
+			return "", err
+		}
+	}
+
+	return path, nil
+}
+
+// ApplyUpdate runs the update script and restarts the app
+func (a *App) ApplyUpdate(pkgPath string) error {
+	err := a.updater.Apply(pkgPath)
+	if err != nil {
+		return err
+	}
+
+	// Exit the app so the update script can replace the binary
+	os.Exit(0)
+	return nil
 }
 
 // GetLanguage повертає поточну мову з налаштувань
