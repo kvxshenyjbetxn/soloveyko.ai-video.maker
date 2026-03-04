@@ -30,7 +30,7 @@ jobs:
         run: wails build -platform darwin/universal -clean
 
       - name: Ad-hoc sign
-        run: codesign --force --deep --sign - build/bin/Soloveyko.AI.Video.Maker.app
+        run: codesign --force --deep --sign - build/bin/*.app
 
       - name: Create correct .zip archive
         run: |
