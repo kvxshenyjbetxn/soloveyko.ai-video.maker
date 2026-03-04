@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useI18n } from '../contexts/I18nContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { utils } from '../../wailsjs/go/models';
 
 interface UpdateModalProps {
@@ -10,6 +11,7 @@ interface UpdateModalProps {
 
 export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onClose }) => {
     const { locale } = useI18n();
+    const { accentColor } = useTheme();
     const [isDownloading, setIsDownloading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                 <div className="update-modal-header">
                     <div className="header-icon-container">
                         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="header-icon">
-                            <path d="M12 4V12M12 12H16M12 12H8M12 12V16M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M12 17V7M12 7L8 11M12 7L16 11M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                     </div>
                     <div className="header-text">
@@ -96,7 +98,30 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
 
                     {manifest.notes && (
                         <div className="update-notes-fancy">
-                            {manifest.notes}
+                            {(() => {
+                                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                const parts = manifest.notes.split(urlRegex);
+                                return parts.map((part, i) => {
+                                    if (part.match(urlRegex)) {
+                                        return (
+                                            <span
+                                                key={i}
+                                                className="note-link"
+                                                onClick={() => {
+                                                    // @ts-ignore
+                                                    if (window.runtime) {
+                                                        // @ts-ignore
+                                                        window.runtime.BrowserOpenURL(part);
+                                                    }
+                                                }}
+                                            >
+                                                {part}
+                                            </span>
+                                        );
+                                    }
+                                    return part;
+                                });
+                            })()}
                         </div>
                     )}
 
@@ -173,7 +198,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                     right: -100px;
                     width: 250px;
                     height: 250px;
-                    background: radial-gradient(circle, rgba(0, 120, 212, 0.15) 0%, transparent 70%);
+                    background: radial-gradient(circle, ${accentColor}26 0%, transparent 70%);
                     pointer-events: none;
                 }
                 .update-modal-header {
@@ -185,13 +210,13 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                 .header-icon-container {
                     width: 48px;
                     height: 48px;
-                    background: rgba(0, 120, 212, 0.1);
+                    background: ${accentColor}1a;
                     border-radius: 12px;
                     display: flex;
                     justify-content: center;
                     align-items: center;
                     margin-right: 15px;
-                    color: #0078d4;
+                    color: ${accentColor};
                 }
                 .header-icon {
                     width: 28px;
@@ -264,7 +289,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                 }
                 .progress-percent {
                     font-weight: 700;
-                    color: #0078d4;
+                    color: ${accentColor};
                 }
                 .fancy-progress-bg {
                     height: 6px;
@@ -274,7 +299,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                 }
                 .fancy-progress-fill {
                     height: 100%;
-                    background: linear-gradient(90deg, #0078d4, #00c6ff);
+                    background: linear-gradient(90deg, ${accentColor}, ${accentColor}cc);
                     border-radius: 10px;
                     transition: width 0.4s cubic-bezier(0.1, 0.7, 0.1, 1);
                     position: relative;
@@ -330,7 +355,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                     color: #fff;
                 }
                 .btn-update-now {
-                    background: #0078d4;
+                    background: ${accentColor};
                     border: none;
                     color: #fff;
                     padding: 12px 28px;
@@ -339,12 +364,12 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                     font-weight: 600;
                     cursor: pointer;
                     transition: all 0.2s;
-                    box-shadow: 0 4px 15px rgba(0, 120, 212, 0.3);
+                    box-shadow: 0 4px 15px ${accentColor}4d;
                 }
                 .btn-update-now:hover:not(:disabled) {
-                    background: #0086eb;
+                    background: ${accentColor}ee;
                     transform: translateY(-1px);
-                    box-shadow: 0 6px 20px rgba(0, 120, 212, 0.4);
+                    box-shadow: 0 6px 20px ${accentColor}66;
                 }
                 .btn-update-now:active:not(:disabled) {
                     transform: translateY(0);
@@ -368,6 +393,18 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                 .update-notes-fancy::-webkit-scrollbar-thumb {
                     background: rgba(255, 255, 255, 0.1);
                     border-radius: 10px;
+                }
+                .note-link {
+                    color: ${accentColor};
+                    text-decoration: none;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    border-bottom: 1px dashed ${accentColor}4d;
+                }
+                .note-link:hover {
+                    filter: brightness(1.2);
+                    border-bottom: 1px solid ${accentColor};
+                    text-shadow: 0 0 10px ${accentColor}66;
                 }
             ` }} />
         </div>
