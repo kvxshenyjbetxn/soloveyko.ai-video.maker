@@ -224,6 +224,7 @@ type Settings struct {
 	AppAccessKey                  string           `json:"appAccessKey"`
 	TelegramNotificationsEnabled  bool             `json:"telegramNotificationsEnabled"`
 	TelegramChatID                string           `json:"telegramChatID"`
+	SystemNotificationsEnabled    bool             `json:"systemNotificationsEnabled"`
 }
 
 type SettingsService struct {
@@ -1444,5 +1445,24 @@ func (s *SettingsService) SetTelegramChatID(chatID string) error {
 		return err
 	}
 	settings.TelegramChatID = chatID
+	return s.SaveSettings(settings)
+}
+
+// GetSystemNotificationsEnabled returns if system notifications are enabled
+func (s *SettingsService) GetSystemNotificationsEnabled() bool {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return false
+	}
+	return settings.SystemNotificationsEnabled
+}
+
+// SetSystemNotificationsEnabled saves if system notifications are enabled
+func (s *SettingsService) SetSystemNotificationsEnabled(enabled bool) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.SystemNotificationsEnabled = enabled
 	return s.SaveSettings(settings)
 }

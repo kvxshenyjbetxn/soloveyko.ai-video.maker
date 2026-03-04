@@ -703,8 +703,9 @@
     },
     "notifications": {
         "tab_title": "Notifications",
-        "description": "Telegram Notification Settings",
-        "enable": "Enable Notifications",
+        "description": "Telegram and System Notification Settings",
+        "enable": "Enable Telegram Notifications",
+        "system_enable": "Enable System Notifications",
         "chat_id": "Telegram ID",
         "chat_id_placeholder": "Enter your Telegram ID...",
         "autofill": "Autofill",

@@ -1183,3 +1183,13 @@ func (a *App) SendTelegramNotification(chatID string, text string) error {
 func (a *App) TestTelegramNotification(chatID string) error {
 	return a.telegramService.SendNotification(chatID, "🔔 *Тестове сповіщення*\n\nСповіщення від Soloveyko.AI Video Maker успішно налаштовані!")
 }
+
+// System Notifications Methods
+
+func (a *App) GetSystemNotificationsEnabled() bool {
+	return a.settings.GetSystemNotificationsEnabled()
+}
+
+func (a *App) SaveSystemNotificationsEnabled(enabled bool) error {
+	return a.settings.SetSystemNotificationsEnabled(enabled)
+}

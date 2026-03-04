@@ -713,8 +713,9 @@
   },
   "notifications": {
     "tab_title": "Сповіщення",
-    "description": "Налаштування сповіщень у Telegram",
-    "enable": "Увімкнути сповіщення",
+    "description": "Налаштування сповіщень у Telegram та системі",
+    "enable": "Увімкнути сповіщення Telegram",
+    "system_enable": "Увімкнути системні сповіщення",
     "chat_id": "Telegram ID",
     "chat_id_placeholder": "Введіть ваш Telegram ID...",
     "autofill": "Автозаповнення",

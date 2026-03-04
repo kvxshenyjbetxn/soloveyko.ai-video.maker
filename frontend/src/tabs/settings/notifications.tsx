@@ -8,6 +8,7 @@ const NotificationsSettings: React.FC = () => {
     const { showToast } = useToast();
 
     const [enabled, setEnabled] = useState(false);
+    const [systemEnabled, setSystemEnabled] = useState(false);
     const [chatID, setChatID] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
@@ -18,12 +19,15 @@ const NotificationsSettings: React.FC = () => {
                 // @ts-ignore
                 const isEnabled = await window.go.main.App.GetTelegramNotificationsEnabled();
                 // @ts-ignore
+                const isSystemEnabled = await window.go.main.App.GetSystemNotificationsEnabled();
+                // @ts-ignore
                 const savedChatID = await window.go.main.App.GetTelegramChatID();
 
                 setEnabled(isEnabled);
+                setSystemEnabled(isSystemEnabled);
                 setChatID(savedChatID || "");
             } catch (e) {
-                console.error("Failed to load telegram settings", e);
+                console.error("Failed to load notification settings", e);
             }
         };
         loadSettings();
@@ -35,7 +39,22 @@ const NotificationsSettings: React.FC = () => {
             // @ts-ignore
             await window.go.main.App.SaveTelegramNotificationsEnabled(newValue);
         } catch (e) {
-            console.error("Failed to save enabled state", e);
+            console.error("Failed to save telegram enabled state", e);
+        }
+    };
+
+    const handleSaveSystemEnabled = async (newValue: boolean) => {
+        setSystemEnabled(newValue);
+        try {
+            // @ts-ignore
+            await window.go.main.App.SaveSystemNotificationsEnabled(newValue);
+            if (newValue && ("Notification" in window)) {
+                if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                    Notification.requestPermission();
+                }
+            }
+        } catch (e) {
+            console.error("Failed to save system enabled state", e);
         }
     };
 
@@ -93,22 +112,42 @@ const NotificationsSettings: React.FC = () => {
                         {t('notifications.description')}
                     </p>
 
-                    <div className="settings-controls" style={{ display: 'flex', alignItems: 'center', marginBottom: '20px', gap: '12px', userSelect: 'none' }}>
-                        <label className="toggle-switch">
-                            <input
-                                type="checkbox"
-                                checked={enabled}
-                                onChange={(e) => handleSaveEnabled(e.target.checked)}
-                            />
-                            <span className="toggle-slider" style={enabled ? { backgroundColor: 'var(--accent-primary)' } : {}}></span>
-                        </label>
-                        <span
-                            className="toggle-label"
-                            onClick={() => handleSaveEnabled(!enabled)}
-                            style={{ fontSize: '15px', color: enabled ? 'var(--text-primary)' : 'var(--text-secondary)' }}
-                        >
-                            {t('notifications.enable')}
-                        </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '30px' }}>
+                        <div className="settings-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px', userSelect: 'none' }}>
+                            <label className="toggle-switch">
+                                <input
+                                    type="checkbox"
+                                    checked={enabled}
+                                    onChange={(e) => handleSaveEnabled(e.target.checked)}
+                                />
+                                <span className="toggle-slider" style={enabled ? { backgroundColor: 'var(--accent-primary)' } : {}}></span>
+                            </label>
+                            <span
+                                className="toggle-label"
+                                onClick={() => handleSaveEnabled(!enabled)}
+                                style={{ fontSize: '15px', color: enabled ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                            >
+                                {t('notifications.enable')}
+                            </span>
+                        </div>
+
+                        <div className="settings-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px', userSelect: 'none' }}>
+                            <label className="toggle-switch">
+                                <input
+                                    type="checkbox"
+                                    checked={systemEnabled}
+                                    onChange={(e) => handleSaveSystemEnabled(e.target.checked)}
+                                />
+                                <span className="toggle-slider" style={systemEnabled ? { backgroundColor: 'var(--accent-primary)' } : {}}></span>
+                            </label>
+                            <span
+                                className="toggle-label"
+                                onClick={() => handleSaveSystemEnabled(!systemEnabled)}
+                                style={{ fontSize: '15px', color: systemEnabled ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                            >
+                                {t('notifications.system_enable')}
+                            </span>
+                        </div>
                     </div>
 
                     <div

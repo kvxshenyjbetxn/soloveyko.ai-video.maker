@@ -52,18 +52,31 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const tasksRef = useRef<QueueTask[]>([]);
     useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
-    const sendTelegramNotification = useCallback(async (msg: string) => {
+    const sendNotification = useCallback(async (msg: string) => {
         try {
+            // Telegram
             // @ts-ignore
-            const enabled = await window.go.main.App.GetTelegramNotificationsEnabled();
-            if (!enabled) return;
+            const tgEnabled = await window.go.main.App.GetTelegramNotificationsEnabled();
+            if (tgEnabled) {
+                // @ts-ignore
+                const chatID = await window.go.main.App.GetTelegramChatID();
+                if (chatID) {
+                    // @ts-ignore
+                    await window.go.main.App.SendTelegramNotification(chatID, msg);
+                }
+            }
+
+            // System
             // @ts-ignore
-            const chatID = await window.go.main.App.GetTelegramChatID();
-            if (!chatID) return;
-            // @ts-ignore
-            await window.go.main.App.SendTelegramNotification(chatID, msg);
+            const sysEnabled = await window.go.main.App.GetSystemNotificationsEnabled();
+            if (sysEnabled && ("Notification" in window) && Notification.permission === "granted") {
+                new Notification("Soloveyko.AI", {
+                    body: msg.replace(/\*/g, ''), // remove markdown bold for system notification
+                    icon: '/icon.png'
+                });
+            }
         } catch (err) {
-            console.error("Failed to send telegram notification:", err);
+            console.error("Failed to send notification:", err);
         }
     }, []);
 
@@ -314,7 +327,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
                 // Send Telegram Notification if enabled
                 const msg = `${t('notifications.queue_completed_title')}\n\n${t('notifications.queue_completed_msg')}\n${t('notifications.tasks_completed')}: ${pending.length}\n${t('notifications.duration')}: ${durStr}`;
-                await sendTelegramNotification(msg);
+                await sendNotification(msg);
             }
         };
         run();
@@ -339,7 +352,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             const task = tasksRef.current.find(t => t.id === id);
             if (task) {
                 const msg = `${t('notifications.review_translation_title')}\n\n*${t('notifications.task_name')}*: ${task.subName || task.name}\n*${t('notifications.template')}*: ${task.folderName}`;
-                sendTelegramNotification(msg);
+                sendNotification(msg);
             }
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: true, controlContent: text } : t));
         });
@@ -347,7 +360,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             const task = tasksRef.current.find(t => t.id === id);
             if (task) {
                 const msg = `${t('notifications.review_images_title')}\n\n*${t('notifications.task_name')}*: ${task.subName || task.name}\n*${t('notifications.template')}*: ${task.folderName}`;
-                sendTelegramNotification(msg);
+                sendNotification(msg);
             }
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingImageControl: true } : t));
         });

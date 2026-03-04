@@ -703,8 +703,9 @@
     },
     "notifications": {
         "tab_title": "Уведомления",
-        "description": "Настройки уведомлений в Telegram",
-        "enable": "Включить уведомления",
+        "description": "Настройки уведомлений в Telegram и системе",
+        "enable": "Включить уведомления Telegram",
+        "system_enable": "Включить системные уведомления",
         "chat_id": "Telegram ID",
         "chat_id_placeholder": "Введите ваш Telegram ID...",
         "autofill": "Автозаполнение",
