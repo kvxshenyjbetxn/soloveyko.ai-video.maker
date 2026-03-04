@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -233,7 +232,7 @@ exit
 
 	// Запускаємо батнік як прихований процес
 	cmd := exec.Command("cmd", "/c", batchPath)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	PrepareHiddenCmd(cmd)
 	return cmd.Start()
 }
 
