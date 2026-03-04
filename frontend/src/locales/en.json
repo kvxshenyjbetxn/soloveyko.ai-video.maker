@@ -2,6 +2,25 @@
     "app": {
         "title": "Soloveyko.AI"
     },
+    "auth": {
+        "title": "Authorization",
+        "key_placeholder": "Enter access key...",
+        "save_key": "Save key",
+        "login": "Login",
+        "profile": "Profile",
+        "days_left": "Days left: {{days}}",
+        "expired": "Subscription expired",
+        "unlimited": "Unlimited",
+        "telegram_id": "Telegram ID: {{id}}",
+        "logout": "Logout",
+        "checking": "Checking...",
+        "subtitle": "Enter your access key to continue",
+        "invalid_key": "Invalid key. Please try again.",
+        "checking_error": "Error checking access key. Please check your internet connection.",
+        "error_expired": "Your subscription has expired. Please renew it.",
+        "error_hardware_mismatch": "This key is bound to another device.",
+        "error_invalid": "Invalid access key."
+    },
     "tabs": {
         "text": "Text",
         "queue": "Queue",

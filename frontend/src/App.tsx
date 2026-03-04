@@ -5,6 +5,9 @@ import { useQueue } from './contexts/QueueContext';
 import { useLogger } from './contexts/LoggerContext';
 import logo from './assets/logo.png';
 import { ConfirmModal } from './components/ConfirmModal';
+import { AuthWindow } from './components/AuthWindow';
+import { Profile } from './components/Profile';
+import { api } from '../wailsjs/go/models';
 
 // Import all tab components
 import { Translate } from './tabs/text/translate';
@@ -63,6 +66,60 @@ type TabPath = string;
 
 function App() {
     const { t } = useI18n();
+
+    // Auth State
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [authResponse, setAuthResponse] = useState<api.AuthResponse | null>(null);
+    const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+    const [authError, setAuthError] = useState<string | undefined>(undefined);
+
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                // @ts-ignore
+                const key = await window.go.main.App.GetSavedAuthKey();
+                if (key) {
+                    // @ts-ignore
+                    const response = await window.go.main.App.ValidateKey(key);
+                    if (response && response.valid) {
+                        setIsAuthenticated(true);
+                        setAuthResponse(response);
+                        sessionStorage.setItem('current_auth_key', key);
+                    }
+                }
+            } catch (e: any) {
+                console.error("Auth check failed:", e);
+                if (e && e.includes && e.includes("Subscription expired")) {
+                    setAuthError(e);
+                }
+            } finally {
+                setIsLoadingAuth(false);
+            }
+        };
+        checkAuth();
+    }, []);
+
+    const handleAuthentication = async (response: api.AuthResponse, key: string, save: boolean) => {
+        setIsAuthenticated(true);
+        setAuthResponse(response);
+        sessionStorage.setItem('current_auth_key', key);
+        if (save) {
+            // @ts-ignore
+            await window.go.main.App.SaveAuthKey(key);
+        } else {
+            // @ts-ignore
+            await window.go.main.App.ClearAuthKey();
+        }
+    };
+
+    const handleLogout = async () => {
+        setIsAuthenticated(false);
+        setAuthResponse(null);
+        sessionStorage.removeItem('current_auth_key');
+        // @ts-ignore
+        await window.go.main.App.ClearAuthKey();
+    };
+
     const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification } = useQueue();
     const pendingCount = tasks.filter(t => t.status === 'pending').length;
     const { addLog } = useLogger();
@@ -402,6 +459,14 @@ function App() {
         return null;
     };
 
+    if (isLoadingAuth) {
+        return <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>Loading...</div>;
+    }
+
+    if (!isAuthenticated) {
+        return <AuthWindow onAuthenticated={handleAuthentication} error={authError} />;
+    }
+
     return (
         <div className="app-container">
             {/* Top Header with Tabs */}
@@ -463,6 +528,8 @@ function App() {
                             <span>{t('tabs.logs')}</span>
                         </div>
                     </nav>
+
+                    <Profile authResponse={authResponse} onLogout={handleLogout} />
                 </div>
             </header>
 

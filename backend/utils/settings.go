@@ -221,6 +221,7 @@ type Settings struct {
 	Pipeline                      PipelineSettings `json:"pipeline"`
 	GoogleSheetURL                string           `json:"googleSheetURL"`
 	GoogleFilter                  string           `json:"googleFilter"`
+	AppAccessKey                  string           `json:"appAccessKey"`
 }
 
 type SettingsService struct {
@@ -1384,5 +1385,24 @@ func (s *SettingsService) SetGoogleFilter(filter string) error {
 		return err
 	}
 	settings.GoogleFilter = filter
+	return s.SaveSettings(settings)
+}
+
+// GetAppAccessKey повертає збережений ключ доступу до програми
+func (s *SettingsService) GetAppAccessKey() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.AppAccessKey
+}
+
+// SetAppAccessKey зберігає ключ доступу до програми
+func (s *SettingsService) SetAppAccessKey(key string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.AppAccessKey = key
 	return s.SaveSettings(settings)
 }
