@@ -34,6 +34,7 @@ import { Statistic } from './tabs/other/statistic';
 import { History } from './tabs/other/history';
 import { Logs } from './tabs/logs';
 import { GoogleIntegration } from './tabs/settings/api/google_integration';
+import NotificationsSettings from './tabs/settings/notifications';
 import { GoogleMonitor } from './components/GoogleMonitor';
 
 // Simple Icons (SVG)
@@ -85,6 +86,7 @@ function App() {
                         setIsAuthenticated(true);
                         setAuthResponse(response);
                         sessionStorage.setItem('current_auth_key', key);
+                        if (response.telegram_id) sessionStorage.setItem('telegram_id', response.telegram_id.toString());
                     }
                 }
             } catch (e: any) {
@@ -103,6 +105,7 @@ function App() {
         setIsAuthenticated(true);
         setAuthResponse(response);
         sessionStorage.setItem('current_auth_key', key);
+        if (response.telegram_id) sessionStorage.setItem('telegram_id', response.telegram_id.toString());
         if (save) {
             // @ts-ignore
             await window.go.main.App.SaveAuthKey(key);
@@ -116,6 +119,7 @@ function App() {
         setIsAuthenticated(false);
         setAuthResponse(null);
         sessionStorage.removeItem('current_auth_key');
+        sessionStorage.removeItem('telegram_id');
         // @ts-ignore
         await window.go.main.App.ClearAuthKey();
     };
@@ -258,6 +262,7 @@ function App() {
             case 'settings.api.assemblyai': return <AssemblyAI />;
             case 'settings.api.google': return <GoogleIntegration />;
             case 'settings.performance': return <Performance />;
+            case 'settings.notifications': return <NotificationsSettings />;
 
             // Other tabs
             case 'other.statistic': return <Statistic />;
@@ -313,6 +318,13 @@ function App() {
                         onClick={() => setCurrentPath('settings.performance')}
                     >
                         {t('settings.performance')}
+                    </div>
+
+                    <div
+                        className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'settings.notifications' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('settings.notifications')}
+                    >
+                        {t('notifications.tab_title')}
                     </div>
 
                     {/* API Section */}

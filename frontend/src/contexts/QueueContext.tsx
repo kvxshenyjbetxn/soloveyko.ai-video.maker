@@ -49,6 +49,23 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const taskCounterRef = useRef(1);
     const activeBatchRef = useRef<string[]>([]);
     const hasShownImageBatchNotificationRef = useRef(false);
+    const tasksRef = useRef<QueueTask[]>([]);
+    useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
+    const sendTelegramNotification = useCallback(async (msg: string) => {
+        try {
+            // @ts-ignore
+            const enabled = await window.go.main.App.GetTelegramNotificationsEnabled();
+            if (!enabled) return;
+            // @ts-ignore
+            const chatID = await window.go.main.App.GetTelegramChatID();
+            if (!chatID) return;
+            // @ts-ignore
+            await window.go.main.App.SendTelegramNotification(chatID, msg);
+        } catch (err) {
+            console.error("Failed to send telegram notification:", err);
+        }
+    }, []);
 
     const closeCompletionModal = () => setCompletionModal(prev => ({ ...prev, isOpen: false }));
     const closeImageControlNotification = () => setImageControlNotification({ isOpen: false });
@@ -294,6 +311,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 else if (m > 0) durStr = `${m}${t('common.unit_m')} ${s}${t('common.unit_s')}`;
                 else durStr = `${s}${t('common.unit_s')}`;
                 setTimeout(() => setCompletionModal({ isOpen: true, taskCount: pending.length, duration: durStr }), 800);
+
+                // Send Telegram Notification if enabled
+                const msg = `${t('notifications.queue_completed_title')}\n\n${t('notifications.queue_completed_msg')}\n${t('notifications.tasks_completed')}: ${pending.length}\n${t('notifications.duration')}: ${durStr}`;
+                await sendTelegramNotification(msg);
             }
         };
         run();
@@ -315,9 +336,19 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             }));
         });
         const uReq = EventsOn("requestControl", (id: string, text: string) => {
+            const task = tasksRef.current.find(t => t.id === id);
+            if (task) {
+                const msg = `${t('notifications.review_translation_title')}\n\n*${t('notifications.task_name')}*: ${task.subName || task.name}\n*${t('notifications.template')}*: ${task.folderName}`;
+                sendTelegramNotification(msg);
+            }
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: true, controlContent: text } : t));
         });
         const uImgReq = EventsOn("requestImageControl", (id: string) => {
+            const task = tasksRef.current.find(t => t.id === id);
+            if (task) {
+                const msg = `${t('notifications.review_images_title')}\n\n*${t('notifications.task_name')}*: ${task.subName || task.name}\n*${t('notifications.template')}*: ${task.folderName}`;
+                sendTelegramNotification(msg);
+            }
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingImageControl: true } : t));
         });
         const uFilesReq = EventsOn("requestExistingFilesCheck", (data: any) => {
@@ -327,7 +358,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setTasks(prev => prev.map(t => t.id === id ? { ...t, resultLength: length } : t));
         });
         return () => { uStatus(); uStage(); uReq(); uImgReq(); uFilesReq(); uTextResult(); };
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         if (!isProcessing || activeBatchRef.current.length === 0 || hasShownImageBatchNotificationRef.current) return;

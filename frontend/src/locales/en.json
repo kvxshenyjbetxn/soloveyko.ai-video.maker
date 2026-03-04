@@ -700,5 +700,26 @@
         "unit_s": "s",
         "stage": "Pipeline Stage",
         "select": "Select..."
+    },
+    "notifications": {
+        "tab_title": "Notifications",
+        "description": "Telegram Notification Settings",
+        "enable": "Enable Notifications",
+        "chat_id": "Telegram ID",
+        "chat_id_placeholder": "Enter your Telegram ID...",
+        "autofill": "Autofill",
+        "autofill_desc": "Get ID from your account",
+        "test": "Test Notification",
+        "test_sent": "Test notification sent!",
+        "test_error": "Failed to send: ",
+        "queue_completed_title": "✅ *Soloveyko.AI Video Maker*",
+        "queue_completed_msg": "Queue processing completed!",
+        "tasks_completed": "Tasks completed",
+        "duration": "Duration",
+        "review_translation_title": "📝 *Translation Review*",
+        "review_images_title": "🖼️ *Image Review*",
+        "task_name": "Task Name",
+        "template": "Template",
+        "message": "Message"
     }
 }

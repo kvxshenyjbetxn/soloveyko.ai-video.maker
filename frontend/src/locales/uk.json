@@ -710,5 +710,26 @@
     "unit_s": "с",
     "stage": "Етап пайплайну",
     "select": "Вибрати..."
+  },
+  "notifications": {
+    "tab_title": "Сповіщення",
+    "description": "Налаштування сповіщень у Telegram",
+    "enable": "Увімкнути сповіщення",
+    "chat_id": "Telegram ID",
+    "chat_id_placeholder": "Введіть ваш Telegram ID...",
+    "autofill": "Автозаповнення",
+    "autofill_desc": "Отримати ID з вашого акаунта",
+    "test": "Тестове сповіщення",
+    "test_sent": "Тестове сповіщення надіслано!",
+    "test_error": "Помилка відправки: ",
+    "queue_completed_title": "✅ *Soloveyko.AI Video Maker*",
+    "queue_completed_msg": "Обробку черги завершено!",
+    "tasks_completed": "Виконано завдань",
+    "duration": "Час виконання",
+    "review_translation_title": "📝 *Контроль перекладу*",
+    "review_images_title": "🖼️ *Контроль зображень*",
+    "task_name": "Назва завдання",
+    "template": "Шаблон",
+    "message": "Повідомлення"
   }
 }

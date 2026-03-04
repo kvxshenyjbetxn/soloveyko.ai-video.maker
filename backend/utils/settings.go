@@ -222,6 +222,8 @@ type Settings struct {
 	GoogleSheetURL                string           `json:"googleSheetURL"`
 	GoogleFilter                  string           `json:"googleFilter"`
 	AppAccessKey                  string           `json:"appAccessKey"`
+	TelegramNotificationsEnabled  bool             `json:"telegramNotificationsEnabled"`
+	TelegramChatID                string           `json:"telegramChatID"`
 }
 
 type SettingsService struct {
@@ -1404,5 +1406,43 @@ func (s *SettingsService) SetAppAccessKey(key string) error {
 		return err
 	}
 	settings.AppAccessKey = key
+	return s.SaveSettings(settings)
+}
+
+// GetTelegramNotificationsEnabled returns if Telegram notifications are enabled
+func (s *SettingsService) GetTelegramNotificationsEnabled() bool {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return false
+	}
+	return settings.TelegramNotificationsEnabled
+}
+
+// SetTelegramNotificationsEnabled saves if Telegram notifications are enabled
+func (s *SettingsService) SetTelegramNotificationsEnabled(enabled bool) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.TelegramNotificationsEnabled = enabled
+	return s.SaveSettings(settings)
+}
+
+// GetTelegramChatID returns the saved Telegram Chat ID
+func (s *SettingsService) GetTelegramChatID() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return ""
+	}
+	return settings.TelegramChatID
+}
+
+// SetTelegramChatID saves the Telegram Chat ID
+func (s *SettingsService) SetTelegramChatID(chatID string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.TelegramChatID = chatID
 	return s.SaveSettings(settings)
 }

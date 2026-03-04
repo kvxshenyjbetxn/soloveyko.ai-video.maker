@@ -700,5 +700,26 @@
         "unit_s": "с",
         "stage": "Этап пайплайна",
         "select": "Выбрать..."
+    },
+    "notifications": {
+        "tab_title": "Уведомления",
+        "description": "Настройки уведомлений в Telegram",
+        "enable": "Включить уведомления",
+        "chat_id": "Telegram ID",
+        "chat_id_placeholder": "Введите ваш Telegram ID...",
+        "autofill": "Автозаполнение",
+        "autofill_desc": "Получить ID из вашего аккаунта",
+        "test": "Тестовое уведомление",
+        "test_sent": "Тестовое уведомление отправлено!",
+        "test_error": "Ошибка отправки: ",
+        "queue_completed_title": "✅ *Soloveyko.AI Video Maker*",
+        "queue_completed_msg": "Обработка очереди завершена!",
+        "tasks_completed": "Выполнено задач",
+        "duration": "Время выполнения",
+        "review_translation_title": "📝 *Контроль перевода*",
+        "review_images_title": "🖼️ *Контроль изображений*",
+        "task_name": "Название задачи",
+        "template": "Шаблон",
+        "message": "Сообщение"
     }
 }

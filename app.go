@@ -41,6 +41,7 @@ type App struct {
 	productionStats *utils.ProductionStatsService
 	googleParser    *api.GoogleParserService
 	authService     *api.AuthService
+	telegramService *api.TelegramService
 }
 
 // NewApp creates a new App application struct
@@ -63,6 +64,7 @@ func NewApp() *App {
 		templates:       utils.NewTemplateService(),
 		googleParser:    api.NewGoogleParserService(),
 		authService:     api.NewAuthService(),
+		telegramService: api.NewTelegramService(),
 	}
 	app.galleryManager = utils.NewGalleryManager()
 	app.localWhisper = pipeline.NewLocalWhisperService()
@@ -1154,4 +1156,30 @@ func (a *App) ParseGoogleSheet() ([]api.GoogleParserRow, error) {
 
 	a.LogToUI("SUCCESS", fmt.Sprintf("[Google] Successfully parsed %d rows", len(results)), "google", "Google Parser")
 	return results, nil
+}
+
+// Telegram Notifications Methods
+
+func (a *App) GetTelegramNotificationsEnabled() bool {
+	return a.settings.GetTelegramNotificationsEnabled()
+}
+
+func (a *App) SaveTelegramNotificationsEnabled(enabled bool) error {
+	return a.settings.SetTelegramNotificationsEnabled(enabled)
+}
+
+func (a *App) GetTelegramChatID() string {
+	return a.settings.GetTelegramChatID()
+}
+
+func (a *App) SaveTelegramChatID(chatID string) error {
+	return a.settings.SetTelegramChatID(chatID)
+}
+
+func (a *App) SendTelegramNotification(chatID string, text string) error {
+	return a.telegramService.SendNotification(chatID, text)
+}
+
+func (a *App) TestTelegramNotification(chatID string) error {
+	return a.telegramService.SendNotification(chatID, "🔔 *Тестове сповіщення*\n\nСповіщення від Soloveyko.AI Video Maker успішно налаштовані!")
 }
