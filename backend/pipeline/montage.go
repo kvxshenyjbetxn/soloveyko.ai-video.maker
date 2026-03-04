@@ -230,9 +230,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	// Ensure the last clip is slightly longer to avoid "freezing" before audio ends.
-	// The final trim=duration=audioDur will cut it to the exact length.
+	// We use a larger buffer (1.5s) to ensure effects (zoompan/boomerang) continue until the very end.
 	if numFiles > 0 {
-		effectiveDurs[numFiles-1] += 0.5
+		effectiveDurs[numFiles-1] += 1.5
 	}
 
 	baseW, baseH := 1920, 1080
@@ -816,9 +816,10 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	montageV = currentMontageV
 
-	// Montage trim
+	// Montage trim (with a safety margin so it doesn't end before audio)
+	// The final -shortest flag will ensure the file ends exactly with the audio.
 	filterParts = append(filterParts, fmt.Sprintf(
-		"[%s]trim=duration=%.6f,setpts=PTS-STARTPTS[v_montage_final]", montageV, audioDur,
+		"[%s]trim=duration=%.6f,setpts=PTS-STARTPTS[v_montage_final]", montageV, audioDur+2.0,
 	))
 
 	finalV := "v_montage_final"
@@ -921,6 +922,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	cmdArgs = append(cmdArgs,
 		"-pix_fmt", "yuv420p",
 		"-r", strconv.Itoa(fps),
+		"-shortest",
 		outputFile,
 	)
 
