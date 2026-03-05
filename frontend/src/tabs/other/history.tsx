@@ -134,8 +134,10 @@ export const History = () => {
                                         className={`history-list-item ${selectedEntry?.id === entry.id ? 'selected' : ''}`}
                                         onClick={() => handleViewDetail(entry)}
                                     >
-                                        <div className="col-name">
-                                            <span className="history-item-name">{entry.taskName}</span>
+                                        <div className="col-name" title={entry.taskName}>
+                                            <span className="history-item-name">
+                                                {entry.taskName.length > 150 ? entry.taskName.substring(0, 147) + '...' : entry.taskName}
+                                            </span>
                                             {entry.templates && entry.templates.length > 0 && (
                                                 <span className="history-item-template">{entry.templates[0]}</span>
                                             )}
