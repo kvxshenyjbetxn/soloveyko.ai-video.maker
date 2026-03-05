@@ -237,7 +237,7 @@ exit
 }
 
 func (m *UpdateManager) applyMacOS(pkgPath, exePath string) error {
-	// На Mac exePath зазвичай вказує на Contents/MacOS/soloveyko всередині .app
+	// Знаходимо шлях до .app бандла
 	appPath := exePath
 	if idx := strings.Index(exePath, ".app/Contents/MacOS"); idx != -1 {
 		appPath = exePath[:idx+4]
@@ -245,71 +245,85 @@ func (m *UpdateManager) applyMacOS(pkgPath, exePath string) error {
 
 	shPath := filepath.Join(os.TempDir(), "soloveyko_update.sh")
 
-	// Створюємо скрипт для Mac з розширеним логуванням та надійнішою перевіркою
 	shContent := fmt.Sprintf(`#!/bin/bash
+# Логування
 exec > /tmp/soloveyko_update.log 2>&1
-echo "Update started: $(date)"
-echo "Archive: %s"
-echo "Target: %s"
+echo "--- Update Session: $(date) ---"
+echo "Target App Path: %s"
+echo "Package Path: %s"
 
-# Чекаємо виходу програми (до 5 секунд)
+# Перевірка на Translocation (macOS sandbox/security)
+if [[ "%s" == *"/AppTranslocation/"* ]]; then
+    echo "WARNING: App is running from a translocated path. Update may not persist."
+    echo "Suggest the user to move the app to /Applications."
+fi
+
+# Жорстко завершуємо всі процеси програми (до 5 секунд)
+APP_NAME="%s"
+echo "Closing application processes targeting $APP_NAME..."
 for i in {1..5}; do
-    if ! pgrep -f "%s" > /dev/null; then break; fi
-    echo "Waiting for app to close..."
+    pkill -9 -f "$APP_NAME" > /dev/null 2>&1
     sleep 1
+    if ! pgrep -f "$APP_NAME" > /dev/null; then break; fi
 done
 
 EXTRACT_DIR="/tmp/soloveyko_extract_$(date +%%s)"
 mkdir -p "$EXTRACT_DIR"
 
-echo "Extracting archive..."
-# Використовуємо ditto (Mac native) якщо є, або unzip
+echo "Extracting new version..."
 if command -v ditto >/dev/null 2>&1; then
     ditto -x -k "%s" "$EXTRACT_DIR"
 else
     unzip -q -o "%s" -d "$EXTRACT_DIR"
 fi
 
-# Шукаємо .app бандл (до 4 рівнів глибини, ігноруючи __MACOSX)
+# Пошук бандла
 NEW_APP=$(find "$EXTRACT_DIR" -maxdepth 4 -name "*.app" -type d | grep -v "__MACOSX" | head -n 1)
 
 if [ -n "$NEW_APP" ]; then
-    echo "Found bundle in archive: $NEW_APP"
+    echo "Found new bundle: $NEW_APP"
     
-    # Робимо бінарник всередині бандла виконуваним (на випадок якщо zip робився на Windows)
+    # Виправляємо права перед копіюванням
+    chmod -R 755 "$NEW_APP"
     find "$NEW_APP/Contents/MacOS" -type f -exec chmod +x {} + 2>/dev/null
+
+    # Атомна заміна: перейменовуємо стару версію замість негайного видалення
+    OLD_BACKUP="%s.old_backup"
+    rm -rf "$OLD_BACKUP"
     
-    echo "Replacing application bundle..."
-    rm -rf "%s"
-    cp -R "$NEW_APP" "%s"
+    echo "Moving old version to backup..."
+    mv "%s" "$OLD_BACKUP"
     
-    echo "Clearing quarantine flag..."
-    xattr -rd com.apple.quarantine "%s" 2>/dev/null
+    echo "Installing new version..."
+    ditto "$NEW_APP" "%s"
+    
+    if [ $? -eq 0 ]; then
+        echo "Installation successful. Cleaning quarantine..."
+        xattr -rd com.apple.quarantine "%s" 2>/dev/null
+        rm -rf "$OLD_BACKUP"
+    else
+        echo "ERROR: Installation failed. Restoring backup..."
+        mv "$OLD_BACKUP" "%s"
+    fi
     
     sync
-    echo "Launching new version..."
+    echo "Re-opening app..."
     open "%s"
 else
-    echo "No .app bundle found in archive, searching for binary..."
-    # Спроба знайти будь-який виконуваний файл або просто будь-який файл як бінарник
-    NEW_BIN=$(find "$EXTRACT_DIR" -maxdepth 4 -type f -perm +111 | head -n 1)
-    if [ -z "$NEW_BIN" ]; then NEW_BIN=$(find "$EXTRACT_DIR" -maxdepth 4 -type f | head -n 1); fi
-    
+    echo "CRITICAL ERROR: No .app bundle found in the archive!"
+    # Спроба прямої заміни бінарника
+    NEW_BIN=$(find "$EXTRACT_DIR" -maxdepth 4 -type f -executable | head -n 1)
     if [ -n "$NEW_BIN" ]; then
-        echo "Found potential binary: $NEW_BIN"
+        echo "Trying binary-only replacement for: %s"
         cp -af "$NEW_BIN" "%s"
         chmod +x "%s"
-        sync
         open "%s"
-    else
-        echo "ERROR: No suitable update files found in archive"
     fi
 fi
 
-echo "Cleaning up..."
 rm -rf "$EXTRACT_DIR"
-echo "Update finished."
-`, pkgPath, appPath, filepath.Base(exePath), pkgPath, pkgPath, appPath, appPath, appPath, appPath, exePath, exePath, appPath)
+echo "Update script finished."
+`, appPath, pkgPath, appPath, filepath.Base(exePath), pkgPath, pkgPath, appPath, appPath, appPath, appPath, appPath, appPath, exePath, exePath, exePath, appPath)
 
 	err := os.WriteFile(shPath, []byte(shContent), 0755)
 	if err != nil {
