@@ -340,7 +340,32 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageOverlayTriggersEnabled"].(bool); ok {
 		pSettings.MontageOverlayTriggersEnabled = val
 	}
-	// Note: MontageOverlayTriggers list is complex and currently not overridden from template map.
+	if val, ok := settings["montageOverlayTriggers"].([]interface{}); ok {
+		var triggers []utils.OverlayTrigger
+		for _, v := range val {
+			if m, ok := v.(map[string]interface{}); ok {
+				var tr utils.OverlayTrigger
+				if phrase, ok := m["phrase"].(string); ok {
+					tr.Phrase = phrase
+				}
+				if path, ok := m["path"].(string); ok {
+					tr.Path = path
+				}
+				if x, ok := m["x"].(float64); ok {
+					tr.X = int(x)
+				}
+				if y, ok := m["y"].(float64); ok {
+					tr.Y = int(y)
+				}
+				if tr.Phrase != "" && tr.Path != "" {
+					triggers = append(triggers, tr)
+				}
+			}
+		}
+		if len(triggers) > 0 {
+			pSettings.MontageOverlayTriggers = triggers
+		}
+	}
 
 	upW := int(math.Round(float64(baseW) * upFactor))
 	upH := int(math.Round(float64(baseH) * upFactor))
