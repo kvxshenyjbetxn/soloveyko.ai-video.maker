@@ -238,7 +238,6 @@ exit
 
 func (m *UpdateManager) applyMacOS(pkgPath, exePath string) error {
 	// На Mac exePath зазвичай вказує на Contents/MacOS/soloveyko всередині .app
-	// Нам потрібно знайти шлях до самої папки .app для правильної заміни
 	appPath := exePath
 	if idx := strings.Index(exePath, ".app/Contents/MacOS"); idx != -1 {
 		appPath = exePath[:idx+4]
@@ -246,46 +245,71 @@ func (m *UpdateManager) applyMacOS(pkgPath, exePath string) error {
 
 	shPath := filepath.Join(os.TempDir(), "soloveyko_update.sh")
 
-	// Створюємо скрипт для Mac
-	// 1. Чекаємо поки додаток закриється
-	// 2. Розпаковуємо у тимчасову папку
-	// 3. Шукаємо .app або файли
-	// 4. Знімаємо карантин (xattr)
-	// 5. Замінюємо та запускаємо через 'open'
+	// Створюємо скрипт для Mac з розширеним логуванням та надійнішою перевіркою
 	shContent := fmt.Sprintf(`#!/bin/bash
-sleep 2
+exec > /tmp/soloveyko_update.log 2>&1
+echo "Update started: $(date)"
+echo "Archive: %s"
+echo "Target: %s"
 
-EXTRACT_DIR="/tmp/soloveyko_update_$(date +%%s)"
+# Чекаємо виходу програми (до 5 секунд)
+for i in {1..5}; do
+    if ! pgrep -f "%s" > /dev/null; then break; fi
+    echo "Waiting for app to close..."
+    sleep 1
+done
+
+EXTRACT_DIR="/tmp/soloveyko_extract_$(date +%%s)"
 mkdir -p "$EXTRACT_DIR"
 
-unzip -q -o "%s" -d "$EXTRACT_DIR"
+echo "Extracting archive..."
+# Використовуємо ditto (Mac native) якщо є, або unzip
+if command -v ditto >/dev/null 2>&1; then
+    ditto -x -k "%s" "$EXTRACT_DIR"
+else
+    unzip -q -o "%s" -d "$EXTRACT_DIR"
+fi
 
-# Шукаємо .app бандл у розпакованих файлах (глибина до 2 рівнів)
-NEW_APP=$(find "$EXTRACT_DIR" -maxdepth 2 -name "*.app" -type d | head -n 1)
+# Шукаємо .app бандл (до 4 рівнів глибини, ігноруючи __MACOSX)
+NEW_APP=$(find "$EXTRACT_DIR" -maxdepth 4 -name "*.app" -type d | grep -v "__MACOSX" | head -n 1)
 
 if [ -n "$NEW_APP" ]; then
-    echo "Found .app bundle: $NEW_APP"
-    # Знімаємо карантин macOS (важливо для завантажених файлів)
-    xattr -rd com.apple.quarantine "$NEW_APP" 2>/dev/null
+    echo "Found bundle in archive: $NEW_APP"
     
-    # Видаляємо стару версію та копіюємо нову
+    # Робимо бінарник всередині бандла виконуваним (на випадок якщо zip робився на Windows)
+    find "$NEW_APP/Contents/MacOS" -type f -exec chmod +x {} + 2>/dev/null
+    
+    echo "Replacing application bundle..."
     rm -rf "%s"
     cp -R "$NEW_APP" "%s"
     
-    # Запускаємо через open, щоб GUI підхопився правильно
+    echo "Clearing quarantine flag..."
+    xattr -rd com.apple.quarantine "%s" 2>/dev/null
+    
+    sync
+    echo "Launching new version..."
     open "%s"
 else
-    echo "No .app bundle found, trying binary replacement"
-    # Якщо це просто бінарник, копіюємо його
-    cp -f "$EXTRACT_DIR/"* "$(dirname "%s")/" 2>/dev/null
-    chmod +x "%s"
-    open "%s"
+    echo "No .app bundle found in archive, searching for binary..."
+    # Спроба знайти будь-який виконуваний файл або просто будь-який файл як бінарник
+    NEW_BIN=$(find "$EXTRACT_DIR" -maxdepth 4 -type f -perm +111 | head -n 1)
+    if [ -z "$NEW_BIN" ]; then NEW_BIN=$(find "$EXTRACT_DIR" -maxdepth 4 -type f | head -n 1); fi
+    
+    if [ -n "$NEW_BIN" ]; then
+        echo "Found potential binary: $NEW_BIN"
+        cp -af "$NEW_BIN" "%s"
+        chmod +x "%s"
+        sync
+        open "%s"
+    else
+        echo "ERROR: No suitable update files found in archive"
+    fi
 fi
 
-# Чистимо за собою
+echo "Cleaning up..."
 rm -rf "$EXTRACT_DIR"
-rm -- "$0"
-`, pkgPath, appPath, appPath, appPath, exePath, exePath, appPath)
+echo "Update finished."
+`, pkgPath, appPath, filepath.Base(exePath), pkgPath, pkgPath, appPath, appPath, appPath, appPath, exePath, exePath, appPath)
 
 	err := os.WriteFile(shPath, []byte(shContent), 0755)
 	if err != nil {
