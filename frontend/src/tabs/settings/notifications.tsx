@@ -58,16 +58,24 @@ const NotificationsSettings: React.FC = () => {
         }
     };
 
-    const handleSaveChatID = async () => {
-        if (!chatID && enabled) {
-            showToast(t('common.error') + ": " + t('notifications.chat_id') + " is empty", "error");
+    const handleSaveChatID = async (idToSave?: string) => {
+        const targetID = idToSave !== undefined ? idToSave : chatID;
+
+        if (!targetID && enabled) {
+            // Don't show error on auto-save if empty, only on manual
+            if (idToSave === undefined) {
+                showToast(t('common.error') + ": " + t('notifications.chat_id') + " is empty", "error");
+            }
             return;
         }
+
         setIsSaving(true);
         try {
             // @ts-ignore
-            await window.go.main.App.SaveTelegramChatID(chatID);
-            showToast(t('common.save') + " OK", "success");
+            await window.go.main.App.SaveTelegramChatID(targetID);
+            if (idToSave === undefined) {
+                showToast(t('common.save') + " OK", "success");
+            }
         } catch (e) {
             console.error("Failed to save chat ID", e);
             showToast(t('common.error'), "error");
@@ -80,6 +88,7 @@ const NotificationsSettings: React.FC = () => {
         const id = sessionStorage.getItem('telegram_id');
         if (id) {
             setChatID(id);
+            handleSaveChatID(id);
         } else {
             showToast(t('common.error'), "error");
         }
@@ -166,6 +175,7 @@ const NotificationsSettings: React.FC = () => {
                                     className="settings-input"
                                     value={chatID}
                                     onChange={(e) => setChatID(e.target.value)}
+                                    onBlur={() => handleSaveChatID()}
                                     placeholder={t('notifications.chat_id_placeholder')}
                                     style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                                 />
@@ -183,7 +193,7 @@ const NotificationsSettings: React.FC = () => {
                         <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
                             <button
                                 className="btn-primary"
-                                onClick={handleSaveChatID}
+                                onClick={() => handleSaveChatID()}
                                 disabled={isSaving}
                                 style={{ padding: '10px 20px', borderRadius: '8px' }}
                             >

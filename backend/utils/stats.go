@@ -61,20 +61,61 @@ func (s *StatsService) GetSystemStats() (*SystemStats, error) {
 	// Disks
 	partitions, err := disk.Partitions(false)
 	if err == nil {
+		seenMounts := make(map[string]bool)
 		for _, partition := range partitions {
-			if strings.HasPrefix(partition.Mountpoint, "/dev") || strings.HasPrefix(partition.Mountpoint, "/sys") || strings.HasPrefix(partition.Mountpoint, "/proc") {
+			m := partition.Mountpoint
+
+			// Global filter for virtual/system filesystems
+			fs := strings.ToLower(partition.Fstype)
+			if fs == "devfs" || fs == "tmpfs" || fs == "autofs" || fs == "map" || fs == "nullfs" || fs == "procfs" || fs == "sysfs" {
 				continue
 			}
-			usage, err := disk.Usage(partition.Mountpoint)
+
+			// macOS specific filtering
+			if runtime.GOOS == "darwin" {
+				// Hide system-internal volumes that clutter the view
+				if strings.HasPrefix(m, "/System/Volumes/") && m != "/System/Volumes/Data" {
+					continue
+				}
+				if strings.HasPrefix(m, "/private/var/vm") || strings.Contains(m, "com.apple.TimeMachine") {
+					continue
+				}
+				// If we have both / and /System/Volumes/Data (modern macOS split),
+				// they show the same space. Keep / to avoid "double" disks.
+				if m == "/System/Volumes/Data" {
+					continue
+				}
+			}
+
+			// Windows/Linux general filter
+			if strings.HasPrefix(m, "/dev") || strings.HasPrefix(m, "/sys") || strings.HasPrefix(m, "/proc") {
+				continue
+			}
+
+			if seenMounts[m] {
+				continue
+			}
+
+			usage, err := disk.Usage(m)
 			if err == nil && usage.Total > 0 {
+				displayName := m
+				if runtime.GOOS == "darwin" {
+					if m == "/" {
+						displayName = "Macintosh HD"
+					} else if strings.HasPrefix(m, "/Volumes/") {
+						displayName = strings.TrimPrefix(m, "/Volumes/")
+					}
+				}
+
 				stats.Disks = append(stats.Disks, DiskInfo{
 					Device:      partition.Device,
-					Mountpoint:  partition.Mountpoint,
+					Mountpoint:  displayName,
 					Total:       usage.Total,
 					Free:        usage.Free,
 					Used:        usage.Used,
 					UsedPercent: usage.UsedPercent,
 				})
+				seenMounts[m] = true
 			}
 		}
 	}
@@ -101,33 +142,32 @@ func (s *StatsService) getWindowsGPUs() []GPUData {
 			gpus = append(gpus, GPUData{Name: name, Percent: 0})
 		}
 	} else {
-		psNamesCmd := "(Get-CimInstance Win32_VideoController).Name"
+		psNamesCmd := "(Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name | Sort-Object -Unique)"
 		out, err := runHiddenCommand("powershell", "-Command", psNamesCmd)
 		if err == nil {
 			lines := strings.Split(string(out), "\n")
 			for _, line := range lines {
 				name := strings.TrimSpace(line)
-				// Cleanup name
+				// Cleanup name from invisible characters
 				name = strings.Map(func(r rune) rune {
-					if r < 32 || r > 126 && r < 160 {
-						if r == '\n' || r == '\r' || r == '\t' {
-							return -1
-						}
+					if r < 32 || (r > 126 && r < 160) {
 						return -1
 					}
 					return r
 				}, name)
 
 				if name != "" {
-					// Avoid duplicates
-					duplicate := false
-					for _, g := range gpus {
-						if g.Name == name {
-							duplicate = true
+					// Avoid duplicates (system might still return similar names with different cases)
+					isDuplicate := false
+					normalizedCurrent := strings.ToLower(name)
+					for _, existing := range s.cachedGPUNames {
+						if strings.ToLower(existing) == normalizedCurrent {
+							isDuplicate = true
 							break
 						}
 					}
-					if !duplicate {
+
+					if !isDuplicate {
 						gpus = append(gpus, GPUData{Name: name, Percent: 0})
 						s.cachedGPUNames = append(s.cachedGPUNames, name)
 					}
