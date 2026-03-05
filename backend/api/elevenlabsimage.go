@@ -23,7 +23,7 @@ type ElevenLabsImageService struct {
 func NewElevenLabsImageService(settings *utils.SettingsService) *ElevenLabsImageService {
 	return &ElevenLabsImageService{
 		settings: settings,
-		baseUrl:  "https://voiceapi.csv666.ru/api/v1/image",
+		baseUrl:  "https://voiceapi.csv666.ru/api/v2/image",
 	}
 }
 
@@ -32,6 +32,9 @@ func (s *ElevenLabsImageService) ensureSemaphore() chan struct{} {
 	defer s.mu.Unlock()
 
 	max := s.settings.GetElevenLabsImageMaxConnections()
+	if max > 3 {
+		max = 3 // API v2 limit
+	}
 	if s.sem == nil || s.limit != max {
 		s.sem = make(chan struct{}, max)
 		s.limit = max
@@ -41,31 +44,56 @@ func (s *ElevenLabsImageService) ensureSemaphore() chan struct{} {
 }
 
 type ImageCreateRequest struct {
-	Prompt      string `json:"prompt"`
-	AspectRatio string `json:"aspect_ratio,omitempty"`
+	Prompt           string `json:"prompt"`
+	AspectRatio      string `json:"aspect_ratio,omitempty"`
+	PromptUpsampling bool   `json:"prompt_upsampling"`
+	GenerationMode   string `json:"generation_mode"`
+	SaveThumbnail    bool   `json:"save_thumbnail"`
+	NumImages        int    `json:"num_images"`
+}
+
+type ImageTaskResponse struct {
+	TaskID  int    `json:"task_id"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+type ImageStatusResponse struct {
+	TaskID       int     `json:"task_id"`
+	Status       string  `json:"status"` // queued, in_progress, completed, failed, cancelled
+	Progress     float64 `json:"progress"`
+	ErrorMessage string  `json:"error_message,omitempty"`
 }
 
 type ImageResultResponse struct {
-	ImageB64 string `json:"image_b64"`
+	ImageBase64 string `json:"image_base64"`
+	Images      []struct {
+		ImageBase64 string `json:"image_base64"`
+	} `json:"images"`
 }
 
 type ImageErrorResponse struct {
-	Detail    string `json:"detail"`
-	ErrorCode string `json:"error_code,omitempty"`
+	Detail string `json:"detail"`
+	Error  string `json:"error,omitempty"`
 }
 
-// GenerateImage генерує картинку за допомогою ElevenLabs Image
+// GenerateImage генерує картинку за допомогою ElevenLabs Image v2 (Асинхронно)
 func (s *ElevenLabsImageService) GenerateImage(apiKey string, prompt string, aspectRatio string, outputPath string) error {
 	sem := s.ensureSemaphore()
 	sem <- struct{}{}
 	defer func() { <-sem }()
 
-	client := &http.Client{Timeout: 300 * time.Second}
-	url := fmt.Sprintf("%s/create", s.baseUrl)
+	client := &http.Client{Timeout: 30 * time.Second}
 
+	// 1. Створити задачу
+	createUrl := fmt.Sprintf("%s/generate", s.baseUrl)
 	reqBody := ImageCreateRequest{
-		Prompt:      prompt,
-		AspectRatio: aspectRatio,
+		Prompt:           prompt,
+		AspectRatio:      aspectRatio,
+		PromptUpsampling: false,
+		GenerationMode:   "quality",
+		SaveThumbnail:    false,
+		NumImages:        1,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -74,14 +102,13 @@ func (s *ElevenLabsImageService) GenerateImage(apiKey string, prompt string, asp
 	}
 
 	if s.OnLogData != nil {
-		s.OnLogData("ElevenLabs Image Request", fmt.Sprintf("PROMPT: %s\nRATIO: %s", prompt, aspectRatio))
+		s.OnLogData("ElevenLabs Image v2 Request", fmt.Sprintf("PROMPT: %s\nRATIO: %s", prompt, aspectRatio))
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", createUrl, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
-
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", apiKey)
 
@@ -91,22 +118,106 @@ func (s *ElevenLabsImageService) GenerateImage(apiKey string, prompt string, asp
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		var errResp ImageErrorResponse
 		json.NewDecoder(resp.Body).Decode(&errResp)
-		return fmt.Errorf("ElevenLabs Image API failed (%d): %s", resp.StatusCode, errResp.Detail)
+		msg := errResp.Detail
+		if msg == "" {
+			msg = errResp.Error
+		}
+		return fmt.Errorf("ElevenLabs Image API (v2) Create failed (%d): %s", resp.StatusCode, msg)
 	}
 
-	var res ImageResultResponse
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+	var task ImageTaskResponse
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
 		return err
 	}
 
-	if res.ImageB64 == "" {
-		return fmt.Errorf("API returned empty image data")
+	if s.OnLog != nil {
+		s.OnLog("INFO", fmt.Sprintf("[ElevenLabs Image] Task created: %d, status: %s", task.TaskID, task.Status))
 	}
 
-	err = utils.SaveBase64Image(res.ImageB64, outputPath)
+	// 2. Опитування статусу
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	timeout := time.After(300 * time.Second)
+	statusUrl := fmt.Sprintf("%s/tasks/%d/status", s.baseUrl, task.TaskID)
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("ElevenLabs Image generation timed out after 5 minutes")
+		case <-ticker.C:
+			sReq, err := http.NewRequest("GET", statusUrl, nil)
+			if err != nil {
+				continue
+			}
+			sReq.Header.Set("X-API-Key", apiKey)
+
+			sResp, err := client.Do(sReq)
+			if err != nil {
+				continue
+			}
+
+			if sResp.StatusCode != http.StatusOK {
+				sResp.Body.Close()
+				continue
+			}
+
+			var status ImageStatusResponse
+			err = json.NewDecoder(sResp.Body).Decode(&status)
+			sResp.Body.Close()
+			if err != nil {
+				continue
+			}
+
+			if status.Status == "completed" {
+				goto retrieveResult
+			} else if status.Status == "failed" || status.Status == "cancelled" {
+				return fmt.Errorf("ElevenLabs Image task failed or cancelled: %s", status.ErrorMessage)
+			}
+
+			if s.OnLog != nil {
+				s.OnLog("INFO", fmt.Sprintf("[ElevenLabs Image] Task %d progress: %.2f", task.TaskID, status.Progress))
+			}
+		}
+	}
+
+retrieveResult:
+	// 3. Отримання результату
+	resultUrl := fmt.Sprintf("%s/tasks/%d/result?image_base64=true", s.baseUrl, task.TaskID)
+	rReq, err := http.NewRequest("GET", resultUrl, nil)
+	if err != nil {
+		return err
+	}
+	rReq.Header.Set("X-API-Key", apiKey)
+
+	rResp, err := client.Do(rReq)
+	if err != nil {
+		return err
+	}
+	defer rResp.Body.Close()
+
+	if rResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("ElevenLabs Image failed to retrieve result (%d)", rResp.StatusCode)
+	}
+
+	var res ImageResultResponse
+	if err := json.NewDecoder(rResp.Body).Decode(&res); err != nil {
+		return err
+	}
+
+	b64 := res.ImageBase64
+	if b64 == "" && len(res.Images) > 0 {
+		b64 = res.Images[0].ImageBase64
+	}
+
+	if b64 == "" {
+		return fmt.Errorf("API v2 returned empty image data")
+	}
+
+	err = utils.SaveBase64Image(b64, outputPath)
 	return err
 }
 

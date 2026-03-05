@@ -320,8 +320,8 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 	if settings.GooglerMaxVideoConnections <= 0 {
 		settings.GooglerMaxVideoConnections = 10
 	}
-	if settings.ElevenLabsImageMaxConnections <= 0 {
-		settings.ElevenLabsImageMaxConnections = 25
+	if settings.ElevenLabsImageMaxConnections <= 0 || settings.ElevenLabsImageMaxConnections > 3 {
+		settings.ElevenLabsImageMaxConnections = 3
 	}
 	if settings.SubtitleMaxConnections <= 0 {
 		settings.SubtitleMaxConnections = 2
