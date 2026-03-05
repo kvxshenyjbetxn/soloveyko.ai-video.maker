@@ -50,8 +50,9 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
 
     if (tasks.length === 0) return null;
 
-    const runningTasks = tasks.filter(t => t.status === 'running').length;
-    const pendingTasksCount = tasks.filter(t => t.status === 'pending').length;
+    const runningTasks = tasks.filter(t => t.status === 'running' || t.status === 'processing').length;
+    const pendingTasksCount = tasks.filter(t => t.status === 'pending' || t.status === 'waiting').length;
+    const totalActiveTasks = runningTasks + pendingTasksCount;
 
     return (
         <div className={`queue-monitor-wrapper ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`} ref={wrapperRef}>
@@ -108,13 +109,14 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
                                     <span className="task-text-preview" title={task.name}>{task.name}</span>
                                     <span className="task-mini-status">
                                         {task.status === 'pending' ? t('queue.status_pending') :
-                                            task.status === 'running' ? t('queue.status_running') :
-                                                task.status === 'completed' ? t('queue.status_completed') : t('queue.status_failed')}
+                                            task.status === 'running' || task.status === 'processing' ? t('queue.status_running') :
+                                                task.status === 'waiting' ? t('queue.status_waiting') :
+                                                    task.status === 'completed' ? t('queue.status_completed') : t('queue.status_failed')}
                                     </span>
                                 </div>
                             </div>
                             <div className="queue-mini-item-status">
-                                {task.status === 'running' && (
+                                {(task.status === 'running' || task.status === 'processing') && (
                                     <div className="mini-progress-ring">
                                         <svg viewBox="0 0 36 36" className="circular-chart">
                                             <path className="circle-bg"
@@ -141,7 +143,7 @@ export const QueueMonitor = ({ navigateTo }: QueueMonitorProps) => {
                 className={`queue-monitor-circle ${runningTasks > 0 ? 'is-running' : ''}`}
                 onClick={() => handleExpand(!isExpanded)}
             >
-                {pendingTasksCount > 0 && <div className="queue-count-badge">{pendingTasksCount}</div>}
+                {totalActiveTasks > 0 && <div className="queue-count-badge">{totalActiveTasks}</div>}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 18H18" /><path d="M6 12H18" /><path d="M6 6H18" /><circle cx="3" cy="6" r="1" /><circle cx="3" cy="12" r="1" /><circle cx="3" cy="18" r="1" /></svg>
 
                 {runningTasks > 0 && <div className="running-indicator"></div>}

@@ -90,7 +90,8 @@
     position: absolute;
     top: -2px;
     right: -2px;
-    background: #ff5252;
+    background: #475569;
+    /* Slate/Neutral for pending */
     color: white;
     font-size: 10px;
     font-weight: 800;
