@@ -15,7 +15,8 @@ import (
 func GetHardwareID() string {
 	var hwID string
 
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		cmd := exec.Command("reg", "query", `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography`, "/v", "MachineGuid")
 		PrepareHiddenCmd(cmd)
 		out, err := cmd.CombinedOutput()
@@ -26,7 +27,7 @@ func GetHardwareID() string {
 				hwID = matches[0]
 			}
 		}
-	} else if runtime.GOOS == "darwin" {
+	case "darwin":
 		cmd := exec.Command("ioreg", "-rd1", "-c", "IOPlatformExpertDevice")
 		PrepareHiddenCmd(cmd)
 		out, err := cmd.CombinedOutput()

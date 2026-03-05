@@ -228,6 +228,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 	}
 
+	isFromModal := hasSkippedInfo
 	if !hasSkippedInfo {
 		if _, err := os.Stat(finalDir); err == nil {
 			data := s.CheckExistingFiles(id, finalDir, taskType, settings)
@@ -238,6 +239,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 				if s.OnRequestExistingFilesCheck != nil {
 					s.log("INFO", "[Pipeline] Requesting user confirmation for existing files...", id, taskLabel)
 					s.OnRequestExistingFilesCheck(data)
+					isFromModal = true
 				}
 
 				// Block until result received
@@ -252,6 +254,33 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 	} else {
 		s.log("INFO", fmt.Sprintf("[Pipeline] Using pre-defined skipped stages: %v", skippedStages), id, taskLabel)
+	}
+
+	if isFromModal {
+		// If user was prompted, we respect their choice.
+		// If a stage is NOT in skippedStages, we should FORCE regeneration if it's already there
+		// to avoid the "auto-skip if file exists" behavior in sub-stages.
+		stagesToProcess := []string{"voice", "subtitle", "image"}
+		for _, stage := range stagesToProcess {
+			isSkipped := false
+			for _, st := range skippedStages {
+				if st == stage {
+					isSkipped = true
+					break
+				}
+			}
+			if !isSkipped {
+				switch stage {
+				case "voice":
+					settings["voiceoverRegenerate"] = true
+				case "subtitle":
+					settings["subtitleRegenerate"] = true
+				case "image":
+					settings["imageRegeneratePrompts"] = true
+					settings["imageGooglerRegenerateImages"] = true
+				}
+			}
+		}
 	}
 
 	settings["skippedStages"] = skippedStages

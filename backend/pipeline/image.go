@@ -610,7 +610,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			imgPath := filepath.Join(imagesDir, imgName)
 
 			// Check if file already exists
-			if _, err := os.Stat(imgPath); err == nil {
+			if _, err := os.Stat(imgPath); err == nil && !shouldRegeneratePrompts {
 				s.log("INFO", fmt.Sprintf("[Pollinations] Image %s already exists, skipping generation.", imgName), id, taskLabel)
 				successCount++
 				s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d i:%d/%d v:0", validPrompts, successCount, validPrompts))
@@ -781,7 +781,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 				// Skip if already exists
 				if isVideo {
-					if _, err := os.Stat(vidPath); err == nil {
+					if _, err := os.Stat(vidPath); err == nil && !shouldRegeneratePrompts {
 						imgMu.Lock()
 						s.log("INFO", fmt.Sprintf("[Googler] [%d] Video %s already exists, skipping.", aIdx, vidName), id, taskLabel)
 						successCount++
@@ -794,7 +794,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 						return
 					}
 				} else {
-					if _, err := os.Stat(imgPath); err == nil {
+					if _, err := os.Stat(imgPath); err == nil && !shouldRegeneratePrompts {
 						imgMu.Lock()
 						s.log("INFO", fmt.Sprintf("[Googler] [%d] Image %s already exists, skipping.", aIdx, imgName), id, taskLabel)
 						successCount++
