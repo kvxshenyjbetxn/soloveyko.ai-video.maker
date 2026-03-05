@@ -229,10 +229,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
-	// Ensure the last clip is slightly longer to avoid "freezing" before audio ends.
-	// We use a larger buffer (1.5s) to ensure effects (zoompan/boomerang) continue until the very end.
+	// Add a deep 4.0s buffer to the final clip. This completely absorbs ANY frame-rounding
+	// accumulation from the concat filter, and guarantees the final clip is actively
+	// animating (zoompan/boomerang) past the audio end.
 	if numFiles > 0 {
-		effectiveDurs[numFiles-1] += 1.5
+		effectiveDurs[numFiles-1] += 4.0
 	}
 
 	baseW, baseH := 1920, 1080
@@ -450,6 +451,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		visualOffset = 1
 	}
 
+	padAmount := 0.0
+	if !isFadeFast {
+		padAmount = 1.0 // Pad each clip to prevent xfade frame underrun
+	}
+
 	for idx, vFile := range visualFiles {
 		ext := strings.ToLower(filepath.Ext(vFile))
 		isVideo := videoExts[ext]
@@ -461,17 +467,18 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		if isVideo {
 			actualDur, _ := s.getDuration(ffprobePath, filepath.Join(finalDir, vFile))
 			requiredDur := effectiveDurs[idx]
+			paddedDur := requiredDur + padAmount
+
 			if actualDur > 0 && actualDur < requiredDur {
 				// Apply Boomerang Effect with infinite looping
 				s.log("INFO", fmt.Sprintf("[Montage] [%d] Applying boomerang loop (actual: %.2fs, req: %.2fs)", idx, actualDur, requiredDur), id, taskLabel)
-				loopFrames := int(actualDur * 2 * float64(fps))
 				filterParts = append(filterParts, fmt.Sprintf(
 					"[%d:v]trim=duration=%.6f,setpts=PTS-STARTPTS[f%d_1];"+
 						"[f%d_1]split=2[pts%d_a][pts%d_b];"+
 						"[pts%d_b]reverse,setpts=PTS-STARTPTS[b%d_wd];"+
 						"[pts%d_a][b%d_wd]concat=n=2:v=1[v%d_boom];"+
-						"[v%d_boom]loop=loop=-1:size=%d:start=0,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
-					idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, loopFrames, baseW, baseH, baseW, baseH, fps, requiredDur, vOut,
+						"[v%d_boom]loop=loop=-1:size=0:start=0,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+					idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, baseW, baseH, baseW, baseH, fps, paddedDur, vOut,
 				))
 			} else {
 				if actualDur <= 0 {
@@ -479,12 +486,13 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				}
 				effDur := math.Min(actualDur, requiredDur)
 				filterParts = append(filterParts, fmt.Sprintf(
-					"%strim=duration=%.6f,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,setpts=PTS-STARTPTS[%s]",
-					vIn, effDur, baseW, baseH, baseW, baseH, fps, vOut,
+					"%strim=duration=%.6f,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,tpad=stop_mode=clone:stop=-1,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+					vIn, effDur, baseW, baseH, baseW, baseH, fps, paddedDur, vOut,
 				))
 			}
 		} else { // Image
 			requiredDur := effectiveDurs[idx]
+			paddedDur := requiredDur + padAmount
 			vUp := fmt.Sprintf("v%d_up", idx)
 
 			// Scale to upscaled resolution
@@ -523,7 +531,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 			filterParts = append(filterParts, fmt.Sprintf(
 				"[%s]zoompan=z='%s':x='%s':y='%s':d=1:s=%dx%d:fps=%d,scale=%d:%d,fps=%d,format=yuv420p,setsar=1,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
-				vUp, zExpr, xExpr, yExpr, baseW, baseH, fps, baseW, baseH, fps, requiredDur, vOut,
+				vUp, zExpr, xExpr, yExpr, baseW, baseH, fps, baseW, baseH, fps, paddedDur, vOut,
 			))
 		}
 	}
@@ -538,9 +546,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			vOut := fmt.Sprintf("v%d_faded", i)
 			dur := effectiveDurs[i]
 
-			// Apply fade in and fade out
-			// Only fade in if not the first clip? Or always?
-			// The user said "затуханием и проявлением" (fade out and fade in).
 			// Limit fade duration to 40% of clip duration to prevent disappearing images
 			safeFade := transDur / 2
 			if safeFade > dur*0.4 {
@@ -554,10 +559,18 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			}
 			fadeOutDur := safeFade
 
-			filterParts = append(filterParts, fmt.Sprintf(
-				"[%s]fade=t=in:st=0:d=%.3f,fade=t=out:st=%.3f:d=%.3f[%s]",
-				vIn, fadeInDur, fadeOutSt, fadeOutDur, vOut,
-			))
+			if i == numFiles-1 {
+				// The last clip doesn't fade out locally. We fade out the final combined video globally!
+				filterParts = append(filterParts, fmt.Sprintf(
+					"[%s]fade=t=in:st=0:d=%.3f[%s]",
+					vIn, fadeInDur, vOut,
+				))
+			} else {
+				filterParts = append(filterParts, fmt.Sprintf(
+					"[%s]fade=t=in:st=0:d=%.3f,fade=t=out:st=%.3f:d=%.3f[%s]",
+					vIn, fadeInDur, fadeOutSt, fadeOutDur, vOut,
+				))
+			}
 			concatParts = append(concatParts, fmt.Sprintf("[%s]", vOut))
 			lastV = vOut
 		}
@@ -582,8 +595,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
+	// Pad the montage stream to infinity before subtitles, so subtitles have infinite frames to draw on.
+	// This prevents subtitles from freezing if the combined video naturally ends early due to rounding deficits.
+	filterParts = append(filterParts, fmt.Sprintf("[%s]tpad=stop_mode=clone:stop=-1[v_padded_montage]", lastV))
+
 	// Subtitles
-	montageV := lastV
+	montageV := "v_padded_montage"
 	assPath := filepath.Join(finalDir, "subtitle.ass")
 	if _, err := os.Stat(assPath); err == nil {
 		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles='subtitle.ass'[v_sub]", montageV))
@@ -816,10 +833,21 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	montageV = currentMontageV
 
-	// Montage trim (with a safety margin so it doesn't end before audio)
-	// The final -shortest flag will ensure the file ends exactly with the audio.
+	// Global Video Fade Out (At the exact end of actual audio)
+	finalFadeOut := ""
+	if transDur > 0 {
+		finalFadeSt := audioDur - (transDur / 2)
+		if finalFadeSt < 0 {
+			finalFadeSt = 0
+		}
+		finalFadeOut = fmt.Sprintf(",fade=t=out:st=%.3f:d=%.3f", finalFadeSt, transDur/2)
+	}
+
+	// Montage trim
+	// We trim exactly to audioDur to match the voice length.
+	// Because we added an infinite tpad before subtitles, there will NEVER be an underrun.
 	filterParts = append(filterParts, fmt.Sprintf(
-		"[%s]trim=duration=%.6f,setpts=PTS-STARTPTS[v_montage_final]", montageV, audioDur+2.0,
+		"[%s]trim=duration=%.6f%s,setpts=PTS-STARTPTS[v_montage_final]", montageV, audioDur, finalFadeOut,
 	))
 
 	finalV := "v_montage_final"
@@ -922,7 +950,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	cmdArgs = append(cmdArgs,
 		"-pix_fmt", "yuv420p",
 		"-r", strconv.Itoa(fps),
-		"-shortest",
 		outputFile,
 	)
 

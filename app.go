@@ -408,7 +408,6 @@ func (a *App) OpenPath(path string) {
 	}
 
 	if cmd != nil {
-		utils.PrepareHiddenCmd(cmd)
 		cmd.Run()
 	}
 }
