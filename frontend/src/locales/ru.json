@@ -585,7 +585,8 @@
             "fade_out": "Исчезновение (мс)",
             "services": {
                 "standard": "Whisper (Стандартный)",
-                "amd": "AMD Whisper (Только Windows/AMD)"
+                "amd": "AMD Whisper (Только Windows/AMD)",
+                "whisperx": "WhisperX"
             },
             "amd": {
                 "warning": "Этот сервис предназначен только для Windows и видеокарт AMD. При выборе он будет распакован в папку программы. Вы уверены, что хотите установить его?",

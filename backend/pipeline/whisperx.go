@@ -1,0 +1,135 @@
+package pipeline
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"soloveyko/backend/utils"
+)
+
+// ProcessWhisperX executes the WhisperX CLI executable for transcription and preserves JSON, SRT, and ASS files.
+func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir string, voiceFilePath string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
+	s.log("INFO", "[WhisperX] Starting WhisperX transcription process...", id, taskLabel)
+
+	// 1. Resolve paths
+	configDir := s.settings.GetConfigDir()
+	
+	// Check multiple possible locations for the executable
+	possibleExes := []string{
+		filepath.Join(configDir, "bin", "whisperx_cli.exe"),
+		filepath.Join(configDir, "bin", "whisperx_aligner_win", "whisperx_cli.exe"),
+	}
+
+	var whisperxExe string
+	for _, p := range possibleExes {
+		if _, err := os.Stat(p); err == nil {
+			whisperxExe = p
+			break
+		}
+	}
+
+	if whisperxExe == "" {
+		s.log("ERROR", "[WhisperX] WhisperX executable not found. Looked in: "+strings.Join(possibleExes, ", "), id, taskLabel)
+		return fmt.Errorf("whisperx executable not found. Please ensure whisperx_cli.exe is in your user/bin folder")
+	}
+
+	ffmpegExe := filepath.Join(configDir, "bin", "ffmpeg.exe")
+
+	// Check if karaoke effect is enabled
+	karaokeEffect := false
+	if val, ok := settings["subtitleKaraokeEffect"].(bool); ok {
+		karaokeEffect = val
+	}
+
+	// Output base path (WhisperX CLI adds .json and .srt)
+	outputBase := filepath.Join(finalDir, "whisperx_output")
+	outputJSONPath := outputBase + ".json"
+	outputSRTPath := outputBase + ".srt"
+
+	// 2. Prepare command
+	cmdArgs := []string{
+		"--audio", voiceFilePath,
+		"--output", outputBase,
+	}
+
+	// Model selection
+	sModel, _ := settings["subtitleModel"].(string)
+	if sModel == "" {
+		sModel = "base"
+	}
+	cmdArgs = append(cmdArgs, "--model", sModel)
+
+	// Language selection
+	if val, ok := settings["subtitleWhisperxLanguage"].(string); ok && val != "" {
+		cmdArgs = append(cmdArgs, "--language", val)
+	}
+
+	// FFmpeg path
+	if ffmpegExe != "" {
+		if _, err := os.Stat(ffmpegExe); err == nil {
+			cmdArgs = append(cmdArgs, "--ffmpeg-path", ffmpegExe)
+		}
+	}
+
+	// Device selection (auto by default)
+	cmdArgs = append(cmdArgs, "--device", "auto")
+
+	s.log("INFO", fmt.Sprintf("[WhisperX] Running command: %s %s", whisperxExe, strings.Join(cmdArgs, " ")), id, taskLabel)
+
+	cmd := exec.CommandContext(s.ctx, whisperxExe, cmdArgs...)
+	cmd.Dir = filepath.Dir(whisperxExe)
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUTF8=1")
+
+	// 3. Execute command
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Execution failed: %v", err), id, taskLabel)
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Output: %s", string(output)), id, taskLabel)
+		return fmt.Errorf("whisperx execution failed: %v", err)
+	}
+
+	s.log("INFO", "[WhisperX] Execution completed successfully.", id, taskLabel)
+
+	// 4. Handle output files
+	
+	// Ensure SRT is moved/copied to the standard location if needed, 
+	// but here we can just keep whisperx_output.srt and also create subtitle.srt
+	if _, err := os.Stat(outputSRTPath); err == nil {
+		subtitleSrtPath := filepath.Join(finalDir, "subtitle.srt")
+		srtData, _ := os.ReadFile(outputSRTPath)
+		_ = os.WriteFile(subtitleSrtPath, srtData, 0644)
+	}
+
+	// Parse output JSON and generate ASS
+	if _, err := os.Stat(outputJSONPath); os.IsNotExist(err) {
+		s.log("ERROR", "[WhisperX] Output JSON not found at "+outputJSONPath, id, taskLabel)
+		return fmt.Errorf("whisperx output JSON not found")
+	}
+
+	jsonBytes, err := os.ReadFile(outputJSONPath)
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Failed to read JSON: %v", err), id, taskLabel)
+		return fmt.Errorf("failed to read whisperx json: %v", err)
+	}
+
+	// Convert to ASS
+	assData, err := utils.JsonToAss(string(jsonBytes), pSettings, karaokeEffect)
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Failed to convert JSON to ASS: %v", err), id, taskLabel)
+		return fmt.Errorf("failed to convert json to ass: %v", err)
+	}
+
+	subtitleAssPath := filepath.Join(finalDir, "subtitle.ass")
+	err = os.WriteFile(subtitleAssPath, []byte(assData), 0644)
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Failed to save ASS file: %v", err), id, taskLabel)
+		return fmt.Errorf("failed to save ass file: %v", err)
+	}
+
+	s.log("SUCCESS", "[WhisperX] Subtitles created successfully (SRT, JSON, ASS preserved).", id, taskLabel)
+	return nil
+}
+

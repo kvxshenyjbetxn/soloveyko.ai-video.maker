@@ -422,6 +422,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.subtitleFadeEnabled === undefined) s.subtitleFadeEnabled = true;
                 if (s.subtitleFadeIn === undefined) s.subtitleFadeIn = 300;
                 if (s.subtitleFadeOut === undefined) s.subtitleFadeOut = 300;
+                if (s.subtitleKaraokeEffect === undefined) s.subtitleKaraokeEffect = false;
+                if (s.subtitleWhisperxLanguage === undefined) s.subtitleWhisperxLanguage = '';
 
                 if (!s.voiceoverService) { s.voiceoverService = 'elevenlabsbot'; updated = true; }
 
@@ -545,7 +547,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         // 4. Subtitle Settings
         const subtitleFields = [
             'subtitleService', 'subtitleModel', 'subtitleAmdLanguage', 'subtitleMaxLen', 'subtitleMaxWords',
-            'subtitleFont', 'subtitleSize', 'subtitleColor', 'subtitleFadeEnabled', 'subtitleFadeIn', 'subtitleFadeOut'
+            'subtitleFont', 'subtitleSize', 'subtitleColor', 'subtitleFadeEnabled', 'subtitleFadeIn', 'subtitleFadeOut',
+            'subtitleKaraokeEffect', 'subtitleWhisperxLanguage'
         ];
         subtitleFields.forEach(f => { if (settings[f] !== undefined) templateData.subtitle[f] = settings[f]; });
 

@@ -101,6 +101,13 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 	var result string
 	var err error
 
+	// Ensure only one whisper process (local, amd) runs at a time globally
+	// WhisperX is excluded to allow parallelism based on the subtitle semaphore settings
+	if sService == "standard" || sService == "amd" {
+		GlobalWhisperMutex.Lock()
+		defer GlobalWhisperMutex.Unlock()
+	}
+
 	switch sService {
 	case "standard":
 		result, err = s.localWhisper.TranscribeBase(voiceFilePath, sModel, pSettings.SubtitleMaxLen)
@@ -137,6 +144,16 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			s.emitStageStatus(id, "subtitle", "failed")
 			return err
 		}
+	case "whisperx":
+		err = s.ProcessWhisperX(id, taskLabel, finalDir, voiceFilePath, settings, pSettings)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[WhisperX] Failed: %v", err), id, taskLabel)
+			s.emitStageStatus(id, "subtitle", "failed")
+			return err
+		}
+		// WhisperX directly saves the ASS and JSON files, so we don't need to call saveSubtitles
+		s.emitStageStatus(id, "subtitle", "completed")
+		return nil
 	default:
 		s.log("WARN", fmt.Sprintf("[Pipeline] Service %s is not yet implemented for subtitle generation", sService), id, taskLabel)
 		s.emitStageStatus(id, "subtitle", "completed")

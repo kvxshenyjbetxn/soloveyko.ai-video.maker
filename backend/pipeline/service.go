@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// GlobalWhisperMutex ensures that only one Whisper (local, amd, or whisperx) process runs at a time globally.
+var GlobalWhisperMutex sync.Mutex
+
 // ControlAction represents an action from the UI control editor
 type ControlAction struct {
 	Action   string                 `json:"action"`   // "confirm", "regenerate", "cancel_queue"

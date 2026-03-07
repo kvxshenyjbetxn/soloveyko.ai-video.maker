@@ -106,7 +106,7 @@ export const Performance = () => {
                                 <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', maxWidth: '400px', lineHeight: '1.4' }}>{t('performanceTab.subtitle_max_concurrency_desc')}</span>
                             </div>
                             <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                                {(['standard', 'amd', 'assemblyai'] as const).map(s => (
+                                {(['standard', 'amd', 'whisperx', 'assemblyai'] as const).map(s => (
                                     <button key={s} onClick={() => { 
                                         setSubtitleService(s); 
                                         savePipelineField('subtitleService', s); 
@@ -115,7 +115,7 @@ export const Performance = () => {
                                             handleSubtitleMaxChange(5);
                                         }
                                     }} style={btnStyle(subtitleService === s)}>
-                                        {s === 'standard' ? 'Whisper' : s === 'amd' ? 'AMD' : 'AssemblyAI'}
+                                        {s === 'standard' ? 'Whisper' : s === 'amd' ? 'AMD' : s === 'whisperx' ? 'WhisperX' : 'AssemblyAI'}
                                     </button>
                                 ))}
                             </div>

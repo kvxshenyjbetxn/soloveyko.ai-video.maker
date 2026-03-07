@@ -43,7 +43,8 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
     const services = [
         { id: 'standard', name: t('pipeline.subtitle.services.standard') },
         { id: 'amd', name: t('pipeline.subtitle.services.amd') },
-        { id: 'assemblyai', name: 'AssemblyAI' }
+        { id: 'assemblyai', name: 'AssemblyAI' },
+        { id: 'whisperx', name: 'WhisperX' }
     ];
 
     useEffect(() => {
@@ -188,9 +189,9 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
             <div className={`stage-settings-content ${settings.subtitleCollapsed || !settings.subtitleEnabled ? 'collapsed' : ''}`}>
                 <div className="settings-group">
 
-                    {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && (
+                    {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd' || settings.subtitleService === 'whisperx') && (
                         <div className="settings-control">
-                            <label className="settings-label">{t('pipeline.model')} (Whisper)</label>
+                            <label className="settings-label">{t('pipeline.model')} ({settings.subtitleService === 'whisperx' ? 'WhisperX' : 'Whisper'})</label>
                             <select
                                 className="settings-select"
                                 value={settings.subtitleModel || 'base'}
@@ -279,6 +280,41 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                                 </>
                             )}
                         </>
+                    )}
+
+                    {settings.subtitleService === 'whisperx' && (
+                        <div className="settings-control">
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <label className="settings-label" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-primary)' }}>{t('pipeline.subtitle.karaoke_effect')}</span>
+                                    <span style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,0,195,0.1)', borderRadius: '4px', color: 'var(--accent-primary)' }}>Beta</span>
+                                </label>
+                                <label className="stage-switch small">
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.subtitleKaraokeEffect || false}
+                                        onChange={(e) => handleChange('subtitleKaraokeEffect', e.target.checked)}
+                                    />
+                                    <span className="stage-slider"></span>
+                                </label>
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '8px', lineHeight: '1.4' }}>
+                                {t('pipeline.subtitle.karaoke_desc') || "Генерує покадрово анімовані субтитри з точним підсвічуванням кожного слова під час вимови (зберігається як .ass)."}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {settings.subtitleService === 'whisperx' && (
+                        <div className="settings-control">
+                            <label className="settings-label">Мова (залиште порожнім для автовизначення)</label>
+                            <input
+                                type="text"
+                                className="settings-input"
+                                placeholder="en, uk, ru, ..."
+                                value={settings.subtitleWhisperxLanguage || ''}
+                                onChange={(e) => handleChange('subtitleWhisperxLanguage', e.target.value.toLowerCase().slice(0, 2))}
+                            />
+                        </div>
                     )}
 
                     {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd' || settings.subtitleService === 'assemblyai') && (

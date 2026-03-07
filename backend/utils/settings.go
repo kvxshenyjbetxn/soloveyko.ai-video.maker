@@ -98,10 +98,12 @@ type PipelineSettings struct {
 	SubtitleMaxWords    int    `json:"subtitleMaxWords,omitempty"`
 	SubtitleColor       string `json:"subtitleColor,omitempty"`
 	SubtitleSize        int    `json:"subtitleSize,omitempty"`
-	SubtitleFont        string `json:"subtitleFont,omitempty"`
-	SubtitleFadeEnabled bool   `json:"subtitleFadeEnabled"`
-	SubtitleFadeIn      int    `json:"subtitleFadeIn,omitempty"`
-	SubtitleFadeOut     int    `json:"subtitleFadeOut,omitempty"`
+	SubtitleFont             string `json:"subtitleFont,omitempty"`
+	SubtitleFadeEnabled      bool   `json:"subtitleFadeEnabled"`
+	SubtitleFadeIn           int    `json:"subtitleFadeIn,omitempty"`
+	SubtitleFadeOut          int    `json:"subtitleFadeOut,omitempty"`
+	SubtitleKaraokeEffect    bool   `json:"subtitleKaraokeEffect"`
+	SubtitleWhisperxLanguage string `json:"subtitleWhisperxLanguage,omitempty"`
 
 	// Image settings
 	ImageEnabled                   bool    `json:"imageEnabled"`
