@@ -113,6 +113,8 @@ export interface PipelineSettings {
     subtitleFadeEnabled: boolean;
     subtitleFadeIn: number;
     subtitleFadeOut: number;
+    subtitleKaraokeEffect: boolean;
+    subtitleWhisperxLanguage: string;
 
     montageEnabled: boolean;
     montageCollapsed: boolean;

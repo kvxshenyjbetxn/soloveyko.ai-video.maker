@@ -766,6 +766,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 customStagesEnabled: cleanApplied.customStagesEnabled ?? false,
                 montageOverlayTriggers: cleanApplied.montageOverlayTriggers ?? [],
                 montageOverlayTriggersEnabled: cleanApplied.montageOverlayTriggersEnabled ?? false,
+                subtitleKaraokeEffect: cleanApplied.subtitleKaraokeEffect ?? false,
+                subtitleWhisperxLanguage: cleanApplied.subtitleWhisperxLanguage ?? '',
             };
         });
     };

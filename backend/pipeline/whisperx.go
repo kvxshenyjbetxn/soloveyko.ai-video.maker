@@ -39,7 +39,7 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 	ffmpegExe := filepath.Join(configDir, "bin", "ffmpeg.exe")
 
 	// Check if karaoke effect is enabled
-	karaokeEffect := false
+	karaokeEffect := pSettings.SubtitleKaraokeEffect
 	if val, ok := settings["subtitleKaraokeEffect"].(bool); ok {
 		karaokeEffect = val
 	}
@@ -58,13 +58,21 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 	// Model selection
 	sModel, _ := settings["subtitleModel"].(string)
 	if sModel == "" {
+		sModel = pSettings.SubtitleModel
+	}
+	if sModel == "" {
 		sModel = "base"
 	}
 	cmdArgs = append(cmdArgs, "--model", sModel)
 
 	// Language selection
-	if val, ok := settings["subtitleWhisperxLanguage"].(string); ok && val != "" {
-		cmdArgs = append(cmdArgs, "--language", val)
+	language, _ := settings["subtitleWhisperxLanguage"].(string)
+	if language == "" {
+		language = pSettings.SubtitleWhisperxLanguage
+	}
+	
+	if language != "" {
+		cmdArgs = append(cmdArgs, "--language", language)
 	}
 
 	// FFmpeg path
