@@ -103,6 +103,8 @@ type PipelineSettings struct {
 	SubtitleFadeIn           int    `json:"subtitleFadeIn,omitempty"`
 	SubtitleFadeOut          int    `json:"subtitleFadeOut,omitempty"`
 	SubtitleKaraokeEffect    bool   `json:"subtitleKaraokeEffect"`
+	SubtitleKaraokeColor     string `json:"subtitleKaraokeColor,omitempty"`
+	SubtitleKaraokeMode      string `json:"subtitleKaraokeMode,omitempty"` // "fill" or "highlight"
 	SubtitleWhisperxLanguage string `json:"subtitleWhisperxLanguage,omitempty"`
 
 	// Image settings

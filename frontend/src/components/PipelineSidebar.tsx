@@ -423,6 +423,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.subtitleFadeIn === undefined) s.subtitleFadeIn = 300;
                 if (s.subtitleFadeOut === undefined) s.subtitleFadeOut = 300;
                 if (s.subtitleKaraokeEffect === undefined) s.subtitleKaraokeEffect = false;
+                if (s.subtitleKaraokeColor === undefined) s.subtitleKaraokeColor = '#ffd700';
+                if (s.subtitleKaraokeMode === undefined) s.subtitleKaraokeMode = 'highlight';
                 if (s.subtitleWhisperxLanguage === undefined) s.subtitleWhisperxLanguage = '';
 
                 if (!s.voiceoverService) { s.voiceoverService = 'elevenlabsbot'; updated = true; }
@@ -548,7 +550,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         const subtitleFields = [
             'subtitleService', 'subtitleModel', 'subtitleAmdLanguage', 'subtitleMaxLen', 'subtitleMaxWords',
             'subtitleFont', 'subtitleSize', 'subtitleColor', 'subtitleFadeEnabled', 'subtitleFadeIn', 'subtitleFadeOut',
-            'subtitleKaraokeEffect', 'subtitleWhisperxLanguage'
+            'subtitleKaraokeEffect', 'subtitleKaraokeColor', 'subtitleKaraokeMode', 'subtitleWhisperxLanguage'
         ];
         subtitleFields.forEach(f => { if (settings[f] !== undefined) templateData.subtitle[f] = settings[f]; });
 
@@ -767,6 +769,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 montageOverlayTriggers: cleanApplied.montageOverlayTriggers ?? [],
                 montageOverlayTriggersEnabled: cleanApplied.montageOverlayTriggersEnabled ?? false,
                 subtitleKaraokeEffect: cleanApplied.subtitleKaraokeEffect ?? false,
+                subtitleKaraokeColor: cleanApplied.subtitleKaraokeColor ?? '#ffd700',
+                subtitleKaraokeMode: cleanApplied.subtitleKaraokeMode ?? 'highlight',
                 subtitleWhisperxLanguage: cleanApplied.subtitleWhisperxLanguage ?? '',
             };
         });

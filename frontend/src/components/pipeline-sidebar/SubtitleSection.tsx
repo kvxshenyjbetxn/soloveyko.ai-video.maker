@@ -287,17 +287,65 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <label className="settings-label" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-primary)' }}>{t('pipeline.subtitle.karaoke_effect')}</span>
-                                    <span style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,0,195,0.1)', borderRadius: '4px', color: 'var(--accent-primary)' }}>Beta</span>
                                 </label>
                                 <label className="stage-switch small">
                                     <input
                                         type="checkbox"
                                         checked={settings.subtitleKaraokeEffect || false}
                                         onChange={(e) => handleChange('subtitleKaraokeEffect', e.target.checked)}
+                                    // settings.subtitleKaraokeEffect = e.target.checked
                                     />
                                     <span className="stage-slider"></span>
                                 </label>
                             </div>
+
+                            {settings.subtitleKaraokeEffect && (
+                                <div style={{ marginTop: '12px', padding: '12px', background: 'rgba(var(--accent-rgb), 0.03)', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    <div className="settings-control" style={{ marginBottom: 0 }}>
+                                        <label className="settings-label" style={{ fontSize: '11px' }}>Колір підсвічування</label>
+                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <div style={{
+                                                width: '24px',
+                                                height: '24px',
+                                                borderRadius: '4px',
+                                                backgroundColor: settings.subtitleKaraokeColor || '#ffd700',
+                                                border: '1px solid var(--border-color)',
+                                                position: 'relative',
+                                                overflow: 'hidden',
+                                                cursor: 'pointer'
+                                            }}>
+                                                <input
+                                                    type="color"
+                                                    value={settings.subtitleKaraokeColor || '#ffd700'}
+                                                    onChange={(e) => handleChange('subtitleKaraokeColor', e.target.value)}
+                                                    style={{ position: 'absolute', top: '-5px', left: '-5px', width: '40px', height: '40px', cursor: 'pointer', opacity: 0 }}
+                                                />
+                                            </div>
+                                            <input
+                                                type="text"
+                                                className="settings-input"
+                                                style={{ fontFamily: 'monospace', fontSize: '10px', textTransform: 'uppercase', height: '24px' }}
+                                                value={settings.subtitleKaraokeColor || '#ffd700'}
+                                                onChange={(e) => handleChange('subtitleKaraokeColor', e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="settings-control" style={{ marginBottom: 0 }}>
+                                        <label className="settings-label" style={{ fontSize: '11px' }}>Режим караоке</label>
+                                        <select
+                                            className="settings-select"
+                                            style={{ height: '28px', fontSize: '11px' }}
+                                            value={settings.subtitleKaraokeMode || 'highlight'}
+                                            onChange={(e) => handleChange('subtitleKaraokeMode', e.target.value)}
+                                        >
+                                            <option value="fill">Заливка (поступово)</option>
+                                            <option value="highlight">Підсвітка слова (послідовно)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+
                             <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '8px', lineHeight: '1.4' }}>
                                 {t('pipeline.subtitle.karaoke_desc') || "Генерує покадрово анімовані субтитри з точним підсвічуванням кожного слова під час вимови (зберігається як .ass)."}
                             </div>

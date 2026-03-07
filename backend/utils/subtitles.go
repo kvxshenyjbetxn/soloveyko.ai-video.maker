@@ -465,12 +465,28 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 
 				// &H0000D7FF -> BGR format for Gold/Yellow (#FFD700)
 				highlightColor := "&H0000D7FF"
+				if settings != nil && settings.SubtitleKaraokeColor != "" {
+					highlightColor = hexToAssColor(settings.SubtitleKaraokeColor)
+				}
 
-				// Animation: Start with base color, instantly switch to highlight at wStart, instantly switch back at wEnd
-				tag := fmt.Sprintf("{\\c%s&\\t(%d,%d,\\c%s&)\\t(%d,%d,\\c%s&)}",
-					primaryColor,
-					relStartMs, relStartMs+1, highlightColor,
-					relEndMs, relEndMs+1, primaryColor)
+				karaokeMode := "highlight"
+				if settings != nil && settings.SubtitleKaraokeMode != "" {
+					karaokeMode = settings.SubtitleKaraokeMode
+				}
+
+				tag := ""
+				if karaokeMode == "fill" {
+					// Gradual fill of the whole word while it's being spoken
+					tag = fmt.Sprintf("{\\c%s&\\t(%d,%d,\\c%s&)}",
+						primaryColor,
+						relStartMs, relEndMs, highlightColor)
+				} else {
+					// Sequential highlighting: word turns highlight color, then returns to primary
+					tag = fmt.Sprintf("{\\c%s&\\t(%d,%d,\\c%s&)\\t(%d,%d,\\c%s&)}",
+						primaryColor,
+						relStartMs, relStartMs+1, highlightColor,
+						relEndMs, relEndMs+1, primaryColor)
+				}
 
 				textBuilder.WriteString(tag)
 				textBuilder.WriteString(cleanSrtText(w.Word))

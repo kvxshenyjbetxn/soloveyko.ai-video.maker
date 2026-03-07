@@ -114,6 +114,8 @@ export interface PipelineSettings {
     subtitleFadeIn: number;
     subtitleFadeOut: number;
     subtitleKaraokeEffect: boolean;
+    subtitleKaraokeColor: string;
+    subtitleKaraokeMode: 'fill' | 'highlight';
     subtitleWhisperxLanguage: string;
 
     montageEnabled: boolean;
