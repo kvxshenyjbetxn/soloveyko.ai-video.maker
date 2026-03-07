@@ -298,8 +298,8 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                         </>
                     )}
 
-                    {/* --- ГРУПА: КАРАОКЕ ТА WHISPERX --- */}
-                    {settings.subtitleService === 'whisperx' && (
+                    {/* --- ГРУПА: КАРАОКЕ ТА WHISPERX/ASSEMBLY-AI --- */}
+                    {(settings.subtitleService === 'whisperx' || settings.subtitleService === 'assemblyai') && (
                         <div style={{
                             marginBottom: '16px',
                             padding: '16px',
@@ -405,7 +405,7 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                         </div>
                     )}
 
-                    {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd' || settings.subtitleService === 'assemblyai') && (
+                    {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && (
                         <>
                             {settings.subtitleService === 'standard' && (
                                 <div className="settings-control">

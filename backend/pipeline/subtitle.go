@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 // ProcessSubtitle handles subtitle generation using chosen transcriber
 func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
 	var sEnabled bool
+	var jsonRes string
 	if val, ok := settings["subtitleEnabled"].(bool); ok {
 		sEnabled = val
 	} else {
@@ -138,7 +140,14 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			return fmt.Errorf("AssemblyAI service not initialized")
 		}
 
-		result, err = s.assemblyAI.Transcribe(s.ctx, voiceFilePath)
+		if pSettings.SubtitleKaraokeEffect {
+			var srtRes string
+			srtRes, jsonRes, err = s.assemblyAI.TranscribeFull(s.ctx, voiceFilePath)
+			result = srtRes
+		} else {
+			result, err = s.assemblyAI.Transcribe(s.ctx, voiceFilePath)
+		}
+
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[AssemblyAI] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
@@ -161,6 +170,37 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 	}
 
 	// Save results (SRT and convert to ASS)
+	if sService == "assemblyai" && pSettings.SubtitleKaraokeEffect && jsonRes != "" {
+		// Save JSON (pretty-printed and unescaped for readability)
+		jsonPath := filepath.Join(finalDir, "subtitle.json")
+		var apiData interface{}
+		if err := json.Unmarshal([]byte(jsonRes), &apiData); err == nil {
+			if f, createErr := os.Create(jsonPath); createErr == nil {
+				enc := json.NewEncoder(f)
+				enc.SetEscapeHTML(false)
+				enc.SetIndent("", "  ")
+				_ = enc.Encode(apiData)
+				f.Close()
+			} else {
+				_ = os.WriteFile(jsonPath, []byte(jsonRes), 0644)
+			}
+		} else {
+			_ = os.WriteFile(jsonPath, []byte(jsonRes), 0644)
+		}
+
+		// Convert to ASS
+		assData, err := utils.JsonToAss(jsonRes, pSettings, true)
+		if err != nil {
+			s.log("WARN", fmt.Sprintf("[Subtitle] Failed to convert JSON to ASS: %v", err), id, taskLabel)
+		} else {
+			subtitleAssPath := filepath.Join(finalDir, "subtitle.ass")
+			_ = os.WriteFile(subtitleAssPath, []byte(assData), 0644)
+		}
+
+		// Still save SRT
+		return s.saveSubtitles(finalDir, result, id, taskLabel, pSettings)
+	}
+
 	err = s.saveSubtitles(finalDir, result, id, taskLabel, pSettings)
 	if err != nil {
 		s.emitStageStatus(id, "subtitle", "failed")
@@ -182,18 +222,22 @@ func (s *PipelineService) saveSubtitles(finalDir string, srtData string, id stri
 		return err
 	}
 
-	// 2. Convert to ASS and save
-	assData, err := utils.SrtToAss(srtData, pSettings)
-	if err != nil {
-		s.log("WARN", fmt.Sprintf("[Subtitle] Failed to convert to ASS: %v", err), id, taskLabel)
-		// We still have SRT, so we can continue
-	} else {
-		err = os.WriteFile(subtitleAssPath, []byte(assData), 0644)
+	// 2. Convert to ASS and save (only if not already exists - e.g. from high-quality JSON)
+	if _, statErr := os.Stat(subtitleAssPath); os.IsNotExist(statErr) {
+		assData, err := utils.SrtToAss(srtData, pSettings)
 		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[Subtitle] Failed to save ASS: %v", err), id, taskLabel)
-			return err
+			s.log("WARN", fmt.Sprintf("[Subtitle] Failed to convert to ASS: %v", err), id, taskLabel)
+			// We still have SRT, so we can continue
+		} else {
+			err = os.WriteFile(subtitleAssPath, []byte(assData), 0644)
+			if err != nil {
+				s.log("ERROR", fmt.Sprintf("[Subtitle] Failed to save ASS: %v", err), id, taskLabel)
+				return err
+			}
+			s.log("SUCCESS", "[Subtitle] Success: Subtitles saved in SRT and standard ASS formats", id, taskLabel)
 		}
-		s.log("SUCCESS", "[Subtitle] Success: Subtitles saved in SRT and high-quality ASS formats", id, taskLabel)
+	} else {
+		s.log("INFO", "[Subtitle] Skipping standard ASS generation (high-quality ASS already exists)", id, taskLabel)
 	}
 
 	return nil

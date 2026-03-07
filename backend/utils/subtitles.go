@@ -190,13 +190,34 @@ func cleanSrtText(text string, settings *PipelineSettings) string {
 // JsonToAss converts WhisperX JSON to an ASS subtitle format with optional karaoke tags
 func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect bool) (string, error) {
 	var result WhisperXResult
-	err := json.Unmarshal([]byte(jsonContent), &result)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse whisperx json: %v", err)
+	var assemblyRes AssemblyAIResult
+
+	// Try AssemblyAI format first (by checking if 'words' is present and structured like AssemblyAI)
+	var raw map[string]interface{}
+	_ = json.Unmarshal([]byte(jsonContent), &raw)
+
+	if _, ok := raw["words"]; ok {
+		err := json.Unmarshal([]byte(jsonContent), &assemblyRes)
+		if err == nil && len(assemblyRes.Words) > 0 {
+			// Convert AssemblyAI to WhisperX format
+			result.Language = "auto"
+			for _, aw := range assemblyRes.Words {
+				result.Words = append(result.Words, WhisperXWord{
+					Word:  aw.Text,
+					Start: float64(aw.Start) / 1000.0, // ms to s
+					End:   float64(aw.End) / 1000.0,   // ms to s
+					Score: 1.0,
+				})
+			}
+		}
 	}
 
+	// If result.Words is still empty, it might be WhisperX format
 	if len(result.Words) == 0 {
-		return "", fmt.Errorf("whisperx json contains no words")
+		err := json.Unmarshal([]byte(jsonContent), &result)
+		if err != nil || len(result.Words) == 0 {
+			return "", fmt.Errorf("unknown or empty JSON format for subtitles")
+		}
 	}
 
 	// Styles calculation
@@ -448,6 +469,17 @@ type WhisperXWord struct {
 	Start float64 `json:"start"`
 	End   float64 `json:"end"`
 	Score float64 `json:"score"`
+}
+
+type AssemblyAIWord struct {
+	Text  string `json:"text"`
+	Start int    `json:"start"`
+	End   int    `json:"end"`
+}
+
+type AssemblyAIResult struct {
+	Text  string           `json:"text"`
+	Words []AssemblyAIWord `json:"words"`
 }
 
 func formatSecondsToAss(totalSec float64) string {
