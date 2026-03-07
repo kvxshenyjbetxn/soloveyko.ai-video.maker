@@ -455,6 +455,15 @@ func GetImageTimings(finalDir string, audioDur float64, totalImages int, visualF
 		}
 	}
 
+	// Ensure the first timing starts at t=0.
+	// When the first subtitle starts after silence (e.g. at 0.5s), the gap from 0 to Start
+	// is not covered by any timing. In concat mode this causes ALL images to shift earlier
+	// by that gap amount, because sum(durations) < audioDur by exactly that gap.
+	if len(finalTimings) > 0 && finalTimings[0].Start > 0 {
+		finalTimings[0].Duration = finalTimings[0].End // Duration from 0 to End
+		finalTimings[0].Start = 0
+	}
+
 	// Refine to ensure exact match with audioDur
 	if len(finalTimings) > 0 {
 		finalTimings[len(finalTimings)-1].End = audioDur

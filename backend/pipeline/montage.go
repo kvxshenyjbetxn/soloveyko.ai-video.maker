@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"runtime"
 	"soloveyko/backend/utils"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -205,8 +206,18 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		} else {
 			for i, t := range timings {
 				if i < numFiles {
-					effectiveDurs[i] = t.Duration
-					if !isFadeFast {
+					if isFadeFast {
+						// [SYNC FIX] For concat mode: each clip must extend to the next clip's Start.
+						// Subtitle timings have gaps between them (silence between phrases).
+						// Using just t.Duration excludes these gaps, causing cumulative drift.
+						// Example: 101 gaps × ~0.09s avg = ~9s total drift.
+						if i < len(timings)-1 {
+							effectiveDurs[i] = timings[i+1].Start - t.Start
+						} else {
+							effectiveDurs[i] = audioDur - t.Start
+						}
+					} else {
+						effectiveDurs[i] = t.Duration
 						// We add transDur to each effective duration because xfade consumes it
 						effectiveDurs[i] += transDur
 					}
@@ -229,13 +240,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
-	// Add a deep 4.0s buffer to the final clip. This completely absorbs ANY frame-rounding
-	// accumulation from the concat filter, and guarantees the final clip is actively
-	// animating (zoompan/boomerang) past the audio end.
-	if numFiles > 0 {
-		effectiveDurs[numFiles-1] += 4.0
-	}
-
 	baseW, baseH := 1920, 1080
 	switch pSettings.MontageResolution {
 	case "720p":
@@ -248,6 +252,60 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if fps <= 0 {
 		fps = 30
 	}
+
+	// [SYNC FIX] Snap clip durations to exact frame boundaries for concat mode.
+	// Without this, each clip loses up to 1/fps seconds due to frame discretization,
+	// causing accumulated drift over many clips (e.g. ~0.5s over 100+ clips at 30fps).
+	// Uses the "largest remainder" method to distribute rounding residual.
+	if isFadeFast && numFiles > 1 {
+		totalFrames := int(math.Round(audioDur * float64(fps)))
+
+		// Compute ideal (fractional) frame counts
+		idealFrames := make([]float64, numFiles)
+		baseFrames := make([]int, numFiles)
+		baseSum := 0
+		for i := 0; i < numFiles; i++ {
+			idealFrames[i] = effectiveDurs[i] * float64(fps)
+			baseFrames[i] = int(math.Floor(idealFrames[i]))
+			if baseFrames[i] < 1 {
+				baseFrames[i] = 1
+			}
+			baseSum += baseFrames[i]
+		}
+
+		// Distribute remaining frames to clips with largest fractional remainders
+		remaining := totalFrames - baseSum
+		if remaining > 0 {
+			type indexRemainder struct {
+				idx       int
+				remainder float64
+			}
+			remainders := make([]indexRemainder, numFiles)
+			for i := 0; i < numFiles; i++ {
+				remainders[i] = indexRemainder{idx: i, remainder: idealFrames[i] - float64(baseFrames[i])}
+			}
+			sort.Slice(remainders, func(a, b int) bool {
+				return remainders[a].remainder > remainders[b].remainder
+			})
+			for j := 0; j < remaining && j < numFiles; j++ {
+				baseFrames[remainders[j].idx]++
+			}
+		}
+
+		// Apply snapped durations
+		for i := 0; i < numFiles; i++ {
+			effectiveDurs[i] = float64(baseFrames[i]) / float64(fps)
+		}
+		s.log("INFO", fmt.Sprintf("[Montage] Frame-snapped %d clips to exact boundaries (total: %d frames at %dfps)", numFiles, totalFrames, fps), id, taskLabel)
+	}
+
+	// Add a deep 4.0s buffer to the final clip. This completely absorbs ANY residual
+	// from the concat filter, and guarantees the final clip is actively
+	// animating (zoompan/boomerang) past the audio end.
+	if numFiles > 0 {
+		effectiveDurs[numFiles-1] += 4.0
+	}
+
 	upFactor := pSettings.MontageUpscaleFactor
 	if upFactor < 1.0 {
 		upFactor = 1.0
@@ -439,6 +497,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		loop       bool
 		path       string
 		streamLoop bool
+		framerate  int // Explicit -framerate for looped images (0 = not set)
 	}
 	var inputSpecs []inputSpec
 	var filterParts []string
@@ -487,7 +546,10 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		vIn := fmt.Sprintf("[%d:v]", idx+visualOffset)
 		vOut := fmt.Sprintf("v%d_final", idx)
 		relVFile := getRel(vFile)
-		inputSpecs = append(inputSpecs, inputSpec{loop: !isVideo, path: relVFile})
+		// For images: don't use -loop 1. zoompan with d=<frames> generates all
+		// needed frames from a single input image (its canonical usage).
+		// Using -loop 1 would feed at 25fps by default, causing rate mismatches.
+		inputSpecs = append(inputSpecs, inputSpec{loop: false, path: relVFile})
 
 		if isVideo {
 			actualDur, _ := s.getDuration(ffprobePath, filepath.Join(finalDir, vFile))
@@ -554,9 +616,16 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				yExpr = "ih/2-(ih/zoom/2)"
 			}
 
+			// Calculate exact frame count for zoompan to produce precise duration.
+			// Using d=<frames> instead of d=1 ensures zoompan generates exactly the
+			// right number of frames, preventing rate mismatches with the input stream.
+			exactFrames := int(math.Round(paddedDur * float64(fps)))
+			if exactFrames < 1 {
+				exactFrames = 1
+			}
 			filterParts = append(filterParts, fmt.Sprintf(
-				"[%s]zoompan=z='%s':x='%s':y='%s':d=1:s=%dx%d:fps=%d,scale=%d:%d,fps=%d,format=yuv420p,setsar=1,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
-				vUp, zExpr, xExpr, yExpr, baseW, baseH, fps, baseW, baseH, fps, paddedDur, vOut,
+				"[%s]zoompan=z='%s':x='%s':y='%s':d=%d:s=%dx%d:fps=%d,format=yuv420p,setsar=1,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+				vUp, zExpr, xExpr, yExpr, exactFrames, baseW, baseH, fps, paddedDur, vOut,
 			))
 		}
 	}
@@ -938,6 +1007,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	for _, spec := range inputSpecs {
 		// Removed -thread_queue_size 4096 here to save 24 chars per file.
 		// For 600 files, this saves ~15,000 characters, bypassing Windows 32KB command limit!
+		if spec.framerate > 0 {
+			cmdArgs = append(cmdArgs, "-framerate", strconv.Itoa(spec.framerate))
+		}
 		if spec.loop {
 			cmdArgs = append(cmdArgs, "-loop", "1")
 		}
