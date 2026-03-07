@@ -89,23 +89,35 @@ type PipelineSettings struct {
 	ControlCollapsed              bool    `json:"controlCollapsed"`
 
 	// Subtitle settings
-	SubtitleEnabled     bool   `json:"subtitleEnabled"`
-	SubtitleCollapsed   bool   `json:"subtitleCollapsed"`
-	SubtitleService     string `json:"subtitleService,omitempty"`
-	SubtitleModel       string `json:"subtitleModel,omitempty"`
-	SubtitleAmdLanguage string `json:"subtitleAmdLanguage,omitempty"`
-	SubtitleMaxLen      int    `json:"subtitleMaxLen,omitempty"`
-	SubtitleMaxWords    int    `json:"subtitleMaxWords,omitempty"`
-	SubtitleColor       string `json:"subtitleColor,omitempty"`
-	SubtitleSize        int    `json:"subtitleSize,omitempty"`
-	SubtitleFont             string `json:"subtitleFont,omitempty"`
-	SubtitleFadeEnabled      bool   `json:"subtitleFadeEnabled"`
-	SubtitleFadeIn           int    `json:"subtitleFadeIn,omitempty"`
-	SubtitleFadeOut          int    `json:"subtitleFadeOut,omitempty"`
-	SubtitleKaraokeEffect    bool   `json:"subtitleKaraokeEffect"`
-	SubtitleKaraokeColor     string `json:"subtitleKaraokeColor,omitempty"`
-	SubtitleKaraokeMode      string `json:"subtitleKaraokeMode,omitempty"` // "fill" or "highlight"
-	SubtitleWhisperxLanguage string `json:"subtitleWhisperxLanguage,omitempty"`
+	SubtitleEnabled          bool    `json:"subtitleEnabled"`
+	SubtitleCollapsed        bool    `json:"subtitleCollapsed"`
+	SubtitleService          string  `json:"subtitleService,omitempty"`
+	SubtitleModel            string  `json:"subtitleModel,omitempty"`
+	SubtitleAmdLanguage      string  `json:"subtitleAmdLanguage,omitempty"`
+	SubtitleMaxLen           int     `json:"subtitleMaxLen,omitempty"`
+	SubtitleMaxWords         int     `json:"subtitleMaxWords,omitempty"`
+	SubtitleColor            string  `json:"subtitleColor,omitempty"`
+	SubtitleOutlineColor     string  `json:"subtitleOutlineColor,omitempty"`
+	SubtitleOutlineWidth     float64 `json:"subtitleOutlineWidth"`
+	SubtitleShadowColor      string  `json:"subtitleShadowColor,omitempty"`
+	SubtitleShadowWidth      float64 `json:"subtitleShadowWidth"`
+	SubtitleBlur             float64 `json:"subtitleBlur"`
+	SubtitleSize             int     `json:"subtitleSize,omitempty"`
+	SubtitleFont             string  `json:"subtitleFont,omitempty"`
+	SubtitleUppercase        bool    `json:"subtitleUppercase"`
+	SubtitleKerning          float64 `json:"subtitleKerning"`
+	SubtitlePosition         string  `json:"subtitlePosition,omitempty"` // "bottom", "middle", "top"
+	SubtitleMarginV          int     `json:"subtitleMarginV,omitempty"`
+	SubtitleAnimation        string  `json:"subtitleAnimation,omitempty"` // "none", "slide-up"
+	SubtitleFadeEnabled      bool    `json:"subtitleFadeEnabled"`
+	SubtitleFadeIn           int     `json:"subtitleFadeIn"`
+	SubtitleFadeOut          int     `json:"subtitleFadeOut"`
+	SubtitleKaraokeEffect    bool    `json:"subtitleKaraokeEffect"`
+	SubtitleKaraokeColor     string  `json:"subtitleKaraokeColor,omitempty"`
+	SubtitleKaraokeMode      string  `json:"subtitleKaraokeMode,omitempty"` // "fill" or "highlight"
+	SubtitleKaraokeScale     float64 `json:"subtitleKaraokeScale,omitempty"`
+	SubtitleKaraokeSpeed     int     `json:"subtitleKaraokeSpeed"`
+	SubtitleWhisperxLanguage string  `json:"subtitleWhisperxLanguage,omitempty"`
 
 	// Image settings
 	ImageEnabled                   bool    `json:"imageEnabled"`
@@ -278,12 +290,20 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				RewriteModel:         "google/gemini-2.5-flash",
 				RewriteTemperature:   1.0,
 				RewriteEnabled:       true,
+				SubtitleKaraokeEffect: false,
+				SubtitleKaraokeSpeed:  100,
+				ImageEnabled:          true,
 				VoiceoverEnabled:     false,
 				SubtitleMaxLen:       40,
 				SubtitleMaxWords:     10,
 				SubtitleColor:        "#ffffff",
 				SubtitleSize:         24,
 				SubtitleFont:         "Arial",
+				SubtitleOutlineColor: "#000000",
+				SubtitleOutlineWidth: 2.0,
+				SubtitleShadowColor:  "#000000",
+				SubtitleShadowWidth:  1.0,
+				SubtitleBlur:         0.0,
 				SubtitleFadeEnabled:  true,
 				SubtitleFadeIn:       300,
 				SubtitleFadeOut:      300,

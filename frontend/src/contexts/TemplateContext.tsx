@@ -108,14 +108,27 @@ export interface PipelineSettings {
     subtitleAmdLanguage: string;
     subtitleMaxLen: number;
     subtitleColor: string;
+    subtitleOutlineColor: string;
+    subtitleOutlineWidth: number;
+    subtitleShadowColor: string;
+    subtitleShadowWidth: number;
+    subtitleBlur: number;
     subtitleSize: number;
     subtitleFont: string;
+    subtitleUppercase: boolean;
+    subtitleKerning: number;
+    subtitlePosition: 'bottom' | 'middle' | 'top';
+    subtitleMarginV: number;
+    subtitleBgEnabled: boolean;
+    subtitleBgColor: string;
+    subtitleAnimation: 'none' | 'slide-up';
     subtitleFadeEnabled: boolean;
     subtitleFadeIn: number;
     subtitleFadeOut: number;
     subtitleKaraokeEffect: boolean;
     subtitleKaraokeColor: string;
     subtitleKaraokeMode: 'fill' | 'highlight';
+    subtitleKaraokeScale: number;
     subtitleWhisperxLanguage: string;
 
     montageEnabled: boolean;

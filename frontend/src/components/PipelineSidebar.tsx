@@ -422,9 +422,22 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.subtitleFadeEnabled === undefined) s.subtitleFadeEnabled = true;
                 if (s.subtitleFadeIn === undefined) s.subtitleFadeIn = 300;
                 if (s.subtitleFadeOut === undefined) s.subtitleFadeOut = 300;
+                if (s.subtitleColor === undefined) s.subtitleColor = '#ffffff';
+                if (s.subtitleOutlineColor === undefined) s.subtitleOutlineColor = '#000000';
+                if (s.subtitleOutlineWidth === undefined) s.subtitleOutlineWidth = 2.0;
+                if (s.subtitleShadowColor === undefined) s.subtitleShadowColor = '#000000';
+                if (s.subtitleShadowWidth === undefined) s.subtitleShadowWidth = 1.0;
+                if (s.subtitleBlur === undefined) s.subtitleBlur = 0.0;
+                if (s.subtitleUppercase === undefined) s.subtitleUppercase = false;
+                if (s.subtitleKerning === undefined) s.subtitleKerning = 0.0;
+                if (s.subtitlePosition === undefined) s.subtitlePosition = 'bottom';
+                if (s.subtitleMarginV === undefined) s.subtitleMarginV = 80;
+                if (s.subtitleAnimation === undefined) s.subtitleAnimation = 'none';
                 if (s.subtitleKaraokeEffect === undefined) s.subtitleKaraokeEffect = false;
                 if (s.subtitleKaraokeColor === undefined) s.subtitleKaraokeColor = '#ffd700';
                 if (s.subtitleKaraokeMode === undefined) s.subtitleKaraokeMode = 'highlight';
+                if (s.subtitleKaraokeScale === undefined) s.subtitleKaraokeScale = 1.1;
+                if (s.subtitleKaraokeSpeed === undefined) s.subtitleKaraokeSpeed = 100;
                 if (s.subtitleWhisperxLanguage === undefined) s.subtitleWhisperxLanguage = '';
 
                 if (!s.voiceoverService) { s.voiceoverService = 'elevenlabsbot'; updated = true; }
@@ -549,8 +562,11 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         // 4. Subtitle Settings
         const subtitleFields = [
             'subtitleService', 'subtitleModel', 'subtitleAmdLanguage', 'subtitleMaxLen', 'subtitleMaxWords',
-            'subtitleFont', 'subtitleSize', 'subtitleColor', 'subtitleFadeEnabled', 'subtitleFadeIn', 'subtitleFadeOut',
-            'subtitleKaraokeEffect', 'subtitleKaraokeColor', 'subtitleKaraokeMode', 'subtitleWhisperxLanguage'
+            'subtitleFont', 'subtitleSize', 'subtitleColor', 'subtitleOutlineColor', 'subtitleOutlineWidth',
+            'subtitleShadowColor', 'subtitleShadowWidth', 'subtitleBlur', 'subtitleUppercase', 'subtitleKerning',
+            'subtitlePosition', 'subtitleMarginV', 'subtitleAnimation',
+            'subtitleFadeEnabled', 'subtitleFadeIn', 'subtitleFadeOut',
+            'subtitleKaraokeEffect', 'subtitleKaraokeColor', 'subtitleKaraokeMode', 'subtitleKaraokeScale', 'subtitleKaraokeSpeed', 'subtitleWhisperxLanguage'
         ];
         subtitleFields.forEach(f => { if (settings[f] !== undefined) templateData.subtitle[f] = settings[f]; });
 
@@ -768,10 +784,22 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 customStagesEnabled: cleanApplied.customStagesEnabled ?? false,
                 montageOverlayTriggers: cleanApplied.montageOverlayTriggers ?? [],
                 montageOverlayTriggersEnabled: cleanApplied.montageOverlayTriggersEnabled ?? false,
+                subtitleUppercase: cleanApplied.subtitleUppercase ?? false,
+                subtitleKerning: cleanApplied.subtitleKerning ?? 0,
+                subtitlePosition: cleanApplied.subtitlePosition ?? 'bottom',
+                subtitleMarginV: cleanApplied.subtitleMarginV ?? 80,
+                subtitleAnimation: cleanApplied.subtitleAnimation ?? 'none',
                 subtitleKaraokeEffect: cleanApplied.subtitleKaraokeEffect ?? false,
                 subtitleKaraokeColor: cleanApplied.subtitleKaraokeColor ?? '#ffd700',
                 subtitleKaraokeMode: cleanApplied.subtitleKaraokeMode ?? 'highlight',
+                subtitleKaraokeScale: cleanApplied.subtitleKaraokeScale ?? 1.1,
+                subtitleKaraokeSpeed: cleanApplied.subtitleKaraokeSpeed ?? 100,
                 subtitleWhisperxLanguage: cleanApplied.subtitleWhisperxLanguage ?? '',
+                subtitleOutlineColor: cleanApplied.subtitleOutlineColor ?? '#000000',
+                subtitleOutlineWidth: cleanApplied.subtitleOutlineWidth ?? 2,
+                subtitleShadowColor: cleanApplied.subtitleShadowColor ?? '#000000',
+                subtitleShadowWidth: cleanApplied.subtitleShadowWidth ?? 1,
+                subtitleBlur: cleanApplied.subtitleBlur ?? 0,
             };
         });
     };
