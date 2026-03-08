@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"soloveyko/backend/utils"
+	"strings"
 	"sync"
 	"time"
 )
@@ -161,6 +162,11 @@ func (s *OpenRouterService) GetOpenRouterSavedModels() []string {
 
 // Chat executes a chat completion request to OpenRouter with retries and concurrency limit
 func (s *OpenRouterService) Chat(id string, taskLabel string, taskType string, keyName string, apiKey string, model string, prompt string, temperature float64, maxTokens int) (string, error) {
+	return s.ChatWithHistory(id, taskLabel, taskType, keyName, apiKey, model, []ChatMessage{{Role: "user", Content: prompt}}, temperature, maxTokens)
+}
+
+// ChatWithHistory executes a chat completion request with a full history of messages
+func (s *OpenRouterService) ChatWithHistory(id string, taskLabel string, taskType string, keyName string, apiKey string, model string, messages []ChatMessage, temperature float64, maxTokens int) (string, error) {
 	sem := s.ensureSemaphore()
 	sem <- struct{}{}        // Acquire
 	defer func() { <-sem }() // Release
@@ -173,10 +179,8 @@ func (s *OpenRouterService) Chat(id string, taskLabel string, taskType string, k
 	client := &http.Client{Timeout: 300 * time.Second}
 
 	reqBody := ChatRequest{
-		Model: model,
-		Messages: []ChatMessage{
-			{Role: "user", Content: prompt},
-		},
+		Model:       model,
+		Messages:    messages,
 		Temperature: temperature,
 		MaxTokens:   maxTokens,
 	}
@@ -229,7 +233,12 @@ func (s *OpenRouterService) Chat(id string, taskLabel string, taskType string, k
 				}
 
 				if s.OnLogData != nil {
-					detailedLog := fmt.Sprintf("PROMPT:\n%s\n\nRESPONSE:\n%s", prompt, string(body))
+					// Build a representation of the conversation for logging
+					var convo strings.Builder
+					for _, m := range messages {
+						convo.WriteString(fmt.Sprintf("[%s]: %s\n\n", strings.ToUpper(m.Role), m.Content))
+					}
+					detailedLog := fmt.Sprintf("HISTORY:\n%s\nRESPONSE:\n%s", convo.String(), string(body))
 					s.OnLogData("OpenRouter Chat Completion", detailedLog)
 				}
 

@@ -163,6 +163,37 @@ func (s *PipelineService) ResetCancellation() {
 	s.cancelled.Store(false)
 }
 
+// LoadChatHistory loads chat history from a file in the task directory
+func (s *PipelineService) LoadChatHistory(finalDir string) ([]api.ChatMessage, error) {
+	historyPath := filepath.Join(finalDir, "chat_history.json")
+	if _, err := os.Stat(historyPath); os.IsNotExist(err) {
+		return []api.ChatMessage{}, nil
+	}
+
+	data, err := os.ReadFile(historyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var history []api.ChatMessage
+	if err := json.Unmarshal(data, &history); err != nil {
+		return nil, err
+	}
+
+	return history, nil
+}
+
+// SaveChatHistory saves chat history to a file in the task directory
+func (s *PipelineService) SaveChatHistory(finalDir string, history []api.ChatMessage) error {
+	historyPath := filepath.Join(finalDir, "chat_history.json")
+	data, err := json.MarshalIndent(history, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(historyPath, data, 0644)
+}
+
 func (s *PipelineService) runPipeline(id string, taskLabel string, taskType string, content string, settings map[string]interface{}, taskName string, subName string) (string, error) {
 	if s.cancelled.Load() {
 		return "", fmt.Errorf("queue execution cancelled")
@@ -305,6 +336,15 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	orSuccess := false
 	var err error
 
+	// 2. FS Stage - Prepare Directory (Already determined as finalDir)
+	if _, err := os.Stat(finalDir); os.IsNotExist(err) {
+		err = os.MkdirAll(finalDir, 0755)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[FileSystem] Failed to create directory: %v", err), id, taskLabel)
+			return "", err
+		}
+	}
+
 	for {
 		if s.cancelled.Load() {
 			return "", fmt.Errorf("queue execution cancelled")
@@ -315,12 +355,12 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 			processedText, err = s.LoadTextResult(finalDir, taskType)
 			if err != nil {
 				s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to load existing text: %v. Running generation anyway.", err), id, taskLabel)
-				processedText, orSuccess, err = s.ProcessText(id, taskLabel, taskType, content, settings, &pSettings)
+				processedText, orSuccess, err = s.ProcessText(id, taskLabel, taskType, content, finalDir, settings, &pSettings)
 			} else {
 				s.emitStageStatus(id, "text", "completed")
 			}
 		} else {
-			processedText, orSuccess, err = s.ProcessText(id, taskLabel, taskType, content, settings, &pSettings)
+			processedText, orSuccess, err = s.ProcessText(id, taskLabel, taskType, content, finalDir, settings, &pSettings)
 		}
 
 		if err != nil {
@@ -407,16 +447,6 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 
 		// If we reached here, it means we don't need to regenerate
 		break
-	}
-
-	// 2. FS Stage - Prepare Directory (Already determined as finalDir)
-
-	if _, err := os.Stat(finalDir); os.IsNotExist(err) {
-		err = os.MkdirAll(finalDir, 0755)
-		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[FileSystem] Failed to create directory: %v", err), id, taskLabel)
-			return "", err
-		}
 	}
 
 	// Save Text Result

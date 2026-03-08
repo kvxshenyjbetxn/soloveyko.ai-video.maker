@@ -360,7 +360,22 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			if detPrompt != "" {
 				s.log("INFO", "[Pipeline] Determining characters from text...", id, taskLabel)
 				s.emitStageStatus(id, "image", "running", "characters...")
-				charRes, err := s.openRouter.Chat(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, detPrompt+"\n\n"+processedText, temp, tokens)
+
+				var charRes string
+				var err error
+
+				if iMode == "memory" && iMemType == "external" {
+					history, _ := s.LoadChatHistory(finalDir)
+					history = append(history, bapi.ChatMessage{Role: "user", Content: detPrompt + "\n\n" + processedText})
+					charRes, err = s.openRouter.ChatWithHistory(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, history, temp, tokens)
+					if err == nil {
+						history = append(history, bapi.ChatMessage{Role: "assistant", Content: charRes})
+						s.SaveChatHistory(finalDir, history)
+					}
+				} else {
+					charRes, err = s.openRouter.Chat(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, detPrompt+"\n\n"+processedText, temp, tokens)
+				}
+
 				if err != nil {
 					s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to determine characters: %v", err), id, taskLabel)
 				} else {
@@ -457,57 +472,61 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 		generatedPromptsCount = loadedCount
 
-		for i, chunk := range chunks {
-			// Skip if already loaded from file
-			if prompts[i] != "" {
-				continue
-			}
-
-			wg.Add(1)
-			go func(index int, textChunk string) {
-				defer wg.Done()
-				var fullPrompt string
-				if strings.Contains(promptTemplate, "{{content}}") {
-					fullPrompt = strings.ReplaceAll(promptTemplate, "{{content}}", textChunk)
-				} else {
-					fullPrompt = promptTemplate + "\n\n" + textChunk
+		// For Full Memory (external), we MUST generate prompts sequentially to maintain history
+		if iMode == "memory" && iMemType == "external" {
+			s.log("INFO", "[Pipeline] Sequential prompt generation for Full Memory mode...", id, taskLabel)
+			for i, chunk := range chunks {
+				if prompts[i] != "" {
+					continue
 				}
 
-				if iMode == "memory" && iMemType == "primitive" {
-					contextText := memoryContexts[index]
-					if contextText != "" {
-						contextStr := contextText + "\n\n"
-						if strings.Contains(fullPrompt, "{{memory}}") {
-							fullPrompt = strings.ReplaceAll(fullPrompt, "{{memory}}", contextStr)
-						} else {
-							fullPrompt = contextStr + fullPrompt
-						}
-					} else {
-						fullPrompt = strings.ReplaceAll(fullPrompt, "{{memory}}", "")
-					}
-				}
+				fullPrompt := s.prepareFullPrompt(promptTemplate, chunk, "", iMode, "", processedText) // primitive context handled separately
 
-				// Final placeholder cleanup
-				fullPrompt = strings.ReplaceAll(fullPrompt, "{{memory}}", "")
-				fullPrompt = strings.ReplaceAll(fullPrompt, "{{characters}}", "")
+				history, _ := s.LoadChatHistory(finalDir)
+				history = append(history, bapi.ChatMessage{Role: "user", Content: fullPrompt})
 
-				// We use OpenRouter's internal Chat which handles rate limiting/semaphore automatically
-				res, err := s.openRouter.Chat(id, taskLabel, "image_prompt", orKeyName, orApiKey, orModel, fullPrompt, temp, tokens)
-
-				mu.Lock()
+				res, err := s.openRouter.ChatWithHistory(id, taskLabel, "image_prompt", orKeyName, orApiKey, orModel, history, temp, tokens)
 				if err != nil {
-					if genError == nil {
-						genError = err
-					}
+					genError = err
+					s.log("ERROR", fmt.Sprintf("[Pipeline] Prompt %d failed: %v", i+1, err), id, taskLabel)
 				} else {
-					prompts[index] = strings.TrimSpace(res)
+					prompts[i] = strings.TrimSpace(res)
 					generatedPromptsCount++
+					history = append(history, bapi.ChatMessage{Role: "assistant", Content: res})
+					s.SaveChatHistory(finalDir, history)
 					s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d/%d", generatedPromptsCount, len(chunks)))
 				}
-				mu.Unlock()
-			}(i, chunk)
+			}
+		} else {
+			for i, chunk := range chunks {
+				// Skip if already loaded from file
+				if prompts[i] != "" {
+					continue
+				}
+
+				wg.Add(1)
+				go func(index int, textChunk string) {
+					defer wg.Done()
+					fullPrompt := s.prepareFullPrompt(promptTemplate, textChunk, memoryContexts[index], iMode, iMemType, processedText)
+
+					// We use OpenRouter's internal Chat which handles rate limiting/semaphore automatically
+					res, err := s.openRouter.Chat(id, taskLabel, "image_prompt", orKeyName, orApiKey, orModel, fullPrompt, temp, tokens)
+
+					mu.Lock()
+					if err != nil {
+						if genError == nil {
+							genError = err
+						}
+					} else {
+						prompts[index] = strings.TrimSpace(res)
+						generatedPromptsCount++
+						s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d/%d", generatedPromptsCount, len(chunks)))
+					}
+					mu.Unlock()
+				}(i, chunk)
+			}
+			wg.Wait()
 		}
-		wg.Wait()
 
 		if generatedPromptsCount == 0 && len(chunks) > 0 {
 			if genError != nil {
@@ -1002,8 +1021,38 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 	} else {
 		s.log("ERROR", "[Pipeline] Image service is not selected!", id, taskLabel)
 	}
-
 	return nil
+}
+
+func (s *PipelineService) prepareFullPrompt(template string, chunk string, memory string, mode string, memType string, story string) string {
+	var fullPrompt string
+	if strings.Contains(template, "{{content}}") {
+		fullPrompt = strings.ReplaceAll(template, "{{content}}", chunk)
+	} else {
+		fullPrompt = template + "\n\n" + chunk
+	}
+
+	if mode == "memory" && memType == "primitive" {
+		if memory != "" {
+			contextStr := memory + "\n\n"
+			if strings.Contains(fullPrompt, "{{memory}}") {
+				fullPrompt = strings.ReplaceAll(fullPrompt, "{{memory}}", contextStr)
+			} else {
+				fullPrompt = contextStr + fullPrompt
+			}
+		}
+	}
+
+	// story mode logic or just global placeholder
+	if strings.Contains(fullPrompt, "{{story}}") {
+		fullPrompt = strings.ReplaceAll(fullPrompt, "{{story}}", story)
+	}
+
+	// Final placeholder cleanup
+	fullPrompt = strings.ReplaceAll(fullPrompt, "{{memory}}", "")
+	fullPrompt = strings.ReplaceAll(fullPrompt, "{{characters}}", "")
+
+	return fullPrompt
 }
 
 // RegenerateImage regenerates a single image/video for a given gallery path

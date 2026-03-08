@@ -2,12 +2,13 @@ package pipeline
 
 import (
 	"fmt"
+	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
 	"strings"
 )
 
 // ProcessText handles translation or rewriting using OpenRouter
-func (s *PipelineService) ProcessText(id string, taskLabel string, taskType string, content string, settings map[string]interface{}, pSettings *utils.PipelineSettings) (string, bool, error) {
+func (s *PipelineService) ProcessText(id string, taskLabel string, taskType string, content string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) (string, bool, error) {
 	var apiKey string
 	keyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
 
@@ -70,7 +71,32 @@ func (s *PipelineService) ProcessText(id string, taskLabel string, taskType stri
 		fullPrompt = prompt + "\n\n" + content
 	}
 
-	result, err := s.openRouter.Chat(id, taskLabel, taskType, keyName, apiKey, model, fullPrompt, temp, int(tokens))
+	// FULL MEMORY LOGIC
+	iMode, _ := settings["imageMode"].(string)
+	if iMode == "" {
+		iMode = pSettings.ImageMode
+	}
+	iMemType, _ := settings["imageMemoryType"].(string)
+	if iMemType == "" {
+		iMemType = pSettings.ImageMemoryType
+	}
+
+	var result string
+	var err error
+
+	if iMode == "memory" && iMemType == "external" {
+		history, _ := s.LoadChatHistory(finalDir)
+		history = append(history, api.ChatMessage{Role: "user", Content: fullPrompt})
+
+		result, err = s.openRouter.ChatWithHistory(id, taskLabel, taskType, keyName, apiKey, model, history, temp, int(tokens))
+		if err == nil {
+			history = append(history, api.ChatMessage{Role: "assistant", Content: result})
+			s.SaveChatHistory(finalDir, history)
+		}
+	} else {
+		result, err = s.openRouter.Chat(id, taskLabel, taskType, keyName, apiKey, model, fullPrompt, temp, int(tokens))
+	}
+
 	if err != nil {
 		s.log("ERROR", fmt.Sprintf("[OpenRouter] [%s] Error: %v", strings.Title(taskType), err), id, taskLabel)
 		s.emitStageStatus(id, "text", "failed")

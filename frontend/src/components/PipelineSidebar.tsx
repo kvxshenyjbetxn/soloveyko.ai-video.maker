@@ -800,6 +800,15 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 subtitleShadowColor: cleanApplied.subtitleShadowColor ?? '#000000',
                 subtitleShadowWidth: cleanApplied.subtitleShadowWidth ?? 1,
                 subtitleBlur: cleanApplied.subtitleBlur ?? 0,
+                // Image Generation Resets
+                imageMode: cleanApplied.imageMode ?? 'normal',
+                imageMemoryType: cleanApplied.imageMemoryType ?? 'primitive',
+                imageMemoryChars: cleanApplied.imageMemoryChars ?? 1000,
+                imageDetermineCharacters: cleanApplied.imageDetermineCharacters ?? false,
+                imageDetermineCharactersPrompt: cleanApplied.imageDetermineCharactersPrompt ?? '',
+                imagePromptModel: cleanApplied.imagePromptModel ?? '',
+                imagePromptTemperature: cleanApplied.imagePromptTemperature ?? 0.7,
+                imagePromptMaxTokens: cleanApplied.imagePromptMaxTokens ?? 0,
             };
         });
     };

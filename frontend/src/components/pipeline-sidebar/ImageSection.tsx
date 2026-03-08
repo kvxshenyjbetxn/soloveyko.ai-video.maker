@@ -254,7 +254,22 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             transition: 'all 0.2s'
                                         }}
                                     >
-                                        {t('pipeline.image.memory_type_primitive') || 'Примітивно'}
+                                        {t('pipeline.image.memory_type_primitive') || 'Коротка'}
+                                    </button>
+                                    <button
+                                        className={`method-toggle-btn ${settings.imageMemoryType === 'story' ? 'active' : ''}`}
+                                        onClick={() => handleChange('imageMemoryType', 'story')}
+                                        style={{
+                                            flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                            background: settings.imageMemoryType === 'story' ? 'var(--bg-primary)' : 'transparent',
+                                            color: settings.imageMemoryType === 'story' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                            fontSize: '12px', fontWeight: settings.imageMemoryType === 'story' ? 500 : 400,
+                                            boxShadow: settings.imageMemoryType === 'story' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        {t('pipeline.image.memory_type_story') || 'Історія'}
                                     </button>
                                     <button
                                         className={`method-toggle-btn ${settings.imageMemoryType === 'external' ? 'active' : ''}`}
@@ -269,14 +284,30 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             transition: 'all 0.2s'
                                         }}
                                     >
-                                        {t('pipeline.image.memory_type_external') || 'Сторонні сервіси'}
+                                        {t('pipeline.image.memory_type_external') || 'Повна'}
                                     </button>
                                 </div>
                             )}
 
-                            {((settings.imageMode || 'normal') === 'normal' || ((settings.imageMode === 'memory') && (settings.imageMemoryType || 'primitive') === 'primitive')) && (
+                            {((settings.imageMode || 'normal') === 'normal' || ((settings.imageMode === 'memory') && ((settings.imageMemoryType || 'primitive') === 'primitive' || settings.imageMemoryType === 'external' || settings.imageMemoryType === 'story'))) && (
                                 <>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: settings.imageMode === 'memory' ? '4px' : '0' }}>
+                                    {settings.imageMode === 'memory' && (settings.imageMemoryType || 'primitive') === 'primitive' && (
+                                        <div className="settings-slider-container" style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+                                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{t('pipeline.image.memory_chars') || "Кількість символів пам'яті:"} {settings.imageMemoryChars ?? 1000}</span>
+                                            <input
+                                                type="range"
+                                                className="settings-slider"
+                                                min="500"
+                                                max="5000"
+                                                step="100"
+                                                value={settings.imageMemoryChars ?? 1000}
+                                                style={{ '--range-progress': `${((settings.imageMemoryChars ?? 1000) - 500) / 4500 * 100}%`, marginTop: '8px', width: '100%' } as React.CSSProperties}
+                                                onChange={(e) => handleChange('imageMemoryChars', parseInt(e.target.value))}
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: '0px' }}>
                                         <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.determine_characters') || 'Визначити персонажів'}</label>
                                         <label className="stage-switch small">
                                             <input
@@ -303,22 +334,6 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             />
                                         </div>
                                     )}
-
-                                    {settings.imageMode === 'memory' && (
-                                        <div className="settings-slider-container" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-                                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{t('pipeline.image.memory_chars') || "Кількість символів пам'яті:"} {settings.imageMemoryChars ?? 1000}</span>
-                                            <input
-                                                type="range"
-                                                className="settings-slider"
-                                                min="500"
-                                                max="5000"
-                                                step="100"
-                                                value={settings.imageMemoryChars ?? 1000}
-                                                style={{ '--range-progress': `${((settings.imageMemoryChars ?? 1000) - 500) / 4500 * 100}%`, marginTop: '8px', width: '100%' } as React.CSSProperties}
-                                                onChange={(e) => handleChange('imageMemoryChars', parseInt(e.target.value))}
-                                            />
-                                        </div>
-                                    )}
                                 </>
                             )}
                         </div>
@@ -335,8 +350,16 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             placeholder={t('pipeline.image.prompt_placeholder') || 'Введіть промт...'}
                         />
                         <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                            {t('pipeline.image.prompt_placeholder')?.split('...').pop()?.trim() || 'Використовуйте {{content}} для вставки тексту'}
+                            {t('pipeline.image.prompt_placeholder')?.split('...').pop()?.trim() || 'Використовуйте {{content}} для вставки частини тексту'}
                         </div>
+                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            {'Використовуйте {{story}} для вставки всього тексту'}
+                        </div>
+                        {settings.imageDetermineCharacters && (
+                            <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                {'Використовуйте {{characters}} для вставки опису персонажів'}
+                            </div>
+                        )}
 
                         {content && content.trim() !== '' && (
                             <div style={{ fontSize: '11px', color: 'var(--accent-primary)', marginTop: '8px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
