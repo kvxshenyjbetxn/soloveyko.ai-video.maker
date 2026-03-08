@@ -41,14 +41,14 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
     };
 
     return (
-        <div className={`pipeline-stage-container ${settings.montageCollapsed || !settings.montageEnabled ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${settings.montageCollapsed ? 'is-collapsed' : ''}`}>
             <div
                 className="pipeline-stage-header"
                 onClick={() => handleChange('montageCollapsed', !settings.montageCollapsed)}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.montageCollapsed || !settings.montageEnabled ? 'rotated' : ''}`}
+                        className={`stage-chevron ${settings.montageCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -81,8 +81,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                             const val = e.target.checked;
                             setSettings((prev: any) => ({
                                 ...prev,
-                                montageEnabled: val,
-                                montageCollapsed: !val ? true : prev.montageCollapsed
+                                montageEnabled: val
                             }));
                         }}
                     />
@@ -90,7 +89,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                 </label>
             </div>
 
-            <div className={`stage-settings-content ${settings.montageCollapsed || !settings.montageEnabled ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${settings.montageCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     {/* Intro Video Setting */}
                     <div className="settings-control">

@@ -137,14 +137,14 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
     };
 
     return (
-        <div className={`pipeline-stage-container ${settings.subtitleCollapsed || !settings.subtitleEnabled ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${settings.subtitleCollapsed ? 'is-collapsed' : ''}`}>
             <div
                 className="pipeline-stage-header"
                 onClick={() => handleChange('subtitleCollapsed', !settings.subtitleCollapsed)}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.subtitleCollapsed || !settings.subtitleEnabled ? 'rotated' : ''}`}
+                        className={`stage-chevron ${settings.subtitleCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -177,8 +177,7 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                             const val = e.target.checked;
                             setSettings((prev: any) => ({
                                 ...prev,
-                                subtitleEnabled: val,
-                                subtitleCollapsed: !val ? true : prev.subtitleCollapsed
+                                subtitleEnabled: val
                             }));
                         }}
                     />
@@ -186,7 +185,7 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                 </label>
             </div>
 
-            <div className={`stage-settings-content ${settings.subtitleCollapsed || !settings.subtitleEnabled ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${settings.subtitleCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
 
                     {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd' || settings.subtitleService === 'whisperx') && (

@@ -36,14 +36,14 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
     }, [settings.voiceoverService]);
 
     return (
-        <div className={`pipeline-stage-container ${settings.voiceoverCollapsed || !settings.voiceoverEnabled ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${settings.voiceoverCollapsed ? 'is-collapsed' : ''}`}>
             <div
                 className="pipeline-stage-header"
                 onClick={() => handleChange('voiceoverCollapsed', !settings.voiceoverCollapsed)}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.voiceoverCollapsed || !settings.voiceoverEnabled ? 'rotated' : ''}`}
+                        className={`stage-chevron ${settings.voiceoverCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -76,8 +76,7 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                             const val = e.target.checked;
                             setSettings((prev: any) => ({
                                 ...prev,
-                                voiceoverEnabled: val,
-                                voiceoverCollapsed: !val ? true : prev.voiceoverCollapsed
+                                voiceoverEnabled: val
                             }));
                         }}
                     />
@@ -85,7 +84,7 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                 </label>
             </div>
 
-            <div className={`stage-settings-content ${settings.voiceoverCollapsed || !settings.voiceoverEnabled ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${settings.voiceoverCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     <div className="settings-control">
                         <label className="settings-label">{t('pipeline.voiceover.service') || 'Сервіс озвучки'}</label>
