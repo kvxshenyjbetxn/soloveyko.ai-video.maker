@@ -17,7 +17,7 @@ import { RegenerateModal } from '../components/RegenerateModal';
 
 
 // Memoized Card Component
-const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick, onSelectionToggle, onDelete, onRegenerate, isRegenerating }: any) => {
+const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick, onSelectionToggle, onDelete, onRegenerate, isRegenerating, buster, isDeleted }: any) => {
     const isVideo = img.url.toLowerCase().endsWith('.mp4');
     const [showPrompt, setShowPrompt] = useState(false);
     const [isInView, setIsInView] = useState(false);
@@ -46,16 +46,22 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
     }, []);
 
     return (
-        <div ref={cardRef} className={`gallery-card ${isSelected ? 'selected' : ''}`}
-            onClick={() => onCardClick(img)}>
+        <div ref={cardRef} className={`gallery-card ${isSelected ? 'selected' : ''} ${isDeleted ? 'is-deleted' : ''}`}
+            onClick={() => !isDeleted && onCardClick(img)}>
             <div className="media-container">
+                {isDeleted && (
+                    <div className="deleted-placeholder animate-fade">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></svg>
+                        <span className="deleted-label">Deleted</span>
+                    </div>
+                )}
                 {!isInView ? (
                     <div className="media-placeholder">
                         <div className="spinner-small"></div>
                     </div>
                 ) : isVideo ? (
                     <video
-                        src={`${img.url}?v=${Date.now()}`}
+                        src={`${img.url}?v=${buster}`}
                         muted
                         loop
                         playsInline
@@ -67,7 +73,7 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
                         }}
                     />
                 ) : (
-                    <img src={`${img.url}?thumb=1&v=${Date.now()}`} alt={img.name} loading="lazy" />
+                    <img src={`${img.url}?thumb=1&v=${buster}`} alt={img.name} loading="lazy" />
                 )}
 
                 {isRegenerating && (
@@ -134,10 +140,10 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
 });
 
 // Memoized Template Section
-const TemplateSection = React.memo(({ tpl, taskName, isCollapsed, onToggle, isSelectionMode, selectedPaths, onCardClick, onSelectionToggle, onDelete, onRegenerate, regeneratingPaths }: any) => {
+const TemplateSection = React.memo(({ tpl, taskName, isCollapsed, onToggle, isSelectionMode, selectedPaths, onCardClick, onSelectionToggle, onDelete, onRegenerate, regeneratingPaths, sessionBuster, busters, deletedPaths }: any) => {
     return (
         <div className={`template-section ${isCollapsed ? 'is-collapsed' : ''}`}>
-            <div className="template-header" onClick={onToggle}>
+            <div className="template-header" onClick={() => onToggle(taskName, tpl.name)}>
                 <div className="template-name">
                     <svg className="section-icon-minor" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
                     {tpl.name}
@@ -158,6 +164,8 @@ const TemplateSection = React.memo(({ tpl, taskName, isCollapsed, onToggle, isSe
                             onDelete={onDelete}
                             onRegenerate={onRegenerate}
                             isRegenerating={regeneratingPaths?.has(img.path)}
+                            buster={busters[img.path] || sessionBuster}
+                            isDeleted={deletedPaths.has(img.path)}
                         />
                     ))}
                 </div>
@@ -175,6 +183,32 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
     const [collapsedTemplates, setCollapsedTemplates] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [sessionBuster, setSessionBuster] = useState(Date.now());
+    const [busters, setBusters] = useState<Record<string, number>>({});
+    const [renderLimit, setRenderLimit] = useState(30);
+    const [deletedPaths, setDeletedPaths] = useState<Set<string>>(new Set());
+    const isDeletingRef = useRef(false);
+
+    const flatImages = useMemo(() => {
+        return tasks.reduce((acc: any[], task) => {
+            task.templates?.forEach(tpl => {
+                tpl.images?.forEach(img => {
+                    acc.push({ ...img, taskName: task.name, templateName: tpl.name });
+                });
+            });
+            return acc;
+        }, []);
+    }, [tasks]);
+
+    // Progressive loading effect
+    useEffect(() => {
+        if (!loading && renderLimit < flatImages.length) {
+            const timer = setTimeout(() => {
+                setRenderLimit(prev => Math.min(prev + 50, flatImages.length));
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, renderLimit, flatImages.length]);
 
     // Regeneration modal state
     const [isRegModalOpen, setIsRegModalOpen] = useState(false);
@@ -183,6 +217,12 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
 
     const { tasks: queueTasks, resumeImageControl, regeneratingPaths, addRegeneratingPath, removeRegeneratingPath } = useQueue();
     const isAwaitingControl = useMemo(() => queueTasks.some(t => t.isAwaitingImageControl), [queueTasks]);
+
+    const handleRefresh = useCallback(() => {
+        setSessionBuster(Date.now());
+        setDeletedPaths(new Set());
+        loadGallery();
+    }, []);
 
     const handleContinueProcessing = async () => {
         // Force hide gallery tab via event before switching
@@ -203,6 +243,7 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
             setLoading(true);
             const data = await GetGalleryImages();
             setTasks(data || []);
+            setRenderLimit(30); // Reset limit when loading new data
         } catch (error) {
             console.error('Failed to load gallery:', error);
         } finally {
@@ -214,13 +255,15 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
         loadGallery();
 
         const uStage = EventsOn('stageStatus', (id: string, stage: string, status: string) => {
-            if (stage === 'image' && status === 'completed') {
+            if (stage === 'image' && status === 'completed' && !isDeletingRef.current) {
                 loadGallery();
             }
         });
 
         const uUpdate = EventsOn('galleryUpdate', () => {
-            loadGallery();
+            if (!isDeletingRef.current) {
+                loadGallery();
+            }
         });
 
         return () => {
@@ -263,37 +306,49 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
     const handleDeleteImage = useCallback(async (path: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
         const app = (window as any).go.main.App;
+        
+        isDeletingRef.current = true;
+        // Add to deleted set immediately for UI feedback
+        setDeletedPaths(prev => new Set(prev).add(path));
+        
         const success = await app.DeleteGalleryImage(path);
         if (success) {
-            loadGallery();
             setSelectedMedia(prev => (prev?.path === path ? null : prev));
+        } else {
+            // Revert on failure
+            setDeletedPaths(prev => {
+                const next = new Set(prev);
+                next.delete(path);
+                return next;
+            });
         }
-    }, [loadGallery]);
+        // Small delay to ensure any pending events are skipped
+        setTimeout(() => { isDeletingRef.current = false; }, 500);
+    }, [loadGallery, setSelectedMedia]);
 
     const handleBulkDelete = async () => {
         if (selectedPaths.size === 0) return;
         const app = (window as any).go.main.App;
-        await app.DeleteGalleryImages(Array.from(selectedPaths));
+        
+        isDeletingRef.current = true;
+        const paths = Array.from(selectedPaths);
+        setDeletedPaths(prev => {
+            const next = new Set(prev);
+            paths.forEach(p => next.add(p));
+            return next;
+        });
+
+        await app.DeleteGalleryImages(paths);
         setSelectedPaths(new Set());
         setIsSelectionMode(false);
-        loadGallery();
+        
+        setTimeout(() => { isDeletingRef.current = false; }, 500);
     };
 
     const clearSelection = useCallback(() => {
         setSelectedPaths(new Set());
         setIsSelectionMode(false);
     }, []);
-
-    const flatImages = useMemo(() => {
-        return tasks.reduce((acc: any[], task) => {
-            task.templates?.forEach(tpl => {
-                tpl.images?.forEach(img => {
-                    acc.push({ ...img, taskName: task.name, templateName: tpl.name });
-                });
-            });
-            return acc;
-        }, []);
-    }, [tasks]);
 
     const onCardClick = useCallback((img: any) => {
         if (isSelectionMode) {
@@ -342,6 +397,14 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
 
         await Promise.all(promises);
 
+        setBusters(prev => {
+            const next = { ...prev };
+            pathsToRegenerate.forEach(p => {
+                if (p) next[p] = Date.now();
+            });
+            return next;
+        });
+
         loadGallery();
         if (isBulkReg) {
             clearSelection();
@@ -378,7 +441,7 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
                     <span className="total-count-badge">
                         {flatImages.length} {t('gallery.imagesCount') || 'images'}
                     </span>
-                    <button className="btn-refresh-icon" onClick={loadGallery} title={t('gallery.refresh')}>
+                    <button className="btn-refresh-icon" onClick={handleRefresh} title={t('gallery.refresh')}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
                     </button>
                 </div>
@@ -429,38 +492,71 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
                     <div className="gallery-empty"><p>{t('gallery.empty')}</p></div>
                 ) : (
                     <div className="gallery-tasks">
-                        {tasks.map((task, tIndex) => (
-                            <div key={task.name || tIndex} className={`task-section ${collapsedTasks.has(task.name) ? 'is-collapsed' : ''}`}>
-                                <div className="task-header" onClick={() => toggleTask(task.name)}>
-                                    <div className="task-name">
-                                        <svg className="section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
-                                        {task.name}
-                                        <span className="section-count">{task.templates?.reduce((sum, tpl) => sum + (tpl.images?.length || 0), 0) || 0}</span>
+                        {(() => {
+                            let imageGlobalIndex = 0;
+                            return tasks.map((task, tIndex) => {
+                                const taskImageCount = task.templates?.reduce((sum, tpl) => sum + (tpl.images?.length || 0), 0) || 0;
+                                
+                                // Check if this task has ANY images to show within the limit
+                                if (imageGlobalIndex >= renderLimit) {
+                                    imageGlobalIndex += taskImageCount;
+                                    return null;
+                                }
+
+                                const renderedTask = (
+                                    <div key={task.name || tIndex} className={`task-section ${collapsedTasks.has(task.name) ? 'is-collapsed' : ''}`}>
+                                        <div className="task-header" onClick={() => toggleTask(task.name)}>
+                                            <div className="task-name">
+                                                <svg className="section-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
+                                                {task.name}
+                                                <span className="section-count">{taskImageCount}</span>
+                                            </div>
+                                            <svg className={`collapse-chevron ${collapsedTasks.has(task.name) ? 'collapsed' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+                                        </div>
+                                        <div className="task-collapsible-wrapper">
+                                            <div className="task-content">
+                                                {task.templates.map((tpl, tmpIndex) => {
+                                                    const tplImages = tpl.images || [];
+                                                    const remainingLimit = Math.max(0, renderLimit - imageGlobalIndex);
+                                                    
+                                                    // Only show template if it has images to display
+                                                    if (remainingLimit <= 0) {
+                                                        imageGlobalIndex += tplImages.length;
+                                                        return null;
+                                                    }
+
+                                                    const visibleImages = tplImages.slice(0, remainingLimit);
+                                                    const templateComponent = (
+                                                        <TemplateSection
+                                                            key={`${task.name}_${tpl.name}` || tmpIndex}
+                                                            tpl={{ ...tpl, images: visibleImages }}
+                                                            taskName={task.name}
+                                                            isCollapsed={collapsedTemplates.has(`${task.name}_${tpl.name}`)}
+                                                            onToggle={toggleTemplate}
+                                                            isSelectionMode={isSelectionMode}
+                                                            selectedPaths={selectedPaths}
+                                                            onCardClick={onCardClick}
+                                                            onSelectionToggle={toggleImageSelection}
+                                                            onDelete={handleDeleteImage}
+                                                            onRegenerate={handleOpenRegenerate}
+                                                            regeneratingPaths={regeneratingPaths}
+                                                            sessionBuster={sessionBuster}
+                                                            busters={busters}
+                                                            deletedPaths={deletedPaths}
+                                                        />
+                                                    );
+                                                    
+                                                    imageGlobalIndex += tplImages.length;
+                                                    return templateComponent;
+                                                })}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <svg className={`collapse-chevron ${collapsedTasks.has(task.name) ? 'collapsed' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
-                                </div>
-                                <div className="task-collapsible-wrapper">
-                                    <div className="task-content">
-                                        {task.templates.map((tpl, tmpIndex) => (
-                                            <TemplateSection
-                                                key={`${task.name}_${tpl.name}` || tmpIndex}
-                                                tpl={tpl}
-                                                taskName={task.name}
-                                                isCollapsed={collapsedTemplates.has(`${task.name}_${tpl.name}`)}
-                                                onToggle={() => toggleTemplate(task.name, tpl.name)}
-                                                isSelectionMode={isSelectionMode}
-                                                selectedPaths={selectedPaths}
-                                                onCardClick={onCardClick}
-                                                onSelectionToggle={toggleImageSelection}
-                                                onDelete={handleDeleteImage}
-                                                onRegenerate={handleOpenRegenerate}
-                                                regeneratingPaths={regeneratingPaths}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                                );
+                                
+                                return renderedTask;
+                            });
+                        })()}
                     </div>
                 )}
             </div>

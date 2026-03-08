@@ -1,3 +1,3 @@
 package utils
 
-const AppVersion = "0.29.5"
+const AppVersion = "0.29.6"
