@@ -453,7 +453,7 @@
             }
         },
         "montage": {
-            "title": "3. Montage",
+            "title": "4. Montage",
             "sway": "Sway (Rocking)",
             "transitions": "Transition Duration (sec)",
             "transition_fast": "fast",
@@ -604,8 +604,8 @@
             "rewrite": "1. Rewrite",
             "voiceover": "2.A Voiceover",
             "image": "2.B Images",
-            "subtitle": "2.C Subtitles",
-            "montage": "3. Montage",
+            "subtitle": "3. Subtitles",
+            "montage": "4. Montage",
             "enabled": "Enabled",
             "disabled": "Disabled (original text)",
             "disabled_simple": "Disabled"
@@ -687,6 +687,7 @@
         "value": "Value",
         "select_template": "Select template...",
         "refresh": "Refresh",
+        "disabled": "Disabled",
         "loading": "Loading...",
         "yes": "Yes",
         "no": "No",

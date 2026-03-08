@@ -104,7 +104,14 @@ export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settin
                         <input
                             type="checkbox"
                             checked={settings.customStagesEnabled}
-                            onChange={(e) => handleChange('customStagesEnabled', e.target.checked)}
+                            onChange={(e) => {
+                                const val = e.target.checked;
+                                handleChange('customStagesEnabled', val);
+                                if (!val) {
+                                    const disabledStages = stages.map((s: CustomStage) => ({ ...s, enabled: false }));
+                                    handleChange('customStages', disabledStages);
+                                }
+                            }}
                         />
                         <span className="stage-slider"></span>
                     </label>

@@ -5,6 +5,7 @@ interface MontageSectionProps {
     settings: any;
     handleChange: (field: string, value: any) => void;
     setSettings: React.Dispatch<React.SetStateAction<any>>;
+    setCurrentPath?: (path: string) => void;
 }
 
 const MontageIcon = () => (
@@ -31,7 +32,7 @@ const RESOLUTIONS = ["720p", "1080p", "2k"];
 const FPS_OPTIONS = [24, 30, 60];
 
 export const MontageSection: React.FC<MontageSectionProps> = ({
-    settings, handleChange, setSettings
+    settings, handleChange, setSettings, setCurrentPath
 }) => {
     const { t } = useI18n();
 
@@ -73,20 +74,33 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </span>
                     </div>
                 </div>
-                <label className="stage-switch" onClick={(e) => e.stopPropagation()}>
-                    <input
-                        type="checkbox"
-                        checked={settings.montageEnabled}
-                        onChange={(e) => {
-                            const val = e.target.checked;
-                            setSettings((prev: any) => ({
-                                ...prev,
-                                montageEnabled: val
-                            }));
-                        }}
-                    />
-                    <span className="stage-slider"></span>
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                        className="templates-settings-link"
+                        onClick={() => setCurrentPath?.('settings.performance')}
+                        title={t('pipeline.performance_settings') || 'Performance Settings'}
+                        style={{ margin: 0, padding: '4px' }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                    </button>
+                    <label className="stage-switch">
+                        <input
+                            type="checkbox"
+                            checked={settings.montageEnabled}
+                            onChange={(e) => {
+                                const val = e.target.checked;
+                                setSettings((prev: any) => ({
+                                    ...prev,
+                                    montageEnabled: val
+                                }));
+                            }}
+                        />
+                        <span className="stage-slider"></span>
+                    </label>
+                </div>
             </div>
 
             <div className={`stage-settings-content ${settings.montageCollapsed ? 'collapsed' : ''}`}>

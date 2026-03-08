@@ -994,10 +994,12 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
                     <SubtitleSection
                         settings={settings} handleChange={handleChange} setSettings={setSettings}
+                        setCurrentPath={setCurrentPath}
                     />
 
                     <MontageSection
                         settings={settings} handleChange={handleChange} setSettings={setSettings}
+                        setCurrentPath={setCurrentPath}
                     />
 
                 </div>
