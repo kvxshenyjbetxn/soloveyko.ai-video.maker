@@ -353,35 +353,54 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			detChars = pSettings.ImageDetermineCharacters
 		}
 		if detChars && strings.Contains(promptTemplate, "{{characters}}") {
-			detPrompt, _ := settings["imageDetermineCharactersPrompt"].(string)
-			if detPrompt == "" {
-				detPrompt = pSettings.ImageDetermineCharactersPrompt
+			detMode, _ := settings["imageDetermineCharactersMode"].(string)
+			if detMode == "" {
+				detMode = pSettings.ImageDetermineCharactersMode
 			}
-			if detPrompt != "" {
-				s.log("INFO", "[Pipeline] Determining characters from text...", id, taskLabel)
-				s.emitStageStatus(id, "image", "running", "characters...")
+			if detMode == "" {
+				detMode = "dynamic"
+			}
 
-				var charRes string
-				var err error
-
-				if iMode == "memory" && iMemType == "external" {
-					history, _ := s.LoadChatHistory(finalDir)
-					history = append(history, bapi.ChatMessage{Role: "user", Content: detPrompt + "\n\n" + processedText})
-					charRes, err = s.openRouter.ChatWithHistory(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, history, temp, tokens)
-					if err == nil {
-						history = append(history, bapi.ChatMessage{Role: "assistant", Content: charRes})
-						s.SaveChatHistory(finalDir, history)
-					}
-				} else {
-					charRes, err = s.openRouter.Chat(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, detPrompt+"\n\n"+processedText, temp, tokens)
+			if detMode == "static" {
+				staticDesc, _ := settings["imageDetermineCharactersStatic"].(string)
+				if staticDesc == "" {
+					staticDesc = pSettings.ImageDetermineCharactersStatic
 				}
+				if staticDesc != "" {
+					s.log("INFO", "[Pipeline] Using static character description", id, taskLabel)
+					promptTemplate = strings.ReplaceAll(promptTemplate, "{{characters}}", staticDesc)
+				}
+			} else {
+				detPrompt, _ := settings["imageDetermineCharactersPrompt"].(string)
+				if detPrompt == "" {
+					detPrompt = pSettings.ImageDetermineCharactersPrompt
+				}
+				if detPrompt != "" {
+					s.log("INFO", "[Pipeline] Determining characters from text...", id, taskLabel)
+					s.emitStageStatus(id, "image", "running", "characters...")
 
-				if err != nil {
-					s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to determine characters: %v", err), id, taskLabel)
-				} else {
-					charDesc := strings.TrimSpace(charRes)
-					s.log("SUCCESS", "[Pipeline] Characters determined and added to instruction template", id, taskLabel)
-					promptTemplate = strings.ReplaceAll(promptTemplate, "{{characters}}", charDesc)
+					var charRes string
+					var err error
+
+					if iMode == "memory" && iMemType == "external" {
+						history, _ := s.LoadChatHistory(finalDir)
+						history = append(history, bapi.ChatMessage{Role: "user", Content: detPrompt + "\n\n" + processedText})
+						charRes, err = s.openRouter.ChatWithHistory(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, history, temp, tokens)
+						if err == nil {
+							history = append(history, bapi.ChatMessage{Role: "assistant", Content: charRes})
+							s.SaveChatHistory(finalDir, history)
+						}
+					} else {
+						charRes, err = s.openRouter.Chat(id, taskLabel, "image_characters", orKeyName, orApiKey, orModel, detPrompt+"\n\n"+processedText, temp, tokens)
+					}
+
+					if err != nil {
+						s.log("ERROR", fmt.Sprintf("[Pipeline] Failed to determine characters: %v", err), id, taskLabel)
+					} else {
+						charDesc := strings.TrimSpace(charRes)
+						s.log("SUCCESS", "[Pipeline] Characters determined and added to instruction template", id, taskLabel)
+						promptTemplate = strings.ReplaceAll(promptTemplate, "{{characters}}", charDesc)
+					}
 				}
 			}
 		}

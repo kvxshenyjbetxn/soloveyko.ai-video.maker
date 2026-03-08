@@ -183,135 +183,10 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	// 4. Settings
-	transDur := pSettings.MontageTransitionDuration
-	if numFiles <= 1 {
-		transDur = 0
+	// [OVERRIDES] Apply template/task settings before calculating derived variables
+	if val, ok := settings["imageSyncEnabled"].(bool); ok {
+		pSettings.ImageSyncEnabled = val
 	}
-
-	isFadeFast := pSettings.MontageTransitionEffect == "fade_fast"
-
-	effectiveDurs := make([]float64, numFiles)
-	if pSettings.ImageSyncEnabled {
-		s.log("INFO", "[Montage] Synchronous Mode enabled, calculating timings...", id, taskLabel)
-		timings, err := utils.GetImageTimings(finalDir, audioDur, numFiles, visualFiles, taskLabel)
-		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[Montage] Sync failed: %v. Falling back to equal distribution.", err), id, taskLabel)
-			clipDur := audioDur / float64(numFiles)
-			if !isFadeFast {
-				clipDur = (audioDur + float64(numFiles-1)*transDur) / float64(numFiles)
-			}
-			for i := range effectiveDurs {
-				effectiveDurs[i] = clipDur
-			}
-		} else {
-			for i, t := range timings {
-				if i < numFiles {
-					if isFadeFast {
-						// [SYNC FIX] For concat mode: each clip must extend to the next clip's Start.
-						// Subtitle timings have gaps between them (silence between phrases).
-						// Using just t.Duration excludes these gaps, causing cumulative drift.
-						// Example: 101 gaps × ~0.09s avg = ~9s total drift.
-						if i < len(timings)-1 {
-							effectiveDurs[i] = timings[i+1].Start - t.Start
-						} else {
-							effectiveDurs[i] = audioDur - t.Start
-						}
-					} else {
-						effectiveDurs[i] = t.Duration
-						// We add transDur to each effective duration because xfade consumes it
-						effectiveDurs[i] += transDur
-					}
-				}
-			}
-			s.log("SUCCESS", fmt.Sprintf("[Montage] Successfully calculated synchronous timings for %d clips.", numFiles), id, taskLabel)
-		}
-	} else {
-		if isFadeFast {
-			clipDur := audioDur / float64(numFiles)
-			for i := range effectiveDurs {
-				effectiveDurs[i] = clipDur
-			}
-		} else {
-			totalTransLoss := float64(numFiles-1) * transDur
-			clipDur := (audioDur + totalTransLoss) / float64(numFiles)
-			for i := range effectiveDurs {
-				effectiveDurs[i] = clipDur
-			}
-		}
-	}
-
-	baseW, baseH := 1920, 1080
-	switch pSettings.MontageResolution {
-	case "720p":
-		baseW, baseH = 1280, 720
-	case "2k":
-		baseW, baseH = 2560, 1440
-	}
-
-	fps := pSettings.MontageFPS
-	if fps <= 0 {
-		fps = 30
-	}
-
-	// [SYNC FIX] Snap clip durations to exact frame boundaries for concat mode.
-	// Without this, each clip loses up to 1/fps seconds due to frame discretization,
-	// causing accumulated drift over many clips (e.g. ~0.5s over 100+ clips at 30fps).
-	// Uses the "largest remainder" method to distribute rounding residual.
-	if isFadeFast && numFiles > 1 {
-		totalFrames := int(math.Round(audioDur * float64(fps)))
-
-		// Compute ideal (fractional) frame counts
-		idealFrames := make([]float64, numFiles)
-		baseFrames := make([]int, numFiles)
-		baseSum := 0
-		for i := 0; i < numFiles; i++ {
-			idealFrames[i] = effectiveDurs[i] * float64(fps)
-			baseFrames[i] = int(math.Floor(idealFrames[i]))
-			if baseFrames[i] < 1 {
-				baseFrames[i] = 1
-			}
-			baseSum += baseFrames[i]
-		}
-
-		// Distribute remaining frames to clips with largest fractional remainders
-		remaining := totalFrames - baseSum
-		if remaining > 0 {
-			type indexRemainder struct {
-				idx       int
-				remainder float64
-			}
-			remainders := make([]indexRemainder, numFiles)
-			for i := 0; i < numFiles; i++ {
-				remainders[i] = indexRemainder{idx: i, remainder: idealFrames[i] - float64(baseFrames[i])}
-			}
-			sort.Slice(remainders, func(a, b int) bool {
-				return remainders[a].remainder > remainders[b].remainder
-			})
-			for j := 0; j < remaining && j < numFiles; j++ {
-				baseFrames[remainders[j].idx]++
-			}
-		}
-
-		// Apply snapped durations
-		for i := 0; i < numFiles; i++ {
-			effectiveDurs[i] = float64(baseFrames[i]) / float64(fps)
-		}
-		s.log("INFO", fmt.Sprintf("[Montage] Frame-snapped %d clips to exact boundaries (total: %d frames at %dfps)", numFiles, totalFrames, fps), id, taskLabel)
-	}
-
-	// Add a deep 4.0s buffer to the final clip. This completely absorbs ANY residual
-	// from the concat filter, and guarantees the final clip is actively
-	// animating (zoompan/boomerang) past the audio end.
-	if numFiles > 0 {
-		effectiveDurs[numFiles-1] += 4.0
-	}
-
-	upFactor := pSettings.MontageUpscaleFactor
-	if upFactor < 1.0 {
-		upFactor = 1.0
-	}
-
-	// Overrides from settings map (e.g. from templates)
 	if val, ok := settings["montageSwayFactor"].(float64); ok {
 		pSettings.MontageSwayFactor = val
 	}
@@ -327,18 +202,24 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageEncodingPreset"].(string); ok {
 		pSettings.MontageEncodingPreset = val
 	}
-	if val, ok := settings["montageBitrate"].(float64); ok {
-		pSettings.MontageBitrate = int(val)
-	} else if val, ok := settings["montageBitrate"].(int); ok {
-		pSettings.MontageBitrate = val
+	if val, ok := settings["montageBitrate"]; ok {
+		switch v := val.(type) {
+		case float64:
+			pSettings.MontageBitrate = int(v)
+		case int:
+			pSettings.MontageBitrate = v
+		}
 	}
 	if val, ok := settings["montageResolution"].(string); ok {
 		pSettings.MontageResolution = val
 	}
-	if val, ok := settings["montageFPS"].(float64); ok {
-		pSettings.MontageFPS = int(val)
-	} else if val, ok := settings["montageFPS"].(int); ok {
-		pSettings.MontageFPS = val
+	if val, ok := settings["montageFPS"]; ok {
+		switch v := val.(type) {
+		case float64:
+			pSettings.MontageFPS = int(v)
+		case int:
+			pSettings.MontageFPS = v
+		}
 	}
 	if val, ok := settings["montageUpscaleFactor"].(float64); ok {
 		pSettings.MontageUpscaleFactor = val
@@ -346,20 +227,25 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageVideoCodec"].(string); ok {
 		pSettings.MontageVideoCodec = val
 	}
-	if val, ok := settings["montageThreadsPerProcess"].(float64); ok {
-		pSettings.MontageThreadsPerProcess = int(val)
-	} else if val, ok := settings["montageThreadsPerProcess"].(int); ok {
-		pSettings.MontageThreadsPerProcess = val
+	if val, ok := settings["montageThreadsPerProcess"]; ok {
+		switch v := val.(type) {
+		case float64:
+			pSettings.MontageThreadsPerProcess = int(v)
+		case int:
+			pSettings.MontageThreadsPerProcess = v
+		}
 	}
 	if val, ok := settings["montageProcessPriority"].(string); ok {
 		pSettings.MontageProcessPriority = val
 	}
-	if val, ok := settings["montageCPUCores"].(float64); ok {
-		pSettings.MontageCPUCores = int(val)
-	} else if val, ok := settings["montageCPUCores"].(int); ok {
-		pSettings.MontageCPUCores = val
+	if val, ok := settings["montageCPUCores"]; ok {
+		switch v := val.(type) {
+		case float64:
+			pSettings.MontageCPUCores = int(v)
+		case int:
+			pSettings.MontageCPUCores = v
+		}
 	}
-
 	if val, ok := settings["montageIntroVideoEnabled"].(bool); ok {
 		pSettings.MontageIntroVideoEnabled = val
 	}
@@ -378,10 +264,13 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageWatermarkOpacity"].(float64); ok {
 		pSettings.MontageWatermarkOpacity = val
 	}
-	if val, ok := settings["montageWatermarkSize"].(float64); ok {
-		pSettings.MontageWatermarkSize = int(val)
-	} else if val, ok := settings["montageWatermarkSize"].(int); ok {
-		pSettings.MontageWatermarkSize = val
+	if val, ok := settings["montageWatermarkSize"]; ok {
+		switch v := val.(type) {
+		case float64:
+			pSettings.MontageWatermarkSize = int(v)
+		case int:
+			pSettings.MontageWatermarkSize = v
+		}
 	}
 	if val, ok := settings["montageWatermarkOnIntro"].(bool); ok {
 		pSettings.MontageWatermarkOnIntro = val
@@ -423,6 +312,121 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		if len(triggers) > 0 {
 			pSettings.MontageOverlayTriggers = triggers
 		}
+	}
+
+	// Derived variables from finalized pSettings
+	transDur := pSettings.MontageTransitionDuration
+	if numFiles <= 1 {
+		transDur = 0
+	}
+
+	isFadeFast := pSettings.MontageTransitionEffect == "fade_fast"
+
+	baseW, baseH := 1920, 1080
+	switch pSettings.MontageResolution {
+	case "720p":
+		baseW, baseH = 1280, 720
+	case "2k":
+		baseW, baseH = 2560, 1440
+	}
+
+	fps := pSettings.MontageFPS
+	if fps <= 0 {
+		fps = 30
+	}
+
+	upFactor := pSettings.MontageUpscaleFactor
+	if upFactor < 1.0 {
+		upFactor = 1.0
+	}
+
+	s.log("INFO", fmt.Sprintf("[Montage] Finalized config: Res=%dx%d | FPS=%d | Upscale=%.2f | Sync=%v",
+		baseW, baseH, fps, upFactor, pSettings.ImageSyncEnabled), id, taskLabel)
+
+	effectiveDurs := make([]float64, numFiles)
+	if pSettings.ImageSyncEnabled {
+		s.log("INFO", "[Montage] Synchronous Mode enabled, calculating timings...", id, taskLabel)
+		timings, err := utils.GetImageTimings(finalDir, audioDur, numFiles, visualFiles, taskLabel)
+		if err != nil {
+			s.log("ERROR", fmt.Sprintf("[Montage] Sync failed: %v. Falling back to equal distribution.", err), id, taskLabel)
+			clipDur := audioDur / float64(numFiles)
+			if !isFadeFast {
+				clipDur = (audioDur + float64(numFiles-1)*transDur) / float64(numFiles)
+			}
+			for i := range effectiveDurs {
+				effectiveDurs[i] = clipDur
+			}
+		} else {
+			for i, t := range timings {
+				if i < numFiles {
+					if isFadeFast {
+						if i < len(timings)-1 {
+							effectiveDurs[i] = timings[i+1].Start - t.Start
+						} else {
+							effectiveDurs[i] = audioDur - t.Start
+						}
+					} else {
+						effectiveDurs[i] = t.Duration
+						effectiveDurs[i] += transDur
+					}
+				}
+			}
+			s.log("SUCCESS", fmt.Sprintf("[Montage] Successfully calculated synchronous timings for %d clips.", numFiles), id, taskLabel)
+		}
+	} else {
+		if isFadeFast {
+			clipDur := audioDur / float64(numFiles)
+			for i := range effectiveDurs {
+				effectiveDurs[i] = clipDur
+			}
+		} else {
+			totalTransLoss := float64(numFiles-1) * transDur
+			clipDur := (audioDur + totalTransLoss) / float64(numFiles)
+			for i := range effectiveDurs {
+				effectiveDurs[i] = clipDur
+			}
+		}
+	}
+
+	// [SYNC FIX] Snap clip durations to exact frame boundaries for concat mode.
+	if isFadeFast && numFiles > 1 {
+		totalFrames := int(math.Round(audioDur * float64(fps)))
+		idealFrames := make([]float64, numFiles)
+		baseFrames := make([]int, numFiles)
+		baseSum := 0
+		for i := 0; i < numFiles; i++ {
+			idealFrames[i] = effectiveDurs[i] * float64(fps)
+			baseFrames[i] = int(math.Floor(idealFrames[i]))
+			if baseFrames[i] < 1 {
+				baseFrames[i] = 1
+			}
+			baseSum += baseFrames[i]
+		}
+		remaining := totalFrames - baseSum
+		if remaining > 0 {
+			type indexRemainder struct {
+				idx       int
+				remainder float64
+			}
+			remainders := make([]indexRemainder, numFiles)
+			for i := 0; i < numFiles; i++ {
+				remainders[i] = indexRemainder{idx: i, remainder: idealFrames[i] - float64(baseFrames[i])}
+			}
+			sort.Slice(remainders, func(a, b int) bool {
+				return remainders[a].remainder > remainders[b].remainder
+			})
+			for j := 0; j < remaining && j < numFiles; j++ {
+				baseFrames[remainders[j].idx]++
+			}
+		}
+		for i := 0; i < numFiles; i++ {
+			effectiveDurs[i] = float64(baseFrames[i]) / float64(fps)
+		}
+		s.log("INFO", fmt.Sprintf("[Montage] Frame-snapped %d clips to exact boundaries (total: %d frames at %dfps)", numFiles, totalFrames, fps), id, taskLabel)
+	}
+
+	if numFiles > 0 {
+		effectiveDurs[numFiles-1] += 4.0
 	}
 
 	upW := int(math.Round(float64(baseW) * upFactor))

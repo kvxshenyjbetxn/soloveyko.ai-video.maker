@@ -53,7 +53,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [pendingContent, setPendingContent] = useState<string>("");
     const [historyOverride, setHistoryOverride] = useState<{ content: string, templateIds: string[], taskName: string } | null>(null);
     const { templates, saveTemplate, removeTemplate, selectedTemplateIds, setSelectedTemplateIds } = useTemplates();
-    const [voiceTemplates, setVoiceTemplates] = useState<string[]>([]);
+    const [voiceTemplates, setVoiceTemplates] = useState<{ uuid: string; name: string }[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [voiceMakerVoices, setVoiceMakerVoices] = useState<any[]>([]);
     const [pollinationsModels, setPollinationsModels] = useState<string[]>([]);
@@ -542,7 +542,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         });
 
         // 3. Image Settings
-        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersPrompt'];
+        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic'];
         imageBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.image[f] = settings[f]; });
 
         // Image Service Specific Groups
@@ -805,7 +805,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 imageMemoryType: cleanApplied.imageMemoryType ?? 'primitive',
                 imageMemoryChars: cleanApplied.imageMemoryChars ?? 1000,
                 imageDetermineCharacters: cleanApplied.imageDetermineCharacters ?? false,
+                imageDetermineCharactersMode: cleanApplied.imageDetermineCharactersMode ?? 'dynamic',
                 imageDetermineCharactersPrompt: cleanApplied.imageDetermineCharactersPrompt ?? '',
+                imageDetermineCharactersStatic: cleanApplied.imageDetermineCharactersStatic ?? '',
                 imagePromptModel: cleanApplied.imagePromptModel ?? '',
                 imagePromptTemperature: cleanApplied.imagePromptTemperature ?? 0.7,
                 imagePromptMaxTokens: cleanApplied.imagePromptMaxTokens ?? 0,

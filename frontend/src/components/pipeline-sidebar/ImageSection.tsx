@@ -99,10 +99,100 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
 
             <div className={`stage-settings-content ${settings.imageCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
-                    <div className="settings-group-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                        {t('pipeline.group.prompt')}
+
+                    <div className="settings-control" style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.sync_enabled')}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.imageSyncEnabled || false}
+                                    onChange={(e) => handleChange('imageSyncEnabled', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                            {t('pipeline.image.sync_desc')}
+                        </div>
+
+                        {settings.imageSyncEnabled && (
+                            <div style={{ marginTop: '12px' }}>
+                                <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.image.sync_mode')}</label>
+                                <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px' }}>
+                                    <button
+                                        className={`method-toggle-btn ${(settings.imageSyncMode || 'simple') === 'simple' ? 'active' : ''}`}
+                                        onClick={() => handleChange('imageSyncMode', 'simple')}
+                                        style={{
+                                            flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                            background: (settings.imageSyncMode || 'simple') === 'simple' ? 'var(--bg-primary)' : 'transparent',
+                                            color: (settings.imageSyncMode || 'simple') === 'simple' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                            fontSize: '11px', fontWeight: (settings.imageSyncMode || 'simple') === 'simple' ? 500 : 400,
+                                            boxShadow: (settings.imageSyncMode || 'simple') === 'simple' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        {t('pipeline.image.sync_mode_simple')}
+                                    </button>
+                                    <button
+                                        className={`method-toggle-btn ${settings.imageSyncMode === 'accurate' ? 'active' : ''}`}
+                                        onClick={() => handleChange('imageSyncMode', 'accurate')}
+                                        style={{
+                                            flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                            background: settings.imageSyncMode === 'accurate' ? 'var(--bg-primary)' : 'transparent',
+                                            color: settings.imageSyncMode === 'accurate' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                            fontSize: '11px', fontWeight: settings.imageSyncMode === 'accurate' ? 500 : 400,
+                                            boxShadow: settings.imageSyncMode === 'accurate' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        {t('pipeline.image.sync_mode_accurate')}
+                                    </button>
+                                </div>
+
+                                {settings.imageSyncMode === 'accurate' && (
+                                    <>
+                                        {!(settings.subtitleService === 'whisperx' || settings.subtitleService === 'assemblyai') && (
+                                            <div style={{
+                                                marginTop: '10px',
+                                                padding: '10px',
+                                                backgroundColor: 'rgba(255, 170, 0, 0.05)',
+                                                border: '1px solid rgba(255, 170, 0, 0.2)',
+                                                borderRadius: '8px',
+                                                fontSize: '11px',
+                                                color: '#ffaa00',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '8px'
+                                            }}>
+                                                <div style={{ lineHeight: '1.4' }}>
+                                                    {t('pipeline.image.sync_accurate_warning')}
+                                                </div>
+                                                <button
+                                                    onClick={() => setCurrentPath?.('settings.performance')}
+                                                    className="premium-btn-sm"
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '28px',
+                                                        fontSize: '10px',
+                                                        background: 'linear-gradient(135deg, #ffaa00 0%, #ff8800 100%)',
+                                                        color: '#fff',
+                                                        border: 'none',
+                                                        boxShadow: '0 2px 8px rgba(255, 136, 0, 0.2)'
+                                                    }}
+                                                >
+                                                    {t('pipeline.image.go_to_performance')}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </div>
+
                     <div className="settings-control">
                         <label className="settings-label">{t('pipeline.image.generation_method') || 'Метод генерации задач'}</label>
                         <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
@@ -307,6 +397,11 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                         </div>
                                     )}
 
+                                    <div className="settings-group-title" style={{ marginTop: '20px', marginBottom: '16px' }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                                        {t('pipeline.group.prompt')}
+                                    </div>
+
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: '0px' }}>
                                         <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.determine_characters') || 'Визначити персонажів'}</label>
                                         <label className="stage-switch small">
@@ -323,15 +418,64 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                     </div>
 
                                     {settings.imageDetermineCharacters && (
-                                        <div className="settings-control" style={{ marginTop: '12px' }}>
-                                            <label className="settings-label">{t('pipeline.image.determine_characters_prompt') || 'Промт для визначення персонажів'}</label>
-                                            <textarea
-                                                className="settings-textarea"
-                                                style={{ height: '80px', resize: 'vertical' }}
-                                                value={settings.imageDetermineCharactersPrompt || ''}
-                                                onChange={(e) => handleChange('imageDetermineCharactersPrompt', e.target.value)}
-                                                placeholder={t('pipeline.image.determine_characters_prompt_desc') || 'Введіть промт для визначення персонажів...'}
-                                            />
+                                        <div style={{ marginTop: '12px' }}>
+                                            <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.image.determine_characters_mode')}</label>
+                                            <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px', marginBottom: '12px' }}>
+                                                <button
+                                                    className={`method-toggle-btn ${(settings.imageDetermineCharactersMode || 'dynamic') === 'dynamic' ? 'active' : ''}`}
+                                                    onClick={() => handleChange('imageDetermineCharactersMode', 'dynamic')}
+                                                    style={{
+                                                        flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                                        background: (settings.imageDetermineCharactersMode || 'dynamic') === 'dynamic' ? 'var(--bg-primary)' : 'transparent',
+                                                        color: (settings.imageDetermineCharactersMode || 'dynamic') === 'dynamic' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                                        fontSize: '11px', fontWeight: (settings.imageDetermineCharactersMode || 'dynamic') === 'dynamic' ? 500 : 400,
+                                                        boxShadow: (settings.imageDetermineCharactersMode || 'dynamic') === 'dynamic' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    {t('pipeline.image.determine_characters_mode_dynamic')}
+                                                </button>
+                                                <button
+                                                    className={`method-toggle-btn ${settings.imageDetermineCharactersMode === 'static' ? 'active' : ''}`}
+                                                    onClick={() => handleChange('imageDetermineCharactersMode', 'static')}
+                                                    style={{
+                                                        flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                                        background: settings.imageDetermineCharactersMode === 'static' ? 'var(--bg-primary)' : 'transparent',
+                                                        color: settings.imageDetermineCharactersMode === 'static' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                                        fontSize: '11px', fontWeight: settings.imageDetermineCharactersMode === 'static' ? 500 : 400,
+                                                        boxShadow: settings.imageDetermineCharactersMode === 'static' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                                        transition: 'all 0.2s'
+                                                    }}
+                                                >
+                                                    {t('pipeline.image.determine_characters_mode_static')}
+                                                </button>
+                                            </div>
+
+                                            {(settings.imageDetermineCharactersMode || 'dynamic') === 'dynamic' ? (
+                                                <div className="settings-control">
+                                                    <label className="settings-label">{t('pipeline.image.determine_characters_prompt')}</label>
+                                                    <textarea
+                                                        className="settings-textarea"
+                                                        style={{ height: '80px', resize: 'vertical' }}
+                                                        value={settings.imageDetermineCharactersPrompt || ''}
+                                                        onChange={(e) => handleChange('imageDetermineCharactersPrompt', e.target.value)}
+                                                        placeholder={t('pipeline.image.determine_characters_prompt_desc')}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="settings-control">
+                                                    <label className="settings-label">{t('pipeline.image.determine_characters_static_desc')}</label>
+                                                    <textarea
+                                                        className="settings-textarea"
+                                                        style={{ height: '80px', resize: 'vertical' }}
+                                                        value={settings.imageDetermineCharactersStatic || ''}
+                                                        onChange={(e) => handleChange('imageDetermineCharactersStatic', e.target.value)}
+                                                        placeholder={t('pipeline.image.determine_characters_static_placeholder')}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </>
@@ -369,22 +513,6 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                         )}
                     </div>
 
-                    <div className="settings-control" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.sync_enabled') || 'Синхронний режим (SRT)'}</label>
-                            <label className="stage-switch small">
-                                <input
-                                    type="checkbox"
-                                    checked={settings.imageSyncEnabled || false}
-                                    onChange={(e) => handleChange('imageSyncEnabled', e.target.checked)}
-                                />
-                                <span className="stage-slider"></span>
-                            </label>
-                        </div>
-                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
-                            {t('pipeline.image.sync_desc') || 'Зміна картинок відбуватиметься синхронно з вимовою тексту (через SRT)'}
-                        </div>
-                    </div>
                 </div>
 
                 <div className="settings-group">

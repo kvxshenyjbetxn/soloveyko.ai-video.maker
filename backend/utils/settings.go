@@ -157,7 +157,9 @@ type PipelineSettings struct {
 	ElevenLabsImageAspectRatio     string  `json:"elevenLabsImageAspectRatio,omitempty"`
 	ImageSyncEnabled               bool    `json:"imageSyncEnabled"`
 	ImageDetermineCharacters       bool    `json:"imageDetermineCharacters"`
+	ImageDetermineCharactersMode   string  `json:"imageDetermineCharactersMode,omitempty"`
 	ImageDetermineCharactersPrompt string  `json:"imageDetermineCharactersPrompt,omitempty"`
+	ImageDetermineCharactersStatic string  `json:"imageDetermineCharactersStatic,omitempty"`
 
 	// Keep outputPath for migration if needed
 

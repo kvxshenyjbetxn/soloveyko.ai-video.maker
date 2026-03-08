@@ -18,7 +18,7 @@ export const Templates = () => {
     const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
     const [models, setModels] = useState<string[]>([]);
     const [pollinationsModels, setPollinationsModels] = useState<string[]>([]);
-    const [voiceTemplates, setVoiceTemplates] = useState<string[]>([]);
+    const [voiceTemplates, setVoiceTemplates] = useState<{ uuid: string; name: string }[]>([]);
     const [voiceMakerVoices, setVoiceMakerVoices] = useState<any[]>([]);
     const [edgeTTSVoices, setEdgeTTSVoices] = useState<any[]>([]);
 
@@ -400,8 +400,8 @@ export const Templates = () => {
                                     {(selectedSetting as MassEditorSetting).dynamicModels === 'pollinations' && pollinationsModels.map(m => (
                                         <option key={`pol-${m}`} value={m}>{m}</option>
                                     ))}
-                                    {(selectedSetting as MassEditorSetting).dynamicModels === 'elevenlabsbot' && voiceTemplates.map(m => (
-                                        <option key={`el-${m}`} value={m}>{m}</option>
+                                    {(selectedSetting as MassEditorSetting).dynamicModels === 'elevenlabsbot' && (voiceTemplates as any[]).map(m => (
+                                        <option key={`el-${m.uuid || m}`} value={m.uuid || m}>{m.name || m}</option>
                                     ))}
                                     {(selectedSetting as MassEditorSetting).dynamicModels === 'voicemaker' && voiceMakerVoices.map(v => (
                                         <option key={`vm-${v.VoiceId}`} value={v.VoiceId}>

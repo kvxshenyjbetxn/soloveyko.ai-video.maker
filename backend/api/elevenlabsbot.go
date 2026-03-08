@@ -69,8 +69,13 @@ func (s *ElevenLabsBotService) GetBalance(apiKey string) (float64, error) {
 	return float64(balanceRes.Balance), nil
 }
 
+type VoiceTemplate struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+}
+
 // GetTemplates отримує список шаблонів голосів
-func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
+func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]VoiceTemplate, error) {
 	if apiKey == "" {
 		if s.OnLog != nil {
 			s.OnLog("ERROR", "[ElevenLabsBot] GetTemplates failed: API key is empty")
@@ -91,9 +96,7 @@ func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
 		return nil, err
 	}
 
-	// Try multiple header formats
 	req.Header["X-API-Key"] = []string{apiKey}
-	req.Header["api-key"] = []string{apiKey}
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := client.Do(req)
@@ -114,99 +117,37 @@ func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
 		return nil, fmt.Errorf("API error: %d", resp.StatusCode)
 	}
 
-	// Use a temporary buffer to allow multiple decoding attempts if needed
-	var rawData json.RawMessage
-	if err := json.Unmarshal(body, &rawData); err != nil {
+	var templates []VoiceTemplate
+	if err := json.Unmarshal(body, &templates); err == nil && len(templates) > 0 {
 		if s.OnLog != nil {
-			s.OnLog("ERROR", fmt.Sprintf("[ElevenLabsBot] JSON parse error: %v | Body: %s", err, string(body)))
+			s.OnLog("SUCCESS", fmt.Sprintf("[ElevenLabsBot] Successfully loaded %d voice templates", len(templates)))
 		}
-		return nil, err
+		return templates, nil
 	}
 
-	var results []string
-
-	// 1. Try as simple slice of strings
-	var strSlice []string
-	if err := json.Unmarshal(body, &strSlice); err == nil && len(strSlice) > 0 {
-		results = strSlice
-	}
-
-	// 2. Try as slice of objects (Matches the schema provided by user)
-	if len(results) == 0 {
-		var objSlice []map[string]interface{}
-		if err := json.Unmarshal(body, &objSlice); err == nil {
-			for _, item := range objSlice {
-				// У схемі користувача є поле "name"
-				if name, ok := item["name"].(string); ok && name != "" {
-					results = append(results, name)
-				} else if label, ok := item["label"].(string); ok && label != "" {
-					results = append(results, label)
-				} else if title, ok := item["title"].(string); ok && title != "" {
-					results = append(results, title)
-				} else if uuid, ok := item["uuid"].(string); ok && uuid != "" {
-					results = append(results, uuid)
-				}
+	// FALLBACK: If it's not a standard slice of VoiceTemplate, try to extract manually
+	var objSlice []map[string]interface{}
+	if err := json.Unmarshal(body, &objSlice); err == nil {
+		for _, item := range objSlice {
+			uuid, _ := item["uuid"].(string)
+			name, _ := item["name"].(string)
+			if name == "" {
+				name, _ = item["label"].(string)
+			}
+			if name == "" {
+				name, _ = item["title"].(string)
+			}
+			if uuid != "" && name != "" {
+				templates = append(templates, VoiceTemplate{UUID: uuid, Name: name})
 			}
 		}
 	}
 
-	// 3. Try as object with nested fields
-	if len(results) == 0 {
-		var tObj map[string]interface{}
-		if err := json.Unmarshal(body, &tObj); err == nil {
-			fields := []string{"templates", "data", "items", "voices", "list"}
-			for _, f := range fields {
-				if val, ok := tObj[f]; ok {
-					// Handle if field is a slice
-					if slice, ok := val.([]interface{}); ok {
-						for _, item := range slice {
-							if s, ok := item.(string); ok {
-								results = append(results, s)
-							} else if m, ok := item.(map[string]interface{}); ok {
-								if name, ok := m["name"].(string); ok {
-									results = append(results, name)
-								} else if name, ok := m["label"].(string); ok {
-									results = append(results, name)
-								} else if name, ok := m["title"].(string); ok {
-									results = append(results, name)
-								}
-							}
-						}
-					} else if m, ok := val.(map[string]interface{}); ok {
-						// Handle if field is a map (key is name)
-						for k := range m {
-							results = append(results, k)
-						}
-					}
-				}
-				if len(results) > 0 {
-					break
-				}
-			}
-		}
-	}
-
-	// 4. Try as a map (key is template name)
-	if len(results) == 0 {
-		var tMap map[string]interface{}
-		if err := json.Unmarshal(body, &tMap); err == nil {
-			for k := range tMap {
-				// Skip "status" or "error" if any
-				if k == "status" || k == "error" || k == "detail" {
-					continue
-				}
-				results = append(results, k)
-			}
-		}
-	}
-
-	if len(results) > 0 {
+	if len(templates) > 0 {
 		if s.OnLog != nil {
-			s.OnLog("SUCCESS", fmt.Sprintf("[ElevenLabsBot] Successfully loaded %d voice templates", len(results)))
+			s.OnLog("SUCCESS", fmt.Sprintf("[ElevenLabsBot] Successfully loaded %d voice templates (fallback)", len(templates)))
 		}
-		// Sort results for better UX
-		// sort.Strings(results) // Optional
-		return results, nil
+		return templates, nil
 	}
 
 	if s.OnLog != nil {
@@ -218,12 +159,13 @@ func (s *ElevenLabsBotService) GetTemplates(apiKey string) ([]string, error) {
 // TaskCreateRequest структура для створення завдання
 type TaskCreateRequest struct {
 	Text         string `json:"text"`
-	TemplateName string `json:"template_name"`
+	TemplateUUID string `json:"template_uuid"`
 }
 
 // TaskCreateResponse відповідь при створенні завдання
 type TaskCreateResponse struct {
-	TaskID int64 `json:"task_id"`
+	TaskID  int64  `json:"task_id"`
+	Message string `json:"message"`
 }
 
 // TaskStatusResponse відповідь про статус завдання
@@ -233,14 +175,15 @@ type TaskStatusResponse struct {
 }
 
 // CreateTask створює нове завдання на синтез
-func (s *ElevenLabsBotService) CreateTask(apiKey string, text string, templateName string) (string, error) {
+func (s *ElevenLabsBotService) CreateTask(apiKey string, text string, templateUUID string) (string, error) {
 	if apiKey == "" {
 		return "", fmt.Errorf("API key is empty")
 	}
 
+	fmt.Printf("[ElevenLabsBot] Creating task with template_uuid: '%s'\n", templateUUID)
 	reqBody := TaskCreateRequest{
 		Text:         text,
-		TemplateName: templateName,
+		TemplateUUID: templateUUID,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -337,12 +280,12 @@ func (s *ElevenLabsBotService) DownloadResult(apiKey string, taskID string, file
 }
 
 // Synthesize виконує повний цикл синтезу голосу
-func (s *ElevenLabsBotService) Synthesize(apiKey string, text string, templateName string, outputPath string, id string, taskLabel string) error {
+func (s *ElevenLabsBotService) Synthesize(apiKey string, text string, templateUUID string, outputPath string, id string, taskLabel string) error {
 	if s.OnLog != nil {
 		s.OnLog("INFO", "[ElevenLabsBot] Starting voice synthesis...", id, taskLabel)
 	}
 
-	taskID, err := s.CreateTask(apiKey, text, templateName)
+	taskID, err := s.CreateTask(apiKey, text, templateUUID)
 	if err != nil {
 		return err
 	}

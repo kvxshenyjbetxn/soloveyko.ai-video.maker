@@ -120,6 +120,7 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 				time.Sleep(time.Duration(backoffs[attempt-1]) * time.Second)
 			}
 
+			s.log("INFO", fmt.Sprintf("[ElevenLabsBot] Synthesizing voice. Template UUID: '%s', Text length: %d chars", vTemplate, len([]rune(processedText))), id, taskLabel)
 			s.elevenLabsSem <- struct{}{}
 			err = s.elevenLabs.Synthesize(vApiKey, processedText, vTemplate, voiceFilePath, id, taskLabel)
 			<-s.elevenLabsSem

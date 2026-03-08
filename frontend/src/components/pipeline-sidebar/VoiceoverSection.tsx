@@ -9,7 +9,7 @@ interface VoiceoverSectionProps {
     fetchVoiceTemplates: (keyID?: string) => void;
     fetchVoiceMakerVoices: (keyID?: string) => void;
     fetchEdgeTTSVoices: () => void;
-    voiceTemplates: string[];
+    voiceTemplates: { uuid: string; name: string }[];
     voiceMakerVoices: any[];
     edgeTTSVoices: any[];
     loadingTemplates: boolean;
@@ -123,11 +123,11 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                                     disabled={loadingTemplates}
                                 >
                                     <option value="">{loadingTemplates ? (t('common.loading') || 'Loading...') : (t('common.select_template') || 'Select template...')}</option>
-                                    {settings.voiceoverTemplate && !voiceTemplates.includes(settings.voiceoverTemplate) && (
-                                        <option value={settings.voiceoverTemplate}>{settings.voiceoverTemplate}</option>
+                                    {settings.voiceoverTemplate && !voiceTemplates.find(t => t.uuid === settings.voiceoverTemplate) && (
+                                        <option value={settings.voiceoverTemplate}>Unknown ({settings.voiceoverTemplate})</option>
                                     )}
                                     {voiceTemplates.map(tpl => (
-                                        <option key={tpl} value={tpl}>{tpl}</option>
+                                        <option key={tpl.uuid} value={tpl.uuid}>{tpl.name}</option>
                                     ))}
                                 </select>
                                 <button

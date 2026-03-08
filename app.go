@@ -914,7 +914,7 @@ func (a *App) SavePipelineSettings(pipeline utils.PipelineSettings) error {
 }
 
 // GetElevenLabsBotVoiceTemplates returns the list of voice templates for a given API key
-func (a *App) GetElevenLabsBotVoiceTemplates(apiKey string) ([]string, error) {
+func (a *App) GetElevenLabsBotVoiceTemplates(apiKey string) ([]api.VoiceTemplate, error) {
 	return a.elevenLabs.GetTemplates(apiKey)
 }
 

@@ -97,7 +97,9 @@ export interface PipelineSettings {
     imageMemoryType: string;
     imageMemoryChars: number;
     imageDetermineCharacters: boolean;
+    imageDetermineCharactersMode: string;
     imageDetermineCharactersPrompt: string;
+    imageDetermineCharactersStatic: string;
     elevenLabsImageKeyID: string;
     elevenLabsImageAspectRatio: string;
 

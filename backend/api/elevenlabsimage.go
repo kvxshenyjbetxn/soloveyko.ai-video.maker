@@ -172,9 +172,10 @@ func (s *ElevenLabsImageService) GenerateImage(apiKey string, prompt string, asp
 				continue
 			}
 
-			if status.Status == "completed" {
+			switch status.Status {
+			case "completed":
 				goto retrieveResult
-			} else if status.Status == "failed" || status.Status == "cancelled" {
+			case "failed", "cancelled":
 				return fmt.Errorf("ElevenLabs Image task failed or cancelled: %s", status.ErrorMessage)
 			}
 
