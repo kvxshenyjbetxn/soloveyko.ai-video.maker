@@ -13,14 +13,24 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
     const { locale } = useI18n();
     const { accentColor } = useTheme();
     const [isDownloading, setIsDownloading] = useState(false);
+    const [isDownloaded, setIsDownloaded] = useState(false);
+    const [downloadedPath, setDownloadedPath] = useState("");
+    const [os, setOs] = useState("");
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isOpen) {
             setIsDownloading(false);
+            setIsDownloaded(false);
             setProgress(0);
             setError(null);
+        } else {
+            // @ts-ignore
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetOS) {
+                // @ts-ignore
+                window.go.main.App.GetOS().then(setOs);
+            }
         }
     }, [isOpen]);
 
@@ -44,8 +54,14 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
             // @ts-ignore
             const pkgPath = await window.go.main.App.DownloadUpdate(manifest.url);
             if (pkgPath) {
-                // @ts-ignore
-                await window.go.main.App.ApplyUpdate(pkgPath);
+                if (os === 'darwin') {
+                    setIsDownloading(false);
+                    setIsDownloaded(true);
+                    setDownloadedPath(pkgPath);
+                } else {
+                    // @ts-ignore
+                    await window.go.main.App.ApplyUpdate(pkgPath);
+                }
             }
         } catch (e: any) {
             console.error("Update failed:", e);
@@ -54,7 +70,23 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
         }
     };
 
+    const handleOpenFolder = () => {
+        if (!downloadedPath) return;
+        // Strip filename to get directory
+        const dir = downloadedPath.substring(0, downloadedPath.lastIndexOf(os === 'windows' ? '\\' : '/'));
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.OpenPath) {
+            // @ts-ignore
+            window.go.main.App.OpenPath(dir || downloadedPath);
+        }
+    };
+
     const getTitle = () => {
+        if (isDownloaded) {
+            if (locale === 'uk') return 'Файл завантажено';
+            if (locale === 'ru') return 'Файл загружен';
+            return 'File Downloaded';
+        }
         if (locale === 'uk') return 'Доступне оновлення';
         if (locale === 'ru') return 'Доступно обновление';
         return 'Update Available';
@@ -79,7 +111,11 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                 <div className="update-modal-header">
                     <div className="header-icon-container">
                         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="header-icon">
-                            <path d="M12 17V7M12 7L8 11M12 7L16 11M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            {isDownloaded ? (
+                                <path d="M5 13L9 17L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            ) : (
+                                <path d="M12 17V7M12 7L8 11M12 7L16 11M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            )}
                         </svg>
                     </div>
                     <div className="header-text">
@@ -92,43 +128,60 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                 </div>
 
                 <div className="update-modal-body">
-                    <div className="notes-label">
-                        {locale === 'uk' ? 'Що нового:' : (locale === 'ru' ? 'Что нового:' : 'What\'s new:')}
-                    </div>
+                    {!isDownloaded ? (
+                        <>
+                            <div className="notes-label">
+                                {locale === 'uk' ? 'Що нового:' : (locale === 'ru' ? 'Что нового:' : 'What\'s new:')}
+                            </div>
 
-                    {manifest.notes && (
-                        <div className="update-notes-fancy">
-                            {(() => {
-                                const urlRegex = /(https?:\/\/[^\s]+)/g;
-                                const parts = manifest.notes.split(urlRegex);
-                                return parts.map((part, i) => {
-                                    if (part.match(urlRegex)) {
-                                        return (
-                                            <span
-                                                key={i}
-                                                className="note-link"
-                                                onClick={() => {
-                                                    // @ts-ignore
-                                                    if (window.runtime) {
-                                                        // @ts-ignore
-                                                        window.runtime.BrowserOpenURL(part);
-                                                    }
-                                                }}
-                                            >
-                                                {part}
-                                            </span>
-                                        );
-                                    }
-                                    return part;
-                                });
-                            })()}
+                            {manifest.notes && (
+                                <div className="update-notes-fancy">
+                                    {(() => {
+                                        const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                        const parts = manifest.notes.split(urlRegex);
+                                        return parts.map((part, i) => {
+                                            if (part.match(urlRegex)) {
+                                                return (
+                                                    <span
+                                                        key={i}
+                                                        className="note-link"
+                                                        onClick={() => {
+                                                            // @ts-ignore
+                                                            if (window.runtime) {
+                                                                // @ts-ignore
+                                                                window.runtime.BrowserOpenURL(part);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {part}
+                                                    </span>
+                                                );
+                                            }
+                                            return part;
+                                        });
+                                    })()}
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="download-success-message">
+                            <p>
+                                {locale === 'uk' 
+                                    ? `Для оновлення треба закрити цю программу та відкрити нову в папці Завантаження (Downloads).` 
+                                    : (locale === 'ru' 
+                                        ? `Для обновления нужно закрыть эту программу и открыть новую в папке Загрузки (Downloads).` 
+                                        : `To update, you need to close this program and open the new one in the Downloads folder.`)}
+                            </p>
+                            <div className="file-path-display">
+                                {downloadedPath}
+                            </div>
                         </div>
                     )}
 
                     {isDownloading && (
                         <div className="download-section">
                             <div className="progress-info">
-                                <span>{locale === 'uk' ? 'Встановлення компонентів...' : (locale === 'ru' ? 'Установка компонентов...' : 'Installing components...')}</span>
+                                <span>{locale === 'uk' ? 'Завантаження компонентів...' : (locale === 'ru' ? 'Загрузка компонентов...' : 'Downloading components...')}</span>
                                 <span className="progress-percent">{progress}%</span>
                             </div>
                             <div className="fancy-progress-bg">
@@ -150,20 +203,33 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                 </div>
 
                 <div className="update-modal-footer">
-                    {!isDownloading && (
+                    {!isDownloading && !isDownloaded && (
                         <button className="btn-later" onClick={onClose}>
                             {locale === 'uk' ? 'Пізніше' : (locale === 'ru' ? 'Позже' : 'Later')}
                         </button>
                     )}
-                    <button
-                        className={`btn-update-now ${isDownloading ? 'loading' : ''}`}
-                        onClick={handleUpdate}
-                        disabled={isDownloading}
-                    >
-                        {getButtonText()}
-                    </button>
+                    
+                    {isDownloaded ? (
+                        <>
+                            <button className="btn-later" onClick={handleOpenFolder}>
+                                {locale === 'uk' ? 'Відкрити папку' : (locale === 'ru' ? 'Открыть папку' : 'Open Folder')}
+                            </button>
+                            <button className="btn-update-now" onClick={onClose}>
+                                {locale === 'uk' ? 'Закрити' : (locale === 'ru' ? 'Закрыть' : 'Close')}
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            className={`btn-update-now ${isDownloading ? 'loading' : ''}`}
+                            onClick={handleUpdate}
+                            disabled={isDownloading}
+                        >
+                            {getButtonText()}
+                        </button>
+                    )}
                 </div>
             </div>
+
 
             <style dangerouslySetInnerHTML={{
                 __html: `
@@ -405,6 +471,24 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, manifest, onCl
                     filter: brightness(1.2);
                     border-bottom: 1px solid ${accentColor};
                     text-shadow: 0 0 10px ${accentColor}66;
+                }
+                .download-success-message {
+                    color: rgba(255, 255, 255, 0.9);
+                    font-size: 1rem;
+                    line-height: 1.5;
+                    text-align: center;
+                    margin: 10px 0;
+                }
+                .file-path-display {
+                    background: rgba(0, 0, 0, 0.3);
+                    border: 1px dashed rgba(255, 255, 255, 0.2);
+                    border-radius: 8px;
+                    padding: 10px;
+                    margin-top: 15px;
+                    font-family: monospace;
+                    font-size: 0.8rem;
+                    color: rgba(255, 255, 255, 0.5);
+                    word-break: break-all;
                 }
             ` }} />
         </div>

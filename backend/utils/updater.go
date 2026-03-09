@@ -149,6 +149,74 @@ func (m *UpdateManager) Download(url string, progressChan chan int) (string, err
 	return tmpFile.Name(), nil
 }
 
+func (m *UpdateManager) DownloadToDownloads(url string, progressChan chan int) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	downloadsDir := filepath.Join(home, "Downloads")
+	// Ensure directory exists, though Downloads should exist
+	os.MkdirAll(downloadsDir, 0755)
+
+	// Extract filename from URL
+	filename := "soloveyko-update.zip"
+	if lastSlash := strings.LastIndex(url, "/"); lastSlash != -1 {
+		filename = url[lastSlash+1:]
+		if filename == "" {
+			filename = "soloveyko-update.zip"
+		}
+	}
+
+	destPath := filepath.Join(downloadsDir, filename)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to download: status %d", resp.StatusCode)
+	}
+
+	destFile, err := os.Create(destPath)
+	if err != nil {
+		return "", err
+	}
+	defer destFile.Close()
+
+	size := resp.ContentLength
+	buffer := make([]byte, 32*1024)
+	var downloaded int64
+
+	for {
+		n, err := resp.Body.Read(buffer)
+		if n > 0 {
+			_, writeErr := destFile.Write(buffer[:n])
+			if writeErr != nil {
+				return "", writeErr
+			}
+			downloaded += int64(n)
+			if size > 0 {
+				progress := int(float64(downloaded) / float64(size) * 100)
+				select {
+				case progressChan <- progress:
+				default:
+				}
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return destPath, nil
+}
+
 func (m *UpdateManager) Apply(pkgPath string) error {
 	exePath, err := os.Executable()
 	if err != nil {

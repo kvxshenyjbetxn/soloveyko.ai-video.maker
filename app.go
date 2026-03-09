@@ -318,7 +318,12 @@ func (a *App) GetAppVersion() string {
 	return utils.AppVersion
 }
 
-// CheckForUpdates checks for application updates
+// GetOS returns the current operating system
+func (a *App) GetOS() string {
+	return runtime.GOOS
+}
+
+// Check for updates checks for application updates
 func (a *App) CheckForUpdates(manifestURL string) (*utils.UpdateManifest, error) {
 	return a.updater.Check(manifestURL)
 }
@@ -338,7 +343,15 @@ func (a *App) DownloadUpdate(url string) (string, error) {
 
 	defer close(progressChan)
 
-	pkgPath, err := a.updater.Download(url, progressChan)
+	var pkgPath string
+	var err error
+
+	if runtime.GOOS == "darwin" {
+		pkgPath, err = a.updater.DownloadToDownloads(url, progressChan)
+	} else {
+		pkgPath, err = a.updater.Download(url, progressChan)
+	}
+
 	if err != nil {
 		return "", err
 	}
@@ -396,8 +409,21 @@ func (a *App) OpenConfigDir() {
 
 // OpenPath opens the specified path in the system file explorer
 func (a *App) OpenPath(path string) {
-	var cmd *exec.Cmd
+	if path == "" {
+		return
+	}
 
+	// Normalize path separators if needed (handling Windows paths on Unix)
+	if runtime.GOOS != "windows" {
+		path = strings.ReplaceAll(path, "\\", "/")
+	}
+
+	// Clean the path to resolve redundant separators and ..
+	path = filepath.Clean(path)
+
+	a.LogToUI("INFO", fmt.Sprintf("[System] Opening path: %s", path))
+
+	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
 		cmd = exec.Command("explorer", path)
@@ -408,7 +434,10 @@ func (a *App) OpenPath(path string) {
 	}
 
 	if cmd != nil {
-		cmd.Run()
+		err := cmd.Run()
+		if err != nil {
+			a.LogToUI("ERROR", fmt.Sprintf("[System] Failed to open path: %v", err))
+		}
 	}
 }
 

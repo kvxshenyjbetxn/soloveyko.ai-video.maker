@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
 	"strings"
@@ -972,7 +973,11 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 
 	if outPath == "" {
 		home, _ := os.UserHomeDir()
-		outPath = filepath.Join(home, "Videos")
+		if runtime.GOOS == "darwin" {
+			outPath = filepath.Join(home, "Movies")
+		} else {
+			outPath = filepath.Join(home, "Videos")
+		}
 	}
 
 	templateDir := subName
@@ -986,6 +991,13 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 
 	safeTaskName := utils.SanitizeFilename(taskName)
 	safeTemplateDir := utils.SanitizeFilename(templateDir)
+
+	// Normalize outPath separators if we are on a non-Windows system
+	// but the path came from a Windows-style configuration.
+	if runtime.GOOS != "windows" && outPath != "" {
+		outPath = strings.ReplaceAll(outPath, "\\", "/")
+	}
+
 	finalDir := filepath.Join(outPath, safeTaskName, safeTemplateDir)
 
 	// Backward compatibility check: if Default dir doesn't exist OR is empty, check parent
