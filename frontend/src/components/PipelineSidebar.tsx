@@ -386,7 +386,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.imageMemoryType === undefined) s.imageMemoryType = "primitive";
                 if (s.imageMemoryChars === undefined) s.imageMemoryChars = 1000;
                 if (s.imageDetermineCharacters === undefined) s.imageDetermineCharacters = false;
+                if (s.imageDetermineCharactersMode === undefined) s.imageDetermineCharactersMode = "dynamic";
                 if (s.imageDetermineCharactersPrompt === undefined) s.imageDetermineCharactersPrompt = "";
+                if (s.imageDetermineCharactersStatic === undefined) s.imageDetermineCharactersStatic = "";
 
                 if (s.imageWidth === undefined) s.imageWidth = 1920;
                 if (s.imageHeight === undefined) s.imageHeight = 1080;

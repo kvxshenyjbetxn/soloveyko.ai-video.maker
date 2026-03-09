@@ -355,7 +355,13 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		if detChars && strings.Contains(promptTemplate, "{{characters}}") {
 			detMode, _ := settings["imageDetermineCharactersMode"].(string)
 			if detMode == "" {
-				detMode = pSettings.ImageDetermineCharactersMode
+				if subName != "" {
+					// Якщо ми в шаблоні, ми не хочемо, щоб налаштування з бічної панелі перезаписували логіку.
+					// Ми використовуємо "dynamic" як безпечне значення за замовчуванням.
+					detMode = "dynamic"
+				} else {
+					detMode = pSettings.ImageDetermineCharactersMode
+				}
 			}
 			if detMode == "" {
 				detMode = "dynamic"
@@ -364,7 +370,12 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			if detMode == "static" {
 				staticDesc, _ := settings["imageDetermineCharactersStatic"].(string)
 				if staticDesc == "" {
-					staticDesc = pSettings.ImageDetermineCharactersStatic
+					if subName != "" {
+						// В шаблоні ми не беремо опис з панелі, якщо він не вказаний в самому шаблоні
+						staticDesc = ""
+					} else {
+						staticDesc = pSettings.ImageDetermineCharactersStatic
+					}
 				}
 				if staticDesc != "" {
 					s.log("INFO", "[Pipeline] Using static character description", id, taskLabel)
@@ -373,7 +384,12 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			} else {
 				detPrompt, _ := settings["imageDetermineCharactersPrompt"].(string)
 				if detPrompt == "" {
-					detPrompt = pSettings.ImageDetermineCharactersPrompt
+					if subName != "" {
+						// Для шаблону використовуємо дефолтний промпт, якщо він не заданий
+						detPrompt = ""
+					} else {
+						detPrompt = pSettings.ImageDetermineCharactersPrompt
+					}
 				}
 				if detPrompt != "" {
 					s.log("INFO", "[Pipeline] Determining characters from text...", id, taskLabel)
