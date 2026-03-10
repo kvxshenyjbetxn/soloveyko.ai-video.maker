@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './InitialSetup.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useServices } from '../contexts/ServiceContext';
 import { ConfirmModal } from './ConfirmModal';
 // @ts-ignore
 import logo from '../assets/logo.png';
@@ -13,6 +14,7 @@ interface InitialSetupProps {
 export const InitialSetup: React.FC<InitialSetupProps> = ({ onFinish }) => {
     const { t, locale, setLocale } = useI18n();
     const { theme, setTheme, accentColor, setAccentColor } = useTheme();
+    const { refreshAllBalances } = useServices();
     const [step, setStep] = useState(1);
     const [apiKey, setApiKey] = useState('');
     const [whisperEngine, setWhisperEngine] = useState('standard');
@@ -123,6 +125,9 @@ export const InitialSetup: React.FC<InitialSetupProps> = ({ onFinish }) => {
             // Mark initial setup as finished (mandatory)
             // @ts-ignore
             await window.go.main.App.SetFirstRun(false);
+
+            // Refresh services to update keys in UI
+            await refreshAllBalances();
 
             onFinish();
         } catch (error) {

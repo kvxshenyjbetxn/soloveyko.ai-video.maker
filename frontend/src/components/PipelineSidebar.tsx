@@ -292,71 +292,74 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 const modelList = orModels || [];
 
                 if (modelList.length > 0) {
-                    if (s.translateModel === "") { s.translateModel = modelList[0]; updated = true; }
-                    if (s.rewriteModel === "") { s.rewriteModel = modelList[0]; updated = true; }
+                    if (!s.translateModel || s.translateModel === "") { s.translateModel = modelList[0]; updated = true; }
+                    if (!s.rewriteModel || s.rewriteModel === "") { s.rewriteModel = modelList[0]; updated = true; }
                 }
 
                 if (openRouterKeys.length > 0) {
-                    if (!s.translateOpenRouterKeyID) { s.translateOpenRouterKeyID = openRouterKeys[0].id; updated = true; }
-                    if (!s.rewriteOpenRouterKeyID) { s.rewriteOpenRouterKeyID = openRouterKeys[0].id; updated = true; }
+                    if (!s.translateOpenRouterKeyID || s.translateOpenRouterKeyID === "") { s.translateOpenRouterKeyID = openRouterKeys[0].id; updated = true; }
+                    if (!s.rewriteOpenRouterKeyID || s.rewriteOpenRouterKeyID === "") { s.rewriteOpenRouterKeyID = openRouterKeys[0].id; updated = true; }
                 }
 
-                if (elevenLabsBotKeys.length > 0 && !s.voiceoverElevenLabsBotKeyID) {
+                if (elevenLabsBotKeys.length > 0 && (!s.voiceoverElevenLabsBotKeyID || s.voiceoverElevenLabsBotKeyID === "")) {
                     s.voiceoverElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
                     updated = true;
                 }
 
-                if (voiceMakerKeys.length > 0 && !s.voiceoverVoiceMakerKeyID) {
+                if (voiceMakerKeys.length > 0 && (!s.voiceoverVoiceMakerKeyID || s.voiceoverVoiceMakerKeyID === "")) {
                     s.voiceoverVoiceMakerKeyID = voiceMakerKeys[0].id;
                     updated = true;
                 }
 
-                if (elevenLabsUAKeys.length > 0 && !s.voiceoverElevenLabsUAKeyID) {
+                if (elevenLabsUAKeys.length > 0 && (!s.voiceoverElevenLabsUAKeyID || s.voiceoverElevenLabsUAKeyID === "")) {
                     s.voiceoverElevenLabsUAKeyID = elevenLabsUAKeys[0].id;
                     updated = true;
                 }
 
-                if (pollinationsKeys.length > 0 && !s.imagePollinationsKeyID) {
+                if (pollinationsKeys.length > 0 && (!s.imagePollinationsKeyID || s.imagePollinationsKeyID === "")) {
                     s.imagePollinationsKeyID = pollinationsKeys[0].id;
                     updated = true;
                 }
 
-                if (elevenLabsImageKeys.length > 0 && !s.elevenLabsImageKeyID) {
+                if (elevenLabsImageKeys.length > 0 && (!s.elevenLabsImageKeyID || s.elevenLabsImageKeyID === "")) {
                     s.elevenLabsImageKeyID = elevenLabsImageKeys[0].id;
                     updated = true;
                 }
 
-                if (elevenLabsUnlimKeys.length > 0 && !s.voiceoverElevenLabsUnlimKeyID) {
+                if (elevenLabsUnlimKeys.length > 0 && (!s.voiceoverElevenLabsUnlimKeyID || s.voiceoverElevenLabsUnlimKeyID === "")) {
                     s.voiceoverElevenLabsUnlimKeyID = elevenLabsUnlimKeys[0].id;
                     updated = true;
                 }
 
                 if (!s.rewriteEnabled) { s.rewriteEnabled = true; updated = true; }
-                if (s.voiceoverEnabled === undefined) { s.voiceoverEnabled = false; updated = true; }
+                if (s.voiceoverEnabled === undefined) { s.voiceoverEnabled = true; updated = true; }
 
-                if (!s.translateOutputPath || !s.rewriteOutputPath) {
+                if (!s.translateOutputPath || s.translateOutputPath === "") {
                     const def = await GetDefaultVideosPath();
                     if (def) {
-                        if (!s.translateOutputPath) s.translateOutputPath = s.outputPath || def;
-                        if (!s.rewriteOutputPath) s.rewriteOutputPath = s.outputPath || def;
+                        if (!s.translateOutputPath || s.translateOutputPath === "") s.translateOutputPath = s.outputPath || def;
+                        if (!s.rewriteOutputPath || s.rewriteOutputPath === "") s.rewriteOutputPath = s.outputPath || def;
                         updated = true;
                     }
                 }
 
                 // Initial UI states
-                s.apiCollapsed = true;
-                s.pathCollapsed = true;
+                if (s.apiCollapsed === undefined) s.apiCollapsed = true;
+                if (s.pathCollapsed === undefined) s.pathCollapsed = true;
+                if (s.translateCollapsed === undefined) s.translateCollapsed = true;
+                if (s.rewriteCollapsed === undefined) s.rewriteCollapsed = true;
+                if (s.voiceoverCollapsed === undefined) s.voiceoverCollapsed = true;
+                if (s.subtitleCollapsed === undefined) s.subtitleCollapsed = true;
+                if (s.imageCollapsed === undefined) s.imageCollapsed = true;
+                if (s.montageCollapsed === undefined) s.montageCollapsed = true;
+                if (s.templatesCollapsed === undefined) s.templatesCollapsed = true;
+                if (s.controlCollapsed === undefined) s.controlCollapsed = true;
                 if (s.translateTemplatesCollapsed === undefined) s.translateTemplatesCollapsed = true;
                 if (s.rewriteTemplatesCollapsed === undefined) s.rewriteTemplatesCollapsed = true;
                 if (s.voiceoverTemplatesCollapsed === undefined) s.voiceoverTemplatesCollapsed = true;
                 if (s.imageTemplatesCollapsed === undefined) s.imageTemplatesCollapsed = true;
-                if (s.controlCollapsed === undefined) s.controlCollapsed = true;
-                if (s.translateControlEnabled === undefined) { s.translateControlEnabled = true; updated = true; }
-                if (s.imageControlEnabled === undefined) { s.imageControlEnabled = true; updated = true; }
-                if (s.subtitleCollapsed === undefined) s.subtitleCollapsed = true;
-                if (s.imageCollapsed === undefined) s.imageCollapsed = true;
-                if (s.montageCollapsed === undefined) s.montageCollapsed = true;
-                if (s.montageEnabled === undefined) { s.montageEnabled = false; updated = true; }
+                if (s.customStagesCollapsed === undefined) s.customStagesCollapsed = true;
+                if (s.montageEnabled === undefined) { s.montageEnabled = true; updated = true; }
                 if (s.montageIntroVideoEnabled === undefined) { s.montageIntroVideoEnabled = false; updated = true; }
                 if (s.montageIntroVideoPath === undefined) { s.montageIntroVideoPath = ""; updated = true; }
                 if (s.montageWatermarkEnabled === undefined) { s.montageWatermarkEnabled = false; updated = true; }
@@ -369,6 +372,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 if (s.montageOverlayOnIntro === undefined) { s.montageOverlayOnIntro = false; updated = true; }
                 if (s.montageOverlayTriggersEnabled === undefined) { s.montageOverlayTriggersEnabled = false; updated = true; }
                 if (s.montageOverlayTriggers === undefined) { s.montageOverlayTriggers = []; updated = true; }
+                if (s.montageTransitionEffect === undefined) { s.montageTransitionEffect = "fade_fast"; updated = true; }
+                if (s.montageEncodingPreset === undefined) { s.montageEncodingPreset = "superfast"; updated = true; }
+                if (s.montageBitrate === undefined) { s.montageBitrate = 5; updated = true; }
 
                 if (s.customStages === undefined) { s.customStages = []; updated = true; }
                 if (s.customStagesEnabled === undefined) { s.customStagesEnabled = true; updated = true; }
@@ -424,7 +430,7 @@ story:
                 if (s.rewriteMaxTokens === undefined) s.rewriteMaxTokens = 0;
 
                 if (s.imagePromptModel === undefined) s.imagePromptModel = modelList.length > 0 ? modelList[0] : "";
-                if (s.imagePromptTemperature === undefined) s.imagePromptTemperature = 0.7;
+                if (s.imagePromptTemperature === undefined) s.imagePromptTemperature = 1.0;
                 if (s.imagePromptMaxTokens === undefined) s.imagePromptMaxTokens = 0;
                 if (s.imageMode === undefined) s.imageMode = "normal";
                 if (s.imageMemoryType === undefined) s.imageMemoryType = "primitive";
@@ -438,7 +444,8 @@ story:
                 if (s.imageHeight === undefined) s.imageHeight = 1080;
                 if (s.imageNoLogo === undefined) s.imageNoLogo = true;
                 if (s.imageEnhance === undefined) s.imageEnhance = false;
-                if (s.imagePrompt === undefined) s.imagePrompt = `Role: You are an expert AI Cinematographer and Prompt Engineer specializing in ultra-realistic photography for continuous storytelling pipelines. 
+                if (!s.imagePrompt || s.imagePrompt === "") {
+                    s.imagePrompt = `Role: You are an expert AI Cinematographer and Prompt Engineer specializing in ultra-realistic photography for continuous storytelling pipelines. 
 Task: Convert the provided story excerpt into a single, highly detailed image generation prompt in English. The prompt must strictly reflect the current action while maintaining visual continuity with the characters and previous context.
 
 CRITICAL RULES:
@@ -455,9 +462,12 @@ Output Format: Respond ONLY with the raw image generation prompt in English. No 
 
 Prompt Structure:
 Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (performing ONE realistic action OR a neutral/passive pose if text is a Call-to-Action), (Detailed Environment perfectly matching Previous Context), (Lighting/Atmosphere), shot on 35mm lens, realistic textures, natural lighting, strictly grounded in reality, completely textless, 8k raw photo.`;
-                if (s.imageService === undefined) { s.imageService = "pollinations"; updated = true; }
-                if (s.imageGooglerModel === undefined) { s.imageGooglerModel = "whisk"; updated = true; }
-                if (s.imageGooglerVideoModel === undefined) { s.imageGooglerVideoModel = "whisk"; updated = true; }
+                    updated = true;
+                }
+                if (!s.imageService || s.imageService === "") { s.imageService = "pollinations"; updated = true; }
+                if (!s.imageModel || s.imageModel === "") { s.imageModel = "zimage"; updated = true; }
+                if (!s.imageGooglerModel || s.imageGooglerModel === "") { s.imageGooglerModel = "whisk"; updated = true; }
+                if (!s.imageGooglerVideoModel || s.imageGooglerVideoModel === "") { s.imageGooglerVideoModel = "whisk"; updated = true; }
                 if (s.imageGooglerVideoUpscale === undefined) { s.imageGooglerVideoUpscale = false; updated = true; }
                 if (s.imageGooglerVideoEnabled === undefined) { s.imageGooglerVideoEnabled = false; updated = true; }
                 if (s.imageSyncEnabled === undefined) { s.imageSyncEnabled = true; updated = true; }
@@ -477,16 +487,16 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 
                 if (!s.subtitleService) { s.subtitleService = 'standard'; updated = true; }
                 if (!s.subtitleModel) { s.subtitleModel = 'base'; updated = true; }
-                if (s.subtitleEnabled === undefined) { s.subtitleEnabled = false; updated = true; }
+                if (s.subtitleEnabled === undefined) { s.subtitleEnabled = true; updated = true; }
                 if (s.subtitleMaxLen === undefined) s.subtitleMaxLen = 40;
                 if (s.subtitleMaxWords === undefined) s.subtitleMaxWords = 10;
                 if (s.subtitleAmdLanguage === undefined) s.subtitleAmdLanguage = 'uk';
-                if (s.subtitleFont === undefined) s.subtitleFont = 'Arial';
-                if (s.subtitleSize === undefined) s.subtitleSize = 24;
+                if (s.subtitleFont === undefined) s.subtitleFont = 'Impact';
+                if (s.subtitleSize === undefined) s.subtitleSize = 70;
                 if (s.subtitleColor === undefined) s.subtitleColor = '#ffffff';
                 if (s.subtitleFadeEnabled === undefined) s.subtitleFadeEnabled = true;
-                if (s.subtitleFadeIn === undefined) s.subtitleFadeIn = 300;
-                if (s.subtitleFadeOut === undefined) s.subtitleFadeOut = 300;
+                if (s.subtitleFadeIn === undefined) s.subtitleFadeIn = 150;
+                if (s.subtitleFadeOut === undefined) s.subtitleFadeOut = 150;
                 if (s.subtitleColor === undefined) s.subtitleColor = '#ffffff';
                 if (s.subtitleOutlineColor === undefined) s.subtitleOutlineColor = '#000000';
                 if (s.subtitleOutlineWidth === undefined) s.subtitleOutlineWidth = 2.0;
@@ -517,7 +527,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             }
         };
         init();
-    }, [type]);
+    }, [type, openRouterKeys.length, elevenLabsBotKeys.length, elevenLabsUnlimKeys.length, elevenLabsUAKeys.length, voiceMakerKeys.length, pollinationsKeys.length, elevenLabsImageKeys.length]);
 
 
 

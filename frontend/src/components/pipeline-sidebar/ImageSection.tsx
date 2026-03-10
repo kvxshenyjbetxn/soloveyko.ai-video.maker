@@ -616,7 +616,10 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             if (pollinationsModels.length === 0) fetchPollinationsModels();
                                         }}
                                     >
-                                        <option value="">{loadingPollinationsModels ? t('common.loading') : t('pipeline.model.default')}</option>
+                                        {!settings.imageModel && <option value="">{loadingPollinationsModels ? t('common.loading') : t('pipeline.model.default')}</option>}
+                                        {settings.imageModel && !pollinationsModels.includes(settings.imageModel) && (
+                                            <option value={settings.imageModel}>{settings.imageModel}</option>
+                                        )}
                                         {pollinationsModels.map(m => (
                                             <option key={m} value={m}>{m}</option>
                                         ))}

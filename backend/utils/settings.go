@@ -332,9 +332,22 @@ story:
 `,
 				TranslateTemperature:    1.0,
 				TranslateEnabled:        true,
+				TranslateCollapsed:      true,
 				RewriteModel:            "google/gemini-2.5-flash",
 				RewriteTemperature:      1.0,
 				RewriteEnabled:          true,
+				RewriteCollapsed:        true,
+				ApiCollapsed:            true,
+				PathCollapsed:           true,
+				TemplatesCollapsed:      true,
+				TranslateTemplatesCollapsed: true,
+				RewriteTemplatesCollapsed: true,
+				VoiceoverTemplatesCollapsed: true,
+				ControlCollapsed:        true,
+				SubtitleCollapsed:       true,
+				ImageTemplatesCollapsed: true,
+				ImageCollapsed:          true,
+				CustomStagesCollapsed:   true,
 				SubtitleKaraokeEffect:   false,
 				SubtitleKaraokeSpeed:    100,
 				ImageEnabled:            true,
@@ -343,6 +356,9 @@ story:
 				ImageGroupSentences:     false,
 				ImageMode:               "normal",
 				ImageDetermineCharacters: false,
+				ImageModel:              "zimage",
+				ImageNoLogo:             true,
+				ImagePromptTemperature:  1.0,
 				ImagePrompt: `Role: You are an expert AI Cinematographer and Prompt Engineer specializing in ultra-realistic photography for continuous storytelling pipelines. 
 Task: Convert the provided story excerpt into a single, highly detailed image generation prompt in English. The prompt must strictly reflect the current action while maintaining visual continuity with the characters and previous context.
 
@@ -360,24 +376,26 @@ Output Format: Respond ONLY with the raw image generation prompt in English. No 
 
 Prompt Structure:
 Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (performing ONE realistic action OR a neutral/passive pose if text is a Call-to-Action), (Detailed Environment perfectly matching Previous Context), (Lighting/Atmosphere), shot on 35mm lens, realistic textures, natural lighting, strictly grounded in reality, completely textless, 8k raw photo.`,
-				VoiceoverEnabled:        false,
+				VoiceoverEnabled:        true,
 				VoiceoverService:        "edgetts",
 				EdgeTTSVoiceID:          "uk-UA-OstapNeural",
+				VoiceoverCollapsed:      true,
+				SubtitleEnabled:         true,
 				SubtitleMaxLen:          40,
 				SubtitleMaxWords:        10,
 				SubtitleColor:           "#ffffff",
-				SubtitleSize:            24,
-				SubtitleFont:            "Arial",
+				SubtitleSize:            70,
+				SubtitleFont:            "Impact",
 				SubtitleOutlineColor:    "#000000",
 				SubtitleOutlineWidth:    2.0,
 				SubtitleShadowColor:     "#000000",
 				SubtitleShadowWidth:     1.0,
 				SubtitleBlur:            0.0,
 				SubtitleFadeEnabled:     true,
-				SubtitleFadeIn:          300,
-				SubtitleFadeOut:         300,
+				SubtitleFadeIn:          150,
+				SubtitleFadeOut:         150,
 				SidebarWidth:            320,
-				MontageEnabled:          false,
+				MontageEnabled:          true,
 				MontageCollapsed:        true,
 				ImageMemoryType:         "primitive",
 				ImageMemoryChars:        1000,
@@ -435,7 +453,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 		settings.Pipeline.MontageTransitionDuration = 0.5
 	}
 	if settings.Pipeline.MontageTransitionEffect == "" {
-		settings.Pipeline.MontageTransitionEffect = "fade"
+		settings.Pipeline.MontageTransitionEffect = "fade_fast"
 	}
 	if settings.Pipeline.MontageSwayFactor == 0 {
 		settings.Pipeline.MontageSwayFactor = 1.0
@@ -444,10 +462,10 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 		settings.Pipeline.MontageZoomFactor = 1.0
 	}
 	if settings.Pipeline.MontageEncodingPreset == "" {
-		settings.Pipeline.MontageEncodingPreset = "medium"
+		settings.Pipeline.MontageEncodingPreset = "superfast"
 	}
 	if settings.Pipeline.MontageBitrate <= 0 {
-		settings.Pipeline.MontageBitrate = 15
+		settings.Pipeline.MontageBitrate = 5
 	}
 	if settings.Pipeline.MontageResolution == "" {
 		settings.Pipeline.MontageResolution = "1080p"
@@ -469,6 +487,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 
 	if settings.Pipeline.ImageMode == "" {
 		settings.Pipeline.ImageMode = "normal"
+	}
+	if settings.Pipeline.ImageModel == "" {
+		settings.Pipeline.ImageModel = "zimage"
 	}
 	if settings.Pipeline.ImageMemoryType == "" {
 		settings.Pipeline.ImageMemoryType = "primitive"
@@ -496,6 +517,16 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 				Name: "Default",
 				Key:  settings.OpenRouterAPIKey,
 			},
+		}
+	}
+
+	// Ініціалізуємо key IDs, якщо вони порожні, але ключі є
+	if len(settings.OpenRouterKeys) > 0 {
+		if settings.Pipeline.TranslateOpenRouterKeyID == "" {
+			settings.Pipeline.TranslateOpenRouterKeyID = settings.OpenRouterKeys[0].ID
+		}
+		if settings.Pipeline.RewriteOpenRouterKeyID == "" {
+			settings.Pipeline.RewriteOpenRouterKeyID = settings.OpenRouterKeys[0].ID
 		}
 	}
 	// Міграція для ElevenLabsBotKeys
@@ -1622,6 +1653,26 @@ func (s *SettingsService) SaveOpenRouterAPIKey(key string) error {
 		return err
 	}
 	settings.OpenRouterAPIKey = key
+
+	// Також автоматично додаємо його в список іменованих ключів, якщо він порожній
+	if len(settings.OpenRouterKeys) == 0 {
+		settings.OpenRouterKeys = []NamedAPIKey{
+			{
+				ID:   "default",
+				Name: "Default",
+				Key:  key,
+			},
+		}
+	}
+
+	// І ініціалізуємо ID в пайплайнах
+	if settings.Pipeline.TranslateOpenRouterKeyID == "" {
+		settings.Pipeline.TranslateOpenRouterKeyID = "default"
+	}
+	if settings.Pipeline.RewriteOpenRouterKeyID == "" {
+		settings.Pipeline.RewriteOpenRouterKeyID = "default"
+	}
+
 	return s.SaveSettings(settings)
 }
 
