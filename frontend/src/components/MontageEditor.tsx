@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useI18n } from '../contexts/I18nContext';
 import './MontageEditor.css';
 import { QueueTask } from '../contexts/QueueContext';
+import { RegenerateModal } from './RegenerateModal';
 
 interface MontageClip {
     path: string;
     duration: number;
     isVideo: boolean;
+    actualDuration?: number;
 }
 
 interface MontageSegment {
@@ -74,6 +76,13 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [timelineHeight, setTimelineHeight] = useState<number>(300);
     const isResizingRef = useRef<boolean>(false);
 
+    // CLIP ACTIONS STATE
+    const [isRegModalOpen, setIsRegModalOpen] = useState<boolean>(false);
+    const [regIdx, setRegIdx] = useState<number | null>(null);
+    const [regeneratingIndices, setRegeneratingIndices] = useState<Set<number>>(new Set());
+    const [clipBusters, setClipBusters] = useState<Record<string, number>>({});
+    const [prompts, setPrompts] = useState<string[]>([]);
+
     // Initial Load
     useEffect(() => {
         if (task.montagePlanData) {
@@ -85,6 +94,19 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     setAudioSegments(parsed.audioSegments);
                 } else {
                     setAudioSegments([{ start: 0, end: parsed.audioDuration }]);
+                }
+
+                // Try to load prompts.txt for regeneration
+                if (parsed.audioPath) {
+                    const taskDir = parsed.audioPath.split(/[\\/]voice\.mp3/)[0];
+                    const promptsPath = `${taskDir}/prompts.txt`;
+                    // @ts-ignore
+                    window.go.main.App.ReadFile(promptsPath).then(content => {
+                        if (content) {
+                            const pStrs = content.split('\n\n--------------------\n\n').map((s: string) => s.trim());
+                            setPrompts(pStrs);
+                        }
+                    }).catch(() => console.log("No prompts.txt found"));
                 }
             } catch (e) {
                 console.error("Failed to parse montage plan:", e);
@@ -164,8 +186,19 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             const layout = clipLayouts[i];
             const startTime = layout.x / zoom;
             const endTime = (layout.x + layout.width) / zoom;
-            if (currentTime >= startTime && currentTime <= endTime) {
-                return { ...layout, timeInClip: currentTime - startTime };
+            if (currentTime >= startTime && currentTime <= endTime + 0.001) {
+                let timeInClip = currentTime - startTime;
+                
+                // BOOMERANG LOGIC
+                if (layout.clip.isVideo && layout.clip.actualDuration && layout.clip.actualDuration < layout.clip.duration) {
+                    const actualDur = layout.clip.actualDuration;
+                    const cycle = actualDur * 2;
+                    const pos = timeInClip % cycle;
+                    if (pos <= actualDur) timeInClip = pos;
+                    else timeInClip = actualDur - (pos - actualDur);
+                }
+                
+                return { ...layout, timeInClip };
             }
         }
         return null;
@@ -178,23 +211,27 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     animStateRef.current = { currentTime, selection, isPlaying, audioSegments, clips, zoom, totalDuration: totalTimelineDuration };
 
     const getOriginalTime = useCallback((timelineTime: number) => {
-        const segs = animStateRef.current.audioSegments;
-        if (segs.length === 0) return timelineTime;
-        let current = 0;
-        for (const seg of segs) {
+        let currentTimeline = 0;
+        let originalTime = 0;
+        for (const seg of audioSegments) {
             const segDur = seg.end - seg.start;
-            if (timelineTime <= current + segDur + 0.001) {
-                return seg.start + (timelineTime - current);
+            if (timelineTime <= currentTimeline + segDur + 0.001) { // Add a small epsilon for floating point
+                originalTime = seg.start + (timelineTime - currentTimeline);
+                return originalTime;
             }
-            current += segDur;
+            currentTimeline += segDur;
         }
-        return segs[segs.length - 1]?.end || timelineTime;
-    }, []);
+        // If timelineTime exceeds total audio segments, return the end of the last segment
+        return audioSegments.length > 0 ? audioSegments[audioSegments.length - 1].end : timelineTime;
+    }, [audioSegments]);
 
     const currentSubtitle = useMemo(() => {
         const origTime = getOriginalTime(currentTime);
         return subtitles.find(s => origTime >= s.start && origTime <= s.end);
     }, [subtitles, currentTime, getOriginalTime]);
+
+    const activeClipInfoRef = useRef(activeClipInfo);
+    activeClipInfoRef.current = activeClipInfo;
 
     const animate = useCallback((time: number) => {
         if (lastTimeRef.current === 0) {
@@ -212,6 +249,16 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 if (Math.abs(previewAudioRef.current.currentTime - targetOrig) > 0.15) {
                     previewAudioRef.current.currentTime = targetOrig;
                 }
+            }
+            if (previewVideoRef.current && activeClipInfoRef.current?.clip.isVideo) {
+                 // Aggressive sync for video to handle boomerang and drift
+                 const targetV = activeClipInfoRef.current.timeInClip;
+                 if (Math.abs(previewVideoRef.current.currentTime - targetV) > 0.15) {
+                     previewVideoRef.current.currentTime = targetV;
+                 }
+                 if (previewVideoRef.current.paused) {
+                     previewVideoRef.current.play().catch(() => {});
+                 }
             }
             if (next >= animStateRef.current.totalDuration) {
                 setIsPlaying(false);
@@ -231,6 +278,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 previewAudioRef.current.play().catch(() => {});
             }
             if (previewVideoRef.current && activeClipInfo?.clip.isVideo) {
+                previewVideoRef.current.currentTime = activeClipInfo.timeInClip;
                 previewVideoRef.current.play().catch(() => {});
             }
         } else {
@@ -239,7 +287,8 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             if (previewVideoRef.current) previewVideoRef.current.pause();
         }
         return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); };
-    }, [isPlaying, animate]);
+    }, [isPlaying, animate, activeClipInfo?.idx]); // Re-run if clip changes during playback
+
 
     useEffect(() => {
         if (!isPlaying) {
@@ -317,6 +366,81 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         setCurrentTime(start);
     }, [getOriginalTime, clipLayouts, zoom]);
 
+    const handleDeleteClip = useCallback((idx: number) => {
+        setClips(prevClips => {
+            const newClips = [...prevClips];
+            if (newClips.length <= 1) return prevClips; // Don't delete last clip
+
+            const removedDuration = newClips[idx].duration;
+            if (idx > 0) {
+                // Re-allocate to previous clip
+                newClips[idx - 1] = { 
+                    ...newClips[idx - 1], 
+                    duration: newClips[idx - 1].duration + removedDuration 
+                };
+            } else if (idx < newClips.length - 1) {
+                // Re-allocate to next clip (if it's the first clip)
+                newClips[idx + 1] = { 
+                    ...newClips[idx + 1], 
+                    duration: newClips[idx + 1].duration + removedDuration 
+                };
+            }
+            newClips.splice(idx, 1);
+            return newClips;
+        });
+    }, []);
+
+    const handleOpenRegenerate = useCallback((idx: number) => {
+        setRegIdx(idx);
+        setIsRegModalOpen(true);
+    }, []);
+
+    const handleRegenerateConfirm = useCallback(async (prompt: string, service: string, settings: any) => {
+        if (regIdx === null) return;
+        const targetClip = clips[regIdx];
+        
+        setRegeneratingIndices(prev => new Set(prev).add(regIdx));
+
+        try {
+            // @ts-ignore
+            const newPath = await window.go.main.App.RegenerateGalleryImage(targetClip.path, prompt, service, settings);
+            if (newPath) {
+                // Get new duration
+                let actualDur = targetClip.actualDuration || 0;
+                if (newPath.toLowerCase().endsWith('.mp4')) {
+                    const v = document.createElement('video');
+                    v.src = `local/${newPath.replace(/\\/g, '/')}`;
+                    await new Promise(r => {
+                        v.onloadedmetadata = () => { actualDur = v.duration; r(null); };
+                        v.onerror = () => r(null);
+                        setTimeout(() => r(null), 2000); 
+                    });
+                }
+
+                setClips(prev => {
+                    const next = [...prev];
+                    next[regIdx] = { 
+                        ...next[regIdx], 
+                        path: newPath,
+                        isVideo: newPath.toLowerCase().endsWith('.mp4'),
+                        actualDuration: actualDur
+                    };
+                    return next;
+                });
+                setClipBusters(prev => ({ ...prev, [newPath]: Date.now() }));
+            }
+        } catch (err) {
+            console.error("Regeneration failed:", err);
+        } finally {
+            setRegeneratingIndices(prev => {
+                const next = new Set(prev);
+                next.delete(regIdx);
+                return next;
+            });
+            setRegIdx(null);
+        }
+    }, [regIdx, clips]);
+
     // Keyboard shortcuts
     const actionRef = useRef({ handleCutSelection, handleMarkIn, handleMarkOut, handleTogglePlay });
     actionRef.current = { handleCutSelection, handleMarkIn, handleMarkOut, handleTogglePlay };
@@ -389,20 +513,35 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
 
     const clipElements = useMemo(() => {
         return clipLayouts.map(({ clip, idx, width, x }) => (
-            <div key={idx} className={`montage-clip-block ${clip.isVideo ? 'video' : 'image'} ${activeClipInfo?.idx === idx ? 'active-preview' : ''}`} style={{ left: `${x}px`, width: `${width}px` }}>
+            <div key={idx} className={`montage-clip-block ${clip.isVideo ? 'video' : 'image'} ${activeClipInfo?.idx === idx ? 'active-preview' : ''} ${regeneratingIndices.has(idx) ? 'is-regenerating' : ''}`} style={{ left: `${x}px`, width: `${width}px` }}>
                 <div className="montage-clip-content">
-                    <div className="montage-clip-thumbnail-placeholder">{clip.isVideo ? '🎬' : '🖼️'}</div>
+                    {regeneratingIndices.has(idx) ? (
+                        <div className="clip-loading-spinner"><div className="spinner-tiny" /></div>
+                    ) : (
+                        <div className="montage-clip-thumbnail-placeholder">{clip.isVideo ? '🎬' : '🖼️'}</div>
+                    )}
                     <span className="montage-clip-name">{clip.path.split(/[\\/]/).pop()}</span>
                     <span className="montage-clip-duration">{clip.duration.toFixed(1)}s</span>
+                    
+                    <div className="montage-clip-actions">
+                        <button className="clip-action-btn delete" onMouseDown={(e) => { e.stopPropagation(); handleDeleteClip(idx); }}>🗑️</button>
+                        <button className="clip-action-btn regenerate" onMouseDown={(e) => { e.stopPropagation(); handleOpenRegenerate(idx); }}>🔄</button>
+                    </div>
                 </div>
                 {idx < clips.length - 1 && (
                     <div className="montage-clip-resizer right" onMouseDown={(e) => { e.stopPropagation(); setDraggingIdx(idx); setStartX(e.clientX); setStartDurations({ current: clips[idx].duration, next: clips[idx + 1].duration }); }} />
                 )}
             </div>
         ));
-    }, [clipLayouts, activeClipInfo?.idx, clips, zoom]);
+    }, [clipLayouts, activeClipInfo?.idx, clips, regeneratingIndices, handleDeleteClip, handleOpenRegenerate]);
 
-    const getUrl = (p: string) => `local/${p.replace(/\\/g, '/')}`;
+    const getUrl = (p: string) => {
+        let url = `local/${p.replace(/\\/g, '/')}`;
+        if (clipBusters[p]) {
+            url += `?buster=${clipBusters[p]}`;
+        }
+        return url;
+    };
 
     if (!plan) return null;
 
@@ -481,7 +620,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                         <div className="montage-preview-container">
                             {activeClipInfo ? (
                                 <div className="montage-preview-wrap">
-                                    {activeClipInfo.clip.isVideo ? <video ref={previewVideoRef} src={getUrl(activeClipInfo.clip.path)} playsInline /> : <img src={getUrl(activeClipInfo.clip.path)} alt="p" />}
+                                    {activeClipInfo.clip.isVideo ? (
+                                        <video ref={previewVideoRef} src={getUrl(activeClipInfo.clip.path)} muted playsInline />
+                                    ) : (
+                                        <img src={getUrl(activeClipInfo.clip.path)} alt="Preview" />
+                                    )}
                                     <div className="preview-timestamp">{currentTime.toFixed(2)}s</div>
                                     {plan.audioPath && <audio ref={previewAudioRef} src={getUrl(plan.audioPath)} style={{ display: 'none' }} />}
                                     
@@ -560,6 +703,14 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     }}>{t('common.save')} & {t('queue.start')}</button>
                 </div>
             </div>
+
+            <RegenerateModal 
+                isOpen={isRegModalOpen}
+                initialPrompt={regIdx !== null ? prompts[regIdx] || "" : ""}
+                imagePath={regIdx !== null ? clips[regIdx].path : ""}
+                onClose={() => setIsRegModalOpen(false)}
+                onConfirm={handleRegenerateConfirm}
+            />
         </div>
     );
 };

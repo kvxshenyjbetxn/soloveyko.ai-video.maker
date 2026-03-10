@@ -514,9 +514,10 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		s.log("INFO", "[Control] Waiting for user montage review...", id, taskLabel)
 
 		type MontageClip struct {
-			Path     string  `json:"path"`
-			Duration float64 `json:"duration"`
-			IsVideo  bool    `json:"isVideo"`
+			Path           string  `json:"path"`
+			Duration       float64 `json:"duration"`
+			IsVideo        bool    `json:"isVideo"`
+			ActualDuration float64 `json:"actualDuration"`
 		}
 
 		type MontagePlan struct {
@@ -541,10 +542,16 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		for i, f := range visualFiles {
 			// Convert absolute path to relative or filename for UI, or use full depending on how we load
 			ext := strings.ToLower(filepath.Ext(f))
+			isVid := videoExts[ext]
+			actualDur := 0.0
+			if isVid {
+				actualDur, _ = s.getDuration(ffprobePath, filepath.Join(finalDir, f))
+			}
 			plan.Clips[i] = MontageClip{
-				Path:     filepath.Join(finalDir, f),
-				Duration: effectiveDurs[i],
-				IsVideo:  videoExts[ext],
+				Path:           filepath.Join(finalDir, f),
+				Duration:       effectiveDurs[i],
+				IsVideo:        isVid,
+				ActualDuration: actualDur,
 			}
 		}
 

@@ -53,6 +53,8 @@ export const RegenerateModal: React.FC<RegenerateModalProps> = ({
             if (isMediaVideo) {
                 setService('googler');
                 setGooVideo(true);
+            } else {
+                setGooVideo(false);
             }
         }
     }, [isOpen, initialPrompt, isMediaVideo]);
@@ -112,30 +114,14 @@ export const RegenerateModal: React.FC<RegenerateModalProps> = ({
 
                 <div className="reg-modal-body premium-scrollbar">
                     <div className="reg-field">
-                        <label>{t('gallery.regenerate_modal.service')}</label>
-                        {!isMediaVideo && (
+                        <label>{t('gallery.regenerate_modal.service') || 'Service'}</label>
+                        {!isMediaVideo ? (
                             <div className="service-selector">
-                                <button
-                                    className={service === 'pollinations' ? 'active' : ''}
-                                    onClick={() => setService('pollinations')}
-                                >
-                                    Pollinations
-                                </button>
-                                <button
-                                    className={service === 'googler' ? 'active' : ''}
-                                    onClick={() => setService('googler')}
-                                >
-                                    Googler
-                                </button>
-                                <button
-                                    className={service === 'elevenlabs' ? 'active' : ''}
-                                    onClick={() => setService('elevenlabs')}
-                                >
-                                    ElevenLabs
-                                </button>
+                                <button className={service === 'googler' ? 'active' : ''} onClick={() => setService('googler')}>Googler</button>
+                                <button className={service === 'pollinations' ? 'active' : ''} onClick={() => setService('pollinations')}>Pollinations</button>
+                                <button className={service === 'elevenlabs' ? 'active' : ''} onClick={() => setService('elevenlabs')}>ElevenLabs</button>
                             </div>
-                        )}
-                        {isMediaVideo && (
+                        ) : (
                             <div className="service-selector">
                                 <button className="active">Googler (Video)</button>
                             </div>
