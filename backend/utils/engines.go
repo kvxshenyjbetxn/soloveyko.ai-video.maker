@@ -26,9 +26,10 @@ func EnsureEngine(name string) (string, error) {
 	targetPath := filepath.Join(binDir, binaryName)
 
 	// Якщо файл вже існує, повертаємо шлях
-	if _, err := os.Stat(targetPath); err == nil {
-		// Переконуємося, що права на виконання встановлені (могли бути скинуті або не встановлені раніше)
-		if runtime.GOOS != "windows" {
+	if info, err := os.Stat(targetPath); err == nil {
+		// Переконуємося, що права на виконання встановлені, але тільки якщо вони не 0755
+		// Це трохи швидше ніж постійний Chmod на маку
+		if runtime.GOOS != "windows" && info.Mode().Perm() != 0755 {
 			os.Chmod(targetPath, 0755)
 		}
 		return targetPath, nil

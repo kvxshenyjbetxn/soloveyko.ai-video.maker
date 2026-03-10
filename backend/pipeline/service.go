@@ -266,7 +266,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	isFromModal := hasSkippedInfo
 	if !hasSkippedInfo {
 		if _, err := os.Stat(finalDir); err == nil {
-			data := s.CheckExistingFiles(id, finalDir, taskType, settings)
+			data := s.CheckExistingFiles(id, finalDir, taskType, settings, false)
 			if len(data.FoundStages) > 0 {
 				resChan := make(chan []string)
 				s.pendingSkip.Store(id, resChan)
@@ -833,7 +833,7 @@ type ExistingFilesData struct {
 	CustomCount   int      `json:"customCount"`
 }
 
-func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskType string, settings map[string]interface{}) ExistingFilesData {
+func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskType string, settings map[string]interface{}, skipExtra bool) ExistingFilesData {
 	data := ExistingFilesData{
 		ID:          id,
 		FoundStages: []string{},
@@ -860,9 +860,11 @@ func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskTyp
 	voicePath := filepath.Join(finalDir, "voice.mp3")
 	if info, err := os.Stat(voicePath); err == nil && !info.IsDir() {
 		data.FoundStages = append(data.FoundStages, "voice")
-		dur, err := utils.GetAudioDuration(voicePath)
-		if err == nil {
-			data.VoiceDuration = dur
+		if !skipExtra {
+			dur, err := utils.GetAudioDuration(voicePath)
+			if err == nil {
+				data.VoiceDuration = dur
+			}
 		}
 	}
 
@@ -1002,10 +1004,10 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 
 	// Backward compatibility check: if Default dir doesn't exist OR is empty, check parent
 	if templateDir == "Default" {
-		dataPrimary := s.CheckExistingFiles("tmp", finalDir, taskType, settings)
+		dataPrimary := s.CheckExistingFiles("tmp", finalDir, taskType, settings, true)
 		if len(dataPrimary.FoundStages) == 0 {
 			parentDir := filepath.Join(outPath, safeTaskName)
-			dataParent := s.CheckExistingFiles("tmp", parentDir, taskType, settings)
+			dataParent := s.CheckExistingFiles("tmp", parentDir, taskType, settings, true)
 			if len(dataParent.FoundStages) > 0 {
 				return parentDir
 			}

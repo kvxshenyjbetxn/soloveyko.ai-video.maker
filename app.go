@@ -11,6 +11,7 @@ import (
 	"soloveyko/backend/pipeline"
 	"soloveyko/backend/utils"
 	"strings"
+	"sync"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -434,10 +435,12 @@ func (a *App) OpenPath(path string) {
 	}
 
 	if cmd != nil {
-		err := cmd.Run()
-		if err != nil {
-			a.LogToUI("ERROR", fmt.Sprintf("[System] Failed to open path: %v", err))
-		}
+		go func() {
+			err := cmd.Run()
+			if err != nil {
+				a.LogToUI("ERROR", fmt.Sprintf("[System] Failed to open path: %v", err))
+			}
+		}()
 	}
 }
 
@@ -1010,27 +1013,40 @@ func (a *App) ResetQueueCancellation() {
 // CheckExistingTasks checks multiple tasks (usually from multiple templates) for existing files
 func (a *App) CheckExistingTasks(tasks []map[string]interface{}) ([]pipeline.ExistingFilesData, error) {
 	results := make([]pipeline.ExistingFilesData, 0)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
 	for _, t := range tasks {
-		taskName, _ := t["taskName"].(string)
-		taskType, _ := t["taskType"].(string)
-		subName, _ := t["subName"].(string)
-		settings, _ := t["settings"].(map[string]interface{})
+		wg.Add(1)
+		go func(taskData map[string]interface{}) {
+			defer wg.Done()
 
-		if taskName == "" {
-			continue
-		}
+			taskName, _ := taskData["taskName"].(string)
+			taskType, _ := taskData["taskType"].(string)
+			subName, _ := taskData["subName"].(string)
+			settings, _ := taskData["settings"].(map[string]interface{})
 
-		finalDir := a.pipeline.ResolveFinalDir(taskName, taskType, subName, settings)
-		a.LogToUI("INFO", fmt.Sprintf("[Check] Checking directory for %s - %s: %s", taskName, subName, finalDir))
-
-		if _, err := os.Stat(finalDir); err == nil {
-			data := a.pipeline.CheckExistingFiles("check", finalDir, taskType, settings)
-			if len(data.FoundStages) > 0 {
-				data.ID = subName // Use subName as ID to identify which template this is
-				results = append(results, data)
+			if taskName == "" {
+				return
 			}
-		}
+
+			// We use ResolveFinalDir which now handles backward compatibility more efficiently
+			finalDir := a.pipeline.ResolveFinalDir(taskName, taskType, subName, settings)
+
+			if _, err := os.Stat(finalDir); err == nil {
+				// For the UI check, we DO want full info (skipExtra = false)
+				// but since we are running in parallel, it will be much faster.
+				data := a.pipeline.CheckExistingFiles("check", finalDir, taskType, settings, false)
+				if len(data.FoundStages) > 0 {
+					data.ID = subName
+					mu.Lock()
+					results = append(results, data)
+					mu.Unlock()
+				}
+			}
+		}(t)
 	}
+	wg.Wait()
 
 	if len(results) > 0 {
 		return results, nil
@@ -1047,7 +1063,7 @@ func (a *App) CheckExistingTask(taskName string, taskType string, settings map[s
 	a.LogToUI("INFO", fmt.Sprintf("[Check] Checking directory: %s", finalDir))
 
 	if _, err := os.Stat(finalDir); err == nil {
-		data := a.pipeline.CheckExistingFiles("check", finalDir, taskType, settings)
+		data := a.pipeline.CheckExistingFiles("check", finalDir, taskType, settings, false)
 		a.LogToUI("INFO", fmt.Sprintf("[Check] Found stages: %v", data.FoundStages))
 		if len(data.FoundStages) > 0 {
 			return &data, nil
@@ -1340,4 +1356,3 @@ func (a *App) DownloadWhisperX() error {
 
 	return nil
 }
-

@@ -250,7 +250,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 	if shouldSkipImage {
 		s.log("INFO", "[Pipeline] Restore Mode: Using existing images/videos as-is. Sync updated.", id, taskLabel)
 		// Get actual counts of what was restored to show the user
-		data := s.CheckExistingFiles(id, finalDir, taskType, settings)
+		data := s.CheckExistingFiles(id, finalDir, taskType, settings, false)
 		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("p:%d i:%d v:%d", data.PromptCount, data.ImageCount, data.VideoCount))
 		return nil
 	}
