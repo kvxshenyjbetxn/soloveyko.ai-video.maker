@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import {
     XAxis,
     YAxis,
@@ -38,6 +39,7 @@ interface StatsData {
 
 export const Statistic = () => {
     const { t } = useI18n();
+    const { accentColor } = useTheme();
     const [period, setPeriod] = useState<30 | 0>(30); // 30 days or 0 (all time)
     const [chartType, setChartType] = useState<'area' | 'bar'>('area');
     const [stats, setStats] = useState<StatsData | null>(null);
@@ -131,7 +133,7 @@ export const Statistic = () => {
 
                 <div className="stats-grid">
                     <div className="dashboard-stat-card" style={{ animationDelay: '0.1s' }}>
-                        <div className="dashboard-stat-icon" style={{ background: 'linear-gradient(135deg, #FF0080, #7928CA)' }}>
+                        <div className="dashboard-stat-icon" style={{ background: `linear-gradient(135deg, ${accentColor}, #7928CA)` }}>
                             <Video size={32} color="#fff" />
                         </div>
                         <div className="dashboard-stat-info">
@@ -172,8 +174,8 @@ export const Statistic = () => {
                                 <AreaChart data={stats?.dailyData || []}>
                                     <defs>
                                         <linearGradient id="colorVideo" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#ff0080" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#ff0080" stopOpacity={0} />
+                                            <stop offset="5%" stopColor={accentColor} stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor={accentColor} stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -199,7 +201,7 @@ export const Statistic = () => {
                                                 return (
                                                     <div className="custom-tooltip">
                                                         <p className="tooltip-date">{label ? new Date(label).toLocaleDateString() : ''}</p>
-                                                        <p className="tooltip-value">{`${payload[0].value} відео`}</p>
+                                                        <p className="tooltip-value" style={{ color: accentColor }}>{`${payload[0].value} відео`}</p>
                                                     </div>
                                                 );
                                             }
@@ -209,7 +211,7 @@ export const Statistic = () => {
                                     <Area
                                         type="monotone"
                                         dataKey="videoCount"
-                                        stroke="#ff0080"
+                                        stroke={accentColor}
                                         strokeWidth={3}
                                         fillOpacity={1}
                                         fill="url(#colorVideo)"
@@ -242,7 +244,7 @@ export const Statistic = () => {
                                                 return (
                                                     <div className="custom-tooltip">
                                                         <p className="tooltip-date">{label ? new Date(label).toLocaleDateString() : ''}</p>
-                                                        <p className="tooltip-value">{`${payload[0].value} відео`}</p>
+                                                        <p className="tooltip-value" style={{ color: accentColor }}>{`${payload[0].value} відео`}</p>
                                                     </div>
                                                 );
                                             }
@@ -251,7 +253,7 @@ export const Statistic = () => {
                                     />
                                     <Bar
                                         dataKey="videoCount"
-                                        fill="#ff0080"
+                                        fill={accentColor}
                                         radius={[4, 4, 0, 0]}
                                         animationDuration={1500}
                                     />
@@ -262,7 +264,7 @@ export const Statistic = () => {
                 </div>
 
                 <button className="test-data-btn" onClick={handleClearStats} style={{
-                    borderColor: 'rgba(255, 0, 128, 0.2)',
+                    borderColor: `${accentColor}33`,
                     color: 'rgba(255, 255, 255, 0.5)'
                 }}>
                     <Trash2 size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />

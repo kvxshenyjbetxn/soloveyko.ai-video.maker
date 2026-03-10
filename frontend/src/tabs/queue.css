@@ -123,8 +123,8 @@
 
 .task-card.active {
     border-color: var(--accent-primary);
-    background: rgba(255, 0, 195, 0.05);
-    box-shadow: 0 0 20px rgba(255, 0, 195, 0.1);
+    background: color-mix(in srgb, var(--accent-primary), transparent 95%);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent-primary), transparent 90%);
 }
 
 .task-card:hover {
@@ -738,7 +738,7 @@
 
 .control-textarea:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 15px rgba(255, 0, 195, 0.25);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--accent-primary), transparent 75%);
     background: rgba(255, 255, 255, 0.05);
 }
 
@@ -879,7 +879,7 @@
 .settings-field select:focus,
 .settings-field textarea:focus {
     border-color: var(--accent-primary);
-    box-shadow: 0 0 0 4px rgba(255, 0, 195, 0.25);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-primary), transparent 75%);
     background: rgba(0, 0, 0, 0.5);
 }
 
@@ -905,7 +905,7 @@
 .apply-regenerate-btn:hover {
     filter: brightness(1.1);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(255, 0, 195, 0.3);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-primary), transparent 70%);
 }
 
 .animate-fade-in {

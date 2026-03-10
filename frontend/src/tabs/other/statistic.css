@@ -73,8 +73,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(121, 40, 202, 0.2), rgba(255, 0, 128, 0.2));
-    color: #ff0080;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent-primary), transparent 80%), color-mix(in srgb, var(--accent-primary), transparent 80%));
+    color: var(--accent-primary);
 }
 
 .dashboard-stat-info {
@@ -142,7 +142,7 @@
 .tooltip-value {
     font-size: 16px;
     font-weight: 600;
-    color: #ff0080;
+    color: var(--accent-primary);
 }
 
 .test-data-btn {

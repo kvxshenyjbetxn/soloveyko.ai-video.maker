@@ -79,13 +79,13 @@
     font-size: 15px;
     font-weight: 700;
     transition: all 0.2s ease;
-    box-shadow: 0 8px 20px rgba(255, 0, 195, 0.25);
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-color), transparent 75%);
 }
 
 .welcome-btn-primary:hover:not(:disabled) {
     transform: translateY(-2px);
     filter: brightness(1.1);
-    box-shadow: 0 12px 28px rgba(255, 0, 195, 0.35);
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--accent-color), transparent 65%);
 }
 
 .welcome-btn-secondary {

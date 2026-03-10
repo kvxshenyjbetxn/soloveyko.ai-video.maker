@@ -103,7 +103,7 @@
 .modal-input:focus {
     border-color: var(--accent-primary);
     background: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 0 0 4px rgba(255, 0, 195, 0.1);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-primary), transparent 90%);
 }
 
 .modal-footer {
@@ -143,5 +143,5 @@
 .modal-btn.primary:hover {
     filter: brightness(1.1);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(255, 0, 195, 0.3);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-primary), transparent 70%);
 }

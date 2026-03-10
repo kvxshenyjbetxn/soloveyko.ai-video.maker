@@ -72,6 +72,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         document.body.className = `theme-${theme}`;
         // Apply accent color as CSS variable
         document.documentElement.style.setProperty('--accent-primary', accentColor);
+        document.documentElement.style.setProperty('--accent-color', accentColor);
         // Calculate a hover color (simpler version: same color for now or slightly transparent)
         document.documentElement.style.setProperty('--accent-hover', accentColor + 'ee');
     }, [theme, accentColor]);

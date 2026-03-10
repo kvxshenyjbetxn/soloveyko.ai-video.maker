@@ -49,7 +49,7 @@
 }
 
 .history-list-item.selected {
-    background: rgba(255, 0, 195, 0.05);
+    background: color-mix(in srgb, var(--accent-primary), transparent 95%);
 }
 
 .col-name {
@@ -213,7 +213,7 @@
 .h-stage-tag.active {
     border-color: var(--accent-primary);
     color: var(--text-primary);
-    background: rgba(255, 0, 195, 0.05);
+    background: color-mix(in srgb, var(--accent-primary), transparent 95%);
 }
 
 .h-stage-icon {

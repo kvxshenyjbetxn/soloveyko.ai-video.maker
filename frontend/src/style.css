@@ -266,12 +266,12 @@ input[type="range"].custom-slider::-moz-range-thumb,
     background-color: var(--accent-primary);
     color: white;
     border: none;
-    box-shadow: 0 4px 12px rgba(255, 0, 195, 0.2);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-primary), transparent 80%);
 }
 
 .start-queue-btn:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(255, 0, 195, 0.4);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--accent-primary), transparent 60%);
     filter: brightness(1.1);
 }
 
@@ -293,7 +293,7 @@ input[type="range"].custom-slider::-moz-range-thumb,
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s;
-    box-shadow: 0 2px 8px rgba(255, 0, 195, 0.3);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--accent-primary), transparent 70%);
 }
 
 .mini-start-btn:hover:not(:disabled) {

@@ -81,7 +81,7 @@
 }
 
 .list-item.selected {
-    background: rgba(255, 0, 195, 0.05);
+    background: color-mix(in srgb, var(--accent-primary), transparent 95%);
 }
 
 .col-check {
@@ -118,9 +118,9 @@
 }
 
 .type-tag.rewrite {
-    background: rgba(255, 0, 195, 0.1);
+    background: color-mix(in srgb, var(--accent-primary), transparent 90%);
     color: var(--accent-primary);
-    border: 1px solid rgba(255, 0, 195, 0.2);
+    border: 1px solid color-mix(in srgb, var(--accent-primary), transparent 80%);
 }
 
 .col-date {
