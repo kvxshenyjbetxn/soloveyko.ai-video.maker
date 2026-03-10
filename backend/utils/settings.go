@@ -288,38 +288,105 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 				"z-ai/glm-4.5-air:free",
 			},
 			Pipeline: PipelineSettings{
-				TranslateModel:        "google/gemini-2.5-flash",
-				TranslateTemperature:  1.0,
-				TranslateEnabled:      true,
-				RewriteModel:          "google/gemini-2.5-flash",
-				RewriteTemperature:    1.0,
-				RewriteEnabled:        true,
-				SubtitleKaraokeEffect: false,
-				SubtitleKaraokeSpeed:  100,
-				ImageEnabled:          true,
-				VoiceoverEnabled:      false,
-				SubtitleMaxLen:        40,
-				SubtitleMaxWords:      10,
-				SubtitleColor:         "#ffffff",
-				SubtitleSize:          24,
-				SubtitleFont:          "Arial",
-				SubtitleOutlineColor:  "#000000",
-				SubtitleOutlineWidth:  2.0,
-				SubtitleShadowColor:   "#000000",
-				SubtitleShadowWidth:   1.0,
-				SubtitleBlur:          0.0,
-				SubtitleFadeEnabled:   true,
-				SubtitleFadeIn:        300,
-				SubtitleFadeOut:       300,
-				SidebarWidth:          320,
-				MontageEnabled:        false,
-				MontageCollapsed:      true,
-				ImageMode:             "normal",
-				ImageMemoryType:       "primitive",
-				ImageMemoryChars:      1000,
+				TranslateModel: "google/gemini-2.5-flash",
+				TranslatePrompt: `GENERAL PRINCIPLES:
+Translate ALL text completely, without cuts or omissions.
+Preserve the original structure and narrative style.
+FULLY adapt ALL cultural elements to be familiar and natural for Ukrainian readers.
+
+NAMES AND FORMS OF ADDRESS:
+Adapt ALL names to Ukrainian equivalents (e.g., Ivan → Ivan, Mikhail → Mykhailo, Elena → Olena, Pyotr → Petro).
+Handle patronymics and foreign naming conventions appropriately for a Ukrainian context, replacing them with natural forms of address (e.g., first name in conversation, or "pan/pani" + name in formal settings).
+Use appropriate Ukrainian titles and forms of courtesy (pan, pani, etc.).
+
+GEOGRAPHY AND COMPLETE LOCALIZATION:
+Replace ALL geographical references with Ukrainian regions (e.g., taiga → the dense forests of the Carpathians, the Dnieper floodplains, or the Polissya marshes).
+Adapt climate and landscape to familiar Ukrainian environments.
+Replace Russian/Siberian settings with equivalent Ukrainian locations (e.g., the Carpathian Mountains, Kyiv, Lviv, the Black Sea coast).
+Use familiar Ukrainian flora and fauna (e.g., brown bears, wolves, storks, lynx).
+
+LANGUAGE AND STYLE:
+Use natural Ukrainian idioms and expressions instead of literal translation.
+Adapt dialogues to natural Ukrainian conversational language.
+Preserve emotional weight and atmosphere while making it culturally Ukrainian.
+Use appropriate regional Ukrainian variants (dialects) where fitting.
+
+CULTURAL ELEMENTS - COMPLETE ADAPTATION:
+Replace ALL cultural references: food (e.g., pelmeni → varenyky, shchi → borscht or kapusnyak, vodka → horilka), clothing (kosovorotka → vyshyvanka), traditions, and institutions (FSB → SBU or National Police of Ukraine).
+Adapt occupations and social structures to Ukrainian equivalents.
+Replace the wildlife conservation context to familiar Ukrainian regions (e.g., Askania-Nova, Carpathian Biosphere Reserve).
+Change all cultural practices to Ukrainian equivalents.
+Adapt government institutions, educational systems, and social norms.
+
+SETTING ADAPTATION:
+Transform the wilderness into a familiar Ukrainian natural environment (e.g., the deep forests of Zakarpattia or Polissya).
+Adapt the reserve/conservation context to Ukrainian national parks.
+Replace all foreign cultural elements with Ukrainian equivalents.
+
+The result should read like an original Ukrainian text set in Ukraine, written for Ukrainian audiences, with NO foreign cultural elements remaining, while preserving all plot elements and emotional depth of the original.
+
+Without your comments, nothing superfluous, just text.
+Don't write anything unnecessary! Write the translation text right away! Don't write comments like “here's the translation.”
+
+story:
+`,
+				TranslateTemperature:    1.0,
+				TranslateEnabled:        true,
+				RewriteModel:            "google/gemini-2.5-flash",
+				RewriteTemperature:      1.0,
+				RewriteEnabled:          true,
+				SubtitleKaraokeEffect:   false,
+				SubtitleKaraokeSpeed:    100,
+				ImageEnabled:            true,
+				ImageSyncEnabled:        true,
+				ImageGenerationMethod:   "sentences",
+				ImageGroupSentences:     false,
+				ImageMode:               "normal",
+				ImageDetermineCharacters: false,
+				ImagePrompt: `Role: You are an expert AI Cinematographer and Prompt Engineer specializing in ultra-realistic photography for continuous storytelling pipelines. 
+Task: Convert the provided story excerpt into a single, highly detailed image generation prompt in English. The prompt must strictly reflect the current action while maintaining visual continuity with the characters and previous context.
+
+CRITICAL RULES:
+1. IGNORE VIEWER CALL-TO-ACTIONS (META-TEXT): If the "Current Text" contains direct addresses to the viewer (e.g., "Subscribe," "Like," "Leave a comment," "Let's begin," "Tell us where you are from"), DO NOT attempt to visualize these concepts. Do not generate UI elements, screens, or thumbs-up gestures. Instead, rely entirely on the "Previous Context" to generate a neutral, atmospheric establishing shot or a passive character pose that naturally bridges the scenes.
+2. VISUAL HARMONY & CONTINUITY: The generated image must feel like the exact next frame in the same movie. You must strictly integrate the "Previous Context" (Memory) and "Character Profiles" with the "Current Text". Maintain the exact same setting, time of day, and mood so all generated images flow harmoniously together without jarring scene changes.
+3. STRICT REALISM & LOGIC (NO MAGIC): The scene must be 100% grounded in reality. Absolutely NO magic, fantasy elements, glowing auras, floating objects, surrealism, or exaggerated physics unless explicitly stated in a sci-fi/fantasy source text. Everything must obey real-world logic and realistic cinematography.
+4. DYNAMIC PROPS & HANDS (CRITICAL): Characters must ONLY interact with items explicitly mentioned in the "Current Text". DO NOT carry over props or weapons from "Character Profiles" or "Previous Context" unless actively used right now.
+5. SINGLE MOMENT & NO TEXT: Pick ONLY ONE specific visual moment. Never combine sequential actions. The final image must be completely devoid of written language (no letters, words, watermarks, or logos).
+
+Input Data:
+Current Text: {{content}}
+
+Output Format: Respond ONLY with the raw image generation prompt in English. No intro, no filler, no explanations.
+
+Prompt Structure:
+Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (performing ONE realistic action OR a neutral/passive pose if text is a Call-to-Action), (Detailed Environment perfectly matching Previous Context), (Lighting/Atmosphere), shot on 35mm lens, realistic textures, natural lighting, strictly grounded in reality, completely textless, 8k raw photo.`,
+				VoiceoverEnabled:        false,
+				VoiceoverService:        "edgetts",
+				EdgeTTSVoiceID:          "uk-UA-OstapNeural",
+				SubtitleMaxLen:          40,
+				SubtitleMaxWords:        10,
+				SubtitleColor:           "#ffffff",
+				SubtitleSize:            24,
+				SubtitleFont:            "Arial",
+				SubtitleOutlineColor:    "#000000",
+				SubtitleOutlineWidth:    2.0,
+				SubtitleShadowColor:     "#000000",
+				SubtitleShadowWidth:     1.0,
+				SubtitleBlur:            0.0,
+				SubtitleFadeEnabled:     true,
+				SubtitleFadeIn:          300,
+				SubtitleFadeOut:         300,
+				SidebarWidth:            320,
+				MontageEnabled:          false,
+				MontageCollapsed:        true,
+				ImageMemoryType:         "primitive",
+				ImageMemoryChars:        1000,
+				TranslateControlEnabled: true,
+				ImageControlEnabled:     true,
 			},
-			FirstRun:    true,
-			ShowWelcome: true,
+			FirstRun:                 true,
+			ShowWelcome:              true,
+			OpenRouterMaxConnections: 10,
 		}, nil
 	}
 
@@ -344,7 +411,7 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 		settings.AccentColor = "#ff00c3"
 	}
 	if settings.OpenRouterMaxConnections <= 0 {
-		settings.OpenRouterMaxConnections = 5
+		settings.OpenRouterMaxConnections = 10
 	}
 	if settings.GooglerMaxImageConnections <= 0 {
 		settings.GooglerMaxImageConnections = 25
@@ -1243,10 +1310,10 @@ func (s *SettingsService) SetAssemblyAIAPIKey(apiKey string) error {
 func (s *SettingsService) GetOpenRouterMaxConnections() int {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		return 5
+		return 10
 	}
 	if settings.OpenRouterMaxConnections <= 0 {
-		return 5
+		return 10
 	}
 	return settings.OpenRouterMaxConnections
 }

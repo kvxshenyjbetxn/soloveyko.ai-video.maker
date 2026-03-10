@@ -22,7 +22,7 @@ export const OpenRouter = () => {
     const [newModel, setNewModel] = useState('');
     const [isLoaded, setIsLoaded] = useState(false);
     const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-    const [maxConnections, setMaxConnections] = useState<number>(5);
+    const [maxConnections, setMaxConnections] = useState<number>(10);
 
     useEffect(() => {
         const loadKey = async () => {
@@ -32,7 +32,7 @@ export const OpenRouter = () => {
             const models = await GetOpenRouterSavedModels();
             setSavedModels(models || []);
             const max = await GetOpenRouterMaxConnections();
-            setMaxConnections(max || 5);
+            setMaxConnections(max || 10);
             setIsLoaded(true);
         };
         loadKey();
