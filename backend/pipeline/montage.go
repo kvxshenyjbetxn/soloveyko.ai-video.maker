@@ -182,6 +182,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		return fmt.Errorf("audio duration is zero")
 	}
 
+	type MontageSegment struct {
+		Start float64 `json:"start"`
+		End   float64 `json:"end"`
+	}
+	var audioSegments []MontageSegment
+
 	// 4. Settings
 	// [OVERRIDES] Apply template/task settings before calculating derived variables
 	if val, ok := settings["imageSyncEnabled"].(bool); ok {
@@ -514,11 +520,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 
 		type MontagePlan struct {
-			AudioDuration float64       `json:"audioDuration"`
-			AudioPath     string        `json:"audioPath"`
-			TransDuration float64       `json:"transDuration"`
-			IsFadeFast    bool          `json:"isFadeFast"`
-			Clips         []MontageClip `json:"clips"`
+			AudioDuration float64          `json:"audioDuration"`
+			AudioPath     string           `json:"audioPath"`
+			TransDuration float64          `json:"transDuration"`
+			IsFadeFast    bool             `json:"isFadeFast"`
+			Clips         []MontageClip    `json:"clips"`
+			AudioSegments []MontageSegment `json:"audioSegments"`
 		}
 
 		plan := MontagePlan{
@@ -554,7 +561,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			// Parse modified plan if we get new durations from UI
 			// format: "confirm:duration1,duration2,..." or simply "confirm"
 			if strings.HasPrefix(actionData, "confirm:") {
-				parts := strings.Split(strings.TrimPrefix(actionData, "confirm:"), ",")
+				mainParts := strings.Split(actionData, ";segments:")
+				parts := strings.Split(strings.TrimPrefix(mainParts[0], "confirm:"), ",")
 				for i, p := range parts {
 					if i < numFiles {
 						if parsedDur, err := strconv.ParseFloat(p, 64); err == nil && parsedDur > 0 {
@@ -562,7 +570,27 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						}
 					}
 				}
-				s.log("SUCCESS", "[Control] Montage timings updated from UI.", id, taskLabel)
+				if len(mainParts) > 1 {
+					segStrs := strings.Split(mainParts[1], "|")
+					var newSegments []MontageSegment
+					var totalAudio float64
+					for _, s := range segStrs {
+						coords := strings.Split(s, ",")
+						if len(coords) == 2 {
+							st, _ := strconv.ParseFloat(coords[0], 64)
+							en, _ := strconv.ParseFloat(coords[1], 64)
+							if en > st {
+								newSegments = append(newSegments, MontageSegment{Start: st, End: en})
+								totalAudio += (en - st)
+							}
+						}
+					}
+					if len(newSegments) > 0 {
+						audioSegments = newSegments
+						audioDur = totalAudio
+					}
+				}
+				s.log("SUCCESS", fmt.Sprintf("[Control] Montage updated. Audio length: %.2fs, Clips: %d", audioDur, numFiles), id, taskLabel)
 			} else if actionData == "cancel" {
 				s.log("INFO", "[Control] Task cancelled by user", id, taskLabel)
 				return fmt.Errorf("task cancelled")
@@ -1035,11 +1063,31 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	audioIdx := len(inputSpecs) // voice.mp3 index
 	actualTransDur := 0.0
 
+	// Handle Audio Cuts/Trimming
+	voiceASource := fmt.Sprintf("[%d:a]", audioIdx)
+	if len(audioSegments) > 0 {
+		var segLabels []string
+		for i, seg := range audioSegments {
+			label := fmt.Sprintf("aseg%d", i)
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%d:a]atrim=start=%.3f:end=%.3f,asetpts=PTS-STARTPTS[%s]",
+				audioIdx, seg.Start, seg.End, label,
+			))
+			segLabels = append(segLabels, "["+label+"]")
+		}
+		filterParts = append(filterParts, fmt.Sprintf(
+			"%sconcat=n=%d:v=0:a=1[a_cut]",
+			strings.Join(segLabels, ""), len(audioSegments),
+		))
+		voiceASource = "[a_cut]"
+		finalA = "a_cut"
+	}
+
 	if introIdx != -1 {
 		// Prepare voice.mp3 audio to match intro audio
 		filterParts = append(filterParts, fmt.Sprintf(
-			"[%d:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a_voice_res]",
-			audioIdx,
+			"%saresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a_voice_res]",
+			voiceASource,
 		))
 
 		// Use transition if both parts are long enough
