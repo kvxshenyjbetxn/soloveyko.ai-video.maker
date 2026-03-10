@@ -4,67 +4,118 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
-	"unicode"
 )
 
 type subtitleBlock struct {
-	start string
-	end   string
-	text  []string
+	start float64
+	end   float64
+	text  string
+}
+
+func srtTimeToSeconds(t string) float64 {
+	t = strings.ReplaceAll(strings.TrimSpace(t), ",", ".")
+	parts := strings.Split(t, ":")
+	if len(parts) != 3 {
+		return 0
+	}
+	h, _ := strconv.ParseFloat(parts[0], 64)
+	m, _ := strconv.ParseFloat(parts[1], 64)
+	s, _ := strconv.ParseFloat(parts[2], 64)
+	return h*3600 + m*60 + s
+}
+
+func splitSrtRecursive(seg subtitleBlock, maxWords int) []subtitleBlock {
+	words := strings.Fields(seg.text)
+	if len(words) <= maxWords || maxWords <= 0 {
+		return []subtitleBlock{seg}
+	}
+
+	part1Words := words[:maxWords]
+	part2Words := words[maxWords:]
+
+	totalWords := float64(len(words))
+	duration := seg.end - seg.start
+
+	part1Dur := (float64(len(part1Words)) / totalWords) * duration
+	splitTime := seg.start + part1Dur
+
+	part1 := subtitleBlock{
+		start: seg.start,
+		end:   splitTime,
+		text:  strings.Join(part1Words, " "),
+	}
+	part2 := subtitleBlock{
+		start: splitTime,
+		end:   seg.end,
+		text:  strings.Join(part2Words, " "),
+	}
+
+	res := []subtitleBlock{part1}
+	res = append(res, splitSrtRecursive(part2, maxWords)...)
+	return res
 }
 
 // SrtToAss converts SRT subtitle content to ASS format using provided settings
 func SrtToAss(srtContent string, settings *PipelineSettings) (string, error) {
-	// Robust SRT parsing
-	lines := strings.Split(strings.ReplaceAll(srtContent, "\r\n", "\n"), "\n")
+	// 1. Parsing (matching Python's _parse_srt_content)
+	content := strings.ReplaceAll(srtContent, "\r\n", "\n")
+	content = strings.TrimSpace(content)
+	blocks := regexp.MustCompile(`\n\s*\n`).Split(content, -1)
 
-	var blocks []subtitleBlock
-	currentIdx := -1
-
-	timeRegex := regexp.MustCompile(`(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})`)
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+	var segments []subtitleBlock
+	for _, block := range blocks {
+		lines := strings.Split(block, "\n")
+		var cleanLines []string
+		for _, l := range lines {
+			if strings.TrimSpace(l) != "" {
+				cleanLines = append(cleanLines, strings.TrimSpace(l))
+			}
+		}
+		if len(cleanLines) < 2 {
 			continue
 		}
 
-		match := timeRegex.FindStringSubmatch(line)
-		if len(match) > 0 {
-			blocks = append(blocks, subtitleBlock{
-				start: match[1],
-				end:   match[2],
-				text:  []string{},
-			})
-			currentIdx = len(blocks) - 1
-			continue
-		}
-
-		// Check if line is just a number (index)
-		isNumeric := true
-		for _, r := range line {
-			if !unicode.IsDigit(r) {
-				isNumeric = false
+		timeLineIdx := -1
+		for i := 0; i < len(cleanLines) && i < 2; i++ {
+			if strings.Contains(cleanLines[i], "-->") {
+				timeLineIdx = i
 				break
 			}
 		}
 
-		if isNumeric {
-			currentIdx = -1
-			continue
-		}
-
-		if currentIdx != -1 {
-			blocks[currentIdx].text = append(blocks[currentIdx].text, line)
+		if timeLineIdx != -1 {
+			timeLine := cleanLines[timeLineIdx]
+			times := strings.Split(timeLine, "-->")
+			if len(times) == 2 {
+				start := srtTimeToSeconds(times[0])
+				end := srtTimeToSeconds(times[1])
+				text := strings.Join(cleanLines[timeLineIdx+1:], " ")
+				segments = append(segments, subtitleBlock{
+					start: start,
+					end:   end,
+					text:  text,
+				})
+			}
 		}
 	}
 
-	if len(blocks) == 0 {
+	if len(segments) == 0 {
 		return "", fmt.Errorf("no valid SRT blocks found")
 	}
 
-	// Styles calculation
+	// 2. Splitting (matching Python's _split_long_lines)
+	maxWords := 10
+	if settings != nil && settings.SubtitleMaxWords > 0 {
+		maxWords = settings.SubtitleMaxWords
+	}
+	var processedSegments []subtitleBlock
+	for _, seg := range segments {
+		processedSegments = append(processedSegments, splitSrtRecursive(seg, maxWords)...)
+	}
+
+	// 3. Writing (Restored full Go formatting)
 	fontName := "Arial"
 	fontSize := 24
 	primaryColor := "&H00FFFFFF" // White
@@ -73,7 +124,7 @@ func SrtToAss(srtContent string, settings *PipelineSettings) (string, error) {
 	outlineWidth := 2.0
 	shadowWidth := 1.0
 	alignment := 2 // Bottom center
-	marginV := 80
+	marginVVal := 80
 	borderStyle := 1 // 1 = outline, 3 = opaque box
 	blur := 0.0
 
@@ -100,7 +151,7 @@ func SrtToAss(srtContent string, settings *PipelineSettings) (string, error) {
 			shadowWidth = settings.SubtitleShadowWidth
 		}
 		if settings.SubtitleMarginV > 0 {
-			marginV = settings.SubtitleMarginV
+			marginVVal = settings.SubtitleMarginV
 		}
 		if settings.SubtitleBlur >= 0 {
 			blur = settings.SubtitleBlur
@@ -113,7 +164,6 @@ func SrtToAss(srtContent string, settings *PipelineSettings) (string, error) {
 		default:
 			alignment = 2
 		}
-
 	}
 
 	var sb strings.Builder
@@ -127,14 +177,14 @@ func SrtToAss(srtContent string, settings *PipelineSettings) (string, error) {
 	}
 
 	sb.WriteString(fmt.Sprintf("Style: Default,%s,%d,%s,&H000000FF,%s,%s,1,0,0,0,100,100,%.1f,0,%d,%.1f,%.1f,%d,60,60,%d,1\n\n",
-		fontName, fontSize, primaryColor, outlineColor, backColor, spacing, borderStyle, outlineWidth, shadowWidth, alignment, marginV))
+		fontName, fontSize, primaryColor, outlineColor, backColor, spacing, borderStyle, outlineWidth, shadowWidth, alignment, marginVVal))
 
 	sb.WriteString("[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
 
-	for _, b := range blocks {
-		start := formatSrtTimeToAss(b.start)
-		end := formatSrtTimeToAss(b.end)
-		text := cleanSrtText(strings.Join(b.text, " "), settings)
+	for _, seg := range processedSegments {
+		startStr := formatSecondsToAss(seg.start)
+		endStr := formatSecondsToAss(seg.end)
+		text := cleanSrtText(seg.text, settings)
 
 		if text != "" {
 			var tags strings.Builder
@@ -143,10 +193,10 @@ func SrtToAss(srtContent string, settings *PipelineSettings) (string, error) {
 			// Animations and Positioning
 			if settings != nil && settings.SubtitleAnimation == "slide-up" {
 				resY := 1080
-				yEnd := resY - marginV
+				yEnd := resY - marginVVal
 				switch alignment {
 				case 8: // Top
-					yEnd = marginV
+					yEnd = marginVVal
 				case 5: // Middle
 					yEnd = resY / 2
 				}
@@ -163,14 +213,12 @@ func SrtToAss(srtContent string, settings *PipelineSettings) (string, error) {
 			}
 			tags.WriteString("}")
 
-			sb.WriteString(fmt.Sprintf("Dialogue: 0,%s,%s,Default,,0,0,0,,%s%s\n", start, end, tags.String(), text))
+			sb.WriteString(fmt.Sprintf("Dialogue: 0,%s,%s,Default,,0,0,0,,%s%s\n", startStr, endStr, tags.String(), text))
 		}
 	}
 
 	return sb.String(), nil
 }
-
-// splitBlockRecursive, srtTimeToSeconds, secondsToSrtTime, hexToAssColor, formatSrtTimeToAss, cleanSrtText stay mostly the same but cleanSrtText gets Uppercase
 
 func cleanSrtText(text string, settings *PipelineSettings) string {
 	reTags := regexp.MustCompile(`<[^>]*>`)
@@ -269,7 +317,6 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 		default:
 			alignment = 2
 		}
-
 	}
 
 	var sb strings.Builder
@@ -434,22 +481,8 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 }
 
 func formatSrtTimeToAss(srtTime string) string {
-	parts := strings.Split(srtTime, ",")
-	if len(parts) != 2 {
-		return "0:00:00.00"
-	}
-	hms := parts[0]
-	ms := parts[1]
-	cs := ms[:2]
-	hmsParts := strings.Split(hms, ":")
-	if len(hmsParts) == 3 {
-		h := strings.TrimLeft(hmsParts[0], "0")
-		if h == "" {
-			h = "0"
-		}
-		return fmt.Sprintf("%s:%s:%s.%s", h, hmsParts[1], hmsParts[2], cs)
-	}
-	return fmt.Sprintf("%s.%s", hms, cs)
+	sec := srtTimeToSeconds(srtTime)
+	return formatSecondsToAss(sec)
 }
 
 func hexToAssColor(hex string) string {

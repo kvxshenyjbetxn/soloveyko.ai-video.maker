@@ -54,7 +54,8 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 	}
 
 	// Output base path (WhisperX CLI adds .json and .srt)
-	outputBase := filepath.Join(finalDir, "whisperx_output")
+	// We use "subtitle" so it creates subtitle.srt and subtitle.json directly
+	outputBase := filepath.Join(finalDir, "subtitle")
 	outputJSONPath := outputBase + ".json"
 	outputSRTPath := outputBase + ".srt"
 
@@ -98,7 +99,7 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 
 	cmd := exec.CommandContext(s.ctx, whisperxExe, cmdArgs...)
 	cmd.Dir = filepath.Dir(whisperxExe)
-	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUTF8=1")
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUTF8=1", "HF_HUB_DISABLE_SYMLINKS=1")
 
 	// 3. Execute command
 	output, err := cmd.CombinedOutput()
@@ -112,12 +113,16 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 
 	// 4. Handle output files
 	
-	// Ensure SRT is moved/copied to the standard location if needed, 
-	// but here we can just keep whisperx_output.srt and also create subtitle.srt
-	if _, err := os.Stat(outputSRTPath); err == nil {
-		subtitleSrtPath := filepath.Join(finalDir, "subtitle.srt")
-		srtData, _ := os.ReadFile(outputSRTPath)
-		_ = os.WriteFile(subtitleSrtPath, srtData, 0644)
+	// WhisperX might sometimes use the input filename (voice.mp3 -> voice.srt) 
+	// even if --output is specified as a path. Let's be robust.
+	voiceSrt := filepath.Join(finalDir, "voice.srt")
+	voiceJson := filepath.Join(finalDir, "voice.json")
+
+	if _, err := os.Stat(voiceSrt); err == nil && outputSRTPath != voiceSrt {
+		_ = os.Rename(voiceSrt, outputSRTPath)
+	}
+	if _, err := os.Stat(voiceJson); err == nil && outputJSONPath != voiceJson {
+		_ = os.Rename(voiceJson, outputJSONPath)
 	}
 
 	// Parse output JSON and generate ASS
