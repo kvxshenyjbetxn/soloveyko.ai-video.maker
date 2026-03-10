@@ -10,7 +10,7 @@ export interface QueueTask {
     id: string; taskNumber?: number; name: string; folderName: string; subName: string;
     type: 'translate' | 'rewrite' | 'voiceover'; content: string; settings: any;
     status: TaskStatus; progress: number; resultLength?: number;
-    isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; isAwaitingExistingFilesCheck?: boolean; controlContent?: string;
+    isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; isAwaitingMontageControl?: boolean; montagePlanData?: string; isAwaitingExistingFilesCheck?: boolean; controlContent?: string;
     existingFilesData?: any;
     textStatus: TaskStatus; voiceStatus: TaskStatus; imageStatus: TaskStatus;
     subtitleStatus: TaskStatus; montageStatus: TaskStatus; montageMsg?: string;
@@ -31,6 +31,7 @@ interface QueueContextType {
     cancelTask: (id: string) => Promise<void>;
     cancelQueue: () => Promise<void>;
     resumeImageControl: () => Promise<void>;
+    resumeMontageControl: (id: string, resultData: string) => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
     closeCompletionModal: () => void; closeImageControlNotification: () => void;
     regeneratingPaths: Set<string>;
@@ -232,6 +233,16 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         for (const id of ids) await SubmitImageControlResult(id);
     };
 
+    const resumeMontageControl = async (id: string, resultData: string) => {
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingMontageControl: false, montageStatus: 'processing' } : t));
+        // We will call the backend binding here
+        // @ts-ignore
+        if (window.go?.main?.App?.SubmitMontageControlResult) {
+            // @ts-ignore
+            await window.go.main.App.SubmitMontageControlResult(id, resultData);
+        }
+    };
+
     const resumeWithExistingFiles = async (id: string, skipStages: string[]) => {
         setTasks(prev => prev.map(t => {
             if (t.id !== id) return t;
@@ -364,13 +375,21 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             }
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingImageControl: true } : t));
         });
+        const uMontageReq = EventsOn("requestMontageControl", (id: string, planData: string) => {
+            const task = tasksRef.current.find(t => t.id === id);
+            if (task) {
+                const msg = `${t('pipeline.montage_control') || 'Montage Review'}\n\n*${t('notifications.task_name')}*: ${task.subName || task.name}`;
+                sendNotification(msg);
+            }
+            setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingMontageControl: true, montagePlanData: planData } : t));
+        });
         const uFilesReq = EventsOn("requestExistingFilesCheck", (data: any) => {
             setTasks(prev => prev.map(t => t.id === data.id ? { ...t, isAwaitingExistingFilesCheck: true, existingFilesData: data } : t));
         });
         const uTextResult = EventsOn("textResult", (id: string, length: number) => {
             setTasks(prev => prev.map(t => t.id === id ? { ...t, resultLength: length } : t));
         });
-        return () => { uStatus(); uStage(); uReq(); uImgReq(); uFilesReq(); uTextResult(); };
+        return () => { uStatus(); uStage(); uReq(); uImgReq(); uMontageReq(); uFilesReq(); uTextResult(); };
     }, [t]);
 
     useEffect(() => {
@@ -401,7 +420,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         <QueueContext.Provider value={{
             tasks, isProcessing, completionModal, imageControlNotification,
             addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
-            updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeWithExistingFiles, closeCompletionModal, closeImageControlNotification,
+            updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles, closeCompletionModal, closeImageControlNotification,
             regeneratingPaths, addRegeneratingPath, removeRegeneratingPath
         }}>{children}</QueueContext.Provider>
     );

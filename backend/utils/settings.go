@@ -86,6 +86,7 @@ type PipelineSettings struct {
 	EdgeTTSVolume                 string  `json:"edgeTTSVolume,omitempty"`
 	TranslateControlEnabled       bool    `json:"translateControlEnabled"`
 	ImageControlEnabled           bool    `json:"imageControlEnabled"`
+	MontageControlEnabled         bool    `json:"montageControlEnabled"`
 	ControlCollapsed              bool    `json:"controlCollapsed"`
 
 	// Subtitle settings
@@ -401,6 +402,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 				ImageMemoryChars:        1000,
 				TranslateControlEnabled: true,
 				ImageControlEnabled:     true,
+				MontageControlEnabled:   true,
 			},
 			FirstRun:                 true,
 			ShowWelcome:              true,

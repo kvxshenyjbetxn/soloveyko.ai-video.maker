@@ -152,6 +152,7 @@ export interface PipelineSettings {
     controlCollapsed: boolean;
     outputPath: string;
     imageControlEnabled: boolean;
+    montageControlEnabled: boolean;
     edgeTTSVoiceID: string;
     edgeTTSRate: string;
     edgeTTSPitch: string;

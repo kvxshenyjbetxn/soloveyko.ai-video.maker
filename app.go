@@ -123,6 +123,11 @@ func NewApp() *App {
 			wruntime.EventsEmit(app.ctx, "requestImageControl", id)
 		}
 	}
+	app.pipeline.OnRequestMontageControl = func(id string, planData string) {
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "requestMontageControl", id, planData)
+		}
+	}
 	app.pipeline.OnRequestExistingFilesCheck = func(data pipeline.ExistingFilesData) {
 		if app.ctx != nil {
 			wruntime.EventsEmit(app.ctx, "requestExistingFilesCheck", data)
@@ -1115,6 +1120,11 @@ func (a *App) ResolveTaskDir(taskName string, taskType string, subName string, s
 // SubmitImageControlResult resumes a paused task after image review
 func (a *App) SubmitImageControlResult(taskId string) {
 	a.pipeline.SubmitImageControlResult(taskId)
+}
+
+// SubmitMontageControlResult resumes a paused task after montage review
+func (a *App) SubmitMontageControlResult(taskId string, result string) {
+	a.pipeline.SubmitMontageControlResult(taskId, result)
 }
 
 // SubmitExistingFilesResult resumes a task after existing files check

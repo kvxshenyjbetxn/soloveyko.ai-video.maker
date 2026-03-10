@@ -6,6 +6,7 @@ import { useQueue, QueueTask } from '../contexts/QueueContext';
 import { useLogger } from '../contexts/LoggerContext';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { ExistingFilesModal } from '../components/ExistingFilesModal';
+import { MontageEditor } from '../components/MontageEditor';
 import { VirtualLogList } from '../components/VirtualLogList';
 // @ts-ignore
 import { GetOpenRouterSavedModels, GetPipelineSettings, OpenPath, ResolveTaskDir } from '../../wailsjs/go/main/App';
@@ -217,7 +218,7 @@ const renderStatusLines = (message: string, isFinished: boolean) => {
     });
 };
 
-const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, isProcessing, t, resumeTask, logs }: any) => {
+const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, onOpenMontageEditor, isProcessing, t, resumeTask, logs }: any) => {
     const settings = task.settings || {};
     const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
     const isVoiceEnabled = settings.voiceoverEnabled === true;
@@ -248,6 +249,27 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                         {displayMainLabel}
                     </span>
                     <div className="task-card-header-actions">
+                        {settings.montageControlEnabled && (
+                            <button
+                                className={`open-folder-task-btn ${task.isAwaitingMontageControl ? 'pulse-btn active' : ''}`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Always allow opening if we have data, or only when awaiting? Let's allow anytime if montagePlanData exists.
+                                    // Actually, we only want to interact when it's awaiting control.
+                                    if (task.isAwaitingMontageControl && onOpenMontageEditor) {
+                                        onOpenMontageEditor(task);
+                                    }
+                                }}
+                                title={t('pipeline.montage_control') || 'Montage Control'}
+                                style={{ 
+                                    marginRight: '4px',
+                                    opacity: task.isAwaitingMontageControl ? 1 : 0.5,
+                                    cursor: task.isAwaitingMontageControl ? 'pointer' : 'not-allowed'
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+                            </button>
+                        )}
                         <button
                             className="open-folder-task-btn"
                             onClick={(e) => {
@@ -417,10 +439,11 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl } = useQueue();
     const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message?: string; onConfirm: () => void; }>({ isOpen: false, title: '', onConfirm: () => { } });
+    const [activeMontageTask, setActiveMontageTask] = useState<QueueTask | null>(null);
 
     useEffect(() => {
         if (tasks.length === 0 && setCurrentPath) {
@@ -460,6 +483,21 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         }
     }, []);
 
+    const handleOpenMontageEditor = useCallback((task: QueueTask) => {
+        setActiveMontageTask(task);
+    }, []);
+
+    const handleMontageConfirm = useCallback((taskId: string, resultData: string) => {
+        resumeMontageControl(taskId, resultData);
+        setActiveMontageTask(null);
+    }, [resumeMontageControl]);
+
+    const handleMontageCancel = useCallback((taskId: string) => {
+        // We could send a cancel signal or just close the editor and keep waiting.
+        // For now, let's just close the editor. If user wants to cancel the task, they can use the main cancel button.
+        setActiveMontageTask(null);
+    }, []);
+
     return (
         <div className="content-wrapper animate-fade">
             <div className="queue-header">
@@ -492,6 +530,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                 onToggle={toggleExpand}
                                 onRemove={handleRemoveTask}
                                 onOpenFolder={handleOpenFolder}
+                                onOpenMontageEditor={handleOpenMontageEditor}
                                 isProcessing={isProcessing}
                                 t={t}
                                 resumeTask={resumeTask}
@@ -509,6 +548,13 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                     data={tasks.find(t => t.isAwaitingExistingFilesCheck)?.existingFilesData}
                     onConfirm={(skip) => resumeWithExistingFiles(tasks.find(t => t.isAwaitingExistingFilesCheck)!.id, skip)}
                     onCancel={() => resumeWithExistingFiles(tasks.find(t => t.isAwaitingExistingFilesCheck)!.id, [])}
+                />
+            )}
+            {activeMontageTask && (
+                <MontageEditor 
+                    task={activeMontageTask} 
+                    onConfirm={handleMontageConfirm} 
+                    onCancel={handleMontageCancel} 
                 />
             )}
         </div>

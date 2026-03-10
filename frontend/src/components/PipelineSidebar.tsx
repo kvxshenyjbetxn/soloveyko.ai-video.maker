@@ -552,7 +552,8 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             },
             control: {
                 translate: settings.translateControlEnabled,
-                image: settings.imageControlEnabled
+                image: settings.imageControlEnabled,
+                montage: settings.montageControlEnabled
             },
             text: {},
             voiceover: {
@@ -589,7 +590,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         });
 
         // Also save major enabling flags and OUTPUT PATHS so the template "knows" what it does
-        ['voiceoverEnabled', 'imageEnabled', 'subtitleEnabled', 'montageEnabled', 'translateControlEnabled', 'imageControlEnabled',
+        ['voiceoverEnabled', 'imageEnabled', 'subtitleEnabled', 'montageEnabled', 'translateControlEnabled', 'imageControlEnabled', 'montageControlEnabled',
             'translateOutputPath', 'rewriteOutputPath'
         ].forEach(key => {
             if (settings[key] !== undefined) {
@@ -719,6 +720,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         if (obj.control && typeof obj.control === 'object') {
             if (obj.control.translate !== undefined) result.translateControlEnabled = obj.control.translate;
             if (obj.control.image !== undefined) result.imageControlEnabled = obj.control.image;
+            if (obj.control.montage !== undefined) result.montageControlEnabled = obj.control.montage;
         }
 
         // Explicitly handle arrays (they should be arrays, not flattened)
@@ -856,6 +858,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 voiceoverTemplatesCollapsed: prev.voiceoverTemplatesCollapsed,
                 controlCollapsed: prev.controlCollapsed,
                 // Ensure values are RESET to defaults if missing in template, not carried over from previous state
+                montageControlEnabled: cleanApplied.montageControlEnabled ?? false,
+                translateControlEnabled: cleanApplied.translateControlEnabled ?? false,
+                imageControlEnabled: cleanApplied.imageControlEnabled ?? false,
                 customStages: cleanApplied.customStages ?? [],
                 customStagesEnabled: cleanApplied.customStagesEnabled ?? false,
                 montageOverlayTriggers: cleanApplied.montageOverlayTriggers ?? [],

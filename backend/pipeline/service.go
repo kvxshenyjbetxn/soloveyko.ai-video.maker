@@ -48,6 +48,7 @@ type PipelineService struct {
 	OnTextResult                func(id string, resultText string)
 	OnRequestControl            func(id string, text string)
 	OnRequestImageControl       func(id string)
+	OnRequestMontageControl     func(id string, planData string)
 	OnTaskStatus                func(id string, status string, progress int)
 	OnImageGenerated            func(taskName string, templateName string, imageName string, path string, prompt string)
 	OnImageDeleted              func(imgPath string)
@@ -701,6 +702,13 @@ func (s *PipelineService) SubmitImageControlResult(id string) {
 	if val, ok := s.pendingControl.Load(id + "_image"); ok {
 		ch := val.(chan string)
 		ch <- "done"
+	}
+}
+
+func (s *PipelineService) SubmitMontageControlResult(id string, result string) {
+	if val, ok := s.pendingControl.Load(id + "_montage"); ok {
+		ch := val.(chan string)
+		ch <- result
 	}
 }
 

@@ -164,7 +164,7 @@
       "translate_prompt": "Промт перекладу",
       "translate_control": "Контроль перекладу",
       "image_control": "Контроль зображень",
-      "rewrite_model": "Модель рерайту",
+      "montage_control": "Контроль монтажу",      "rewrite_model": "Модель рерайту",
       "rewrite_temperature": "Температура рерайту",
       "rewrite_max_tokens": "Макс. токенів рерайту",
       "rewrite_prompt": "Промт рерайту"
@@ -656,7 +656,7 @@
     "control": "Контроль",
     "translate_control": "Контроль перекладу",
     "image_control": "Контроль зображень",
-    "image_control_notification": {
+    "montage_control": "Контроль монтажу",    "image_control_notification": {
       "title": "Зображення готові",
       "message": "Генерацію зображень та відео для всіх завдань завершено. Будь ласка, перейдіть до Галереї для перевірки та редагування перед фінальним монтажем.",
       "go_to_gallery": "Перейти до Галереї"

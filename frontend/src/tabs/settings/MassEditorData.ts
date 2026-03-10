@@ -263,6 +263,7 @@ export const MASS_EDITOR_BLOCKS: MassEditorBlock[] = [
         settings: [
             { id: 'translateControlEnabled', labelKey: 'pipeline.translate_control', type: 'switch', path: 'control.translateControlEnabled' },
             { id: 'imageControlEnabled', labelKey: 'pipeline.image_control', type: 'switch', path: 'control.imageControlEnabled' },
+            { id: 'montageControlEnabled', labelKey: 'pipeline.montage_control', type: 'switch', path: 'control.montageControlEnabled' },
         ],
     },
     {

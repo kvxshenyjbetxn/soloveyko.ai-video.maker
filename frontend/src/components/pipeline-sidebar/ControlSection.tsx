@@ -83,6 +83,20 @@ export const ControlSection: React.FC<ControlSectionProps> = ({ settings, handle
                             </label>
                         </div>
                     </div>
+
+                    <div className="settings-control">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.montage_control') || 'Контроль монтажу'}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.montageControlEnabled}
+                                    onChange={(e) => handleChange('montageControlEnabled', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

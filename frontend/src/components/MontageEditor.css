@@ -1,0 +1,317 @@
+.montage-editor-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.montage-editor-window {
+    width: 95%;
+    max-width: 1400px;
+    height: 90vh;
+    background: var(--bg-primary);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.montage-editor-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.montage-editor-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-primary);
+}
+
+.montage-editor-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.montage-zoom-label {
+    min-width: 48px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.montage-editor-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.montage-info-panel {
+    padding: 12px 20px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.info-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.info-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.info-value {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.info-message {
+    margin-left: auto;
+    color: var(--accent-color);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+.montage-timeline-container {
+    flex: 1;
+    overflow: auto;
+    padding: 20px;
+    background: #1e1e1e; /* Darker background for timeline */
+    position: relative;
+}
+
+.montage-timeline-wrapper {
+    position: relative;
+    min-height: 200px;
+}
+
+.montage-timeline-ruler {
+    height: 30px;
+    border-bottom: 1px solid #444;
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-marker {
+    position: absolute;
+    bottom: 0;
+    height: 10px;
+    border-left: 1px solid #666;
+}
+
+.timeline-marker.minor {
+    height: 5px;
+    border-color: #444;
+}
+
+.timeline-marker span {
+    position: absolute;
+    top: -20px;
+    left: -10px;
+    font-size: 0.75rem;
+    color: #888;
+    user-select: none;
+}
+
+.audio-track-reference {
+    position: absolute;
+    bottom: -15px;
+    left: 0;
+    height: 4px;
+    background: var(--accent-color);
+    opacity: 0.5;
+    border-radius: 2px;
+}
+
+.audio-track-reference span {
+    position: absolute;
+    right: 5px;
+    top: -18px;
+    font-size: 0.7rem;
+    color: var(--accent-color);
+    white-space: nowrap;
+}
+
+.montage-timeline-tracks {
+    position: relative;
+    height: 120px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 6px;
+    border: 1px dashed rgba(255, 255, 255, 0.05);
+}
+
+.montage-track {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    height: 80px;
+    width: 100%;
+}
+
+.montage-clip-block {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: #2c3e50;
+    border: 1px solid #34495e;
+    border-radius: 6px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: background-color 0.2s, filter 0.2s;
+    user-select: none;
+}
+
+.montage-clip-block.video {
+    background: #2980b9;
+    border-color: #3498db;
+}
+
+.montage-clip-block.image {
+    background: #27ae60;
+    border-color: #2ecc71;
+}
+
+.montage-clip-block:hover {
+    filter: brightness(1.2);
+}
+
+.montage-clip-block.dragging {
+    filter: brightness(1.3);
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    z-index: 10;
+}
+
+.montage-clip-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.montage-clip-thumbnail-placeholder {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+}
+
+.montage-clip-name {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.montage-clip-duration {
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: white;
+    background: rgba(0,0,0,0.5);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-top: auto;
+}
+
+.montage-clip-resizer {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    cursor: ew-resize;
+    z-index: 2;
+}
+
+.montage-clip-resizer:hover, .montage-clip-block.dragging .montage-clip-resizer {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.montage-clip-resizer.right {
+    right: 0;
+    border-left: 1px solid rgba(0,0,0,0.2);
+}
+
+.montage-editor-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.montage-btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+
+.montage-btn.icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.montage-btn.icon:hover {
+    background: var(--bg-hover);
+}
+
+.montage-btn.secondary {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.montage-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.montage-btn.primary {
+    background: var(--accent-color);
+    color: white;
+}
+
+.montage-btn.primary:hover {
+    filter: brightness(1.1);
+}

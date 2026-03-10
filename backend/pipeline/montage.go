@@ -426,7 +426,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	if numFiles > 0 {
-		effectiveDurs[numFiles-1] += 4.0
+		// No forced outro padding
 	}
 
 	upW := int(math.Round(float64(baseW) * upFactor))
@@ -495,6 +495,86 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	outputFile := strings.TrimSpace(finalBaseName) + ".mp4"
 	s.log("INFO", fmt.Sprintf("[Montage] Output file will be: %s", outputFile), id, taskLabel)
+
+	// [CONTROL] -------------------------------------------------------------
+	// Wait for user confirmation if Montage Control is enabled
+	mControlEnabled := pSettings.MontageControlEnabled
+	if val, ok := settings["montageControlEnabled"].(bool); ok {
+		mControlEnabled = val
+	}
+
+	if mControlEnabled {
+		s.emitStageStatus(id, "montage", "waiting")
+		s.log("INFO", "[Control] Waiting for user montage review...", id, taskLabel)
+
+		type MontageClip struct {
+			Path     string  `json:"path"`
+			Duration float64 `json:"duration"`
+			IsVideo  bool    `json:"isVideo"`
+		}
+
+		type MontagePlan struct {
+			AudioDuration float64       `json:"audioDuration"`
+			TransDuration float64       `json:"transDuration"`
+			IsFadeFast    bool          `json:"isFadeFast"`
+			Clips         []MontageClip `json:"clips"`
+		}
+
+		plan := MontagePlan{
+			AudioDuration: audioDur,
+			TransDuration: transDur,
+			IsFadeFast:    isFadeFast,
+			Clips:         make([]MontageClip, numFiles),
+		}
+
+		for i, f := range visualFiles {
+			// Convert absolute path to relative or filename for UI, or use full depending on how we load
+			ext := strings.ToLower(filepath.Ext(f))
+			plan.Clips[i] = MontageClip{
+				Path:     filepath.Join(finalDir, f),
+				Duration: effectiveDurs[i],
+				IsVideo:  videoExts[ext],
+			}
+		}
+
+		planJSON, _ := json.Marshal(plan)
+
+		resChan := make(chan string)
+		s.pendingControl.Store(id+"_montage", resChan)
+
+		if s.OnRequestMontageControl != nil {
+			s.OnRequestMontageControl(id, string(planJSON))
+		}
+
+		// Block until result received or timeout/context cancel
+		select {
+		case actionData := <-resChan:
+			// Parse modified plan if we get new durations from UI
+			// format: "confirm:duration1,duration2,..." or simply "confirm"
+			if strings.HasPrefix(actionData, "confirm:") {
+				parts := strings.Split(strings.TrimPrefix(actionData, "confirm:"), ",")
+				for i, p := range parts {
+					if i < numFiles {
+						if parsedDur, err := strconv.ParseFloat(p, 64); err == nil && parsedDur > 0 {
+							effectiveDurs[i] = parsedDur
+						}
+					}
+				}
+				s.log("SUCCESS", "[Control] Montage timings updated from UI.", id, taskLabel)
+			} else if actionData == "cancel" {
+                s.log("INFO", "[Control] Task cancelled by user", id, taskLabel)
+                return fmt.Errorf("task cancelled")
+            } else {
+				s.log("SUCCESS", "[Control] Montage approved (default timings).", id, taskLabel)
+			}
+			s.emitStageStatus(id, "montage", "running")
+		case <-s.ctx.Done():
+			s.log("INFO", "[Control] Task cancelled while waiting for montage review", id, taskLabel)
+			return fmt.Errorf("task cancelled")
+		}
+		s.pendingControl.Delete(id + "_montage")
+	}
+	// ------------------------------------------------------------------------
 
 	// 5. Build filter graph — single-pass
 	type inputSpec struct {
