@@ -522,6 +522,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		type MontagePlan struct {
 			AudioDuration float64          `json:"audioDuration"`
 			AudioPath     string           `json:"audioPath"`
+			SubtitlePath  string           `json:"subtitlePath"`
 			TransDuration float64          `json:"transDuration"`
 			IsFadeFast    bool             `json:"isFadeFast"`
 			Clips         []MontageClip    `json:"clips"`
@@ -531,6 +532,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		plan := MontagePlan{
 			AudioDuration: audioDur,
 			AudioPath:     audioPath,
+			SubtitlePath:  filepath.Join(finalDir, "subtitle.srt"),
 			TransDuration: transDur,
 			IsFadeFast:    isFadeFast,
 			Clips:         make([]MontageClip, numFiles),

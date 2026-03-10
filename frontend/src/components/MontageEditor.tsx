@@ -20,7 +20,14 @@ interface MontagePlan {
     transDuration: number;
     isFadeFast: boolean;
     clips: MontageClip[];
+    subtitlePath?: string;
     audioSegments?: MontageSegment[];
+}
+
+interface SubtitleEntry {
+    start: number;
+    end: number;
+    text: string;
 }
 
 interface MontageEditorProps {
@@ -53,6 +60,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [isCuttingMode, setIsCuttingMode] = useState<boolean>(false);
     const [draggingSelectionSide, setDraggingSelectionSide] = useState<null | 'start' | 'end'>(null);
     const [cutJunctions, setCutJunctions] = useState<{ position: number, durationRemoved: number }[]>([]);
+    const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
 
     const previewVideoRef = useRef<HTMLVideoElement>(null);
     const previewAudioRef = useRef<HTMLAudioElement>(null);
@@ -83,6 +91,47 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             }
         }
     }, [task.montagePlanData]);
+
+    // Subtitle Fetching & Parsing
+    useEffect(() => {
+        if (!plan?.subtitlePath) return;
+
+        const parseTime = (timeStr: string) => {
+            const parts = timeStr.trim().replace(',', '.').split(':');
+            if (parts.length !== 3) return 0;
+            const h = parseFloat(parts[0]);
+            const m = parseFloat(parts[1]);
+            const s = parseFloat(parts[2]);
+            return h * 3600 + m * 60 + s;
+        };
+
+        const fetchSubtitles = async () => {
+            try {
+                const response = await fetch(getUrl(plan.subtitlePath!));
+                const text = await response.text();
+                const entries: SubtitleEntry[] = [];
+                const blockRegex = /(\d+)\r?\n(\d{2}:\d{2}:\d{2}[,\.]\d{3}) --> (\d{2}:\d{2}:\d{2}[,\.]\d{3})\r?\n([\s\S]*?)(?=\r?\n\r?\n|\r?\n?$)/g;
+                
+                let match;
+                while ((match = blockRegex.exec(text)) !== null) {
+                    entries.push({
+                        start: parseTime(match[2]),
+                        end: parseTime(match[3]),
+                        text: match[4].trim().replace(/\r?\n/g, ' ')
+                    });
+                }
+                setSubtitles(entries);
+            } catch (err) {
+                console.error("Failed to load subtitles:", err);
+            }
+        };
+
+        fetchSubtitles();
+    }, [plan?.subtitlePath]);
+
+    const currentSubtitle = useMemo(() => {
+        return subtitles.find(s => currentTime >= s.start && currentTime <= s.end);
+    }, [subtitles, currentTime]);
 
     // Layout Calculations
     const clipLayouts = useMemo(() => {
@@ -434,6 +483,12 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                     {activeClipInfo.clip.isVideo ? <video ref={previewVideoRef} src={getUrl(activeClipInfo.clip.path)} playsInline /> : <img src={getUrl(activeClipInfo.clip.path)} alt="p" />}
                                     <div className="preview-timestamp">{currentTime.toFixed(2)}s</div>
                                     {plan.audioPath && <audio ref={previewAudioRef} src={getUrl(plan.audioPath)} style={{ display: 'none' }} />}
+                                    
+                                    {currentSubtitle && (
+                                        <div className="preview-subtitle-overlay animate-fade">
+                                            {currentSubtitle.text}
+                                        </div>
+                                    )}
                                 </div>
                             ) : <div className="montage-preview-placeholder">No preview</div>}
                         </div>
