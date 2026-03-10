@@ -243,6 +243,8 @@ type Settings struct {
 	TelegramNotificationsEnabled  bool             `json:"telegramNotificationsEnabled"`
 	TelegramChatID                string           `json:"telegramChatID"`
 	SystemNotificationsEnabled    bool             `json:"systemNotificationsEnabled"`
+	FirstRun                      bool             `json:"firstRun"`
+	ShowWelcome                   bool             `json:"showWelcome"`
 }
 
 type SettingsService struct {
@@ -279,43 +281,45 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 	if _, err := os.Stat(s.configPath); os.IsNotExist(err) {
 		return &Settings{
 			Language:    "uk",
-			Theme:       "dark",
-			AccentColor: "#ff00c3", // Наш фірмовий рожевий
+			Theme:       "amoled",
+			AccentColor: "#0078d4", // Синій за замовчуванням
 			OpenRouterModels: []string{
 				"google/gemini-2.5-flash",
 				"z-ai/glm-4.5-air:free",
 			},
 			Pipeline: PipelineSettings{
-				TranslateModel:       "google/gemini-2.5-flash",
-				TranslateTemperature: 1.0,
-				TranslateEnabled:     true,
-				RewriteModel:         "google/gemini-2.5-flash",
-				RewriteTemperature:   1.0,
-				RewriteEnabled:       true,
+				TranslateModel:        "google/gemini-2.5-flash",
+				TranslateTemperature:  1.0,
+				TranslateEnabled:      true,
+				RewriteModel:          "google/gemini-2.5-flash",
+				RewriteTemperature:    1.0,
+				RewriteEnabled:        true,
 				SubtitleKaraokeEffect: false,
 				SubtitleKaraokeSpeed:  100,
 				ImageEnabled:          true,
-				VoiceoverEnabled:     false,
-				SubtitleMaxLen:       40,
-				SubtitleMaxWords:     10,
-				SubtitleColor:        "#ffffff",
-				SubtitleSize:         24,
-				SubtitleFont:         "Arial",
-				SubtitleOutlineColor: "#000000",
-				SubtitleOutlineWidth: 2.0,
-				SubtitleShadowColor:  "#000000",
-				SubtitleShadowWidth:  1.0,
-				SubtitleBlur:         0.0,
-				SubtitleFadeEnabled:  true,
-				SubtitleFadeIn:       300,
-				SubtitleFadeOut:      300,
-				SidebarWidth:         320,
-				MontageEnabled:       false,
-				MontageCollapsed:     true,
-				ImageMode:            "normal",
-				ImageMemoryType:      "primitive",
-				ImageMemoryChars:     1000,
+				VoiceoverEnabled:      false,
+				SubtitleMaxLen:        40,
+				SubtitleMaxWords:      10,
+				SubtitleColor:         "#ffffff",
+				SubtitleSize:          24,
+				SubtitleFont:          "Arial",
+				SubtitleOutlineColor:  "#000000",
+				SubtitleOutlineWidth:  2.0,
+				SubtitleShadowColor:   "#000000",
+				SubtitleShadowWidth:   1.0,
+				SubtitleBlur:          0.0,
+				SubtitleFadeEnabled:   true,
+				SubtitleFadeIn:        300,
+				SubtitleFadeOut:       300,
+				SidebarWidth:          320,
+				MontageEnabled:        false,
+				MontageCollapsed:      true,
+				ImageMode:             "normal",
+				ImageMemoryType:       "primitive",
+				ImageMemoryChars:      1000,
 			},
+			FirstRun:    true,
+			ShowWelcome: true,
 		}, nil
 	}
 
@@ -324,7 +328,9 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 		return nil, err
 	}
 
-	var settings Settings
+	settings := Settings{
+		ShowWelcome: true,
+	}
 	err = json.Unmarshal(data, &settings)
 	if err != nil {
 		return nil, err
@@ -642,6 +648,26 @@ func (s *SettingsService) SetOpenRouterAlertThreshold(threshold float64) error {
 	}
 
 	settings.OpenRouterAlertThreshold = threshold
+	return s.SaveSettings(settings)
+}
+
+// IsFirstRun повертає чи це перший запуск програми
+func (s *SettingsService) IsFirstRun() bool {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return false
+	}
+	return settings.FirstRun
+}
+
+// SetFirstRun встановлює чи це перший запуск програми
+func (s *SettingsService) SetFirstRun(firstRun bool) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.FirstRun = firstRun
 	return s.SaveSettings(settings)
 }
 
@@ -1490,5 +1516,54 @@ func (s *SettingsService) SetSystemNotificationsEnabled(enabled bool) error {
 		return err
 	}
 	settings.SystemNotificationsEnabled = enabled
+	return s.SaveSettings(settings)
+}
+
+// GetShowWelcome returns if the welcome screen should be shown
+func (s *SettingsService) GetShowWelcome() bool {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return true
+	}
+	return settings.ShowWelcome
+}
+
+// SetShowWelcome updates the ShowWelcome flag
+func (s *SettingsService) SetShowWelcome(show bool) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.ShowWelcome = show
+	return s.SaveSettings(settings)
+}
+
+// SetGeneralWhisperEngine updates the subtitle service in pipeline settings
+func (s *SettingsService) SetGeneralWhisperEngine(engine string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.Pipeline.SubtitleService = engine
+	return s.SaveSettings(settings)
+}
+
+// SaveOpenRouterAPIKey saves a single OpenRouter API key
+func (s *SettingsService) SaveOpenRouterAPIKey(key string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.OpenRouterAPIKey = key
+	return s.SaveSettings(settings)
+}
+
+// SetGeneralMontageCodec updates the montage video codec in pipeline settings
+func (s *SettingsService) SetGeneralMontageCodec(codec string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.Pipeline.MontageVideoCodec = codec
 	return s.SaveSettings(settings)
 }

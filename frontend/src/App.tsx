@@ -37,6 +37,8 @@ import { GoogleIntegration } from './tabs/settings/api/google_integration';
 import NotificationsSettings from './tabs/settings/notifications';
 import { GoogleMonitor } from './components/GoogleMonitor';
 import { UpdateModal } from './components/UpdateModal';
+import { InitialSetup } from './components/InitialSetup';
+import { WelcomeWindow } from './components/WelcomeWindow';
 import { utils as models } from '../wailsjs/go/models';
 
 // Simple Icons (SVG)
@@ -80,6 +82,10 @@ function App() {
     const [updateManifest, setUpdateManifest] = useState<models.UpdateManifest | null>(null);
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
+    // Initial setup and welcome states
+    const [showInitialSetup, setShowInitialSetup] = useState(false);
+    const [showWelcomeWindow, setShowWelcomeWindow] = useState(false);
+
     const checkUpdates = async () => {
         try {
             // @ts-ignore
@@ -107,6 +113,20 @@ function App() {
                         sessionStorage.setItem('current_auth_key', key);
                         if (response.telegram_id) sessionStorage.setItem('telegram_id', response.telegram_id.toString());
                         checkUpdates();
+
+                        // Check if it's the first run
+                        // @ts-ignore
+                        const firstRun = await window.go.main.App.IsFirstRun();
+                        if (firstRun) {
+                            setShowInitialSetup(true);
+                        } else {
+                            // Only check for welcome window if not first run
+                            // @ts-ignore
+                            const showWelcome = await window.go.main.App.GetShowWelcome();
+                            if (showWelcome) {
+                                setShowWelcomeWindow(true);
+                            }
+                        }
                     }
                 }
             } catch (e: any) {
@@ -134,6 +154,20 @@ function App() {
             await window.go.main.App.ClearAuthKey();
         }
         checkUpdates();
+
+        // Check if it's the first run
+        // @ts-ignore
+        const firstRun = await window.go.main.App.IsFirstRun();
+        if (firstRun) {
+            setShowInitialSetup(true);
+        } else {
+            // Check if welcome should be shown
+            // @ts-ignore
+            const showWelcome = await window.go.main.App.GetShowWelcome();
+            if (showWelcome) {
+                setShowWelcomeWindow(true);
+            }
+        }
     };
 
     const handleLogout = async () => {
@@ -502,6 +536,23 @@ function App() {
 
     return (
         <div className="app-container">
+            {showInitialSetup && (
+                <InitialSetup onFinish={() => {
+                    setShowInitialSetup(false);
+                    // After first setup, we can show the welcome window
+                    setShowWelcomeWindow(true);
+                }} />
+            )}
+
+            {showWelcomeWindow && (
+                <WelcomeWindow
+                    onFinish={() => setShowWelcomeWindow(false)}
+                    onReconfigure={() => {
+                        setShowWelcomeWindow(false);
+                        setShowInitialSetup(true);
+                    }}
+                />
+            )}
             {/* Top Header with Tabs */}
             <header className="app-header">
                 <div className="header-content">

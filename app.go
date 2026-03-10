@@ -402,10 +402,40 @@ func (a *App) SetAccentColor(color string) error {
 	return a.settings.SetAccentColor(color)
 }
 
+// IsFirstRun повертає чи це перший запуск програми
+func (a *App) IsFirstRun() bool {
+	return a.settings.IsFirstRun()
+}
+
+// SetFirstRun встановлює статус першого запуску
+func (a *App) SetFirstRun(firstRun bool) error {
+	return a.settings.SetFirstRun(firstRun)
+}
+
+// GetShowWelcome повертає чи потрібно показувати вікно привітання
+func (a *App) GetShowWelcome() bool {
+	return a.settings.GetShowWelcome()
+}
+
+// SetShowWelcome встановлює чи потрібно показувати вікно привітання
+func (a *App) SetShowWelcome(show bool) error {
+	return a.settings.SetShowWelcome(show)
+}
+
 // OpenConfigDir відкриває папку з конфігурацією в системному провіднику
 func (a *App) OpenConfigDir() {
 	path := a.settings.GetConfigDir()
 	a.OpenPath(path)
+}
+
+// SetGeneralWhisperEngine встановлює обраний двигун транскрипції
+func (a *App) SetGeneralWhisperEngine(engine string) error {
+	return a.settings.SetGeneralWhisperEngine(engine)
+}
+
+// SetGeneralMontageCodec встановлює обраний кодек для монтажу
+func (a *App) SetGeneralMontageCodec(codec string) error {
+	return a.settings.SetGeneralMontageCodec(codec)
 }
 
 // OpenPath opens the specified path in the system file explorer
@@ -971,6 +1001,9 @@ func (a *App) InstallAmdWhisper() error {
 		return err
 	}
 	a.LogToUI("SUCCESS", "[AmdWhisper] Сервіс AMD успішно встановлено")
+	if a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "amdInstalled")
+	}
 	return nil
 }
 
