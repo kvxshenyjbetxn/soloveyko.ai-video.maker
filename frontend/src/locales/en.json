@@ -134,6 +134,11 @@
             "change_image": "Change Image"
         }
     },
+    "montage_editor": {
+        "title": "Montage Editor",
+        "drag_hint": "Drag the right edge of a block to change its duration. Click or drag on the timeline to scrub.",
+        "no_preview": "No preview at this time"
+    },
     "text": {
         "translate": "Translate",
         "rewrite": "Rewrite",

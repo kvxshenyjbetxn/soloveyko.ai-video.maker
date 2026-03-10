@@ -515,6 +515,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 		type MontagePlan struct {
 			AudioDuration float64       `json:"audioDuration"`
+			AudioPath     string        `json:"audioPath"`
 			TransDuration float64       `json:"transDuration"`
 			IsFadeFast    bool          `json:"isFadeFast"`
 			Clips         []MontageClip `json:"clips"`
@@ -522,6 +523,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 		plan := MontagePlan{
 			AudioDuration: audioDur,
+			AudioPath:     audioPath,
 			TransDuration: transDur,
 			IsFadeFast:    isFadeFast,
 			Clips:         make([]MontageClip, numFiles),
@@ -562,9 +564,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				}
 				s.log("SUCCESS", "[Control] Montage timings updated from UI.", id, taskLabel)
 			} else if actionData == "cancel" {
-                s.log("INFO", "[Control] Task cancelled by user", id, taskLabel)
-                return fmt.Errorf("task cancelled")
-            } else {
+				s.log("INFO", "[Control] Task cancelled by user", id, taskLabel)
+				return fmt.Errorf("task cancelled")
+			} else {
 				s.log("SUCCESS", "[Control] Montage approved (default timings).", id, taskLabel)
 			}
 			s.emitStageStatus(id, "montage", "running")

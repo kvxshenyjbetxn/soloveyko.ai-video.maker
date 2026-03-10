@@ -13,15 +13,15 @@
 }
 
 .montage-editor-window {
-    width: 95%;
-    max-width: 1400px;
+    width: 98vw;
     height: 90vh;
+    margin-bottom: 40px;
     background: var(--bg-primary);
     border-radius: 12px;
     border: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     overflow: hidden;
 }
 
@@ -63,14 +63,160 @@
     overflow: hidden;
 }
 
-.montage-info-panel {
-    padding: 12px 20px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
+/* Playback & Volume UI */
+.playback-overlay-controls {
+    display: flex !important;
+    justify-content: center !important;
+    background: #111 !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    padding: 12px !important;
+    width: 100% !important;
+}
+
+.playback-controls {
+    display: flex !important;
+    align-items: center !important;
+    gap: 20px !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    padding: 8px 24px !important;
+    border-radius: 12px !important;
+}
+
+.play-btn {
+    background: #e50914 !important;
+    color: white !important;
+    border: none !important;
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
+}
+
+.volume-control {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    color: white !important;
+}
+
+.volume-control input {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    width: 100px !important;
+    height: 6px !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 3px !important;
+    outline: none !important;
+    cursor: pointer !important;
+    margin: 0 4px !important;
+}
+
+.volume-control input::-webkit-slider-thumb {
+    -webkit-appearance: none !important;
+    width: 16px !important;
+    height: 16px !important;
+    background: #e50914 !important;
+    border-radius: 50% !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5) !important;
+    cursor: pointer !important;
+    transition: transform 0.1s ease;
+}
+
+.volume-control input::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+/* Firefox compatibility */
+.volume-control input::-moz-range-track {
+    background: rgba(255, 255, 255, 0.2) !important;
+    height: 6px !important;
+    border-radius: 3px !important;
+}
+
+.volume-control input::-moz-range-thumb {
+    width: 16px !important;
+    height: 16px !important;
+    background: #e50914 !important;
+    border-radius: 50% !important;
+    border: none !important;
+}
+
+.volume-label {
+    font-size: 14px !important;
+    color: white !important;
+    min-width: 45px !important;
+}
+
+.montage-preview-and-info {
     display: flex;
+    flex: 1;
+    min-height: 0;
+    border-bottom: 1px solid var(--border-color);
+    background: #111;
+}
+
+.montage-preview-container {
+    flex: 2;
+    background: #000;
+    display: flex;
+    justify-content: center;
     align-items: center;
-    gap: 24px;
-    flex-wrap: wrap;
+    position: relative;
+    border-right: 1px solid var(--border-color);
+    min-height: 0;
+}
+
+.montage-preview-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.montage-preview-wrap img,
+.montage-preview-wrap video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+}
+
+.preview-timestamp {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-family: monospace;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.montage-preview-placeholder {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.montage-info-panel {
+    flex: 1;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    background: var(--bg-secondary);
+    min-width: 300px;
+    overflow-y: auto;
 }
 
 .info-item {
@@ -96,11 +242,39 @@
     font-style: italic;
 }
 
+.montage-timeline-resizer {
+    height: 10px;
+    background: #252525;
+    cursor: row-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.2s;
+    user-select: none;
+    z-index: 100;
+}
+
+.montage-timeline-resizer:hover {
+    background: #333;
+}
+
+.resizer-handle-line {
+    width: 30px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+}
+
 .montage-timeline-container {
-    flex: 1;
+    flex: none;
     overflow: auto;
     padding: 20px;
-    background: #1e1e1e; /* Darker background for timeline */
+    background: #1e1e1e;
+    /* Darker background for timeline */
     position: relative;
 }
 
@@ -113,7 +287,7 @@
     height: 30px;
     border-bottom: 1px solid #444;
     position: relative;
-    margin-bottom: 20px;
+    margin-bottom: 40px;
 }
 
 .timeline-marker {
@@ -139,21 +313,61 @@
 
 .audio-track-reference {
     position: absolute;
-    bottom: -15px;
+    bottom: -32px;
     left: 0;
-    height: 4px;
-    background: var(--accent-color);
-    opacity: 0.5;
-    border-radius: 2px;
+    height: 24px;
+    background: rgba(52, 152, 219, 0.4);
+    border: 1px solid rgba(52, 152, 219, 0.6);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.audio-track-reference::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255, 255, 255, 0.1) 2px, rgba(255, 255, 255, 0.1) 4px);
 }
 
 .audio-track-reference span {
-    position: absolute;
-    right: 5px;
-    top: -18px;
-    font-size: 0.7rem;
-    color: var(--accent-color);
+    position: relative;
+    font-size: 0.75rem;
+    color: white;
+    font-weight: bold;
     white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    z-index: 1;
+}
+
+.montage-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e74c3c;
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
+}
+
+.playhead-handle {
+    position: absolute;
+    top: 25px;
+    /* Alignment with ruler bottom */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 10px solid #e74c3c;
 }
 
 .montage-timeline-tracks {
@@ -203,8 +417,14 @@
 
 .montage-clip-block.dragging {
     filter: brightness(1.3);
-    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
     z-index: 10;
+}
+
+.montage-clip-block.active-preview {
+    border-width: 2px;
+    border-color: #fff;
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2);
 }
 
 .montage-clip-content {
@@ -236,7 +456,7 @@
     font-size: 0.8rem;
     font-weight: bold;
     color: white;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0, 0, 0, 0.5);
     padding: 2px 6px;
     border-radius: 4px;
     margin-top: auto;
@@ -252,13 +472,14 @@
     z-index: 2;
 }
 
-.montage-clip-resizer:hover, .montage-clip-block.dragging .montage-clip-resizer {
+.montage-clip-resizer:hover,
+.montage-clip-block.dragging .montage-clip-resizer {
     background: rgba(255, 255, 255, 0.6);
 }
 
 .montage-clip-resizer.right {
     right: 0;
-    border-left: 1px solid rgba(0,0,0,0.2);
+    border-left: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .montage-editor-footer {
