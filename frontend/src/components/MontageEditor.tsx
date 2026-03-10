@@ -129,10 +129,6 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         fetchSubtitles();
     }, [plan?.subtitlePath]);
 
-    const currentSubtitle = useMemo(() => {
-        return subtitles.find(s => currentTime >= s.start && currentTime <= s.end);
-    }, [subtitles, currentTime]);
-
     // Layout Calculations
     const clipLayouts = useMemo(() => {
         if (!plan) return [];
@@ -194,6 +190,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         }
         return segs[segs.length - 1]?.end || timelineTime;
     }, []);
+
+    const currentSubtitle = useMemo(() => {
+        const origTime = getOriginalTime(currentTime);
+        return subtitles.find(s => origTime >= s.start && origTime <= s.end);
+    }, [subtitles, currentTime, getOriginalTime]);
 
     const animate = useCallback((time: number) => {
         if (lastTimeRef.current === 0) {

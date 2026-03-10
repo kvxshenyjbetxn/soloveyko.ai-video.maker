@@ -14,6 +14,11 @@ type subtitleBlock struct {
 	text  string
 }
 
+type AudioSegment struct {
+	Start float64 `json:"start"`
+	End   float64 `json:"end"`
+}
+
 func srtTimeToSeconds(t string) float64 {
 	t = strings.ReplaceAll(strings.TrimSpace(t), ",", ".")
 	parts := strings.Split(t, ":")
@@ -527,4 +532,99 @@ type WhisperXResult struct {
 	Language string         `json:"language"`
 	Audio    string         `json:"audio"`
 	Words    []WhisperXWord `json:"words"`
+}
+func (s WhisperXResult) ToSrt() string {
+	var sb strings.Builder
+	for i, w := range s.Words {
+		sb.WriteString(fmt.Sprintf("%d\n", i+1))
+		sb.WriteString(fmt.Sprintf("%s --> %s\n", formatSecondsToSrt(w.Start), formatSecondsToSrt(w.End)))
+		sb.WriteString(fmt.Sprintf("%s\n\n", w.Word))
+	}
+	return sb.String()
+}
+
+func formatSecondsToSrt(totalSec float64) string {
+	h := int(totalSec / 3600)
+	m := int((totalSec - float64(h*3600)) / 60)
+	s := int(totalSec - float64(h*3600) - float64(m*60))
+	ms := int((totalSec - float64(int(totalSec))) * 1000)
+	return fmt.Sprintf("%02d:%02d:%02d,%03d", h, m, s, ms)
+}
+
+// TrimSrt filters and offsets SRT content based on provided audio segments
+func TrimSrt(srtContent string, segments []AudioSegment) string {
+	if len(segments) == 0 {
+		return srtContent
+	}
+
+	content := strings.ReplaceAll(srtContent, "\r\n", "\n")
+	blocks := regexp.MustCompile(`\n\s*\n`).Split(content, -1)
+
+	var originalSegments []subtitleBlock
+	for _, block := range blocks {
+		lines := strings.Split(strings.TrimSpace(block), "\n")
+		if len(lines) < 2 {
+			continue
+		}
+		timeLineIdx := -1
+		for i := 0; i < len(lines) && i < 2; i++ {
+			if strings.Contains(lines[i], "-->") {
+				timeLineIdx = i
+				break
+			}
+		}
+		if timeLineIdx != -1 {
+			times := strings.Split(lines[timeLineIdx], "-->")
+			if len(times) == 2 {
+				start := srtTimeToSeconds(times[0])
+				end := srtTimeToSeconds(times[1])
+				text := strings.Join(lines[timeLineIdx+1:], "\n")
+				originalSegments = append(originalSegments, subtitleBlock{start: start, end: end, text: text})
+			}
+		}
+	}
+
+	var trimmedBlocks []subtitleBlock
+	currentTimelineOffset := 0.0
+
+	for _, seg := range segments {
+		segDur := seg.End - seg.Start
+		for _, sub := range originalSegments {
+			// Check overlap between subtitle and current segment
+			overlapStart := mathMax(sub.start, seg.Start)
+			overlapEnd := mathMin(sub.end, seg.End)
+
+			if overlapStart < overlapEnd {
+				// This subtitle (or part of it) is in the segment
+				trimmedBlocks = append(trimmedBlocks, subtitleBlock{
+					start: currentTimelineOffset + (overlapStart - seg.Start),
+					end:   currentTimelineOffset + (overlapEnd - seg.Start),
+					text:  sub.text,
+				})
+			}
+		}
+		currentTimelineOffset += segDur
+	}
+
+	var sb strings.Builder
+	for i, b := range trimmedBlocks {
+		sb.WriteString(fmt.Sprintf("%d\n", i+1))
+		sb.WriteString(fmt.Sprintf("%s --> %s\n", formatSecondsToSrt(b.start), formatSecondsToSrt(b.end)))
+		sb.WriteString(fmt.Sprintf("%s\n\n", b.text))
+	}
+	return sb.String()
+}
+
+func mathMax(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func mathMin(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }

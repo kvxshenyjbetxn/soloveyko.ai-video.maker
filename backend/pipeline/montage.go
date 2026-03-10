@@ -811,9 +811,28 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	// Subtitles
 	montageV := "v_padded_montage"
-	assPath := filepath.Join(finalDir, "subtitle.ass")
+	assName := "subtitle.ass"
+	if len(audioSegments) > 0 {
+		srtPath := filepath.Join(finalDir, "subtitle.srt")
+		if srtData, err := os.ReadFile(srtPath); err == nil {
+			var utilsSegments []utils.AudioSegment
+			for _, seg := range audioSegments {
+				utilsSegments = append(utilsSegments, utils.AudioSegment{Start: seg.Start, End: seg.End})
+			}
+			trimmedSrt := utils.TrimSrt(string(srtData), utilsSegments)
+			_ = os.WriteFile(filepath.Join(finalDir, "subtitle_trimmed.srt"), []byte(trimmedSrt), 0644)
+
+			trimmedAss, err := utils.SrtToAss(trimmedSrt, pSettings)
+			if err == nil {
+				_ = os.WriteFile(filepath.Join(finalDir, "subtitle_trimmed.ass"), []byte(trimmedAss), 0644)
+				assName = "subtitle_trimmed.ass"
+			}
+		}
+	}
+
+	assPath := filepath.Join(finalDir, assName)
 	if _, err := os.Stat(assPath); err == nil {
-		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles='subtitle.ass'[v_sub]", montageV))
+		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles='%s'[v_sub]", montageV, assName))
 		montageV = "v_sub"
 	}
 
