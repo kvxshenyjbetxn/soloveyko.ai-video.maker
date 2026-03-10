@@ -8,9 +8,13 @@ import {
     GetMontageMode,
     SaveMontageMode,
     GetPipelineSettings,
-    SavePipelineSettings
+    SavePipelineSettings,
+    IsWhisperXInstalled,
+    DownloadWhisperX
 } from '../../../wailsjs/go/main/App';
+import { ConfirmModal } from '../../components/ConfirmModal';
 import './general.css';
+
 
 export const Performance = () => {
     const { t } = useI18n();
@@ -21,6 +25,10 @@ export const Performance = () => {
     const [montageCodec, setMontageCodec] = useState('cpu');
     const [montagePriority, setMontagePriority] = useState('normal');
     const [montageCores, setMontageCores] = useState(0);
+    const [isWhisperXInstalled, setIsWhisperXInstalled] = useState(true);
+    const [isDownloadingWhisperX, setIsDownloadingWhisperX] = useState(false);
+    const [whisperXDownloadProgress, setWhisperXDownloadProgress] = useState(0);
+    const [showWhisperXPrompt, setShowWhisperXPrompt] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const totalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 8) : 8;
 
@@ -29,8 +37,9 @@ export const Performance = () => {
             GetSubtitleMaxConnections(),
             GetMontageMaxConnections(),
             GetMontageMode(),
-            GetPipelineSettings()
-        ]).then(([max, mmax, mode, ps]) => {
+            GetPipelineSettings(),
+            IsWhisperXInstalled()
+        ]).then(([max, mmax, mode, ps, installed]) => {
             setSubtitleMax(max || 2);
             setSubtitleService((ps as any)?.subtitleService || 'standard');
             setMontageMax(mmax || 1);
@@ -38,7 +47,25 @@ export const Performance = () => {
             setMontageCodec((ps as any)?.montageVideoCodec || 'cpu');
             setMontagePriority((ps as any)?.montageProcessPriority || 'normal');
             setMontageCores((ps as any)?.montageCPUCores || 0);
+            setIsWhisperXInstalled(installed);
         });
+
+        // @ts-ignore
+        const unsubProgress = window.runtime?.EventsOn("whisperxDownloadProgress", (progress: number) => {
+            setWhisperXDownloadProgress(progress);
+        });
+        // @ts-ignore
+        const unsubInstalled = window.runtime?.EventsOn("whisperxInstalled", () => {
+            setIsWhisperXInstalled(true);
+            setIsDownloadingWhisperX(false);
+            setSubtitleService('whisperx');
+            savePipelineField('subtitleService', 'whisperx');
+        });
+
+        return () => {
+            if (unsubProgress) unsubProgress();
+            if (unsubInstalled) unsubInstalled();
+        };
     }, []);
 
     const handleSubtitleMaxChange = async (val: number) => {
@@ -74,6 +101,33 @@ export const Performance = () => {
         finally { setIsSaving(false); }
     };
 
+    const handleEngineSelect = async (s: string) => {
+        if (s === 'whisperx') {
+            const installed = await IsWhisperXInstalled();
+            if (!installed) {
+                setShowWhisperXPrompt(true);
+                return;
+            }
+        }
+        setSubtitleService(s);
+        savePipelineField('subtitleService', s);
+        if (s === 'assemblyai') {
+            handleSubtitleMaxChange(5);
+        }
+    };
+
+    const startWhisperXDownload = async () => {
+        setShowWhisperXPrompt(false);
+        setIsDownloadingWhisperX(true);
+        setWhisperXDownloadProgress(0);
+        try {
+            await DownloadWhisperX();
+        } catch (err) {
+            console.error(err);
+            setIsDownloadingWhisperX(false);
+        }
+    };
+
     const subtitleProgress = ((subtitleMax - 1) / 4) * 100;
 
     const btnStyle = (active: boolean): React.CSSProperties => ({
@@ -107,19 +161,31 @@ export const Performance = () => {
                             </div>
                             <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                                 {(['standard', 'amd', 'whisperx', 'assemblyai'] as const).map(s => (
-                                    <button key={s} onClick={() => { 
-                                        setSubtitleService(s); 
-                                        savePipelineField('subtitleService', s); 
-                                        // Якщо AssemblyAI, форсуємо 5 у семафорі
-                                        if (s === 'assemblyai') {
-                                            handleSubtitleMaxChange(5);
-                                        }
-                                    }} style={btnStyle(subtitleService === s)}>
+                                    <button key={s} onClick={() => handleEngineSelect(s)} style={btnStyle(subtitleService === s)}>
                                         {s === 'standard' ? 'Whisper' : s === 'amd' ? 'AMD' : s === 'whisperx' ? 'WhisperX' : 'AssemblyAI'}
                                     </button>
                                 ))}
                             </div>
                         </div>
+
+                        {isDownloadingWhisperX && (
+                            <div style={{ padding: '4px 0' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '11px' }}>
+                                    <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>
+                                        {t('performanceTab.whisperx_downloading').replace('{{progress}}', whisperXDownloadProgress.toString())}
+                                    </span>
+                                    <span>{whisperXDownloadProgress}%</span>
+                                </div>
+                                <div style={{ height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+                                    <div style={{ 
+                                        height: '100%', 
+                                        width: `${whisperXDownloadProgress}%`, 
+                                        background: 'var(--accent-primary)',
+                                        transition: 'width 0.3s ease'
+                                    }} />
+                                </div>
+                            </div>
+                        )}
 
                         <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: 0, opacity: 0.5 }} />
 
@@ -286,6 +352,17 @@ export const Performance = () => {
                         )}
                     </div>
                 </div>
+
+                <ConfirmModal
+                    isOpen={showWhisperXPrompt}
+                    onClose={() => setShowWhisperXPrompt(false)}
+                    onConfirm={startWhisperXDownload}
+                    title={t('performanceTab.whisperx_not_found_title')}
+                    message={t('performanceTab.whisperx_not_found_desc')}
+                    confirmText={t('performanceTab.whisperx_download_btn')}
+                    isDanger={false}
+                    type="info"
+                />
 
                 <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '8px', height: '20px' }}>
                     {isSaving && (

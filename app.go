@@ -1269,3 +1269,75 @@ func (a *App) GetSystemNotificationsEnabled() bool {
 func (a *App) SaveSystemNotificationsEnabled(enabled bool) error {
 	return a.settings.SetSystemNotificationsEnabled(enabled)
 }
+
+// WhisperX Management Methods
+
+// IsWhisperXInstalled checks if WhisperX is installed in the user's bin folder
+func (a *App) IsWhisperXInstalled() bool {
+	configDir := a.settings.GetConfigDir()
+	binDir := filepath.Join(configDir, "bin")
+
+	folderName := "whisperx-win"
+	if runtime.GOOS == "darwin" {
+		folderName = "whisperx-mac"
+	}
+
+	targetDir := filepath.Join(binDir, folderName)
+	if _, err := os.Stat(targetDir); err == nil {
+		return true
+	}
+	return false
+}
+
+// DownloadWhisperX downloads and installs WhisperX engine
+func (a *App) DownloadWhisperX() error {
+	url := "https://github.com/kvxshenyjbetxn/video.maker.releases/releases/download/whisperx/whisperx-win.zip"
+	if runtime.GOOS == "darwin" {
+		url = "https://github.com/kvxshenyjbetxn/video.maker.releases/releases/download/whisperx/whisperx-mac.zip"
+	}
+
+	a.LogToUI("INFO", "[WhisperX] Starting engine download...")
+
+	progressChan := make(chan int)
+	go func() {
+		for progress := range progressChan {
+			if a.ctx != nil {
+				wruntime.EventsEmit(a.ctx, "whisperxDownloadProgress", progress)
+			}
+		}
+	}()
+
+	pkgPath, err := a.updater.Download(url, progressChan)
+	close(progressChan) // Close after download finishes
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Download failed: %v", err))
+		return err
+	}
+	defer os.Remove(pkgPath)
+
+	a.LogToUI("INFO", "[WhisperX] Extracting engine...")
+
+	configDir := a.settings.GetConfigDir()
+	binDir := filepath.Join(configDir, "bin")
+	os.MkdirAll(binDir, 0755)
+
+	err = a.updater.Unzip(pkgPath, binDir)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Extraction failed: %v", err))
+		return err
+	}
+
+	// For Mac, ensure binary is executable
+	if runtime.GOOS == "darwin" {
+		exePath := filepath.Join(binDir, "whisperx-mac", "whisperx_cli")
+		os.Chmod(exePath, 0755)
+	}
+
+	a.LogToUI("SUCCESS", "[WhisperX] Engine installed successfully!")
+	if a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "whisperxInstalled")
+	}
+
+	return nil
+}
+

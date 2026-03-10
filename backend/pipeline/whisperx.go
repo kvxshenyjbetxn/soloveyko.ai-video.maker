@@ -5,10 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"soloveyko/backend/utils"
 )
+
 
 // ProcessWhisperX executes the WhisperX CLI executable for transcription and preserves JSON, SRT, and ASS files.
 func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir string, voiceFilePath string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
@@ -21,7 +23,10 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 	possibleExes := []string{
 		filepath.Join(configDir, "bin", "whisperx_cli.exe"),
 		filepath.Join(configDir, "bin", "whisperx_aligner_win", "whisperx_cli.exe"),
+		filepath.Join(configDir, "bin", "whisperx-win", "whisperx_cli.exe"),
+		filepath.Join(configDir, "bin", "whisperx-mac", "whisperx_cli"),
 	}
+
 
 	var whisperxExe string
 	for _, p := range possibleExes {
@@ -36,7 +41,11 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 		return fmt.Errorf("whisperx executable not found. Please ensure whisperx_cli.exe is in your user/bin folder")
 	}
 
-	ffmpegExe := filepath.Join(configDir, "bin", "ffmpeg.exe")
+	ffmpegName := "ffmpeg"
+	if runtime.GOOS == "windows" {
+		ffmpegName = "ffmpeg.exe"
+	}
+	ffmpegExe := filepath.Join(configDir, "bin", ffmpegName)
 
 	// Check if karaoke effect is enabled
 	karaokeEffect := pSettings.SubtitleKaraokeEffect

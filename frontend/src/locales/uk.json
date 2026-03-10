@@ -58,6 +58,10 @@
     "montage_cpu_cores": "Обмеження ядер (Affinity)",
     "montage_cpu_cores_desc": "Обмежує FFmpeg певними процесорними ядрами. 0 = всі ядра (авто). Windows виключно.",
     "under_development": "В розробці",
+    "whisperx_not_found_title": "WhisperX не знайдено",
+    "whisperx_not_found_desc": "Для використання WhisperX необхідно завантажити додаткові файли (~150MB). Завантажити зараз?",
+    "whisperx_download_btn": "Завантажити",
+    "whisperx_downloading": "Завантаження WhisperX: {{progress}}%",
     "description": "Налаштування продуктивності та лімітів одночасних операцій.",
     "saving": "Збереження..."
   },

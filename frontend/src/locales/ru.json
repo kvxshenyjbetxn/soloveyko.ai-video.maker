@@ -58,7 +58,11 @@
         "montage_cpu_cores": "Ограничение ядер (Affinity)",
         "montage_cpu_cores_desc": "Ограничивает FFmpeg определёнными ядрами. 0 = все ядра (авто). Только Windows.",
         "under_development": "В разработке",
-        "description": "Настройки производительности и лимитов одновременных операций.",
+        "whisperx_not_found_title": "WhisperX не найден",
+    "whisperx_not_found_desc": "Для использования WhisperX необходимо скачать дополнительные файлы (~150MB). Скачать сейчас?",
+    "whisperx_download_btn": "Скачать",
+    "whisperx_downloading": "Загрузка WhisperX: {{progress}}%",
+    "description": "Настройки производительности и лимитов одновременных операций.",
         "saving": "Сохранение..."
     },
     "logsTab": {

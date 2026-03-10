@@ -58,7 +58,11 @@
         "montage_cpu_cores": "CPU Core Limit (Affinity)",
         "montage_cpu_cores_desc": "Limits FFmpeg to specific CPU cores. 0 = all cores (auto). Windows only.",
         "under_development": "Under Development",
-        "description": "Performance settings and concurrent operation limits.",
+        "whisperx_not_found_title": "WhisperX Not Found",
+    "whisperx_not_found_desc": "To use WhisperX, you need to download additional files (~150MB). Download now?",
+    "whisperx_download_btn": "Download",
+    "whisperx_downloading": "Downloading WhisperX: {{progress}}%",
+    "description": "Performance settings and concurrent operation limits.",
         "saving": "Saving..."
     },
     "logsTab": {
