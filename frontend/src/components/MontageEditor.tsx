@@ -76,7 +76,14 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [draggingIdx, setDraggingIdx] = useState<number | null>(null);
     const [startX, setStartX] = useState<number>(0);
     const [startDurations, setStartDurations] = useState<{ current: number, next: number }>({ current: 0, next: 0 });
-    const [timelineHeight, setTimelineHeight] = useState<number>(300);
+    const [timelineHeight, setTimelineHeight] = useState<number>(() => {
+        const saved = localStorage.getItem('montage-timeline-height');
+        return saved ? parseInt(saved, 10) : 300;
+    });
+    const [infoPanelWidth, setInfoPanelWidth] = useState<number>(() => {
+        const saved = localStorage.getItem('montage-info-width');
+        return saved ? parseInt(saved, 10) : 340;
+    });
     const isResizingRef = useRef<boolean>(false);
 
     // CLIP ACTIONS STATE
@@ -565,7 +572,26 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
 
     const handleResizeMouseDown = (e: React.MouseEvent) => {
         e.preventDefault();
-        const mm = (me: MouseEvent) => setTimelineHeight(Math.max(150, Math.min(600, window.innerHeight - me.clientY - 120)));
+        const mm = (me: MouseEvent) => {
+            const h = Math.max(150, Math.min(600, window.innerHeight - me.clientY - 120));
+            setTimelineHeight(h);
+            localStorage.setItem('montage-timeline-height', h.toString());
+        };
+        const mu = () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
+        document.addEventListener('mousemove', mm);
+        document.addEventListener('mouseup', mu);
+    };
+
+    const handleInfoResizeMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startWidth = infoPanelWidth;
+        const startX = e.clientX;
+        const mm = (me: MouseEvent) => {
+            const deltaX = startX - me.clientX;
+            const w = Math.max(250, Math.min(800, startWidth + deltaX));
+            setInfoPanelWidth(w);
+            localStorage.setItem('montage-info-width', w.toString());
+        };
         const mu = () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
         document.addEventListener('mousemove', mm);
         document.addEventListener('mouseup', mu);
@@ -647,9 +673,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 <div className="montage-editor-header">
                     <div className="montage-editor-title">{t('pipeline.montage_control') || 'Montage Editor'} - {task.name}</div>
                     <div className="montage-editor-controls">
-                        <button className="montage-btn icon" onClick={() => setZoom(p => Math.max(p - 10, 10))}>-</button>
+                        <button className="montage-btn icon" onClick={() => setZoom(p => Math.max(p - (p > 50 ? 10 : 5), 5))}>-</button>
                         <span className="montage-zoom-label">{zoom}%</span>
-                        <button className="montage-btn icon" onClick={() => setZoom(p => Math.min(p + 10, 200))}>+</button>
+                        <button className="montage-btn icon" onClick={() => setZoom(p => Math.min(p + (p < 50 ? 5 : 10), 400))}>+</button>
                     </div>
                 </div>
                 <div className="montage-editor-body">
@@ -673,7 +699,8 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                 </div>
                             ) : <div className="montage-preview-placeholder">No preview</div>}
                         </div>
-                        <div className="montage-info-panel">
+                        <div className="montage-info-resizer-v" onMouseDown={handleInfoResizeMouseDown}><div className="resizer-handle-v-line"></div></div>
+                        <div className="montage-info-panel" style={{ width: `${infoPanelWidth}px`, flex: 'none' }}>
                             <div className="info-tabs">
                                 <button className={`info-tab ${activeInfoTab === 'library' ? 'active' : ''}`} onClick={() => setActiveInfoTab('library')}>Library</button>
                                 <button className={`info-tab ${activeInfoTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveInfoTab('stats')}>Stats</button>
@@ -739,7 +766,6 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                         <div className="selection-controls-container">
                             <button className={`scissors-toggle ${isCuttingMode ? 'active' : ''}`} onClick={() => setIsCuttingMode(!isCuttingMode)} title="Trimming Tools">
                                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
-                                <span>{isCuttingMode ? 'Close Tools' : 'Cut & Trim'}</span>
                             </button>
                             {isCuttingMode && (
                                 <div className="selection-controls-expanded animate-slide-in">
@@ -756,20 +782,19 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     <div 
                         className={`montage-timeline-container ${isDraggingFromPool ? 'accepting-drop' : ''}`} 
                         ref={containerRef} 
-                        onMouseDown={handleMouseDownGlobal}
                         onDragOver={(e) => { if (isDraggingFromPool) { e.preventDefault(); const rect = containerRef.current!.getBoundingClientRect(); const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 24; setDropPreview(x / zoom); } }}
                         onDragLeave={() => setDropPreview(null)}
                         onDrop={(e) => { if (isDraggingFromPool) { const rect = containerRef.current!.getBoundingClientRect(); const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 24; handleInternalDrop(x / zoom); } }}
                         style={{ height: `${timelineHeight}px`, flex: 'none' }}
                     >
                         <div className="montage-timeline-wrapper" style={{ width: `${totalTimelineDuration * zoom + 100}px`, minWidth: '100%' }}>
-                            <div className="montage-timeline-ruler">
+                            <div className="montage-timeline-ruler" onMouseDown={handleMouseDownGlobal}>
                                 {markers}
                                 {selection.start !== null && <div className="selection-marker start interactive" style={{ left: `${selection.start * zoom}px` }} onMouseDown={(e) => { e.stopPropagation(); setDraggingSelectionSide('start'); }}><div className="marker-handle" /></div>}
                                 {selection.end !== null && <div className="selection-marker end interactive" style={{ left: `${selection.end * zoom}px` }} onMouseDown={(e) => { e.stopPropagation(); setDraggingSelectionSide('end'); }}><div className="marker-handle" /></div>}
                                 {selection.start !== null && selection.end !== null && <div className="selection-range" style={{ left: `${Math.min(selection.start, selection.end) * zoom}px`, width: `${Math.abs(selection.end - selection.start) * zoom}px` }} />}
                                 {cutJunctions.map((j, i) => (<div key={i} className="timeline-cut-junction" style={{ left: `${j.position * zoom}px` }}><div className="junction-icon">✂</div></div>))}
-                                <div className="audio-track-reference" style={{ width: `${totalTimelineDuration * zoom}px` }}><span>Audio Sequence</span></div>
+                                <div className="audio-track-reference" style={{ width: `${totalTimelineDuration * zoom}px` }} onMouseDown={handleMouseDownGlobal}><span>Audio Sequence</span></div>
                             </div>
                             <div className="montage-timeline-tracks">
                                 <div className="montage-track">
