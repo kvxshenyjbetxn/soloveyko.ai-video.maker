@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"soloveyko/backend/utils"
 	"strings"
 	"sync"
+	"time"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -276,6 +278,16 @@ func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.pipeline.SetContext(ctx)
+
+	// Register native file drop handler
+	wruntime.OnFileDrop(ctx, func(x, y int, paths []string) {
+		// Emit custom event to frontend with absolute paths
+		wruntime.EventsEmit(ctx, "files:dropped", map[string]interface{}{
+			"x":     x,
+			"y":     y,
+			"paths": paths,
+		})
+	})
 
 	// Розпаковуємо всі бінарники одразу при старті в фоні (без блокування UI)
 	go func() {
@@ -1404,6 +1416,109 @@ func (a *App) DownloadWhisperX() error {
 
 	return nil
 }
+
+type ImportMediaData struct {
+	Path           string  `json:"path"`
+	Duration       float64 `json:"duration"`
+	IsVideo        bool    `json:"isVideo"`
+	ActualDuration float64 `json:"actualDuration"`
+}
+
+func (a *App) getMediaMetadata(targetPath string, ext string) (*ImportMediaData, error) {
+	videoExts := map[string]bool{".mp4": true, ".mkv": true, ".mov": true, ".avi": true, ".webm": true}
+	imageExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true}
+
+	isVideo := videoExts[ext]
+	isImage := imageExts[ext]
+
+	if !isVideo && !isImage {
+		return nil, fmt.Errorf("unsupported file type: %s", ext)
+	}
+
+	data := &ImportMediaData{
+		Path:    targetPath,
+		IsVideo: isVideo,
+	}
+
+	if isVideo {
+		ffprobePath, _ := utils.EnsureEngine("ffprobe")
+		if ffprobePath != "" {
+			dur, _ := a.getFFprobeDuration(ffprobePath, targetPath)
+			data.Duration = dur
+			data.ActualDuration = dur
+		}
+	} else {
+		data.Duration = 2.0
+		data.ActualDuration = 0
+	}
+
+	a.LogToUI("SUCCESS", fmt.Sprintf("[Import] Metadata detected: %s", filepath.Base(targetPath)))
+	return data, nil
+}
+
+func (a *App) ImportMediaFile(taskID string, taskName string, taskType string, subName string, settings map[string]interface{}, sourcePath string) (*ImportMediaData, error) {
+	if sourcePath == "" {
+		return nil, fmt.Errorf("source path is empty")
+	}
+
+	if _, err := os.Stat(sourcePath); err != nil {
+		return nil, fmt.Errorf("source file not found: %v", err)
+	}
+
+	finalDir := a.pipeline.ResolveFinalDir(taskName, taskType, subName, settings)
+	importDir := filepath.Join(finalDir, "imports")
+	if _, err := os.Stat(importDir); os.IsNotExist(err) {
+		os.MkdirAll(importDir, 0755)
+	}
+
+	ext := strings.ToLower(filepath.Ext(sourcePath))
+	fileName := fmt.Sprintf("import_%d%s", time.Now().UnixNano(), ext)
+	targetPath := filepath.Join(importDir, fileName)
+
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return nil, err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(targetPath)
+	if err != nil {
+		return nil, err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return a.getMediaMetadata(targetPath, ext)
+}
+
+func (a *App) getFFprobeDuration(ffprobePath, path string) (float64, error) {
+	cmd := exec.Command(ffprobePath, "-v", "error", "-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1", path)
+	utils.PrepareHiddenCmd(cmd)
+
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+	var dur float64
+	_, err = fmt.Sscanf(strings.TrimSpace(string(out)), "%f", &dur)
+	return dur, err
+}
+
+// SelectFiles opens a native file dialog and returns selected paths
+func (a *App) SelectFiles() ([]string, error) {
+	return wruntime.OpenMultipleFilesDialog(a.ctx, wruntime.OpenDialogOptions{
+		Title: "Select Media Files",
+		Filters: []wruntime.FileFilter{
+			{DisplayName: "Media Files", Pattern: "*.jpg;*.jpeg;*.png;*.webp;*.mp4;*.mkv;*.mov;*.avi;*.webm"},
+		},
+	})
+}
+
 func (a *App) ReadFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

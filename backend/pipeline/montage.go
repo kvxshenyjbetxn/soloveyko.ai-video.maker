@@ -494,8 +494,54 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		// Block until result received or timeout/context cancel
 		select {
 		case actionData := <-resChan:
-			// Parse modified plan if we get new durations from UI
-			if strings.HasPrefix(actionData, "confirm:") {
+			// Parse modified plan if we get new durations/files from UI
+			if strings.HasPrefix(actionData, "confirm_v2:") {
+				mainParts := strings.Split(actionData, ";segments:")
+				clipStr := strings.TrimPrefix(mainParts[0], "confirm_v2:")
+				clipParts := strings.Split(clipStr, "::")
+				
+				var newVisualFiles []string
+				var newEffectiveDurs []float64
+				
+				for _, cp := range clipParts {
+					subParts := strings.Split(cp, "|")
+					if len(subParts) == 3 {
+						path := subParts[0]
+						dur, _ := strconv.ParseFloat(subParts[1], 64)
+						// subParts[2] is type 'v' or 'i', but we verify by extension or path
+						newVisualFiles = append(newVisualFiles, path)
+						newEffectiveDurs = append(newEffectiveDurs, dur)
+					}
+				}
+				
+				if len(newVisualFiles) > 0 {
+					visualFiles = newVisualFiles
+					effectiveDurs = newEffectiveDurs
+					numFiles = len(visualFiles)
+				}
+
+				if len(mainParts) > 1 {
+					segStrs := strings.Split(mainParts[1], "|")
+					var newSegments []MontageSegment
+					var totalAudio float64
+					for _, s := range segStrs {
+						coords := strings.Split(s, ",")
+						if len(coords) == 2 {
+							st, _ := strconv.ParseFloat(coords[0], 64)
+							en, _ := strconv.ParseFloat(coords[1], 64)
+							if en > st {
+								newSegments = append(newSegments, MontageSegment{Start: st, End: en})
+								totalAudio += (en - st)
+							}
+						}
+					}
+					if len(newSegments) > 0 {
+						audioSegments = newSegments
+						audioDur = totalAudio
+					}
+				}
+				s.log("SUCCESS", fmt.Sprintf("[Control] Montage updated (V2). Audio length: %.2fs, Clips: %d", audioDur, numFiles), id, taskLabel)
+			} else if strings.HasPrefix(actionData, "confirm:") {
 				mainParts := strings.Split(actionData, ";segments:")
 				parts := strings.Split(strings.TrimPrefix(mainParts[0], "confirm:"), ",")
 				for i, p := range parts {
@@ -505,6 +551,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						}
 					}
 				}
+				// (rest of confirm: parsing remains same, segments handling follows)
 				if len(mainParts) > 1 {
 					segStrs := strings.Split(mainParts[1], "|")
 					var newSegments []MontageSegment

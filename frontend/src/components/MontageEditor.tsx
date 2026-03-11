@@ -57,6 +57,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
     const [isPlaying, setIsPlaying] = useState<boolean>(false);
     const [volume, setVolume] = useState<number>(0.8);
+    const [activeInfoTab, setActiveInfoTab] = useState<'library' | 'stats'>('library');
     const [selection, setSelection] = useState<{ start: number | null, end: number | null }>({ start: null, end: null });
     const [audioSegments, setAudioSegments] = useState<MontageSegment[]>([]);
     const [isCuttingMode, setIsCuttingMode] = useState<boolean>(false);
@@ -67,6 +68,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const previewVideoRef = useRef<HTMLVideoElement>(null);
     const previewAudioRef = useRef<HTMLAudioElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const poolRef = useRef<HTMLDivElement>(null);
     const requestRef = useRef<number>();
     const lastTimeRef = useRef<number>(0);
 
@@ -82,6 +84,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [regeneratingIndices, setRegeneratingIndices] = useState<Set<number>>(new Set());
     const [clipBusters, setClipBusters] = useState<Record<string, number>>({});
     const [prompts, setPrompts] = useState<string[]>([]);
+    const [mediaPool, setMediaPool] = useState<MontageClip[]>([]);
+    const [isDraggingFromPool, setIsDraggingFromPool] = useState<MontageClip | null>(null);
+    const [dropPreview, setDropPreview] = useState<number | null>(null);
 
     // Initial Load
     useEffect(() => {
@@ -113,6 +118,25 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             }
         }
     }, [task.montagePlanData]);
+
+    // Safety: Lock total duration to audio duration
+    useEffect(() => {
+        if (!plan || clips.length === 0) return;
+        const currentTotal = clips.reduce((sum, c) => sum + c.duration, 0);
+        const targetTotal = plan.audioDuration;
+        if (Math.abs(currentTotal - targetTotal) > 0.005) {
+            setClips(prev => {
+                if (prev.length === 0) return prev;
+                const next = [...prev];
+                const lastIdx = next.length - 1;
+                const diff = targetTotal - currentTotal;
+                if (next[lastIdx].duration + diff > 0.05) {
+                    next[lastIdx] = { ...next[lastIdx], duration: next[lastIdx].duration + diff };
+                }
+                return next;
+            });
+        }
+    }, [clips, plan]);
 
     // Subtitle Fetching & Parsing
     useEffect(() => {
@@ -368,22 +392,16 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
 
     const handleDeleteClip = useCallback((idx: number) => {
         setClips(prevClips => {
+            if (prevClips.length <= 1) return prevClips;
             const newClips = [...prevClips];
-            if (newClips.length <= 1) return prevClips; // Don't delete last clip
-
             const removedDuration = newClips[idx].duration;
+            
+            // Re-allocate duration to the neighbor to keep total duration IDENTICAL
+            // Neighbor lengths change, but OTHER clips on the timeline don't shift!
             if (idx > 0) {
-                // Re-allocate to previous clip
-                newClips[idx - 1] = { 
-                    ...newClips[idx - 1], 
-                    duration: newClips[idx - 1].duration + removedDuration 
-                };
-            } else if (idx < newClips.length - 1) {
-                // Re-allocate to next clip (if it's the first clip)
-                newClips[idx + 1] = { 
-                    ...newClips[idx + 1], 
-                    duration: newClips[idx + 1].duration + removedDuration 
-                };
+                newClips[idx - 1] = { ...newClips[idx - 1], duration: newClips[idx - 1].duration + removedDuration };
+            } else {
+                newClips[idx + 1] = { ...newClips[idx + 1], duration: newClips[idx + 1].duration + removedDuration };
             }
             newClips.splice(idx, 1);
             return newClips;
@@ -440,6 +458,109 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             setRegIdx(null);
         }
     }, [regIdx, clips]);
+
+    const importFiles = useCallback(async (paths: string[]) => {
+        for (const path of paths) {
+            try {
+                // @ts-ignore
+                const res = await window.go.main.App.ImportMediaFile(
+                    task.id, task.folderName, task.type, task.subName, task.settings || {}, path
+                );
+                if (res) {
+                    setMediaPool(prev => [...prev, {
+                        path: res.path,
+                        duration: res.duration,
+                        isVideo: res.isVideo,
+                        actualDuration: res.actualDuration
+                    }]);
+                }
+            } catch (e) {
+                console.error("Import failed for", path, e);
+            }
+        }
+    }, [task]);
+
+    const handleAddMedia = async () => {
+        try {
+            // @ts-ignore
+            const paths = await window.go.main.App.SelectFiles();
+            if (paths && paths.length > 0) {
+                await importFiles(paths);
+            }
+        } catch (err) {
+            console.error("Failed to pick files:", err);
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.multiple = true;
+            input.accept = 'image/*,video/*';
+            input.onchange = async (e: any) => {
+                const files = Array.from(e.target.files || []) as any[];
+                const paths = files.map(f => f.path).filter(p => !!p);
+                if (paths.length > 0) await importFiles(paths);
+            };
+            input.click();
+        }
+    };
+
+    const [isHoveringPool, setIsHoveringPool] = useState(false);
+
+    const handleInternalDragStart = (item: MontageClip) => {
+        setIsDraggingFromPool(item);
+    };
+
+    const handleInternalDrop = useCallback((dropTime: number) => {
+        if (!isDraggingFromPool) return;
+        
+        setClips(prev => {
+            const next: MontageClip[] = [];
+            let currentTimePos = 0;
+            let targetIdx = -1;
+
+            // 1. Find the clip being dropped on
+            for (let i = 0; i < prev.length; i++) {
+                const start = currentTimePos;
+                const end = currentTimePos + prev[i].duration;
+                if (dropTime >= start && dropTime < end) {
+                    targetIdx = i;
+                    break;
+                }
+                currentTimePos += prev[i].duration;
+            }
+
+            if (targetIdx === -1) return prev;
+
+            // 2. Perform the split
+            const targetClip = prev[targetIdx];
+            const targetStart = prev.slice(0, targetIdx).reduce((s, c) => s + c.duration, 0);
+            const beforeDur = dropTime - targetStart;
+            
+            // New clip takes exactly 2 seconds from the target clip ONLY
+            // This ensures NO neighbors move or change duration!
+            const newClipDur = Math.min(2.0, targetClip.duration - 0.2); 
+            
+            if (newClipDur <= 0.1) {
+                // If the target is too small, just replace it entirely
+                return prev.map((c, i) => i === targetIdx ? { ...isDraggingFromPool, duration: c.duration } : c);
+            }
+
+            const afterDur = targetClip.duration - beforeDur - newClipDur;
+
+            for (let i = 0; i < prev.length; i++) {
+                if (i === targetIdx) {
+                    if (beforeDur > 0.05) next.push({ ...targetClip, duration: beforeDur });
+                    next.push({ ...isDraggingFromPool, duration: newClipDur });
+                    if (afterDur > 0.05) next.push({ ...targetClip, duration: afterDur });
+                } else {
+                    next.push(prev[i]);
+                }
+            }
+
+            return next;
+        });
+        
+        setIsDraggingFromPool(null);
+        setDropPreview(null);
+    }, [isDraggingFromPool]);
 
     // Keyboard shortcuts
     const actionRef = useRef({ handleCutSelection, handleMarkIn, handleMarkOut, handleTogglePlay });
@@ -637,26 +758,95 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                             ) : <div className="montage-preview-placeholder">No preview</div>}
                         </div>
                         <div className="montage-info-panel">
-                            <div className="info-item"><span className="info-label">Clips Count:</span><span className="info-value">{clips.length} items</span></div>
-                            <div className="info-item"><span className="info-label">Current Duration:</span><span className="info-value">{totalTimelineDuration.toFixed(1)}s</span></div>
+                            <div className="info-tabs">
+                                <button className={`info-tab ${activeInfoTab === 'library' ? 'active' : ''}`} onClick={() => setActiveInfoTab('library')}>Library</button>
+                                <button className={`info-tab ${activeInfoTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveInfoTab('stats')}>Stats</button>
+                                {activeInfoTab === 'library' && (
+                                    <button className="add-files-btn-mini" onClick={handleAddMedia}>+ Add</button>
+                                )}
+                            </div>
                             
-                            {selection.start !== null && selection.end !== null && (
-                                <div className="cut-preview-stats animate-fade-in">
-                                    <div className="stats-divider" />
-                                    <div className="info-item highlight">
-                                        <span className="info-label">Selection to Cut:</span>
-                                        <span className="info-value">-{Math.abs(selection.end - selection.start).toFixed(2)}s</span>
+                            <div className="media-pool-container">
+                                {activeInfoTab === 'library' ? (
+                                    <>
+                                        <div className="media-library-header-compact">
+                                            <h3 className="media-library-title">Assets</h3>
+                                        </div>
+                                        {mediaPool.length > 0 ? (
+                                            <div className="media-pool-grid">
+                                                {mediaPool.map((m, i) => (
+                                                    <div 
+                                                        key={i} 
+                                                        className="pool-item" 
+                                                        draggable 
+                                                        onDragStart={() => handleInternalDragStart(m)}
+                                                        onDragEnd={() => setIsDraggingFromPool(null)}
+                                                        title={m.path.split(/[\\/]/).pop()}
+                                                    >
+                                                        <div className="pool-thumb-wrapper">
+                                                            {m.isVideo ? (
+                                                                <div className="pool-video-overlay">🎬</div>
+                                                            ) : null}
+                                                            <img src={getUrl(m.path)} alt="thumb" className="pool-thumb-img" />
+                                                        </div>
+                                                        <div className="pool-dur">{m.duration.toFixed(1)}s</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="pool-empty-state">
+                                                <div className="empty-icon">📁</div>
+                                                <p>Empty</p>
+                                                <button className="add-files-btn-center" onClick={handleAddMedia}>Add Files</button>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="project-stats-tab animate-fade-in">
+                                        <div className="stat-card">
+                                            <div className="stat-label">Total Clips</div>
+                                            <div className="stat-value">{clips.length}</div>
+                                        </div>
+                                        <div className="stat-card">
+                                            <div className="stat-label">Project Duration</div>
+                                            <div className="stat-value">{totalTimelineDuration.toFixed(2)}s</div>
+                                        </div>
+                                        <div className="stat-card">
+                                            <div className="stat-label">Audio Sync</div>
+                                            <div className="stat-value">{plan?.audioDuration.toFixed(2)}s</div>
+                                        </div>
+                                        <div className="stat-card">
+                                            <div className="stat-label">Transitions</div>
+                                            <div className="stat-value">{plan?.transDuration}s ({plan?.isFadeFast ? 'Fast' : 'Fade'})</div>
+                                        </div>
                                     </div>
-                                    <div className="info-item">
-                                        <span className="info-label">Duration After Cut:</span>
-                                        <span className="info-value">{(totalTimelineDuration - Math.abs(selection.end - selection.start)).toFixed(2)}s</span>
-                                    </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
                     <div className="montage-timeline-resizer" onMouseDown={handleResizeMouseDown}><div className="resizer-handle-line"></div></div>
-                    <div className="montage-timeline-container" ref={containerRef} onMouseDown={handleMouseDownGlobal} style={{ height: `${timelineHeight}px`, flex: 'none' }}>
+                    <div 
+                        className={`montage-timeline-container ${isDraggingFromPool ? 'accepting-drop' : ''}`} 
+                        ref={containerRef} 
+                        onMouseDown={handleMouseDownGlobal}
+                        onDragOver={(e) => {
+                            if (isDraggingFromPool) {
+                                e.preventDefault();
+                                const rect = containerRef.current!.getBoundingClientRect();
+                                const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 20;
+                                setDropPreview(x / zoom);
+                            }
+                        }}
+                        onDragLeave={() => setDropPreview(null)}
+                        onDrop={(e) => {
+                            if (isDraggingFromPool) {
+                                const rect = containerRef.current!.getBoundingClientRect();
+                                const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 20;
+                                handleInternalDrop(x / zoom);
+                            }
+                        }}
+                        style={{ height: `${timelineHeight}px`, flex: 'none' }}
+                    >
                         <div className="montage-timeline-wrapper" style={{ width: `${totalTimelineDuration * zoom + 100}px`, minWidth: '100%' }}>
                             <div className="montage-timeline-ruler">
                                 {markers}
@@ -689,7 +879,21 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
 
                                 <div className="audio-track-reference" style={{ width: `${totalTimelineDuration * zoom}px` }}><span>Audio Sequence</span></div>
                             </div>
-                            <div className="montage-timeline-tracks"><div className="montage-track">{clipElements}</div></div>
+                            <div className="montage-timeline-tracks">
+                                <div className="montage-track">
+                                    {clipElements}
+                                    {isDraggingFromPool && dropPreview !== null && (
+                                        <div className="timeline-drop-ghost-precise" style={{ left: `${dropPreview * zoom}px`, width: `${isDraggingFromPool.duration * zoom}px` }}>
+                                            <div className="ghost-indicator">DROP TO INSERT</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            {isDraggingFromPool && dropPreview !== null && (
+                                <div className="timeline-insertion-guide" style={{ left: `${dropPreview * zoom}px`, height: '100%' }}>
+                                    <div className="guide-line" />
+                                </div>
+                            )}
                             <div className="montage-playhead" style={{ left: `${currentTime * zoom}px` }}><div className="playhead-handle" /></div>
                         </div>
                     </div>
@@ -697,9 +901,10 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 <div className="montage-editor-footer">
                     <button className="montage-btn secondary" onClick={() => onCancel(task.id)}>{t('common.cancel')}</button>
                     <button className="montage-btn primary" onClick={() => {
-                        const ds = clips.map(c => c.duration.toFixed(3)).join(',');
+                        // Send full clip data to backend so it knows about ADDED/REPLACED files
+                        const clipData = clips.map(c => `${c.path}|${c.duration.toFixed(3)}|${c.isVideo ? 'v' : 'i'}`).join('::');
                         const ss = audioSegments.map(s => `${s.start.toFixed(3)},${s.end.toFixed(3)}`).join('|');
-                        onConfirm(task.id, `confirm:${ds};segments:${ss}`);
+                        onConfirm(task.id, `confirm_v2:${clipData};segments:${ss}`);
                     }}>{t('common.save')}</button>
                 </div>
             </div>

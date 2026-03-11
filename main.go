@@ -8,6 +8,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -39,6 +40,14 @@ func main() {
 		OnStartup: app.startup,
 		Bind: []interface{}{
 			app,
+		},
+		Windows: &windows.Options{
+			WebviewIsTransparent: false,
+			WindowIsTranslucent:  false,
+		},
+		// This enables standard HTML5 Drag & Drop to work and provide file paths via enriched File objects
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop: true,
 		},
 	})
 
