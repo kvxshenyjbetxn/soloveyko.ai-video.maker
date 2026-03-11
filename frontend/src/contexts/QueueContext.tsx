@@ -34,7 +34,7 @@ interface QueueContextType {
     resumeImageControl: () => Promise<void>;
     resumeMontageControl: (id: string, resultData: string) => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
-    closeCompletionModal: () => void; closeImageControlNotification: () => void;
+    closeCompletionModal: () => void; closeImageControlNotification: () => void; closeMontageControlNotification: () => void;
     regeneratingPaths: Set<string>;
     addRegeneratingPath: (path: string) => void;
     removeRegeneratingPath: (path: string) => void;
