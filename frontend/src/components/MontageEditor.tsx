@@ -3,6 +3,7 @@ import { useI18n } from '../contexts/I18nContext';
 import './MontageEditor.css';
 import { QueueTask } from '../contexts/QueueContext';
 import { RegenerateModal } from './RegenerateModal';
+import { OnFileDrop, OnFileDropOff } from '../../wailsjs/runtime/runtime';
 
 interface MontageClip {
     path: string;
@@ -86,9 +87,43 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [prompts, setPrompts] = useState<string[]>([]);
     const [mediaPool, setMediaPool] = useState<MontageClip[]>([]);
     const [isDraggingFromPool, setIsDraggingFromPool] = useState<MontageClip | null>(null);
+    const [isDraggingExternal, setIsDraggingExternal] = useState(false);
     const [dropPreview, setDropPreview] = useState<number | null>(null);
 
-    // Initial Load
+    const importFiles = useCallback(async (paths: string[]) => {
+        for (const path of paths) {
+            try {
+                // @ts-ignore
+                const res = await window.go.main.App.ImportMediaFile(
+                    task.id, task.folderName, task.type, task.subName, task.settings || {}, path
+                );
+                if (res) {
+                    setMediaPool(prev => [...prev, {
+                        path: res.path,
+                        duration: res.duration,
+                        isVideo: res.isVideo,
+                        actualDuration: res.actualDuration
+                    }]);
+                }
+            } catch (e) {
+                console.error("Import failed for", path, e);
+            }
+        }
+    }, [task]);
+
+    // Initial Load & File Drop Registration
+    useEffect(() => {
+        const handleFileDrop = (x: number, y: number, paths: string[]) => {
+            setIsDraggingExternal(false);
+            if (paths && paths.length > 0) {
+                importFiles(paths);
+            }
+        };
+
+        OnFileDrop(handleFileDrop, true);
+        return () => OnFileDropOff();
+    }, [importFiles]);
+
     useEffect(() => {
         if (task.montagePlanData) {
             try {
@@ -459,27 +494,6 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         }
     }, [regIdx, clips]);
 
-    const importFiles = useCallback(async (paths: string[]) => {
-        for (const path of paths) {
-            try {
-                // @ts-ignore
-                const res = await window.go.main.App.ImportMediaFile(
-                    task.id, task.folderName, task.type, task.subName, task.settings || {}, path
-                );
-                if (res) {
-                    setMediaPool(prev => [...prev, {
-                        path: res.path,
-                        duration: res.duration,
-                        isVideo: res.isVideo,
-                        actualDuration: res.actualDuration
-                    }]);
-                }
-            } catch (e) {
-                console.error("Import failed for", path, e);
-            }
-        }
-    }, [task]);
-
     const handleAddMedia = async () => {
         try {
             // @ts-ignore
@@ -500,6 +514,10 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             };
             input.click();
         }
+    };
+
+    const handleRemoveFromPool = (idx: number) => {
+        setMediaPool(prev => prev.filter((_, i) => i !== idx));
     };
 
     const [isHoveringPool, setIsHoveringPool] = useState(false);
@@ -761,12 +779,28 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                             <div className="info-tabs">
                                 <button className={`info-tab ${activeInfoTab === 'library' ? 'active' : ''}`} onClick={() => setActiveInfoTab('library')}>Library</button>
                                 <button className={`info-tab ${activeInfoTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveInfoTab('stats')}>Stats</button>
-                                {activeInfoTab === 'library' && (
-                                    <button className="add-files-btn-mini" onClick={handleAddMedia}>+ Add</button>
-                                )}
                             </div>
                             
-                            <div className="media-pool-container">
+                            <div 
+                                className={`media-pool-container ${isDraggingExternal ? 'dragging-external' : ''}`} 
+                                ref={poolRef}
+                                onDragOver={(e) => {
+                                    if (e.dataTransfer.types.includes('Files')) {
+                                        e.preventDefault();
+                                        setIsDraggingExternal(true);
+                                    }
+                                }}
+                                onDragLeave={() => setIsDraggingExternal(false)}
+                                onDrop={() => setIsDraggingExternal(false)}
+                            >
+                                {isDraggingExternal && (
+                                    <div className="media-pool-import-overlay">
+                                        <div className="import-overlay-content">
+                                            <div className="import-icon">📥</div>
+                                            <div className="import-text">Drop to Import</div>
+                                        </div>
+                                    </div>
+                                )}
                                 {activeInfoTab === 'library' ? (
                                     <>
                                         <div className="media-library-header-compact">
@@ -783,6 +817,13 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                         onDragEnd={() => setIsDraggingFromPool(null)}
                                                         title={m.path.split(/[\\/]/).pop()}
                                                     >
+                                                        <button 
+                                                            className="pool-item-delete" 
+                                                            onClick={(e) => { e.stopPropagation(); handleRemoveFromPool(i); }}
+                                                            title="Remove from pool"
+                                                        >
+                                                            ✕
+                                                        </button>
                                                         <div className="pool-thumb-wrapper">
                                                             {m.isVideo ? (
                                                                 <div className="pool-video-overlay">🎬</div>
