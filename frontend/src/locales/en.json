@@ -590,7 +590,9 @@
             "path": "Paths",
             "subtitles": "Subtitle Style",
             "control": "Control",
-            "custom_stages": "Custom Stages"
+            "custom_stages": "Custom Stages",
+            "templates": "Pipeline Templates",
+            "text": "Text Settings"
         },
         "model": "Model",
         "model.default": "Default (GPT-4o)",
@@ -633,6 +635,8 @@
         },
         "hide_settings": "Hide Settings",
         "show_settings": "Show Settings",
+        "show_dashboard": "Show Dashboard",
+        "dashboard_title": "Pipeline Dashboard",
         "empty_state": "Pipeline settings will appear here...",
         "stage": {
             "translate": "1. Translation",

@@ -28,6 +28,7 @@ import { ImageSection } from './pipeline-sidebar/ImageSection';
 import { MontageSection } from './pipeline-sidebar/MontageSection';
 import { CustomStagesSection } from './pipeline-sidebar/CustomStagesSection';
 import { SidebarFooter } from './pipeline-sidebar/SidebarFooter';
+import { PipelineDashboard } from './PipelineDashboard';
 
 interface PipelineSidebarProps {
     type: 'translate' | 'rewrite' | 'voiceover';
@@ -59,6 +60,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [pollinationsModels, setPollinationsModels] = useState<string[]>([]);
     const [loadingPollinationsModels, setLoadingPollinationsModels] = useState(false);
     const [edgeTTSVoices, setEdgeTTSVoices] = useState<any[]>([]);
+    const [showDashboard, setShowDashboard] = useState(false);
 
     const sidebarRef = useRef<HTMLDivElement>(null);
     const lastSavedRef = useRef<string>("");
@@ -292,8 +294,8 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 const modelList = orModels || [];
 
                 if (modelList.length > 0) {
-                    if (!s.translateModel || s.translateModel === "") { s.translateModel = modelList[0]; updated = true; }
-                    if (!s.rewriteModel || s.rewriteModel === "") { s.rewriteModel = modelList[0]; updated = true; }
+                    if (!s.translateModel || s.translateModel === "" || !modelList.includes(s.translateModel)) { s.translateModel = modelList[0]; updated = true; }
+                    if (!s.rewriteModel || s.rewriteModel === "" || !modelList.includes(s.rewriteModel)) { s.rewriteModel = modelList[0]; updated = true; }
                 }
 
                 if (openRouterKeys.length > 0) {
@@ -1038,65 +1040,162 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
     if (!settings) return null;
 
     const templatesCollapsedField = type === 'translate' ? 'translateTemplatesCollapsed' : (type === 'rewrite' ? 'rewriteTemplatesCollapsed' : 'voiceoverTemplatesCollapsed');
+    const isTranslate = type === 'translate';
+    const isRewrite = type === 'rewrite';
 
     return (
-        <aside className="pipeline-sidebar" ref={sidebarRef} style={{ width: `${isOpen ? (settings.sidebarWidth || 320) : 0}px` }}>
-            <div className={`sidebar-resizer ${isResizing ? 'is-resizing' : ''}`} onMouseDown={(e) => { setIsResizing(true); e.preventDefault(); }} />
-            <div className="sidebar-clipper">
-                <SidebarHeader type={type} settings={settings} handleChange={handleChange} handleSaveTemplate={handleSaveTemplate} />
-                <div className="pipeline-sidebar-content">
-                    <TemplatesSection
-                        type={type} templates={templates} selectedTemplateIds={selectedTemplateIds}
-                        toggleTemplate={(id) => setSelectedTemplateIds(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])}
-                        applyTemplate={applyTemplate} setTemplateToDelete={setTemplateToDelete}
-                        isCollapsed={settings[templatesCollapsedField]}
-                        onToggleCollapse={(collapsed) => handleChange(templatesCollapsedField, collapsed)}
-                        setCurrentPath={setCurrentPath}
+        <>
+            <aside 
+                className="pipeline-sidebar" 
+                ref={sidebarRef} 
+                style={{ width: `${isOpen ? (settings.sidebarWidth || 320) : 0}px` }}
+            >
+                <div 
+                    className={`sidebar-resizer ${isResizing ? 'is-resizing' : ''}`} 
+                    onMouseDown={(e) => { setIsResizing(true); e.preventDefault(); }} 
+                />
+                
+                <div className="sidebar-clipper">
+                    <SidebarHeader 
+                        type={type} 
+                        settings={settings} 
+                        handleChange={handleChange} 
+                        handleSaveTemplate={handleSaveTemplate} 
                     />
-                    <ControlSection settings={settings} handleChange={handleChange} />
-                    <ApiSection
-                        type={type} settings={settings} handleChange={handleChange}
-                        openRouterKeys={openRouterKeys} elevenLabsBotKeys={elevenLabsBotKeys} elevenLabsUnlimKeys={elevenLabsUnlimKeys}
-                        elevenLabsUAKeys={elevenLabsUAKeys} voiceMakerKeys={voiceMakerKeys} pollinationsKeys={pollinationsKeys}
-                        elevenLabsImageKeys={elevenLabsImageKeys}
-                        fetchVoiceTemplates={fetchVoiceTemplates} fetchVoiceMakerVoices={fetchVoiceMakerVoices} setCurrentPath={setCurrentPath}
+                    
+                    <div className="pipeline-sidebar-content">
+                        <TemplatesSection
+                            type={type} 
+                            templates={templates} 
+                            selectedTemplateIds={selectedTemplateIds}
+                            toggleTemplate={(id) => setSelectedTemplateIds(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])}
+                            applyTemplate={applyTemplate} 
+                            setTemplateToDelete={setTemplateToDelete}
+                            isCollapsed={settings[templatesCollapsedField]}
+                            onToggleCollapse={(collapsed) => handleChange(templatesCollapsedField, collapsed)}
+                            setCurrentPath={setCurrentPath}
+                        />
+
+                        <ControlSection settings={settings} handleChange={handleChange} />
+
+                        <ApiSection
+                            type={type} 
+                            settings={settings} 
+                            handleChange={handleChange}
+                            openRouterKeys={openRouterKeys || []} 
+                            elevenLabsBotKeys={elevenLabsBotKeys || []} 
+                            elevenLabsUnlimKeys={elevenLabsUnlimKeys || []}
+                            elevenLabsUAKeys={elevenLabsUAKeys || []} 
+                            voiceMakerKeys={voiceMakerKeys || []} 
+                            pollinationsKeys={pollinationsKeys || []}
+                            elevenLabsImageKeys={elevenLabsImageKeys || []}
+                            fetchVoiceTemplates={fetchVoiceTemplates} 
+                            fetchVoiceMakerVoices={fetchVoiceMakerVoices} 
+                            setCurrentPath={setCurrentPath}
+                        />
+
+                        <PathSection 
+                            type={type} 
+                            settings={settings} 
+                            handleChange={handleChange} 
+                            handleSelectPath={handleSelectPath} 
+                        />
+
+                        {(isTranslate || isRewrite) && (
+                            <>
+                                <TextSection 
+                                    type={type} 
+                                    settings={settings} 
+                                    handleChange={handleChange} 
+                                    models={models || []} 
+                                    renderValueOrInput={renderValueOrInput} 
+                                    setCurrentPath={setCurrentPath} 
+                                />
+                                <CustomStagesSection 
+                                    settings={settings} 
+                                    handleChange={handleChange} 
+                                    models={models || []} 
+                                />
+                            </>
+                        )}
+
+
+                        <VoiceoverSection
+                            settings={settings} 
+                            handleChange={handleChange} 
+                            setSettings={setSettings}
+                            fetchVoiceTemplates={fetchVoiceTemplates} 
+                            fetchVoiceMakerVoices={fetchVoiceMakerVoices} 
+                            fetchEdgeTTSVoices={fetchEdgeTTSVoices}
+                            voiceTemplates={voiceTemplates || []} 
+                            voiceMakerVoices={voiceMakerVoices || []} 
+                            edgeTTSVoices={edgeTTSVoices || []} 
+                            loadingTemplates={loadingTemplates}
+                        />
+
+                        <ImageSection
+                            settings={settings} 
+                            handleChange={handleChange} 
+                            setSettings={setSettings}
+                            fetchPollinationsModels={fetchPollinationsModels} 
+                            pollinationsModels={pollinationsModels || []}
+                            loadingPollinationsModels={loadingPollinationsModels} 
+                            estimatedChunks={estimatedChunks}
+                            content={content} 
+                            models={models || []} 
+                            renderValueOrInput={renderValueOrInput} 
+                            setCurrentPath={setCurrentPath}
+                            elevenLabsImageKeys={elevenLabsImageKeys || []}
+                        />
+
+                        <SubtitleSection
+                            settings={settings} 
+                            handleChange={handleChange} 
+                            setSettings={setSettings}
+                            setCurrentPath={setCurrentPath}
+                        />
+
+                        <MontageSection
+                            settings={settings} 
+                            handleChange={handleChange} 
+                            setSettings={setSettings}
+                            setCurrentPath={setCurrentPath}
+                        />
+                    </div>
+
+                    <SidebarFooter 
+                        type={type} 
+                        content={content} 
+                        selectedTemplateIds={selectedTemplateIds} 
+                        templates={templates} 
+                        setIsModalOpen={setIsModalOpen} 
                     />
-                    <PathSection type={type} settings={settings} handleChange={handleChange} handleSelectPath={handleSelectPath} />
-
-                    {(type === 'translate' || type === 'rewrite') && (
-                        <>
-                            <TextSection type={type} settings={settings} handleChange={handleChange} models={models} renderValueOrInput={renderValueOrInput} setCurrentPath={setCurrentPath} />
-                            <CustomStagesSection settings={settings} handleChange={handleChange} models={models} />
-                        </>
-                    )}
-
-                    <VoiceoverSection
-                        settings={settings} handleChange={handleChange} setSettings={setSettings}
-                        fetchVoiceTemplates={fetchVoiceTemplates} fetchVoiceMakerVoices={fetchVoiceMakerVoices} fetchEdgeTTSVoices={fetchEdgeTTSVoices}
-                        voiceTemplates={voiceTemplates} voiceMakerVoices={voiceMakerVoices} edgeTTSVoices={edgeTTSVoices} loadingTemplates={loadingTemplates}
-                    />
-
-                    <ImageSection
-                        settings={settings} handleChange={handleChange} setSettings={setSettings}
-                        fetchPollinationsModels={fetchPollinationsModels} pollinationsModels={pollinationsModels}
-                        loadingPollinationsModels={loadingPollinationsModels} estimatedChunks={estimatedChunks}
-                        content={content} models={models} renderValueOrInput={renderValueOrInput} setCurrentPath={setCurrentPath}
-                        elevenLabsImageKeys={elevenLabsImageKeys}
-                    />
-
-                    <SubtitleSection
-                        settings={settings} handleChange={handleChange} setSettings={setSettings}
-                        setCurrentPath={setCurrentPath}
-                    />
-
-                    <MontageSection
-                        settings={settings} handleChange={handleChange} setSettings={setSettings}
-                        setCurrentPath={setCurrentPath}
-                    />
-
                 </div>
-                <SidebarFooter type={type} content={content} selectedTemplateIds={selectedTemplateIds} templates={templates} setIsModalOpen={setIsModalOpen} />
-            </div>
+
+                <button 
+                    className={`sidebar-floating-toggle ${isOpen ? 'is-open' : ''}`} 
+                    onClick={onToggle} 
+                    title={isOpen ? t('pipeline.hide_settings') : t('pipeline.show_settings')}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                </button>
+
+                <button 
+                    className={`sidebar-dashboard-toggle ${showDashboard ? 'is-active' : ''}`} 
+                    onClick={() => setShowDashboard(true)} 
+                    title={t('pipeline.dashboard_title') || "Pipeline Dashboard"}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                </button>
+            </aside>
 
             <TaskNameModal
                 isOpen={isModalOpen}
@@ -1107,13 +1206,12 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 onConfirm={handleAddTask}
                 defaultName={historyOverride?.taskName}
             />
+
             {existingFilesData && (
                 <ExistingFilesModal
                     isOpen={true}
                     data={existingFilesData}
                     onConfirm={(skip: string[]) => {
-                        // If some found stages are NOT in the final 'skip' list,
-                        // it means the user wants to regenerate them.
                         const allFound = new Set<string>();
                         existingFilesData.forEach((d: any) => (d.foundStages || []).forEach((s: string) => allFound.add(s)));
 
@@ -1142,10 +1240,54 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                     }}
                 />
             )}
-            <button className={`sidebar-floating-toggle ${isOpen ? 'is-open' : ''}`} onClick={onToggle} title={isOpen ? t('pipeline.hide_settings') : t('pipeline.show_settings')}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
-            </button>
-            <ConfirmModal isOpen={!!templateToDelete} onClose={() => setTemplateToDelete(null)} onConfirm={handleConfirmDelete} title={t('common.delete')} message={t('templatesTab.delete_confirm')} />
-        </aside>
+
+            <PipelineDashboard
+                type={type}
+                isOpen={showDashboard}
+                onClose={() => setShowDashboard(false)}
+                settings={settings}
+                handleChange={handleChange}
+                setSettings={setSettings}
+                content={content}
+                templates={templates}
+                selectedTemplateIds={selectedTemplateIds}
+                setSelectedTemplateIds={setSelectedTemplateIds}
+                applyTemplate={applyTemplate}
+                handleSaveTemplate={handleSaveTemplate}
+                setTemplateToDelete={setTemplateToDelete}
+                handleAddTask={handleAddTask}
+                setIsModalOpen={setIsModalOpen}
+                setCurrentPath={setCurrentPath}
+                openRouterKeys={openRouterKeys || []}
+                elevenLabsBotKeys={elevenLabsBotKeys || []}
+                elevenLabsUnlimKeys={elevenLabsUnlimKeys || []}
+                elevenLabsUAKeys={elevenLabsUAKeys || []}
+                voiceMakerKeys={voiceMakerKeys || []}
+                pollinationsKeys={pollinationsKeys || []}
+                elevenLabsImageKeys={elevenLabsImageKeys || []}
+                models={models || []}
+                voiceTemplates={voiceTemplates || []}
+                voiceMakerVoices={voiceMakerVoices || []}
+                edgeTTSVoices={edgeTTSVoices || []}
+                pollinationsModels={pollinationsModels || []}
+                loadingTemplates={loadingTemplates}
+                loadingPollinationsModels={loadingPollinationsModels}
+                estimatedChunks={estimatedChunks}
+                fetchVoiceTemplates={fetchVoiceTemplates}
+                fetchVoiceMakerVoices={fetchVoiceMakerVoices}
+                fetchEdgeTTSVoices={fetchEdgeTTSVoices}
+                fetchPollinationsModels={fetchPollinationsModels}
+                handleSelectPath={handleSelectPath}
+                renderValueOrInput={renderValueOrInput}
+            />
+
+            <ConfirmModal 
+                isOpen={!!templateToDelete} 
+                onClose={() => setTemplateToDelete(null)} 
+                onConfirm={handleConfirmDelete} 
+                title={t('common.delete')} 
+                message={t('templatesTab.delete_confirm')} 
+            />
+        </>
     );
 };

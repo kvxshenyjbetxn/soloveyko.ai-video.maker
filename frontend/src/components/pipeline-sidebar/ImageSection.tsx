@@ -14,6 +14,8 @@ interface ImageSectionProps {
     renderValueOrInput: (field: string, value: number, isFloat: boolean) => React.ReactNode;
     setCurrentPath?: (path: string) => void;
     elevenLabsImageKeys?: any[];
+    isCollapsed?: boolean;
+    onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 const ImageIcon = () => (
@@ -25,10 +27,22 @@ const ImageIcon = () => (
 );
 
 export const ImageSection: React.FC<ImageSectionProps> = ({
-    settings, handleChange, setSettings, fetchPollinationsModels, pollinationsModels, loadingPollinationsModels, estimatedChunks, content, models, renderValueOrInput, setCurrentPath, elevenLabsImageKeys
+    settings, handleChange, setSettings, fetchPollinationsModels, pollinationsModels, loadingPollinationsModels, estimatedChunks, content, models, renderValueOrInput, setCurrentPath, elevenLabsImageKeys,
+    isCollapsed: externalIsCollapsed, onToggleCollapse
 }) => {
     const { t } = useI18n();
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+
+    const internalIsCollapsed = settings.imageCollapsed;
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
+
+    const toggleCollapse = () => {
+        if (onToggleCollapse) {
+            onToggleCollapse(!isCollapsed);
+        } else {
+            handleChange('imageCollapsed', !isCollapsed);
+        }
+    };
 
     React.useEffect(() => {
         if (settings.imageGooglerReferenceImage) {
@@ -49,14 +63,14 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
     }, [settings.imageGooglerReferenceImage]);
 
     return (
-        <div className={`pipeline-stage-container ${settings.imageCollapsed ? 'is-collapsed' : ''}`} >
+        <div className={`pipeline-stage-container ${isCollapsed ? 'is-collapsed' : ''}`} >
             <div
                 className="pipeline-stage-header"
-                onClick={() => handleChange('imageCollapsed', !settings.imageCollapsed)}
+                onClick={toggleCollapse}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.imageCollapsed ? 'rotated' : ''}`}
+                        className={`stage-chevron ${isCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -97,7 +111,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                 </label>
             </div>
 
-            <div className={`stage-settings-content ${settings.imageCollapsed ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
 
                     <div className="settings-group-title" style={{ marginBottom: '16px' }}>

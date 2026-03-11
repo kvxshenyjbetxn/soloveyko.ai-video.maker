@@ -4,6 +4,8 @@ import { useI18n } from '../../contexts/I18nContext';
 interface ControlSectionProps {
     settings: any;
     handleChange: (field: string, value: any) => void;
+    isCollapsed?: boolean;
+    onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 const ControlIcon = () => (
@@ -20,18 +22,32 @@ const ControlIcon = () => (
     </svg>
 );
 
-export const ControlSection: React.FC<ControlSectionProps> = ({ settings, handleChange }) => {
+export const ControlSection: React.FC<ControlSectionProps> = ({ 
+    settings, handleChange,
+    isCollapsed: externalIsCollapsed, onToggleCollapse 
+}) => {
     const { t } = useI18n();
 
+    const internalIsCollapsed = settings.controlCollapsed;
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
+
+    const toggleCollapse = () => {
+        if (onToggleCollapse) {
+            onToggleCollapse(!isCollapsed);
+        } else {
+            handleChange('controlCollapsed', !isCollapsed);
+        }
+    };
+
     return (
-        <div className={`pipeline-stage-container ${settings.controlCollapsed ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${isCollapsed ? 'is-collapsed' : ''}`}>
             <div
                 className="pipeline-stage-header"
-                onClick={() => handleChange('controlCollapsed', !settings.controlCollapsed)}
+                onClick={toggleCollapse}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.controlCollapsed ? 'rotated' : ''}`}
+                        className={`stage-chevron ${isCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -54,7 +70,7 @@ export const ControlSection: React.FC<ControlSectionProps> = ({ settings, handle
                     </div>
                 </div>
             </div>
-            <div className={`stage-settings-content ${settings.controlCollapsed ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     <div className="settings-control">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>

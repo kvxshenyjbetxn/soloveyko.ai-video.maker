@@ -7,6 +7,8 @@ interface TextSectionProps {
     handleChange: (field: string, value: any) => void;
     models: string[];
     renderValueOrInput: (field: string, value: number, isFloat: boolean) => React.ReactNode;
+    isCollapsed?: boolean;
+    onToggleCollapse?: (collapsed: boolean) => void;
     setCurrentPath?: (path: string) => void;
 }
 
@@ -17,14 +19,15 @@ const TextIcon = () => (
 );
 
 export const TextSection: React.FC<TextSectionProps> = ({
-    type, settings, handleChange, models, renderValueOrInput, setCurrentPath
+    type, settings, handleChange, models, renderValueOrInput, isCollapsed: externalIsCollapsed, onToggleCollapse, setCurrentPath
 }) => {
     const { t } = useI18n();
     const isTranslate = type === 'translate';
     const isRewrite = type === 'rewrite';
 
     const isEnabled = isTranslate ? settings.translateEnabled : settings.rewriteEnabled;
-    const isCollapsed = isTranslate ? settings.translateCollapsed : settings.rewriteCollapsed;
+    const internalIsCollapsed = isTranslate ? settings.translateCollapsed : settings.rewriteCollapsed;
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
 
     const modelValue = isTranslate ? settings.translateModel : (isRewrite ? settings.rewriteModel : '');
     const tempValue = (isTranslate ? settings.translateTemperature : settings.rewriteTemperature) ?? 0;
@@ -32,8 +35,12 @@ export const TextSection: React.FC<TextSectionProps> = ({
     const promptValue = isTranslate ? settings.translatePrompt : settings.rewritePrompt;
 
     const toggleCollapse = () => {
-        const field = isTranslate ? 'translateCollapsed' : 'rewriteCollapsed';
-        handleChange(field, !isCollapsed);
+        if (onToggleCollapse) {
+            onToggleCollapse(!isCollapsed);
+        } else {
+            const field = isTranslate ? 'translateCollapsed' : 'rewriteCollapsed';
+            handleChange(field, !isCollapsed);
+        }
     };
 
     const handleToggleEnable = (e: React.ChangeEvent<HTMLInputElement>) => {

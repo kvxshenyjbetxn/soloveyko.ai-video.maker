@@ -13,6 +13,8 @@ interface VoiceoverSectionProps {
     voiceMakerVoices: any[];
     edgeTTSVoices: any[];
     loadingTemplates: boolean;
+    isCollapsed?: boolean;
+    onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 const VoiceIcon = () => (
@@ -25,9 +27,19 @@ const VoiceIcon = () => (
 );
 
 export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
-    settings, handleChange, setSettings, fetchVoiceTemplates, fetchVoiceMakerVoices, fetchEdgeTTSVoices, voiceTemplates, voiceMakerVoices, edgeTTSVoices, loadingTemplates
+    settings, handleChange, setSettings, fetchVoiceTemplates, fetchVoiceMakerVoices, fetchEdgeTTSVoices, voiceTemplates, voiceMakerVoices, edgeTTSVoices, loadingTemplates, isCollapsed: externalIsCollapsed, onToggleCollapse
 }) => {
     const { t } = useI18n();
+
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : settings.voiceoverCollapsed;
+
+    const toggleCollapse = () => {
+        if (onToggleCollapse) {
+            onToggleCollapse(!isCollapsed);
+        } else {
+            handleChange('voiceoverCollapsed', !isCollapsed);
+        }
+    };
 
     React.useEffect(() => {
         if (settings.voiceoverService === 'edgetts' && edgeTTSVoices.length === 0) {
@@ -36,14 +48,14 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
     }, [settings.voiceoverService]);
 
     return (
-        <div className={`pipeline-stage-container ${settings.voiceoverCollapsed ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${isCollapsed ? 'is-collapsed' : ''}`}>
             <div
                 className="pipeline-stage-header"
-                onClick={() => handleChange('voiceoverCollapsed', !settings.voiceoverCollapsed)}
+                onClick={toggleCollapse}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.voiceoverCollapsed ? 'rotated' : ''}`}
+                        className={`stage-chevron ${isCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -84,7 +96,7 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                 </label>
             </div>
 
-            <div className={`stage-settings-content ${settings.voiceoverCollapsed ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     <div className="settings-control">
                         <label className="settings-label">{t('pipeline.voiceover.service') || 'Сервіс озвучки'}</label>

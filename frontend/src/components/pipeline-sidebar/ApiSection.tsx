@@ -14,6 +14,8 @@ interface ApiSectionProps {
     elevenLabsImageKeys: any[];
     fetchVoiceTemplates: (keyID?: string) => void;
     fetchVoiceMakerVoices: (keyID?: string) => void;
+    isCollapsed?: boolean;
+    onToggleCollapse?: (collapsed: boolean) => void;
     setCurrentPath?: (path: string) => void;
 }
 
@@ -25,24 +27,34 @@ const ApiIcon = () => (
 );
 
 export const ApiSection: React.FC<ApiSectionProps> = ({
-    type, settings, handleChange, openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys, elevenLabsImageKeys, fetchVoiceTemplates, fetchVoiceMakerVoices, setCurrentPath
+    type, settings, handleChange, openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys, elevenLabsImageKeys, fetchVoiceTemplates, fetchVoiceMakerVoices, isCollapsed: externalIsCollapsed, onToggleCollapse, setCurrentPath
 }) => {
     const { t } = useI18n();
     const isTranslate = type === 'translate';
     const isRewrite = type === 'rewrite';
 
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : settings.apiCollapsed;
+
+    const toggleCollapse = () => {
+        if (onToggleCollapse) {
+            onToggleCollapse(!isCollapsed);
+        } else {
+            handleChange('apiCollapsed', !isCollapsed);
+        }
+    };
+
     const selectedApiKeyID = isTranslate ? settings.translateOpenRouterKeyID : (isRewrite ? settings.rewriteOpenRouterKeyID : '');
     const selectedElevenLabsBotKeyID = isTranslate ? settings.translateElevenLabsBotKeyID : (isRewrite ? settings.rewriteElevenLabsBotKeyID : settings.voiceoverElevenLabsBotKeyID);
 
     return (
-        <div className={`pipeline-stage-container ${settings.apiCollapsed ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${isCollapsed ? 'is-collapsed' : ''}`}>
             <div
                 className="pipeline-stage-header"
-                onClick={() => handleChange('apiCollapsed', !settings.apiCollapsed)}
+                onClick={toggleCollapse}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.apiCollapsed ? 'rotated' : ''}`}
+                        className={`stage-chevron ${isCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -66,7 +78,7 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                 </div>
             </div>
 
-            <div className={`stage-settings-content ${settings.apiCollapsed ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     <div className="settings-control">
                         <label className="settings-label">{t('settings.api_keys.openrouter')}</label>

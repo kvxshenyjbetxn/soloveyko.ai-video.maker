@@ -6,6 +6,8 @@ interface MontageSectionProps {
     handleChange: (field: string, value: any) => void;
     setSettings: React.Dispatch<React.SetStateAction<any>>;
     setCurrentPath?: (path: string) => void;
+    isCollapsed?: boolean;
+    onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 const MontageIcon = () => (
@@ -32,9 +34,21 @@ const RESOLUTIONS = ["720p", "1080p", "2k"];
 const FPS_OPTIONS = [24, 30, 60];
 
 export const MontageSection: React.FC<MontageSectionProps> = ({
-    settings, handleChange, setSettings, setCurrentPath
+    settings, handleChange, setSettings, setCurrentPath,
+    isCollapsed: externalIsCollapsed, onToggleCollapse
 }) => {
     const { t } = useI18n();
+
+    const internalIsCollapsed = settings.montageCollapsed;
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
+
+    const toggleCollapse = () => {
+        if (onToggleCollapse) {
+            onToggleCollapse(!isCollapsed);
+        } else {
+            handleChange('montageCollapsed', !isCollapsed);
+        }
+    };
 
     // Utility for slider fill
     const getProgress = (val: number, min: number, max: number) => {
@@ -42,14 +56,14 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
     };
 
     return (
-        <div className={`pipeline-stage-container ${settings.montageCollapsed ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${isCollapsed ? 'is-collapsed' : ''}`}>
             <div
                 className="pipeline-stage-header"
-                onClick={() => handleChange('montageCollapsed', !settings.montageCollapsed)}
+                onClick={toggleCollapse}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.montageCollapsed ? 'rotated' : ''}`}
+                        className={`stage-chevron ${isCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -103,7 +117,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                 </div>
             </div>
 
-            <div className={`stage-settings-content ${settings.montageCollapsed ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     <div className="settings-group-title" style={{ marginBottom: '16px' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/></svg>

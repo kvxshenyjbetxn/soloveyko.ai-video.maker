@@ -6,6 +6,9 @@ interface PathSectionProps {
     settings: any;
     handleChange: (field: string, value: any) => void;
     handleSelectPath: () => void;
+    isCollapsed?: boolean;
+    onToggleCollapse?: (collapsed: boolean) => void;
+    setCurrentPath?: (path: string) => void;
 }
 
 const PathIcon = () => (
@@ -14,24 +17,32 @@ const PathIcon = () => (
     </svg>
 );
 
-export const PathSection: React.FC<PathSectionProps> = ({ type, settings, handleChange, handleSelectPath }) => {
+export const PathSection: React.FC<PathSectionProps> = ({ type, settings, handleChange, handleSelectPath, isCollapsed: externalIsCollapsed, onToggleCollapse, setCurrentPath }) => {
     const { t } = useI18n();
-    const isTranslate = type === 'translate';
-    const isRewrite = type === 'rewrite';
-    const isVoiceover = type === 'voiceover';
+    
+    const internalIsCollapsed = settings.pathCollapsed;
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
+
+    const toggleCollapse = () => {
+        if (onToggleCollapse) {
+            onToggleCollapse(!isCollapsed);
+        } else {
+            handleChange('pathCollapsed', !isCollapsed);
+        }
+    };
 
     const outputPath = type === 'rewrite' ? settings?.rewriteOutputPath : settings?.translateOutputPath;
 
     return (
-        <div className={`pipeline-stage-container ${settings.pathCollapsed ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${isCollapsed ? 'is-collapsed' : ''}`}>
             <div
                 className="pipeline-stage-header"
-                onClick={() => handleChange('pathCollapsed', !settings.pathCollapsed)}
+                onClick={toggleCollapse}
                 style={{ cursor: 'pointer' }}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.pathCollapsed ? 'rotated' : ''}`}
+                        className={`stage-chevron ${isCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -55,7 +66,7 @@ export const PathSection: React.FC<PathSectionProps> = ({ type, settings, handle
                 </div>
             </div>
 
-            <div className={`stage-settings-content ${settings.pathCollapsed ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     <div className="settings-control">
                         <label className="settings-label">{t('pipeline.group.path')}</label>

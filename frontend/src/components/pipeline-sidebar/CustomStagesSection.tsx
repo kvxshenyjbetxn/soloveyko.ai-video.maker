@@ -17,6 +17,8 @@ interface CustomStagesSectionProps {
     settings: any;
     handleChange: (field: string, value: any) => void;
     models: string[];
+    isCollapsed?: boolean;
+    onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 const LayersIcon = () => (
@@ -33,13 +35,144 @@ const TrashIcon = () => (
     </svg>
 );
 
-export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settings, handleChange, models }) => {
+const CustomStageItem: React.FC<{ 
+    stage: CustomStage, 
+    onUpdate: (id: string, field: keyof CustomStage, value: any) => void,
+    onDelete: (id: string) => void,
+    models: string[],
+    t: any
+}> = React.memo(({ stage, onUpdate, onDelete, models, t }) => {
+    const [localName, setLocalName] = React.useState(stage.name);
+    const [localPrompt, setLocalPrompt] = React.useState(stage.prompt);
+
+    React.useEffect(() => {
+        setLocalName(stage.name);
+    }, [stage.name]);
+
+    React.useEffect(() => {
+        setLocalPrompt(stage.prompt);
+    }, [stage.prompt]);
+
+    return (
+        <div className="custom-stage-item">
+            <div className="custom-stage-header">
+                <input
+                    type="text"
+                    className="custom-stage-name-input"
+                    value={localName}
+                    onChange={(e) => setLocalName(e.target.value)}
+                    onBlur={() => { if (localName !== stage.name) onUpdate(stage.id, 'name', localName); }}
+                    placeholder={t('pipeline.custom_stages.stage_name')}
+                    onClick={(e) => e.stopPropagation()}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label className="stage-switch" onClick={(e) => e.stopPropagation()}>
+                        <input
+                            type="checkbox"
+                            checked={stage.enabled}
+                            onChange={(e) => onUpdate(stage.id, 'enabled', e.target.checked)}
+                        />
+                        <span className="stage-slider"></span>
+                    </label>
+                    <button
+                        className="delete-stage-btn"
+                        onClick={(e) => { e.stopPropagation(); onDelete(stage.id); }}
+                    >
+                        <TrashIcon />
+                    </button>
+                </div>
+            </div>
+
+            <div className="settings-control">
+                <label className="settings-label">{t('pipeline.custom_stages.data_source')}</label>
+                <select
+                    className="settings-select"
+                    value={stage.dataSource}
+                    onChange={(e) => onUpdate(stage.id, 'dataSource', e.target.value)}
+                >
+                    <option value="text">{t('pipeline.custom_stages.source_text')}</option>
+                    <option value="taskName">{t('pipeline.custom_stages.source_task_name')}</option>
+                </select>
+            </div>
+
+            <div className="settings-control">
+                <label className="settings-label">{t('pipeline.model')}</label>
+                <select
+                    className="settings-select"
+                    value={stage.model || ''}
+                    onChange={(e) => onUpdate(stage.id, 'model', e.target.value)}
+                >
+                    <option value="">{t('pipeline.custom_stages.default_model')}</option>
+                    {models.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+            </div>
+
+            <div className="settings-control">
+                <label className="settings-label">{t('pipeline.temperature')}</label>
+                <div className="settings-slider-container">
+                    <input
+                        type="range"
+                        className="settings-slider"
+                        min="0"
+                        max="2"
+                        step="0.1"
+                        value={stage.temperature || 0}
+                        style={{ '--range-progress': `${((stage.temperature || 0) / 2) * 100}%` } as React.CSSProperties}
+                        onChange={(e) => onUpdate(stage.id, 'temperature', parseFloat(e.target.value))}
+                    />
+                    <span className="settings-slider-value">
+                        {(!stage.temperature || stage.temperature === 0)
+                            ? t('pipeline.custom_stages.default_temp')
+                            : (Number(stage.temperature) || 0).toFixed(1)}
+                    </span>
+                </div>
+            </div>
+
+            <div className="settings-control">
+                <label className="settings-label">{t('pipeline.max_tokens')}</label>
+                <div className="settings-slider-container">
+                    <input
+                        type="range"
+                        className="settings-slider"
+                        min="0"
+                        max="128000"
+                        step="500"
+                        value={stage.maxTokens || 0}
+                        style={{ '--range-progress': `${((stage.maxTokens || 0) / 128000) * 100}%` } as React.CSSProperties}
+                        onChange={(e) => onUpdate(stage.id, 'maxTokens', parseInt(e.target.value))}
+                    />
+                    <span className="settings-slider-value">{stage.maxTokens === 0 ? t('pipeline.max_tokens_unlimited') : stage.maxTokens}</span>
+                </div>
+            </div>
+
+            <div className="settings-control">
+                <label className="settings-label">{t('pipeline.custom_stages.prompt')}</label>
+                <textarea
+                    className="settings-textarea"
+                    style={{ height: '80px' }}
+                    value={localPrompt}
+                    onChange={(e) => setLocalPrompt(e.target.value)}
+                    onBlur={() => { if (localPrompt !== stage.prompt) onUpdate(stage.id, 'prompt', localPrompt); }}
+                    placeholder={t('pipeline.custom_stages.prompt_placeholder')}
+                />
+            </div>
+        </div>
+    );
+});
+
+export const CustomStagesSection: React.FC<CustomStagesSectionProps> = React.memo(({ settings, handleChange, models, isCollapsed: externalIsCollapsed, onToggleCollapse }) => {
     const { t } = useI18n();
     const stages = settings.customStages || [];
-    const isCollapsed = settings.customStagesCollapsed;
+    const internalIsCollapsed = settings.customStagesCollapsed;
+    
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
 
     const toggleCollapse = () => {
-        handleChange('customStagesCollapsed', !isCollapsed);
+        if (onToggleCollapse) {
+            onToggleCollapse(!isCollapsed);
+        } else {
+            handleChange('customStagesCollapsed', !isCollapsed);
+        }
     };
 
     const handleAddStage = () => {
@@ -54,20 +187,23 @@ export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settin
             enabled: true
         };
         handleChange('customStages', [...stages, newStage]);
-        if (isCollapsed) handleChange('customStagesCollapsed', false);
+        if (isCollapsed) {
+            if (onToggleCollapse) onToggleCollapse(false);
+            else handleChange('customStagesCollapsed', false);
+        }
     };
 
-    const handleUpdateStage = (id: string, field: keyof CustomStage, value: any) => {
+    const handleUpdateStage = React.useCallback((id: string, field: keyof CustomStage, value: any) => {
         const newStages = stages.map((s: CustomStage) => s.id === id ? { ...s, [field]: value } : s);
         handleChange('customStages', newStages);
-    };
+    }, [stages, handleChange]);
 
-    const handleDeleteStage = (id: string) => {
+    const handleDeleteStage = React.useCallback((id: string) => {
         if (window.confirm(t('pipeline.custom_stages.delete_confirm'))) {
             const newStages = stages.filter((s: CustomStage) => s.id !== id);
             handleChange('customStages', newStages);
         }
-    };
+    }, [stages, handleChange, t]);
 
     return (
         <div className={`pipeline-stage-container ${isCollapsed ? 'is-collapsed' : ''}`}>
@@ -121,107 +257,14 @@ export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settin
             <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
                 <div className="custom-stages-list">
                     {stages.map((stage: CustomStage) => (
-                        <div key={stage.id} className="custom-stage-item">
-                            <div className="custom-stage-header">
-                                <input
-                                    type="text"
-                                    className="custom-stage-name-input"
-                                    value={stage.name}
-                                    onChange={(e) => handleUpdateStage(stage.id, 'name', e.target.value)}
-                                    placeholder={t('pipeline.custom_stages.stage_name')}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <label className="stage-switch" onClick={(e) => e.stopPropagation()}>
-                                        <input
-                                            type="checkbox"
-                                            checked={stage.enabled}
-                                            onChange={(e) => handleUpdateStage(stage.id, 'enabled', e.target.checked)}
-                                        />
-                                        <span className="stage-slider"></span>
-                                    </label>
-                                    <button
-                                        className="delete-stage-btn"
-                                        onClick={(e) => { e.stopPropagation(); handleDeleteStage(stage.id); }}
-                                    >
-                                        <TrashIcon />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="settings-control">
-                                <label className="settings-label">{t('pipeline.custom_stages.data_source')}</label>
-                                <select
-                                    className="settings-select"
-                                    value={stage.dataSource}
-                                    onChange={(e) => handleUpdateStage(stage.id, 'dataSource', e.target.value)}
-                                >
-                                    <option value="text">{t('pipeline.custom_stages.source_text')}</option>
-                                    <option value="taskName">{t('pipeline.custom_stages.source_task_name')}</option>
-                                </select>
-                            </div>
-
-                            <div className="settings-control">
-                                <label className="settings-label">{t('pipeline.model')}</label>
-                                <select
-                                    className="settings-select"
-                                    value={stage.model || ''}
-                                    onChange={(e) => handleUpdateStage(stage.id, 'model', e.target.value)}
-                                >
-                                    <option value="">{t('pipeline.custom_stages.default_model')}</option>
-                                    {models.map(m => <option key={m} value={m}>{m}</option>)}
-                                </select>
-                            </div>
-
-                            <div className="settings-control">
-                                <label className="settings-label">{t('pipeline.temperature')}</label>
-                                <div className="settings-slider-container">
-                                    <input
-                                        type="range"
-                                        className="settings-slider"
-                                        min="0"
-                                        max="2"
-                                        step="0.1"
-                                        value={stage.temperature || 0}
-                                        style={{ '--range-progress': `${((stage.temperature || 0) / 2) * 100}%` } as React.CSSProperties}
-                                        onChange={(e) => handleUpdateStage(stage.id, 'temperature', parseFloat(e.target.value))}
-                                    />
-                                    <span className="settings-slider-value">
-                                        {(!stage.temperature || stage.temperature === 0)
-                                            ? t('pipeline.custom_stages.default_temp')
-                                            : (Number(stage.temperature) || 0).toFixed(1)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="settings-control">
-                                <label className="settings-label">{t('pipeline.max_tokens')}</label>
-                                <div className="settings-slider-container">
-                                    <input
-                                        type="range"
-                                        className="settings-slider"
-                                        min="0"
-                                        max="128000"
-                                        step="500"
-                                        value={stage.maxTokens || 0}
-                                        style={{ '--range-progress': `${((stage.maxTokens || 0) / 128000) * 100}%` } as React.CSSProperties}
-                                        onChange={(e) => handleUpdateStage(stage.id, 'maxTokens', parseInt(e.target.value))}
-                                    />
-                                    <span className="settings-slider-value">{stage.maxTokens === 0 ? t('pipeline.max_tokens_unlimited') : stage.maxTokens}</span>
-                                </div>
-                            </div>
-
-                            <div className="settings-control">
-                                <label className="settings-label">{t('pipeline.custom_stages.prompt')}</label>
-                                <textarea
-                                    className="settings-textarea"
-                                    style={{ height: '80px' }}
-                                    value={stage.prompt}
-                                    onChange={(e) => handleUpdateStage(stage.id, 'prompt', e.target.value)}
-                                    placeholder={t('pipeline.custom_stages.prompt_placeholder')}
-                                />
-                            </div>
-                        </div>
+                        <CustomStageItem 
+                            key={stage.id} 
+                            stage={stage} 
+                            onUpdate={handleUpdateStage} 
+                            onDelete={handleDeleteStage}
+                            models={models}
+                            t={t}
+                        />
                     ))}
                 </div>
                 <button className="add-stage-btn" onClick={handleAddStage}>
@@ -231,4 +274,4 @@ export const CustomStagesSection: React.FC<CustomStagesSectionProps> = ({ settin
             </div>
         </div>
     );
-};
+});

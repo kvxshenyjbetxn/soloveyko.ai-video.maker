@@ -17,6 +17,8 @@ interface SubtitleSectionProps {
     handleChange: (field: string, value: any) => void;
     setSettings: React.Dispatch<React.SetStateAction<any>>;
     setCurrentPath?: (path: string) => void;
+    isCollapsed?: boolean;
+    onToggleCollapse?: (collapsed: boolean) => void;
 }
 
 const SubtitleIcon = () => (
@@ -28,9 +30,21 @@ const SubtitleIcon = () => (
 );
 
 export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
-    settings, handleChange, setSettings, setCurrentPath
+    settings, handleChange, setSettings, setCurrentPath,
+    isCollapsed: externalIsCollapsed, onToggleCollapse
 }) => {
     const { t } = useI18n();
+
+    const internalIsCollapsed = settings.subtitleCollapsed;
+    const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
+
+    const toggleCollapse = () => {
+        if (onToggleCollapse) {
+            onToggleCollapse(!isCollapsed);
+        } else {
+            handleChange('subtitleCollapsed', !isCollapsed);
+        }
+    };
     const [downloading, setDownloading] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState(0);
     const [downloadStatus, setDownloadStatus] = useState('');
@@ -138,14 +152,14 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
     };
 
     return (
-        <div className={`pipeline-stage-container ${settings.subtitleCollapsed ? 'is-collapsed' : ''}`}>
+        <div className={`pipeline-stage-container ${isCollapsed ? 'is-collapsed' : ''}`}>
             <div
                 className="pipeline-stage-header"
-                onClick={() => handleChange('subtitleCollapsed', !settings.subtitleCollapsed)}
+                onClick={toggleCollapse}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                     <svg
-                        className={`stage-chevron ${settings.subtitleCollapsed ? 'rotated' : ''}`}
+                        className={`stage-chevron ${isCollapsed ? 'rotated' : ''}`}
                         xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
                     >
                         <path d="m6 9 6 6 6-6" />
@@ -199,7 +213,7 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                 </div>
             </div>
 
-            <div className={`stage-settings-content ${settings.subtitleCollapsed ? 'collapsed' : ''}`}>
+            <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
                     <div className="settings-group-title" style={{ marginBottom: '16px' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20v-6M9 20v-10M15 20v-2M18 20v-8M21 20v-4M3 20v-12M6 20v-16"/></svg>

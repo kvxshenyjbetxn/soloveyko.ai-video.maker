@@ -58,6 +58,40 @@
     transform: rotate(180deg);
 }
 
+.sidebar-dashboard-toggle {
+    position: absolute;
+    left: -36px;
+    top: calc(50% + 52px);
+    transform: translateY(-50%);
+    width: 36px;
+    height: 48px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-right: none;
+    border-radius: 12px 0 0 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1000;
+    transition: all 0.3s ease;
+    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-dashboard-toggle:hover {
+    color: var(--accent-primary);
+    background: var(--bg-tertiary);
+    width: 42px;
+    left: -42px;
+}
+
+.sidebar-dashboard-toggle.is-active {
+    color: var(--accent-primary);
+    border-color: var(--accent-primary);
+    background: color-mix(in srgb, var(--accent-primary), transparent 90%);
+}
+
 .sidebar-resizer {
     position: absolute;
     left: -3px;
@@ -350,7 +384,8 @@ input:checked+.stage-slider:before {
     /* Increased to avoid clipping large content */
     opacity: 1;
     transform: translateY(0);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.4s ease-in-out, padding 0.3s ease;
+    will-change: max-height, opacity, transform;
     /* overflow: visible; default, allowed to pop out */
 }
 
@@ -358,12 +393,13 @@ input:checked+.stage-slider:before {
     max-height: 0;
     padding-top: 0;
     padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
     gap: 0;
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-8px) scale(0.98);
     pointer-events: none;
     overflow: hidden;
-    /* Keep hidden only when collapsed */
 }
 
 .stage-status-text {

@@ -589,7 +589,9 @@
             "path": "Пути",
             "subtitles": "Стиль субтитров",
             "control": "Контроль",
-            "custom_stages": "Кастомные этапы"
+            "custom_stages": "Кастомные этапы",
+            "templates": "Шаблоны пайплайнов",
+            "text": "Настройки текста"
         },
         "model": "Модель",
         "model.default": "По умолчанию (GPT-4o)",
@@ -633,6 +635,8 @@
         },
         "hide_settings": "Скрыть настройки",
         "show_settings": "Показать настройки",
+        "show_dashboard": "Показать дашборд",
+        "dashboard_title": "Дашборд пайплайна",
         "empty_state": "Здесь будут настройки пайплайна...",
         "stage": {
             "translate": "1. Перевод",
