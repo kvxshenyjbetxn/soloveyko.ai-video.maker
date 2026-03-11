@@ -179,7 +179,7 @@ function App() {
         await window.go.main.App.ClearAuthKey();
     };
 
-    const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification } = useQueue();
+    const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification, montageControlNotification, closeMontageControlNotification } = useQueue();
     const pendingCount = tasks.filter(t => t.status === 'pending').length;
     const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');
@@ -665,6 +665,17 @@ function App() {
                 title={t('pipeline.image_control_notification.title')}
                 message={t('pipeline.image_control_notification.message')}
                 confirmText={t('pipeline.image_control_notification.go_to_gallery')}
+                isDanger={false}
+                type="info"
+            />
+
+            <ConfirmModal
+                isOpen={montageControlNotification.isOpen}
+                onClose={closeMontageControlNotification}
+                onConfirm={closeMontageControlNotification}
+                title={t('pipeline.montage_control_notification.title')}
+                message={t('pipeline.montage_control_notification.message')}
+                confirmText={t('pipeline.montage_control_notification.ok')}
                 isDanger={false}
                 type="info"
             />

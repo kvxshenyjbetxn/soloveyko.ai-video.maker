@@ -218,6 +218,10 @@ const renderStatusLines = (message: string, isFinished: boolean) => {
     });
 };
 
+const MagicWandIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.21 1.21 0 0 0 1.72 0L21.64 5.36a1.21 1.21 0 0 0 0-1.72Z"></path><path d="m14 7 3 3"></path><path d="M5 6v.01"></path><path d="M19 14v.01"></path><path d="M10 2v.01"></path><path d="M7 21v.01"></path><path d="M14 22v.01"></path></svg>
+);
+
 const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, onOpenMontageEditor, isProcessing, t, resumeTask, logs }: any) => {
     const settings = task.settings || {};
     const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
@@ -238,7 +242,7 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
     return (
         <div className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
             <div
-                className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${task.isAwaitingControl ? 'awaiting-control' : ''}`}
+                className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${task.isAwaitingControl ? 'awaiting-control' : ''} ${task.isAwaitingMontageControl ? 'awaiting-montage-control' : ''}`}
                 onClick={() => !task.isAwaitingControl && onToggle(task.id)}
             >
                 {task.isAwaitingControl && (
@@ -254,8 +258,6 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                 className={`open-folder-task-btn ${task.isAwaitingMontageControl ? 'pulse-btn active' : ''}`}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    // Always allow opening if we have data, or only when awaiting? Let's allow anytime if montagePlanData exists.
-                                    // Actually, we only want to interact when it's awaiting control.
                                     if (task.isAwaitingMontageControl && onOpenMontageEditor) {
                                         onOpenMontageEditor(task);
                                     }
@@ -264,10 +266,12 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                 style={{ 
                                     marginRight: '4px',
                                     opacity: task.isAwaitingMontageControl ? 1 : 0.5,
-                                    cursor: task.isAwaitingMontageControl ? 'pointer' : 'not-allowed'
+                                    cursor: task.isAwaitingMontageControl ? 'pointer' : 'not-allowed',
+                                    color: task.isAwaitingMontageControl ? 'var(--accent-color)' : 'inherit',
+                                    borderColor: task.isAwaitingMontageControl ? 'var(--accent-color)' : 'transparent'
                                 }}
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+                                <MagicWandIcon />
                             </button>
                         )}
                         <button

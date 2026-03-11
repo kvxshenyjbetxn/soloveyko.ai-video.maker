@@ -664,7 +664,12 @@
         "control": "Control",
         "translate_control": "Translation Control",
         "image_control": "Image Control",
-        "image_control_notification": {
+        "montage_control_notification": {
+      "title": "Montage Ready for Review",
+      "message": "Tasks are waiting for review. Click the magic wand ✨ icon in each task card to adjust timings and click (Save).\n\nNote: This is a simplified preview editor. Visual effects and subtitle styling are not shown here — they will only appear in the final rendered video.",
+      "ok": "Got it"
+    },
+    "image_control_notification": {
             "title": "Images Ready",
             "message": "Image and video generation for all tasks is complete. Please go to the Gallery to review and edit before final montage.",
             "go_to_gallery": "Go to Gallery"

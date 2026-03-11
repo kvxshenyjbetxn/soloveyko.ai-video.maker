@@ -62,14 +62,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	s.emitStageStatus(id, "montage", "waiting")
-	s.log("INFO", "[Pipeline] Waiting for montage slot...", id, taskLabel)
-
-	sem := s.getMontageSem()
-	sem <- struct{}{}
-	defer func() { <-sem }()
-
-	s.log("INFO", "[Pipeline] Montage slot acquired, starting...", id, taskLabel)
-	s.emitStageStatus(id, "montage", "running")
 
 	// 1. Get FFmpeg and FFprobe paths
 	ffmpegPath, err := utils.EnsureEngine("ffmpeg")
@@ -208,7 +200,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageEncodingPreset"].(string); ok {
 		pSettings.MontageEncodingPreset = val
 	}
-	if val, ok := settings["montageBitrate"]; ok {
+	if val, ok := settings["bitrate"]; ok {
 		switch v := val.(type) {
 		case float64:
 			pSettings.MontageBitrate = int(v)
@@ -346,15 +338,13 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		upFactor = 1.0
 	}
 
-	s.log("INFO", fmt.Sprintf("[Montage] Finalized config: Res=%dx%d | FPS=%d | Upscale=%.2f | Sync=%v",
-		baseW, baseH, fps, upFactor, pSettings.ImageSyncEnabled), id, taskLabel)
+	upW := int(math.Round(float64(baseW) * upFactor))
+	upH := int(math.Round(float64(baseH) * upFactor))
 
 	effectiveDurs := make([]float64, numFiles)
 	if pSettings.ImageSyncEnabled {
-		s.log("INFO", "[Montage] Synchronous Mode enabled, calculating timings...", id, taskLabel)
 		timings, err := utils.GetImageTimings(finalDir, audioDur, numFiles, visualFiles, taskLabel)
 		if err != nil {
-			s.log("ERROR", fmt.Sprintf("[Montage] Sync failed: %v. Falling back to equal distribution.", err), id, taskLabel)
 			clipDur := audioDur / float64(numFiles)
 			if !isFadeFast {
 				clipDur = (audioDur + float64(numFiles-1)*transDur) / float64(numFiles)
@@ -377,7 +367,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 					}
 				}
 			}
-			s.log("SUCCESS", fmt.Sprintf("[Montage] Successfully calculated synchronous timings for %d clips.", numFiles), id, taskLabel)
 		}
 	} else {
 		if isFadeFast {
@@ -428,15 +417,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		for i := 0; i < numFiles; i++ {
 			effectiveDurs[i] = float64(baseFrames[i]) / float64(fps)
 		}
-		s.log("INFO", fmt.Sprintf("[Montage] Frame-snapped %d clips to exact boundaries (total: %d frames at %dfps)", numFiles, totalFrames, fps), id, taskLabel)
 	}
-
-	if numFiles > 0 {
-		// No forced outro padding
-	}
-
-	upW := int(math.Round(float64(baseW) * upFactor))
-	upH := int(math.Round(float64(baseH) * upFactor))
 
 	swayFactor := pSettings.MontageSwayFactor
 	zoomFactor := pSettings.MontageZoomFactor
@@ -448,59 +429,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	videoCodec := s.resolveCodec(ffmpegPath, pSettings.MontageVideoCodec, id, taskLabel)
 	procPriority := pSettings.MontageProcessPriority
 	cpuCores := pSettings.MontageCPUCores
-
-	// Helper for relative paths
-	getRel := func(p string) string {
-		if p == "" {
-			return p
-		}
-		if rel, err := filepath.Rel(finalDir, p); err == nil {
-			if !strings.HasPrefix(rel, "..") {
-				return rel
-			}
-		}
-		return p
-	}
-
-	s.log("INFO", fmt.Sprintf("[Montage] Codec: %s | Priority: %s | CPUCores: %d | Clips: %d",
-		videoCodec, procPriority, cpuCores, numFiles), id, taskLabel)
-
-	// Build final filename: TaskName + TemplateName
-	limit := 180
-	tplName := subName
-	if tplName == "" || tplName == "Default" {
-		tplName = ""
-	}
-
-	safeTask := utils.SanitizeFilename(taskName)
-	safeTpl := utils.SanitizeFilename(tplName)
-
-	if safeTask == "" {
-		safeTask = "Task"
-	}
-
-	var finalBaseName string
-	if safeTpl != "" {
-		tplRunes := []rune(safeTpl)
-		availableForTask := limit - len(tplRunes) - 3
-		if availableForTask < 20 {
-			availableForTask = 20
-		}
-		taskRunes := []rune(safeTask)
-		if len(taskRunes) > availableForTask {
-			safeTask = string(taskRunes[:availableForTask])
-		}
-		finalBaseName = strings.TrimRight(safeTask, ". ") + " - " + safeTpl
-	} else {
-		taskRunes := []rune(safeTask)
-		if len(taskRunes) > limit {
-			safeTask = string(taskRunes[:limit])
-		}
-		finalBaseName = strings.TrimRight(safeTask, ". ")
-	}
-
-	outputFile := strings.TrimSpace(finalBaseName) + ".mp4"
-	s.log("INFO", fmt.Sprintf("[Montage] Output file will be: %s", outputFile), id, taskLabel)
 
 	// [CONTROL] -------------------------------------------------------------
 	// Wait for user confirmation if Montage Control is enabled
@@ -540,7 +468,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 
 		for i, f := range visualFiles {
-			// Convert absolute path to relative or filename for UI, or use full depending on how we load
 			ext := strings.ToLower(filepath.Ext(f))
 			isVid := videoExts[ext]
 			actualDur := 0.0
@@ -568,7 +495,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		select {
 		case actionData := <-resChan:
 			// Parse modified plan if we get new durations from UI
-			// format: "confirm:duration1,duration2,..." or simply "confirm"
 			if strings.HasPrefix(actionData, "confirm:") {
 				mainParts := strings.Split(actionData, ";segments:")
 				parts := strings.Split(strings.TrimPrefix(mainParts[0], "confirm:"), ",")
@@ -606,14 +532,79 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			} else {
 				s.log("SUCCESS", "[Control] Montage approved (default timings).", id, taskLabel)
 			}
-			s.emitStageStatus(id, "montage", "running")
+			s.MarkMontageConfirmed(id)
 		case <-s.ctx.Done():
 			s.log("INFO", "[Control] Task cancelled while waiting for montage review", id, taskLabel)
 			return fmt.Errorf("task cancelled")
 		}
 		s.pendingControl.Delete(id + "_montage")
+	} else {
+		// If control not enabled, still mark as confirmed to not block others
+		s.MarkMontageConfirmed(id)
 	}
-	// ------------------------------------------------------------------------
+
+	// [BARRIER] Wait for all controlled tasks in the batch
+	s.log("INFO", "[Pipeline] Waiting for batch montage synchronization...", id, taskLabel)
+	s.WaitForMontageBatch(id)
+
+	// [SEMAPHORE] Acquire slot AFTER batch confirmation
+	s.log("INFO", "[Pipeline] Waiting for montage slot...", id, taskLabel)
+	sem := s.getMontageSem()
+	sem <- struct{}{}
+	defer func() { <-sem }()
+
+	s.log("INFO", "[Pipeline] Montage slot acquired, starting...", id, taskLabel)
+	s.emitStageStatus(id, "montage", "running")
+
+	// Helper for relative paths
+	getRel := func(p string) string {
+		if p == "" {
+			return p
+		}
+		if rel, err := filepath.Rel(finalDir, p); err == nil {
+			if !strings.HasPrefix(rel, "..") {
+				return rel
+			}
+		}
+		return p
+	}
+
+	// Build final filename: TaskName + TemplateName
+	limit := 180
+	tplName := subName
+	if tplName == "" || tplName == "Default" {
+		tplName = ""
+	}
+
+	safeTask := utils.SanitizeFilename(taskName)
+	safeTpl := utils.SanitizeFilename(tplName)
+
+	if safeTask == "" {
+		safeTask = "Task"
+	}
+
+	var finalBaseName string
+	if safeTpl != "" {
+		tplRunes := []rune(safeTpl)
+		availableForTask := limit - len(tplRunes) - 3
+		if availableForTask < 20 {
+			availableForTask = 20
+		}
+		taskRunes := []rune(safeTask)
+		if len(taskRunes) > availableForTask {
+			safeTask = string(taskRunes[:availableForTask])
+		}
+		finalBaseName = strings.TrimRight(safeTask, ". ") + " - " + safeTpl
+	} else {
+		taskRunes := []rune(safeTask)
+		if len(taskRunes) > limit {
+			safeTask = string(taskRunes[:limit])
+		}
+		finalBaseName = strings.TrimRight(safeTask, ". ")
+	}
+
+	outputFile := strings.TrimSpace(finalBaseName) + ".mp4"
+	s.log("INFO", fmt.Sprintf("[Montage] Output file will be: %s", outputFile), id, taskLabel)
 
 	// 5. Build filter graph — single-pass
 	type inputSpec struct {

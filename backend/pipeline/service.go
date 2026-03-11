@@ -71,6 +71,14 @@ type PipelineService struct {
 
 	edgeTTSSem chan struct{}
 	cancelled  atomic.Bool
+
+	montageSync struct {
+		sync.Mutex
+		cond           *sync.Cond
+		pendingTasks   map[string]bool // taskID -> confirmed
+		totalExpected  int
+		activeBatchID  string
+	}
 }
 
 // NewPipelineService creates a new PipelineService
@@ -89,7 +97,7 @@ func NewPipelineService(
 	edgeTTS *api.EdgeTTSService,
 	assemblyAI *api.AssemblyAIService,
 ) *PipelineService {
-	return &PipelineService{
+	s := &PipelineService{
 		settings:           settings,
 		openRouter:         openRouter,
 		elevenLabs:         elevenLabs,
@@ -112,7 +120,81 @@ func NewPipelineService(
 		montageSem:         make(chan struct{}, settings.GetMontageMaxConnections()),
 		edgeTTSSem:         make(chan struct{}, 5),
 	}
+	s.montageSync.cond = sync.NewCond(&s.montageSync.Mutex)
+	s.montageSync.pendingTasks = make(map[string]bool)
+	return s
 }
+
+// PrepareMontageBatch initializes the synchronization for a batch of tasks with montage control enabled
+func (s *PipelineService) PrepareMontageBatch(taskIDs []string) {
+	s.montageSync.Lock()
+	defer s.montageSync.Unlock()
+
+	s.montageSync.pendingTasks = make(map[string]bool)
+	for _, id := range taskIDs {
+		s.montageSync.pendingTasks[id] = false
+	}
+	s.montageSync.totalExpected = len(taskIDs)
+	s.montageSync.activeBatchID = fmt.Sprintf("batch_%d", time.Now().Unix())
+	s.log("INFO", fmt.Sprintf("[Pipeline] Prepared montage batch with %d controlled tasks", len(taskIDs)))
+}
+
+// MarkMontageConfirmed marks a task as confirmed by the user and broadcasts if all are ready
+func (s *PipelineService) MarkMontageConfirmed(id string) {
+	s.montageSync.Lock()
+	defer s.montageSync.Unlock()
+
+	if _, ok := s.montageSync.pendingTasks[id]; ok {
+		s.montageSync.pendingTasks[id] = true
+		s.log("INFO", fmt.Sprintf("[Pipeline] Task %s confirmed for montage batch", id))
+	}
+
+	// Check if all are confirmed
+	allConfirmed := true
+	count := 0
+	for _, confirmed := range s.montageSync.pendingTasks {
+		if !confirmed {
+			allConfirmed = false
+			break
+		}
+		count++
+	}
+
+	if allConfirmed && count > 0 {
+		s.log("INFO", "[Pipeline] All tasks in batch confirmed! Starting montages...")
+		s.montageSync.cond.Broadcast()
+	}
+}
+
+// WaitForMontageBatch blocks until all tasks in the current batch are confirmed
+func (s *PipelineService) WaitForMontageBatch(id string) {
+	s.montageSync.Lock()
+	defer s.montageSync.Unlock()
+
+	// If this task is not part of the batch, just continue
+	if _, ok := s.montageSync.pendingTasks[id]; !ok {
+		return
+	}
+
+	// Wait while NOT all are confirmed
+	for {
+		allConfirmed := true
+		count := 0
+		for _, confirmed := range s.montageSync.pendingTasks {
+			if !confirmed {
+				allConfirmed = false
+				break
+			}
+			count++
+		}
+
+		if allConfirmed || count == 0 {
+			break
+		}
+		s.montageSync.cond.Wait()
+	}
+}
+
 
 func (s *PipelineService) SetContext(ctx context.Context) {
 	s.ctx = ctx

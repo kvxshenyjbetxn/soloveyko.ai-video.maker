@@ -1132,6 +1132,11 @@ func (a *App) SubmitExistingFilesResult(id string, skipStages []string) {
 	a.pipeline.SubmitExistingFilesResult(id, skipStages)
 }
 
+// PrepareMontageBatch prepares the synchronization for a batch of tasks with montage control
+func (a *App) PrepareMontageBatch(taskIDs []string) {
+	a.pipeline.PrepareMontageBatch(taskIDs)
+}
+
 // GetGalleryImages scans output directories and returns gallery data
 func (a *App) GetGalleryImages() []utils.GalleryTask {
 	return a.galleryManager.GetGalleryData()

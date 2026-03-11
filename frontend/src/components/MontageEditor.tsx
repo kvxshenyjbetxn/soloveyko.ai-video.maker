@@ -700,7 +700,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                         const ds = clips.map(c => c.duration.toFixed(3)).join(',');
                         const ss = audioSegments.map(s => `${s.start.toFixed(3)},${s.end.toFixed(3)}`).join('|');
                         onConfirm(task.id, `confirm:${ds};segments:${ss}`);
-                    }}>{t('common.save')} & {t('queue.start')}</button>
+                    }}>{t('common.save')}</button>
                 </div>
             </div>
 
