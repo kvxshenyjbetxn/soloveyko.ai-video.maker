@@ -100,6 +100,11 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
             <div className={`stage-settings-content ${settings.imageCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
 
+                    <div className="settings-group-title" style={{ marginBottom: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+                        {t('pipeline.image.sync_mode')}
+                    </div>
+
                     <div className="settings-control" style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                             <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.sync_enabled')}</label>
@@ -112,13 +117,10 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                 <span className="stage-slider"></span>
                             </label>
                         </div>
-                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
-                            {t('pipeline.image.sync_desc')}
-                        </div>
+
 
                         {settings.imageSyncEnabled && (
                             <div style={{ marginTop: '12px' }}>
-                                <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.image.sync_mode')}</label>
                                 <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px' }}>
                                     <button
                                         className={`method-toggle-btn ${(settings.imageSyncMode || 'simple') === 'simple' ? 'active' : ''}`}
@@ -133,6 +135,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             transition: 'all 0.2s'
                                         }}
                                     >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                                         {t('pipeline.image.sync_mode_simple')}
                                     </button>
                                     <button
@@ -148,6 +151,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             transition: 'all 0.2s'
                                         }}
                                     >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
                                         {t('pipeline.image.sync_mode_accurate')}
                                     </button>
                                 </div>
@@ -193,11 +197,12 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                         )}
                     </div>
 
+                    <div className="settings-group-title" style={{ marginTop: '20px', marginBottom: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        {t('pipeline.image.generation_method')}
+                    </div>
+
                     <div className="settings-control">
-                        <label className="settings-label">{t('pipeline.image.generation_method') || 'Метод генерации задач'}</label>
-                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                            {t('pipeline.image.generation_desc') || 'Выберите как разбить текст на отдельные промпты'}
-                        </div>
                         <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px' }}>
                             <button
                                 className={`method-toggle-btn ${settings.imageGenerationMethod === 'lines' ? 'active' : ''}`}
@@ -247,11 +252,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                     <span className="stage-slider"></span>
                                 </label>
                             </div>
-                            <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px', marginBottom: '12px' }}>
-                                {settings.imageGroupSentences
-                                    ? (t('pipeline.image.group_limit_desc') || 'Предложения будут объединены до достижения лимита символов')
-                                    : (t('pipeline.image.group_limit_desc_off') || 'Каждое предложение будет разделено буквально как отдельный промпт')}
-                            </div>
+
 
                             {settings.imageGroupSentences && (
                                 <div className="settings-slider-container" style={{ marginTop: '8px' }}>
@@ -274,9 +275,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                     {(settings.imageGenerationMethod === 'lines' || (settings.imageGenerationMethod === 'sentences' && settings.imageGroupSentences)) && (
                         <div className="settings-control" style={{ marginTop: '12px' }}>
                             <label className="settings-label">{t('pipeline.image.initial_sentences') || 'Динамічний початок (речень)'}</label>
-                            <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                                {t('pipeline.image.initial_sentences_desc') || 'Вкажіть кількість перших частин, які будуть нарізані по одному (без групування)'}
-                            </div>
+
                             <div className="settings-slider-container">
                                 <input
                                     type="range"
@@ -293,8 +292,12 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                         </div>
                     )}
 
-                    <div className="settings-control" style={{ borderTop: '1px solid var(--border-color)', marginTop: '12px', paddingTop: '12px' }}>
-                        <label className="settings-label">{t('pipeline.image.mode') || 'Режим'}</label>
+                    <div className="settings-group-title" style={{ marginTop: '20px', marginBottom: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h.01"/><path d="M12 16h.01"/><path d="M12 12h.01"/><path d="M12 8h.01"/><path d="M12 4h.01"/></svg>
+                        {t('pipeline.image.mode')}
+                    </div>
+
+                    <div className="settings-control">
                         <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px', marginBottom: '12px' }}>
                             <button
                                 className={`method-toggle-btn ${(settings.imageMode || 'normal') === 'normal' ? 'active' : ''}`}
@@ -309,6 +312,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                     transition: 'all 0.2s'
                                 }}
                             >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                                 {t('pipeline.image.mode_normal') || 'Звичайний'}
                             </button>
                             <button
@@ -324,6 +328,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                     transition: 'all 0.2s'
                                 }}
                             >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                                 {t('pipeline.image.mode_memory') || 'Пам\'ять'}
                             </button>
                         </div>
@@ -344,6 +349,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             transition: 'all 0.2s'
                                         }}
                                     >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                                         {t('pipeline.image.memory_type_primitive') || 'Коротка'}
                                     </button>
                                     <button
@@ -359,6 +365,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             transition: 'all 0.2s'
                                         }}
                                     >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
                                         {t('pipeline.image.memory_type_story') || 'Історія'}
                                     </button>
                                     <button
@@ -374,6 +381,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             transition: 'all 0.2s'
                                         }}
                                     >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
                                         {t('pipeline.image.memory_type_external') || 'Повна'}
                                     </button>
                                 </div>
@@ -413,9 +421,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             <span className="stage-slider"></span>
                                         </label>
                                     </div>
-                                    <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
-                                        {t('pipeline.image.determine_characters_desc') || 'Автоматично визначити опис персонажів із тексту для використання в промптах'}
-                                    </div>
+
 
                                     {settings.imageDetermineCharacters && (
                                         <div style={{ marginTop: '12px' }}>
@@ -434,6 +440,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                                         transition: 'all 0.2s'
                                                     }}
                                                 >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
                                                     {t('pipeline.image.determine_characters_mode_dynamic')}
                                                 </button>
                                                 <button
@@ -449,6 +456,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                                         transition: 'all 0.2s'
                                                     }}
                                                 >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                                     {t('pipeline.image.determine_characters_mode_static')}
                                                 </button>
                                             </div>
@@ -493,17 +501,33 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             onChange={(e) => handleChange('imagePrompt', e.target.value)}
                             placeholder={t('pipeline.image.prompt_placeholder') || 'Введіть промт...'}
                         />
-                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                            {t('pipeline.image.prompt_placeholder')?.split('...').pop()?.trim() || 'Використовуйте {{content}} для вставки частини тексту'}
+                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: '1.4' }}>
+                            <div style={{ marginBottom: '4px', opacity: 0.8 }}>{t('pipeline.image.available_tags') || 'Доступні теги:'}</div>
+                            <ul style={{ margin: 0, paddingLeft: '0', listStyleType: 'none', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <code style={{ color: 'var(--accent-primary)', background: 'rgba(var(--accent-rgb), 0.1)', padding: '1px 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{'{{content}}'}</code>
+                                    <span>— {t('pipeline.image.tag_content') || 'поточний текст (завжди)'}</span>
+                                </li>
+                                {settings.imageDetermineCharacters && (
+                                    <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <code style={{ color: 'var(--accent-primary)', background: 'rgba(var(--accent-rgb), 0.1)', padding: '1px 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{'{{characters}}'}</code>
+                                        <span>— {t('pipeline.image.tag_characters') || 'опис персонажів'}</span>
+                                    </li>
+                                )}
+                                {settings.imageMode === 'memory' && (settings.imageMemoryType || 'primitive') === 'primitive' && (
+                                    <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <code style={{ color: 'var(--accent-primary)', background: 'rgba(var(--accent-rgb), 0.1)', padding: '1px 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{'{{memory}}'}</code>
+                                        <span>— {t('pipeline.image.tag_memory') || 'контекст пам\'яті'}</span>
+                                    </li>
+                                )}
+                                {settings.imageMode === 'memory' && settings.imageMemoryType === 'story' && (
+                                    <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <code style={{ color: 'var(--accent-primary)', background: 'rgba(var(--accent-rgb), 0.1)', padding: '1px 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{'{{story}}'}</code>
+                                        <span>— {t('pipeline.image.tag_story') || 'переказ всієї історії'}</span>
+                                    </li>
+                                )}
+                            </ul>
                         </div>
-                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                            {'Використовуйте {{story}} для вставки всього тексту'}
-                        </div>
-                        {settings.imageDetermineCharacters && (
-                            <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                                {'Використовуйте {{characters}} для вставки опису персонажів'}
-                            </div>
-                        )}
 
                         {content && content.trim() !== '' && (
                             <div style={{ fontSize: '11px', color: 'var(--accent-primary)', marginTop: '8px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>

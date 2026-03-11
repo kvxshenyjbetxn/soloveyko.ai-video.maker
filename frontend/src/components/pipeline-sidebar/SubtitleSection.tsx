@@ -201,11 +201,17 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
 
             <div className={`stage-settings-content ${settings.subtitleCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
+                    <div className="settings-group-title" style={{ marginBottom: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20v-6M9 20v-10M15 20v-2M18 20v-8M21 20v-4M3 20v-12M6 20v-16"/></svg>
+                        {t('pipeline.subtitle.group_model')}
+                    </div>
 
                     {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd' || settings.subtitleService === 'whisperx') && (
                         <>
                             <div className="settings-control">
-                                <label className="settings-label">{t('pipeline.model')} ({settings.subtitleService === 'whisperx' ? 'WhisperX' : 'Whisper'})</label>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                    <label className="settings-label" style={{ marginBottom: 0 }}>{settings.subtitleService === 'whisperx' ? 'WhisperX' : 'Whisper'}</label>
+                                </div>
                                 <select
                                     className="settings-select"
                                     value={settings.subtitleModel || 'base'}
@@ -410,9 +416,7 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                                         </div>
                                     </div>
 
-                                    <div style={{ fontSize: '10px', color: 'rgba(var(--accent-rgb), 0.7)', lineHeight: '1.4', fontStyle: 'italic' }}>
-                                        {t('pipeline.subtitle.karaoke_desc') || "Створює анімовані субтитри з точним підсвічуванням кожного слова під час мовлення."}
-                                    </div>
+
                                 </div>
                             )}
                         </div>
@@ -421,8 +425,7 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                     {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && (
                         <>
                             {settings.subtitleService === 'standard' && (
-                                <div className="settings-control">
-                                    <label className="settings-label">{t('pipeline.subtitle.max_len')}</label>
+                                <div className="settings-control" style={{ marginBottom: 0 }}>
                                     <div className="settings-slider-container">
                                         <input
                                             type="range"
@@ -436,15 +439,11 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                                         />
                                         <span className="settings-slider-value">{settings.subtitleMaxLen || 40}</span>
                                     </div>
-                                    <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
-                                        {t('pipeline.subtitle.max_len_desc')}
-                                    </div>
                                 </div>
                             )}
 
                             {settings.subtitleService === 'amd' && (
-                                <div className="settings-control">
-                                    <label className="settings-label">{t('pipeline.subtitle.max_words')}</label>
+                                <div className="settings-control" style={{ marginBottom: 0 }}>
                                     <div className="settings-slider-container">
                                         <input
                                             type="range"
@@ -458,19 +457,16 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                                         />
                                         <span className="settings-slider-value">{settings.subtitleMaxWords || 10}</span>
                                     </div>
-                                    <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
-                                        {t('pipeline.subtitle.max_words_desc')}
-                                    </div>
                                 </div>
                             )}
                         </>
                     )}
 
                     {/* --- ГРУПА: СТИЛІЗАЦІЯ ТЕКСТУ --- */}
-                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            Стилізація та Оформлення
-                        </div>
+                    <div className="settings-group-title" style={{ marginTop: '20px', marginBottom: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.5-.6 1.5-1.5 0-.4-.1-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.7-1.5 1.5-1.5H16c2.2 0 4-1.8 4-4 0-3.9-3.6-7-8-7z"/></svg>
+                        {t('pipeline.subtitle.group_style')}
+                    </div>
 
                         {/* Шрифти */}
                         <div className="settings-control">
@@ -592,14 +588,11 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                             </div>
                         </div>
 
-
-                    </div>
-
                     {/* --- ГРУПА: РОЗТАШУВАННЯ --- */}
-                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            Позиція та Відступи
-                        </div>
+                    <div className="settings-group-title" style={{ marginTop: '20px', marginBottom: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18 9l-6 6-6-6"/></svg>
+                        {t('pipeline.subtitle.group_position')}
+                    </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                             <div className="settings-control" style={{ marginBottom: 0 }}>
@@ -626,14 +619,11 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                                     <span className="settings-slider-value">{settings.subtitleMarginV ?? 80}</span>
                                 </div>
                             </div>
-                        </div>
+                        </div>                    {/* --- ГРУПА: АНІМАЦІЇ ТА ЕФЕКТИ (ЗАГАЛЬНІ) --- */}
+                    <div className="settings-group-title" style={{ marginTop: '20px', marginBottom: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        {t('pipeline.subtitle.group_animation')}
                     </div>
-
-                    {/* --- ГРУПА: АНІМАЦІЇ ТА ЕФЕКТИ (ЗАГАЛЬНІ) --- */}
-                    <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            Анімація (Загальна)
-                        </div>
 
                         <div className="settings-control">
                             <label className="settings-label">Основна анімація появи</label>
@@ -690,7 +680,6 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                             )}
                         </div>
                     </div>
-                </div>
             </div>
 
             <ConfirmModal

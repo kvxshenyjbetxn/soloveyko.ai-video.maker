@@ -105,6 +105,11 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
 
             <div className={`stage-settings-content ${settings.montageCollapsed ? 'collapsed' : ''}`}>
                 <div className="settings-group">
+                    <div className="settings-group-title" style={{ marginBottom: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/></svg>
+                        {t('pipeline.montage.group_overlays')}
+                    </div>
+
                     {/* Intro Video Setting */}
                     <div className="settings-control">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -599,12 +604,15 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </div>
                     )}
 
-                    <div style={{ margin: '12px 0', borderTop: '1px solid var(--border-color)', opacity: 0.5 }} />
+                    <div className="settings-group-title" style={{ marginTop: '20px', marginBottom: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v10"/><path d="M18.4 4.6a9 9 0 1 1-12.8 0"/><path d="m12 12 9 9"/></svg>
+                        {t('pipeline.montage.group_quality')}
+                    </div>
 
                     {/* Resolution & FPS Row */}
                     <div className="settings-row">
-                        <div className="settings-control" style={{ flex: 1 }}>
-                            <label className="settings-label">
+                        <div className="settings-control" style={{ flex: 1, marginBottom: 0 }}>
+                            <label className="settings-label" style={{ fontSize: '11px' }}>
                                 {t('pipeline.montage.resolution')}
                             </label>
                             <select
@@ -617,8 +625,8 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                 ))}
                             </select>
                         </div>
-                        <div className="settings-control" style={{ flex: 1 }}>
-                            <label className="settings-label">
+                        <div className="settings-control" style={{ flex: 1, marginBottom: 0 }}>
+                            <label className="settings-label" style={{ fontSize: '11px' }}>
                                 {t('pipeline.montage.fps')}
                             </label>
                             <select
@@ -633,9 +641,8 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </div>
                     </div>
 
-                    {/* Sway (Rocking) */}
-                    <div className="settings-control">
-                        <label className="settings-label">{t('pipeline.montage.sway')}</label>
+                    <div className="settings-control" style={{ marginTop: '12px' }}>
+                        <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.sway')}</label>
                         <div className="settings-slider-container">
                             <input
                                 type="range"
@@ -651,9 +658,8 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </div>
                     </div>
 
-                    {/* Zoom Intensity */}
                     <div className="settings-control">
-                        <label className="settings-label">{t('pipeline.montage.zoom')}</label>
+                        <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.zoom')}</label>
                         <div className="settings-slider-container">
                             <input
                                 type="range"
@@ -669,9 +675,8 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </div>
                     </div>
 
-                    {/* Internal Upscale Factor */}
                     <div className="settings-control">
-                        <label className="settings-label">{t('pipeline.montage.internal_upscale')}</label>
+                        <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.internal_upscale')}</label>
                         <div className="settings-slider-container">
                             <input
                                 type="range"
@@ -687,9 +692,8 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </div>
                     </div>
 
-                    {/* Transition Duration */}
                     <div className="settings-control">
-                        <label className="settings-label">{t('pipeline.montage.transitions')}</label>
+                        <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.transitions')}</label>
                         <div className="settings-slider-container">
                             <input
                                 type="range"
@@ -705,9 +709,8 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </div>
                     </div>
 
-                    {/* Transition Effect Selection */}
                     <div className="settings-control">
-                        <label className="settings-label">
+                        <label className="settings-label" style={{ fontSize: '11px' }}>
                             {t('pipeline.montage.transition_effect')}
                         </label>
                         <select
@@ -725,9 +728,8 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </select>
                     </div>
 
-                    {/* Encoding Preset */}
                     <div className="settings-control">
-                        <label className="settings-label">
+                        <label className="settings-label" style={{ fontSize: '11px' }}>
                             {t('pipeline.montage.encoding_preset')}
                         </label>
                         <select
@@ -741,9 +743,8 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </select>
                     </div>
 
-                    {/* Bitrate */}
-                    <div className="settings-control">
-                        <label className="settings-label">{t('pipeline.montage.bitrate')}</label>
+                    <div className="settings-control" style={{ marginBottom: 0 }}>
+                        <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.bitrate')}</label>
                         <div className="settings-slider-container">
                             <input
                                 type="range" min="1" max="50" step="1" className="settings-slider"

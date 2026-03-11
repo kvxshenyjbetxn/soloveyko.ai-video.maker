@@ -66,8 +66,8 @@ export const TextSection: React.FC<TextSectionProps> = ({
                         width: '28px',
                         height: '28px',
                         borderRadius: '8px',
-                        background: isEnabled ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--bg-tertiary)',
-                        color: isEnabled ? 'var(--accent-color)' : 'var(--text-tertiary)',
+                        background: 'rgba(var(--accent-rgb), 0.1)',
+                        color: 'var(--accent-color)',
                         transition: 'all 0.3s'
                     }}>
                         <TextIcon />
@@ -175,6 +175,15 @@ export const TextSection: React.FC<TextSectionProps> = ({
                             }}
                             placeholder={t(`pipeline.${type}.prompt_placeholder`)}
                         />
+                        <div className="settings-description" style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: '1.4' }}>
+                            <div style={{ marginBottom: '4px', opacity: 0.8 }}>{t('pipeline.image.available_tags') || 'Доступні теги:'}</div>
+                            <ul style={{ margin: 0, paddingLeft: '0', listStyleType: 'none', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                <li style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <code style={{ color: 'var(--accent-primary)', background: 'rgba(var(--accent-rgb), 0.1)', padding: '1px 4px', borderRadius: '4px', fontSize: '10px', fontWeight: 700 }}>{'{{content}}'}</code>
+                                    <span>— {t('pipeline.image.tag_content') || 'поточний текст (завжди)'}</span>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
