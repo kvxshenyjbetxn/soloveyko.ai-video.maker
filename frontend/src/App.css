@@ -158,7 +158,7 @@
 
 .sidebar-submenu .sidebar-item {
     padding-left: 32px;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .sidebar-submenu .sidebar-submenu .sidebar-item {
@@ -242,38 +242,48 @@
 
 /* Stats Bar */
 .stats-bar {
-    height: 36px;
+    height: 32px;
     background-color: var(--bg-tertiary);
     display: flex;
     align-items: center;
     padding: 0 24px;
     gap: 16px;
     border-top: 1px solid var(--border-color);
-    font-size: 12px;
+    font-size: 10px;
     color: var(--text-secondary);
 }
 
-.stat-item {
+.stats-bar .stat-item {
     display: flex;
     align-items: center;
     gap: 6px;
+    height: 100%;
+    line-height: 1.2;
 }
 
-.stat-label {
+.stats-bar .stat-label {
     color: var(--text-secondary);
+    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
     position: relative;
-    top: 3px;
+    top: 4px;
 }
 
-.stat-value {
+.stats-bar .stat-value {
     color: var(--text-primary);
     font-weight: 500;
     font-variant-numeric: tabular-nums;
+    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
 }
 
 .stat-separator {
     width: 1px;
-    height: 14px;
+    height: 12px;
     background-color: var(--border-color);
 }
 
@@ -398,7 +408,7 @@
 }
 
 .history-item-name {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;

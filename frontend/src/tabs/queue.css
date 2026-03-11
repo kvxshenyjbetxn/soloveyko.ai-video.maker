@@ -688,30 +688,42 @@
     display: flex;
     gap: 16px;
     margin-bottom: 12px;
-    padding: 8px 12px;
+    padding: 6px 12px;
     background: rgba(255, 255, 255, 0.02);
     border-radius: 8px;
+    align-items: center;
 }
 
-.stat-item {
+.control-stats .stat-item {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
+    gap: 5px;
+    font-size: 10px;
+    line-height: 1.2;
 }
 
-.stat-label {
+.control-stats .stat-label {
     color: var(--text-placeholder);
     font-weight: 600;
+    font-size: 10px;
+    line-height: 1.2;
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    top: 3px;
 }
 
-.stat-value {
+.control-stats .stat-value {
     color: var(--text-primary);
     font-weight: 800;
     font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    line-height: 1.2;
+    display: inline-flex;
+    align-items: center;
 }
 
-.stat-value.warning {
+.control-stats .stat-value.warning {
     color: #ffb74d;
 }
 
