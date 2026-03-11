@@ -725,8 +725,15 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             if (obj.control.montage !== undefined) result.montageControlEnabled = obj.control.montage;
         }
 
+        // Ensure critical flags have defaults (false) if missing from template, to prevent bleeding from sidebar
+        result.translateControlEnabled = result.translateControlEnabled ?? false;
+        result.imageControlEnabled = result.imageControlEnabled ?? false;
+        result.montageControlEnabled = result.montageControlEnabled ?? false;
+        result.customStagesEnabled = result.customStagesEnabled ?? false;
+
         // Explicitly handle arrays (they should be arrays, not flattened)
         if (obj.customStages && Array.isArray(obj.customStages)) result.customStages = obj.customStages;
+        else if (result.customStages === undefined) result.customStages = [];
         if (obj.montageOverlayTriggers && Array.isArray(obj.montageOverlayTriggers)) {
             result.montageOverlayTriggers = obj.montageOverlayTriggers;
         } else if (obj.montage && typeof obj.montage === 'object' && Array.isArray(obj.montage.montageOverlayTriggers)) {
