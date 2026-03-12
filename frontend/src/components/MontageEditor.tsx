@@ -149,6 +149,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [prompts, setPrompts] = useState<string[]>([]);
     const [mediaPool, setMediaPool] = useState<MontageClip[]>([]);
     const [isDraggingFromPool, setIsDraggingFromPool] = useState<MontageClip | null>(null);
+    const [draggingHoverTrack, setDraggingHoverTrack] = useState<'clips' | 'triggers' | 'watermarks' | 'intro' | null>(null);
     const [isDraggingExternal, setIsDraggingExternal] = useState(false);
     const dragCounter = useRef(0);
     const [dropPreview, setDropPreview] = useState<number | null>(null);
@@ -704,6 +705,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
 
     const handleInternalDragStart = (item: MontageClip) => {
         setIsDraggingFromPool(item);
+        setDraggingHoverTrack(null);
     };
 
     const handleDeleteIntro = () => {
@@ -717,6 +719,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         if (dropTime < 0.2) {
             setIntroVideo({ ...isDraggingFromPool, duration: isDraggingFromPool.actualDuration || 3.0 });
             setIsDraggingFromPool(null);
+            setDraggingHoverTrack(null);
             setDropPreview(null);
             return;
         }
@@ -755,6 +758,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             return next;
         });
         setIsDraggingFromPool(null);
+        setDraggingHoverTrack(null);
         setDropPreview(null);
     }, [isDraggingFromPool]);
 
@@ -781,6 +785,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             return nt;
         });
         setIsDraggingFromPool(null);
+        setDraggingHoverTrack(null);
         setDropPreview(null);
     }, [isDraggingFromPool, plan]);
 
@@ -802,6 +807,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             return nw;
         });
         setIsDraggingFromPool(null);
+        setDraggingHoverTrack(null);
         setDropPreview(null);
     }, [isDraggingFromPool]);
 
@@ -1256,7 +1262,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                         className="pool-item" 
                                                         draggable 
                                                         onDragStart={() => handleInternalDragStart(m)} 
-                                                        onDragEnd={() => setIsDraggingFromPool(null)} 
+                                                        onDragEnd={() => { setIsDraggingFromPool(null); setDraggingHoverTrack(null); }} 
                                                         onMouseEnter={() => setHoveredMediaIdx(i)}
                                                         onMouseLeave={() => setHoveredMediaIdx(null)}
                                                         title={m.path.split(/[\\/]/).pop()}
@@ -1359,7 +1365,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
 
                     <div className="montage-timeline-resizer" onMouseDown={handleResizeMouseDown}><div className="resizer-handle-line"></div></div>
                     <div 
-                        className={`montage-timeline-container ${isDraggingFromPool ? 'accepting-drop' : ''}`} 
+                        className={`montage-timeline-container ${isDraggingFromPool && draggingHoverTrack === 'clips' ? 'accepting-drop' : ''}`} 
                         style={{ height: `${timelineHeight}px`, flex: 'none' }}
                     >
                         <div className="montage-timeline-wrapper">
@@ -1373,14 +1379,16 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
                                         setDropPreview((x - introWidth) / zoom); 
+                                        setDraggingHoverTrack('clips');
                                     } 
                                 }}
-                                onDragLeave={() => setDropPreview(null)}
+                                onDragLeave={() => { setDropPreview(null); setDraggingHoverTrack(null); }}
                                 onDrop={(e) => { 
                                     if (isDraggingFromPool) { 
                                         const rect = e.currentTarget.getBoundingClientRect();
                                         const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
                                         handleInternalDrop((x - introWidth) / zoom); 
+                                        setDraggingHoverTrack(null);
                                     } 
                                 }}
                             >
@@ -1410,11 +1418,12 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                             <div 
                                                 className="intro-slot-container"
                                                 style={{ width: `${introWidth}px` }}
-                                                onDragOver={(e) => { if (isDraggingFromPool) { e.preventDefault(); e.stopPropagation(); setDropPreview(0); } }}
-                                                onDrop={(e) => { if (isDraggingFromPool) { e.stopPropagation(); handleInternalDrop(0); } }}
+                                                onDragOver={(e) => { if (isDraggingFromPool) { e.preventDefault(); e.stopPropagation(); setDropPreview(0); setDraggingHoverTrack('intro'); } }}
+                                                onDragLeave={() => setDraggingHoverTrack(null)}
+                                                onDrop={(e) => { if (isDraggingFromPool) { e.stopPropagation(); handleInternalDrop(0); setDraggingHoverTrack(null); } }}
                                             >
                                                 {introVideo ? (
-                                                    <div className={`montage-clip-block intro-selected ${isDraggingFromPool && dropPreview === 0 ? 'active' : ''}`} style={{ width: '100%' }}>
+                                                    <div className={`montage-clip-block intro-selected ${isDraggingFromPool && draggingHoverTrack === 'intro' ? 'active' : ''}`} style={{ width: '100%' }}>
                                                         <div className="montage-clip-content">
                                                             <div className="montage-clip-thumbnail-placeholder">🚀</div>
                                                             <span className="montage-clip-name">{introVideo.path.split(/[\\/]/).pop()}</span>
@@ -1425,7 +1434,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div className={`intro-drop-slot ${isDraggingFromPool && dropPreview === 0 ? 'active' : ''}`}>
+                                                    <div className={`intro-drop-slot ${isDraggingFromPool && draggingHoverTrack === 'intro' ? 'active' : ''}`}>
                                                         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" /></svg>
                                                         <span>{t('montage_editor.drop_intro')}</span>
                                                     </div>
@@ -1456,7 +1465,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                     )}
                                                 </div>
                                             ))}
-                                            {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && (
+                                            {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && draggingHoverTrack === 'clips' && (
                                                 <div className="timeline-drop-ghost-precise" style={{ left: `${dropPreview * zoom + introWidth}px`, width: `${isDraggingFromPool.duration * zoom}px` }}>
                                                     <div className="ghost-indicator">DROP TO INSERT</div>
                                                 </div>
@@ -1464,7 +1473,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                         </div>
 
                                         <div 
-                                            className={`montage-track triggers ${isDraggingFromPool ? 'accepting-drop' : ''}`}
+                                            className={`montage-track triggers ${isDraggingFromPool && draggingHoverTrack === 'triggers' ? 'accepting-drop' : ''}`}
                                             onDragOver={(e) => { 
                                                 if (isDraggingFromPool) {
                                                     e.preventDefault(); 
@@ -1472,14 +1481,17 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                     const rect = e.currentTarget.getBoundingClientRect();
                                                     const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
                                                     setDropPreview((x - introWidth) / zoom); 
+                                                    setDraggingHoverTrack('triggers');
                                                 } 
                                             }}
+                                            onDragLeave={() => setDraggingHoverTrack(null)}
                                             onDrop={(e) => { 
                                                 if (isDraggingFromPool) { 
                                                     e.stopPropagation(); 
                                                     const rect = e.currentTarget.getBoundingClientRect();
                                                     const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
                                                     handleTriggerDrop((x - introWidth) / zoom); 
+                                                    setDraggingHoverTrack(null);
                                                 } 
                                             }}
                                         >
@@ -1516,7 +1528,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                     </div>
                                                 );
                                             })}
-                                            {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && (
+                                            {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && draggingHoverTrack === 'triggers' && (
                                                 <div className="timeline-drop-ghost-precise" style={{ left: `${dropPreview * zoom + introWidth}px`, width: '120px' }}>
                                                     <div className="ghost-indicator" style={{ background: '#ffcc00', color: '#000' }}>ADD TRIGGER</div>
                                                 </div>
@@ -1524,21 +1536,24 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                         </div>
 
                                         <div 
-                                            className={`montage-track watermarks ${isDraggingFromPool ? 'accepting-drop' : ''}`}
+                                            className={`montage-track watermarks ${isDraggingFromPool && draggingHoverTrack === 'watermarks' ? 'accepting-drop' : ''}`}
                                             onDragOver={(e) => { 
                                                 if (isDraggingFromPool) {
                                                     e.preventDefault(); e.stopPropagation(); 
                                                     const rect = e.currentTarget.getBoundingClientRect();
                                                     const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
                                                     setDropPreview((x - introWidth) / zoom); 
+                                                    setDraggingHoverTrack('watermarks');
                                                 } 
                                             }}
+                                            onDragLeave={() => setDraggingHoverTrack(null)}
                                             onDrop={(e) => { 
                                                 if (isDraggingFromPool) { 
                                                     e.stopPropagation(); 
                                                     const rect = e.currentTarget.getBoundingClientRect();
                                                     const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
                                                     handleWatermarkDrop((x - introWidth) / zoom); 
+                                                    setDraggingHoverTrack(null);
                                                 } 
                                             }}
                                         >
@@ -1566,19 +1581,19 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                         <div className="watermark-name">{w.path.split(/[\\/]/).pop()}</div>
                                                         <button className="trigger-delete-btn" onClick={(e) => { e.stopPropagation(); handleDeleteWatermark(i); }}>✕</button>
                                                         
-                                                        <div className="watermark-resizer-timeline left" onMouseDown={(e) => { e.stopPropagation(); setDraggingWatermarkSide('start'); setDragWatermarkStartPos(w.startTime); setDragWatermarkStartDur(w.duration); }} />
-                                                        <div className="watermark-resizer-timeline right" onMouseDown={(e) => { e.stopPropagation(); setDraggingWatermarkSide('end'); setDragWatermarkStartPos(w.startTime); setDragWatermarkStartDur(w.duration); }} />
+                                                        <div className="watermark-resizer-timeline left" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setDraggingWatermarkSide('start'); setDraggingWatermarkIdx(i); setStartX(e.clientX); setDragWatermarkStartPos(w.startTime); setDragWatermarkStartDur(w.duration); }} />
+                                                        <div className="watermark-resizer-timeline right" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setDraggingWatermarkSide('end'); setDraggingWatermarkIdx(i); setStartX(e.clientX); setDragWatermarkStartPos(w.startTime); setDragWatermarkStartDur(w.duration); }} />
                                                     </div>
                                                 );
                                             })}
-                                            {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && (
+                                            {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && draggingHoverTrack === 'watermarks' && (
                                                 <div className="timeline-drop-ghost-precise" style={{ left: `${dropPreview * zoom + introWidth}px`, width: '120px' }}>
                                                     <div className="ghost-indicator" style={{ background: 'var(--accent-color)', color: '#fff' }}>ADD WATERMARK</div>
                                                 </div>
                                             )}
                                         </div>
                                     </div>
-                                    {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && (
+                                    {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && draggingHoverTrack === 'clips' && (
                                         <div className="timeline-insertion-guide" style={{ left: `${dropPreview * zoom + introWidth}px`, height: '100%' }}><div className="guide-line" /></div>
                                     )}
                                     <div className="montage-playhead" style={{ left: `${currentTime * zoom + (introVideo ? 0 : introWidth)}px` }}><div className="playhead-handle" /></div>
