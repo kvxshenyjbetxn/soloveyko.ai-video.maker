@@ -474,6 +474,18 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			H         int     `json:"h"`
 		}
 
+		type MontageWatermark struct {
+			ID        string  `json:"id"`
+			Path      string  `json:"path"`
+			StartTime float64 `json:"startTime"`
+			Duration  float64 `json:"duration"`
+			X         int     `json:"x"`
+			Y         int     `json:"y"`
+			W         int     `json:"w"`
+			H         int     `json:"h"`
+			Opacity   float64 `json:"opacity"`
+		}
+
 		type MontagePlan struct {
 			AudioDuration float64          `json:"audioDuration"`
 			AudioPath     string           `json:"audioPath"`
@@ -483,6 +495,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			Clips         []MontageClip    `json:"clips"`
 			AudioSegments []MontageSegment `json:"audioSegments"`
 			Triggers      []MontageTrigger `json:"triggers"`
+			Watermarks    []MontageWatermark `json:"watermarks"`
 			BaseW         int              `json:"baseW"`
 			BaseH         int              `json:"baseH"`
 			IntroPath     string           `json:"introPath,omitempty"`
@@ -500,6 +513,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			BaseH:         baseH,
 			Clips:         make([]MontageClip, numFiles),
 			Triggers:      []MontageTrigger{},
+			Watermarks:    []MontageWatermark{},
 		}
 
 		if pSettings.MontageIntroVideoEnabled && pSettings.MontageIntroVideoPath != "" {
@@ -550,6 +564,34 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						H:         baseH,
 					})
 				}
+			}
+		}
+
+		// Calculate Watermarks for UI
+		if len(pSettings.MontageWatermarks) > 0 {
+			for _, wm := range pSettings.MontageWatermarks {
+				if wm.Path == "" {
+					continue
+				}
+				startTime := 0.0
+				if wm.StartTime != nil {
+					startTime = *wm.StartTime
+				}
+				duration := 5.0
+				if wm.Duration != nil {
+					duration = *wm.Duration
+				}
+				plan.Watermarks = append(plan.Watermarks, MontageWatermark{
+					ID:        wm.ID,
+					Path:      wm.Path,
+					StartTime: startTime,
+					Duration:  duration,
+					X:         wm.X,
+					Y:         wm.Y,
+					W:         wm.W,
+					H:         wm.H,
+					Opacity:   wm.Opacity,
+				})
 			}
 		}
 
@@ -650,6 +692,35 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 							}
 						}
 						pSettings.MontageOverlayTriggers = newTrs
+					} else if strings.HasPrefix(p, "watermarks:") {
+						wmStr := strings.TrimPrefix(p, "watermarks:")
+						wmItems := strings.Split(wmStr, "::")
+						var newWms []utils.OverlayWatermark
+						for _, item := range wmItems {
+							bits := strings.Split(item, "|")
+							if len(bits) >= 9 {
+								// id|path|startTime|duration|x|y|w|h|opacity
+								start, _ := strconv.ParseFloat(bits[2], 64)
+								dur, _ := strconv.ParseFloat(bits[3], 64)
+								x, _ := strconv.Atoi(bits[4])
+								y, _ := strconv.Atoi(bits[5])
+								w, _ := strconv.Atoi(bits[6])
+								h, _ := strconv.Atoi(bits[7])
+								opacity, _ := strconv.ParseFloat(bits[8], 64)
+								newWms = append(newWms, utils.OverlayWatermark{
+									ID:        bits[0],
+									Path:      bits[1],
+									X:         x,
+									Y:         y,
+									W:         w,
+									H:         h,
+									StartTime: &start,
+									Duration:  &dur,
+									Opacity:   opacity,
+								})
+							}
+						}
+						pSettings.MontageWatermarks = newWms
 					} else if strings.HasPrefix(p, "intro:") {
 						introData := strings.TrimPrefix(p, "intro:")
 						if introData == "" || introData == "none" {
@@ -1105,7 +1176,62 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		h         int
 	}
 	var activeTriggers []triggerInfo
-	if pSettings.MontageOverlayTriggersEnabled && len(pSettings.MontageOverlayTriggers) > 0 {
+
+	// Custom Watermarks
+	type watermarkInfo struct {
+		id        string
+		path      string
+		startTime float64
+		duration  float64
+		idx       int
+		x         int
+		y         int
+		w         int
+		h         int
+		opacity   float64
+	}
+	var activeCustomWatermarks []watermarkInfo
+	if len(pSettings.MontageWatermarks) > 0 {
+		for _, wm := range pSettings.MontageWatermarks {
+			if wm.Path == "" {
+				continue
+			}
+			if _, err := os.Stat(wm.Path); err != nil {
+				s.log("WARN", fmt.Sprintf("[Montage] Custom watermark path not found: %s", wm.Path), id, taskLabel)
+				continue
+			}
+
+			startT := 0.0
+			if wm.StartTime != nil {
+				startT = *wm.StartTime
+			}
+			durT := 5.0
+			if wm.Duration != nil {
+				durT = *wm.Duration
+			}
+
+			if startT > audioDur {
+				continue
+			}
+
+			customWmIdx := len(inputSpecs)
+			inputSpecs = append(inputSpecs, inputSpec{loop: true, path: getRel(wm.Path)})
+
+			activeCustomWatermarks = append(activeCustomWatermarks, watermarkInfo{
+				id:        wm.ID,
+				path:      wm.Path,
+				startTime: startT,
+				duration:  durT,
+				idx:       customWmIdx,
+				x:         wm.X,
+				y:         wm.Y,
+				w:         wm.W,
+				h:         wm.H,
+				opacity:   wm.Opacity,
+			})
+		}
+	}
+	if len(pSettings.MontageOverlayTriggers) > 0 {
 		for _, tr := range pSettings.MontageOverlayTriggers {
 			if tr.Phrase == "" || tr.Path == "" {
 				continue
@@ -1253,6 +1379,29 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				currentMontageV, trigProcessedLabel, tr.x, tr.y, enableExpr, outLabel,
 			))
 		}
+		currentMontageV = outLabel
+	}
+
+	for i, wm := range activeCustomWatermarks {
+		wmDur := wm.duration
+		wmProcessedLabel := fmt.Sprintf("v_pwm_ready_%d", i)
+		
+		opacity := wm.opacity
+		if opacity <= 0 {
+			opacity = 1.0
+		}
+
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[%d:v]format=yuva420p,scale=%d:%d,colorchannelmixer=aa=%.3f,setpts=PTS-STARTPTS+%.3f/TB[%s]",
+			wm.idx, wm.w, wm.h, opacity, wm.startTime, wmProcessedLabel,
+		))
+
+		outLabel := fmt.Sprintf("v_pwm_out_%d", i)
+		enableExpr := fmt.Sprintf("between(t,%.3f,%.3f)", wm.startTime, wm.startTime+wmDur)
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[%s][%s]overlay=x=%d:y=%d:enable='%s'[%s]",
+			currentMontageV, wmProcessedLabel, wm.x, wm.y, enableExpr, outLabel,
+		))
 		currentMontageV = outLabel
 	}
 

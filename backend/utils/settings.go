@@ -22,6 +22,20 @@ type OverlayTrigger struct {
 	H         int      `json:"h"`
 	StartTime *float64 `json:"startTime,omitempty"`
 	Duration  *float64 `json:"duration,omitempty"`
+	IsVideo   bool     `json:"isVideo"`
+}
+
+type OverlayWatermark struct {
+	ID        string   `json:"id"`
+	Path      string   `json:"path"`
+	X         int      `json:"x"`
+	Y         int      `json:"y"`
+	W         int      `json:"w"`
+	H         int      `json:"h"`
+	StartTime *float64 `json:"startTime,omitempty"`
+	Duration  *float64 `json:"duration,omitempty"`
+	Opacity   float64  `json:"opacity"`
+	IsVideo   bool     `json:"isVideo"`
 }
 
 type CustomStage struct {
@@ -198,8 +212,9 @@ type PipelineSettings struct {
 	MontageOverlayPath            string           `json:"montageOverlayPath,omitempty"`
 	MontageOverlayOnIntro         bool             `json:"montageOverlayOnIntro"`
 	MontageOverlayTriggersEnabled bool             `json:"montageOverlayTriggersEnabled"`
-	MontageOverlayTriggers        []OverlayTrigger `json:"montageOverlayTriggers,omitempty"`
-	MontageMetadataSimulation     string           `json:"montageMetadataSimulation,omitempty"` // "none", "DaVinci Resolve Studio"
+	MontageOverlayTriggers        []OverlayTrigger   `json:"montageOverlayTriggers,omitempty"`
+	MontageWatermarks             []OverlayWatermark `json:"montageWatermarks,omitempty"`
+	MontageMetadataSimulation     string             `json:"montageMetadataSimulation,omitempty"` // "none", "DaVinci Resolve Studio"
 
 	CustomStages          []CustomStage `json:"customStages,omitempty"`
 	CustomStagesEnabled   bool          `json:"customStagesEnabled"`
