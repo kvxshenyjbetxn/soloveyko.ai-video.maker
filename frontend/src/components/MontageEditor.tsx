@@ -100,7 +100,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
 
     const [triggers, setTriggers] = useState<MontageTrigger[]>([]);
     const [draggingTriggerIdx, setDraggingTriggerIdx] = useState<number | null>(null);
+    const [draggingTriggerSide, setDraggingTriggerSide] = useState<null | 'start' | 'end'>(null);
     const [dragTriggerStartPos, setDragTriggerStartPos] = useState<number>(0);
+    const [dragTriggerStartDur, setDragTriggerStartDur] = useState<number>(0);
     const [dragTriggerOffsetX, setDragTriggerOffsetX] = useState<number>(0);
     const [draggingTriggerPosIdx, setDraggingTriggerPosIdx] = useState<number | null>(null);
     const [dragStartCoords, setDragStartCoords] = useState<{ x: number, y: number, mouseX: number, mouseY: number, x2?: number, y2?: number } | null>(null);
@@ -562,6 +564,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         setDraggingIdx(null);
         setDraggingSelectionSide(null);
         setDraggingTriggerIdx(null);
+        setDraggingTriggerSide(null);
         setDraggingTriggerPosIdx(null);
         setDraggingWatermarkIdx(null);
         setDraggingWatermarkPosIdx(null);
@@ -890,6 +893,21 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     nw[draggingWatermarkIdx] = { ...nw[draggingWatermarkIdx], startTime: newTime };
                     return nw;
                 });
+            } else if (draggingTriggerSide !== null && draggingTriggerIdx !== null) {
+                const deltaT = (e.clientX - startX) / zoom;
+                setTriggers(p => {
+                    const nt = [...p];
+                    const tr = nt[draggingTriggerIdx];
+                    if (draggingTriggerSide === 'start') {
+                        const newStart = Math.max(0, dragTriggerStartPos + deltaT);
+                        const newDur = Math.max(0.2, dragTriggerStartDur - (newStart - dragTriggerStartPos));
+                        nt[draggingTriggerIdx] = { ...tr, startTime: newStart, duration: newDur };
+                    } else {
+                        const newDur = Math.max(0.2, dragTriggerStartDur + deltaT);
+                        nt[draggingTriggerIdx] = { ...tr, duration: newDur };
+                    }
+                    return nt;
+                });
             } else if (draggingTriggerIdx !== null) {
                 const deltaT = (e.clientX - startX) / zoom;
                 let newTime = Math.max(0, dragTriggerStartPos + deltaT);
@@ -979,12 +997,12 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             }
             if (isScrubbing) handleTimelineMove(e);
         };
-        if (draggingIdx !== null || isScrubbing || draggingSelectionSide !== null || draggingTriggerIdx !== null || draggingTriggerPosIdx !== null || draggingWatermarkIdx !== null || draggingWatermarkPosIdx !== null || resizingWatermarkIdx !== null) {
+        if (draggingIdx !== null || isScrubbing || draggingSelectionSide !== null || draggingTriggerIdx !== null || draggingTriggerSide !== null || draggingTriggerPosIdx !== null || draggingWatermarkIdx !== null || draggingWatermarkPosIdx !== null || resizingWatermarkIdx !== null) {
             document.addEventListener('mousemove', mm);
             document.addEventListener('mouseup', mu);
         }
         return () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
-    }, [draggingIdx, isScrubbing, draggingSelectionSide, draggingTriggerIdx, draggingTriggerPosIdx, draggingWatermarkIdx, draggingWatermarkPosIdx, resizingWatermarkIdx, dragStartCoords, handleTimelineMove, zoom, startX, startDurations, dragTriggerStartPos, dragWatermarkStartPos, dragWatermarkStartDur, resizingWatermarkHandle, draggingWatermarkSide, handleMouseUp, plan, introWidth]);
+    }, [draggingIdx, isScrubbing, draggingSelectionSide, draggingTriggerIdx, draggingTriggerSide, draggingTriggerPosIdx, draggingWatermarkIdx, draggingWatermarkPosIdx, resizingWatermarkIdx, dragStartCoords, handleTimelineMove, zoom, startX, startDurations, dragTriggerStartPos, dragTriggerStartDur, dragWatermarkStartPos, dragWatermarkStartDur, resizingWatermarkHandle, draggingWatermarkSide, handleMouseUp, plan, introWidth]);
 
     const markers = useMemo(() => {
         const res = [];
@@ -1488,6 +1506,13 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                         <div className="trigger-icon">🎯</div>
                                                         <div className="trigger-phrase">{tr.phrase}</div>
                                                         <button className="trigger-delete-btn" onClick={(e) => { e.stopPropagation(); handleDeleteTrigger(i); }}>✕</button>
+                                                        
+                                                        {!tr.isVideo && (
+                                                            <>
+                                                                <div className="trigger-resizer-timeline left" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setDraggingTriggerSide('start'); setDraggingTriggerIdx(i); setSelectedTriggerIdx(i); setStartX(e.clientX); setDragTriggerStartPos(tr.startTime); setDragTriggerStartDur(tr.duration); }} />
+                                                                <div className="trigger-resizer-timeline right" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setDraggingTriggerSide('end'); setDraggingTriggerIdx(i); setSelectedTriggerIdx(i); setStartX(e.clientX); setDragTriggerStartPos(tr.startTime); setDragTriggerStartDur(tr.duration); }} />
+                                                            </>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
