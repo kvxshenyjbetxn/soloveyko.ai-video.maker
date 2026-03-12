@@ -451,6 +451,16 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			ActualDuration float64 `json:"actualDuration"`
 		}
 
+		type MontageTrigger struct {
+			Phrase    string  `json:"phrase"`
+			Path      string  `json:"path"`
+			StartTime float64 `json:"startTime"`
+			Duration  float64 `json:"duration"`
+			IsVideo   bool    `json:"isVideo"`
+			X         int     `json:"x"`
+			Y         int     `json:"y"`
+		}
+
 		type MontagePlan struct {
 			AudioDuration float64          `json:"audioDuration"`
 			AudioPath     string           `json:"audioPath"`
@@ -459,6 +469,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			IsFadeFast    bool             `json:"isFadeFast"`
 			Clips         []MontageClip    `json:"clips"`
 			AudioSegments []MontageSegment `json:"audioSegments"`
+			Triggers      []MontageTrigger `json:"triggers"`
 		}
 
 		plan := MontagePlan{
@@ -468,6 +479,47 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			TransDuration: transDur,
 			IsFadeFast:    isFadeFast,
 			Clips:         make([]MontageClip, numFiles),
+			Triggers:      []MontageTrigger{},
+		}
+
+		// Calculate Triggers for UI
+		if pSettings.MontageOverlayTriggersEnabled && len(pSettings.MontageOverlayTriggers) > 0 {
+			assPath := filepath.Join(finalDir, "subtitle.ass")
+			srtPath := filepath.Join(finalDir, "subtitle.srt")
+			
+			// Determine which subtitle file to use for finding timings
+			activeSubPath := assPath
+			if _, err := os.Stat(assPath); err != nil {
+				if _, errSrt := os.Stat(srtPath); errSrt == nil {
+					activeSubPath = srtPath
+				}
+			}
+
+			for _, tr := range pSettings.MontageOverlayTriggers {
+				if tr.Phrase == "" || tr.Path == "" {
+					continue
+				}
+				startT := s.findTextTiming(activeSubPath, tr.Phrase, taskLabel)
+				if startT != nil {
+					trDur := 3.0 // Default for images
+					ext := strings.ToLower(filepath.Ext(tr.Path))
+					isTrVideo := videoExts[ext]
+					if isTrVideo {
+						if d, err := s.getDuration(ffprobePath, tr.Path); err == nil && d > 0 {
+							trDur = d
+						}
+					}
+					plan.Triggers = append(plan.Triggers, MontageTrigger{
+						Phrase:    tr.Phrase,
+						Path:      tr.Path,
+						StartTime: *startT,
+						Duration:  trDur,
+						IsVideo:   isTrVideo,
+						X:         tr.X,
+						Y:         tr.Y,
+					})
+				}
+			}
 		}
 
 		for i, f := range visualFiles {
@@ -1465,19 +1517,19 @@ func (s *PipelineService) getVideoSizeGB(ffprobePath, path string) string {
 	return fmt.Sprintf("%.2f GB", gb)
 }
 
-func (s *PipelineService) findTextTiming(assPath string, phrase string, taskLabel string) *float64 {
-	data, err := os.ReadFile(assPath)
+func (s *PipelineService) findTextTiming(subPath string, phrase string, taskLabel string) *float64 {
+	data, err := os.ReadFile(subPath)
 	if err != nil {
 		return nil
 	}
 
+	isAss := strings.HasSuffix(strings.ToLower(subPath), ".ass")
+
 	normalize := func(t string) string {
 		t = strings.ToLower(t)
 		t = strings.ReplaceAll(t, "ё", "е")
-		// Replace all non-word characters (punctuation, special chars) with a space
 		reg := regexp.MustCompile(`[^\p{L}\p{N}]+`)
 		t = reg.ReplaceAllString(t, " ")
-		// Normalize whitespace
 		return strings.Join(strings.Fields(t), " ")
 	}
 
@@ -1496,46 +1548,64 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string, taskLabe
 	}
 	var subWords []subWord
 
-	// Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Text
-	re := regexp.MustCompile(`Dialogue: \d+,(\d+:\d+:\d+\.\d+),(\d+:\d+:\d+\.\d+),.*,,(.*)`)
 	tagRe := regexp.MustCompile(`\{.*?\}`)
+	
+	if isAss {
+		reAss := regexp.MustCompile(`Dialogue: \d+,(\d+:\d+:\d+\.\d+),(\d+:\d+:\d+\.\d+),.*,,(.*)`)
+		for _, line := range lines {
+			matches := reAss.FindStringSubmatch(line)
+			if len(matches) > 3 {
+				startTimeStr := matches[1]
+				endTimeStr := matches[2]
+				text := matches[3]
+				text = tagRe.ReplaceAllString(text, "")
+				text = strings.ReplaceAll(text, "\\N", " ")
+				text = strings.ReplaceAll(text, "\\n", " ")
+				text = strings.ReplaceAll(text, "\\h", " ")
 
-	for _, line := range lines {
-		matches := re.FindStringSubmatch(line)
-		if len(matches) > 3 {
-			startTimeStr := matches[1]
-			endTimeStr := matches[2]
-			text := matches[3]
-			// Clean ASS tags and common line break tags
-			text = tagRe.ReplaceAllString(text, "")
-			text = strings.ReplaceAll(text, "\\N", " ")
-			text = strings.ReplaceAll(text, "\\n", " ")
-			text = strings.ReplaceAll(text, "\\h", " ")
+				startT := s.assTimeToSeconds(startTimeStr)
+				endT := s.assTimeToSeconds(endTimeStr)
 
-			parseTime := func(tStr string) float64 {
-				parts := strings.Split(tStr, ":")
-				if len(parts) == 3 {
-					h, _ := strconv.ParseFloat(parts[0], 64)
-					m, _ := strconv.ParseFloat(parts[1], 64)
-					sec, _ := strconv.ParseFloat(parts[2], 64)
-					return h*3600 + m*60 + sec
+				cleaned := normalize(text)
+				words := strings.Fields(cleaned)
+				if len(words) > 0 {
+					wordDur := (endT - startT) / float64(len(words))
+					for i, w := range words {
+						subWords = append(subWords, subWord{
+							text:  w,
+							start: startT + float64(i)*wordDur,
+							end:   startT + float64(i+1)*wordDur,
+						})
+					}
 				}
-				return 0
 			}
-
-			startT := parseTime(startTimeStr)
-			endT := parseTime(endTimeStr)
-
-			cleaned := normalize(text)
-			words := strings.Fields(cleaned)
-			if len(words) > 0 {
-				wordDur := (endT - startT) / float64(len(words))
-				for i, w := range words {
-					subWords = append(subWords, subWord{
-						text:  w,
-						start: startT + float64(i)*wordDur,
-						end:   startT + float64(i+1)*wordDur,
-					})
+		}
+	} else {
+		// SRT Parsing
+		reSrtTime := regexp.MustCompile(`(\d{2}:\d{2}:\d{2}[,\.]\d{3}) --> (\d{2}:\d{2}:\d{2}[,\.]\d{3})`)
+		var currentStart, currentEnd float64
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			timeMatches := reSrtTime.FindStringSubmatch(line)
+			if len(timeMatches) > 2 {
+				currentStart = s.srtTimeToSeconds(timeMatches[1])
+				currentEnd = s.srtTimeToSeconds(timeMatches[2])
+			} else if (currentStart != 0 || currentEnd != 0) && !regexp.MustCompile(`^\d+$`).MatchString(line) {
+				// It's text (and not just the index number)
+				cleaned := normalize(line)
+				words := strings.Fields(cleaned)
+				if len(words) > 0 {
+					wordDur := (currentEnd - currentStart) / float64(len(words))
+					for i, w := range words {
+						subWords = append(subWords, subWord{
+							text:  w,
+							start: currentStart + float64(i)*wordDur,
+							end:   currentStart + float64(i+1)*wordDur,
+						})
+					}
 				}
 			}
 		}
@@ -1545,7 +1615,6 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string, taskLabe
 		return nil
 	}
 
-	// Use exact match threshold if possible
 	threshold := 0.60
 	if len(targetWords) <= 2 {
 		threshold = 1.0
@@ -1584,6 +1653,29 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string, taskLabe
 
 	s.log("WARN", fmt.Sprintf("[Montage] Trigger phrase not found after full scan: '%s'", phrase), "", taskLabel)
 	return nil
+}
+
+func (s *PipelineService) assTimeToSeconds(t string) float64 {
+	parts := strings.Split(t, ":")
+	if len(parts) != 3 {
+		return 0
+	}
+	h, _ := strconv.ParseFloat(parts[0], 64)
+	m, _ := strconv.ParseFloat(parts[1], 64)
+	sec, _ := strconv.ParseFloat(parts[2], 64)
+	return h*3600 + m*60 + sec
+}
+
+func (s *PipelineService) srtTimeToSeconds(t string) float64 {
+	t = strings.ReplaceAll(t, ",", ".")
+	parts := strings.Split(t, ":")
+	if len(parts) != 3 {
+		return 0
+	}
+	h, _ := strconv.ParseFloat(parts[0], 64)
+	m, _ := strconv.ParseFloat(parts[1], 64)
+	sec, _ := strconv.ParseFloat(parts[2], 64)
+	return h*3600 + m*60 + sec
 }
 
 // applyMetadata applies specialized metadata simulation (e.g. for DaVinci Resolve) using exiftool.

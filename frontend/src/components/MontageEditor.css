@@ -746,7 +746,7 @@
 
 .montage-timeline-tracks {
     position: relative;
-    height: 100px;
+    height: 146px;
     background: rgba(255, 255, 255, 0.02);
     border-radius: 8px;
     border: 1px dashed rgba(255, 255, 255, 0.05);
@@ -754,10 +754,72 @@
 
 .montage-track {
     position: absolute;
-    top: 10px;
     left: 0;
-    height: 80px;
     width: 100%;
+}
+
+.montage-track.clips {
+    top: 10px;
+    height: 80px;
+}
+
+.montage-track.triggers {
+    top: 100px;
+    height: 36px;
+    background: rgba(0, 0, 0, 0.1);
+    border-top: 1px solid var(--border-color);
+}
+
+.track-label {
+    position: absolute;
+    left: 12px;
+    top: -18px;
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+}
+
+.montage-trigger-marker {
+    position: absolute;
+    top: 4px;
+    height: 28px;
+    background: color-mix(in srgb, #ffcc00, transparent 85%);
+    border: 1px solid color-mix(in srgb, #ffcc00, transparent 70%);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    gap: 6px;
+    color: var(--text-secondary);
+    cursor: help;
+    transition: all 0.2s;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.montage-trigger-marker:hover {
+    background: color-mix(in srgb, #ffcc00, transparent 70%);
+    border-color: #ffcc00;
+}
+
+.montage-trigger-marker.active {
+    background: #ffcc00;
+    color: #000;
+    border-color: #ffcc00;
+    box-shadow: 0 0 15px rgba(255, 204, 0, 0.4);
+    z-index: 10;
+}
+
+.trigger-icon {
+    font-size: 14px;
+}
+
+.trigger-phrase {
+    font-size: 10px;
+    font-weight: 700;
 }
 
 .montage-clip-block {

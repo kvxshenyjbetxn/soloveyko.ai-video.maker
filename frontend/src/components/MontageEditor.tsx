@@ -17,6 +17,16 @@ interface MontageSegment {
     end: number;
 }
 
+interface MontageTrigger {
+    phrase: string;
+    path: string;
+    startTime: number;
+    duration: number;
+    isVideo: boolean;
+    x: number;
+    y: number;
+}
+
 interface MontagePlan {
     audioDuration: number;
     audioPath: string | null;
@@ -25,6 +35,7 @@ interface MontagePlan {
     clips: MontageClip[];
     subtitlePath?: string;
     audioSegments?: MontageSegment[];
+    triggers?: MontageTrigger[];
 }
 
 interface SubtitleEntry {
@@ -665,6 +676,27 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         ));
     }, [clipLayouts, activeClipInfo?.idx, clips, regeneratingIndices, handleDeleteClip, handleOpenRegenerate]);
 
+    const triggerElements = useMemo(() => {
+        if (!plan?.triggers) return null;
+        return plan.triggers.map((tr, i) => {
+            const width = Math.max(tr.duration * zoom, 40);
+            const x = tr.startTime * zoom;
+            const isActive = currentTime >= tr.startTime && currentTime <= tr.startTime + tr.duration;
+            return (
+                <div 
+                    key={i} 
+                    className={`montage-trigger-marker ${isActive ? 'active' : ''}`}
+                    style={{ left: `${x}px`, width: `${width}px` }}
+                    title={`Trigger: ${tr.phrase} (${tr.path.split(/[\\/]/).pop()})`}
+                    onClick={() => setCurrentTime(tr.startTime)}
+                >
+                    <div className="trigger-icon">🎯</div>
+                    <div className="trigger-phrase">{tr.phrase}</div>
+                </div>
+            );
+        });
+    }, [plan?.triggers, zoom, currentTime]);
+
     if (!plan) return null;
 
     return (
@@ -797,7 +829,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                 <div className="audio-track-reference" style={{ width: `${totalTimelineDuration * zoom}px` }} onMouseDown={handleMouseDownGlobal}><span>Audio Sequence</span></div>
                             </div>
                             <div className="montage-timeline-tracks">
-                                <div className="montage-track">
+                                <div className="montage-track clips">
                                     {clipElements}
                                     {isDraggingFromPool && dropPreview !== null && (
                                         <div className="timeline-drop-ghost-precise" style={{ left: `${dropPreview * zoom}px`, width: `${isDraggingFromPool.duration * zoom}px` }}>
@@ -805,6 +837,13 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                         </div>
                                     )}
                                 </div>
+
+                                {plan?.triggers && plan.triggers.length > 0 && (
+                                    <div className="montage-track triggers">
+                                        <div className="track-label">Triggers</div>
+                                        {triggerElements}
+                                    </div>
+                                )}
                             </div>
                             {isDraggingFromPool && dropPreview !== null && (
                                 <div className="timeline-insertion-guide" style={{ left: `${dropPreview * zoom}px`, height: '100%' }}><div className="guide-line" /></div>
