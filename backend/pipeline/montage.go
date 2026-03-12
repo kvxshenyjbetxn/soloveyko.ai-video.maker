@@ -324,11 +324,22 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	isFadeFast := pSettings.MontageTransitionEffect == "fade_fast"
 
 	baseW, baseH := 1920, 1080
+	if pSettings.ImageWidth < pSettings.ImageHeight && pSettings.ImageWidth > 0 {
+		baseW, baseH = 1080, 1920
+	}
 	switch pSettings.MontageResolution {
 	case "720p":
-		baseW, baseH = 1280, 720
+		if baseW > baseH {
+			baseW, baseH = 1280, 720
+		} else {
+			baseW, baseH = 720, 1280
+		}
 	case "2k":
-		baseW, baseH = 2560, 1440
+		if baseW > baseH {
+			baseW, baseH = 2560, 1440
+		} else {
+			baseW, baseH = 1440, 2560
+		}
 	}
 
 	fps := pSettings.MontageFPS
@@ -459,6 +470,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			IsVideo   bool    `json:"isVideo"`
 			X         int     `json:"x"`
 			Y         int     `json:"y"`
+			W         int     `json:"w"`
+			H         int     `json:"h"`
 		}
 
 		type MontagePlan struct {
@@ -470,6 +483,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			Clips         []MontageClip    `json:"clips"`
 			AudioSegments []MontageSegment `json:"audioSegments"`
 			Triggers      []MontageTrigger `json:"triggers"`
+			BaseW         int              `json:"baseW"`
+			BaseH         int              `json:"baseH"`
 		}
 
 		plan := MontagePlan{
@@ -478,6 +493,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			SubtitlePath:  filepath.Join(finalDir, "subtitle.srt"),
 			TransDuration: transDur,
 			IsFadeFast:    isFadeFast,
+			BaseW:         baseW,
+			BaseH:         baseH,
 			Clips:         make([]MontageClip, numFiles),
 			Triggers:      []MontageTrigger{},
 		}
@@ -517,6 +534,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						IsVideo:   isTrVideo,
 						X:         tr.X,
 						Y:         tr.Y,
+						W:         baseW, // Full screen by default
+						H:         baseH,
 					})
 				}
 			}
@@ -598,17 +617,21 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						var newTrs []utils.OverlayTrigger
 						for _, item := range trItems {
 							bits := strings.Split(item, "|")
-							if len(bits) >= 7 {
-								// phrase|path|startTime|duration|x|y|type
+							if len(bits) >= 9 {
+								// phrase|path|startTime|duration|x|y|w|h|type
 								start, _ := strconv.ParseFloat(bits[2], 64)
 								dur, _ := strconv.ParseFloat(bits[3], 64)
 								x, _ := strconv.Atoi(bits[4])
 								y, _ := strconv.Atoi(bits[5])
+								w, _ := strconv.Atoi(bits[6])
+								h, _ := strconv.Atoi(bits[7])
 								newTrs = append(newTrs, utils.OverlayTrigger{
 									Phrase:    bits[0],
 									Path:      bits[1],
 									X:         x,
 									Y:         y,
+									W:         w,
+									H:         h,
 									StartTime: &start,
 									Duration:  &dur,
 								})
@@ -1058,6 +1081,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		idx       int
 		x         int
 		y         int
+		w         int
+		h         int
 	}
 	var activeTriggers []triggerInfo
 	if pSettings.MontageOverlayTriggersEnabled && len(pSettings.MontageOverlayTriggers) > 0 {
@@ -1105,6 +1130,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 					idx:       tIdx,
 					x:         tr.X,
 					y:         tr.Y,
+					w:         tr.W,
+					h:         tr.H,
 				})
 			} else {
 				s.log("INFO", fmt.Sprintf("[Montage] Trigger phrase '%s' not found", tr.Phrase), id, taskLabel)
@@ -1188,7 +1215,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		trigProcessedLabel := fmt.Sprintf("v_trig_ready_%d", i)
 		filterParts = append(filterParts, fmt.Sprintf(
 			"[%d:v]format=yuva420p,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setpts=PTS-STARTPTS+%.3f/TB[%s]",
-			tr.idx, baseW, baseH, baseW, baseH, tr.startTime, trigProcessedLabel,
+			tr.idx, tr.w, tr.h, tr.w, tr.h, tr.startTime, trigProcessedLabel,
 		))
 
 		// 2. Apply overlay

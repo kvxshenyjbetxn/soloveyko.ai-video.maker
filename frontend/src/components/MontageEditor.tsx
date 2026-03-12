@@ -25,6 +25,8 @@ interface MontageTrigger {
     isVideo: boolean;
     x: number;
     y: number;
+    w: number;
+    h: number;
 }
 
 interface MontagePlan {
@@ -36,6 +38,8 @@ interface MontagePlan {
     subtitlePath?: string;
     audioSegments?: MontageSegment[];
     triggers?: MontageTrigger[];
+    baseW?: number;
+    baseH?: number;
 }
 
 interface SubtitleEntry {
@@ -81,9 +85,12 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [draggingTriggerIdx, setDraggingTriggerIdx] = useState<number | null>(null);
     const [dragTriggerStartPos, setDragTriggerStartPos] = useState<number>(0);
     const [dragTriggerOffsetX, setDragTriggerOffsetX] = useState<number>(0);
+    const [draggingTriggerPosIdx, setDraggingTriggerPosIdx] = useState<number | null>(null);
+    const [dragStartCoords, setDragStartCoords] = useState<{ x: number, y: number, mouseX: number, mouseY: number } | null>(null);
 
     const previewVideoRef = useRef<HTMLVideoElement>(null);
     const previewAudioRef = useRef<HTMLAudioElement>(null);
+    const previewWrapRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const poolRef = useRef<HTMLDivElement>(null);
     const requestRef = useRef<number>();
@@ -116,6 +123,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [hoveredMediaIdx, setHoveredMediaIdx] = useState<number | null>(null);
     const [editingTriggerIdx, setEditingTriggerIdx] = useState<number | null>(null);
     const [tempTriggerPhrase, setTempTriggerPhrase] = useState<string>("");
+    const [previewAspect, setPreviewAspect] = useState<number>(1);
 
     const importFiles = useCallback(async (paths: string[]) => {
         for (const path of paths) {
@@ -459,6 +467,15 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         setCurrentTime(start);
     }, [getOriginalTime, clipLayouts, zoom]);
 
+    const handleMouseUp = useCallback(() => {
+        setDraggingIdx(null);
+        setDraggingSelectionSide(null);
+        setDraggingTriggerIdx(null);
+        setDraggingTriggerPosIdx(null);
+        setDragStartCoords(null);
+        setIsScrubbing(false);
+    }, []);
+
     const handleDeleteClip = useCallback((idx: number) => {
         setClips(prevClips => {
             if (prevClips.length <= 1) return prevClips;
@@ -473,6 +490,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             return newClips;
         });
     }, []);
+
+    const activeTriggersAtTime = useMemo(() => {
+        return triggers.map((t, i) => ({ ...t, index: i }))
+                       .filter(tr => currentTime >= tr.startTime && currentTime <= tr.startTime + tr.duration);
+    }, [triggers, currentTime]);
 
     const handleSaveTriggerPhrase = () => {
         if (editingTriggerIdx !== null) {
@@ -601,13 +623,15 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             duration: isDraggingFromPool.actualDuration && isDraggingFromPool.actualDuration > 0 ? isDraggingFromPool.actualDuration : 3.0,
             isVideo: isDraggingFromPool.isVideo,
             x: 0,
-            y: 0
+            y: 0,
+            w: plan?.baseW || 1920,
+            h: plan?.baseH || 1080
         };
 
         setTriggers(prev => [...prev, newTrigger]);
         setIsDraggingFromPool(null);
         setDropPreview(null);
-    }, [isDraggingFromPool]);
+    }, [isDraggingFromPool, plan]);
 
     const handleDeleteTrigger = useCallback((idx: number) => {
         setTriggers(prev => prev.filter((_, i) => i !== idx));
@@ -660,12 +684,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     };
 
     useEffect(() => {
-        const mu = () => { 
-            setDraggingIdx(null); 
-            setIsScrubbing(false); 
-            setDraggingSelectionSide(null);
-            setDraggingTriggerIdx(null);
-        };
+        const mu = handleMouseUp;
         const mm = (e: MouseEvent) => {
             if (draggingIdx !== null) {
                 const deltaD = (e.clientX - startX) / zoom;
@@ -682,6 +701,23 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     nt[draggingTriggerIdx] = { ...nt[draggingTriggerIdx], startTime: newTime };
                     return nt;
                 });
+            } else if (draggingTriggerPosIdx !== null && dragStartCoords !== null) {
+                const dx = (e.clientX - dragStartCoords.mouseX);
+                const dy = (e.clientY - dragStartCoords.mouseY);
+                const rect = previewWrapRef.current?.getBoundingClientRect();
+                if (rect && plan?.baseW && plan?.baseH) {
+                    const scaleX = plan.baseW / rect.width;
+                    const scaleY = plan.baseH / rect.height;
+                    setTriggers(prev => {
+                        const nt = [...prev];
+                        nt[draggingTriggerPosIdx] = {
+                            ...nt[draggingTriggerPosIdx],
+                            x: Math.round(dragStartCoords.x + dx * scaleX),
+                            y: Math.round(dragStartCoords.y + dy * scaleY)
+                        };
+                        return nt;
+                    });
+                }
             } else if (draggingSelectionSide !== null && containerRef.current) {
                 const rect = containerRef.current.getBoundingClientRect();
                 const x = e.clientX - rect.left + containerRef.current.scrollLeft - 24;
@@ -690,12 +726,12 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             }
             if (isScrubbing) handleTimelineMove(e);
         };
-        if (draggingIdx !== null || isScrubbing || draggingSelectionSide !== null || draggingTriggerIdx !== null) {
+        if (draggingIdx !== null || isScrubbing || draggingSelectionSide !== null || draggingTriggerIdx !== null || draggingTriggerPosIdx !== null) {
             document.addEventListener('mousemove', mm);
             document.addEventListener('mouseup', mu);
         }
         return () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
-    }, [draggingIdx, isScrubbing, draggingSelectionSide, draggingTriggerIdx, handleTimelineMove, zoom, startX, startDurations, dragTriggerStartPos]);
+    }, [draggingIdx, isScrubbing, draggingSelectionSide, draggingTriggerIdx, draggingTriggerPosIdx, dragStartCoords, handleTimelineMove, zoom, startX, startDurations, dragTriggerStartPos, handleMouseUp, plan]);
 
     const markers = useMemo(() => {
         const res = [];
@@ -781,19 +817,62 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                         <div className="montage-preview-container">
                             {activeClipInfo ? (
                                 <div className="montage-preview-wrap">
-                                    {activeClipInfo.clip.isVideo ? (
-                                        <video ref={previewVideoRef} src={getUrl(activeClipInfo.clip.path)} muted playsInline />
-                                    ) : (
-                                        <img src={getUrl(activeClipInfo.clip.path)} alt="Preview" />
-                                    )}
-                                    <div className="preview-timestamp">{currentTime.toFixed(2)}s</div>
-                                    {plan.audioPath && <audio ref={previewAudioRef} src={getUrl(plan.audioPath)} style={{ display: 'none' }} />}
-                                    
-                                    {currentSubtitle && (
-                                        <div className="preview-subtitle-overlay animate-fade">
-                                            {currentSubtitle.text}
-                                        </div>
-                                    )}
+                                    <div 
+                                        className="preview-media-wrapper" 
+                                        ref={previewWrapRef}
+                                        style={{ aspectRatio: `${previewAspect}` }}
+                                    >
+                                        {activeClipInfo.clip.isVideo ? (
+                                            <video 
+                                                ref={previewVideoRef} 
+                                                src={getUrl(activeClipInfo.clip.path)} 
+                                                muted 
+                                                playsInline 
+                                                onLoadedMetadata={(e) => {
+                                                    const v = e.currentTarget;
+                                                    if (v.videoWidth && v.videoHeight) setPreviewAspect(v.videoWidth / v.videoHeight);
+                                                }}
+                                            />
+                                        ) : (
+                                            <img 
+                                                src={getUrl(activeClipInfo.clip.path)} 
+                                                alt="Preview" 
+                                                onLoad={(e) => {
+                                                    const img = e.currentTarget;
+                                                    if (img.naturalWidth && img.naturalHeight) setPreviewAspect(img.naturalWidth / img.naturalHeight);
+                                                }}
+                                            />
+                                        )}
+                                        <div className="preview-timestamp">{currentTime.toFixed(2)}s</div>
+                                        {plan.audioPath && <audio ref={previewAudioRef} src={getUrl(plan.audioPath)} style={{ display: 'none' }} />}
+                                        
+                                        {currentSubtitle && (
+                                            <div className="preview-subtitle-overlay animate-fade">
+                                                {currentSubtitle.text}
+                                            </div>
+                                        )}
+
+                                        {activeTriggersAtTime.map((tr) => (
+                                            <div 
+                                                key={tr.index}
+                                                className={`preview-trigger-overlay ${draggingTriggerPosIdx === tr.index ? 'dragging' : ''}`}
+                                                style={{
+                                                    left: `${(tr.x / (plan.baseW || 1920)) * 100}%`,
+                                                    top: `${(tr.y / (plan.baseH || 1080)) * 100}%`,
+                                                    width: `${(tr.w / (plan.baseW || 1920)) * 100}%`,
+                                                    height: `${(tr.h / (plan.baseH || 1080)) * 100}%`,
+                                                }}
+                                                onMouseDown={(e) => {
+                                                    e.stopPropagation();
+                                                    setDraggingTriggerPosIdx(tr.index);
+                                                    setDragStartCoords({ x: tr.x, y: tr.y, mouseX: e.clientX, mouseY: e.clientY });
+                                                }}
+                                            >
+                                                <div className="trigger-overlay-handle">🎯</div>
+                                                <div className="trigger-overlay-label">{tr.phrase}</div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             ) : <div className="montage-preview-placeholder">No preview</div>}
                         </div>
@@ -952,7 +1031,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     <button className="montage-btn primary premium-button" onClick={() => {
                         const clipData = clips.map(c => `${c.path}|${c.duration.toFixed(3)}|${c.isVideo ? 'v' : 'i'}`).join('::');
                         const ss = audioSegments.map(s => `${s.start.toFixed(3)},${s.end.toFixed(3)}`).join('|');
-                        const trData = triggers.map(t => `${t.phrase}|${t.path}|${t.startTime.toFixed(3)}|${t.duration.toFixed(3)}|${t.x}|${t.y}|${t.isVideo ? 'v' : 'i'}`).join('::');
+                        const trData = triggers.map(t => `${t.phrase}|${t.path}|${t.startTime.toFixed(3)}|${t.duration.toFixed(3)}|${t.x}|${t.y}|${t.w}|${t.h}|${t.isVideo ? 'v' : 'i'}`).join('::');
                         onConfirm(task.id, `confirm_v2:${clipData};segments:${ss};triggers:${trData}`);
                     }}>{t('common.save')}</button>
                 </div>

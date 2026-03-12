@@ -18,6 +18,8 @@ type OverlayTrigger struct {
 	Path      string   `json:"path"`
 	X         int      `json:"x"`
 	Y         int      `json:"y"`
+	W         int      `json:"w"`
+	H         int      `json:"h"`
 	StartTime *float64 `json:"startTime,omitempty"`
 	Duration  *float64 `json:"duration,omitempty"`
 }
