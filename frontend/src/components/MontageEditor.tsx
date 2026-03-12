@@ -39,6 +39,15 @@ interface MontageWatermark {
     w: number;
     h: number;
     opacity: number;
+    trackId?: string;
+    isVideo?: boolean;
+}
+
+export interface MontageTrack {
+    id: string;
+    name: string;
+    type: 'image' | 'video' | 'watermark';
+    color: string;
 }
 
 interface MontagePlan {
@@ -51,6 +60,7 @@ interface MontagePlan {
     audioSegments?: MontageSegment[];
     triggers?: MontageTrigger[];
     watermarks?: MontageWatermark[];
+    extraTracks?: MontageTrack[];
     baseW?: number;
     baseH?: number;
     introPath?: string;
@@ -149,7 +159,8 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [prompts, setPrompts] = useState<string[]>([]);
     const [mediaPool, setMediaPool] = useState<MontageClip[]>([]);
     const [isDraggingFromPool, setIsDraggingFromPool] = useState<MontageClip | null>(null);
-    const [draggingHoverTrack, setDraggingHoverTrack] = useState<'clips' | 'triggers' | 'watermarks' | 'intro' | null>(null);
+    const [extraTracks, setExtraTracks] = useState<MontageTrack[]>([]);
+    const [draggingHoverTrack, setDraggingHoverTrack] = useState<'clips' | 'triggers' | 'watermarks' | 'intro' | string | null>(null);
     const [isDraggingExternal, setIsDraggingExternal] = useState(false);
     const dragCounter = useRef(0);
     const [dropPreview, setDropPreview] = useState<number | null>(null);
@@ -214,6 +225,12 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     setWatermarks(parsed.watermarks.map((w: MontageWatermark) => ({ ...w })));
                 } else {
                     setWatermarks([]);
+                }
+
+                if (parsed.extraTracks) {
+                    setExtraTracks(parsed.extraTracks);
+                } else {
+                    setExtraTracks([]);
                 }
                 
                 if (parsed.introPath) {
@@ -789,7 +806,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         setDropPreview(null);
     }, [isDraggingFromPool, plan]);
 
-    const handleWatermarkDrop = useCallback((dropTime: number) => {
+    const handleWatermarkDrop = useCallback((dropTime: number, trackId?: string) => {
         if (!isDraggingFromPool) return;
         const newW: MontageWatermark = {
             id: Math.random().toString(36).substr(2, 9),
@@ -797,7 +814,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             startTime: Math.max(0, dropTime),
             duration: 5.0,
             x: 50, y: 50, w: 200, h: 200,
-            opacity: 1.0
+            opacity: 1.0,
+            trackId,
+            isVideo: isDraggingFromPool.isVideo
         };
         setWatermarks(prev => {
             const nw = [...prev, newW];
@@ -810,6 +829,23 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         setDraggingHoverTrack(null);
         setDropPreview(null);
     }, [isDraggingFromPool]);
+
+    const handleAddTrack = useCallback(() => {
+        const id = 'row_' + Math.random().toString(36).substr(2, 5);
+        const colors = ['#3b82f6', '#a855f7', '#ec4899', '#10b981', '#f59e0b', '#ef4444'];
+        const color = colors[extraTracks.length % colors.length];
+        setExtraTracks(prev => [...prev, {
+            id,
+            name: `Row ${prev.length + 1}`,
+            color,
+            type: 'image'
+        }]);
+    }, [extraTracks]);
+
+    const handleRemoveTrack = useCallback((tid: string) => {
+        setExtraTracks(prev => prev.filter(t => t.id !== tid));
+        setWatermarks(prev => prev.filter(w => w.trackId !== tid));
+    }, []);
 
     const handleDeleteWatermark = useCallback((idx: number) => {
         setWatermarks(prev => prev.filter((_, i) => i !== idx));
@@ -1297,26 +1333,36 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                     <div className="project-stats-tab animate-fade-in">
                                         {selectedWatermarkIdx !== null ? (
                                             <div className="properties-panel">
-                                                <h4>Watermark Properties</h4>
+                                                <h4>{watermarks[selectedWatermarkIdx]?.isVideo ? 'Video Overlay' : 'Image Overlay'}</h4>
+                                                {!watermarks[selectedWatermarkIdx]?.isVideo && (
+                                                    <div className="prop-group">
+                                                        <label>Opacity: {Math.round(watermarks[selectedWatermarkIdx]?.opacity * 100)}%</label>
+                                                        <input 
+                                                            type="range" 
+                                                            min="0" 
+                                                            max="1" 
+                                                            step="0.01" 
+                                                            value={watermarks[selectedWatermarkIdx]?.opacity || 1} 
+                                                            onChange={(e) => {
+                                                                const val = parseFloat(e.target.value);
+                                                                setWatermarks(prev => {
+                                                                    const nw = [...prev];
+                                                                    nw[selectedWatermarkIdx] = { ...nw[selectedWatermarkIdx], opacity: val };
+                                                                    return nw;
+                                                                });
+                                                            }}
+                                                        />
+                                                    </div>
+                                                )}
                                                 <div className="prop-group">
-                                                    <label>Opacity: {Math.round(watermarks[selectedWatermarkIdx]?.opacity * 100)}%</label>
-                                                    <input 
-                                                        type="range" 
-                                                        min="0" 
-                                                        max="1" 
-                                                        step="0.01" 
-                                                        value={watermarks[selectedWatermarkIdx]?.opacity || 1} 
-                                                        onChange={(e) => {
-                                                            const val = parseFloat(e.target.value);
-                                                            setWatermarks(prev => {
-                                                                const nw = [...prev];
-                                                                nw[selectedWatermarkIdx] = { ...nw[selectedWatermarkIdx], opacity: val };
-                                                                return nw;
-                                                            });
-                                                        }}
-                                                    />
+                                                    <div className="prop-row">
+                                                        <span>Position: {Math.round(watermarks[selectedWatermarkIdx]?.x)}, {Math.round(watermarks[selectedWatermarkIdx]?.y)}</span>
+                                                    </div>
+                                                    <div className="prop-row">
+                                                        <span>Size: {Math.round(watermarks[selectedWatermarkIdx]?.w)}x{Math.round(watermarks[selectedWatermarkIdx]?.h)}</span>
+                                                    </div>
                                                 </div>
-                                                <button className="prop-btn danger" onClick={() => { handleDeleteWatermark(selectedWatermarkIdx); setSelectedWatermarkIdx(null); }}>Delete Watermark</button>
+                                                <button className="prop-btn danger" onClick={() => { handleDeleteWatermark(selectedWatermarkIdx); setSelectedWatermarkIdx(null); }}>Delete</button>
                                             </div>
                                         ) : selectedTriggerIdx !== null ? (
                                             <div className="properties-panel">
@@ -1557,14 +1603,16 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                 } 
                                             }}
                                         >
-                                            {watermarks.map((w, i) => {
+                                            <div className="track-label-mini">Watermarks</div>
+                                            {watermarks.filter(w => !w.trackId).map((w) => {
+                                                const i = watermarks.findIndex(wm => wm.id === w.id);
                                                 const width = w.duration * zoom;
                                                 const x = w.startTime * zoom + introWidth;
                                                 const adjustedTime = introVideo ? currentTime - effectiveIntroDuration : currentTime;
                                                 const isActive = adjustedTime >= w.startTime && adjustedTime <= w.startTime + w.duration;
                                                 return (
                                                     <div 
-                                                        key={i} 
+                                                        key={w.id} 
                                                         className={`montage-watermark-marker ${isActive ? 'active' : ''} ${selectedWatermarkIdx === i ? 'selected' : ''}`}
                                                         style={{ left: `${x}px`, width: `${width}px` }}
                                                         onMouseDown={(e) => {
@@ -1577,7 +1625,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                             setActiveInfoTab('stats');
                                                         }}
                                                     >
-                                                        <div className="watermark-icon">🖼️</div>
+                                                        <div className="watermark-icon">{w.isVideo ? '🎬' : '🖼️'}</div>
                                                         <div className="watermark-name">{w.path.split(/[\\/]/).pop()}</div>
                                                         <button className="trigger-delete-btn" onClick={(e) => { e.stopPropagation(); handleDeleteWatermark(i); }}>✕</button>
                                                         
@@ -1591,6 +1639,90 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                     <div className="ghost-indicator" style={{ background: 'var(--accent-color)', color: '#fff' }}>ADD WATERMARK</div>
                                                 </div>
                                             )}
+                                        </div>
+
+                                        {extraTracks.map((track) => (
+                                            <div 
+                                                key={track.id}
+                                                className={`montage-track extra-overlay ${draggingHoverTrack === track.id ? 'accepting-drop' : ''}`}
+                                                style={{ 
+                                                    borderLeft: `4px solid ${track.color}`, 
+                                                    background: draggingHoverTrack === track.id 
+                                                        ? `color-mix(in srgb, ${track.color}, transparent 80%)` 
+                                                        : `color-mix(in srgb, ${track.color}, transparent 95%)` 
+                                                }}
+                                                onDragOver={(e) => { 
+                                                    if (isDraggingFromPool) {
+                                                        e.preventDefault(); e.stopPropagation(); 
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
+                                                        setDropPreview((x - introWidth) / zoom); 
+                                                        setDraggingHoverTrack(track.id);
+                                                    } 
+                                                }}
+                                                onDragLeave={() => setDraggingHoverTrack(null)}
+                                                onDrop={(e) => { 
+                                                    if (isDraggingFromPool) { 
+                                                        e.stopPropagation(); 
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
+                                                        handleWatermarkDrop((x - introWidth) / zoom, track.id); 
+                                                        setDraggingHoverTrack(null);
+                                                    } 
+                                                }}
+                                            >
+                                                <div className="track-label-mini" style={{ color: track.color }}>
+                                                    {track.name}
+                                                    <button className="remove-track-btn" onClick={() => handleRemoveTrack(track.id)}>✕</button>
+                                                </div>
+                                                {watermarks.filter(w => w.trackId === track.id).map((w) => {
+                                                    const originalIdx = watermarks.findIndex(wm => wm.id === w.id);
+                                                    const width = w.duration * zoom;
+                                                    const x = w.startTime * zoom + introWidth;
+                                                    const adjustedTime = introVideo ? currentTime - effectiveIntroDuration : currentTime;
+                                                    const isActive = adjustedTime >= w.startTime && adjustedTime <= w.startTime + w.duration;
+                                                    return (
+                                                        <div 
+                                                            key={w.id} 
+                                                            className={`montage-watermark-marker ${isActive ? 'active' : ''} ${selectedWatermarkIdx === originalIdx ? 'selected' : ''}`}
+                                                            style={{ 
+                                                                left: `${x}px`, 
+                                                                width: `${width}px`,
+                                                                background: isActive ? track.color : `color-mix(in srgb, ${track.color}, transparent 85%)`,
+                                                                borderColor: isActive ? track.color : `color-mix(in srgb, ${track.color}, transparent 70%)`
+                                                            }}
+                                                            onMouseDown={(e) => {
+                                                                e.preventDefault(); e.stopPropagation();
+                                                                setDraggingWatermarkIdx(originalIdx);
+                                                                setStartX(e.clientX);
+                                                                setDragWatermarkStartPos(w.startTime);
+                                                                setSelectedWatermarkIdx(originalIdx);
+                                                                setSelectedTriggerIdx(null);
+                                                                setActiveInfoTab('stats');
+                                                            }}
+                                                        >
+                                                            <div className="watermark-icon">{w.isVideo ? '🎬' : '🖼️'}</div>
+                                                            <div className="watermark-name" style={{ color: isActive ? '#000' : 'inherit' }}>{w.path.split(/[\\/]/).pop()}</div>
+                                                            <button className="trigger-delete-btn" onClick={(e) => { e.stopPropagation(); handleDeleteWatermark(originalIdx); }}>✕</button>
+                                                            
+                                                            <div className="watermark-resizer-timeline left" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setDraggingWatermarkSide('start'); setDraggingWatermarkIdx(originalIdx); setStartX(e.clientX); setDragWatermarkStartPos(w.startTime); setDragWatermarkStartDur(w.duration); }} />
+                                                            <div className="watermark-resizer-timeline right" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setDraggingWatermarkSide('end'); setDraggingWatermarkIdx(originalIdx); setStartX(e.clientX); setDragWatermarkStartPos(w.startTime); setDragWatermarkStartDur(w.duration); }} />
+                                                        </div>
+                                                    );
+                                                })}
+                                                {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && draggingHoverTrack === track.id && (
+                                                    <div className="timeline-drop-ghost-precise" style={{ left: `${dropPreview * zoom + introWidth}px`, width: '120px' }}>
+                                                        <div className="ghost-indicator" style={{ background: track.color, color: '#fff' }}>ADD TO {track.name.toUpperCase()}</div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+
+                                        <div className="montage-track-controls">
+                                            <button className="add-track-btn" onClick={handleAddTrack}>
+                                                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" /></svg>
+                                                Add Overlay Track
+                                            </button>
                                         </div>
                                     </div>
                                     {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && draggingHoverTrack === 'clips' && (
@@ -1608,9 +1740,14 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                         const clipData = clips.map(c => `${c.path}|${c.duration.toFixed(3)}|${c.isVideo ? 'v' : 'i'}`).join('::');
                         const ss = audioSegments.map(s => `${s.start.toFixed(3)},${s.end.toFixed(3)}`).join('|');
                         const trData = triggers.map(t => `${t.phrase}|${t.path}|${t.startTime.toFixed(3)}|${t.duration.toFixed(3)}|${t.x}|${t.y}|${t.w}|${t.h}|${t.isVideo ? 'v' : 'i'}`).join('::');
-                        const wmData = watermarks.map(w => `${w.id}|${w.path}|${w.startTime.toFixed(3)}|${w.duration.toFixed(3)}|${w.x}|${w.y}|${w.w}|${w.h}|${w.opacity.toFixed(2)}`).join('::');
+                        const wmData = watermarks.map(w => {
+                            const tid = w.trackId || "";
+                            const isV = w.isVideo ? 'v' : 'i';
+                            return `${w.id}|${w.path}|${w.startTime.toFixed(3)}|${w.duration.toFixed(3)}|${w.x}|${w.y}|${w.w}|${w.h}|${w.opacity.toFixed(2)}|${tid}|${isV}`;
+                        }).join('::');
                         const introData = introVideo ? introVideo.path : "none";
-                        onConfirm(task.id, `confirm_v2:${clipData};segments:${ss};triggers:${trData};watermarks:${wmData};intro:${introData}`);
+                        const etData = JSON.stringify(extraTracks);
+                        onConfirm(task.id, `confirm_v2:${clipData};segments:${ss};triggers:${trData};watermarks:${wmData};intro:${introData};extraTracks:${etData}`);
                     }}>{t('common.save')}</button>
                 </div>
             </div>

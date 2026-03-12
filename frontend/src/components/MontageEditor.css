@@ -782,6 +782,7 @@
 .montage-timeline-content {
     flex: 1;
     overflow-x: auto;
+    overflow-y: auto;
     position: relative;
     background: #000;
 }
@@ -803,36 +804,38 @@
 
 .montage-timeline-tracks {
     position: relative;
-    height: 150px; /* 80 for clips + 35 for triggers + 35 for watermarks */
+    display: flex;
+    flex-direction: column;
 }
 
 .montage-track {
-    position: absolute;
-    left: 0;
+    position: relative;
     width: 100%;
 }
 
 .montage-track.clips {
-    top: 0;
     height: 80px;
 }
 
 .montage-track.triggers {
-    top: 80px;
     height: 35px;
     background: rgba(0, 0, 0, 0.2);
     border-top: 1px solid var(--border-color);
 }
 
 .montage-track.watermarks {
-    top: 115px;
     height: 35px;
     background: rgba(0, 0, 0, 0.3);
     border-top: 1px solid var(--border-color);
 }
 
-.montage-track.triggers.accepting-drop, .montage-track.watermarks.accepting-drop {
-    background: rgba(255, 204, 0, 0.05);
+.montage-track.extra-overlay {
+    height: 35px;
+    border-top: 1px solid var(--border-color);
+}
+
+.montage-track.accepting-drop {
+    background: rgba(255, 204, 0, 0.05) !important;
 }
 
 .trigger-drop-ghost {
@@ -1608,4 +1611,81 @@
 
 .prop-btn:hover {
     filter: brightness(1.2);
+}
+
+.montage-track-controls {
+    padding: 8px;
+    display: flex;
+    justify-content: flex-start;
+    border-top: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.add-track-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+.add-track-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.track-label-mini {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 5;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 2px 6px;
+    border-radius: 4px;
+    pointer-events: auto;
+}
+
+.remove-track-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+    font-size: 10px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.remove-track-btn:hover {
+    opacity: 1;
+    color: #ff4444;
+}
+
+.montage-track.extra-overlay .montage-watermark-marker {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.prop-row {
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
 }

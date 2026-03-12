@@ -492,6 +492,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			W         int     `json:"w"`
 			H         int     `json:"h"`
 			Opacity   float64 `json:"opacity"`
+			TrackID   string  `json:"trackId"`
+			IsVideo   bool    `json:"isVideo"`
 		}
 
 		type MontagePlan struct {
@@ -504,6 +506,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			AudioSegments []MontageSegment `json:"audioSegments"`
 			Triggers      []MontageTrigger `json:"triggers"`
 			Watermarks    []MontageWatermark `json:"watermarks"`
+			ExtraTracks   []utils.OverlayTrack `json:"extraTracks"`
 			BaseW         int              `json:"baseW"`
 			BaseH         int              `json:"baseH"`
 			IntroPath     string           `json:"introPath,omitempty"`
@@ -522,6 +525,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			Clips:         make([]MontageClip, numFiles),
 			Triggers:      []MontageTrigger{},
 			Watermarks:    []MontageWatermark{},
+			ExtraTracks:   pSettings.MontageExtraTracks,
 		}
 
 		if pSettings.MontageIntroVideoEnabled && pSettings.MontageIntroVideoPath != "" {
@@ -599,6 +603,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 					W:         wm.W,
 					H:         wm.H,
 					Opacity:   wm.Opacity,
+					TrackID:   wm.TrackID,
+					IsVideo:   wm.IsVideo,
 				})
 			}
 		}
@@ -715,6 +721,16 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 								w, _ := strconv.Atoi(bits[6])
 								h, _ := strconv.Atoi(bits[7])
 								opacity, _ := strconv.ParseFloat(bits[8], 64)
+								
+								tid := ""
+								if len(bits) >= 10 {
+									tid = bits[9]
+								}
+								isV := false
+								if len(bits) >= 11 {
+									isV = bits[10] == "v"
+								}
+
 								newWms = append(newWms, utils.OverlayWatermark{
 									ID:        bits[0],
 									Path:      bits[1],
@@ -725,10 +741,18 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 									StartTime: &start,
 									Duration:  &dur,
 									Opacity:   opacity,
+									TrackID:   tid,
+									IsVideo:   isV,
 								})
 							}
 						}
 						pSettings.MontageWatermarks = newWms
+					} else if strings.HasPrefix(p, "extraTracks:") {
+						etStr := strings.TrimPrefix(p, "extraTracks:")
+						var tracks []utils.OverlayTrack
+						if err := json.Unmarshal([]byte(etStr), &tracks); err == nil {
+							pSettings.MontageExtraTracks = tracks
+						}
 					} else if strings.HasPrefix(p, "intro:") {
 						introData := strings.TrimPrefix(p, "intro:")
 						if introData == "" || introData == "none" {
@@ -1194,6 +1218,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		w         int
 		h         int
 		opacity   float64
+		isVideo   bool
 	}
 	var activeCustomWatermarks []watermarkInfo
 	if len(pSettings.MontageWatermarks) > 0 {
@@ -1220,7 +1245,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			}
 
 			customWmIdx := len(inputSpecs)
-			inputSpecs = append(inputSpecs, inputSpec{loop: true, path: getRel(wm.Path)})
+			inputSpecs = append(inputSpecs, inputSpec{
+				loop:       !wm.IsVideo,
+				path:       getRel(wm.Path),
+				streamLoop: false,
+			})
 
 			activeCustomWatermarks = append(activeCustomWatermarks, watermarkInfo{
 				id:        wm.ID,
@@ -1233,6 +1262,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				w:         wm.W,
 				h:         wm.H,
 				opacity:   wm.Opacity,
+				isVideo:   wm.IsVideo,
 			})
 		}
 	}
@@ -1418,10 +1448,17 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 		outLabel := fmt.Sprintf("v_pwm_out_%d", i)
 		enableExpr := fmt.Sprintf("between(t,%.3f,%.3f)", wm.startTime, wm.startTime+wmDur)
-		filterParts = append(filterParts, fmt.Sprintf(
-			"[%s][%s]overlay=x=%d:y=%d:enable='%s'[%s]",
-			currentMontageV, wmProcessedLabel, wm.x, wm.y, enableExpr, outLabel,
-		))
+		if wm.isVideo {
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%s][%s]overlay=x=%d:y=%d:eof_action=pass:enable='%s'[%s]",
+				currentMontageV, wmProcessedLabel, wm.x, wm.y, enableExpr, outLabel,
+			))
+		} else {
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%s][%s]overlay=x=%d:y=%d:enable='%s'[%s]",
+				currentMontageV, wmProcessedLabel, wm.x, wm.y, enableExpr, outLabel,
+			))
+		}
 		currentMontageV = outLabel
 	}
 
