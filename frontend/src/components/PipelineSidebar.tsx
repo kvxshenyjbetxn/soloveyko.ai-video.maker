@@ -665,7 +665,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             'montageUpscaleFactor', 'montageTransitionDuration', 'montageTransitionEffect',
             'montageEncodingPreset', 'montageBitrate', 'montageIntroVideoEnabled', 'montageIntroVideoPath',
             'montageWatermarkEnabled', 'montageWatermarkPath', 'montageWatermarkPosition', 'montageWatermarkOpacity', 'montageWatermarkSize', 'montageWatermarkOnIntro',
-            'montageOverlayEnabled', 'montageOverlayPath', 'montageOverlayOnIntro'
+            'montageOverlayEnabled', 'montageOverlayPath', 'montageOverlayOnIntro', 'montageMetadataSimulation'
         ];
         montageFields.forEach(f => { if (settings[f] !== undefined) templateData.montage[f] = settings[f]; });
 
@@ -903,6 +903,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 imagePromptTemperature: cleanApplied.imagePromptTemperature ?? 0.7,
                 imagePromptMaxTokens: cleanApplied.imagePromptMaxTokens ?? 0,
                 imageShortVideoFillMode: cleanApplied.imageShortVideoFillMode ?? 'boomerang',
+                montageMetadataSimulation: cleanApplied.montageMetadataSimulation ?? 'None',
             };
         });
     };

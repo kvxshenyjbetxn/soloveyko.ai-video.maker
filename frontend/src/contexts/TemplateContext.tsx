@@ -161,6 +161,7 @@ export interface PipelineSettings {
     customStagesEnabled: boolean;
     customStagesCollapsed: boolean;
     imageShortVideoFillMode: string;
+    montageMetadataSimulation: string;
 }
 
 export interface PipelineTemplate {

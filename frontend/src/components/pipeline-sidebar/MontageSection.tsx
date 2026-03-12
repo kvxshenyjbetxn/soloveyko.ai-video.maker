@@ -757,7 +757,7 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                         </select>
                     </div>
 
-                    <div className="settings-control" style={{ marginBottom: 0 }}>
+                    <div className="settings-control" style={{ marginBottom: '12px' }}>
                         <label className="settings-label" style={{ fontSize: '11px' }}>{t('pipeline.montage.bitrate')}</label>
                         <div className="settings-slider-container">
                             <input
@@ -768,6 +768,20 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                             />
                             <span className="settings-slider-value">{settings.montageBitrate || 15} Mbps</span>
                         </div>
+                    </div>
+
+                    <div className="settings-control" style={{ marginBottom: 0 }}>
+                        <label className="settings-label" style={{ fontSize: '11px' }}>
+                            {t('pipeline.montage.metadata_simulation')}
+                        </label>
+                        <select
+                            className="settings-select"
+                            value={settings.montageMetadataSimulation || 'None'}
+                            onChange={(e) => handleChange('montageMetadataSimulation', e.target.value)}
+                        >
+                            <option value="None">{t('pipeline.montage.metadata_simulation_none')}</option>
+                            <option value="DaVinci Resolve Studio">{t('pipeline.montage.metadata_simulation_davinci')}</option>
+                        </select>
                     </div>
 
                 </div>

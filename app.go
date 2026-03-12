@@ -296,6 +296,7 @@ func (a *App) startup(ctx context.Context) {
 	// Розпаковуємо всі бінарники одразу при старті в фоні (без блокування UI)
 	go func() {
 		utils.EnsureEngine("ffprobe")
+		utils.EnsureExifTool() // Розпаковка ExifTool для метаданих
 		if a.localWhisper != nil {
 			a.localWhisper.EnsureFFmpeg()
 			a.localWhisper.EnsureWhisperCLI()

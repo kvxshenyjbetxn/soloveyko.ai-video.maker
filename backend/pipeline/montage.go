@@ -1268,8 +1268,40 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	cmdArgs = append(cmdArgs,
 		"-pix_fmt", "yuv420p",
 		"-r", strconv.Itoa(fps),
-		outputFile,
 	)
+
+	// DaVinci Resolve metadata simulation
+	if pSettings.MontageMetadataSimulation == "DaVinci Resolve Studio" {
+		currentTime := time.Now().UTC().Format("2006-01-02T15:04:05.000") + "Z"
+		cmdArgs = append(cmdArgs,
+			"-metadata", "creation_time="+currentTime,
+			"-metadata:s:v:0", "creation_time="+currentTime,
+			"-metadata:s:v:0", "handler_name=VideoHandler",
+			"-metadata:s:v:0", "timecode=01:00:00:00",
+			"-metadata:s:v:0", "encoder=H.264",
+			"-metadata:s:v:0", "vendor_id=[0][0][0][0]",
+			"-metadata:s:v:0", "language=und",
+			"-metadata:s:a:0", "creation_time="+currentTime,
+			"-metadata:s:a:0", "handler_name=SoundHandler",
+			"-metadata:s:a:0", "vendor_id=[0][0][0][0]",
+			"-metadata:s:a:0", "language=und",
+			"-write_tmcd", "1",
+			"-metadata:s:d:0", "creation_time="+currentTime,
+			"-metadata:s:d:0", "handler_name=TimeCodeHandler",
+			"-metadata:s:d:0", "language=eng",
+			"-color_primaries", "bt709",
+			"-color_trc", "bt709",
+			"-colorspace", "bt709",
+			"-color_range", "pc",
+			"-movflags", "+write_colr+faststart",
+		)
+		if videoCodec == "libx264" || videoCodec == "h264_nvenc" || videoCodec == "h264_amf" {
+			// Force BT.709 and Full Range at bitstream level for H.264
+			cmdArgs = append(cmdArgs, "-bsf:v", "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=1")
+		}
+	}
+
+	cmdArgs = append(cmdArgs, outputFile)
 
 	cmd := exec.Command(ffmpegPath, cmdArgs...)
 	utils.PrepareHiddenCmd(cmd)
@@ -1351,6 +1383,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("ffmpeg failed: %v", err)
 	}
+
+	// Apply DaVinci metadata simulation if enabled (post-processing)
+	s.applyMetadata(filepath.Join(finalDir, outputFile), pSettings, id, taskLabel)
 
 	s.log("SUCCESS", fmt.Sprintf("[Pipeline] Montage complete! Video saved: %s", outputFile), id, taskLabel)
 
@@ -1549,4 +1584,96 @@ func (s *PipelineService) findTextTiming(assPath string, phrase string, taskLabe
 
 	s.log("WARN", fmt.Sprintf("[Montage] Trigger phrase not found after full scan: '%s'", phrase), "", taskLabel)
 	return nil
+}
+
+// applyMetadata applies specialized metadata simulation (e.g. for DaVinci Resolve) using exiftool.
+func (s *PipelineService) applyMetadata(filePath string, pSettings *utils.PipelineSettings, id string, taskLabel string) {
+	if pSettings.MontageMetadataSimulation != "DaVinci Resolve Studio" {
+		return
+	}
+
+	s.log("INFO", "[Metadata] Applying DaVinci Resolve metadata simulation...", id, taskLabel)
+
+	exifPath := s.getExifToolPath()
+	if exifPath == "" {
+		s.log("WARN", "[Metadata] exiftool not found, skipping metadata simulation", id, taskLabel)
+		return
+	}
+
+	// Ensure we have an absolute path to the file
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		absFilePath = filePath
+	}
+
+	// Double check file accessibility
+	if _, err := os.Stat(absFilePath); err != nil {
+		s.log("WARN", fmt.Sprintf("[Metadata] Target file not found: %s", absFilePath), id, taskLabel)
+		return
+	}
+
+	// Create a temporary argument file to pass parameters and path literally.
+	// This is the ONLY 100% reliable way to pass "dirty" Windows paths to ExifTool/Perl.
+	tmpArgs, err := os.CreateTemp("", "exif_args_*.txt")
+	if err != nil {
+		s.log("WARN", fmt.Sprintf("[Metadata] Failed to create temp arg file: %v", err), id, taskLabel)
+		return
+	}
+	argFileName := tmpArgs.Name()
+	defer os.Remove(argFileName)
+
+	// Build arguments list
+	argsList := []string{
+		"-overwrite_original",
+		"-api", "NoWildcards=1",
+		// We remove MajorBrand/CompatibleBrands as they were causing redundant Apple tags
+		"-MinorVersion=512",
+		"-Encoder=Blackmagic Design DaVinci Resolve Studio",
+		"-Apple:Encoder=Blackmagic Design DaVinci Resolve Studio",
+		"-ColorPrimaries=BT.709",
+		"-TransferCharacteristics=BT.709",
+		"-MatrixCoefficients=BT.709",
+		"-VideoFullRange=Full",
+		// Explicitly set handler names for all streams to avoid defaults/mismatches
+		"-HandlerName:Video=VideoHandler",
+		"-HandlerName:Audio=SoundHandler",
+		"-HandlerName:Data=TimeCodeHandler",
+		absFilePath, // This is now read literally from the file
+	}
+
+	// Write one argument per line
+	for _, arg := range argsList {
+		if _, err := tmpArgs.WriteString(arg + "\n"); err != nil {
+			tmpArgs.Close()
+			return
+		}
+	}
+	tmpArgs.Close()
+
+	s.log("INFO", fmt.Sprintf("[Metadata] Using arg-file for: %s", filepath.Base(absFilePath)), id, taskLabel)
+
+	// Execute exiftool with the arg-file
+	cmd := exec.Command(exifPath, "-@", argFileName)
+	utils.PrepareHiddenCmd(cmd)
+
+	if output, err := cmd.CombinedOutput(); err != nil {
+		s.log("WARN", fmt.Sprintf("[Metadata] exiftool failed: %v\nOutput: %s", err, string(output)), id, taskLabel)
+	} else {
+		s.log("SUCCESS", "[Metadata] DaVinci Resolve metadata simulation applied!", id, taskLabel)
+	}
+}
+
+// getExifToolPath attempts to locate the exiftool executable.
+func (s *PipelineService) getExifToolPath() string {
+	// 1. Спробуємо стандартний розгорнутий шлях (автоматичне розпакування)
+	if p, err := utils.EnsureExifTool(); err == nil && p != "" {
+		return p
+	}
+
+	// 2. Check system PATH (якщо вбудований не знайшовся або не розпакувався)
+	if p, err := exec.LookPath("exiftool"); err == nil {
+		return p
+	}
+
+	return ""
 }

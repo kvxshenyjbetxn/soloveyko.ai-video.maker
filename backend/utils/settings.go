@@ -195,6 +195,7 @@ type PipelineSettings struct {
 	MontageOverlayOnIntro         bool             `json:"montageOverlayOnIntro"`
 	MontageOverlayTriggersEnabled bool             `json:"montageOverlayTriggersEnabled"`
 	MontageOverlayTriggers        []OverlayTrigger `json:"montageOverlayTriggers,omitempty"`
+	MontageMetadataSimulation     string           `json:"montageMetadataSimulation,omitempty"` // "none", "DaVinci Resolve Studio"
 
 	CustomStages          []CustomStage `json:"customStages,omitempty"`
 	CustomStagesEnabled   bool          `json:"customStagesEnabled"`
@@ -484,6 +485,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 	}
 	if settings.Pipeline.MontageProcessPriority == "" {
 		settings.Pipeline.MontageProcessPriority = "normal"
+	}
+	if settings.Pipeline.MontageMetadataSimulation == "" {
+		settings.Pipeline.MontageMetadataSimulation = "DaVinci Resolve Studio"
 	}
 	// MontageCPUCores = 0 means all cores (default)
 	// MontageThreadsPerProcess = 0 means auto (not set), so no default override needed
