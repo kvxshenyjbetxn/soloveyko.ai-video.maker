@@ -90,6 +90,72 @@ interface AnimationState {
     totalDuration: number;
 }
 
+const WatermarkPreviewItem = ({ 
+    w, 
+    plan, 
+    selectedWatermarkIdx, 
+    draggingWatermarkPosIdx, 
+    setSelectedWatermarkIdx, 
+    setSelectedTriggerIdx, 
+    setActiveInfoTab, 
+    setDraggingWatermarkPosIdx, 
+    setDragStartCoords, 
+    setResizingWatermarkIdx, 
+    setResizingWatermarkHandle, 
+    getUrl, 
+    adjustedTime 
+}: any) => {
+    const videoRef = useRef<HTMLVideoElement>(null);
+
+    useEffect(() => {
+        if (w.isVideo && videoRef.current) {
+            const timeInClip = adjustedTime - w.startTime;
+            if (Math.abs(videoRef.current.currentTime - timeInClip) > 0.05) {
+                videoRef.current.currentTime = Math.max(0, timeInClip);
+            }
+        }
+    }, [adjustedTime, w.startTime, w.isVideo]);
+
+    return (
+        <div 
+            className={`preview-watermark-overlay ${selectedWatermarkIdx === w.index ? 'selected' : ''} ${draggingWatermarkPosIdx === w.index ? 'dragging' : ''}`}
+            style={{
+                left: `${(w.x / (plan.baseW || 1920)) * 100}%`,
+                top: `${(w.y / (plan.baseH || 1080)) * 100}%`,
+                width: `${(w.w / (plan.baseW || 1920)) * 100}%`,
+                height: `${(w.h / (plan.baseH || 1080)) * 100}%`,
+                opacity: w.opacity
+            }}
+            onMouseDown={(e) => {
+                e.stopPropagation();
+                setSelectedWatermarkIdx(w.index);
+                setSelectedTriggerIdx(null);
+                setActiveInfoTab('stats');
+                setDraggingWatermarkPosIdx(w.index);
+                setDragStartCoords({ x: w.x, y: w.y, mouseX: e.clientX, mouseY: e.clientY });
+            }}
+        >
+            {w.isVideo ? (
+                <video 
+                    ref={videoRef} 
+                    src={getUrl(w.path)} 
+                    muted 
+                    playsInline 
+                    style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none', background: 'transparent' }} 
+                />
+            ) : (
+                <img src={getUrl(w.path)} alt="Watermark" style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }} />
+            )}
+            {selectedWatermarkIdx === w.index && (
+                <>
+                    <div className="watermark-resize-handle br" onMouseDown={(e) => { e.stopPropagation(); setResizingWatermarkIdx(w.index); setResizingWatermarkHandle('br'); setDragStartCoords({ x: w.w, y: w.h, mouseX: e.clientX, mouseY: e.clientY }); }} />
+                    <div className="watermark-resize-handle tl" onMouseDown={(e) => { e.stopPropagation(); setResizingWatermarkIdx(w.index); setResizingWatermarkHandle('tl'); setDragStartCoords({ x: w.w, y: w.h, x2: w.x, y2: w.y, mouseX: e.clientX, mouseY: e.clientY }); }} />
+                </>
+            )}
+        </div>
+    );
+};
+
 export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, onCancel }) => {
     const { t } = useI18n();
     const [plan, setPlan] = useState<MontagePlan | null>(null);
@@ -1219,35 +1285,23 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                         ))}
 
                                         {activeWatermarksAtTime.map((w) => (
-                                            <div 
+                                            <WatermarkPreviewItem 
                                                 key={w.index}
-                                                className={`preview-watermark-overlay ${selectedWatermarkIdx === w.index ? 'selected' : ''} ${draggingWatermarkPosIdx === w.index ? 'dragging' : ''}`}
-                                                style={{
-                                                    left: `${(w.x / (plan.baseW || 1920)) * 100}%`,
-                                                    top: `${(w.y / (plan.baseH || 1080)) * 100}%`,
-                                                    width: `${(w.w / (plan.baseW || 1920)) * 100}%`,
-                                                    height: `${(w.h / (plan.baseH || 1080)) * 100}%`,
-                                                    opacity: w.opacity
-                                                }}
-                                                onMouseDown={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedWatermarkIdx(w.index);
-                                                    setSelectedTriggerIdx(null);
-                                                    setActiveInfoTab('stats');
-                                                    setDraggingWatermarkPosIdx(w.index);
-                                                    setDragStartCoords({ x: w.x, y: w.y, mouseX: e.clientX, mouseY: e.clientY });
-                                                }}
-                                            >
-                                                <img src={getUrl(w.path)} alt="Watermark" />
-                                                {selectedWatermarkIdx === w.index && (
-                                                    <>
-                                                        <div className="watermark-resize-handle br" onMouseDown={(e) => { e.stopPropagation(); setResizingWatermarkIdx(w.index); setResizingWatermarkHandle('br'); setDragStartCoords({ x: w.w, y: w.h, mouseX: e.clientX, mouseY: e.clientY }); }} />
-                                                        <div className="watermark-resize-handle tl" onMouseDown={(e) => { e.stopPropagation(); setResizingWatermarkIdx(w.index); setResizingWatermarkHandle('tl'); setDragStartCoords({ x: w.w, y: w.h, x2: w.x, y2: w.y, mouseX: e.clientX, mouseY: e.clientY }); }} />
-                                                    </>
-                                                )}
-                                            </div>
+                                                w={w}
+                                                plan={plan}
+                                                selectedWatermarkIdx={selectedWatermarkIdx}
+                                                draggingWatermarkPosIdx={draggingWatermarkPosIdx}
+                                                setSelectedWatermarkIdx={setSelectedWatermarkIdx}
+                                                setSelectedTriggerIdx={setSelectedTriggerIdx}
+                                                setActiveInfoTab={setActiveInfoTab}
+                                                setDraggingWatermarkPosIdx={setDraggingWatermarkPosIdx}
+                                                setDragStartCoords={setDragStartCoords}
+                                                setResizingWatermarkIdx={setResizingWatermarkIdx}
+                                                setResizingWatermarkHandle={setResizingWatermarkHandle}
+                                                getUrl={getUrl}
+                                                adjustedTime={introVideo ? currentTime - effectiveIntroDuration : currentTime}
+                                            />
                                         ))}
-
                                         {globalWatermark && (
                                             <div 
                                                 className="preview-watermark-overlay global" 
@@ -1258,12 +1312,22 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                     pointerEvents: 'none'
                                                 }}
                                             >
-                                                <img src={getUrl(globalWatermark.path)} alt="Global Watermark" />
+                                                {globalWatermark.path.toLowerCase().endsWith('.mp4') ? (
+                                                    <video src={getUrl(globalWatermark.path)} muted autoPlay loop playsInline style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                                ) : (
+                                                    <img src={getUrl(globalWatermark.path)} alt="Global Watermark" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                                )}
                                             </div>
                                         )}
                                     </div>
                                 </div>
-                            ) : <div className="montage-preview-placeholder">No preview</div>}
+                            ) : (
+                                <div className="montage-preview-wrap">
+                                    <div className="preview-media-wrapper no-clip">
+                                        <div className="no-clip-message">No clip selected</div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="montage-info-resizer-v" onMouseDown={handleInfoResizeMouseDown}><div className="resizer-handle-v-line"></div></div>
                         <div className="montage-info-panel" style={{ width: `${infoPanelWidth}px`, flex: 'none' }}>
