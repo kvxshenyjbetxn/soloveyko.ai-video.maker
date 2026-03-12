@@ -62,6 +62,14 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	s.emitStageStatus(id, "montage", "waiting")
+	s.log("INFO", "[Pipeline] Waiting for montage slot...", id, taskLabel)
+
+	sem := s.getMontageSem()
+	sem <- struct{}{}
+	defer func() { <-sem }()
+
+	s.log("INFO", "[Pipeline] Montage slot acquired, starting...", id, taskLabel)
+	s.emitStageStatus(id, "montage", "running")
 
 	// 1. Get FFmpeg and FFprobe paths
 	ffmpegPath, err := utils.EnsureEngine("ffmpeg")
@@ -787,9 +795,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	// [SEMAPHORE] Acquire slot AFTER batch confirmation
 	s.log("INFO", "[Pipeline] Waiting for montage slot...", id, taskLabel)
-	sem := s.getMontageSem()
-	sem <- struct{}{}
-	defer func() { <-sem }()
 
 	s.log("INFO", "[Pipeline] Montage slot acquired, starting...", id, taskLabel)
 	s.emitStageStatus(id, "montage", "running")
@@ -1357,11 +1362,19 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		ext := strings.ToLower(filepath.Ext(tr.path))
 		isTrVideo := videoExts[ext]
 
+		// Fallback for 0 dimensions
+		targetW, targetH := tr.w, tr.h
+		if targetW <= 0 { targetW = baseW }
+		if targetH <= 0 { targetH = baseH }
+		// Ensure even dimensions for yuv420p
+		targetW = (targetW / 2) * 2
+		targetH = (targetH / 2) * 2
+
 		// 1. Pre-process trigger: scale, crop, format, and setpts (delay)
 		trigProcessedLabel := fmt.Sprintf("v_trig_ready_%d", i)
 		filterParts = append(filterParts, fmt.Sprintf(
 			"[%d:v]format=yuva420p,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setpts=PTS-STARTPTS+%.3f/TB[%s]",
-			tr.idx, tr.w, tr.h, tr.w, tr.h, tr.startTime, trigProcessedLabel,
+			tr.idx, targetW, targetH, targetW, targetH, tr.startTime, trigProcessedLabel,
 		))
 
 		// 2. Apply overlay
@@ -1391,9 +1404,16 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			opacity = 1.0
 		}
 
+		// Fallback and even dimensions
+		targetW, targetH := wm.w, wm.h
+		if targetW <= 0 { targetW = 200 }
+		if targetH <= 0 { targetH = 200 }
+		targetW = (targetW / 2) * 2
+		targetH = (targetH / 2) * 2
+
 		filterParts = append(filterParts, fmt.Sprintf(
 			"[%d:v]format=yuva420p,scale=%d:%d,colorchannelmixer=aa=%.3f,setpts=PTS-STARTPTS+%.3f/TB[%s]",
-			wm.idx, wm.w, wm.h, opacity, wm.startTime, wmProcessedLabel,
+			wm.idx, targetW, targetH, opacity, wm.startTime, wmProcessedLabel,
 		))
 
 		outLabel := fmt.Sprintf("v_pwm_out_%d", i)
@@ -1543,12 +1563,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	case "h264_videotoolbox":
 		cmdArgs = append(cmdArgs, "-b:v", bitrateStr)
 	}
-
+	
 	cmdArgs = append(cmdArgs,
 		"-pix_fmt", "yuv420p",
 		"-r", strconv.Itoa(fps),
 	)
-
+	
 	// DaVinci Resolve metadata simulation
 	if pSettings.MontageMetadataSimulation == "DaVinci Resolve Studio" {
 		currentTime := time.Now().UTC().Format("2006-01-02T15:04:05.000") + "Z"
