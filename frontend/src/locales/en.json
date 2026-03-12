@@ -137,7 +137,12 @@
     "montage_editor": {
         "title": "Montage Editor",
         "drag_hint": "Drag the right edge of a block to change its duration. Click or drag on the timeline to scrub.",
-        "no_preview": "No preview at this time"
+        "no_preview": "No preview at this time",
+        "intro": "Intro Video",
+        "main_video": "Main Video",
+        "drop_intro": "Drop Intro Here",
+        "triggers": "Triggers",
+        "setup": "Setup"
     },
     "text": {
         "translate": "Translate",
@@ -727,6 +732,7 @@
         "deselect_all": "Deselect All"
     },
     "common": {
+        "setup": "Setup",
         "save": "Save",
         "clear": "Clear",
         "open_folder": "Open Folder",

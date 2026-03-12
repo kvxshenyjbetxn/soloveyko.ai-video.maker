@@ -40,6 +40,9 @@ interface MontagePlan {
     triggers?: MontageTrigger[];
     baseW?: number;
     baseH?: number;
+    introPath?: string;
+    introDuration?: number;
+    introIsVideo?: boolean;
 }
 
 interface SubtitleEntry {
@@ -80,6 +83,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [draggingSelectionSide, setDraggingSelectionSide] = useState<null | 'start' | 'end'>(null);
     const [cutJunctions, setCutJunctions] = useState<{ position: number, durationRemoved: number }[]>([]);
     const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
+    const [introVideo, setIntroVideo] = useState<MontageClip | null>(null);
 
     const [triggers, setTriggers] = useState<MontageTrigger[]>([]);
     const [draggingTriggerIdx, setDraggingTriggerIdx] = useState<number | null>(null);
@@ -176,6 +180,16 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 } else {
                     setTriggers([]);
                 }
+                
+                if (parsed.introPath) {
+                    setIntroVideo({
+                        path: parsed.introPath,
+                        duration: parsed.introDuration || 0,
+                        isVideo: parsed.introIsVideo || true
+                    });
+                } else {
+                    setIntroVideo(null);
+                }
 
                 // Try to load prompts.txt for regeneration
                 if (parsed.audioPath) {
@@ -263,9 +277,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const clipLayouts = useMemo(() => {
         if (!plan) return [];
         let currentStart = 0;
+        
         return clips.map((clip, idx) => {
             const width = clip.duration * zoom;
             const x = currentStart * zoom;
+            
             if (!plan.isFadeFast) {
                 currentStart += (clip.duration - plan.transDuration);
             } else {
@@ -274,9 +290,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             if (!plan.isFadeFast && idx === clips.length - 1) {
                 currentStart += plan.transDuration;
             }
-            return { clip, idx, width, x };
+            return { clip, idx, width, x, isIntro: false };
         });
-    }, [clips, zoom, plan]);
+    }, [clips, zoom, plan, introVideo]);
 
     const actualVideoDuration = useMemo(() => {
         if (clipLayouts.length === 0) return 0;
@@ -284,18 +300,40 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         return (last.x + last.width) / zoom;
     }, [clipLayouts, zoom]);
 
+    const effectiveIntroDuration = useMemo(() => {
+        return introVideo ? introVideo.duration : 0;
+    }, [introVideo]);
+
+    const introWidth = useMemo(() => {
+        return introVideo ? Math.max(introVideo.duration * zoom, 160) : 240;
+    }, [introVideo, zoom]);
+
     const totalTimelineDuration = useMemo(() => {
         const audioTotal = audioSegments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
-        return Math.max(actualVideoDuration, audioTotal);
-    }, [actualVideoDuration, audioSegments]);
+        return Math.max(actualVideoDuration, audioTotal) + effectiveIntroDuration;
+    }, [actualVideoDuration, audioSegments, effectiveIntroDuration]);
 
     const activeClipInfo = useMemo(() => {
+        // Check Intro first
+        if (introVideo && currentTime < effectiveIntroDuration) {
+            return {
+                clip: introVideo,
+                idx: -1, // Special index for intro
+                width: introWidth,
+                x: 0,
+                isIntro: true,
+                timeInClip: currentTime
+            };
+        }
+
+        const adjustedTime = introVideo ? currentTime - effectiveIntroDuration : currentTime;
+
         for (let i = clipLayouts.length - 1; i >= 0; i--) {
             const layout = clipLayouts[i];
             const startTime = layout.x / zoom;
             const endTime = (layout.x + layout.width) / zoom;
-            if (currentTime >= startTime && currentTime <= endTime + 0.001) {
-                let timeInClip = currentTime - startTime;
+            if (adjustedTime >= startTime && adjustedTime <= endTime + 0.001) {
+                let timeInClip = adjustedTime - startTime;
                 
                 // BOOMERANG LOGIC
                 if (layout.clip.isVideo && layout.clip.actualDuration && layout.clip.actualDuration < layout.clip.duration) {
@@ -310,7 +348,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             }
         }
         return null;
-    }, [clipLayouts, currentTime, zoom]);
+    }, [clipLayouts, currentTime, zoom, introVideo, effectiveIntroDuration, introWidth]);
 
     const animStateRef = useRef<AnimationState>({
         currentTime, selection, isPlaying, audioSegments, clips, zoom, totalDuration: totalTimelineDuration
@@ -318,21 +356,27 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     animStateRef.current = { currentTime, selection, isPlaying, audioSegments, clips, zoom, totalDuration: totalTimelineDuration };
 
     const getOriginalTime = useCallback((timelineTime: number) => {
-        let currentTimeline = 0;
+        let currentTimeline = introVideo ? effectiveIntroDuration : 0;
+        if (timelineTime < currentTimeline) return audioSegments[0]?.start || 0;
+
+        let contentTime = introVideo ? timelineTime - effectiveIntroDuration : timelineTime;
+        let trackPos = 0;
+
         for (const seg of audioSegments) {
             const segDur = seg.end - seg.start;
-            if (timelineTime <= currentTimeline + segDur + 0.001) {
-                return seg.start + (timelineTime - currentTimeline);
+            if (contentTime <= trackPos + segDur + 0.001) {
+                return seg.start + (contentTime - trackPos);
             }
-            currentTimeline += segDur;
+            trackPos += segDur;
         }
         return audioSegments.length > 0 ? audioSegments[audioSegments.length - 1].end : timelineTime;
-    }, [audioSegments]);
+    }, [audioSegments, introVideo, effectiveIntroDuration]);
 
     const currentSubtitle = useMemo(() => {
+        if (introVideo && currentTime < effectiveIntroDuration) return undefined;
         const origTime = getOriginalTime(currentTime);
         return subtitles.find(s => origTime >= s.start && origTime <= s.end);
-    }, [subtitles, currentTime, getOriginalTime]);
+    }, [subtitles, currentTime, getOriginalTime, introVideo, effectiveIntroDuration]);
 
     const activeClipInfoRef = useRef(activeClipInfo);
     activeClipInfoRef.current = activeClipInfo;
@@ -352,6 +396,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 const targetOrig = getOriginalTime(next);
                 if (Math.abs(previewAudioRef.current.currentTime - targetOrig) > 0.15) {
                     previewAudioRef.current.currentTime = targetOrig;
+                }
+                // Mute main audio during intro
+                const isIntroNow = !!introVideo && next < effectiveIntroDuration;
+                if (previewAudioRef.current.muted !== isIntroNow) {
+                    previewAudioRef.current.muted = isIntroNow;
                 }
             }
             if (previewVideoRef.current && activeClipInfoRef.current?.clip.isVideo) {
@@ -378,10 +427,12 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             requestRef.current = requestAnimationFrame(animate);
             if (previewAudioRef.current) {
                 previewAudioRef.current.currentTime = getOriginalTime(currentTime);
+                previewAudioRef.current.muted = !!introVideo && currentTime < effectiveIntroDuration;
                 previewAudioRef.current.play().catch((e) => console.error("Audio play failed:", e));
             }
             if (previewVideoRef.current && activeClipInfo?.clip.isVideo) {
                 previewVideoRef.current.currentTime = activeClipInfo.timeInClip;
+                previewVideoRef.current.muted = false; // Ensure unmuted
                 previewVideoRef.current.play().catch(() => {});
             }
         } else {
@@ -415,9 +466,17 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const handleTimelineMove = useCallback((e: React.MouseEvent | MouseEvent) => {
         if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left + containerRef.current.scrollLeft - 24;
-        setCurrentTime(Math.max(0, Math.min(animStateRef.current.totalDuration, x / animStateRef.current.zoom)));
-    }, []);
+        const xRaw = e.clientX - rect.left + containerRef.current.scrollLeft;
+        
+        let targetTime = 0;
+        if (introVideo) {
+            targetTime = xRaw / zoom;
+        } else {
+            targetTime = (xRaw - introWidth) / zoom;
+        }
+        
+        setCurrentTime(Math.max(0, Math.min(animStateRef.current.totalDuration, targetTime)));
+    }, [introWidth, introVideo, zoom]);
 
     const handleCutSelection = useCallback(() => {
         const { start: sBound, end: eBound } = animStateRef.current.selection;
@@ -574,11 +633,24 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         setIsDraggingFromPool(item);
     };
 
+    const handleDeleteIntro = () => {
+        setIntroVideo(null);
+    };
+
     const handleInternalDrop = useCallback((dropTime: number) => {
         if (!isDraggingFromPool) return;
+
+        // Intro Drop detection (very beginning of timeline)
+        if (dropTime < 0.2) {
+            setIntroVideo({ ...isDraggingFromPool, duration: isDraggingFromPool.actualDuration || 3.0 });
+            setIsDraggingFromPool(null);
+            setDropPreview(null);
+            return;
+        }
+
         setClips(prev => {
             const next: MontageClip[] = [];
-            let currentTimePos = 0;
+            let currentTimePos = introVideo ? introVideo.duration : 0;
             let targetIdx = -1;
             for (let i = 0; i < prev.length; i++) {
                 const start = currentTimePos;
@@ -591,7 +663,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             }
             if (targetIdx === -1) return prev;
             const targetClip = prev[targetIdx];
-            const targetStart = prev.slice(0, targetIdx).reduce((s, c) => s + c.duration, 0);
+            const targetStart = (introVideo ? introVideo.duration : 0) + prev.slice(0, targetIdx).reduce((s, c) => s + c.duration, 0);
             const beforeDur = dropTime - targetStart;
             const newClipDur = Math.min(2.0, targetClip.duration - 0.2); 
             if (newClipDur <= 0.1) {
@@ -720,8 +792,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 }
             } else if (draggingSelectionSide !== null && containerRef.current) {
                 const rect = containerRef.current.getBoundingClientRect();
-                const x = e.clientX - rect.left + containerRef.current.scrollLeft - 24;
-                const newTime = Math.max(0, Math.min(animStateRef.current.totalDuration, x / zoom));
+                const xRaw = e.clientX - rect.left + containerRef.current.scrollLeft;
+                let targetTime = introVideo ? xRaw / zoom : (xRaw - introWidth) / zoom;
+                const newTime = Math.max(0, Math.min(animStateRef.current.totalDuration, targetTime));
                 setSelection(prev => ({ ...prev, [draggingSelectionSide]: newTime }));
             }
             if (isScrubbing) handleTimelineMove(e);
@@ -731,21 +804,44 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             document.addEventListener('mouseup', mu);
         }
         return () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
-    }, [draggingIdx, isScrubbing, draggingSelectionSide, draggingTriggerIdx, draggingTriggerPosIdx, dragStartCoords, handleTimelineMove, zoom, startX, startDurations, dragTriggerStartPos, handleMouseUp, plan]);
+    }, [draggingIdx, isScrubbing, draggingSelectionSide, draggingTriggerIdx, draggingTriggerPosIdx, dragStartCoords, handleTimelineMove, zoom, startX, startDurations, dragTriggerStartPos, handleMouseUp, plan, introWidth]);
 
     const markers = useMemo(() => {
         const res = [];
-        const count = Math.ceil(totalTimelineDuration);
-        for (let i = 0; i <= count; i++) {
-            if (zoom > 50 || i % 5 === 0) res.push(<div key={i} className="timeline-marker" style={{ left: `${i * zoom}px` }}><span>{i}s</span></div>);
-            else res.push(<div key={i} className="timeline-marker minor" style={{ left: `${i * zoom}px` }} />);
+        const contentDuration = totalTimelineDuration;
+        const introDur = effectiveIntroDuration;
+        
+        // Total count including intro time if present
+        const totalCount = Math.ceil(contentDuration + introDur);
+        
+        for (let i = 0; i <= totalCount; i++) {
+            // Label should be shifted if intro exists
+            let label = i;
+            if (introDur > 0) {
+                label = i; // Total timeline time
+            } else {
+                label = i; // Regular time
+            }
+
+            // The position 'i' is in seconds relative to the very start of things
+            const xPos = i * zoom;
+            
+            if (zoom > 50 || i % 5 === 0) {
+                res.push(<div key={i} className="timeline-marker" style={{ left: `${xPos}px` }}><span>{label}s</span></div>);
+            } else {
+                res.push(<div key={i} className="timeline-marker minor" style={{ left: `${xPos}px` }} />);
+            }
         }
         return res;
-    }, [totalTimelineDuration, zoom]);
+    }, [totalTimelineDuration, zoom, effectiveIntroDuration]);
 
     const clipElements = useMemo(() => {
         return clipLayouts.map(({ clip, idx, width, x }) => (
-            <div key={idx} className={`montage-clip-block ${clip.isVideo ? 'video' : 'image'} ${activeClipInfo?.idx === idx ? 'active-preview' : ''} ${regeneratingIndices.has(idx) ? 'is-regenerating' : ''}`} style={{ left: `${x}px`, width: `${width}px` }}>
+            <div 
+                key={idx} 
+                className={`montage-clip-block ${clip.isVideo ? 'video' : 'image'} ${activeClipInfo?.idx === idx ? 'active-preview' : ''} ${regeneratingIndices.has(idx) ? 'is-regenerating' : ''}`} 
+                style={{ left: `${x}px`, width: `${width}px` }}
+            >
                 <div className="montage-clip-content">
                     {regeneratingIndices.has(idx) ? (
                         <div className="clip-loading-spinner"><div className="spinner-tiny" /></div>
@@ -805,7 +901,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         <div className="montage-editor-overlay animate-fade">
             <div className="montage-editor-window">
                 <div className="montage-editor-header">
-                    <div className="montage-editor-title">{t('pipeline.montage_control') || 'Montage Editor'} - {task.name}</div>
+                    <div className="montage-editor-title"></div>
                     <div className="montage-editor-controls">
                         <button className="montage-btn icon" onClick={() => setZoom(p => Math.max(p - (p > 50 ? 10 : 5), 5))}>-</button>
                         <span className="montage-zoom-label">{zoom}%</span>
@@ -826,7 +922,6 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                             <video 
                                                 ref={previewVideoRef} 
                                                 src={getUrl(activeClipInfo.clip.path)} 
-                                                muted 
                                                 playsInline 
                                                 onLoadedMetadata={(e) => {
                                                     const v = e.currentTarget;
@@ -942,7 +1037,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                     </>
                                 ) : (
                                     <div className="project-stats-tab animate-fade-in">
-                                        <div className="stat-card"><div className="stat-label">Total Clips</div><div className="stat-value">{clips.length}</div></div>
+                                        <div className="stat-card"><div className="stat-label">Total Clips</div><div className="stat-value">{clips.length + (introVideo ? 1 : 0)}</div></div>
                                         <div className="stat-card"><div className="stat-label">Duration</div><div className="stat-value">{totalTimelineDuration.toFixed(2)}s</div></div>
                                         <div className="stat-card"><div className="stat-label">Audio Sync</div><div className="stat-value">{plan?.audioDuration.toFixed(2)}s</div></div>
                                         <div className="stat-card"><div className="stat-label">Transitions</div><div className="stat-value">{plan?.transDuration}s ({plan?.isFadeFast ? 'Fast' : 'Fade'})</div></div>
@@ -980,49 +1075,165 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     <div className="montage-timeline-resizer" onMouseDown={handleResizeMouseDown}><div className="resizer-handle-line"></div></div>
                     <div 
                         className={`montage-timeline-container ${isDraggingFromPool ? 'accepting-drop' : ''}`} 
-                        ref={containerRef} 
-                        onDragOver={(e) => { if (isDraggingFromPool) { e.preventDefault(); const rect = containerRef.current!.getBoundingClientRect(); const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 24; setDropPreview(x / zoom); } }}
-                        onDragLeave={() => setDropPreview(null)}
-                        onDrop={(e) => { if (isDraggingFromPool) { const rect = containerRef.current!.getBoundingClientRect(); const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 24; handleInternalDrop(x / zoom); } }}
                         style={{ height: `${timelineHeight}px`, flex: 'none' }}
                     >
-                        <div className="montage-timeline-wrapper" style={{ width: `${totalTimelineDuration * zoom + 100}px`, minWidth: '100%' }}>
-                            <div className="montage-timeline-ruler" onMouseDown={handleMouseDownGlobal}>
-                                {markers}
-                                {selection.start !== null && <div className="selection-marker start interactive" style={{ left: `${selection.start * zoom}px` }} onMouseDown={(e) => { e.stopPropagation(); setDraggingSelectionSide('start'); }}><div className="marker-handle" /></div>}
-                                {selection.end !== null && <div className="selection-marker end interactive" style={{ left: `${selection.end * zoom}px` }} onMouseDown={(e) => { e.stopPropagation(); setDraggingSelectionSide('end'); }}><div className="marker-handle" /></div>}
-                                {selection.start !== null && selection.end !== null && <div className="selection-range" style={{ left: `${Math.min(selection.start, selection.end) * zoom}px`, width: `${Math.abs(selection.end - selection.start) * zoom}px` }} />}
-                                {cutJunctions.map((j, i) => (<div key={i} className="timeline-cut-junction" style={{ left: `${j.position * zoom}px` }}><div className="junction-icon">✂</div></div>))}
-                                <div className="audio-track-reference" style={{ width: `${totalTimelineDuration * zoom}px` }} onMouseDown={handleMouseDownGlobal}><span>Audio Sequence</span></div>
-                            </div>
-                            <div className="montage-timeline-tracks">
-                                <div className="montage-track clips">
-                                    {clipElements}
-                                    {isDraggingFromPool && dropPreview !== null && (
-                                        <div className="timeline-drop-ghost-precise" style={{ left: `${dropPreview * zoom}px`, width: `${isDraggingFromPool.duration * zoom}px` }}>
-                                            <div className="ghost-indicator">DROP TO INSERT</div>
-                                        </div>
-                                    )}
-                                </div>
+                        <div className="montage-timeline-wrapper">
 
-                                <div 
-                                    className={`montage-track triggers ${isDraggingFromPool ? 'accepting-drop' : ''}`}
-                                    onDragOver={(e) => { if (isDraggingFromPool) { e.preventDefault(); e.stopPropagation(); const rect = containerRef.current!.getBoundingClientRect(); const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 24; setDropPreview(x / zoom); } }}
-                                    onDrop={(e) => { if (isDraggingFromPool) { e.stopPropagation(); const rect = containerRef.current!.getBoundingClientRect(); const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 24; handleTriggerDrop(x / zoom); } }}
-                                >
-                                    <div className="track-label">Triggers ({triggers.length})</div>
-                                    {triggerElements}
-                                    {isDraggingFromPool && dropPreview !== null && (
-                                        <div className="trigger-drop-ghost" style={{ left: `${dropPreview * zoom}px`, width: `${(isDraggingFromPool.actualDuration || 3.0) * zoom}px` }}>
-                                            <div className="ghost-text">DROP TRIGGER</div>
+                            <div 
+                                className="montage-timeline-content" 
+                                ref={containerRef}
+                                onDragOver={(e) => { 
+                                    if (isDraggingFromPool) { 
+                                        e.preventDefault(); 
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
+                                        setDropPreview((x - introWidth) / zoom); 
+                                    } 
+                                }}
+                                onDragLeave={() => setDropPreview(null)}
+                                onDrop={(e) => { 
+                                    if (isDraggingFromPool) { 
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
+                                        handleInternalDrop((x - introWidth) / zoom); 
+                                    } 
+                                }}
+                            >
+                                <div className="montage-timeline-content-inner" style={{ width: `${totalTimelineDuration * zoom + 500}px`, minWidth: '100%' }}>
+                                    <div className="montage-timeline-ruler" onMouseDown={handleMouseDownGlobal}>
+                                        <div className="ruler-markers-container" style={{ marginLeft: introVideo ? 0 : `${introWidth}px` }}>
+                                            {markers}
                                         </div>
+                                        {selection.start !== null && <div className="selection-marker start interactive" style={{ left: `${selection.start * zoom + (introVideo ? 0 : introWidth)}px` }} onMouseDown={(e) => { e.stopPropagation(); setDraggingSelectionSide('start'); }}><div className="marker-handle" /></div>}
+                                        {selection.end !== null && <div className="selection-marker end interactive" style={{ left: `${selection.end * zoom + (introVideo ? 0 : introWidth)}px` }} onMouseDown={(e) => { e.stopPropagation(); setDraggingSelectionSide('end'); }}><div className="marker-handle" /></div>}
+                                        {selection.start !== null && selection.end !== null && <div className="selection-range" style={{ left: `${Math.min(selection.start, selection.end) * zoom + (introVideo ? 0 : introWidth)}px`, width: `${Math.abs(selection.end - selection.start) * zoom}px` }} />}
+                                        {cutJunctions.map((j, i) => (<div key={i} className="timeline-cut-junction" style={{ left: `${j.position * zoom + (introVideo ? 0 : introWidth)}px` }}><div className="junction-icon">✂</div></div>))}
+                                        
+                                        {introVideo && (
+                                            <div className="audio-track-reference intro-audio" style={{ left: 0, width: `${introWidth}px` }}>
+                                                <span>Intro Audio</span>
+                                            </div>
+                                        )}
+                                        
+                                        <div className="audio-track-reference" style={{ left: `${introWidth}px`, width: `${(totalTimelineDuration - effectiveIntroDuration) * zoom}px` }} onMouseDown={handleMouseDownGlobal}>
+                                            <span>Main Audio Sequence</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="montage-timeline-tracks">
+                                        <div className="montage-track clips">
+                                            <div 
+                                                className="intro-slot-container"
+                                                style={{ width: `${introWidth}px` }}
+                                                onDragOver={(e) => { if (isDraggingFromPool) { e.preventDefault(); e.stopPropagation(); setDropPreview(0); } }}
+                                                onDrop={(e) => { if (isDraggingFromPool) { e.stopPropagation(); handleInternalDrop(0); } }}
+                                            >
+                                                {introVideo ? (
+                                                    <div className={`montage-clip-block intro-selected ${isDraggingFromPool && dropPreview === 0 ? 'active' : ''}`} style={{ width: '100%' }}>
+                                                        <div className="montage-clip-content">
+                                                            <div className="montage-clip-thumbnail-placeholder">🚀</div>
+                                                            <span className="montage-clip-name">{introVideo.path.split(/[\\/]/).pop()}</span>
+                                                            <span className="montage-clip-duration">{introVideo.duration.toFixed(1)}s</span>
+                                                            <div className="montage-clip-actions">
+                                                                <button className="clip-action-btn delete" onMouseDown={(e) => { e.stopPropagation(); handleDeleteIntro(); }}>🗑️</button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className={`intro-drop-slot ${isDraggingFromPool && dropPreview === 0 ? 'active' : ''}`}>
+                                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" /></svg>
+                                                        <span>{t('montage_editor.drop_intro')}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {clipLayouts.map(({ clip, idx, width, x }) => (
+                                                <div 
+                                                    key={idx} 
+                                                    className={`montage-clip-block ${clip.isVideo ? 'video' : 'image'} ${activeClipInfo?.idx === idx ? 'active-preview' : ''} ${regeneratingIndices.has(idx) ? 'is-regenerating' : ''}`} 
+                                                    style={{ left: `${x + introWidth}px`, width: `${width}px` }}
+                                                >
+                                                    <div className="montage-clip-content">
+                                                        {regeneratingIndices.has(idx) ? (
+                                                            <div className="clip-loading-spinner"><div className="spinner-tiny" /></div>
+                                                        ) : (
+                                                            <div className="montage-clip-thumbnail-placeholder">{clip.isVideo ? '🎬' : '🖼️'}</div>
+                                                        )}
+                                                        <span className="montage-clip-name">{clip.path.split(/[\\/]/).pop()}</span>
+                                                        <span className="montage-clip-duration">{clip.duration.toFixed(1)}s</span>
+                                                        
+                                                        <div className="montage-clip-actions">
+                                                            <button className="clip-action-btn delete" onMouseDown={(e) => { e.stopPropagation(); handleDeleteClip(idx); }}>🗑️</button>
+                                                            <button className="clip-action-btn regenerate" onMouseDown={(e) => { e.stopPropagation(); handleOpenRegenerate(idx); }}>🔄</button>
+                                                        </div>
+                                                    </div>
+                                                    {idx < clips.length - 1 && (
+                                                        <div className="montage-clip-resizer right" onMouseDown={(e) => { e.stopPropagation(); setDraggingIdx(idx); setStartX(e.clientX); setStartDurations({ current: clips[idx].duration, next: clips[idx + 1].duration }); }} />
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && (
+                                                <div className="timeline-drop-ghost-precise" style={{ left: `${dropPreview * zoom + introWidth}px`, width: `${isDraggingFromPool.duration * zoom}px` }}>
+                                                    <div className="ghost-indicator">DROP TO INSERT</div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div 
+                                            className={`montage-track triggers ${isDraggingFromPool ? 'accepting-drop' : ''}`}
+                                            onDragOver={(e) => { 
+                                                if (isDraggingFromPool) {
+                                                    e.preventDefault(); 
+                                                    e.stopPropagation(); 
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
+                                                    setDropPreview((x - introWidth) / zoom); 
+                                                } 
+                                            }}
+                                            onDrop={(e) => { 
+                                                if (isDraggingFromPool) { 
+                                                    e.stopPropagation(); 
+                                                    const rect = e.currentTarget.getBoundingClientRect();
+                                                    const x = e.clientX - rect.left + e.currentTarget.scrollLeft;
+                                                    handleTriggerDrop((x - introWidth) / zoom); 
+                                                } 
+                                            }}
+                                        >
+                                            {triggers.map((tr, i) => {
+                                                const width = Math.max(tr.duration * zoom, 40);
+                                                const x = tr.startTime * zoom + introWidth;
+                                                const isActive = currentTime >= tr.startTime && currentTime <= tr.startTime + tr.duration;
+                                                return (
+                                                    <div 
+                                                        key={i} 
+                                                        className={`montage-trigger-marker ${isActive ? 'active' : ''} ${draggingTriggerIdx === i ? 'dragging' : ''}`}
+                                                        style={{ left: `${x}px`, width: `${width}px` }}
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            setDraggingTriggerIdx(i);
+                                                            setStartX(e.clientX);
+                                                            setDragTriggerStartPos(tr.startTime);
+                                                        }}
+                                                    >
+                                                        <div className="trigger-icon">🎯</div>
+                                                        <div className="trigger-phrase">{tr.phrase}</div>
+                                                        <button className="trigger-delete-btn" onClick={(e) => { e.stopPropagation(); handleDeleteTrigger(i); }}>✕</button>
+                                                    </div>
+                                                );
+                                            })}
+                                            {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && (
+                                                <div className="timeline-drop-ghost-precise" style={{ left: `${dropPreview * zoom + introWidth}px`, width: '120px' }}>
+                                                    <div className="ghost-indicator" style={{ background: '#ffcc00', color: '#000' }}>ADD TRIGGER</div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {isDraggingFromPool && dropPreview !== null && dropPreview > 0 && (
+                                        <div className="timeline-insertion-guide" style={{ left: `${dropPreview * zoom + introWidth}px`, height: '100%' }}><div className="guide-line" /></div>
                                     )}
+                                    <div className="montage-playhead" style={{ left: `${currentTime * zoom + (introVideo ? 0 : introWidth)}px` }}><div className="playhead-handle" /></div>
                                 </div>
                             </div>
-                            {isDraggingFromPool && dropPreview !== null && (
-                                <div className="timeline-insertion-guide" style={{ left: `${dropPreview * zoom}px`, height: '100%' }}><div className="guide-line" /></div>
-                            )}
-                            <div className="montage-playhead" style={{ left: `${currentTime * zoom}px` }}><div className="playhead-handle" /></div>
                         </div>
                     </div>
                 </div>
@@ -1032,7 +1243,8 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                         const clipData = clips.map(c => `${c.path}|${c.duration.toFixed(3)}|${c.isVideo ? 'v' : 'i'}`).join('::');
                         const ss = audioSegments.map(s => `${s.start.toFixed(3)},${s.end.toFixed(3)}`).join('|');
                         const trData = triggers.map(t => `${t.phrase}|${t.path}|${t.startTime.toFixed(3)}|${t.duration.toFixed(3)}|${t.x}|${t.y}|${t.w}|${t.h}|${t.isVideo ? 'v' : 'i'}`).join('::');
-                        onConfirm(task.id, `confirm_v2:${clipData};segments:${ss};triggers:${trData}`);
+                        const introData = introVideo ? introVideo.path : "none";
+                        onConfirm(task.id, `confirm_v2:${clipData};segments:${ss};triggers:${trData};intro:${introData}`);
                     }}>{t('common.save')}</button>
                 </div>
             </div>

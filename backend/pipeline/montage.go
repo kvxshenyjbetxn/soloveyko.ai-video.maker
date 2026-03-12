@@ -485,6 +485,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			Triggers      []MontageTrigger `json:"triggers"`
 			BaseW         int              `json:"baseW"`
 			BaseH         int              `json:"baseH"`
+			IntroPath     string           `json:"introPath,omitempty"`
+			IntroDuration float64          `json:"introDuration,omitempty"`
+			IntroIsVideo  bool             `json:"introIsVideo,omitempty"`
 		}
 
 		plan := MontagePlan{
@@ -497,6 +500,15 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			BaseH:         baseH,
 			Clips:         make([]MontageClip, numFiles),
 			Triggers:      []MontageTrigger{},
+		}
+
+		if pSettings.MontageIntroVideoEnabled && pSettings.MontageIntroVideoPath != "" {
+			if _, err := os.Stat(pSettings.MontageIntroVideoPath); err == nil {
+				dur, _ := s.getDuration(ffprobePath, pSettings.MontageIntroVideoPath)
+				plan.IntroPath = pSettings.MontageIntroVideoPath
+				plan.IntroDuration = dur
+				plan.IntroIsVideo = true // Assuming it's video for now
+			}
 		}
 
 		// Calculate Triggers for UI
@@ -638,6 +650,14 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 							}
 						}
 						pSettings.MontageOverlayTriggers = newTrs
+					} else if strings.HasPrefix(p, "intro:") {
+						introData := strings.TrimPrefix(p, "intro:")
+						if introData == "" || introData == "none" {
+							pSettings.MontageIntroVideoEnabled = false
+						} else {
+							pSettings.MontageIntroVideoEnabled = true
+							pSettings.MontageIntroVideoPath = introData
+						}
 					}
 				}
 				s.log("SUCCESS", fmt.Sprintf("[Control] Montage updated (V2). Audio length: %.2fs, Clips: %d, Triggers: %d", audioDur, numFiles, len(pSettings.MontageOverlayTriggers)), id, taskLabel)

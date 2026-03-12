@@ -717,10 +717,12 @@
 }
 
 .montage-timeline-ruler {
-    height: 32px;
-    border-bottom: 1px solid var(--border-color);
+    height: 38px;
+    border-bottom: 2px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.3);
     position: relative;
-    margin-bottom: 48px;
+    cursor: pointer;
+    margin-bottom: 40px;
 }
 
 .timeline-marker {
@@ -743,7 +745,6 @@
 .audio-track-reference {
     position: absolute;
     bottom: -36px;
-    left: 0;
     height: 28px;
     background: color-mix(in srgb, var(--accent-primary), transparent 85%);
     border: 1px solid color-mix(in srgb, var(--accent-primary), transparent 70%);
@@ -751,22 +752,58 @@
     display: flex;
     align-items: center;
     padding: 0 12px;
+    pointer-events: none;
+    z-index: 10;
 }
 
 .audio-track-reference span {
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 800;
     color: var(--accent-primary);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    white-space: nowrap;
+    letter-spacing: 0.1em;
 }
+
+.audio-track-reference.intro-audio {
+    background: linear-gradient(90deg, rgba(236, 72, 153, 0.25) 0%, rgba(168, 85, 247, 0.25) 100%);
+    border: 1px solid rgba(236, 72, 153, 0.5);
+}
+
+.audio-track-reference.intro-audio span {
+    color: #ec4899;
+}
+
+.montage-timeline-wrapper {
+    height: 100%;
+    background: #000;
+}
+
+.montage-timeline-content {
+    flex: 1;
+    overflow-x: auto;
+    position: relative;
+    background: #000;
+}
+
+.montage-timeline-content-inner {
+    position: relative;
+    min-height: 100%;
+}
+
+.sidebar-header {
+    display: none;
+}
+
+.ruler-markers-container {
+    position: relative;
+    height: 100%;
+}
+
 
 .montage-timeline-tracks {
     position: relative;
-    height: 146px;
-    background: rgba(255, 255, 255, 0.02);
-    border-radius: 8px;
-    border: 1px dashed rgba(255, 255, 255, 0.05);
+    height: 115px; /* 80 for clips + 35 for triggers */
 }
 
 .montage-track {
@@ -776,16 +813,15 @@
 }
 
 .montage-track.clips {
-    top: 10px;
+    top: 0;
     height: 80px;
 }
 
 .montage-track.triggers {
-    top: 100px;
-    height: 36px;
-    background: rgba(0, 0, 0, 0.1);
+    top: 80px;
+    height: 35px;
+    background: rgba(0, 0, 0, 0.2);
     border-top: 1px solid var(--border-color);
-    transition: background 0.2s;
 }
 
 .montage-track.triggers.accepting-drop {
@@ -812,15 +848,11 @@
 }
 
 .track-label {
-    position: absolute;
-    left: 12px;
-    top: -18px;
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 800;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    opacity: 0.7;
 }
 
 .montage-trigger-marker {
@@ -905,10 +937,73 @@
 }
 
 .montage-clip-block.video { border-color: color-mix(in srgb, var(--accent-primary), transparent 50%); }
+
+.intro-slot-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    z-index: 20;
+}
+
+.intro-drop-slot {
+    width: 100%;
+    height: 100%;
+    border: 2px dashed color-mix(in srgb, #a855f7, transparent 60%);
+    background: color-mix(in srgb, #a855f7, transparent 95%);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: #a855f7;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    cursor: copy;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+}
+
+.intro-drop-slot:hover, .intro-drop-slot.active {
+    background: color-mix(in srgb, #a855f7, transparent 85%);
+    border-color: #a855f7;
+    border-style: solid;
+    transform: scale(1.02);
+}
+
+.intro-selected {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #1a1a1a;
+    border: 1px solid #a855f7;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.2);
+}
+
+
+.intro-drop-slot svg {
+    opacity: 0.6;
+}
+
+.montage-clip-block.intro-clip {
+    border-color: #a855f7;
+    background: color-mix(in srgb, #a855f7, transparent 90%);
+}
+.montage-clip-block.intro-clip .montage-clip-duration {
+    background: #a855f7;
+}
 .montage-clip-block.active-preview { 
     border-color: var(--accent-primary);
     border-width: 2px;
     box-shadow: 0 0 15px color-mix(in srgb, var(--accent-primary), transparent 70%);
+}
+.montage-clip-block.intro-clip.active-preview {
+    border-color: #a855f7;
+    box-shadow: 0 0 15px color-mix(in srgb, #a855f7, transparent 70%);
 }
 
 .montage-clip-content {
