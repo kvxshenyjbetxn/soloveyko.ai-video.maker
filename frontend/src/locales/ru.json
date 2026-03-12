@@ -573,7 +573,10 @@
                 "video_mode_text": "Из текста (промпта)",
                 "video_mode_image": "Из сгенерированного изображения",
                 "video_count": "Количество видео",
-                "video_upscale": "Upscale видео (Grok)"
+                "video_upscale": "Upscale видео (Grok)",
+                "fill_mode": "Заполнение дефицита времени",
+                "fill_mode_boomerang": "Бумеранг",
+                "fill_mode_mirror": "Зеркало"
             },
             "available_tags": "Доступные теги:",
             "tag_content": "текущий текст (всегда)",

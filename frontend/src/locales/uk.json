@@ -583,7 +583,10 @@
         "video_mode_text": "З тексту (промту)",
         "video_mode_image": "З згенерованого зображення",
         "video_count": "Кількість відео",
-        "video_upscale": "Upscale відео (Grok)"
+        "video_upscale": "Upscale відео (Grok)",
+        "fill_mode": "Заповнення дефіциту часу",
+        "fill_mode_boomerang": "Бумеранг",
+        "fill_mode_mirror": "Дзеркало"
       },
       "available_tags": "Доступні теги:",
       "tag_content": "поточний текст (завжди)",

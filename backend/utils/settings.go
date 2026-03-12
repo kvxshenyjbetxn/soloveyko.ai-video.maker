@@ -161,6 +161,7 @@ type PipelineSettings struct {
 	ImageDetermineCharactersMode   string  `json:"imageDetermineCharactersMode,omitempty"`
 	ImageDetermineCharactersPrompt string  `json:"imageDetermineCharactersPrompt,omitempty"`
 	ImageDetermineCharactersStatic string  `json:"imageDetermineCharactersStatic,omitempty"`
+	ImageShortVideoFillMode        string  `json:"imageShortVideoFillMode,omitempty"` // boomerang, mirror
 
 	// Keep outputPath for migration if needed
 
@@ -498,6 +499,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 	}
 	if settings.Pipeline.ImageMemoryChars <= 0 {
 		settings.Pipeline.ImageMemoryChars = 1000
+	}
+	if settings.Pipeline.ImageShortVideoFillMode == "" {
+		settings.Pipeline.ImageShortVideoFillMode = "boomerang"
 	}
 
 	// Якщо список моделей взагалі nil (поле відсутнє в JSON), додаємо дефолтні.

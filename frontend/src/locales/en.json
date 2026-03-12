@@ -574,7 +574,10 @@
                 "video_mode_text": "From Text (Prompt)",
                 "video_mode_image": "From Generated Image",
                 "video_count": "Number of Videos",
-                "video_upscale": "Upscale Video (Grok)"
+                "video_upscale": "Upscale Video (Grok)",
+                "fill_mode": "Short video fill mode",
+                "fill_mode_boomerang": "Boomerang",
+                "fill_mode_mirror": "Mirror"
             },
             "available_tags": "Available tags:",
             "tag_content": "current text (always)",

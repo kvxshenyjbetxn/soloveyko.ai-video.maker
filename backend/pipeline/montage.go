@@ -250,6 +250,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageIntroVideoPath"].(string); ok {
 		pSettings.MontageIntroVideoPath = val
 	}
+	if val, ok := settings["imageShortVideoFillMode"].(string); ok {
+		pSettings.ImageShortVideoFillMode = val
+	}
 	if val, ok := settings["montageWatermarkEnabled"].(bool); ok {
 		pSettings.MontageWatermarkEnabled = val
 	}
@@ -718,16 +721,34 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			paddedDur := requiredDur + padAmount
 
 			if actualDur > 0 && actualDur < requiredDur {
-				// Apply Boomerang Effect with infinite looping
-				s.log("INFO", fmt.Sprintf("[Montage] [%d] Applying boomerang loop (actual: %.2fs, req: %.2fs)", idx, actualDur, requiredDur), id, taskLabel)
-				filterParts = append(filterParts, fmt.Sprintf(
-					"[%d:v]trim=duration=%.6f,setpts=PTS-STARTPTS[f%d_1];"+
-						"[f%d_1]split=2[pts%d_a][pts%d_b];"+
-						"[pts%d_b]reverse,setpts=PTS-STARTPTS[b%d_wd];"+
-						"[pts%d_a][b%d_wd]concat=n=2:v=1[v%d_boom];"+
-						"[v%d_boom]loop=loop=-1:size=0:start=0,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
-					idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, baseW, baseH, baseW, baseH, fps, paddedDur, vOut,
-				))
+				if pSettings.ImageShortVideoFillMode == "mirror" {
+					// Mirror Transition: Forward -> (fade) -> Forward Mirrored
+					tDur := 0.5
+					if actualDur < 1.0 {
+						tDur = actualDur * 0.3
+					}
+					offset := actualDur - tDur
+					s.log("INFO", fmt.Sprintf("[Montage] [%d] Applying mirror loop with transition (actual: %.2fs, req: %.2fs, trans: %.2fs)", idx, actualDur, requiredDur, tDur), id, taskLabel)
+					filterParts = append(filterParts, fmt.Sprintf(
+						"[%d:v]trim=duration=%.6f,setpts=PTS-STARTPTS[f%d_1];"+
+							"[f%d_1]split=2[pts%d_a][pts%d_b];"+
+							"[pts%d_b]hflip,setpts=PTS-STARTPTS[b%d_wd];"+
+							"[pts%d_a][b%d_wd]xfade=transition=fade:duration=%.3f:offset=%.3f[v%d_boom];"+
+							"[v%d_boom]loop=loop=-1:size=0:start=0,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+						idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, tDur, offset, idx, idx, baseW, baseH, baseW, baseH, fps, paddedDur, vOut,
+					))
+				} else {
+					// Boomerang: Forward -> Backward
+					s.log("INFO", fmt.Sprintf("[Montage] [%d] Applying boomerang loop (actual: %.2fs, req: %.2fs)", idx, actualDur, requiredDur), id, taskLabel)
+					filterParts = append(filterParts, fmt.Sprintf(
+						"[%d:v]trim=duration=%.6f,setpts=PTS-STARTPTS[f%d_1];"+
+							"[f%d_1]split=2[pts%d_a][pts%d_b];"+
+							"[pts%d_b]reverse,setpts=PTS-STARTPTS[b%d_wd];"+
+							"[pts%d_a][b%d_wd]concat=n=2:v=1[v%d_boom];"+
+							"[v%d_boom]loop=loop=-1:size=0:start=0,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+						idx+visualOffset, actualDur, idx, idx, idx, idx, idx, idx, idx, idx, idx, idx, baseW, baseH, baseW, baseH, fps, paddedDur, vOut,
+					))
+				}
 			} else {
 				if actualDur <= 0 {
 					actualDur = requiredDur

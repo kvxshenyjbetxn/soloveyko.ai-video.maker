@@ -943,6 +943,17 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             min="1"
                                         />
                                     </div>
+                                    <div className="settings-control">
+                                        <label className="settings-label">{t('pipeline.image.googler.fill_mode') || 'Заповнення дефіциту часу'}</label>
+                                        <select
+                                            className="settings-select"
+                                            value={settings.imageShortVideoFillMode || 'boomerang'}
+                                            onChange={(e) => handleChange('imageShortVideoFillMode', e.target.value)}
+                                        >
+                                            <option value="boomerang">{t('pipeline.image.googler.fill_mode_boomerang') || 'Бумеранг'}</option>
+                                            <option value="mirror">{t('pipeline.image.googler.fill_mode_mirror') || 'Дзеркало'}</option>
+                                        </select>
+                                    </div>
                                     {settings.imageGooglerVideoModel === 'grok' && (
                                         <div className="settings-control">
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>

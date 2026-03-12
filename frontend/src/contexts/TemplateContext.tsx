@@ -160,6 +160,7 @@ export interface PipelineSettings {
     customStages: CustomStage[];
     customStagesEnabled: boolean;
     customStagesCollapsed: boolean;
+    imageShortVideoFillMode: string;
 }
 
 export interface PipelineTemplate {

@@ -475,6 +475,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 if (s.imageSyncEnabled === undefined) { s.imageSyncEnabled = true; updated = true; }
                 if (s.imageGenerationMethod === undefined) { s.imageGenerationMethod = "sentences"; updated = true; }
                 if (s.imageGroupSentences === undefined) { s.imageGroupSentences = false; updated = true; }
+                if (s.imageShortVideoFillMode === undefined) { s.imageShortVideoFillMode = "boomerang"; updated = true; }
 
                 if (s.elevenLabsUnlimStability === undefined) s.elevenLabsUnlimStability = 0.5;
                 if (s.elevenLabsUnlimSimilarity === undefined) s.elevenLabsUnlimSimilarity = 0.75;
@@ -621,7 +622,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         });
 
         // 3. Image Settings
-        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic'];
+        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic', 'imageShortVideoFillMode'];
         imageBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.image[f] = settings[f]; });
 
         // Image Service Specific Groups
@@ -901,6 +902,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 imagePromptModel: cleanApplied.imagePromptModel ?? '',
                 imagePromptTemperature: cleanApplied.imagePromptTemperature ?? 0.7,
                 imagePromptMaxTokens: cleanApplied.imagePromptMaxTokens ?? 0,
+                imageShortVideoFillMode: cleanApplied.imageShortVideoFillMode ?? 'boomerang',
             };
         });
     };
