@@ -72,13 +72,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
             // System
             // @ts-ignore
-            const sysEnabled = await window.go.main.App.GetSystemNotificationsEnabled();
-            if (sysEnabled && ("Notification" in window) && Notification.permission === "granted") {
-                new Notification("Soloveyko.AI", {
-                    body: msg.replace(/\*/g, ''), // remove markdown bold for system notification
-                    icon: '/icon.png'
-                });
-            }
+            await window.go.main.App.SendSystemNotification(msg, "");
         } catch (err) {
             console.error("Failed to send notification:", err);
         }

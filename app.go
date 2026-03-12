@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gen2brain/beeep"
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -278,6 +279,9 @@ func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.pipeline.SetContext(ctx)
+
+	// Set app name for native notifications
+	beeep.AppName = utils.AppName
 
 	// Register native file drop handler
 	wruntime.OnFileDrop(ctx, func(x, y int, paths []string) {
@@ -1344,6 +1348,45 @@ func (a *App) GetSystemNotificationsEnabled() bool {
 
 func (a *App) SaveSystemNotificationsEnabled(enabled bool) error {
 	return a.settings.SetSystemNotificationsEnabled(enabled)
+}
+
+func (a *App) getIconPath() string {
+	// Possible locations for the icon
+	paths := []string{
+		filepath.Join("build", "windows", "icon.ico"),
+		"icon.ico",
+		"icon.png",
+	}
+
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			abs, _ := filepath.Abs(p)
+			return abs
+		}
+	}
+
+	return ""
+}
+
+// SendSystemNotification sends a native notification using the operating system's API
+func (a *App) SendSystemNotification(title, text string) error {
+	if !a.GetSystemNotificationsEnabled() {
+		return nil
+	}
+
+	// Remove markdown-like bold (**) if any
+	cleanTitle := strings.ReplaceAll(title, "**", "")
+	cleanTitle = strings.ReplaceAll(cleanTitle, "*", "")
+
+	cleanText := strings.ReplaceAll(text, "**", "")
+	cleanText = strings.ReplaceAll(cleanText, "*", "")
+
+	// Providing the icon path helps identity the application name on Windows
+	return beeep.Notify(cleanTitle, cleanText, a.getIconPath())
+}
+
+func (a *App) TestSystemNotification() error {
+	return a.SendSystemNotification("System Notifications", "🔔 Тестове сповіщення успішно налаштоване!")
 }
 
 // WhisperX Management Methods

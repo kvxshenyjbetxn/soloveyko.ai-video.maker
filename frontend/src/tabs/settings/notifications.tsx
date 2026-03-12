@@ -48,11 +48,6 @@ const NotificationsSettings: React.FC = () => {
         try {
             // @ts-ignore
             await window.go.main.App.SaveSystemNotificationsEnabled(newValue);
-            if (newValue && ("Notification" in window)) {
-                if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-                    Notification.requestPermission();
-                }
-            }
         } catch (e) {
             console.error("Failed to save system enabled state", e);
         }
@@ -112,6 +107,20 @@ const NotificationsSettings: React.FC = () => {
         }
     };
 
+    const handleTestSystem = async () => {
+        setIsSaving(true); // Reuse state or add new one, isSaving is fine for visual feedback
+        try {
+            // @ts-ignore
+            await window.go.main.App.TestSystemNotification();
+            showToast(t('notifications.system_test_sent'), "success");
+        } catch (e: any) {
+            console.error("Failed to send test system notification", e);
+            showToast(t('notifications.system_test_error') + e.toString(), "error");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
         <div className="content-wrapper animate-fade">
             <div className="settings-container">
@@ -121,94 +130,121 @@ const NotificationsSettings: React.FC = () => {
                         {t('notifications.description')}
                     </p>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '30px' }}>
-                        <div className="settings-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px', userSelect: 'none' }}>
-                            <label className="toggle-switch">
-                                <input
-                                    type="checkbox"
-                                    checked={enabled}
-                                    onChange={(e) => handleSaveEnabled(e.target.checked)}
-                                />
-                                <span className="toggle-slider" style={enabled ? { backgroundColor: 'var(--accent-primary)' } : {}}></span>
-                            </label>
-                            <span
-                                className="toggle-label"
-                                onClick={() => handleSaveEnabled(!enabled)}
-                                style={{ fontSize: '15px', color: enabled ? 'var(--text-primary)' : 'var(--text-secondary)' }}
-                            >
-                                {t('notifications.enable')}
-                            </span>
-                        </div>
-
-                        <div className="settings-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px', userSelect: 'none' }}>
-                            <label className="toggle-switch">
-                                <input
-                                    type="checkbox"
-                                    checked={systemEnabled}
-                                    onChange={(e) => handleSaveSystemEnabled(e.target.checked)}
-                                />
-                                <span className="toggle-slider" style={systemEnabled ? { backgroundColor: 'var(--accent-primary)' } : {}}></span>
-                            </label>
-                            <span
-                                className="toggle-label"
-                                onClick={() => handleSaveSystemEnabled(!systemEnabled)}
-                                style={{ fontSize: '15px', color: systemEnabled ? 'var(--text-primary)' : 'var(--text-secondary)' }}
-                            >
-                                {t('notifications.system_enable')}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div
-                        className="settings-controls"
-                        style={{
-                            opacity: enabled ? 1 : 0.5,
-                            pointerEvents: enabled ? 'auto' : 'none',
-                            transition: 'opacity 0.3s ease'
-                        }}
-                    >
-                        <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                            <div style={{ flex: 1 }}>
-                                <label className="settings-label" style={{ display: 'block', marginBottom: '8px' }}>{t('notifications.chat_id')}</label>
-                                <input
-                                    type="text"
-                                    className="settings-input"
-                                    value={chatID}
-                                    onChange={(e) => setChatID(e.target.value)}
-                                    onBlur={() => handleSaveChatID()}
-                                    placeholder={t('notifications.chat_id_placeholder')}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                                />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '30px' }}>
+                        {/* Telegram Section */}
+                        <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                            <div className="settings-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px', userSelect: 'none', marginBottom: '20px' }}>
+                                <label className="toggle-switch">
+                                    <input
+                                        type="checkbox"
+                                        checked={enabled}
+                                        onChange={(e) => handleSaveEnabled(e.target.checked)}
+                                    />
+                                    <span className="toggle-slider" style={enabled ? { backgroundColor: 'var(--accent-primary)' } : {}}></span>
+                                </label>
+                                <span
+                                    className="toggle-label"
+                                    onClick={() => handleSaveEnabled(!enabled)}
+                                    style={{ fontSize: '15px', fontWeight: 600, color: enabled ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                                >
+                                    {t('notifications.enable')}
+                                </span>
                             </div>
-                            <button
-                                className="btn-secondary"
-                                onClick={handleAutofill}
-                                title={t('notifications.autofill_desc')}
-                                style={{ marginTop: '26px', padding: '10px 15px', borderRadius: '8px' }}
+
+                            <div
+                                className="settings-controls"
+                                style={{
+                                    opacity: enabled ? 1 : 0.5,
+                                    pointerEvents: enabled ? 'auto' : 'none',
+                                    transition: 'opacity 0.3s ease',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '15px'
+                                }}
                             >
-                                <i className="fa-solid fa-wand-magic-sparkles" style={{ marginRight: '8px' }}></i> {t('notifications.autofill')}
-                            </button>
+                                <div>
+                                    <label className="settings-label" style={{ display: 'block', marginBottom: '8px' }}>{t('notifications.chat_id')}</label>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <input
+                                            type="text"
+                                            className="settings-input"
+                                            value={chatID}
+                                            onChange={(e) => setChatID(e.target.value)}
+                                            onBlur={() => handleSaveChatID()}
+                                            placeholder={t('notifications.chat_id_placeholder')}
+                                            style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                                        />
+                                        <button
+                                            className="btn-secondary"
+                                            onClick={handleAutofill}
+                                            title={t('notifications.autofill_desc')}
+                                            style={{ padding: '0 12px', borderRadius: '8px', height: '40px' }}
+                                        >
+                                            <i className="fa-solid fa-wand-magic-sparkles"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        className="btn-primary"
+                                        onClick={() => handleSaveChatID()}
+                                        disabled={isSaving}
+                                        style={{ padding: '10px 15px', borderRadius: '8px', fontSize: '14px', flex: 1 }}
+                                    >
+                                        {isSaving ? <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> : <i className="fa-solid fa-floppy-disk" style={{ marginRight: '8px' }}></i>}
+                                        {t('common.save')}
+                                    </button>
+                                    <button
+                                        className="btn-secondary"
+                                        onClick={handleTest}
+                                        disabled={isTesting || !chatID}
+                                        style={{ padding: '10px 15px', borderRadius: '8px', fontSize: '14px', flex: 1 }}
+                                    >
+                                        {isTesting ? <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> : <i className="fa-solid fa-paper-plane" style={{ marginRight: '8px' }}></i>}
+                                        {t('notifications.test')}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '15px', marginTop: '20px' }}>
-                            <button
-                                className="btn-primary"
-                                onClick={() => handleSaveChatID()}
-                                disabled={isSaving}
-                                style={{ padding: '10px 20px', borderRadius: '8px' }}
+                        {/* System Section */}
+                        <div style={{ background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+                            <div className="settings-controls" style={{ display: 'flex', alignItems: 'center', gap: '12px', userSelect: 'none', marginBottom: '20px' }}>
+                                <label className="toggle-switch">
+                                    <input
+                                        type="checkbox"
+                                        checked={systemEnabled}
+                                        onChange={(e) => handleSaveSystemEnabled(e.target.checked)}
+                                    />
+                                    <span className="toggle-slider" style={systemEnabled ? { backgroundColor: 'var(--accent-primary)' } : {}}></span>
+                                </label>
+                                <span
+                                    className="toggle-label"
+                                    onClick={() => handleSaveSystemEnabled(!systemEnabled)}
+                                    style={{ fontSize: '15px', fontWeight: 600, color: systemEnabled ? 'var(--text-primary)' : 'var(--text-secondary)' }}
+                                >
+                                    {t('notifications.system_enable')}
+                                </span>
+                            </div>
+
+                            <div
+                                style={{
+                                    opacity: systemEnabled ? 1 : 0.5,
+                                    pointerEvents: systemEnabled ? 'auto' : 'none',
+                                    transition: 'opacity 0.3s ease',
+                                    marginTop: 'auto'
+                                }}
                             >
-                                {isSaving ? <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> : <i className="fa-solid fa-floppy-disk" style={{ marginRight: '8px' }}></i>}
-                                {t('common.save')}
-                            </button>
-                            <button
-                                className="btn-secondary"
-                                onClick={handleTest}
-                                disabled={isTesting || !chatID}
-                                style={{ padding: '10px 20px', borderRadius: '8px' }}
-                            >
-                                {isTesting ? <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i> : <i className="fa-solid fa-paper-plane" style={{ marginRight: '8px' }}></i>}
-                                {t('notifications.test')}
-                            </button>
+                                <button
+                                    className="btn-secondary"
+                                    onClick={handleTestSystem}
+                                    style={{ width: '100%', padding: '10px 15px', borderRadius: '8px', fontSize: '14px' }}
+                                >
+                                    <i className="fa-solid fa-desktop" style={{ marginRight: '8px' }}></i>
+                                    {t('notifications.system_test')}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
