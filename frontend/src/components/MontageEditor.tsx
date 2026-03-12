@@ -77,6 +77,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [cutJunctions, setCutJunctions] = useState<{ position: number, durationRemoved: number }[]>([]);
     const [subtitles, setSubtitles] = useState<SubtitleEntry[]>([]);
 
+    const [triggers, setTriggers] = useState<MontageTrigger[]>([]);
+    const [draggingTriggerIdx, setDraggingTriggerIdx] = useState<number | null>(null);
+    const [dragTriggerStartPos, setDragTriggerStartPos] = useState<number>(0);
+    const [dragTriggerOffsetX, setDragTriggerOffsetX] = useState<number>(0);
+
     const previewVideoRef = useRef<HTMLVideoElement>(null);
     const previewAudioRef = useRef<HTMLAudioElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -108,6 +113,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const [isDraggingExternal, setIsDraggingExternal] = useState(false);
     const dragCounter = useRef(0);
     const [dropPreview, setDropPreview] = useState<number | null>(null);
+    const [hoveredMediaIdx, setHoveredMediaIdx] = useState<number | null>(null);
+    const [editingTriggerIdx, setEditingTriggerIdx] = useState<number | null>(null);
+    const [tempTriggerPhrase, setTempTriggerPhrase] = useState<string>("");
 
     const importFiles = useCallback(async (paths: string[]) => {
         for (const path of paths) {
@@ -154,6 +162,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     setAudioSegments(parsed.audioSegments);
                 } else {
                     setAudioSegments([{ start: 0, end: parsed.audioDuration }]);
+                }
+                if (parsed.triggers) {
+                    setTriggers(parsed.triggers.map((t: MontageTrigger) => ({ ...t })));
+                } else {
+                    setTriggers([]);
                 }
 
                 // Try to load prompts.txt for regeneration
@@ -461,6 +474,17 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         });
     }, []);
 
+    const handleSaveTriggerPhrase = () => {
+        if (editingTriggerIdx !== null) {
+            setTriggers(p => {
+                const nt = [...p];
+                nt[editingTriggerIdx] = { ...nt[editingTriggerIdx], phrase: tempTriggerPhrase };
+                return nt;
+            });
+            setEditingTriggerIdx(null);
+        }
+    };
+
     const handleOpenRegenerate = useCallback((idx: number) => {
         setRegIdx(idx);
         setIsRegModalOpen(true);
@@ -567,6 +591,28 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         setDropPreview(null);
     }, [isDraggingFromPool]);
 
+    const handleTriggerDrop = useCallback((dropTime: number) => {
+        if (!isDraggingFromPool) return;
+        
+        const newTrigger: MontageTrigger = {
+            phrase: isDraggingFromPool.path.split(/[\\/]/).pop()?.split('.')[0] || "Trigger",
+            path: isDraggingFromPool.path,
+            startTime: dropTime,
+            duration: isDraggingFromPool.actualDuration && isDraggingFromPool.actualDuration > 0 ? isDraggingFromPool.actualDuration : 3.0,
+            isVideo: isDraggingFromPool.isVideo,
+            x: 0,
+            y: 0
+        };
+
+        setTriggers(prev => [...prev, newTrigger]);
+        setIsDraggingFromPool(null);
+        setDropPreview(null);
+    }, [isDraggingFromPool]);
+
+    const handleDeleteTrigger = useCallback((idx: number) => {
+        setTriggers(prev => prev.filter((_, i) => i !== idx));
+    }, []);
+
     useEffect(() => {
         const kd = (e: KeyboardEvent) => {
             if (e.target instanceof HTMLInputElement) return;
@@ -618,6 +664,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             setDraggingIdx(null); 
             setIsScrubbing(false); 
             setDraggingSelectionSide(null);
+            setDraggingTriggerIdx(null);
         };
         const mm = (e: MouseEvent) => {
             if (draggingIdx !== null) {
@@ -627,6 +674,14 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 if (cD < 0.5) { cD = 0.5; nD = startDurations.current + startDurations.next - 0.5; }
                 else if (nD < 0.5) { nD = 0.5; cD = startDurations.current + startDurations.next - 0.5; }
                 setClips(p => { const nc = [...p]; nc[draggingIdx] = { ...nc[draggingIdx], duration: cD }; nc[draggingIdx + 1] = { ...nc[draggingIdx + 1], duration: nD }; return nc; });
+            } else if (draggingTriggerIdx !== null) {
+                const deltaT = (e.clientX - startX) / zoom;
+                let newTime = Math.max(0, dragTriggerStartPos + deltaT);
+                setTriggers(p => {
+                    const nt = [...p];
+                    nt[draggingTriggerIdx] = { ...nt[draggingTriggerIdx], startTime: newTime };
+                    return nt;
+                });
             } else if (draggingSelectionSide !== null && containerRef.current) {
                 const rect = containerRef.current.getBoundingClientRect();
                 const x = e.clientX - rect.left + containerRef.current.scrollLeft - 24;
@@ -635,12 +690,12 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             }
             if (isScrubbing) handleTimelineMove(e);
         };
-        if (draggingIdx !== null || isScrubbing || draggingSelectionSide !== null) {
+        if (draggingIdx !== null || isScrubbing || draggingSelectionSide !== null || draggingTriggerIdx !== null) {
             document.addEventListener('mousemove', mm);
             document.addEventListener('mouseup', mu);
         }
         return () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
-    }, [draggingIdx, isScrubbing, draggingSelectionSide, handleTimelineMove, zoom, startX, startDurations]);
+    }, [draggingIdx, isScrubbing, draggingSelectionSide, draggingTriggerIdx, handleTimelineMove, zoom, startX, startDurations, dragTriggerStartPos]);
 
     const markers = useMemo(() => {
         const res = [];
@@ -677,25 +732,36 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     }, [clipLayouts, activeClipInfo?.idx, clips, regeneratingIndices, handleDeleteClip, handleOpenRegenerate]);
 
     const triggerElements = useMemo(() => {
-        if (!plan?.triggers) return null;
-        return plan.triggers.map((tr, i) => {
+        return triggers.map((tr, i) => {
             const width = Math.max(tr.duration * zoom, 40);
             const x = tr.startTime * zoom;
             const isActive = currentTime >= tr.startTime && currentTime <= tr.startTime + tr.duration;
             return (
                 <div 
                     key={i} 
-                    className={`montage-trigger-marker ${isActive ? 'active' : ''}`}
+                    className={`montage-trigger-marker ${isActive ? 'active' : ''} ${draggingTriggerIdx === i ? 'dragging' : ''}`}
                     style={{ left: `${x}px`, width: `${width}px` }}
-                    title={`Trigger: ${tr.phrase} (${tr.path.split(/[\\/]/).pop()})`}
+                    title={`Trigger: ${tr.phrase} (${tr.path.split(/[\\/]/).pop()}) - Click to jump, Drag to move`}
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDraggingTriggerIdx(i);
+                        setStartX(e.clientX);
+                        setDragTriggerStartPos(tr.startTime);
+                    }}
                     onClick={() => setCurrentTime(tr.startTime)}
                 >
                     <div className="trigger-icon">🎯</div>
-                    <div className="trigger-phrase">{tr.phrase}</div>
+                    <div className="trigger-phrase" onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTriggerIdx(i);
+                        setTempTriggerPhrase(tr.phrase);
+                    }}>{tr.phrase}</div>
+                    <button className="trigger-delete-btn" onClick={(e) => { e.stopPropagation(); handleDeleteTrigger(i); }}>✕</button>
                 </div>
             );
         });
-    }, [plan?.triggers, zoom, currentTime]);
+    }, [triggers, zoom, currentTime, draggingTriggerIdx, handleDeleteTrigger]);
 
     if (!plan) return null;
 
@@ -759,11 +825,33 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                         {mediaPool.length > 0 ? (
                                             <div className="media-pool-grid">
                                                 {mediaPool.map((m, i) => (
-                                                    <div key={i} className="pool-item" draggable onDragStart={() => handleInternalDragStart(m)} onDragEnd={() => setIsDraggingFromPool(null)} title={m.path.split(/[\\/]/).pop()}>
+                                                    <div 
+                                                        key={i} 
+                                                        className="pool-item" 
+                                                        draggable 
+                                                        onDragStart={() => handleInternalDragStart(m)} 
+                                                        onDragEnd={() => setIsDraggingFromPool(null)} 
+                                                        onMouseEnter={() => setHoveredMediaIdx(i)}
+                                                        onMouseLeave={() => setHoveredMediaIdx(null)}
+                                                        title={m.path.split(/[\\/]/).pop()}
+                                                    >
                                                         <button className="pool-item-delete" onClick={(e) => { e.stopPropagation(); handleRemoveFromPool(i); }} title="Remove">✕</button>
                                                         <div className="pool-thumb-wrapper">
-                                                            {m.isVideo ? <div className="pool-video-overlay">🎬</div> : null}
-                                                            <img src={getUrl(m.path)} alt="thumb" className="pool-thumb-img" />
+                                                            {m.isVideo ? (
+                                                                <video 
+                                                                    key={`${m.path}-${hoveredMediaIdx === i}`}
+                                                                    src={getUrl(m.path)} 
+                                                                    className={`pool-thumb-img ${hoveredMediaIdx === i ? 'video-preview' : ''}`} 
+                                                                    autoPlay={hoveredMediaIdx === i} 
+                                                                    muted 
+                                                                    loop={hoveredMediaIdx === i} 
+                                                                    playsInline 
+                                                                    preload="metadata"
+                                                                />
+                                                            ) : (
+                                                                <img src={getUrl(m.path)} alt="thumb" className="pool-thumb-img" />
+                                                            )}
+                                                            {m.isVideo && hoveredMediaIdx !== i && <div className="pool-video-overlay">🎬</div>}
                                                         </div>
                                                         <div className="pool-dur">{m.duration.toFixed(1)}s</div>
                                                     </div>
@@ -838,12 +926,19 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                     )}
                                 </div>
 
-                                {plan?.triggers && plan.triggers.length > 0 && (
-                                    <div className="montage-track triggers">
-                                        <div className="track-label">Triggers</div>
-                                        {triggerElements}
-                                    </div>
-                                )}
+                                <div 
+                                    className={`montage-track triggers ${isDraggingFromPool ? 'accepting-drop' : ''}`}
+                                    onDragOver={(e) => { if (isDraggingFromPool) { e.preventDefault(); e.stopPropagation(); const rect = containerRef.current!.getBoundingClientRect(); const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 24; setDropPreview(x / zoom); } }}
+                                    onDrop={(e) => { if (isDraggingFromPool) { e.stopPropagation(); const rect = containerRef.current!.getBoundingClientRect(); const x = e.clientX - rect.left + containerRef.current!.scrollLeft - 24; handleTriggerDrop(x / zoom); } }}
+                                >
+                                    <div className="track-label">Triggers ({triggers.length})</div>
+                                    {triggerElements}
+                                    {isDraggingFromPool && dropPreview !== null && (
+                                        <div className="trigger-drop-ghost" style={{ left: `${dropPreview * zoom}px`, width: `${(isDraggingFromPool.actualDuration || 3.0) * zoom}px` }}>
+                                            <div className="ghost-text">DROP TRIGGER</div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             {isDraggingFromPool && dropPreview !== null && (
                                 <div className="timeline-insertion-guide" style={{ left: `${dropPreview * zoom}px`, height: '100%' }}><div className="guide-line" /></div>
@@ -857,7 +952,8 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     <button className="montage-btn primary premium-button" onClick={() => {
                         const clipData = clips.map(c => `${c.path}|${c.duration.toFixed(3)}|${c.isVideo ? 'v' : 'i'}`).join('::');
                         const ss = audioSegments.map(s => `${s.start.toFixed(3)},${s.end.toFixed(3)}`).join('|');
-                        onConfirm(task.id, `confirm_v2:${clipData};segments:${ss}`);
+                        const trData = triggers.map(t => `${t.phrase}|${t.path}|${t.startTime.toFixed(3)}|${t.duration.toFixed(3)}|${t.x}|${t.y}|${t.isVideo ? 'v' : 'i'}`).join('::');
+                        onConfirm(task.id, `confirm_v2:${clipData};segments:${ss};triggers:${trData}`);
                     }}>{t('common.save')}</button>
                 </div>
             </div>
@@ -868,6 +964,31 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 onClose={() => setIsRegModalOpen(false)}
                 onConfirm={handleRegenerateConfirm}
             />
+
+            {editingTriggerIdx !== null && (
+                <div className="montage-modal-overlay animate-fade-in">
+                    <div className="montage-modal-window trigger-edit animate-scale-up">
+                        <div className="montage-modal-header">
+                            <h3 className="modal-title">Edit Trigger Phrase</h3>
+                            <button className="close-btn" onClick={() => setEditingTriggerIdx(null)}>✕</button>
+                        </div>
+                        <div className="montage-modal-body">
+                            <p className="modal-hint">Enter the phrase from the script to sync this trigger with, or just a descriptive label.</p>
+                            <textarea 
+                                className="trigger-phrase-input"
+                                value={tempTriggerPhrase}
+                                onChange={(e) => setTempTriggerPhrase(e.target.value)}
+                                placeholder="Enter trigger phrase..."
+                                autoFocus
+                            />
+                        </div>
+                        <div className="montage-modal-footer">
+                            <button className="montage-btn secondary" onClick={() => setEditingTriggerIdx(null)}>Cancel</button>
+                            <button className="montage-btn primary" onClick={handleSaveTriggerPhrase}>Apply Changes</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

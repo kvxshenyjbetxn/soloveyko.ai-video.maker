@@ -14,10 +14,12 @@ type NamedAPIKey struct {
 }
 
 type OverlayTrigger struct {
-	Phrase string `json:"phrase"`
-	Path   string `json:"path"`
-	X      int    `json:"x"`
-	Y      int    `json:"y"`
+	Phrase    string   `json:"phrase"`
+	Path      string   `json:"path"`
+	X         int      `json:"x"`
+	Y         int      `json:"y"`
+	StartTime *float64 `json:"startTime,omitempty"`
+	Duration  *float64 `json:"duration,omitempty"`
 }
 
 type CustomStage struct {

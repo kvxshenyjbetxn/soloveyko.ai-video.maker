@@ -551,51 +551,73 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		case actionData := <-resChan:
 			// Parse modified plan if we get new durations/files from UI
 			if strings.HasPrefix(actionData, "confirm_v2:") {
-				mainParts := strings.Split(actionData, ";segments:")
-				clipStr := strings.TrimPrefix(mainParts[0], "confirm_v2:")
-				clipParts := strings.Split(clipStr, "::")
-				
-				var newVisualFiles []string
-				var newEffectiveDurs []float64
-				
-				for _, cp := range clipParts {
-					subParts := strings.Split(cp, "|")
-					if len(subParts) == 3 {
-						path := subParts[0]
-						dur, _ := strconv.ParseFloat(subParts[1], 64)
-						// subParts[2] is type 'v' or 'i', but we verify by extension or path
-						newVisualFiles = append(newVisualFiles, path)
-						newEffectiveDurs = append(newEffectiveDurs, dur)
-					}
-				}
-				
-				if len(newVisualFiles) > 0 {
-					visualFiles = newVisualFiles
-					effectiveDurs = newEffectiveDurs
-					numFiles = len(visualFiles)
-				}
-
-				if len(mainParts) > 1 {
-					segStrs := strings.Split(mainParts[1], "|")
-					var newSegments []MontageSegment
-					var totalAudio float64
-					for _, s := range segStrs {
-						coords := strings.Split(s, ",")
-						if len(coords) == 2 {
-							st, _ := strconv.ParseFloat(coords[0], 64)
-							en, _ := strconv.ParseFloat(coords[1], 64)
-							if en > st {
-								newSegments = append(newSegments, MontageSegment{Start: st, End: en})
-								totalAudio += (en - st)
+				parts := strings.Split(actionData, ";")
+				for _, p := range parts {
+					if strings.HasPrefix(p, "confirm_v2:") {
+						clipStr := strings.TrimPrefix(p, "confirm_v2:")
+						clipParts := strings.Split(clipStr, "::")
+						var newVisualFiles []string
+						var newEffectiveDurs []float64
+						for _, cp := range clipParts {
+							subParts := strings.Split(cp, "|")
+							if len(subParts) == 3 {
+								path := subParts[0]
+								dur, _ := strconv.ParseFloat(subParts[1], 64)
+								newVisualFiles = append(newVisualFiles, path)
+								newEffectiveDurs = append(newEffectiveDurs, dur)
 							}
 						}
-					}
-					if len(newSegments) > 0 {
-						audioSegments = newSegments
-						audioDur = totalAudio
+						if len(newVisualFiles) > 0 {
+							visualFiles = newVisualFiles
+							effectiveDurs = newEffectiveDurs
+							numFiles = len(visualFiles)
+						}
+					} else if strings.HasPrefix(p, "segments:") {
+						segStr := strings.TrimPrefix(p, "segments:")
+						segStrs := strings.Split(segStr, "|")
+						var newSegments []MontageSegment
+						var totalAudio float64
+						for _, s := range segStrs {
+							coords := strings.Split(s, ",")
+							if len(coords) == 2 {
+								st, _ := strconv.ParseFloat(coords[0], 64)
+								en, _ := strconv.ParseFloat(coords[1], 64)
+								if en > st {
+									newSegments = append(newSegments, MontageSegment{Start: st, End: en})
+									totalAudio += (en - st)
+								}
+							}
+						}
+						if len(newSegments) > 0 {
+							audioSegments = newSegments
+							audioDur = totalAudio
+						}
+					} else if strings.HasPrefix(p, "triggers:") {
+						trStr := strings.TrimPrefix(p, "triggers:")
+						trItems := strings.Split(trStr, "::")
+						var newTrs []utils.OverlayTrigger
+						for _, item := range trItems {
+							bits := strings.Split(item, "|")
+							if len(bits) >= 7 {
+								// phrase|path|startTime|duration|x|y|type
+								start, _ := strconv.ParseFloat(bits[2], 64)
+								dur, _ := strconv.ParseFloat(bits[3], 64)
+								x, _ := strconv.Atoi(bits[4])
+								y, _ := strconv.Atoi(bits[5])
+								newTrs = append(newTrs, utils.OverlayTrigger{
+									Phrase:    bits[0],
+									Path:      bits[1],
+									X:         x,
+									Y:         y,
+									StartTime: &start,
+									Duration:  &dur,
+								})
+							}
+						}
+						pSettings.MontageOverlayTriggers = newTrs
 					}
 				}
-				s.log("SUCCESS", fmt.Sprintf("[Control] Montage updated (V2). Audio length: %.2fs, Clips: %d", audioDur, numFiles), id, taskLabel)
+				s.log("SUCCESS", fmt.Sprintf("[Control] Montage updated (V2). Audio length: %.2fs, Clips: %d, Triggers: %d", audioDur, numFiles, len(pSettings.MontageOverlayTriggers)), id, taskLabel)
 			} else if strings.HasPrefix(actionData, "confirm:") {
 				mainParts := strings.Split(actionData, ";segments:")
 				parts := strings.Split(strings.TrimPrefix(mainParts[0], "confirm:"), ",")
@@ -1032,6 +1054,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		phrase    string
 		path      string
 		startTime float64
+		duration  float64
 		idx       int
 		x         int
 		y         int
@@ -1047,30 +1070,44 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				continue
 			}
 
-			startT := s.findTextTiming(assPath, tr.Phrase, taskLabel)
+			var startT *float64
+			if tr.StartTime != nil {
+				startT = tr.StartTime
+			} else {
+				startT = s.findTextTiming(assPath, tr.Phrase, taskLabel)
+			}
+			
 			if startT != nil {
-				s.log("INFO", fmt.Sprintf("[Montage] Found trigger '%s' at %.2fs", tr.Phrase, *startT), id, taskLabel)
+				s.log("INFO", fmt.Sprintf("[Montage] Active trigger '%s' at %.2fs", tr.Phrase, *startT), id, taskLabel)
 				tIdx := len(inputSpecs)
 				ext := strings.ToLower(filepath.Ext(tr.Path))
 				isTrVideo := videoExts[ext]
 				inputSpecs = append(inputSpecs, inputSpec{
 					loop:       !isTrVideo,
 					path:       getRel(tr.Path),
-					streamLoop: false, // Triggers play once? Or loop for duration?
-					// In python it's overlay=...:enable='between(t,start,end)'.
-					// We'll play once or loop for a fixed duration if image.
+					streamLoop: false, 
 				})
+
+				trDur := 3.0
+				if tr.Duration != nil {
+					trDur = *tr.Duration
+				} else if isTrVideo {
+					if d, err := s.getDuration(ffprobePath, tr.Path); err == nil && d > 0 {
+						trDur = d
+					}
+				}
 
 				activeTriggers = append(activeTriggers, triggerInfo{
 					phrase:    tr.Phrase,
 					path:      tr.Path,
 					startTime: *startT,
+					duration:  trDur,
 					idx:       tIdx,
 					x:         tr.X,
 					y:         tr.Y,
 				})
 			} else {
-				s.log("INFO", fmt.Sprintf("[Montage] Trigger phrase '%s' not found in subtitles", tr.Phrase), id, taskLabel)
+				s.log("INFO", fmt.Sprintf("[Montage] Trigger phrase '%s' not found", tr.Phrase), id, taskLabel)
 			}
 		}
 	}
@@ -1143,15 +1180,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	for i, tr := range activeTriggers {
-		trDur := 3.0 // Default 3s for images
+		trDur := tr.duration
 		ext := strings.ToLower(filepath.Ext(tr.path))
 		isTrVideo := videoExts[ext]
-		if isTrVideo {
-			d, _ := s.getDuration(ffprobePath, tr.path)
-			if d > 0 {
-				trDur = d
-			}
-		}
 
 		// 1. Pre-process trigger: scale, crop, format, and setpts (delay)
 		trigProcessedLabel := fmt.Sprintf("v_trig_ready_%d", i)
