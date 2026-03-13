@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type subtitleBlock struct {
@@ -705,4 +706,71 @@ func mathMin(a, b float64) float64 {
 		return a
 	}
 	return b
+}
+
+// SanitizeJsonForWhisperX ensures all segments have a non-zero duration and contain actual words to prevent WhisperX crash.
+func SanitizeJsonForWhisperX(jsonContent string) string {
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonContent), &data); err != nil {
+		return jsonContent
+	}
+
+	hasAlphanumeric := func(s string) bool {
+		for _, r := range s {
+			if unicode.IsLetter(r) || unicode.IsNumber(r) {
+				return true
+			}
+		}
+		return false
+	}
+
+	modified := false
+
+	// Helper to sanitize a slice of segments or words
+	sanitizeList := func(list []interface{}) []interface{} {
+		var newList []interface{}
+		for _, item := range list {
+			if m, ok := item.(map[string]interface{}); ok {
+				text, _ := m["text"].(string)
+				if text == "" {
+					text, _ = m["word"].(string)
+				}
+
+				// Skip punctuation-only or empty segments
+				if !hasAlphanumeric(text) {
+					modified = true
+					continue
+				}
+
+				start, _ := m["start"].(float64)
+				end, _ := m["end"].(float64)
+
+				// Enforce minimum 200ms duration
+				if end-start < 0.2 {
+					m["end"] = start + 0.2
+					modified = true
+				}
+				newList = append(newList, m)
+			}
+		}
+		return newList
+	}
+
+	if segments, ok := data["segments"].([]interface{}); ok {
+		data["segments"] = sanitizeList(segments)
+	}
+
+	if words, ok := data["words"].([]interface{}); ok {
+		data["words"] = sanitizeList(words)
+	}
+
+	if !modified {
+		return jsonContent
+	}
+
+	newBytes, err := json.Marshal(data)
+	if err != nil {
+		return jsonContent
+	}
+	return string(newBytes)
 }

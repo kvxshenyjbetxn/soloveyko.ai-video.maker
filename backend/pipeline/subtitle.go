@@ -179,6 +179,9 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 
 		s.log("INFO", fmt.Sprintf("[AmdWhisper] Transcription finished. JSON length: %d", len(amdJson)), id, taskLabel)
 
+		// Sanitize JSON before passing to WhisperX to prevent float division by zero
+		amdJson = utils.SanitizeJsonForWhisperX(amdJson)
+
 		// Save AMD JSON if returned (it's needed for alignment or just as a source)
 		if amdJson != "" {
 			jsonPath := filepath.Join(finalDir, "subtitle_amd_raw.json")
