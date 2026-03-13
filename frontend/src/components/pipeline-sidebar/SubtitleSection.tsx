@@ -331,8 +331,8 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                         </>
                     )}
 
-                    {/* --- ГРУПА: КАРАОКЕ ТА WHISPERX/ASSEMBLY-AI --- */}
-                    {(settings.subtitleService === 'whisperx' || settings.subtitleService === 'assemblyai') && (
+                    {/* --- ГРУПА: КАРАОКЕ ТА WHISPERX/ASSEMBLY-AI/AMD --- */}
+                    {(settings.subtitleService === 'whisperx' || settings.subtitleService === 'assemblyai' || settings.subtitleService === 'amd') && (
                         <div style={{
                             marginBottom: '16px',
                             padding: '16px',
@@ -429,8 +429,6 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                                             <span className="settings-slider-value">{settings.subtitleMaxWords || 10}</span>
                                         </div>
                                     </div>
-
-
                                 </div>
                             )}
                         </div>

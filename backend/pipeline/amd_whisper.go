@@ -131,9 +131,9 @@ func (s *AmdWhisperService) GetAvailableModels() ([]string, error) {
 	return models, nil
 }
 
-func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, language string, maxLen int) (string, error) {
+func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, language string, maxLen int, outputJson bool) (string, string, error) {
 	if runtime.GOOS != "windows" {
-		return "", fmt.Errorf("AMD Whisper is only available on Windows")
+		return "", "", fmt.Errorf("AMD Whisper is only available on Windows")
 	}
 
 	amdBinPath := s.GetBinPath()
@@ -156,7 +156,7 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 	}
 
 	if _, err := os.Stat(whisperExe); os.IsNotExist(err) {
-		return "", fmt.Errorf("whisper-amd main.exe not found")
+		return "", "", fmt.Errorf("whisper-amd main.exe not found")
 	}
 
 	// For AMD Whisper, we might need ffmpeg as well to convert to 16kHz WAV
@@ -187,7 +187,7 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 	ffmpegCmd := exec.CommandContext(s.ctx, ffmpegExe, "-y", "-i", audioFilePath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wavTempFile)
 	utils.PrepareHiddenCmd(ffmpegCmd)
 	if err := ffmpegCmd.Run(); err != nil {
-		return "", fmt.Errorf("помилка конвертації аудіо для AMD Whisper: %w", err)
+		return "", "", fmt.Errorf("помилка конвертації аудіо для AMD Whisper: %w", err)
 	}
 
 	if s.ctx != nil {
@@ -217,11 +217,15 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 		"-ml", maxLenStr,
 	}
 
+	if outputJson {
+		args = append(args, "-oj")
+	}
+
 	whisperCmd := exec.CommandContext(s.ctx, whisperExe, args...)
 	utils.PrepareHiddenCmd(whisperCmd)
 	cmdOut, err := whisperCmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("помилка whisper-amd (%v): %s", err, string(cmdOut))
+		return "", "", fmt.Errorf("помилка whisper-amd (%v): %s", err, string(cmdOut))
 	}
 
 	// Output file is [wavTempFile].srt OR [wavTempFile-without-extension].srt
@@ -231,17 +235,31 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 	expectedSrt3 := strings.TrimSuffix(wavTempFile, filepath.Ext(wavTempFile)) + "." + language + ".srt"
 
 	var srtBytes []byte
-	var foundPath string
+	var jsonBytes []byte
+	var foundSrtPath string
+	var foundJsonPath string
 
 	if b, err := os.ReadFile(expectedSrt1); err == nil {
 		srtBytes = b
-		foundPath = expectedSrt1
+		foundSrtPath = expectedSrt1
 	} else if b, err := os.ReadFile(expectedSrt2); err == nil {
 		srtBytes = b
-		foundPath = expectedSrt2
+		foundSrtPath = expectedSrt2
 	} else if b, err := os.ReadFile(expectedSrt3); err == nil {
 		srtBytes = b
-		foundPath = expectedSrt3
+		foundSrtPath = expectedSrt3
+	}
+
+	if outputJson {
+		expectedJson1 := wavTempFile + ".json"
+		expectedJson2 := strings.TrimSuffix(wavTempFile, filepath.Ext(wavTempFile)) + ".json"
+		if b, err := os.ReadFile(expectedJson1); err == nil {
+			jsonBytes = b
+			foundJsonPath = expectedJson1
+		} else if b, err := os.ReadFile(expectedJson2); err == nil {
+			jsonBytes = b
+			foundJsonPath = expectedJson2
+		}
 	}
 
 	if srtBytes == nil {
@@ -249,12 +267,15 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 		if len(outputSnippet) > 1000 {
 			outputSnippet = "..." + outputSnippet[len(outputSnippet)-1000:]
 		}
-		return "", fmt.Errorf("не вдалося знайти файл субтитрів AMD Whisper.\nПошук проводився: %s, %s, %s\n\nЛог роботи:\n%s", expectedSrt1, expectedSrt2, expectedSrt3, outputSnippet)
+		return "", "", fmt.Errorf("не вдалося знайти файл субтитрів AMD Whisper.\nПошук проводився: %s, %s, %s\n\nЛог роботи:\n%s", expectedSrt1, expectedSrt2, expectedSrt3, outputSnippet)
 	}
 
-	if foundPath != "" {
-		_ = os.Remove(foundPath)
+	if foundSrtPath != "" {
+		_ = os.Remove(foundSrtPath)
+	}
+	if foundJsonPath != "" {
+		_ = os.Remove(foundJsonPath)
 	}
 
-	return string(srtBytes), nil
+	return string(srtBytes), string(jsonBytes), nil
 }

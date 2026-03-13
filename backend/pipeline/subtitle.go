@@ -134,11 +134,42 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			amdLang = "uk"
 		}
 
-		result, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, pSettings.SubtitleMaxLen)
+		karaokeEffect := pSettings.SubtitleKaraokeEffect
+		if val, ok := settings["subtitleKaraokeEffect"].(bool); ok {
+			karaokeEffect = val
+		}
+
+		// AMD Whisper now returns both SRT and JSON (if requested)
+		var amdJson string
+		s.log("INFO", fmt.Sprintf("[AmdWhisper] Starting transcription (karaoke: %v, maxLen: %d)...", karaokeEffect, pSettings.SubtitleMaxLen), id, taskLabel)
+		result, amdJson, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, pSettings.SubtitleMaxLen, karaokeEffect)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
 			return err
+		}
+
+		s.log("INFO", fmt.Sprintf("[AmdWhisper] Transcription finished. JSON length: %d", len(amdJson)), id, taskLabel)
+
+		// Save AMD JSON if returned (it's needed for alignment or just as a source)
+		if amdJson != "" {
+			jsonPath := filepath.Join(finalDir, "subtitle_amd_raw.json")
+			_ = os.WriteFile(jsonPath, []byte(amdJson), 0644)
+			s.log("INFO", fmt.Sprintf("[AmdWhisper] Saved raw JSON to: %s", jsonPath), id, taskLabel)
+
+			if karaokeEffect {
+				s.log("INFO", "[WhisperX] Triggering alignment using AMD JSON...", id, taskLabel)
+				// Use the raw JSON from AMD to perform precise alignment via WhisperX
+				err = s.ProcessWhisperXAlign(id, taskLabel, finalDir, voiceFilePath, jsonPath, settings, pSettings)
+				if err != nil {
+					s.log("ERROR", fmt.Sprintf("[WhisperX Align] Failed: %v", err), id, taskLabel)
+					// Fallback to standard SRT save if alignment fails?
+					// For now, let's just proceed to save the SRT we got from AMD
+				} else {
+					// WhisperXAlign already saved ASS and JSON, so we just save the final SRT
+					return s.saveSubtitles(finalDir, result, id, taskLabel, pSettings)
+				}
+			}
 		}
 	case "assemblyai":
 		if s.assemblyAI == nil {

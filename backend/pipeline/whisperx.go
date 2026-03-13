@@ -156,3 +156,111 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 	return nil
 }
 
+// ProcessWhisperXAlign performs only word-alignment using an existing transcription JSON file.
+func (s *PipelineService) ProcessWhisperXAlign(id string, taskLabel string, finalDir string, voiceFilePath string, transcriptionJsonPath string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
+	s.log("INFO", "[WhisperX] Starting WhisperX alignment process...", id, taskLabel)
+
+	// 1. Resolve paths
+	configDir := s.settings.GetConfigDir()
+	possibleExes := []string{
+		filepath.Join(configDir, "bin", "whisperx_cli.exe"),
+		filepath.Join(configDir, "bin", "whisperx_aligner_win", "whisperx_cli.exe"),
+		filepath.Join(configDir, "bin", "whisperx-win", "whisperx_cli.exe"),
+		filepath.Join(configDir, "bin", "whisperx-mac", "whisperx_cli"),
+	}
+
+	var whisperxExe string
+	for _, p := range possibleExes {
+		if _, err := os.Stat(p); err == nil {
+			whisperxExe = p
+			break
+		}
+	}
+
+	if whisperxExe == "" {
+		s.log("ERROR", "[WhisperX] WhisperX executable not found.", id, taskLabel)
+		return fmt.Errorf("whisperx executable not found")
+	}
+
+	ffmpegName := "ffmpeg"
+	if runtime.GOOS == "windows" {
+		ffmpegName = "ffmpeg.exe"
+	}
+	ffmpegExe := filepath.Join(configDir, "bin", ffmpegName)
+
+	karaokeEffect := pSettings.SubtitleKaraokeEffect
+	if val, ok := settings["subtitleKaraokeEffect"].(bool); ok {
+		karaokeEffect = val
+	}
+
+	outputBase := filepath.Join(finalDir, "subtitle")
+	outputJSONPath := outputBase + ".json"
+
+	// 2. Prepare command for alignment
+	// We use --align_json to skip transcription and only perform alignment
+	cmdArgs := []string{
+		"--audio", voiceFilePath,
+		"--align-json", transcriptionJsonPath,
+		"--output", outputBase,
+	}
+
+	// Language selection (Required for alignment if not in JSON)
+	language, _ := settings["subtitleAmdLanguage"].(string)
+	if language == "" {
+		language = pSettings.SubtitleAmdLanguage
+	}
+	if language == "" {
+		language = "uk"
+	}
+	cmdArgs = append(cmdArgs, "--language", language)
+
+	if ffmpegExe != "" {
+		if _, err := os.Stat(ffmpegExe); err == nil {
+			cmdArgs = append(cmdArgs, "--ffmpeg-path", ffmpegExe)
+		}
+	}
+
+	cmdArgs = append(cmdArgs, "--device", "auto")
+
+	s.log("INFO", fmt.Sprintf("[WhisperX] Running alignment: %s %s", whisperxExe, strings.Join(cmdArgs, " ")), id, taskLabel)
+
+	cmd := exec.CommandContext(s.ctx, whisperxExe, cmdArgs...)
+	utils.PrepareHiddenCmd(cmd)
+	cmd.Dir = filepath.Dir(whisperxExe)
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUTF8=1", "HF_HUB_DISABLE_SYMLINKS=1")
+
+	// 3. Execute command
+	s.log("INFO", "[WhisperX] Command execution started with timeout...", id, taskLabel)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Alignment failed: %v", err), id, taskLabel)
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Command Output:\n%s", string(output)), id, taskLabel)
+		return fmt.Errorf("whisperx alignment failed: %v", err)
+	}
+
+	s.log("INFO", "[WhisperX] Alignment completed successfully.", id, taskLabel)
+
+	// 4. Handle output files (alignment saves to [outputBase].json)
+	jsonBytes, err := os.ReadFile(outputJSONPath)
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Failed to read aligned JSON: %v", err), id, taskLabel)
+		return fmt.Errorf("failed to read aligned json: %v", err)
+	}
+
+	// Convert aligned JSON to ASS (with Karaoke effect if enabled)
+	assData, err := utils.JsonToAss(string(jsonBytes), pSettings, karaokeEffect)
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Failed to convert aligned JSON to ASS: %v", err), id, taskLabel)
+		return fmt.Errorf("failed to convert aligned json to ass: %v", err)
+	}
+
+	subtitleAssPath := filepath.Join(finalDir, "subtitle.ass")
+	err = os.WriteFile(subtitleAssPath, []byte(assData), 0644)
+	if err != nil {
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Failed to save aligned ASS file: %v", err), id, taskLabel)
+		return fmt.Errorf("failed to save aligned ass file: %v", err)
+	}
+
+	s.log("SUCCESS", "[WhisperX] Aligned subtitles created successfully.", id, taskLabel)
+	return nil
+}
