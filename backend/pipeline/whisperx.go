@@ -98,6 +98,7 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 	s.log("INFO", fmt.Sprintf("[WhisperX] Running command: %s %s", whisperxExe, strings.Join(cmdArgs, " ")), id, taskLabel)
 
 	cmd := exec.CommandContext(s.ctx, whisperxExe, cmdArgs...)
+	utils.PrepareHiddenCmd(cmd)
 	cmd.Dir = filepath.Dir(whisperxExe)
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUTF8=1", "HF_HUB_DISABLE_SYMLINKS=1")
 
