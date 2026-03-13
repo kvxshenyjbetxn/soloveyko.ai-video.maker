@@ -664,11 +664,11 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                 max="3"
                                 step="0.1"
                                 className="settings-slider"
-                                value={settings.montageSwayFactor || 1.0}
+                                value={settings.montageSwayFactor ?? 1.0}
                                 onChange={(e) => handleChange('montageSwayFactor', parseFloat(e.target.value))}
-                                style={{ '--range-progress': `${getProgress(settings.montageSwayFactor || 1.0, 0, 3)}%` } as React.CSSProperties}
+                                style={{ '--range-progress': `${getProgress(settings.montageSwayFactor ?? 1.0, 0, 3)}%` } as React.CSSProperties}
                             />
-                            <span className="settings-slider-value">{(Number(settings.montageSwayFactor) || 1.0).toFixed(1)}x</span>
+                            <span className="settings-slider-value">{(settings.montageSwayFactor ?? 1.0).toFixed(1)}x</span>
                         </div>
                     </div>
 
@@ -681,11 +681,11 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                 max="3"
                                 step="0.1"
                                 className="settings-slider"
-                                value={settings.montageZoomFactor || 1.0}
+                                value={settings.montageZoomFactor ?? 1.0}
                                 onChange={(e) => handleChange('montageZoomFactor', parseFloat(e.target.value))}
-                                style={{ '--range-progress': `${getProgress(settings.montageZoomFactor || 1.0, 0, 3)}%` } as React.CSSProperties}
+                                style={{ '--range-progress': `${getProgress(settings.montageZoomFactor ?? 1.0, 0, 3)}%` } as React.CSSProperties}
                             />
-                            <span className="settings-slider-value">{(Number(settings.montageZoomFactor) || 1.0).toFixed(1)}x</span>
+                            <span className="settings-slider-value">{(settings.montageZoomFactor ?? 1.0).toFixed(1)}x</span>
                         </div>
                     </div>
 

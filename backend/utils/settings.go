@@ -428,6 +428,8 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 				SidebarWidth:            320,
 				MontageEnabled:          true,
 				MontageCollapsed:        true,
+				MontageSwayFactor:       1.0,
+				MontageZoomFactor:       1.0,
 				ImageMemoryType:         "primitive",
 				ImageMemoryChars:        1000,
 				TranslateControlEnabled: true,
@@ -486,12 +488,6 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 	}
 	if settings.Pipeline.MontageTransitionEffect == "" {
 		settings.Pipeline.MontageTransitionEffect = "fade_fast"
-	}
-	if settings.Pipeline.MontageSwayFactor == 0 {
-		settings.Pipeline.MontageSwayFactor = 1.0
-	}
-	if settings.Pipeline.MontageZoomFactor == 0 {
-		settings.Pipeline.MontageZoomFactor = 1.0
 	}
 	if settings.Pipeline.MontageEncodingPreset == "" {
 		settings.Pipeline.MontageEncodingPreset = "superfast"
