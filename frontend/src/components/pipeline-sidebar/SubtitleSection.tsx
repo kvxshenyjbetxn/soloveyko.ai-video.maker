@@ -434,7 +434,7 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                         </div>
                     )}
 
-                    {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && (
+                    {(((settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && !(settings.subtitleService === 'amd' && settings.subtitleKaraokeEffect))) && (
                         <>
                             <div className="settings-control" style={{ marginBottom: 0 }}>
                                 <label className="settings-label">{t('pipeline.subtitle.max_len')}</label>

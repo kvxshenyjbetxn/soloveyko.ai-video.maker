@@ -141,8 +141,12 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 
 		// AMD Whisper now returns both SRT and JSON (if requested)
 		var amdJson string
-		s.log("INFO", fmt.Sprintf("[AmdWhisper] Starting transcription (karaoke: %v, maxLen: %d)...", karaokeEffect, pSettings.SubtitleMaxLen), id, taskLabel)
-		result, amdJson, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, pSettings.SubtitleMaxLen, karaokeEffect)
+		maxLen := pSettings.SubtitleMaxLen
+		if karaokeEffect {
+			maxLen = 40 // Force 40 as requested for AMD + Karaoke
+		}
+		s.log("INFO", fmt.Sprintf("[AmdWhisper] Starting transcription (karaoke: %v, maxLen: %d)...", karaokeEffect, maxLen), id, taskLabel)
+		result, amdJson, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, maxLen, karaokeEffect)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
