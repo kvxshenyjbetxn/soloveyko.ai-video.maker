@@ -883,38 +883,13 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	var inputSpecs []inputSpec
 	var filterParts []string
 
-	introIdx := -1
+	// Intro is prepended after the main render in prependIntroVideo() — separate FFmpeg pass.
+	// This avoids intermittent deadlocks when joining intro+montage inside one filter_complex.
+	introEnabled := pSettings.MontageIntroVideoEnabled &&
+		pSettings.MontageIntroVideoPath != "" &&
+		func() bool { _, e := os.Stat(pSettings.MontageIntroVideoPath); return e == nil }()
 	watermarkIdx := -1
-	introDur := 0.0
-	if pSettings.MontageIntroVideoEnabled && pSettings.MontageIntroVideoPath != "" {
-		if _, err := os.Stat(pSettings.MontageIntroVideoPath); err == nil {
-			introIdx = 0
-			introDur, _ = s.getDuration(ffprobePath, pSettings.MontageIntroVideoPath)
-			hasA := s.hasAudio(ffprobePath, pSettings.MontageIntroVideoPath)
-			inputSpecs = append(inputSpecs, inputSpec{loop: false, path: getRel(pSettings.MontageIntroVideoPath)})
-
-			// Process intro video to match output format (Premium Blurred Background Fit)
-			vFilter := fmt.Sprintf(
-				"[0:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,boxblur=20:10[bg]; "+
-					"[0:v]scale=%d:%d:force_original_aspect_ratio=decrease[fg]; "+
-					"[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d,settb=AVTB[v_intro_base]",
-				baseW, baseH, baseW, baseH, baseW, baseH, fps)
-
-			aFilter := ""
-			if hasA {
-				aFilter = "[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a_intro]"
-			} else {
-				filterParts = append(filterParts, fmt.Sprintf("anullsrc=r=44100:cl=stereo:d=%.6f,aformat=sample_fmts=fltp[a_intro_silence]", introDur))
-				aFilter = "[a_intro_silence]copy[a_intro]"
-			}
-			filterParts = append(filterParts, vFilter, aFilter)
-		}
-	}
-
 	visualOffset := 0
-	if introIdx != -1 {
-		visualOffset = 1
-	}
 
 	padAmount := 0.0
 	if !isFadeFast {
@@ -1321,54 +1296,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 	s.log("INFO", fmt.Sprintf("[Montage] Active triggers found: %d", len(activeTriggers)), id, taskLabel)
 
-	// Split streams for double use (intro + montage) if needed
+	// No intro in main filter graph — watermark/overlay applied to montage only
 	wmMontageTag := "wm"
-	wmIntroTag := ""
-	if wmAvailable {
-		if introIdx != -1 && pSettings.MontageWatermarkOnIntro {
-			filterParts = append(filterParts, "[wm]split[wm_montage][wm_intro]")
-			wmMontageTag = "wm_montage"
-			wmIntroTag = "wm_intro"
-		}
-	}
-
 	ovlMontageTag := "ovl"
-	ovlIntroTag := ""
-	if overlayAvailable {
-		if introIdx != -1 && pSettings.MontageOverlayOnIntro {
-			filterParts = append(filterParts, "[ovl]split[ovl_montage][ovl_intro]")
-			ovlMontageTag = "ovl_montage"
-			ovlIntroTag = "ovl_intro"
-		}
-	}
-
-	// Apply Watermark & Overlay to Intro
-	finalIntroV := "v_intro_base"
-	if introIdx != -1 {
-		currentV := "v_intro_base"
-		// Watermark
-		if wmAvailable && pSettings.MontageWatermarkOnIntro && wmIntroTag != "" {
-			filterParts = append(filterParts, fmt.Sprintf(
-				"[%s][%s]overlay=x=%s:y=%s:format=yuv420:shortest=1[v_intro_wm]",
-				currentV, wmIntroTag, overlayX, overlayY,
-			))
-			currentV = "v_intro_wm"
-		}
-		// Overlay
-		if overlayAvailable && pSettings.MontageOverlayOnIntro && ovlIntroTag != "" {
-			filterParts = append(filterParts, fmt.Sprintf(
-				"[%s][%s]overlay=x=0:y=0:format=yuv420:shortest=1[v_intro_ovl]",
-				currentV, ovlIntroTag,
-			))
-			currentV = "v_intro_ovl"
-		}
-
-		if currentV != "v_intro_base" {
-			finalIntroV = currentV
-		} else {
-			finalIntroV = "v_intro_base"
-		}
-	}
 
 	// Apply Watermark & Overlay to Montage
 	currentMontageV := montageV
@@ -1484,10 +1414,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	finalV := "v_montage_final"
 	finalA := ""
 	audioIdx := len(inputSpecs) // voice.mp3 index
-	actualTransDur := 0.0
 
 	// Handle Audio Cuts/Trimming
-	voiceASource := fmt.Sprintf("[%d:a]", audioIdx)
 	if len(audioSegments) > 0 {
 		var segLabels []string
 		for i, seg := range audioSegments {
@@ -1502,44 +1430,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			"%sconcat=n=%d:v=0:a=1[a_cut]",
 			strings.Join(segLabels, ""), len(audioSegments),
 		))
-		voiceASource = "[a_cut]"
 		finalA = "a_cut"
 	}
 
-	if introIdx != -1 {
-		// Prepare voice.mp3 audio to match intro audio
-		filterParts = append(filterParts, fmt.Sprintf(
-			"%saresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a_voice_res]",
-			voiceASource,
-		))
-
-		// Use transition if both parts are long enough
-		if transDur > 0 && introDur > transDur && audioDur > transDur {
-			actualTransDur = transDur
-			introTransEffect := transEffect
-			if introTransEffect == "fade_fast" {
-				introTransEffect = "fade"
-			}
-			// Video transition (xfade)
-			filterParts = append(filterParts, fmt.Sprintf(
-				"[%s][v_montage_final]xfade=transition=%s:duration=%.3f:offset=%.3f[v_total]",
-				finalIntroV, introTransEffect, transDur, introDur-transDur,
-			))
-			// Audio transition (acrossfade)
-			filterParts = append(filterParts, fmt.Sprintf(
-				"[a_intro][a_voice_res]acrossfade=d=%.3f[a_total]",
-				transDur,
-			))
-			finalV = "v_total"
-			finalA = "a_total"
-		} else {
-			// Fallback to simple concat
-			filterParts = append(filterParts, fmt.Sprintf("[%s][v_montage_final]concat=n=2:v=1:a=0[v_total]", finalIntroV))
-			filterParts = append(filterParts, "[a_intro][a_voice_res]concat=n=2:v=0:a=1[a_total]")
-			finalV = "v_total"
-			finalA = "a_total"
-		}
-	}
 
 	// Write filter script
 	fullGraph := strings.Join(filterParts, ";")
@@ -1680,7 +1573,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		return 0, nil, nil
 	})
 
-	totalDur := introDur + audioDur - actualTransDur
+	totalDur := audioDur // intro is post-processed separately
 	var lastPercent float64 = -1
 	lastLogTime := time.Now()
 
@@ -1720,7 +1613,26 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		return fmt.Errorf("ffmpeg failed: %v", err)
 	}
 
-	// Apply DaVinci metadata simulation if enabled (post-processing)
+	// [POST-PROCESS 1] Prepend intro — reads outputFile + intro, writes to combined tmp, then replaces
+	if introEnabled {
+		s.emitStageStatus(id, "montage", "running", "intro...")
+		if err := s.prependIntroVideo(
+			ffmpegPath, ffprobePath,
+			finalDir, outputFile,
+			pSettings.MontageIntroVideoPath,
+			baseW, baseH, fps, videoCodec,
+			pSettings.MontageEncodingPreset,
+			pSettings.MontageBitrate,
+			transDur,
+			id, taskLabel,
+		); err != nil {
+			s.log("WARN", fmt.Sprintf("[Montage] Failed to prepend intro: %v", err), id, taskLabel)
+		} else {
+			s.log("SUCCESS", "[Montage] Intro prepended", id, taskLabel)
+		}
+	}
+
+	// [POST-PROCESS 2] Apply DaVinci metadata to the final file (with or without intro)
 	s.applyMetadata(filepath.Join(finalDir, outputFile), pSettings, id, taskLabel)
 
 	s.log("SUCCESS", fmt.Sprintf("[Pipeline] Montage complete! Video saved: %s", outputFile), id, taskLabel)
@@ -1733,6 +1645,147 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		s.OnTaskStatus(id, "completed", 100)
 	}
 
+	return nil
+}
+
+// prependIntroVideo prepends an intro to the rendered montage in a separate FFmpeg pass.
+// Strategy: FFmpeg reads intro+outputFile → writes to a NEW tmp file.
+// By the time the encode finishes (seconds/minutes), Windows has released
+// any file lock on outputFile, so the subsequent rename/delete succeeds reliably.
+func (s *PipelineService) prependIntroVideo(
+	ffmpegPath, ffprobePath string,
+	finalDir, mainFile string,
+	introPath string,
+	baseW, baseH, fps int,
+	videoCodec, preset string,
+	bitrate int,
+	fadeDur float64,
+	id, taskLabel string,
+) error {
+	mainFullPath := filepath.Join(finalDir, mainFile)
+
+	introDur, err := s.getDuration(ffprobePath, introPath)
+	if err != nil || introDur <= 0 {
+		return fmt.Errorf("intro probe failed: %v", err)
+	}
+	s.log("INFO", fmt.Sprintf("[Intro] intro=%.2fs fade=%.2fs", introDur, fadeDur), id, taskLabel)
+
+	introHasAudio := s.hasAudio(ffprobePath, introPath)
+	mainHasAudio := s.hasAudio(ffprobePath, mainFullPath)
+
+	bitrateStr := fmt.Sprintf("%dM", bitrate)
+	bufSize := fmt.Sprintf("%dM", bitrate*2)
+
+	// Clamp fade duration
+	ef := fadeDur
+	if ef < 0 { ef = 0 }
+
+	var fp []string
+
+	// Intro: split -> blurred-bg fit
+	fp = append(fp, "[0:v]split=2[ibg][ifg]")
+	fp = append(fp, fmt.Sprintf(
+		"[ibg]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,boxblur=20:10[iblur]",
+		baseW, baseH, baseW, baseH))
+	fp = append(fp, fmt.Sprintf(
+		"[ifg]scale=%d:%d:force_original_aspect_ratio=decrease[ifgsc]", baseW, baseH))
+	fp = append(fp,
+		fmt.Sprintf("[iblur][ifgsc]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[iproc]",
+			fps, introDur))
+
+	// Fade-out on intro end, fade-in on main start
+	if ef > 0 {
+		foSt := introDur - ef
+		if foSt < 0 { foSt = 0 }
+		fp = append(fp, fmt.Sprintf(
+			"[iproc]fade=t=out:st=%.3f:d=%.3f[iv]", foSt, ef))
+		fp = append(fp, fmt.Sprintf(
+			"[1:v]fade=t=in:st=0:d=%.3f[mv]", ef))
+	} else {
+		fp = append(fp, "[iproc]copy[iv]")
+		fp = append(fp, "[1:v]copy[mv]")
+	}
+	fp = append(fp, "[iv][mv]concat=n=2:v=1:a=0[vout]")
+
+	// Audio
+	audioMap := ""
+	switch {
+	case introHasAudio && mainHasAudio:
+		fp = append(fp,
+			"[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ia]",
+			"[1:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ma]",
+			"[ia][ma]concat=n=2:v=0:a=1[aout]")
+		audioMap = "[aout]"
+	case introHasAudio:
+		mainDur, _ := s.getDuration(ffprobePath, mainFullPath)
+		fp = append(fp,
+			"[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ia]",
+			fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[sma]", mainDur),
+			"[ia][sma]concat=n=2:v=0:a=1[aout]")
+		audioMap = "[aout]"
+	case mainHasAudio:
+		fp = append(fp,
+			fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[sia]", introDur),
+			"[1:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ma]",
+			"[sia][ma]concat=n=2:v=0:a=1[aout]")
+		audioMap = "[aout]"
+	}
+
+	// Output goes to a NEW temp file (never the locked outputFile)
+	tmpOut := "intro_combined_tmp.mp4"
+
+	var args []string
+	args = append(args, "-y", "-hide_banner", "-loglevel", "error")
+	args = append(args, "-i", introPath)
+	args = append(args, "-i", mainFile) // relative; cmd.Dir = finalDir
+	args = append(args, "-filter_complex", strings.Join(fp, ";"))
+	args = append(args, "-map", "[vout]")
+	if audioMap != "" {
+		args = append(args, "-map", audioMap)
+	} else if mainHasAudio {
+		args = append(args, "-map", "1:a")
+	}
+	args = append(args, "-c:v", videoCodec)
+	switch videoCodec {
+	case "libx264":
+		args = append(args, "-preset", preset, "-b:v", bitrateStr, "-maxrate", bitrateStr, "-bufsize", bufSize)
+	case "h264_nvenc":
+		args = append(args, "-preset", "p4", "-rc", "vbr", "-b:v", bitrateStr, "-maxrate", bitrateStr, "-bufsize", bufSize)
+	case "h264_amf":
+		args = append(args, "-quality", "balanced", "-b:v", bitrateStr, "-maxrate", bitrateStr, "-bufsize", bufSize)
+	default:
+		args = append(args, "-b:v", bitrateStr)
+	}
+	args = append(args, "-pix_fmt", "yuv420p", "-r", strconv.Itoa(fps))
+	args = append(args, "-c:a", "aac", "-b:a", "192k")
+	args = append(args, tmpOut)
+
+	cmd := exec.Command(ffmpegPath, args...)
+	utils.PrepareHiddenCmd(cmd)
+	cmd.Dir = finalDir
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		_ = os.Remove(filepath.Join(finalDir, tmpOut))
+		return fmt.Errorf("ffmpeg intro encode failed: %v\nOutput: %s", err, string(out))
+	}
+
+	// The second FFmpeg encode took time → Windows has released its lock on outputFile by now.
+	// Retry delete+rename with up to 5s patience just in case.
+	var delErr error
+	for i := 0; i < 25; i++ {
+		delErr = os.Remove(mainFullPath)
+		if delErr == nil {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if delErr != nil {
+		_ = os.Remove(filepath.Join(finalDir, tmpOut))
+		return fmt.Errorf("could not delete original output: %v", delErr)
+	}
+	if err := os.Rename(filepath.Join(finalDir, tmpOut), mainFullPath); err != nil {
+		return fmt.Errorf("could not rename combined file: %v", err)
+	}
 	return nil
 }
 
