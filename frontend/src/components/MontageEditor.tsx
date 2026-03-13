@@ -41,6 +41,7 @@ interface MontageWatermark {
     opacity: number;
     trackId?: string;
     isVideo?: boolean;
+    initialPosition?: string;
 }
 
 export interface MontageTrack {
@@ -50,7 +51,9 @@ export interface MontageTrack {
     color: string;
 }
 
-interface MontagePlan {
+interface ProjectPlan {
+    baseW: number;
+    baseH: number;
     audioDuration: number;
     audioPath: string | null;
     transDuration: number;
@@ -61,12 +64,119 @@ interface MontagePlan {
     triggers?: MontageTrigger[];
     watermarks?: MontageWatermark[];
     extraTracks?: MontageTrack[];
-    baseW?: number;
-    baseH?: number;
     introPath?: string;
     introDuration?: number;
     introIsVideo?: boolean;
 }
+
+interface MontagePlan extends ProjectPlan {}
+
+const WATERMARK_POSITIONS: Record<string, React.CSSProperties> = {
+    'top-left': { top: '5%', left: '5%' },
+    'top-center': { top: '5%', left: '50%', transform: 'translateX(-50%)' },
+    'top-right': { top: '5%', right: '5%' },
+    'bottom-left': { bottom: '5%', left: '5%' },
+    'bottom-center': { bottom: '5%', left: '50%', transform: 'translateX(-50%)' },
+    'bottom-right': { bottom: '5%', right: '5%' },
+    'center': { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' },
+};
+
+const WatermarkPreviewItem = React.memo(({ 
+    w, 
+    plan, 
+    selectedWatermarkIdx, 
+    draggingWatermarkPosIdx, 
+    setSelectedWatermarkIdx, 
+    setSelectedTriggerIdx, 
+    setActiveInfoTab, 
+    setDraggingWatermarkPosIdx, 
+    setDragStartCoords, 
+    setResizingWatermarkIdx, 
+    setResizingWatermarkHandle, 
+    getUrl, 
+    adjustedTime,
+    isPlaying,
+    handleDeleteWatermark,
+    onDimensionsLoad
+}: any) => {
+    const videoRef = useRef<HTMLVideoElement>(null);
+
+    useEffect(() => {
+        if (w.isVideo && videoRef.current) {
+            const target = adjustedTime - w.startTime;
+            if (!isPlaying) {
+                if (Math.abs(videoRef.current.currentTime - target) > 0.03) {
+                    videoRef.current.currentTime = Math.max(0, target);
+                }
+            } else {
+                const drift = Math.abs(videoRef.current.currentTime - target);
+                if (drift > 0.3) {
+                    videoRef.current.currentTime = Math.max(0, target);
+                }
+                if (videoRef.current.paused) {
+                    videoRef.current.play().catch(() => {});
+                }
+            }
+        }
+    }, [adjustedTime, w.startTime, w.isVideo, isPlaying]);
+
+    return (
+        <div 
+            className={`preview-watermark-overlay ${selectedWatermarkIdx === w.index ? 'selected' : ''} ${draggingWatermarkPosIdx === w.index ? 'dragging' : ''}`}
+            style={{
+                left: `${(w.x / (plan.baseW || 1920)) * 100}%`,
+                top: `${(w.y / (plan.baseH || 1080)) * 100}%`,
+                width: `${(w.w / (plan.baseW || 1920)) * 100}%`,
+                height: 'auto',
+                minHeight: `${(w.h / (plan.baseH || 1080)) * 100}%`,
+                opacity: w.opacity
+            }}
+            onMouseDown={(e) => {
+                e.stopPropagation();
+                setSelectedWatermarkIdx(w.index);
+                setSelectedTriggerIdx(null);
+                setActiveInfoTab('stats');
+                setDraggingWatermarkPosIdx(w.index);
+                setDragStartCoords({ x: w.x, y: w.y, mouseX: e.clientX, mouseY: e.clientY });
+            }}
+        >
+            {w.isVideo ? (
+                <video 
+                    ref={videoRef} 
+                    src={getUrl(w.path)} 
+                    muted 
+                    playsInline 
+                    style={{ width: '100%', height: 'auto', objectFit: 'contain', pointerEvents: 'none', background: 'transparent' }} 
+                    onLoadedMetadata={(e) => {
+                        const v = e.currentTarget;
+                        if (v.videoWidth && v.videoHeight) {
+                            onDimensionsLoad(w.index, v.videoWidth, v.videoHeight);
+                        }
+                    }}
+                />
+            ) : (
+                <img 
+                    src={getUrl(w.path)} 
+                    alt="Watermark" 
+                    style={{ width: '100%', height: 'auto', objectFit: 'contain', pointerEvents: 'none' }} 
+                    onLoad={(e) => {
+                        const img = e.currentTarget;
+                        if (img.naturalWidth && img.naturalHeight) {
+                            onDimensionsLoad(w.index, img.naturalWidth, img.naturalHeight);
+                        }
+                    }}
+                />
+            )}
+            {selectedWatermarkIdx === w.index && (
+                <>
+                    <div className="watermark-resize-handle br" onMouseDown={(e) => { e.stopPropagation(); setResizingWatermarkIdx(w.index); setResizingWatermarkHandle('br'); setDragStartCoords({ x: w.w, y: w.h, mouseX: e.clientX, mouseY: e.clientY }); }} />
+                    <div className="watermark-resize-handle tl" onMouseDown={(e) => { e.stopPropagation(); setResizingWatermarkIdx(w.index); setResizingWatermarkHandle('tl'); setDragStartCoords({ x: w.w, y: w.h, x2: w.x, y2: w.y, mouseX: e.clientX, mouseY: e.clientY }); }} />
+                    <button className="preview-delete-btn" title="Delete" onMouseDown={(e) => { e.stopPropagation(); handleDeleteWatermark(w.index); setSelectedWatermarkIdx(null); }}>✕</button>
+                </>
+            )}
+        </div>
+    );
+});
 
 interface SubtitleEntry {
     start: number;
@@ -223,11 +333,51 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     setTriggers([]);
                 }
 
-                if (parsed.watermarks) {
-                    setWatermarks(parsed.watermarks.map((w: MontageWatermark) => ({ ...w })));
-                } else {
-                    setWatermarks([]);
+                let initialWatermarks = parsed.watermarks ? parsed.watermarks.map((w: MontageWatermark) => ({ ...w })) : [];
+                
+                // AUTO-CONVERT GLOBAL WATERMARK IF ENABLED
+                const s = task.settings || {};
+                const hasGlobalWM = initialWatermarks.some((wm: MontageWatermark) => wm.id && wm.id.includes('wm_global_'));
+
+                if (s.montageWatermarkEnabled && s.montageWatermarkPath && !hasGlobalWM) {
+                    const bw = parsed.baseW || 1920;
+                    const bh = parsed.baseH || 1080;
+                    const sz = s.montageWatermarkSize || 15;
+                    const op = s.montageWatermarkOpacity !== undefined ? s.montageWatermarkOpacity : 0.8;
+                    const pos = s.montageWatermarkPosition || 'bottom-right';
+                    
+                    const wmW = Math.round(bw * (sz / 100));
+                    const wmH = Math.round(bh * (sz / 100));
+                    let wmX = 0; let wmY = 0;
+                    const margin = 20;
+                    
+                    switch(pos) {
+                        case 'top-left': wmX = margin; wmY = margin; break;
+                        case 'top-center': wmX = (bw - wmW) / 2; wmY = margin; break;
+                        case 'top-right': wmX = bw - wmW - margin; wmY = margin; break;
+                        case 'bottom-left': wmX = margin; wmY = bh - wmH - margin; break;
+                        case 'bottom-center': wmX = (bw - wmW) / 2; wmY = bh - wmH - margin; break;
+                        case 'bottom-right': wmX = bw - wmW - margin; wmY = bh - wmH - margin; break;
+                        case 'center': wmX = (bw - wmW) / 2; wmY = (bh - wmH) / 2; break;
+                        default: wmX = bw - wmW - margin; wmY = bh - wmH - margin;
+                    }
+
+                    initialWatermarks.push({
+                        id: 'wm_global_auto_' + Date.now(),
+                        path: s.montageWatermarkPath,
+                        startTime: 0,
+                        duration: parsed.audioDuration,
+                        x: wmX, y: wmY, w: wmW, h: wmH,
+                        opacity: op,
+                        isVideo: s.montageWatermarkPath.toLowerCase().endsWith('.mp4'),
+                        initialPosition: pos
+                    });
+                    
+                    // We'll set the local setting to disabled to avoid redundant conversion/rendering
+                    setLocalSettings((prev: any) => ({ ...prev, montageWatermarkEnabled: false }));
                 }
+
+                setWatermarks(initialWatermarks);
 
                 if (parsed.extraTracks) {
                     setExtraTracks(parsed.extraTracks);
@@ -247,15 +397,18 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
 
                 // Try to load prompts.txt for regeneration
                 if (parsed.audioPath) {
-                    const taskDir = parsed.audioPath.split(/[\\/]voice\.mp3/)[0];
-                    const promptsPath = `${taskDir}/prompts.txt`;
-                    // @ts-ignore
-                    window.go.main.App.ReadFile(promptsPath).then(content => {
-                        if (content) {
-                            const pStrs = content.split('\n\n--------------------\n\n').map((s: string) => s.trim());
-                            setPrompts(pStrs);
-                        }
-                    }).catch(() => console.log("No prompts.txt found"));
+                    const parts = parsed.audioPath.split(/[\\/]voice\.mp3/);
+                    const taskDir = parts.length > 0 ? parts[0] : null;
+                    if (taskDir) {
+                        const promptsPath = `${taskDir}/prompts.txt`;
+                        // @ts-ignore
+                        window.go.main.App.ReadFile(promptsPath).then(content => {
+                            if (content) {
+                                const pStrs = content.split('\n\n--------------------\n\n').map((s: string) => s.trim());
+                                setPrompts(pStrs);
+                            }
+                        }).catch(() => console.log("No prompts.txt found"));
+                    }
                 }
             } catch (e) {
                 console.error("Failed to parse montage plan:", e);
@@ -293,7 +446,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     // Subtitle Fetching & Parsing
     useEffect(() => {
         if (!plan?.subtitlePath) return;
-
+        
         const parseTime = (timeStr: string) => {
             const parts = timeStr.trim().replace(',', '.').split(':');
             if (parts.length !== 3) return 0;
@@ -359,50 +512,61 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     }, [introVideo]);
 
     const introWidth = useMemo(() => {
-        return introVideo ? Math.max(introVideo.duration * zoom, 160) : 240;
-    }, [introVideo, zoom]);
+        if (!introVideo && !isDraggingFromPool) return 0;
+        return introVideo ? Math.max(introVideo.duration * zoom, 160) : 160;
+    }, [introVideo, zoom, isDraggingFromPool]);
 
     const totalTimelineDuration = useMemo(() => {
         const audioTotal = audioSegments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
         return Math.max(actualVideoDuration, audioTotal) + effectiveIntroDuration;
     }, [actualVideoDuration, audioSegments, effectiveIntroDuration]);
 
-    const activeClipInfo = useMemo(() => {
-        // Check Intro first
-        if (introVideo && currentTime < effectiveIntroDuration) {
-            return {
-                clip: introVideo,
-                idx: -1, // Special index for intro
-                width: introWidth,
-                x: 0,
-                isIntro: true,
-                timeInClip: currentTime
-            };
-        }
-
+    const activeClipIdx = useMemo(() => {
+        if (introVideo && currentTime < effectiveIntroDuration) return -1;
         const adjustedTime = introVideo ? currentTime - effectiveIntroDuration : currentTime;
-
         for (let i = clipLayouts.length - 1; i >= 0; i--) {
             const layout = clipLayouts[i];
             const startTime = layout.x / zoom;
             const endTime = (layout.x + layout.width) / zoom;
             if (adjustedTime >= startTime && adjustedTime <= endTime + 0.001) {
-                let timeInClip = adjustedTime - startTime;
-                
-                // BOOMERANG LOGIC
-                if (layout.clip.isVideo && layout.clip.actualDuration && layout.clip.actualDuration < layout.clip.duration) {
-                    const actualDur = layout.clip.actualDuration;
-                    const cycle = actualDur * 2;
-                    const pos = timeInClip % cycle;
-                    if (pos <= actualDur) timeInClip = pos;
-                    else timeInClip = actualDur - (pos - actualDur);
-                }
-                
-                return { ...layout, timeInClip };
+                return i;
             }
         }
         return null;
-    }, [clipLayouts, currentTime, zoom, introVideo, effectiveIntroDuration, introWidth]);
+    }, [clipLayouts, currentTime, introVideo, effectiveIntroDuration]);
+
+    const activeClipLayout = useMemo(() => {
+        if (activeClipIdx === -1) return {
+            clip: introVideo!,
+            idx: -1,
+            width: introWidth,
+            x: 0,
+            isIntro: true
+        };
+        if (activeClipIdx === null) return null;
+        return clipLayouts[activeClipIdx];
+    }, [activeClipIdx, clipLayouts, introVideo, introWidth]);
+
+    const timeInClip = useMemo(() => {
+        if (!activeClipLayout) return 0;
+        const adjustedTime = (introVideo && !activeClipLayout.isIntro) ? currentTime - effectiveIntroDuration : currentTime;
+        let t = activeClipLayout.isIntro ? adjustedTime : (adjustedTime - activeClipLayout.x / zoom);
+        
+        // BOOMERANG LOGIC
+        if (activeClipLayout.clip.isVideo && activeClipLayout.clip.actualDuration && activeClipLayout.clip.actualDuration < activeClipLayout.clip.duration) {
+            const actualDur = activeClipLayout.clip.actualDuration;
+            const cycle = actualDur * 2;
+            const pos = t % cycle;
+            if (pos <= actualDur) t = pos;
+            else t = actualDur - (pos - actualDur);
+        }
+        return t;
+    }, [activeClipLayout, currentTime, introVideo, effectiveIntroDuration, zoom]);
+
+    const activeClipInfo = useMemo(() => {
+        if (!activeClipLayout) return null;
+        return { ...activeClipLayout, timeInClip };
+    }, [activeClipLayout, timeInClip]);
 
     const animStateRef = useRef<AnimationState>({
         currentTime, selection, isPlaying, audioSegments, clips, zoom, totalDuration: totalTimelineDuration
@@ -435,6 +599,16 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const activeClipInfoRef = useRef(activeClipInfo);
     activeClipInfoRef.current = activeClipInfo;
 
+    useEffect(() => {
+        if (!isPlaying && previewVideoRef.current && activeClipInfo?.clip.isVideo) {
+            const targetV = activeClipInfo.timeInClip;
+            // Scrubbing/Dragging: Faster sync
+            if (Math.abs(previewVideoRef.current.currentTime - targetV) > 0.05) {
+                previewVideoRef.current.currentTime = targetV;
+            }
+        }
+    }, [activeClipInfo, isPlaying]);
+
     const animate = useCallback((time: number) => {
         if (lastTimeRef.current === 0) {
             lastTimeRef.current = time;
@@ -448,10 +622,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             const next = prev + delta;
             if (previewAudioRef.current) {
                 const targetOrig = getOriginalTime(next);
-                if (Math.abs(previewAudioRef.current.currentTime - targetOrig) > 0.15) {
+                if (Math.abs(previewAudioRef.current.currentTime - targetOrig) > 0.5) {
                     previewAudioRef.current.currentTime = targetOrig;
                 }
-                // Mute main audio during intro
                 const isIntroNow = !!introVideo && next < effectiveIntroDuration;
                 if (previewAudioRef.current.muted !== isIntroNow) {
                     previewAudioRef.current.muted = isIntroNow;
@@ -459,7 +632,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             }
             if (previewVideoRef.current && activeClipInfoRef.current?.clip.isVideo) {
                  const targetV = activeClipInfoRef.current.timeInClip;
-                 if (Math.abs(previewVideoRef.current.currentTime - targetV) > 0.15) {
+                 // Jitter prevention: only sync if significantly off
+                 const drift = Math.abs(previewVideoRef.current.currentTime - targetV);
+                 if (drift > 0.4) {
                      previewVideoRef.current.currentTime = targetV;
                  }
                  if (previewVideoRef.current.paused) {
@@ -611,68 +786,6 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         });
     }, []);
 
-    const globalWatermarkOnTimeline = useMemo(() => {
-        const s = localSettings;
-        if (!s.montageWatermarkEnabled || !s.montageWatermarkPath) return null;
-        const startTime = s.montageWatermarkOnIntro ? 0 : (introVideo ? introVideo.duration : 0);
-        const duration = totalTimelineDuration - startTime;
-        if (duration <= 0) return null;
-        return {
-            path: s.montageWatermarkPath,
-            startTime,
-            duration,
-            isVideo: s.montageWatermarkPath.toLowerCase().endsWith('.mp4')
-        };
-    }, [localSettings, totalTimelineDuration, introVideo]);
-
-    const globalWatermark = useMemo(() => {
-        const s = localSettings;
-        if (s.montageWatermarkEnabled && s.montageWatermarkPath) {
-            const isIntroNow = !!introVideo && currentTime < effectiveIntroDuration;
-            if (isIntroNow && !s.montageWatermarkOnIntro) return null;
-            return {
-                path: s.montageWatermarkPath,
-                position: s.montageWatermarkPosition || 'bottom-right',
-                opacity: s.montageWatermarkOpacity || 0.8,
-                size: s.montageWatermarkSize || 15
-            };
-        }
-        return null;
-    }, [localSettings, currentTime, introVideo, effectiveIntroDuration]);
-
-    const convertGlobalToCustomWatermark = useCallback(() => {
-        if (!globalWatermarkOnTimeline || !globalWatermark) return null;
-        const baseW = plan?.baseW || 1920;
-        const baseH = plan?.baseH || 1080;
-        const sizePercent = globalWatermark.size;
-        const w = Math.round(baseW * (sizePercent / 100));
-        const h = Math.round(baseH * (sizePercent / 100));
-        let x = 0; let y = 0;
-        switch(globalWatermark.position) {
-            case 'top-left': x = baseW * 0.05; y = baseH * 0.05; break;
-            case 'top-center': x = (baseW - w) / 2; y = baseH * 0.05; break;
-            case 'top-right': x = baseW * 0.95 - w; y = baseH * 0.05; break;
-            case 'bottom-left': x = baseW * 0.05; y = baseH * 0.95 - h; break;
-            case 'bottom-center': x = (baseW - w) / 2; y = baseH * 0.95 - h; break;
-            case 'bottom-right': x = baseW * 0.95 - w; y = baseH * 0.95 - h; break;
-            case 'center': x = (baseW - w) / 2; y = (baseH - h) / 2; break;
-            default: x = baseW * 0.95 - w; y = baseH * 0.95 - h;
-        }
-        const newIdx = watermarks.length;
-        const newW: MontageWatermark = {
-            id: 'wm_global_' + Date.now(),
-            path: globalWatermark.path,
-            startTime: globalWatermarkOnTimeline.startTime,
-            duration: globalWatermarkOnTimeline.duration,
-            x, y, w, h,
-            opacity: globalWatermark.opacity,
-            isVideo: globalWatermark.path.toLowerCase().endsWith('.mp4')
-        };
-        setWatermarks((prev: MontageWatermark[]) => [...prev, newW]);
-        setLocalSettings((prev: any) => ({ ...prev, montageWatermarkEnabled: false }));
-        return newIdx;
-    }, [globalWatermark, globalWatermarkOnTimeline, plan, watermarks]);
-
     const activeTriggersAtTime = useMemo(() => {
         const adjustedTime = introVideo ? currentTime - effectiveIntroDuration : currentTime;
         return triggers.map((t, i) => ({ ...t, index: i }))
@@ -684,7 +797,42 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         return watermarks.map((w, i) => ({ ...w, index: i }))
                           .filter(w => adjustedTime >= w.startTime && adjustedTime <= w.startTime + w.duration);
     }, [watermarks, currentTime, introVideo, effectiveIntroDuration]);
-    
+
+    const handleWatermarkDimensionsLoad = useCallback((idx: number, naturalW: number, naturalH: number) => {
+        setWatermarks(prev => {
+            const next = [...prev];
+            const wm = next[idx];
+            if (!wm) return prev;
+            
+            const currentW = wm.w;
+            const aspect = naturalW / naturalH;
+            const newH = Math.round(currentW / aspect);
+            
+            if (Math.abs(wm.h - newH) > 1) {
+                let newX = wm.x;
+                let newY = wm.y;
+                if (wm.id && wm.id.startsWith('wm_global_auto_') && wm.initialPosition) {
+                    const bw = plan?.baseW || 1920;
+                    const bh = plan?.baseH || 1080;
+                    const margin = 20;
+                    const pos = wm.initialPosition;
+                    switch(pos) {
+                        case 'top-left': newX = margin; newY = margin; break;
+                        case 'top-center': newX = (bw - currentW) / 2; newY = margin; break;
+                        case 'top-right': newX = bw - currentW - margin; newY = margin; break;
+                        case 'bottom-left': newX = margin; newY = bh - newH - margin; break;
+                        case 'bottom-center': newX = (bw - currentW) / 2; newY = bh - newH - margin; break;
+                        case 'bottom-right': newX = bw - currentW - margin; newY = bh - newH - margin; break;
+                        case 'center': newX = (bw - currentW) / 2; newY = (bh - newH) / 2; break;
+                    }
+                }
+                next[idx] = { ...wm, h: newH, x: newX, y: newY };
+                return next;
+            }
+            return prev;
+        });
+    }, [plan, task.settings]);
+
     const handleDeleteWatermark = useCallback((idx: number) => {
         setWatermarks(prev => prev.filter((_, i) => i !== idx));
         setSelectedWatermarkIdx(null);
@@ -694,83 +842,6 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         setTriggers(prev => prev.filter((_, i) => i !== idx));
         setSelectedTriggerIdx(null);
     }, []);
-
-    const WatermarkPreviewItem = ({ 
-        w, 
-        plan, 
-        selectedWatermarkIdx, 
-        draggingWatermarkPosIdx, 
-        setSelectedWatermarkIdx, 
-        setSelectedTriggerIdx, 
-        setActiveInfoTab, 
-        setDraggingWatermarkPosIdx, 
-        setDragStartCoords, 
-        setResizingWatermarkIdx, 
-        setResizingWatermarkHandle, 
-        getUrl, 
-        adjustedTime 
-    }: any) => {
-        const videoRef = useRef<HTMLVideoElement>(null);
-
-        useEffect(() => {
-            if (w.isVideo && videoRef.current) {
-                const timeInClip = adjustedTime - w.startTime;
-                if (Math.abs(videoRef.current.currentTime - timeInClip) > 0.05) {
-                    videoRef.current.currentTime = Math.max(0, timeInClip);
-                }
-            }
-        }, [adjustedTime, w.startTime, w.isVideo]);
-
-        return (
-            <div 
-                className={`preview-watermark-overlay ${selectedWatermarkIdx === w.index ? 'selected' : ''} ${draggingWatermarkPosIdx === w.index ? 'dragging' : ''}`}
-                style={{
-                    left: `${(w.x / (plan.baseW || 1920)) * 100}%`,
-                    top: `${(w.y / (plan.baseH || 1080)) * 100}%`,
-                    width: `${(w.w / (plan.baseW || 1920)) * 100}%`,
-                    height: `${(w.h / (plan.baseH || 1080)) * 100}%`,
-                    opacity: w.opacity
-                }}
-                onMouseDown={(e) => {
-                    e.stopPropagation();
-                    setSelectedWatermarkIdx(w.index);
-                    setSelectedTriggerIdx(null);
-                    setActiveInfoTab('stats');
-                    setDraggingWatermarkPosIdx(w.index);
-                    setDragStartCoords({ x: w.x, y: w.y, mouseX: e.clientX, mouseY: e.clientY });
-                }}
-            >
-                {w.isVideo ? (
-                    <video 
-                        ref={videoRef} 
-                        src={getUrl(w.path)} 
-                        muted 
-                        playsInline 
-                        style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none', background: 'transparent' }} 
-                    />
-                ) : (
-                    <img src={getUrl(w.path)} alt="Watermark" style={{ width: '100%', height: '100%', objectFit: 'fill', pointerEvents: 'none' }} />
-                )}
-                {selectedWatermarkIdx === w.index && (
-                    <>
-                        <div className="watermark-resize-handle br" onMouseDown={(e) => { e.stopPropagation(); setResizingWatermarkIdx(w.index); setResizingWatermarkHandle('br'); setDragStartCoords({ x: w.w, y: w.h, mouseX: e.clientX, mouseY: e.clientY }); }} />
-                        <div className="watermark-resize-handle tl" onMouseDown={(e) => { e.stopPropagation(); setResizingWatermarkIdx(w.index); setResizingWatermarkHandle('tl'); setDragStartCoords({ x: w.w, y: w.h, x2: w.x, y2: w.y, mouseX: e.clientX, mouseY: e.clientY }); }} />
-                        <button className="preview-delete-btn" title="Delete" onMouseDown={(e) => { e.stopPropagation(); handleDeleteWatermark(w.index); setSelectedWatermarkIdx(null); }}>✕</button>
-                    </>
-                )}
-            </div>
-        );
-    };
-
-    const WATERMARK_POSITIONS: Record<string, React.CSSProperties> = {
-        'top-left': { top: '5%', left: '5%' },
-        'top-center': { top: '5%', left: '50%', transform: 'translateX(-50%)' },
-        'top-right': { top: '5%', right: '5%' },
-        'bottom-left': { bottom: '5%', left: '5%' },
-        'bottom-center': { bottom: '5%', left: '50%', transform: 'translateX(-50%)' },
-        'bottom-right': { bottom: '5%', right: '5%' },
-        'center': { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' },
-    };
 
     const handleSaveTriggerPhrase = () => {
         if (editingTriggerIdx !== null) {
@@ -1280,8 +1351,8 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 <div className="montage-editor-body">
                     <div className="montage-preview-and-info">
                         <div className="montage-preview-container">
-                            {activeClipInfo ? (
-                                <div className="montage-preview-wrap">
+                            <div className="montage-preview-wrap">
+                                {activeClipInfo ? (
                                     <div 
                                         className="preview-media-wrapper" 
                                         ref={previewWrapRef}
@@ -1299,6 +1370,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                 ref={previewVideoRef} 
                                                 src={getUrl(activeClipInfo.clip.path)} 
                                                 playsInline 
+                                                style={{ background: '#000' }}
                                                 onLoadedMetadata={(e) => {
                                                     const v = e.currentTarget;
                                                     if (v.videoWidth && v.videoHeight) setPreviewAspect(v.videoWidth / v.videoHeight);
@@ -1325,7 +1397,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
 
                                         {activeTriggersAtTime.map((tr) => (
                                             <div 
-                                                key={tr.index}
+                                                key={`tr_${tr.index}`}
                                                 className={`preview-trigger-overlay ${draggingTriggerPosIdx === tr.index ? 'dragging' : ''}`}
                                                 style={{
                                                     left: `${(tr.x / (plan.baseW || 1920)) * 100}%`,
@@ -1348,11 +1420,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                             </div>
                                         ))}
 
-                                        {activeWatermarksAtTime.map((w) => (
+                                        {activeWatermarksAtTime.map((w: MontageWatermark) => (
                                             <WatermarkPreviewItem 
-                                                key={w.index}
+                                                key={w.id}
                                                 w={w}
-                                                plan={plan}
+                                                plan={plan!}
                                                 selectedWatermarkIdx={selectedWatermarkIdx}
                                                 draggingWatermarkPosIdx={draggingWatermarkPosIdx}
                                                 setSelectedWatermarkIdx={setSelectedWatermarkIdx}
@@ -1364,49 +1436,18 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                 setResizingWatermarkHandle={setResizingWatermarkHandle}
                                                 getUrl={getUrl}
                                                 adjustedTime={introVideo ? currentTime - effectiveIntroDuration : currentTime}
+                                                isPlaying={isPlaying}
+                                                handleDeleteWatermark={handleDeleteWatermark}
+                                                onDimensionsLoad={handleWatermarkDimensionsLoad}
                                             />
                                         ))}
-                                        {globalWatermark && (
-                                            <div 
-                                                className="preview-watermark-overlay global" 
-                                                style={{
-                                                    ...WATERMARK_POSITIONS[globalWatermark.position],
-                                                    width: `${globalWatermark.size}%`,
-                                                    opacity: globalWatermark.opacity,
-                                                    cursor: 'grab'
-                                                }}
-                                                onMouseDown={(e) => {
-                                                    e.stopPropagation();
-                                                    const newIdx = convertGlobalToCustomWatermark();
-                                                    if (newIdx !== null) {
-                                                        setSelectedWatermarkIdx(newIdx);
-                                                        setSelectedTriggerIdx(null);
-                                                        setActiveInfoTab('stats');
-                                                        setDraggingWatermarkPosIdx(newIdx);
-                                                        // We need the coordinates we just calculated in convert...
-                                                        // But setWatermarks is async.
-                                                        // For now, let's let the user drag it AFTER the conversion click,
-                                                        // or better, implement the logic directly here.
-                                                    }
-                                                }}
-                                            >
-                                                {globalWatermark.path.toLowerCase().endsWith('.mp4') ? (
-                                                    <video src={getUrl(globalWatermark.path)} muted autoPlay loop playsInline style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                                                ) : (
-                                                    <img src={getUrl(globalWatermark.path)} alt="Global Watermark" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                                                )}
-                                                <button className="preview-delete-btn" title="Remove Global Watermark" onMouseDown={(e) => { e.stopPropagation(); setLocalSettings((prev: any) => ({ ...prev, montageWatermarkEnabled: false })); }}>✕</button>
-                                            </div>
-                                        )}
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="montage-preview-wrap">
+                                ) : (
                                     <div className="preview-media-wrapper no-clip">
                                         <div className="no-clip-message">No clip selected</div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                         <div className="montage-info-resizer-v" onMouseDown={handleInfoResizeMouseDown}><div className="resizer-handle-v-line"></div></div>
                         <div className="montage-info-panel" style={{ width: `${infoPanelWidth}px`, flex: 'none' }}>
@@ -1747,34 +1788,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                             }}
                                         >
                                             <div className="track-label-mini">Watermarks</div>
-                                            {globalWatermarkOnTimeline && (
-                                                <div 
-                                                    className={`montage-watermark-marker global-fixed ${currentTime >= globalWatermarkOnTimeline.startTime && currentTime <= globalWatermarkOnTimeline.startTime + globalWatermarkOnTimeline.duration ? 'active' : ''}`}
-                                                    style={{ 
-                                                        left: `${globalWatermarkOnTimeline.startTime * zoom + (introVideo ? 0 : introWidth)}px`, 
-                                                        width: `${globalWatermarkOnTimeline.duration * zoom}px`,
-                                                        zIndex: 2,
-                                                        cursor: 'grab',
-                                                        pointerEvents: 'auto'
-                                                    }}
-                                                    onMouseDown={(e) => {
-                                                        e.preventDefault(); e.stopPropagation();
-                                                        const newIdx = convertGlobalToCustomWatermark();
-                                                        if (newIdx !== null) {
-                                                            setDraggingWatermarkIdx(newIdx);
-                                                            setStartX(e.clientX);
-                                                            setDragWatermarkStartPos(globalWatermarkOnTimeline.startTime);
-                                                            setSelectedWatermarkIdx(newIdx);
-                                                            setActiveInfoTab('stats');
-                                                        }
-                                                    }}
-                                                >
-                                                    <div className="watermark-icon">🌍</div>
-                                                    <div className="watermark-name">GLOBAL: {globalWatermarkOnTimeline.path.split(/[\\/]/).pop()}</div>
-                                                    <button className="trigger-delete-btn" onClick={(e) => { e.stopPropagation(); setLocalSettings((prev: any) => ({ ...prev, montageWatermarkEnabled: false })); }}>✕</button>
-                                                </div>
-                                            )}
-                                            {watermarks.filter(w => !w.trackId).map((w) => {
+                                            {watermarks.filter(w => !w.trackId).map((w, i_raw) => {
                                                 const i = watermarks.findIndex(wm => wm.id === w.id);
                                                 const width = w.duration * zoom;
                                                 const x = w.startTime * zoom + introWidth;
