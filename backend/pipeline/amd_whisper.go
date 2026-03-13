@@ -131,7 +131,7 @@ func (s *AmdWhisperService) GetAvailableModels() ([]string, error) {
 	return models, nil
 }
 
-func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, language string) (string, error) {
+func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, language string, maxLen int) (string, error) {
 	if runtime.GOOS != "windows" {
 		return "", fmt.Errorf("AMD Whisper is only available on Windows")
 	}
@@ -201,12 +201,20 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 		language = "uk" // Default
 	}
 
+	maxLenStr := fmt.Sprintf("%d", maxLen)
+	if maxLen <= 0 {
+		maxLenStr = "40"
+	}
+
 	// AMD Whisper CLI saves to [input_file].srt if -osrt is present.
+	// -mc 0 disables previous context, preventing repetition loops ("Я не знаю.")
 	args := []string{
 		"-m", modelPath,
 		"-l", language,
 		"-f", wavTempFile,
 		"-osrt",
+		"-mc", "0",
+		"-ml", maxLenStr,
 	}
 
 	whisperCmd := exec.CommandContext(s.ctx, whisperExe, args...)

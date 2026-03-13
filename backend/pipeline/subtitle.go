@@ -65,6 +65,13 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		pSettings.SubtitleMaxLen = int(val)
 	} else if val, ok := settings["subtitleMaxLen"].(int); ok && val > 0 {
 		pSettings.SubtitleMaxLen = val
+	} else if _, hasLen := settings["subtitleMaxLen"]; !hasLen {
+		// Fallback for old templates that only have subtitleMaxWords
+		if val, ok := settings["subtitleMaxWords"].(float64); ok && val > 0 {
+			pSettings.SubtitleMaxLen = int(val)
+		} else if val, ok := settings["subtitleMaxWords"].(int); ok && val > 0 {
+			pSettings.SubtitleMaxLen = val
+		}
 	}
 
 	voiceFilePath := filepath.Join(finalDir, "voice.mp3")
@@ -127,7 +134,7 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			amdLang = "uk"
 		}
 
-		result, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang)
+		result, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, pSettings.SubtitleMaxLen)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")

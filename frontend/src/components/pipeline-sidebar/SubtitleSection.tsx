@@ -438,41 +438,22 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
 
                     {(settings.subtitleService === 'standard' || settings.subtitleService === 'amd') && (
                         <>
-                            {settings.subtitleService === 'standard' && (
-                                <div className="settings-control" style={{ marginBottom: 0 }}>
-                                    <div className="settings-slider-container">
-                                        <input
-                                            type="range"
-                                            min="10"
-                                            max="150"
-                                            step="1"
-                                            className="settings-slider"
-                                            value={settings.subtitleMaxLen || 40}
-                                            style={{ '--range-progress': `${((settings.subtitleMaxLen || 40) - 10) / (150 - 10) * 100}%` } as React.CSSProperties}
-                                            onChange={(e) => handleChange('subtitleMaxLen', parseInt(e.target.value))}
-                                        />
-                                        <span className="settings-slider-value">{settings.subtitleMaxLen || 40}</span>
-                                    </div>
+                            <div className="settings-control" style={{ marginBottom: 0 }}>
+                                <label className="settings-label">{t('pipeline.subtitle.max_len')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range"
+                                        min="10"
+                                        max="150"
+                                        step="1"
+                                        className="settings-slider"
+                                        value={settings.subtitleMaxLen || settings.subtitleMaxWords || 40}
+                                        style={{ '--range-progress': `${((settings.subtitleMaxLen || settings.subtitleMaxWords || 40) - 10) / (150 - 10) * 100}%` } as React.CSSProperties}
+                                        onChange={(e) => handleChange('subtitleMaxLen', parseInt(e.target.value))}
+                                    />
+                                    <span className="settings-slider-value">{settings.subtitleMaxLen || settings.subtitleMaxWords || 40}</span>
                                 </div>
-                            )}
-
-                            {settings.subtitleService === 'amd' && (
-                                <div className="settings-control" style={{ marginBottom: 0 }}>
-                                    <div className="settings-slider-container">
-                                        <input
-                                            type="range"
-                                            min="1"
-                                            max="30"
-                                            step="1"
-                                            className="settings-slider"
-                                            value={settings.subtitleMaxWords || 10}
-                                            style={{ '--range-progress': `${((settings.subtitleMaxWords || 10) - 1) / (30 - 1) * 100}%` } as React.CSSProperties}
-                                            onChange={(e) => handleChange('subtitleMaxWords', parseInt(e.target.value))}
-                                        />
-                                        <span className="settings-slider-value">{settings.subtitleMaxWords || 10}</span>
-                                    </div>
-                                </div>
-                            )}
+                            </div>
                         </>
                     )}
 
