@@ -1042,6 +1042,40 @@
     max-width: 90%;
 }
 
+.preview-delete-btn {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.8);
+    color: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    transition: all 0.2s;
+}
+
+.preview-delete-btn:hover {
+    background: #ef4444;
+    transform: scale(1.1);
+}
+
+.trigger-overlay:hover .preview-delete-btn,
+.preview-watermark-overlay:hover .preview-delete-btn {
+    opacity: 1;
+}
+
+.preview-delete-btn {
+    opacity: 0;
+}
+
 .montage-clip-duration {
     font-size: 10px;
     font-weight: 800;
@@ -1484,9 +1518,19 @@
     z-index: 10;
 }
 
-.montage-watermark-marker.selected {
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 2px var(--accent-primary);
+.montage-watermark-marker.global-fixed {
+    cursor: default;
+    pointer-events: none;
+    border: 1px dashed rgba(255, 255, 255, 0.6);
+    background: rgba(45, 108, 223, 0.25);
+    color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(2px);
+}
+
+.montage-watermark-marker.global-fixed.active {
+    background: rgba(45, 108, 223, 0.6);
+    border-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 15px rgba(45, 108, 223, 0.4);
 }
 
 .watermark-icon {
@@ -1494,6 +1538,13 @@
 }
 
 .watermark-name {
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.montage-watermark-marker.selected {
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px var(--accent-primary);
     font-size: 10px;
     font-weight: 700;
 }
