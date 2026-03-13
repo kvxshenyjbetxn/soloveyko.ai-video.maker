@@ -193,11 +193,17 @@ func (s *PipelineService) ProcessWhisperXAlign(id string, taskLabel string, fina
 		karaokeEffect = val
 	}
 
+	// Check if input JSON exists
+	if _, err := os.Stat(transcriptionJsonPath); os.IsNotExist(err) {
+		s.log("ERROR", "[WhisperX] Transcription JSON not found: "+transcriptionJsonPath, id, taskLabel)
+		return fmt.Errorf("transcription json not found for alignment")
+	}
+
 	outputBase := filepath.Join(finalDir, "subtitle")
 	outputJSONPath := outputBase + ".json"
 
 	// 2. Prepare command for alignment
-	// We use --align_json to skip transcription and only perform alignment
+	// Reverted to hyphens and --output based on binary usage output
 	cmdArgs := []string{
 		"--audio", voiceFilePath,
 		"--align-json", transcriptionJsonPath,
@@ -230,7 +236,7 @@ func (s *PipelineService) ProcessWhisperXAlign(id string, taskLabel string, fina
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUTF8=1", "HF_HUB_DISABLE_SYMLINKS=1")
 
 	// 3. Execute command
-	s.log("INFO", "[WhisperX] Command execution started with timeout...", id, taskLabel)
+	s.log("INFO", "[WhisperX] Command execution started...", id, taskLabel)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		s.log("ERROR", fmt.Sprintf("[WhisperX] Alignment failed: %v", err), id, taskLabel)
@@ -240,10 +246,16 @@ func (s *PipelineService) ProcessWhisperXAlign(id string, taskLabel string, fina
 
 	s.log("INFO", "[WhisperX] Alignment completed successfully.", id, taskLabel)
 
-	// 4. Handle output files (alignment saves to [outputBase].json)
+	// 4. Handle output files
+	// WhisperX usually uses the audio filename for output (voice.mp3 -> voice.json)
+	voiceJson := filepath.Join(finalDir, "voice.json")
+	if _, err := os.Stat(voiceJson); err == nil {
+		_ = os.Rename(voiceJson, outputJSONPath)
+	}
+
 	jsonBytes, err := os.ReadFile(outputJSONPath)
 	if err != nil {
-		s.log("ERROR", fmt.Sprintf("[WhisperX] Failed to read aligned JSON: %v", err), id, taskLabel)
+		s.log("ERROR", fmt.Sprintf("[WhisperX] Failed to read aligned JSON at %s: %v", outputJSONPath, err), id, taskLabel)
 		return fmt.Errorf("failed to read aligned json: %v", err)
 	}
 

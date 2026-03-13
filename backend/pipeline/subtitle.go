@@ -11,6 +11,21 @@ import (
 // ProcessSubtitle handles subtitle generation using chosen transcriber
 func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
 	var sEnabled bool
+	// Detect Orientation for PlayRes
+	pResX, pResY := 1920, 1080
+	if pSettings != nil && pSettings.SubtitlePlayResX > 0 { // 0381fdf9-c543-49cd-9922-06f7a38edb23
+		pResX = pSettings.SubtitlePlayResX
+		pResY = pSettings.SubtitlePlayResY
+	} else if settings != nil {
+		if val, ok := settings["montageOrientation"].(string); ok && val == "vertical" {
+			pResX, pResY = 1080, 1920
+		} else if valW, okW := settings["imageWidth"].(float64); okW {
+			if valH, okH := settings["imageHeight"].(float64); okH && valW < valH && valW > 0 {
+				pResX, pResY = 1080, 1920
+			}
+		}
+	}
+
 	var jsonRes string
 	if val, ok := settings["subtitleEnabled"].(bool); ok {
 		sEnabled = val
@@ -74,6 +89,10 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		}
 	}
 
+	// Set PlayResX/Y in pSettings for ASS generation
+	pSettings.SubtitlePlayResX = pResX
+	pSettings.SubtitlePlayResY = pResY
+
 	voiceFilePath := filepath.Join(finalDir, "voice.mp3")
 	if _, err := os.Stat(voiceFilePath); os.IsNotExist(err) {
 		s.log("WARN", "[Pipeline] No voice.mp3 found for subtitle generation.", id, taskLabel)
@@ -110,16 +129,11 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 	var result string
 	var err error
 
-	// Ensure only one whisper process (local, amd) runs at a time globally
-	// WhisperX is excluded to allow parallelism based on the subtitle semaphore settings
-	if sService == "standard" || sService == "amd" {
-		GlobalWhisperMutex.Lock()
-		defer GlobalWhisperMutex.Unlock()
-	}
-
 	switch sService {
 	case "standard":
+		GlobalWhisperMutex.Lock()
 		result, err = s.localWhisper.TranscribeBase(voiceFilePath, sModel, pSettings.SubtitleMaxLen)
+		GlobalWhisperMutex.Unlock()
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[LocalWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
@@ -146,11 +160,21 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			maxLen = 40 // Force 40 as requested for AMD + Karaoke
 		}
 		s.log("INFO", fmt.Sprintf("[AmdWhisper] Starting transcription (karaoke: %v, maxLen: %d)...", karaokeEffect, maxLen), id, taskLabel)
+
+		// Run AMD transcription inside mutex
+		GlobalWhisperMutex.Lock()
 		result, amdJson, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, maxLen, karaokeEffect)
+		GlobalWhisperMutex.Unlock()
+
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
 			return err
+		}
+
+		if karaokeEffect && amdJson == "" {
+			s.log("ERROR", "[AmdWhisper] Transcription succeeded but NO word-level JSON was produced. Alignment impossible.", id, taskLabel)
+			return fmt.Errorf("AMD Whisper failed to generate word-level timings (JSON) required for Karaoke effect")
 		}
 
 		s.log("INFO", fmt.Sprintf("[AmdWhisper] Transcription finished. JSON length: %d", len(amdJson)), id, taskLabel)
@@ -167,12 +191,17 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 				err = s.ProcessWhisperXAlign(id, taskLabel, finalDir, voiceFilePath, jsonPath, settings, pSettings)
 				if err != nil {
 					s.log("ERROR", fmt.Sprintf("[WhisperX Align] Failed: %v", err), id, taskLabel)
-					// Fallback to standard SRT save if alignment fails?
-					// For now, let's just proceed to save the SRT we got from AMD
-				} else {
-					// WhisperXAlign already saved ASS and JSON, so we just save the final SRT
-					return s.saveSubtitles(finalDir, result, id, taskLabel, pSettings)
+					s.emitStageStatus(id, "subtitle", "failed")
+					return err
 				}
+				// Save SRT and emit completion (ASS already handled by ProcessWhisperXAlign)
+				err = s.saveSubtitles(finalDir, result, id, taskLabel, pSettings)
+				if err == nil {
+					s.emitStageStatus(id, "subtitle", "completed")
+				} else {
+					s.emitStageStatus(id, "subtitle", "failed")
+				}
+				return err
 			}
 		}
 	case "assemblyai":
@@ -240,7 +269,13 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		}
 
 		// Still save SRT
-		return s.saveSubtitles(finalDir, result, id, taskLabel, pSettings)
+		err = s.saveSubtitles(finalDir, result, id, taskLabel, pSettings)
+		if err == nil {
+			s.emitStageStatus(id, "subtitle", "completed")
+		} else {
+			s.emitStageStatus(id, "subtitle", "failed")
+		}
+		return err
 	}
 
 	err = s.saveSubtitles(finalDir, result, id, taskLabel, pSettings)

@@ -253,12 +253,16 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 	if outputJson {
 		expectedJson1 := wavTempFile + ".json"
 		expectedJson2 := strings.TrimSuffix(wavTempFile, filepath.Ext(wavTempFile)) + ".json"
+		expectedJson3 := strings.TrimSuffix(wavTempFile, filepath.Ext(wavTempFile)) + "." + language + ".json"
 		if b, err := os.ReadFile(expectedJson1); err == nil {
 			jsonBytes = b
 			foundJsonPath = expectedJson1
 		} else if b, err := os.ReadFile(expectedJson2); err == nil {
 			jsonBytes = b
 			foundJsonPath = expectedJson2
+		} else if b, err := os.ReadFile(expectedJson3); err == nil {
+			jsonBytes = b
+			foundJsonPath = expectedJson3
 		}
 	}
 

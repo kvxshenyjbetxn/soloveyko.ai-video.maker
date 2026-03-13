@@ -61,6 +61,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		return nil
 	}
 
+	// [SYNC] Wait for other tasks in the batch to catch up to montage stage
+	s.WaitForMontageBatch(id)
+
 	s.emitStageStatus(id, "montage", "waiting")
 	s.log("INFO", "[Pipeline] Waiting for montage slot...", id, taskLabel)
 
@@ -208,7 +211,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageEncodingPreset"].(string); ok {
 		pSettings.MontageEncodingPreset = val
 	}
-	if val, ok := settings["bitrate"]; ok {
+	if val, ok := settings["montageBitrate"]; ok {
 		switch v := val.(type) {
 		case float64:
 			pSettings.MontageBitrate = int(v)
@@ -323,6 +326,13 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
+	if val, ok := settings["montageMetadataSimulation"].(string); ok {
+		pSettings.MontageMetadataSimulation = val
+	}
+	if val, ok := settings["montageOrientation"].(string); ok {
+		pSettings.MontageOrientation = val
+	}
+
 	// Derived variables from finalized pSettings
 	transDur := pSettings.MontageTransitionDuration
 	if numFiles <= 1 {
@@ -332,7 +342,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	isFadeFast := pSettings.MontageTransitionEffect == "fade_fast"
 
 	baseW, baseH := 1920, 1080
-	if pSettings.ImageWidth < pSettings.ImageHeight && pSettings.ImageWidth > 0 {
+	if pSettings.MontageOrientation == "vertical" {
+		baseW, baseH = 1080, 1920
+	} else if pSettings.ImageWidth < pSettings.ImageHeight && pSettings.ImageWidth > 0 {
 		baseW, baseH = 1080, 1920
 	}
 	switch pSettings.MontageResolution {
@@ -1071,26 +1083,69 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	montageV := "v_padded_montage"
 	assName := "subtitle.ass"
 	if len(audioSegments) > 0 {
-		srtPath := filepath.Join(finalDir, "subtitle.srt")
-		if srtData, err := os.ReadFile(srtPath); err == nil {
+		// Priority 1: Try to trim JSON (to preserve Karaoke)
+		jsonPath := filepath.Join(finalDir, "subtitle.json")
+		if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
+			// Try AMD raw JSON as fallback source
+			jsonPath = filepath.Join(finalDir, "subtitle_amd_raw.json")
+		}
+
+		jsonTrimmed := false
+		if jsonBytes, err := os.ReadFile(jsonPath); err == nil {
 			var utilsSegments []utils.AudioSegment
 			for _, seg := range audioSegments {
 				utilsSegments = append(utilsSegments, utils.AudioSegment{Start: seg.Start, End: seg.End})
 			}
-			trimmedSrt := utils.TrimSrt(string(srtData), utilsSegments)
-			_ = os.WriteFile(filepath.Join(finalDir, "subtitle_trimmed.srt"), []byte(trimmedSrt), 0644)
-
-			trimmedAss, err := utils.SrtToAss(trimmedSrt, pSettings)
+			
+			trimmedJson, err := utils.TrimJsonResult(string(jsonBytes), utilsSegments)
 			if err == nil {
-				_ = os.WriteFile(filepath.Join(finalDir, "subtitle_trimmed.ass"), []byte(trimmedAss), 0644)
-				assName = "subtitle_trimmed.ass"
+				_ = os.WriteFile(filepath.Join(finalDir, "subtitle_trimmed.json"), []byte(trimmedJson), 0644)
+				
+				karaokeEffect := pSettings.SubtitleKaraokeEffect
+				trimmedAss, err := utils.JsonToAss(trimmedJson, pSettings, karaokeEffect)
+				if err == nil {
+					_ = os.WriteFile(filepath.Join(finalDir, "subtitle_trimmed.ass"), []byte(trimmedAss), 0644)
+					assName = "subtitle_trimmed.ass"
+					jsonTrimmed = true
+					s.log("INFO", "[Montage] Subtitles trimmed successfully using JSON (Karaoke preserved).", id, taskLabel)
+				}
+			}
+		}
+
+		// Priority 2: Fallback to SRT trimming if JSON failed or doesn't exist
+		if !jsonTrimmed {
+			srtPath := filepath.Join(finalDir, "subtitle.srt")
+			if srtData, err := os.ReadFile(srtPath); err == nil {
+				var utilsSegments []utils.AudioSegment
+				for _, seg := range audioSegments {
+					utilsSegments = append(utilsSegments, utils.AudioSegment{Start: seg.Start, End: seg.End})
+				}
+				trimmedSrt := utils.TrimSrt(string(srtData), utilsSegments)
+				_ = os.WriteFile(filepath.Join(finalDir, "subtitle_trimmed.srt"), []byte(trimmedSrt), 0644)
+
+				trimmedAss, err := utils.SrtToAss(trimmedSrt, pSettings)
+				if err == nil {
+					_ = os.WriteFile(filepath.Join(finalDir, "subtitle_trimmed.ass"), []byte(trimmedAss), 0644)
+					assName = "subtitle_trimmed.ass"
+					s.log("INFO", "[Montage] Subtitles trimmed using SRT fallback.", id, taskLabel)
+				}
 			}
 		}
 	}
 
 	assPath := filepath.Join(finalDir, assName)
 	if _, err := os.Stat(assPath); err == nil {
-		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles='%s'[v_sub]", montageV, assName))
+		// FFmpeg's subtitles filter on Windows is extremely sensitive to paths.
+		// Use forward slashes and escape the colon correctly for the filter string.
+		drivePrefix := ""
+		cleanPath := strings.ReplaceAll(assPath, "\\", "/")
+		if len(cleanPath) > 2 && cleanPath[1] == ':' {
+			drivePrefix = cleanPath[:1] + "\\:"
+			cleanPath = cleanPath[2:]
+		}
+		escapedAssPath := drivePrefix + cleanPath
+		
+		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles='%s'[v_sub]", montageV, escapedAssPath))
 		montageV = "v_sub"
 	}
 
@@ -1948,9 +2003,6 @@ func (s *PipelineService) findTextTiming(subPath string, phrase string, taskLabe
 		}
 	}
 
-	if len(subWords) < len(targetWords) {
-		return nil
-	}
 
 	threshold := 0.60
 	if len(targetWords) <= 2 {
@@ -1976,11 +2028,9 @@ func (s *PipelineService) findTextTiming(subPath string, phrase string, taskLabe
 					if firstMatchIdx == -1 {
 						firstMatchIdx = j
 					}
-					break
 				}
 			}
 		}
-
 		similarity := float64(matchCount) / float64(len(targetWords))
 		if similarity >= threshold && firstMatchIdx != -1 {
 			s.log("INFO", fmt.Sprintf("[Montage] Trigger match found: '%s' (similarity: %.0f%%) at %.3fs", phrase, similarity*100, subWords[firstMatchIdx].start), "", taskLabel)

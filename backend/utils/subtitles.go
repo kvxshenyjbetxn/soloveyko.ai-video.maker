@@ -266,10 +266,20 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 	}
 
 	// If result.Words is still empty, it might be WhisperX format
+	// If result.Words is still empty, it might be standard WhisperX format (segments -> words)
 	if len(result.Words) == 0 {
 		err := json.Unmarshal([]byte(jsonContent), &result)
-		if err != nil || len(result.Words) == 0 {
-			return "", fmt.Errorf("unknown or empty JSON format for subtitles")
+		if err == nil {
+			// Extract words from segments if the root 'words' array is empty
+			if len(result.Words) == 0 && len(result.Segments) > 0 {
+				for _, seg := range result.Segments {
+					result.Words = append(result.Words, seg.Words...)
+				}
+			}
+		}
+
+		if len(result.Words) == 0 {
+			return "", fmt.Errorf("unknown or empty JSON format for subtitles (no words found in root or segments)")
 		}
 	}
 
@@ -433,8 +443,9 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 			if karaokeEffect {
 				relStartMs := int((wStart - displayStart) * 1000)
 				relEndMs := int((wEnd - displayStart) * 1000)
+				durationCs := int((wEnd - wStart) * 100) // ASS karaoke uses centiseconds
 
-				highlightColor := "&H0000D7FF"
+				highlightColor := "&H0000FFFF" // Yellow default
 				if settings != nil && settings.SubtitleKaraokeColor != "" {
 					highlightColor = hexToAssColor(settings.SubtitleKaraokeColor)
 				}
@@ -462,12 +473,15 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 				}
 
 				if karaokeMode == "fill" {
-					textBuilder.WriteString(fmt.Sprintf("{\\c%s&\\t(%d,%d,\\c%s&)%s}", primaryColor, relStartMs, relEndMs, highlightColor, scaleTag))
+					// Use \k for filling effect (standard karaoke)
+					// Duration is in centiseconds
+					textBuilder.WriteString(fmt.Sprintf("{\\k%d%s}%s", durationCs, scaleTag, cleanSrtText(w.Word, settings)))
 				} else {
-					textBuilder.WriteString(fmt.Sprintf("{\\c%s&\\t(%d,%d,\\c%s&)\\t(%d,%d,\\c%s&)%s}",
-						primaryColor, relStartMs, relStartMs+1, highlightColor, relEndMs, relEndMs+1, primaryColor, scaleTag))
+					// Traditional highlight with \t colors
+					textBuilder.WriteString(fmt.Sprintf("{\\c%s&\\t(%d,%d,\\c%s&)\\t(%d,%d,\\c%s&)%s}%s",
+						primaryColor, relStartMs, relStartMs+1, highlightColor, relEndMs, relEndMs+1, primaryColor, scaleTag, cleanSrtText(w.Word, settings)))
 				}
-				textBuilder.WriteString(cleanSrtText(w.Word, settings))
+				
 				// Explicit reset after word to prevent scale/spacing from leaking
 				if scale > 1.0 {
 					textBuilder.WriteString("{\\fscx100\\fscy100\\fsp0}")
@@ -532,6 +546,9 @@ type WhisperXResult struct {
 	Language string         `json:"language"`
 	Audio    string         `json:"audio"`
 	Words    []WhisperXWord `json:"words"`
+	Segments []struct {
+		Words []WhisperXWord `json:"words"`
+	} `json:"segments"`
 }
 func (s WhisperXResult) ToSrt() string {
 	var sb strings.Builder
@@ -613,6 +630,67 @@ func TrimSrt(srtContent string, segments []AudioSegment) string {
 		sb.WriteString(fmt.Sprintf("%s\n\n", b.text))
 	}
 	return sb.String()
+}
+
+// TrimJsonResult offsets and filters word-level timings based on provided audio segments
+func TrimJsonResult(jsonContent string, segments []AudioSegment) (string, error) {
+	if len(segments) == 0 {
+		return jsonContent, nil
+	}
+
+	var result WhisperXResult
+	var raw map[string]interface{}
+	err := json.Unmarshal([]byte(jsonContent), &raw)
+	if err != nil {
+		return "", err
+	}
+
+	// Basic format support: root words or segments
+	if _, ok := raw["words"]; ok {
+		_ = json.Unmarshal([]byte(jsonContent), &result)
+	} else if _, ok := raw["segments"]; ok {
+		_ = json.Unmarshal([]byte(jsonContent), &result)
+		if len(result.Words) == 0 {
+			for _, s := range result.Segments {
+				result.Words = append(result.Words, s.Words...)
+			}
+		}
+	}
+
+	if len(result.Words) == 0 {
+		return jsonContent, nil // Nothing to trim
+	}
+
+	var trimmedWords []WhisperXWord
+	currentTimelineOffset := 0.0
+
+	for _, seg := range segments {
+		segDur := seg.End - seg.Start
+		for _, w := range result.Words {
+			// Check overlap
+			overlapStart := mathMax(w.Start, seg.Start)
+			overlapEnd := mathMin(w.End, seg.End)
+
+			if overlapStart < overlapEnd {
+				// We keep the word if it overlap with the segment
+				// We offset it relative to the new timeline
+				trimmedWords = append(trimmedWords, WhisperXWord{
+					Word:  w.Word,
+					Start: currentTimelineOffset + (overlapStart - seg.Start),
+					End:   currentTimelineOffset + (overlapEnd - seg.Start),
+					Score: w.Score,
+				})
+			}
+		}
+		currentTimelineOffset += segDur
+	}
+
+	// Update result and return
+	result.Words = trimmedWords
+	result.Segments = nil // Clear segments to avoid confusion with the flattened trimmed list
+	
+	newJson, _ := json.Marshal(result)
+	return string(newJson), nil
 }
 
 func mathMax(a, b float64) float64 {

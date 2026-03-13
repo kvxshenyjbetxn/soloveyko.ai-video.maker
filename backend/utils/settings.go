@@ -145,6 +145,8 @@ type PipelineSettings struct {
 	SubtitleKaraokeScale     float64 `json:"subtitleKaraokeScale,omitempty"`
 	SubtitleKaraokeSpeed     int     `json:"subtitleKaraokeSpeed"`
 	SubtitleWhisperxLanguage string  `json:"subtitleWhisperxLanguage,omitempty"`
+	SubtitlePlayResX         int     `json:"subtitlePlayResX,omitempty"`
+	SubtitlePlayResY         int     `json:"subtitlePlayResY,omitempty"`
 
 	// Image settings
 	ImageEnabled                   bool    `json:"imageEnabled"`
@@ -224,6 +226,7 @@ type PipelineSettings struct {
 	MontageWatermarks             []OverlayWatermark `json:"montageWatermarks,omitempty"`
 	MontageExtraTracks            []OverlayTrack     `json:"montageExtraTracks,omitempty"`
 	MontageMetadataSimulation     string             `json:"montageMetadataSimulation,omitempty"` // "none", "DaVinci Resolve Studio"
+	MontageOrientation            string             `json:"montageOrientation,omitempty"`        // "landscape", "vertical"
 
 	CustomStages          []CustomStage `json:"customStages,omitempty"`
 	CustomStagesEnabled   bool          `json:"customStagesEnabled"`
@@ -512,6 +515,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 	}
 	if settings.Pipeline.MontageMetadataSimulation == "" {
 		settings.Pipeline.MontageMetadataSimulation = "DaVinci Resolve Studio"
+	}
+	if settings.Pipeline.MontageOrientation == "" {
+		settings.Pipeline.MontageOrientation = "horizontal"
 	}
 	// MontageCPUCores = 0 means all cores (default)
 	// MontageThreadsPerProcess = 0 means auto (not set), so no default override needed
