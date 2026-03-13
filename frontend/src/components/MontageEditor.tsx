@@ -512,9 +512,10 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     }, [introVideo]);
 
     const introWidth = useMemo(() => {
-        if (!introVideo && !isDraggingFromPool) return 0;
+        // We always reserve space for the intro slot to prevent jarring timeline shifts
+        // and ensure the drop target is always visible to the user.
         return introVideo ? Math.max(introVideo.duration * zoom, 160) : 160;
-    }, [introVideo, zoom, isDraggingFromPool]);
+    }, [introVideo, zoom]);
 
     const totalTimelineDuration = useMemo(() => {
         const audioTotal = audioSegments.reduce((sum, seg) => sum + (seg.end - seg.start), 0);
