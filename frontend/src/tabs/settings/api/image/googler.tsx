@@ -245,18 +245,18 @@ export const Googler = () => {
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                                 <span style={{ fontSize: '0.9em', opacity: 0.7 }}>{t('general.googlerMaxVideos')}</span>
-                                <span style={{ fontSize: '0.95em', fontWeight: 'bold', color: accentColor }}>{googlerMaxVideos} / 10</span>
+                                <span style={{ fontSize: '0.95em', fontWeight: 'bold', color: accentColor }}>{googlerMaxVideos} / 25</span>
                             </div>
                             <input
                                 type="range"
                                 min="1"
-                                max="10"
+                                max="25"
                                 step="1"
                                 className="premium-range"
                                 style={{
                                     width: '100%',
                                     cursor: 'pointer',
-                                    background: `linear-gradient(to right, ${accentColor} ${((googlerMaxVideos - 1) / 9) * 100}%, rgba(255,255,255,0.05) ${((googlerMaxVideos - 1) / 9) * 100}%)`
+                                    background: `linear-gradient(to right, ${accentColor} ${((googlerMaxVideos - 1) / 24) * 100}%, rgba(255,255,255,0.05) ${((googlerMaxVideos - 1) / 24) * 100}%)`
                                 }}
                                 value={googlerMaxVideos}
                                 onChange={(e) => {

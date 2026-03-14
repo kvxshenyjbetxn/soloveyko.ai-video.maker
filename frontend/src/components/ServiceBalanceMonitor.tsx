@@ -24,6 +24,8 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
         googlerVideoThreshold,
         googlerImageThreshold,
         elevenLabsImageUsage, refreshElevenLabsImageUsage,
+        googlerMaxImages,
+        googlerMaxVideos,
         refreshAllBalances,
         autoRefresh, setAutoRefresh
     } = useServices();
@@ -356,14 +358,14 @@ export const ServiceBalanceMonitor = ({ navigateTo }: ServiceBalanceMonitorProps
                                 {/* Потоки знизу */}
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7em', opacity: 0.6 }}>
                                     <span>⚙️ {t('balanceMonitor.videoThreads') || 'Video Threads'}:</span>
-                                    <span style={{ color: googlerUsage.current_usage.active_threads.video_threads >= googlerUsage.account_limits.video_generation_threads_allowed && googlerUsage.account_limits.video_generation_threads_allowed > 0 ? '#ff5252' : 'inherit' }}>
-                                        {loadingGoogler ? '...' : `${googlerUsage.current_usage.active_threads.video_threads}/${googlerUsage.account_limits.video_generation_threads_allowed}`}
+                                    <span style={{ color: googlerUsage.current_usage.active_threads.video_threads >= googlerMaxVideos && googlerMaxVideos > 0 ? '#ff5252' : 'inherit' }}>
+                                        {loadingGoogler ? '...' : `${googlerUsage.current_usage.active_threads.video_threads}/${googlerMaxVideos}`}
                                     </span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7em', opacity: 0.6 }}>
                                     <span>⚙️ {t('balanceMonitor.imageThreads') || 'Image Threads'}:</span>
                                     <span>
-                                        {loadingGoogler ? '...' : `${googlerUsage.current_usage.active_threads.image_threads}/${googlerUsage.account_limits.img_generation_threads_allowed}`}
+                                        {loadingGoogler ? '...' : `${googlerUsage.current_usage.active_threads.image_threads}/${googlerMaxImages}`}
                                     </span>
                                 </div>
                             </div>

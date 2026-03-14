@@ -22,12 +22,19 @@ type GooglerService struct {
 	mu        sync.Mutex
 	OnLog     func(level string, message string, details ...string)
 	OnLogData func(category string, data string)
+	client    *http.Client
 }
 
 func NewGooglerService(settings *utils.SettingsService) *GooglerService {
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     90 * time.Second,
+	}
 	return &GooglerService{
 		settings: settings,
 		baseUrl:  "https://googler.fast-gen.ai/api",
+		client:   &http.Client{Transport: transport, Timeout: 300 * time.Second},
 	}
 }
 
@@ -120,7 +127,8 @@ func (s *GooglerService) GetUsage(apiKey string) (*GooglerUsageResponse, error) 
 		return nil, fmt.Errorf("API key is empty")
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// client := &http.Client{Timeout: 10 * time.Second} // Використовуємо спільний клієнт з вищим таймаутом
+	client := s.client
 	// Спробуємо v3 ендпоінт, як у спеці
 	url := fmt.Sprintf("%s/v3/account/usage?api_key=%s", s.baseUrl, apiKey)
 	req, err := http.NewRequest("GET", url, nil)
@@ -314,7 +322,7 @@ func (s *GooglerService) isRetryable(err error) bool {
 }
 
 func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt string, apiRatio string, outputPath string) error {
-	client := &http.Client{Timeout: 300 * time.Second}
+	client := s.client
 	var url string
 	var reqBody interface{}
 
@@ -487,7 +495,7 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 }
 
 func (s *GooglerService) remixImageOnce(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string) error {
-	client := &http.Client{Timeout: 300 * time.Second}
+	client := s.client
 	url := fmt.Sprintf("%s/v4/whisk/image/remix?api_key=%s", s.baseUrl, apiKey)
 
 	reqBody := RemixImageRequest{
@@ -654,7 +662,7 @@ func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt strin
 }
 
 func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string) error {
-	client := &http.Client{Timeout: 300 * time.Second}
+	client := s.client
 	var url string
 	var reqBody interface{}
 

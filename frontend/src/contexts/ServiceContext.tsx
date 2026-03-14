@@ -107,7 +107,7 @@ const ServiceContext = createContext<ServiceContextType>({
     setElevenLabsUAThreshold: () => { },
     googlerMaxImages: 25,
     setGooglerMaxImages: () => { },
-    googlerMaxVideos: 10,
+    googlerMaxVideos: 25,
     setGooglerMaxVideos: () => { },
     elevenLabsImageKeys: [],
     refreshElevenLabsImageKeys: async () => { },
@@ -161,7 +161,7 @@ export const ServiceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [googlerImageThreshold, setGooglerImageThreshold] = useState(0);
     const [elevenLabsUAThreshold, setElevenLabsUAThreshold] = useState(0);
     const [googlerMaxImages, setGooglerMaxImages] = useState(25);
-    const [googlerMaxVideos, setGooglerMaxVideos] = useState(10);
+    const [googlerMaxVideos, setGooglerMaxVideos] = useState(25);
     const hasFetchedRef = useRef(false);
 
     const refreshOpenRouterBalance = async () => {

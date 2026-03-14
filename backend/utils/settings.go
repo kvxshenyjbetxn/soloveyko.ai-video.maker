@@ -474,7 +474,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 		settings.GooglerMaxImageConnections = 25
 	}
 	if settings.GooglerMaxVideoConnections <= 0 {
-		settings.GooglerMaxVideoConnections = 10
+		settings.GooglerMaxVideoConnections = 25
 	}
 	if settings.ElevenLabsImageMaxConnections <= 0 || settings.ElevenLabsImageMaxConnections > 3 {
 		settings.ElevenLabsImageMaxConnections = 3
@@ -1430,10 +1430,10 @@ func (s *SettingsService) SetGooglerMaxImageConnections(max int) error {
 func (s *SettingsService) GetGooglerMaxVideoConnections() int {
 	settings, err := s.LoadSettings()
 	if err != nil {
-		return 10
+		return 25
 	}
 	if settings.GooglerMaxVideoConnections <= 0 {
-		return 10
+		return 25
 	}
 	return settings.GooglerMaxVideoConnections
 }
