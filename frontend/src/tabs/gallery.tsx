@@ -215,8 +215,8 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
     const [regMedia, setRegMedia] = useState<any>(null);
     const [isBulkReg, setIsBulkReg] = useState(false);
 
-    const { tasks: queueTasks, resumeImageControl, regeneratingPaths, addRegeneratingPath, removeRegeneratingPath } = useQueue();
-    const isAwaitingControl = useMemo(() => queueTasks.some(t => t.isAwaitingImageControl), [queueTasks]);
+    const { tasks: queueTasks, resumeImageControl, isImageBatchReady, regeneratingPaths, addRegeneratingPath, removeRegeneratingPath } = useQueue();
+    const isAwaitingControl = isImageBatchReady;
 
     const handleRefresh = useCallback(() => {
         setSessionBuster(Date.now());

@@ -21,6 +21,7 @@ interface QueueContextType {
     tasks: QueueTask[]; isProcessing: boolean;
     completionModal: { isOpen: boolean; duration: string; taskCount: number; };
     imageControlNotification: { isOpen: boolean; };
+    isImageBatchReady: boolean;
     montageControlNotification: { isOpen: boolean; };
     addTasks: (type: any, content: string, tasksData: any[], name?: string, skippedStages?: string[]) => void;
     addTask: (type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any) => void;
@@ -48,6 +49,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const [isProcessing, setIsProcessing] = useState(false);
     const [completionModal, setCompletionModal] = useState({ isOpen: false, duration: '', taskCount: 0 });
     const [imageControlNotification, setImageControlNotification] = useState({ isOpen: false });
+    const [isImageBatchReady, setIsImageBatchReady] = useState(false);
     const [montageControlNotification, setMontageControlNotification] = useState({ isOpen: false });
     const taskCounterRef = useRef(1);
     const activeBatchRef = useRef<string[]>([]);
@@ -199,6 +201,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const clearQueue = useCallback(() => {
         setTasks([]);
         setIsProcessing(false);
+        setIsImageBatchReady(false);
         ClearGallery();
     }, []);
 
@@ -225,6 +228,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const resumeImageControl = async () => {
         setImageControlNotification({ isOpen: false });
+        setIsImageBatchReady(false);
         const ids = tasks.filter(t => t.isAwaitingImageControl).map(t => t.id);
         if (ids.length === 0) return;
         setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, isAwaitingImageControl: false, imageStatus: 'processing' } : t));
@@ -297,6 +301,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const pendingIds = pending.map(t => t.id);
         activeBatchRef.current = pendingIds;
         hasShownImageBatchNotificationRef.current = false;
+        setIsImageBatchReady(false);
         hasShownMontageBatchNotificationRef.current = false;
 
         // Prepare montage synchronization for this batch
@@ -384,11 +389,6 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: true, controlContent: text } : t));
         });
         const uImgReq = EventsOn("requestImageControl", (id: string) => {
-            const task = tasksRef.current.find(t => t.id === id);
-            if (task) {
-                const msg = `${t('notifications.review_images_title')}\n\n*${t('notifications.task_name')}*: ${task.subName || task.name}\n*${t('notifications.template')}*: ${task.folderName}`;
-                sendNotification(msg);
-            }
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingImageControl: true } : t));
         });
         const uMontageReq = EventsOn("requestMontageControl", (id: string, planData: string) => {
@@ -428,6 +428,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             if (awaitingImg.length > 0 && stillWorkingImg.length === 0) {
                 hasShownImageBatchNotificationRef.current = true;
                 setImageControlNotification({ isOpen: true });
+                setIsImageBatchReady(true);
+                sendNotification(`${t('notifications.review_images_title')}\n\n${t('pipeline.image_control_notification.message')}`);
             }
         }
 
@@ -452,7 +454,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     return (
         <QueueContext.Provider value={{
-            tasks, isProcessing, completionModal, imageControlNotification, montageControlNotification,
+            tasks, isProcessing, completionModal, imageControlNotification, isImageBatchReady, montageControlNotification,
             addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
             updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles, closeCompletionModal, closeImageControlNotification, closeMontageControlNotification,
             regeneratingPaths, addRegeneratingPath, removeRegeneratingPath

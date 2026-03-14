@@ -168,7 +168,7 @@
             "translate_prompt": "Translation Prompt",
             "translate_control": "Translation Control",
             "image_control": "Image Control",
-            "montage_control": "Montage Control",
+            "montage_control": "🎬 Montage Control",
             "rewrite_model": "Rewrite Model",
             "rewrite_temperature": "Rewrite Temperature",
             "rewrite_max_tokens": "Rewrite Max Tokens",
