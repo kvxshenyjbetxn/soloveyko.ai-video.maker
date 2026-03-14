@@ -261,6 +261,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageIntroVideoPath"].(string); ok {
 		pSettings.MontageIntroVideoPath = val
 	}
+	if val, ok := settings["montageIntroFadeDuration"].(float64); ok {
+		pSettings.MontageIntroFadeDuration = val
+	}
 	if val, ok := settings["imageShortVideoFillMode"].(string); ok {
 		pSettings.ImageShortVideoFillMode = val
 	}
@@ -1679,6 +1682,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			pSettings.MontageEncodingPreset,
 			pSettings.MontageBitrate,
 			transDur,
+			pSettings.MontageIntroFadeDuration,
+			audioDur, // Pass the precise duration of the montage
 			id, taskLabel,
 		); err != nil {
 			s.log("WARN", fmt.Sprintf("[Montage] Failed to prepend intro: %v", err), id, taskLabel)
@@ -1714,7 +1719,9 @@ func (s *PipelineService) prependIntroVideo(
 	baseW, baseH, fps int,
 	videoCodec, preset string,
 	bitrate int,
-	fadeDur float64,
+	transDur float64, // existing general transDur (might be used for other things)
+	fadeDur float64,  // our specialized intro fade duration
+	mainDur float64,
 	id, taskLabel string,
 ) error {
 	mainFullPath := filepath.Join(finalDir, mainFile)
@@ -1745,46 +1752,64 @@ func (s *PipelineService) prependIntroVideo(
 	fp = append(fp, fmt.Sprintf(
 		"[ifg]scale=%d:%d:force_original_aspect_ratio=decrease[ifgsc]", baseW, baseH))
 	fp = append(fp,
-		fmt.Sprintf("[iblur][ifgsc]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[iproc]",
+		fmt.Sprintf("[iblur][ifgsc]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[iv_raw]",
 			fps, introDur))
 
+	// Main: ensure consistent TB and FPS
+	fp = append(fp, fmt.Sprintf("[1:v]fps=%d,settb=AVTB,setpts=PTS-STARTPTS,trim=duration=%.6f[mv_raw]", fps, mainDur))
+
 	// Fade-out on intro end, fade-in on main start
+	lastIV, lastMV := "iv_raw", "mv_raw"
 	if ef > 0 {
 		foSt := introDur - ef
 		if foSt < 0 { foSt = 0 }
-		fp = append(fp, fmt.Sprintf(
-			"[iproc]fade=t=out:st=%.3f:d=%.3f[iv]", foSt, ef))
-		fp = append(fp, fmt.Sprintf(
-			"[1:v]fade=t=in:st=0:d=%.3f[mv]", ef))
-	} else {
-		fp = append(fp, "[iproc]copy[iv]")
-		fp = append(fp, "[1:v]copy[mv]")
+		fp = append(fp, fmt.Sprintf("[%s]fade=t=out:st=%.3f:d=%.3f[iv_faded]", lastIV, foSt, ef))
+		fp = append(fp, fmt.Sprintf("[%s]fade=t=in:st=0:d=%.3f[mv_faded]", lastMV, ef))
+		lastIV, lastMV = "iv_faded", "mv_faded"
 	}
-	fp = append(fp, "[iv][mv]concat=n=2:v=1:a=0[vout]")
 
-	// Audio
+	// Audio preparation: ensure identical sample rate/format/channels for concat
 	audioMap := ""
-	switch {
-	case introHasAudio && mainHasAudio:
-		fp = append(fp,
-			"[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ia]",
-			"[1:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ma]",
-			"[ia][ma]concat=n=2:v=0:a=1[aout]")
-		audioMap = "[aout]"
-	case introHasAudio:
-		mainDur, _ := s.getDuration(ffprobePath, mainFullPath)
-		fp = append(fp,
-			"[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ia]",
-			fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[sma]", mainDur),
-			"[ia][sma]concat=n=2:v=0:a=1[aout]")
-		audioMap = "[aout]"
-	case mainHasAudio:
-		fp = append(fp,
-			fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[sia]", introDur),
-			"[1:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ma]",
-			"[sia][ma]concat=n=2:v=0:a=1[aout]")
-		audioMap = "[aout]"
+	var ia, ma string
+	if introHasAudio {
+		fp = append(fp, fmt.Sprintf("[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ia_trimmed]", introDur))
+		ia = "ia_trimmed"
+	} else {
+		fp = append(fp, fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ia_trimmed]", introDur))
+		ia = "ia_trimmed"
 	}
+
+	if mainHasAudio {
+		fp = append(fp, fmt.Sprintf("[1:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ma_trimmed]", mainDur))
+		ma = "ma_trimmed"
+	} else {
+		fp = append(fp, fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ma_trimmed]", mainDur))
+		ma = "ma_trimmed"
+	}
+
+	// Unified Fading & Final Concat (v=1:a=1 is the only way to guarantee sync)
+	finalIV, finalMV := lastIV, lastMV
+	finalIA, finalMA := ia, ma
+
+	if fadeDur > 0 {
+		foSt := introDur - fadeDur
+		if foSt < 0 { foSt = 0 }
+		
+		// Video fades
+		fp = append(fp, fmt.Sprintf("[%s]fade=t=out:st=%.3f:d=%.3f[iv_faded]", finalIV, foSt, fadeDur))
+		fp = append(fp, fmt.Sprintf("[%s]fade=t=in:st=0:d=%.3f[mv_faded]", finalMV, fadeDur))
+		finalIV, finalMV = "iv_faded", "mv_faded"
+		
+		// Audio fades (matching video exactly)
+		fp = append(fp, fmt.Sprintf("[%s]afade=t=out:st=%.3f:d=%.3f[ia_faded]", finalIA, foSt, fadeDur))
+		fp = append(fp, fmt.Sprintf("[%s]afade=t=in:st=0:d=%.3f[ma_faded]", finalMA, fadeDur))
+		finalIA, finalMA = "ia_faded", "ma_faded"
+	}
+
+	// concat filter expects [v0][a0][v1][a1] order for v=1:a=1
+	fp = append(fp, fmt.Sprintf("[%s][%s][%s][%s]concat=n=2:v=1:a=1[vout][aout]", 
+		finalIV, finalIA, finalMV, finalMA))
+	audioMap = "[aout]"
 
 	// Output goes to a NEW temp file (never the locked outputFile)
 	tmpOut := "intro_combined_tmp.mp4"
@@ -1848,17 +1873,32 @@ func (s *PipelineService) getDuration(ffprobePath, path string) (float64, error)
 	if ffprobePath == "" {
 		return 0, fmt.Errorf("ffprobe not found")
 	}
+	
+	// Try format duration first
 	cmd := exec.Command(ffprobePath, "-v", "error", "-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1", path)
 	utils.PrepareHiddenCmd(cmd)
-
 	out, err := cmd.Output()
-	if err != nil {
-		return 0, err
+	if err == nil {
+		var dur float64
+		if _, errS := fmt.Sscanf(strings.TrimSpace(string(out)), "%f", &dur); errS == nil && dur > 0 {
+			return dur, nil
+		}
 	}
-	var dur float64
-	_, err = fmt.Sscanf(strings.TrimSpace(string(out)), "%f", &dur)
-	return dur, err
+
+	// Fallback: check stream-level duration (especially for VFR or certain containers)
+	cmd = exec.Command(ffprobePath, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1", path)
+	utils.PrepareHiddenCmd(cmd)
+	out, err = cmd.Output()
+	if err == nil {
+		var dur float64
+		if _, errS := fmt.Sscanf(strings.TrimSpace(string(out)), "%f", &dur); errS == nil && dur > 0 {
+			return dur, nil
+		}
+	}
+
+	return 0, fmt.Errorf("could not determine duration")
 }
 
 func (s *PipelineService) hasAudio(ffprobePath, path string) bool {

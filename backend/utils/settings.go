@@ -227,6 +227,7 @@ type PipelineSettings struct {
 	MontageExtraTracks            []OverlayTrack     `json:"montageExtraTracks,omitempty"`
 	MontageMetadataSimulation     string             `json:"montageMetadataSimulation,omitempty"` // "none", "DaVinci Resolve Studio"
 	MontageOrientation            string             `json:"montageOrientation,omitempty"`        // "landscape", "vertical"
+	MontageIntroFadeDuration      float64            `json:"montageIntroFadeDuration"`
 
 	CustomStages          []CustomStage `json:"customStages,omitempty"`
 	CustomStagesEnabled   bool          `json:"customStagesEnabled"`
@@ -438,6 +439,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 				TranslateControlEnabled: true,
 				ImageControlEnabled:     true,
 				MontageControlEnabled:   true,
+				MontageIntroFadeDuration: 0.5,
 			},
 			FirstRun:                 true,
 			ShowWelcome:              true,
@@ -518,6 +520,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 	}
 	if settings.Pipeline.MontageOrientation == "" {
 		settings.Pipeline.MontageOrientation = "horizontal"
+	}
+	if settings.Pipeline.MontageIntroFadeDuration <= 0 {
+		settings.Pipeline.MontageIntroFadeDuration = 0.5
 	}
 	// MontageCPUCores = 0 means all cores (default)
 	// MontageThreadsPerProcess = 0 means auto (not set), so no default override needed
