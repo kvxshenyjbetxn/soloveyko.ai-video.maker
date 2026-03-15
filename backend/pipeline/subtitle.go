@@ -156,9 +156,6 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		// AMD Whisper now returns both SRT and JSON (if requested)
 		var amdJson string
 		maxLen := pSettings.SubtitleMaxLen
-		if karaokeEffect {
-			maxLen = 40 // Force 40 as requested for AMD + Karaoke
-		}
 		s.log("INFO", fmt.Sprintf("[AmdWhisper] Starting transcription (karaoke: %v, maxLen: %d)...", karaokeEffect, maxLen), id, taskLabel)
 
 		// Run AMD transcription inside mutex

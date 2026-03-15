@@ -201,20 +201,19 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 		language = "uk" // Default
 	}
 
-	maxLenStr := fmt.Sprintf("%d", maxLen)
-	if maxLen <= 0 {
-		maxLenStr = "40"
-	}
-
-	// AMD Whisper CLI saves to [input_file].srt if -osrt is present.
-	// -mc 0 disables previous context, preventing repetition loops ("Я не знаю.")
 	args := []string{
 		"-m", modelPath,
 		"-l", language,
 		"-f", wavTempFile,
 		"-osrt",
-		"-mc", "0",
-		"-ml", maxLenStr,
+	}
+
+	if !outputJson {
+		maxLenStr := fmt.Sprintf("%d", maxLen)
+		if maxLen <= 0 {
+			maxLenStr = "40"
+		}
+		args = append(args, "-ml", maxLenStr)
 	}
 
 	if outputJson {
