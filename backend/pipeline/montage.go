@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -260,6 +261,19 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 	if val, ok := settings["montageIntroVideoPath"].(string); ok {
 		pSettings.MontageIntroVideoPath = val
+	}
+	if val, ok := settings["montageIntroVideoPaths"]; ok {
+		if slice, ok := val.([]interface{}); ok {
+			var paths []string
+			for _, v := range slice {
+				if s, ok := v.(string); ok && s != "" {
+					paths = append(paths, s)
+				}
+			}
+			pSettings.MontageIntroVideoPaths = paths
+		} else if slice, ok := val.([]string); ok {
+			pSettings.MontageIntroVideoPaths = slice
+		}
 	}
 	if val, ok := settings["montageIntroFadeDuration"].(float64); ok {
 		pSettings.MontageIntroFadeDuration = val
@@ -900,6 +914,21 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	// Intro is prepended after the main render in prependIntroVideo() — separate FFmpeg pass.
 	// This avoids intermittent deadlocks when joining intro+montage inside one filter_complex.
+	// Randomly select intro if multiple paths are provided
+	if pSettings.MontageIntroVideoEnabled && len(pSettings.MontageIntroVideoPaths) > 0 {
+		rand.Seed(time.Now().UnixNano())
+		validPaths := []string{}
+		for _, p := range pSettings.MontageIntroVideoPaths {
+			if _, err := os.Stat(p); err == nil {
+				validPaths = append(validPaths, p)
+			}
+		}
+		if len(validPaths) > 0 {
+			pSettings.MontageIntroVideoPath = validPaths[rand.Intn(len(validPaths))]
+			s.log("INFO", fmt.Sprintf("[Montage] Randomly selected intro: %s", filepath.Base(pSettings.MontageIntroVideoPath)), id, taskLabel)
+		}
+	}
+
 	introEnabled := pSettings.MontageIntroVideoEnabled &&
 		pSettings.MontageIntroVideoPath != "" &&
 		func() bool { _, e := os.Stat(pSettings.MontageIntroVideoPath); return e == nil }()
@@ -1755,61 +1784,52 @@ func (s *PipelineService) prependIntroVideo(
 		fmt.Sprintf("[iblur][ifgsc]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,fps=%d,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[iv_raw]",
 			fps, introDur))
 
-	// Main: ensure consistent TB and FPS
-	fp = append(fp, fmt.Sprintf("[1:v]fps=%d,settb=AVTB,setpts=PTS-STARTPTS,trim=duration=%.6f[mv_raw]", fps, mainDur))
-
-	// Fade-out on intro end, fade-in on main start
-	lastIV, lastMV := "iv_raw", "mv_raw"
-	if ef > 0 {
-		foSt := introDur - ef
-		if foSt < 0 { foSt = 0 }
-		fp = append(fp, fmt.Sprintf("[%s]fade=t=out:st=%.3f:d=%.3f[iv_faded]", lastIV, foSt, ef))
-		fp = append(fp, fmt.Sprintf("[%s]fade=t=in:st=0:d=%.3f[mv_faded]", lastMV, ef))
-		lastIV, lastMV = "iv_faded", "mv_faded"
-	}
+	// Main: ensure consistent TB and FPS + THE FIX: freeze first frame during fade-in
+	fp = append(fp, fmt.Sprintf("[1:v]fps=%d,settb=AVTB,setpts=PTS-STARTPTS,trim=duration=%.6f,tpad=start_mode=clone:start_duration=%.3f[mv_raw]", fps, mainDur, fadeDur))
 
 	// Audio preparation: ensure identical sample rate/format/channels for concat
-	audioMap := ""
 	var ia, ma string
 	if introHasAudio {
-		fp = append(fp, fmt.Sprintf("[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ia_trimmed]", introDur))
-		ia = "ia_trimmed"
+		fp = append(fp, fmt.Sprintf("[0:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ia_raw]", introDur))
+		ia = "ia_raw"
 	} else {
-		fp = append(fp, fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ia_trimmed]", introDur))
-		ia = "ia_trimmed"
+		fp = append(fp, fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ia_raw]", introDur))
+		ia = "ia_raw"
 	}
 
 	if mainHasAudio {
-		fp = append(fp, fmt.Sprintf("[1:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ma_trimmed]", mainDur))
-		ma = "ma_trimmed"
+		// THE FIX: delay audio to match video freeze
+		fp = append(fp, fmt.Sprintf("[1:a]aresample=44100,aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS,adelay=%.0f|%.0f[ma_raw]", mainDur, fadeDur*1000, fadeDur*1000))
+		ma = "ma_raw"
 	} else {
-		fp = append(fp, fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS[ma_trimmed]", mainDur))
-		ma = "ma_trimmed"
+		fp = append(fp, fmt.Sprintf("anullsrc=r=44100:cl=stereo,atrim=duration=%.6f,asetpts=PTS-STARTPTS,adelay=%.0f|%.0f[ma_raw]", mainDur, fadeDur*1000, fadeDur*1000))
+		ma = "ma_raw"
 	}
 
-	// Unified Fading & Final Concat (v=1:a=1 is the only way to guarantee sync)
-	finalIV, finalMV := lastIV, lastMV
+	// Unified Fading & Final Concat
+	finalIV, finalMV := "iv_raw", "mv_raw"
 	finalIA, finalMA := ia, ma
 
 	if fadeDur > 0 {
 		foSt := introDur - fadeDur
 		if foSt < 0 { foSt = 0 }
 		
-		// Video fades
-		fp = append(fp, fmt.Sprintf("[%s]fade=t=out:st=%.3f:d=%.3f[iv_faded]", finalIV, foSt, fadeDur))
-		fp = append(fp, fmt.Sprintf("[%s]fade=t=in:st=0:d=%.3f[mv_faded]", finalMV, fadeDur))
-		finalIV, finalMV = "iv_faded", "mv_faded"
+		// Intro fades out
+		fp = append(fp, fmt.Sprintf("[%s]fade=t=out:st=%.3f:d=%.3f[iv_f_out]", finalIV, foSt, fadeDur))
+		fp = append(fp, fmt.Sprintf("[%s]afade=t=out:st=%.3f:d=%.3f[ia_f_out]", finalIA, foSt, fadeDur))
 		
-		// Audio fades (matching video exactly)
-		fp = append(fp, fmt.Sprintf("[%s]afade=t=out:st=%.3f:d=%.3f[ia_faded]", finalIA, foSt, fadeDur))
-		fp = append(fp, fmt.Sprintf("[%s]afade=t=in:st=0:d=%.3f[ma_faded]", finalMA, fadeDur))
-		finalIA, finalMA = "ia_faded", "ma_faded"
+		// Main video fades in ON TOP of the static/delayed start
+		fp = append(fp, fmt.Sprintf("[%s]fade=t=in:st=0:d=%.3f[mv_f_in]", finalMV, fadeDur))
+		fp = append(fp, fmt.Sprintf("[%s]afade=t=in:st=%.3f:d=%.3f[ma_f_in]", finalMA, fadeDur, fadeDur))
+		
+		finalIV, finalMV = "iv_f_out", "mv_f_in"
+		finalIA, finalMA = "ia_f_out", "ma_f_in"
 	}
 
 	// concat filter expects [v0][a0][v1][a1] order for v=1:a=1
 	fp = append(fp, fmt.Sprintf("[%s][%s][%s][%s]concat=n=2:v=1:a=1[vout][aout]", 
 		finalIV, finalIA, finalMV, finalMA))
-	audioMap = "[aout]"
+	audioMap := "[aout]"
 
 	// Output goes to a NEW temp file (never the locked outputFile)
 	tmpOut := "intro_combined_tmp.mp4"

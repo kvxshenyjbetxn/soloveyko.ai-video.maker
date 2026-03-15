@@ -140,13 +140,88 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                     </div>
 
                     {settings.montageIntroVideoEnabled && (
-                        <div className="settings-control">
-                            <div
+                        <div className="intro-videos-manager" style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div className="settings-label" style={{ fontSize: '11px', opacity: 0.8, marginBottom: '-4px' }}>
+                                {t('pipeline.montage.intro_videos_list') || 'Intro Videos List (Randomly selected)'}
+                            </div>
+                            
+                            {/* List of existing intros */}
+                            {((settings.montageIntroVideoPaths && settings.montageIntroVideoPaths.length > 0) 
+                                ? settings.montageIntroVideoPaths 
+                                : (settings.montageIntroVideoPath ? [settings.montageIntroVideoPath] : [])
+                            ).map((path: string, index: number) => (
+                                <div key={index} className="intro-video-item" style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '8px 12px',
+                                    borderRadius: '10px',
+                                    backgroundColor: 'var(--bg-secondary)',
+                                    border: '1px solid var(--border-color)',
+                                    transition: 'all 0.2s',
+                                    position: 'relative'
+                                }}>
+                                    <div style={{ fontSize: '16px' }}>🎬</div>
+                                    <div style={{
+                                        flex: 1,
+                                        fontSize: '11px',
+                                        color: 'var(--text-primary)',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {path.split(/[\\/]/).pop()}
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const currentPaths = settings.montageIntroVideoPaths && settings.montageIntroVideoPaths.length > 0
+                                                ? [...settings.montageIntroVideoPaths]
+                                                : (settings.montageIntroVideoPath ? [settings.montageIntroVideoPath] : []);
+                                            
+                                            const newPaths = currentPaths.filter((_, i) => i !== index);
+                                            
+                                            setSettings((prev: any) => ({
+                                                ...prev,
+                                                montageIntroVideoPaths: newPaths,
+                                                // Keep backward compatibility for single path
+                                                montageIntroVideoPath: newPaths.length > 0 ? newPaths[0] : ''
+                                            }));
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: 'var(--text-tertiary)',
+                                            cursor: 'pointer',
+                                            padding: '4px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            borderRadius: '4px'
+                                        }}
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                                    </button>
+                                </div>
+                            ))}
+
+                            {/* Add New Intro Button */}
+                            <button
                                 onClick={async () => {
                                     try {
                                         const path = await (window as any).go.main.App.SelectVideo();
                                         if (path) {
-                                            handleChange('montageIntroVideoPath', path);
+                                            const currentPaths = settings.montageIntroVideoPaths && settings.montageIntroVideoPaths.length > 0
+                                                ? [...settings.montageIntroVideoPaths]
+                                                : (settings.montageIntroVideoPath ? [settings.montageIntroVideoPath] : []);
+                                            
+                                            if (!currentPaths.includes(path)) {
+                                                const newPaths = [...currentPaths, path];
+                                                setSettings((prev: any) => ({
+                                                    ...prev,
+                                                    montageIntroVideoPaths: newPaths,
+                                                    montageIntroVideoPath: newPaths[0]
+                                                }));
+                                            }
                                         }
                                     } catch (err) {
                                         console.error(err);
@@ -156,51 +231,32 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                                     width: '100%',
                                     padding: '12px',
                                     borderRadius: '10px',
-                                    border: settings.montageIntroVideoPath ? '1px solid var(--accent-color)' : '1px dashed var(--bg-tertiary)',
-                                    backgroundColor: settings.montageIntroVideoPath ? 'rgba(var(--accent-rgb), 0.05)' : 'var(--bg-secondary)',
+                                    border: '1px dashed var(--bg-tertiary)',
+                                    backgroundColor: 'rgba(var(--accent-rgb), 0.02)',
                                     display: 'flex',
-                                    flexDirection: 'column',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    gap: '6px',
+                                    gap: '8px',
                                     cursor: 'pointer',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                    position: 'relative',
-                                    overflow: 'hidden',
-                                    minHeight: '80px'
+                                    transition: 'all 0.3s',
+                                    color: 'var(--text-secondary)',
+                                    fontSize: '11px',
+                                    fontWeight: '600'
+                                }}
+                                onMouseOver={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.05)';
+                                    e.currentTarget.style.borderColor = 'var(--accent-color)';
+                                    e.currentTarget.style.color = 'var(--text-primary)';
+                                }}
+                                onMouseOut={(e) => {
+                                    e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.02)';
+                                    e.currentTarget.style.borderColor = 'var(--bg-tertiary)';
+                                    e.currentTarget.style.color = 'var(--text-secondary)';
                                 }}
                             >
-                                <div style={{
-                                    fontSize: '20px',
-                                    opacity: settings.montageIntroVideoPath ? 1 : 0.5,
-                                    filter: settings.montageIntroVideoPath ? 'drop-shadow(0 0 8px var(--accent-color))' : 'none',
-                                }}>
-                                    {settings.montageIntroVideoPath ? '🎬' : '📁'}
-                                </div>
-                                <div style={{
-                                    fontSize: '11px',
-                                    fontWeight: '600',
-                                    color: settings.montageIntroVideoPath ? 'var(--text-primary)' : 'var(--text-secondary)',
-                                    textAlign: 'center'
-                                }}>
-                                    {settings.montageIntroVideoPath
-                                        ? t('pipeline.montage.intro_video_change')
-                                        : t('pipeline.montage.intro_video_select')}
-                                </div>
-                                {settings.montageIntroVideoPath && (
-                                    <div style={{
-                                        fontSize: '9px',
-                                        color: 'var(--text-tertiary)',
-                                        maxWidth: '100%',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                        opacity: 0.8
-                                    }}>
-                                        {settings.montageIntroVideoPath.split(/[\\/]/).pop()}
-                                    </div>
-                                )}
-                            </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5v14" /></svg>
+                                {t('pipeline.montage.intro_video_add') || 'Add Intro Video'}
+                            </button>
                         </div>
                     )}
 

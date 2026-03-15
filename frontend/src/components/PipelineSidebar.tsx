@@ -663,7 +663,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         const montageFields = [
             'montageResolution', 'montageFPS', 'montageSwayFactor', 'montageZoomFactor',
             'montageUpscaleFactor', 'montageTransitionDuration', 'montageTransitionEffect',
-            'montageEncodingPreset', 'montageBitrate', 'montageIntroVideoEnabled', 'montageIntroVideoPath',
+            'montageEncodingPreset', 'montageBitrate', 'montageIntroVideoEnabled', 'montageIntroVideoPath', 'montageIntroVideoPaths',
             'montageWatermarkEnabled', 'montageWatermarkPath', 'montageWatermarkPosition', 'montageWatermarkOpacity', 'montageWatermarkSize', 'montageWatermarkOnIntro',
             'montageOverlayEnabled', 'montageOverlayPath', 'montageOverlayOnIntro', 'montageMetadataSimulation'
         ];
@@ -741,6 +741,13 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             // Compatibility for templates that saved them inside montage object
             result.montageOverlayTriggers = obj.montage.montageOverlayTriggers;
         }
+
+        if (obj.montageIntroVideoPaths && Array.isArray(obj.montageIntroVideoPaths)) {
+            result.montageIntroVideoPaths = obj.montageIntroVideoPaths;
+        } else if (obj.montage && typeof obj.montage === 'object' && Array.isArray(obj.montage.montageIntroVideoPaths)) {
+            result.montageIntroVideoPaths = obj.montage.montageIntroVideoPaths;
+        }
+        result.montageIntroVideoPaths = result.montageIntroVideoPaths ?? [];
 
         return result;
     };
@@ -904,6 +911,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 imagePromptMaxTokens: cleanApplied.imagePromptMaxTokens ?? 0,
                 imageShortVideoFillMode: cleanApplied.imageShortVideoFillMode ?? 'boomerang',
                 montageMetadataSimulation: cleanApplied.montageMetadataSimulation ?? 'None',
+                montageIntroVideoPaths: cleanApplied.montageIntroVideoPaths ?? [],
             };
         });
     };

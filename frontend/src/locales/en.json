@@ -492,6 +492,8 @@
             "threads_per_process": "CPU Cores per FFmpeg Process",
             "threads_auto": "auto",
             "intro_video_enabled": "Intro Video",
+            "intro_videos_list": "Intro Videos List (Randomly selected)",
+            "intro_video_add": "Add Intro Video",
             "intro_video_select": "Select Video",
             "intro_video_change": "Change Video",
             "watermark_enabled": "Watermark",

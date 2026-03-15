@@ -501,6 +501,8 @@
       "threads_per_process": "Ядер на процес FFmpeg",
       "threads_auto": "авто",
       "intro_video_enabled": "Відео на початку",
+      "intro_videos_list": "Список відео для інтро (обирається рандомно)",
+      "intro_video_add": "Додати інтро відео",
       "intro_video_select": "Обрати відео",
       "intro_video_change": "Змінити відео",
       "watermark_enabled": "Водяний знак",
