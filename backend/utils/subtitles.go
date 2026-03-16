@@ -344,8 +344,29 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 		spacing = settings.SubtitleKerning
 	}
 
-	sb.WriteString(fmt.Sprintf("Style: Default,%s,%d,%s,&H000000FF,%s,%s,1,0,0,0,100,100,%.1f,0,%d,%.1f,%.1f,%d,60,60,%d,1\n\n",
-		fontName, fontSize, primaryColor, outlineColor, backColor, spacing, borderStyle, outlineWidth, shadowWidth, alignment, marginV))
+	// For Karaoke 'fill' we need to swap Primary/Secondary colors
+	karaokeMode := "highlight"
+	if settings != nil && settings.SubtitleKaraokeMode != "" {
+		karaokeMode = settings.SubtitleKaraokeMode
+	}
+
+	stylePrimary := primaryColor
+	styleSecondary := "&H000000FF" // Default secondary
+	if karaokeEffect {
+		// Default karaoke behavior: secondary is same as primary unless filling
+		styleSecondary = primaryColor
+		if karaokeMode == "fill" {
+			highlightColor := "&H0000FFFF" // Yellow default
+			if settings != nil && settings.SubtitleKaraokeColor != "" {
+				highlightColor = hexToAssColor(settings.SubtitleKaraokeColor)
+			}
+			stylePrimary = highlightColor
+			styleSecondary = primaryColor
+		}
+	}
+
+	sb.WriteString(fmt.Sprintf("Style: Default,%s,%d,%s,%s,%s,%s,1,0,0,0,100,100,%.1f,0,%d,%.1f,%.1f,%d,60,60,%d,1\n\n",
+		fontName, fontSize, stylePrimary, styleSecondary, outlineColor, backColor, spacing, borderStyle, outlineWidth, shadowWidth, alignment, marginV))
 
 	sb.WriteString("[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
 
@@ -402,6 +423,11 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 		var textBuilder strings.Builder
 		textBuilder.WriteString("{")
 
+		// Initial state for 'appear' mode: everything transparent
+		if karaokeEffect && karaokeMode == "appear" {
+			textBuilder.WriteString("\\alpha&HFF&")
+		}
+
 		// Animations and Positioning
 		if settings != nil && settings.SubtitleAnimation == "slide-up" {
 			resY := 1080
@@ -437,10 +463,6 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 				wEnd = wStart + 0.1
 			}
 
-			if i > 0 {
-				textBuilder.WriteString(" ")
-			}
-
 			if karaokeEffect {
 				relStartMs := int((wStart - displayStart) * 1000)
 				relEndMs := int((wEnd - displayStart) * 1000)
@@ -473,11 +495,24 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 						relEndMs, relEndMs+speed)
 				}
 
-				if karaokeMode == "fill" {
-					// Use \k for filling effect (standard karaoke)
-					// Duration is in centiseconds
-					textBuilder.WriteString(fmt.Sprintf("{\\k%d%s}%s", durationCs, scaleTag, cleanSrtText(w.Word, settings)))
+				if karaokeMode == "appear" {
+					// Use alpha transformation to make word (including outline and shadow) appear
+					// relStartMs to relStartMs+100 creates a quick fade-in effect
+					textBuilder.WriteString(fmt.Sprintf("{\\alpha&HFF&\\t(%d,%d,\\alpha&H00&)%s}%s ", 
+						relStartMs, relStartMs+50, scaleTag, cleanSrtText(w.Word, settings)))
+				} else if karaokeMode == "fill" {
+					// 1. Handle delay between currentPos and wStart (especially for the first word in a block or silence gap)
+					gapCs := int((wStart - currentPos) * 100)
+					if gapCs > 0 {
+						textBuilder.WriteString(fmt.Sprintf("{\\k%d}", gapCs))
+					}
+					// 2. Use \kf for filling effect (gradual karaoke)
+					// We add a space after the word to separate it from the next one
+					textBuilder.WriteString(fmt.Sprintf("{\\kf%d%s}%s ", durationCs, scaleTag, cleanSrtText(w.Word, settings)))
 				} else {
+					if i > 0 {
+						textBuilder.WriteString(" ")
+					}
 					// Traditional highlight with \t colors
 					textBuilder.WriteString(fmt.Sprintf("{\\c%s&\\t(%d,%d,\\c%s&)\\t(%d,%d,\\c%s&)%s}%s",
 						primaryColor, relStartMs, relStartMs+1, highlightColor, relEndMs, relEndMs+1, primaryColor, scaleTag, cleanSrtText(w.Word, settings)))
@@ -489,6 +524,9 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 				}
 				currentPos = wEnd
 			} else {
+				if i > 0 {
+					textBuilder.WriteString(" ")
+				}
 				textBuilder.WriteString(cleanSrtText(w.Word, settings))
 			}
 		}

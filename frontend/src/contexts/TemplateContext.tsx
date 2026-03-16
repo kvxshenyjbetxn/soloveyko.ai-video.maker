@@ -129,7 +129,7 @@ export interface PipelineSettings {
     subtitleFadeOut: number;
     subtitleKaraokeEffect: boolean;
     subtitleKaraokeColor: string;
-    subtitleKaraokeMode: 'fill' | 'highlight';
+    subtitleKaraokeMode: 'fill' | 'highlight' | 'appear';
     subtitleKaraokeScale: number;
     subtitleWhisperxLanguage: string;
 

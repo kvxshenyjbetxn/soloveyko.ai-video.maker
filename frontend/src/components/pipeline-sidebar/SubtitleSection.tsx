@@ -409,6 +409,7 @@ export const SubtitleSection: React.FC<SubtitleSectionProps> = ({
                                         <label className="settings-label" style={{ fontSize: '11px' }}>Тип підсвічування</label>
                                         <select className="settings-select" style={{ height: '28px', fontSize: '11px' }} value={settings.subtitleKaraokeMode || 'highlight'} onChange={(e) => handleChange('subtitleKaraokeMode', e.target.value)}>
                                             <option value="fill">Заливка (поступовий перехід)</option>
+                                            <option value="appear">Поява (прояв кожного слова)</option>
                                             <option value="highlight">Акцент (тільки поточне слово)</option>
                                         </select>
                                     </div>
