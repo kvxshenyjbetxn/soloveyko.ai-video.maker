@@ -3,6 +3,10 @@ import { useI18n } from '../../contexts/I18nContext';
 import {
     GetSubtitleMaxConnections,
     SaveSubtitleMaxConnections,
+    GetSubtitleAmdMaxConnections,
+    SaveSubtitleAmdMaxConnections,
+    GetSubtitleWhisperXMaxConnections,
+    SaveSubtitleWhisperXMaxConnections,
     GetMontageMaxConnections,
     SaveMontageMaxConnections,
     GetMontageMode,
@@ -19,6 +23,12 @@ import './general.css';
 export const Performance = () => {
     const { t } = useI18n();
     const [subtitleMax, setSubtitleMax] = useState(2);
+    const [subtitleMaxAmd, setSubtitleMaxAmd] = useState(1);
+    const [subtitleMaxWhisperX, setSubtitleMaxWhisperX] = useState(1);
+    const [subtitleThreads, setSubtitleThreads] = useState(0);
+    const [subtitleAmdThreads, setSubtitleAmdThreads] = useState(0);
+    const [subtitleWhisperXThreads, setSubtitleWhisperXThreads] = useState(0);
+
     const [subtitleService, setSubtitleService] = useState('standard');
     const [montageMax, setMontageMax] = useState(1);
     const [montageMode, setMontageMode] = useState('standard');
@@ -35,13 +45,20 @@ export const Performance = () => {
     useEffect(() => {
         Promise.all([
             GetSubtitleMaxConnections(),
+            GetSubtitleAmdMaxConnections(),
+            GetSubtitleWhisperXMaxConnections(),
             GetMontageMaxConnections(),
             GetMontageMode(),
             GetPipelineSettings(),
             IsWhisperXInstalled()
-        ]).then(([max, mmax, mode, ps, installed]) => {
+        ]).then(([max, amdMax, wxMax, mmax, mode, ps, installed]) => {
             setSubtitleMax(max || 2);
+            setSubtitleMaxAmd(amdMax || 1);
+            setSubtitleMaxWhisperX(wxMax || 1);
             setSubtitleService((ps as any)?.subtitleService || 'standard');
+            setSubtitleThreads((ps as any)?.subtitleThreads || 0);
+            setSubtitleAmdThreads((ps as any)?.subtitleAmdThreads || 0);
+            setSubtitleWhisperXThreads((ps as any)?.subtitleWhisperXThreads || 0);
             setMontageMax(mmax || 1);
             setMontageMode(mode || 'standard');
             setMontageCodec((ps as any)?.montageVideoCodec || 'cpu');
@@ -69,9 +86,19 @@ export const Performance = () => {
     }, []);
 
     const handleSubtitleMaxChange = async (val: number) => {
-        setSubtitleMax(val);
         setIsSaving(true);
-        try { await SaveSubtitleMaxConnections(val); }
+        try { 
+            if (subtitleService === 'standard') {
+                setSubtitleMax(val);
+                await SaveSubtitleMaxConnections(val); 
+            } else if (subtitleService === 'amd') {
+                setSubtitleMaxAmd(val);
+                await SaveSubtitleAmdMaxConnections(val);
+            } else if (subtitleService === 'whisperx') {
+                setSubtitleMaxWhisperX(val);
+                await SaveSubtitleWhisperXMaxConnections(val);
+            }
+        }
         catch (err) { console.error(err); }
         finally { setIsSaving(false); }
     };
@@ -189,7 +216,7 @@ export const Performance = () => {
 
                         <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: 0, opacity: 0.5 }} />
 
-                        {/* Subtitle Concurrency Slider */}
+                        {/* Subtitle Settings */}
                         {subtitleService === 'assemblyai' ? (
                             <div style={{ 
                                 padding: '15px', 
@@ -207,25 +234,74 @@ export const Performance = () => {
                                 <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)' }}>5</div>
                             </div>
                         ) : (
-                            <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                        <span style={{ fontSize: '14px', fontWeight: 600 }}>{t('performanceTab.subtitle_max_concurrency')}</span>
-                                        <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', maxWidth: '400px', lineHeight: '1.4' }}>{t('performanceTab.subtitle_max_concurrency_desc')}</span>
+                            <>
+                                {/* Concurrency Slider */}
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <span style={{ fontSize: '14px', fontWeight: 600 }}>{t('performanceTab.subtitle_max_concurrency')}</span>
+                                            <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', maxWidth: '400px', lineHeight: '1.4' }}>{t('performanceTab.subtitle_max_concurrency_desc')}</span>
+                                        </div>
+                                        <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)', minWidth: '30px', textAlign: 'right' }}>
+                                            {subtitleService === 'standard' ? subtitleMax : subtitleService === 'amd' ? subtitleMaxAmd : subtitleMaxWhisperX}
+                                        </div>
                                     </div>
-                                    <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)', minWidth: '30px', textAlign: 'right' }}>{subtitleMax}</div>
+                                    <input type="range" min="1" max="5" className="settings-slider" 
+                                        value={subtitleService === 'standard' ? subtitleMax : subtitleService === 'amd' ? subtitleMaxAmd : subtitleMaxWhisperX}
+                                        onChange={(e) => handleSubtitleMaxChange(parseInt(e.target.value))}
+                                        style={{ width: '100%', margin: 0, '--range-progress': `${(((subtitleService === 'standard' ? subtitleMax : subtitleService === 'amd' ? subtitleMaxAmd : subtitleMaxWhisperX) - 1) / 4) * 100}%` } as React.CSSProperties} />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', padding: '0 2px' }}>
+                                        {[1, 2, 3, 4, 5].map(v => {
+                                            const current = subtitleService === 'standard' ? subtitleMax : subtitleService === 'amd' ? subtitleMaxAmd : subtitleMaxWhisperX;
+                                            return (
+                                                <span key={v} style={{ fontSize: '10px', color: current === v ? 'var(--accent-primary)' : 'var(--text-tertiary)', fontWeight: current === v ? 700 : 400, transition: 'all 0.2s ease' }}>{v}</span>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                                <input type="range" min="1" max="5" className="settings-slider" value={subtitleMax}
-                                    onChange={(e) => handleSubtitleMaxChange(parseInt(e.target.value))}
-                                    style={{ width: '100%', margin: 0, '--range-progress': `${subtitleProgress}%` } as React.CSSProperties} />
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', padding: '0 2px' }}>
-                                    {[1, 2, 3, 4, 5].map(v => (
-                                        <span key={v} style={{ fontSize: '10px', color: subtitleMax === v ? 'var(--accent-primary)' : 'var(--text-tertiary)', fontWeight: subtitleMax === v ? 700 : 400, transition: 'all 0.2s ease' }}>{v}</span>
-                                    ))}
+
+                                <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: 0, opacity: 0.5 }} />
+
+                                {/* Threads Slider */}
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            <span style={{ fontSize: '14px', fontWeight: 600 }}>{t('performanceTab.subtitle_threads')}</span>
+                                            <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', maxWidth: '400px', lineHeight: '1.4' }}>{t('performanceTab.subtitle_threads_desc')}</span>
+                                        </div>
+                                        <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-primary)', fontFamily: 'var(--font-mono)', minWidth: '60px', textAlign: 'right' }}>
+                                            {(subtitleService === 'standard' ? subtitleThreads : subtitleService === 'amd' ? subtitleAmdThreads : subtitleWhisperXThreads) === 0 ? t('performanceTab.montage_threads_auto') : `${(subtitleService === 'standard' ? subtitleThreads : subtitleService === 'amd' ? subtitleAmdThreads : subtitleWhisperXThreads)}/${totalCores}`}
+                                        </div>
+                                    </div>
+                                    <input type="range" min="0" max={totalCores} step="1" className="settings-slider"
+                                        value={subtitleService === 'standard' ? subtitleThreads : subtitleService === 'amd' ? subtitleAmdThreads : subtitleWhisperXThreads}
+                                        onChange={(e) => {
+                                            const v = parseInt(e.target.value);
+                                            if (subtitleService === 'standard') {
+                                                setSubtitleThreads(v);
+                                                savePipelineField('subtitleThreads', v);
+                                            } else if (subtitleService === 'amd') {
+                                                setSubtitleAmdThreads(v);
+                                                savePipelineField('subtitleAmdThreads', v);
+                                            } else if (subtitleService === 'whisperx') {
+                                                setSubtitleWhisperXThreads(v);
+                                                savePipelineField('subtitleWhisperXThreads', v);
+                                            }
+                                        }}
+                                        style={{ width: '100%', margin: 0, '--range-progress': `${((subtitleService === 'standard' ? subtitleThreads : subtitleService === 'amd' ? subtitleAmdThreads : subtitleWhisperXThreads) / totalCores) * 100}%` } as React.CSSProperties} />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', padding: '0 2px' }}>
+                                        <span style={{ fontSize: '9px', color: 'var(--text-tertiary)' }}>auto</span>
+                                        {Array.from({ length: totalCores }, (_, i) => i + 1).filter(v => v % 2 === 0 || v === 1 || v === totalCores).map(v => {
+                                            const current = subtitleService === 'standard' ? subtitleThreads : subtitleService === 'amd' ? subtitleAmdThreads : subtitleWhisperXThreads;
+                                            return (
+                                                <span key={v} style={{ fontSize: '9px', color: current === v ? 'var(--accent-primary)' : 'var(--text-tertiary)' }}>{v}</span>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            </div>
+                            </>
                         )}
-                    </div>
+                </div>
                 </div>
 
                 {/* Montage Block */}

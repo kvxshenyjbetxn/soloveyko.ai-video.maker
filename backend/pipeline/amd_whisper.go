@@ -131,7 +131,7 @@ func (s *AmdWhisperService) GetAvailableModels() ([]string, error) {
 	return models, nil
 }
 
-func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, language string, maxLen int, outputJson bool) (string, string, error) {
+func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, language string, maxLen int, outputJson bool, threads int) (string, string, error) {
 	if runtime.GOOS != "windows" {
 		return "", "", fmt.Errorf("AMD Whisper is only available on Windows")
 	}
@@ -214,6 +214,10 @@ func (s *AmdWhisperService) Transcribe(audioFilePath string, modelName string, l
 			maxLenStr = "40"
 		}
 		args = append(args, "-ml", maxLenStr)
+	}
+
+	if threads > 0 {
+		args = append(args, "-t", fmt.Sprintf("%d", threads))
 	}
 
 	if outputJson {

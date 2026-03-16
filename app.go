@@ -240,7 +240,35 @@ func (a *App) GetSubtitleMaxConnections() int {
 func (a *App) SaveSubtitleMaxConnections(max int) error {
 	err := a.settings.SetSubtitleMaxConnections(max)
 	if err == nil {
-		a.pipeline.UpdateSubtitleSemaphore(max)
+		a.pipeline.UpdateSubtitleSemaphore(max, "standard")
+	}
+	return err
+}
+
+// GetSubtitleAmdMaxConnections повертає ліміт одночасних запитів Субтитрів AMD
+func (a *App) GetSubtitleAmdMaxConnections() int {
+	return a.settings.GetSubtitleAmdMaxConnections()
+}
+
+// SaveSubtitleAmdMaxConnections встановлює ліміт одночасних запитів Субтитрів AMD
+func (a *App) SaveSubtitleAmdMaxConnections(max int) error {
+	err := a.settings.SetSubtitleAmdMaxConnections(max)
+	if err == nil {
+		a.pipeline.UpdateSubtitleSemaphore(max, "amd")
+	}
+	return err
+}
+
+// GetSubtitleWhisperXMaxConnections повертає ліміт одночасних запитів WhisperX
+func (a *App) GetSubtitleWhisperXMaxConnections() int {
+	return a.settings.GetSubtitleWhisperXMaxConnections()
+}
+
+// SaveSubtitleWhisperXMaxConnections встановлює ліміт одночасних запитів WhisperX
+func (a *App) SaveSubtitleWhisperXMaxConnections(max int) error {
+	err := a.settings.SetSubtitleWhisperXMaxConnections(max)
+	if err == nil {
+		a.pipeline.UpdateSubtitleSemaphore(max, "whisperx")
 	}
 	return err
 }

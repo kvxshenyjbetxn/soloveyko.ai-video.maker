@@ -147,6 +147,9 @@ type PipelineSettings struct {
 	SubtitleWhisperxLanguage string  `json:"subtitleWhisperxLanguage,omitempty"`
 	SubtitlePlayResX         int     `json:"subtitlePlayResX,omitempty"`
 	SubtitlePlayResY         int     `json:"subtitlePlayResY,omitempty"`
+	SubtitleThreads          int     `json:"subtitleThreads,omitempty"`
+	SubtitleAmdThreads       int     `json:"subtitleAmdThreads,omitempty"`
+	SubtitleWhisperXThreads   int     `json:"subtitleWhisperXThreads,omitempty"`
 
 	// Image settings
 	ImageEnabled                   bool    `json:"imageEnabled"`
@@ -269,8 +272,10 @@ type Settings struct {
 	GooglerImageAlertThreshold    float64          `json:"googlerImageAlertThreshold"`
 	ElevenLabsImageKeys           []NamedAPIKey    `json:"elevenLabsImageKeys"`
 	ElevenLabsImageMaxConnections int              `json:"elevenLabsImageMaxConnections"`
-	SubtitleMaxConnections        int              `json:"subtitleMaxConnections"`
-	MontageMaxConnections         int              `json:"montageMaxConnections"`
+	SubtitleMaxConnections         int              `json:"subtitleMaxConnections"`
+	SubtitleAmdMaxConnections      int              `json:"subtitleAmdMaxConnections"`
+	SubtitleWhisperXMaxConnections int              `json:"subtitleWhisperXMaxConnections"`
+	MontageMaxConnections          int              `json:"montageMaxConnections"`
 	MontageMode                   string           `json:"montageMode"`
 	Pipeline                      PipelineSettings `json:"pipeline"`
 	GoogleSheetURL                string           `json:"googleSheetURL"`
@@ -482,6 +487,12 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 	}
 	if settings.SubtitleMaxConnections <= 0 {
 		settings.SubtitleMaxConnections = 2
+	}
+	if settings.SubtitleAmdMaxConnections <= 0 {
+		settings.SubtitleAmdMaxConnections = 1
+	}
+	if settings.SubtitleWhisperXMaxConnections <= 0 {
+		settings.SubtitleWhisperXMaxConnections = 1
 	}
 	if settings.MontageMaxConnections <= 0 {
 		settings.MontageMaxConnections = 1
@@ -1504,6 +1515,52 @@ func (s *SettingsService) SetSubtitleMaxConnections(max int) error {
 	}
 
 	settings.SubtitleMaxConnections = max
+	return s.SaveSettings(settings)
+}
+
+// GetSubtitleAmdMaxConnections повертає ліміт одночасних запитів Субтитрів AMD
+func (s *SettingsService) GetSubtitleAmdMaxConnections() int {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 1
+	}
+	if settings.SubtitleAmdMaxConnections <= 0 {
+		return 1
+	}
+	return settings.SubtitleAmdMaxConnections
+}
+
+// SetSubtitleAmdMaxConnections встановлює ліміт одночасних запитів Субтитрів AMD
+func (s *SettingsService) SetSubtitleAmdMaxConnections(max int) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.SubtitleAmdMaxConnections = max
+	return s.SaveSettings(settings)
+}
+
+// GetSubtitleWhisperXMaxConnections повертає ліміт одночасних запитів WhisperX
+func (s *SettingsService) GetSubtitleWhisperXMaxConnections() int {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 1
+	}
+	if settings.SubtitleWhisperXMaxConnections <= 0 {
+		return 1
+	}
+	return settings.SubtitleWhisperXMaxConnections
+}
+
+// SetSubtitleWhisperXMaxConnections встановлює ліміт одночасних запитів WhisperX
+func (s *SettingsService) SetSubtitleWhisperXMaxConnections(max int) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.SubtitleWhisperXMaxConnections = max
 	return s.SaveSettings(settings)
 }
 

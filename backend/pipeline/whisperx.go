@@ -95,6 +95,11 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 	// Device selection (auto by default)
 	cmdArgs = append(cmdArgs, "--device", "auto")
 
+	// Threads
+	if pSettings.SubtitleWhisperXThreads > 0 {
+		cmdArgs = append(cmdArgs, "--threads", fmt.Sprintf("%d", pSettings.SubtitleWhisperXThreads))
+	}
+
 	s.log("INFO", fmt.Sprintf("[WhisperX] Running command: %s %s", whisperxExe, strings.Join(cmdArgs, " ")), id, taskLabel)
 
 	cmd := exec.CommandContext(s.ctx, whisperxExe, cmdArgs...)
@@ -227,6 +232,11 @@ func (s *PipelineService) ProcessWhisperXAlign(id string, taskLabel string, fina
 	}
 
 	cmdArgs = append(cmdArgs, "--device", "auto")
+
+	// Threads
+	if pSettings.SubtitleWhisperXThreads > 0 {
+		cmdArgs = append(cmdArgs, "--threads", fmt.Sprintf("%d", pSettings.SubtitleWhisperXThreads))
+	}
 
 	s.log("INFO", fmt.Sprintf("[WhisperX] Running alignment: %s %s", whisperxExe, strings.Join(cmdArgs, " ")), id, taskLabel)
 

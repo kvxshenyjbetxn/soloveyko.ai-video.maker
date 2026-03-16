@@ -119,7 +119,7 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 	s.emitStageStatus(id, "subtitle", "waiting")
 	s.log("INFO", "[Pipeline] Waiting for subtitle engine slot...", id, taskLabel)
 
-	sem := s.getSubtitleSem()
+	sem := s.getSubtitleSem(sService)
 	sem <- struct{}{}
 	defer func() { <-sem }()
 
@@ -132,7 +132,7 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 	switch sService {
 	case "standard":
 		GlobalWhisperMutex.Lock()
-		result, err = s.localWhisper.TranscribeBase(voiceFilePath, sModel, pSettings.SubtitleMaxLen)
+		result, err = s.localWhisper.TranscribeBase(voiceFilePath, sModel, pSettings.SubtitleMaxLen, pSettings.SubtitleThreads)
 		GlobalWhisperMutex.Unlock()
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[LocalWhisper] Failed: %v", err), id, taskLabel)
@@ -160,7 +160,7 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 
 		// Run AMD transcription inside mutex
 		GlobalWhisperMutex.Lock()
-		result, amdJson, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, maxLen, karaokeEffect)
+		result, amdJson, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, maxLen, karaokeEffect, pSettings.SubtitleAmdThreads)
 		GlobalWhisperMutex.Unlock()
 
 		if err != nil {
@@ -186,6 +186,13 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			s.log("INFO", fmt.Sprintf("[AmdWhisper] Saved raw JSON to: %s", jsonPath), id, taskLabel)
 
 			if karaokeEffect {
+				// RELEASE AMD slot and ACQUIRE WhisperX slot for alignment stage
+				s.log("INFO", "[Pipeline] Handover: Releasing AMD slot and waiting for WhisperX slot for alignment...", id, taskLabel)
+				<-sem                             // Manually release AMD slot
+				sem = s.getSubtitleSem("whisperx") // Switch variable to WhisperX semaphore
+				sem <- struct{}{}                  // Acquire WhisperX slot
+				// Top-level defer will now release the WhisperX slot when the function finishes
+
 				s.log("INFO", "[WhisperX] Triggering alignment using AMD JSON...", id, taskLabel)
 				// Use the raw JSON from AMD to perform precise alignment via WhisperX
 				err = s.ProcessWhisperXAlign(id, taskLabel, finalDir, voiceFilePath, jsonPath, settings, pSettings)

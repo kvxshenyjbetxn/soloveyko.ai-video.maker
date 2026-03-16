@@ -315,7 +315,7 @@ func (s *LocalWhisperService) EnsureFFmpeg() (string, error) {
 	return "", fmt.Errorf("ffmpeg не знайдено ні вбудованого, ні в системі")
 }
 
-func (s *LocalWhisperService) TranscribeBase(audioFilePath string, modelName string, maxLen int) (string, error) {
+func (s *LocalWhisperService) TranscribeBase(audioFilePath string, modelName string, maxLen int, threads int) (string, error) {
 	modelPath, err := s.GetModelPath(modelName)
 	if err != nil {
 		return "", err
@@ -364,7 +364,11 @@ func (s *LocalWhisperService) TranscribeBase(audioFilePath string, modelName str
 		maxLenStr = "40"
 	}
 
-	whisperCmd := exec.CommandContext(s.ctx, whisperExe, "-m", modelPath, "-l", "auto", "-f", wavTempFile, "-osrt", "-of", outputSrtBase, "-ml", maxLenStr, "-sow")
+	whisperArgs := []string{"-m", modelPath, "-l", "auto", "-f", wavTempFile, "-osrt", "-of", outputSrtBase, "-ml", maxLenStr, "-sow"}
+	if threads > 0 {
+		whisperArgs = append([]string{"-t", fmt.Sprintf("%d", threads)}, whisperArgs...)
+	}
+	whisperCmd := exec.CommandContext(s.ctx, whisperExe, whisperArgs...)
 	utils.PrepareHiddenCmd(whisperCmd)
 	cmdOut, err := whisperCmd.CombinedOutput()
 	if err != nil {

@@ -63,6 +63,10 @@ type PipelineService struct {
 	elevenLabsUASem    chan struct{}
 	subtitleSem        chan struct{}
 	subtitleSemSize    int
+	subtitleAmdSem     chan struct{}
+	subtitleAmdSemSize int
+	subtitleWhisperXSem chan struct{}
+	subtitleWhisperXSemSize int
 	subtitleSemMu      sync.Mutex
 
 	montageSem     chan struct{}
@@ -78,6 +82,12 @@ type PipelineService struct {
 		pendingTasks   map[string]bool // taskID -> confirmed
 		totalExpected  int
 		activeBatchID  string
+	}
+
+	subtitleBarrier struct {
+		sync.Mutex
+		cond           *sync.Cond
+		inFlightCount  int32
 	}
 }
 
@@ -116,12 +126,17 @@ func NewPipelineService(
 		elevenLabsUASem:    make(chan struct{}, 5),
 		subtitleSemSize:    settings.GetSubtitleMaxConnections(),
 		subtitleSem:        make(chan struct{}, settings.GetSubtitleMaxConnections()),
+		subtitleAmdSemSize: settings.GetSubtitleAmdMaxConnections(),
+		subtitleAmdSem:     make(chan struct{}, settings.GetSubtitleAmdMaxConnections()),
+		subtitleWhisperXSemSize: settings.GetSubtitleWhisperXMaxConnections(),
+		subtitleWhisperXSem:    make(chan struct{}, settings.GetSubtitleWhisperXMaxConnections()),
 		montageSemSize:     settings.GetMontageMaxConnections(),
 		montageSem:         make(chan struct{}, settings.GetMontageMaxConnections()),
 		edgeTTSSem:         make(chan struct{}, 5),
 	}
 	s.montageSync.cond = sync.NewCond(&s.montageSync.Mutex)
 	s.montageSync.pendingTasks = make(map[string]bool)
+	s.subtitleBarrier.cond = sync.NewCond(&s.subtitleBarrier.Mutex)
 	return s
 }
 
@@ -283,9 +298,25 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		return "", fmt.Errorf("queue execution cancelled")
 	}
 	startTime := time.Now()
-	s.log("INFO", fmt.Sprintf("[Pipeline] runPipeline started. Type: %s, ID: %s", taskType, id), id, taskLabel)
+	s.log("INFO", fmt.Sprintf("[Pipeline] Task execution started. Type: %s, Name: %s, ID: %s", taskType, taskName, id), id, taskLabel)
+
+	// 0. Subtitle Barrier: Mark this task as "pre-montage"
+	s.subtitleBarrier.Lock()
+	s.subtitleBarrier.inFlightCount++
+	s.subtitleBarrier.Unlock()
+	subtitleStageFinished := false
+	defer func() {
+		if !subtitleStageFinished {
+			s.subtitleBarrier.Lock()
+			s.subtitleBarrier.inFlightCount--
+			s.subtitleBarrier.cond.Broadcast()
+			s.subtitleBarrier.Unlock()
+		}
+	}()
+
+	var pSettings utils.PipelineSettings
 	s.log("INFO", "[Pipeline] Task started and pre-processing...", id, taskLabel)
-	pSettings := s.settings.GetPipelineSettings()
+	pSettings = s.settings.GetPipelineSettings()
 
 	if taskType != "translate" && taskType != "rewrite" && taskType != "voiceover" {
 		return "", fmt.Errorf("task type %s not implemented", taskType)
@@ -650,7 +681,20 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		return processedText, subtitleErr
 	}
 
-	// 5. Montage Stage
+	// 5. Subtitle Barrier: Release and Wait
+	subtitleStageFinished = true
+	s.subtitleBarrier.Lock()
+	s.subtitleBarrier.inFlightCount--
+	s.subtitleBarrier.cond.Broadcast()
+
+	s.log("INFO", "[Pipeline] Waiting for all other tasks in queue to finish subtitles...", id, taskLabel)
+	for s.subtitleBarrier.inFlightCount > 0 {
+		s.subtitleBarrier.cond.Wait()
+	}
+	s.subtitleBarrier.Unlock()
+	s.log("INFO", "[Pipeline] All subtitles finished, proceeding to montage.", id, taskLabel)
+
+	// 6. Montage Stage
 	montageErr := s.ProcessMontage(id, taskLabel, finalDir, settings, &pSettings, taskName, subName)
 	if montageErr != nil {
 		s.log("ERROR", fmt.Sprintf("[Pipeline] Montage stage failed: %v", montageErr), id, taskLabel)
@@ -871,26 +915,51 @@ func (s *PipelineService) SubmitControlAction(id string, action *ControlAction) 
 	}
 }
 
-func (s *PipelineService) UpdateSubtitleSemaphore(newSize int) {
+func (s *PipelineService) UpdateSubtitleSemaphore(newSize int, engine ...string) {
 	s.subtitleSemMu.Lock()
 	defer s.subtitleSemMu.Unlock()
 
-	if newSize == s.subtitleSemSize {
-		return
+	eng := "standard"
+	if len(engine) > 0 {
+		eng = engine[0]
 	}
 
-	// Just re-create the channel. Old tasks might still be using the old one,
-	// but the new tasks will respect the new limit.
-	// This is a simple but effective way to handle it for this app.
-	s.subtitleSem = make(chan struct{}, newSize)
-	s.subtitleSemSize = newSize
-	s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle semaphore updated to %d slots", newSize))
+	switch eng {
+	case "amd":
+		if newSize == s.subtitleAmdSemSize {
+			return
+		}
+		s.subtitleAmdSem = make(chan struct{}, newSize)
+		s.subtitleAmdSemSize = newSize
+	case "whisperx":
+		if newSize == s.subtitleWhisperXSemSize {
+			return
+		}
+		s.subtitleWhisperXSem = make(chan struct{}, newSize)
+		s.subtitleWhisperXSemSize = newSize
+	default:
+		if newSize == s.subtitleSemSize {
+			return
+		}
+		s.subtitleSem = make(chan struct{}, newSize)
+		s.subtitleSemSize = newSize
+	}
+
+	s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle semaphore (%s) updated to %d slots", eng, newSize))
 }
 
-func (s *PipelineService) getSubtitleSem() chan struct{} {
+func (s *PipelineService) getSubtitleSem(engine string) chan struct{} {
 	s.subtitleSemMu.Lock()
 	defer s.subtitleSemMu.Unlock()
-	return s.subtitleSem
+
+	switch engine {
+	case "amd":
+		return s.subtitleAmdSem
+	case "whisperx":
+		return s.subtitleWhisperXSem
+	default:
+		return s.subtitleSem
+	}
 }
 
 func (s *PipelineService) UpdateMontageSemaphore(newSize int) {

@@ -65,6 +65,8 @@
         "whisper_amd_not_found_title": "AMD Service Not Found",
         "whisper_amd_not_found_desc": "To use AMD acceleration, additional libraries need to be extracted. Extract now?",
         "amd_downloading": "Initializing AMD service...",
+        "subtitle_threads": "Transcription Threads",
+        "subtitle_threads_desc": "Limit CPU cores for selected subtitle engine.",
         "description": "Performance settings and concurrent operation limits.",
         "saving": "Saving..."
     },
