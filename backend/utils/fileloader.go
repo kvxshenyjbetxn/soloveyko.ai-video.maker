@@ -2,6 +2,7 @@ package utils
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,11 @@ func NewFileLoader() *FileLoader {
 func (h *FileLoader) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	requestedFilename := strings.TrimPrefix(req.URL.Path, "/")
 	requestedFilename = strings.TrimPrefix(requestedFilename, "local/")
+
+	// Unescape the path to handle spaces and other special characters
+	if path, err := url.PathUnescape(requestedFilename); err == nil {
+		requestedFilename = path
+	}
 
 	// Security: simple check to stay within relative allowlist if needed,
 	// but here we just serve what's requested as "local/".

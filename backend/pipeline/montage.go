@@ -121,53 +121,121 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		numSegments = 1 // Fallback
 	}
 
-	// Try to determine image_count (multiplication factor)
-	imageCount := 0
+	// 2.A Collect all valid files in the images folder
 	files, _ := os.ReadDir(imagesDir)
+	var availableFiles []string
 	for _, f := range files {
-		if !f.IsDir() {
-			imageCount++
+		if f.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(f.Name()))
+		if videoExts[ext] || imageExts[ext] {
+			availableFiles = append(availableFiles, f.Name())
 		}
 	}
-	totalExpected := imageCount
-	if totalExpected < numSegments {
-		totalExpected = numSegments
+	// Sort files to have consistent order
+	sort.Strings(availableFiles)
+
+	imageCount := len(availableFiles)
+
+	// 3. Get Audio Duration
+	audioDur, err := s.getDuration(ffprobePath, filepath.Join(finalDir, "voice.mp3"))
+	if err != nil {
+		return fmt.Errorf("failed to get audio duration: %v", err)
 	}
 
-	var visualFiles []string
-	var lastValidFile string
-	for i := 1; i <= totalExpected; i++ {
-		found := false
-		// Order of preference: video, then images
-		prefixes := []string{fmt.Sprintf("%d", i)}
-		exts := []string{".mp4", ".png", ".jpg", ".jpeg", ".webp", ".webm", ".mov", ".avi", ".mkv"}
-
-		for _, ext := range exts {
-			file := prefixes[0] + ext
-			path := filepath.Join(imagesDir, file)
-			if _, err := os.Stat(path); err == nil {
-				visualFiles = append(visualFiles, filepath.Join("images", file))
-				lastValidFile = filepath.Join("images", file)
-				found = true
-				break
-			}
+	// [PREVIEW LIMITS] Override duration and available files if requested
+	if id == "preview_task" {
+		if val, ok := settings["previewLimitSeconds"].(float64); ok && val > 0 && val < audioDur {
+			audioDur = val
 		}
 
-		if !found {
-			if lastValidFile != "" {
-				visualFiles = append(visualFiles, lastValidFile)
-				s.log("WARN", fmt.Sprintf("[Montage] File %d not found, reusing %s", i, lastValidFile), id, taskLabel)
-			} else {
-				// Search for ANY valid file in the folder to use as fallback
-				for _, f := range files {
-					ext := strings.ToLower(filepath.Ext(f.Name()))
-					if videoExts[ext] || imageExts[ext] {
-						visualFiles = append(visualFiles, filepath.Join("images", f.Name()))
-						lastValidFile = filepath.Join("images", f.Name())
-						found = true
-						break
+		// Ensure settings are integers from the map
+		var imgMax, vidMax int
+		var hasImgMax, hasVidMax bool
+		if val, ok := settings["previewImageMax"].(float64); ok {
+			imgMax = int(val)
+			hasImgMax = true
+		} else if val, ok := settings["previewImageMax"].(int); ok {
+			imgMax = val
+			hasImgMax = true
+		}
+		if val, ok := settings["previewVideoMax"].(float64); ok {
+			vidMax = int(val)
+			hasVidMax = true
+		} else if val, ok := settings["previewVideoMax"].(int); ok {
+			vidMax = val
+			hasVidMax = true
+		}
+
+		if (hasImgMax && imgMax >= 0) || (hasVidMax && vidMax >= 0) {
+			var filtered []string
+			imgCount, vidCount := 0, 0
+			for _, f := range availableFiles {
+				ext := strings.ToLower(filepath.Ext(f))
+				if videoExts[ext] {
+					if !hasVidMax || vidMax < 0 || vidCount < vidMax {
+						filtered = append(filtered, f)
+						vidCount++
+					}
+				} else if imageExts[ext] {
+					if !hasImgMax || imgMax < 0 || imgCount < imgMax {
+						filtered = append(filtered, f)
+						imgCount++
 					}
 				}
+			}
+			if len(filtered) > 0 {
+				availableFiles = filtered
+				imageCount = len(availableFiles)
+			}
+		}
+	}
+
+	totalExpected := imageCount
+	if id != "preview_task" {
+		if totalExpected < numSegments {
+			totalExpected = numSegments
+		}
+	}
+	// For preview, totalExpected = imageCount (the filtered limit)
+	// This ensures that GetImageTimings stretches these few files over the entire duration.
+
+	var visualFiles []string
+	for i := 1; i <= totalExpected; i++ {
+		found := false
+
+		// For preview with limits, we ONLY use the pre-filtered availableFiles to avoid
+		// numerical matches finding files that were explicitly filtered out (e.g. vidMax limit).
+		if id == "preview_task" {
+			if imageCount > 0 {
+				fileIndex := (i - 1) % imageCount
+				fileName := availableFiles[fileIndex]
+				visualFiles = append(visualFiles, filepath.Join("images", fileName))
+				found = true
+			}
+		} else {
+			// Order of preference: try exact numerical match first (historical behavior)
+			prefixes := []string{fmt.Sprintf("%d", i)}
+			exts := []string{".mp4", ".png", ".jpg", ".jpeg", ".webp", ".webm", ".mov", ".avi", ".mkv"}
+
+			for _, ext := range exts {
+				file := prefixes[0] + ext
+				path := filepath.Join(imagesDir, file)
+				if _, err := os.Stat(path); err == nil {
+					visualFiles = append(visualFiles, filepath.Join("images", file))
+					found = true
+					break
+				}
+			}
+
+			// If numerical file not found, use available files in sequence
+			if !found && imageCount > 0 {
+				// Use modulo to loop through available files
+				fileIndex := (i - 1) % imageCount
+				fileName := availableFiles[fileIndex]
+				visualFiles = append(visualFiles, filepath.Join("images", fileName))
+				found = true
 			}
 		}
 	}
@@ -177,11 +245,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		return fmt.Errorf("no visual files found for montage")
 	}
 
-	// 3. Get Audio Duration
-	audioDur, err := s.getDuration(ffprobePath, filepath.Join(finalDir, "voice.mp3"))
-	if err != nil {
-		return fmt.Errorf("failed to get audio duration: %v", err)
-	}
 	if audioDur <= 0 {
 		return fmt.Errorf("audio duration is zero")
 	}
@@ -880,7 +943,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	var finalBaseName string
-	if safeTpl != "" {
+	if id == "preview_task" {
+		finalBaseName = "final"
+	} else if safeTpl != "" {
 		tplRunes := []rune(safeTpl)
 		availableForTask := limit - len(tplRunes) - 3
 		if availableForTask < 20 {
@@ -1584,6 +1649,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	cmdArgs = append(cmdArgs,
 		"-pix_fmt", "yuv420p",
 		"-r", strconv.Itoa(fps),
+		"-t", fmt.Sprintf("%.3f", audioDur),
 	)
 	
 	// DaVinci Resolve metadata simulation

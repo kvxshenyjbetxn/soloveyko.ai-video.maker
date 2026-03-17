@@ -302,6 +302,159 @@ func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 	return a.stats.GetSystemStats()
 }
 
+// GeneratePreview здійснює швидкий рендер фрагмента для попереднього перегляду
+func (a *App) GeneratePreview(settings map[string]interface{}) (string, error) {
+	previewDir := a.settings.GetPreviewDir()
+	
+	// Створюємо папку, якщо не існує
+	if err := os.MkdirAll(previewDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create preview directory: %v", err)
+	}
+
+	// Очищуємо папку перед генерацією (окрім images та voice.mp3)
+	entries, _ := os.ReadDir(previewDir)
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == "images" || name == "voice.mp3" {
+			continue
+		}
+		os.RemoveAll(filepath.Join(previewDir, name))
+	}
+
+	// Переконуємось, що папка images існує
+	if err := os.MkdirAll(filepath.Join(previewDir, "images"), 0755); err != nil {
+		return "", fmt.Errorf("failed to create images directory in preview: %v", err)
+	}
+
+	a.LogToUI("INFO", "[Preview] Starting quick preview generation...", "preview_task", "Preview")
+
+	// Створюємо базові PipelineSettings з поточних налаштувань
+	currentSettings, _ := a.settings.LoadSettings()
+	pSettings := currentSettings.Pipeline
+
+	// Оновлюємо pSettings з тими, що прийшли з фронтенда (з вкладки Preview)
+	// Це дозволяє бачити зміни в реальному часі після натискання ОК
+	// Оновлюємо субтитри
+	if val, ok := settings["subtitleEnabled"].(bool); ok { pSettings.SubtitleEnabled = val }
+	if val, ok := settings["subtitleService"].(string); ok { pSettings.SubtitleService = val }
+	if val, ok := settings["subtitleModel"].(string); ok { pSettings.SubtitleModel = val }
+	if val, ok := settings["subtitleFont"].(string); ok { pSettings.SubtitleFont = val }
+	if val, ok := settings["subtitleSize"].(float64); ok { pSettings.SubtitleSize = int(val) }
+	if val, ok := settings["subtitleColor"].(string); ok { pSettings.SubtitleColor = val }
+	if val, ok := settings["subtitleOutlineColor"].(string); ok { pSettings.SubtitleOutlineColor = val }
+	if val, ok := settings["subtitleOutlineWidth"].(float64); ok { pSettings.SubtitleOutlineWidth = val }
+	if val, ok := settings["subtitleShadowColor"].(string); ok { pSettings.SubtitleShadowColor = val }
+	if val, ok := settings["subtitleShadowWidth"].(float64); ok { pSettings.SubtitleShadowWidth = val }
+	if val, ok := settings["subtitleBlur"].(float64); ok { pSettings.SubtitleBlur = val }
+	if val, ok := settings["subtitleUppercase"].(bool); ok { pSettings.SubtitleUppercase = val }
+	if val, ok := settings["subtitlePosition"].(string); ok { pSettings.SubtitlePosition = val }
+	if val, ok := settings["subtitleMarginV"].(float64); ok { pSettings.SubtitleMarginV = int(val) }
+	if val, ok := settings["subtitleAnimation"].(string); ok { pSettings.SubtitleAnimation = val }
+	if val, ok := settings["subtitleFadeEnabled"].(bool); ok { pSettings.SubtitleFadeEnabled = val }
+	if val, ok := settings["subtitleFadeIn"].(float64); ok { pSettings.SubtitleFadeIn = int(val) }
+	if val, ok := settings["subtitleFadeOut"].(float64); ok { pSettings.SubtitleFadeOut = int(val) }
+	if val, ok := settings["subtitleKaraokeEffect"].(bool); ok { pSettings.SubtitleKaraokeEffect = val }
+	if val, ok := settings["subtitleKaraokeColor"].(string); ok { pSettings.SubtitleKaraokeColor = val }
+	if val, ok := settings["subtitleKaraokeMode"].(string); ok { pSettings.SubtitleKaraokeMode = val }
+	if val, ok := settings["subtitleKaraokeScale"].(float64); ok { pSettings.SubtitleKaraokeScale = val }
+	if val, ok := settings["subtitleKaraokeSpeed"].(float64); ok { pSettings.SubtitleKaraokeSpeed = int(val) }
+	if val, ok := settings["subtitleMaxLen"].(float64); ok { pSettings.SubtitleMaxLen = int(val) }
+	if val, ok := settings["subtitleMaxWords"].(float64); ok { pSettings.SubtitleMaxWords = int(val) }
+	if val, ok := settings["subtitleWhisperxLanguage"].(string); ok { pSettings.SubtitleWhisperxLanguage = val }
+	if val, ok := settings["subtitleAmdLanguage"].(string); ok { pSettings.SubtitleAmdLanguage = val }
+	
+	// Оновлюємо монтаж
+	if val, ok := settings["montageSwayFactor"].(float64); ok { pSettings.MontageSwayFactor = val }
+	if val, ok := settings["montageZoomFactor"].(float64); ok { pSettings.MontageZoomFactor = val }
+	if val, ok := settings["montageTransitionDuration"].(float64); ok { pSettings.MontageTransitionDuration = val }
+	if val, ok := settings["montageTransitionEffect"].(string); ok { pSettings.MontageTransitionEffect = val }
+	if val, ok := settings["montageOrientation"].(string); ok { pSettings.MontageOrientation = val }
+	if val, ok := settings["montageWatermarkEnabled"].(bool); ok { pSettings.MontageWatermarkEnabled = val }
+	if val, ok := settings["montageWatermarkPath"].(string); ok { pSettings.MontageWatermarkPath = val }
+	if val, ok := settings["montageWatermarkPosition"].(string); ok { pSettings.MontageWatermarkPosition = val }
+	if val, ok := settings["montageWatermarkOpacity"].(float64); ok { pSettings.MontageWatermarkOpacity = val }
+	if val, ok := settings["montageWatermarkSize"].(float64); ok { pSettings.MontageWatermarkSize = int(val) }
+	if val, ok := settings["montageIntroVideoEnabled"].(bool); ok { pSettings.MontageIntroVideoEnabled = val }
+	if val, ok := settings["montageIntroVideoPath"].(string); ok { pSettings.MontageIntroVideoPath = val }
+	if val, ok := settings["montageIntroVideoPaths"].([]interface{}); ok {
+		paths := make([]string, 0, len(val))
+		for _, v := range val {
+			if s, ok := v.(string); ok && s != "" {
+				paths = append(paths, s)
+			}
+		}
+		pSettings.MontageIntroVideoPaths = paths
+	}
+
+	// Preview Specific Limits
+	if val, ok := settings["previewLimitSeconds"].(float64); ok && val > 0 {
+		settings["previewLimitSeconds"] = val
+	}
+	if val, ok := settings["previewImageMax"].(float64); ok {
+		settings["previewImageMax"] = int(val)
+	}
+	if val, ok := settings["previewVideoMax"].(float64); ok {
+		settings["previewVideoMax"] = int(val)
+	}
+
+	// [PREVIEW] Respect sidebar settings instead of forcing speed
+	// Use settings from left panel
+
+	// 1. Обробка субтитрів
+	 voicePath := filepath.Join(previewDir, "voice.mp3")
+	 if _, err := os.Stat(voicePath); os.IsNotExist(err) {
+		 return "", fmt.Errorf("voice.mp3 not found in preview folder. Please add it for preview.")
+	 }
+
+	 err := a.pipeline.ProcessSubtitle("preview_task", "Preview", previewDir, settings, &pSettings)
+	 if err != nil {
+		 a.LogToUI("ERROR", fmt.Sprintf("[Preview] Subtitle stage failed: %v", err))
+		 return "", err
+	 }
+
+	 // 2. Обробка монтажу
+	 err = a.pipeline.ProcessMontage("preview_task", "Preview", previewDir, settings, &pSettings, "Preview", "")
+	 if err != nil {
+		 a.LogToUI("ERROR", fmt.Sprintf("[Preview] Montage stage failed: %v", err))
+		 return "", err
+	 }
+
+	 finalVideo := filepath.Join(previewDir, "final.mp4")
+	 if _, err := os.Stat(finalVideo); err != nil {
+		 // Debug: list files to see what was actually generated
+		 files, _ := os.ReadDir(previewDir)
+		 var foundFiles []string
+		 for _, f := range files {
+			 if !f.IsDir() && strings.HasSuffix(f.Name(), ".mp4") {
+				 foundFiles = append(foundFiles, f.Name())
+			 }
+		 }
+		 return "", fmt.Errorf("final video was not generated. Found MP4s: %v", foundFiles)
+	 }
+
+	 a.LogToUI("SUCCESS", "[Preview] Preview generated successfully!")
+	 return finalVideo, nil
+}
+
+// GetPreviewPath повертає шлях до папки прев'ю
+func (a *App) GetPreviewPath() string {
+	return a.settings.GetPreviewDir()
+}
+
+// GetPreviewAudioDuration повертає тривалість аудіо в папці прев'ю
+func (a *App) GetPreviewAudioDuration() (float64, error) {
+	previewDir := a.settings.GetPreviewDir()
+	audioPath := filepath.Join(previewDir, "voice.mp3")
+	if _, err := os.Stat(audioPath); err != nil {
+		return 0, nil
+	}
+	dur, err := utils.GetAudioDurationSeconds(audioPath)
+	if err != nil {
+		return 0, err
+	}
+	return dur, nil
+}
+
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {

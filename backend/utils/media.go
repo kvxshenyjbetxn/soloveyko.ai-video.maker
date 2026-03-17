@@ -51,28 +51,33 @@ func GetImageAsBase64(path string) (string, error) {
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)), nil
 }
 
-// GetAudioDuration повертає тривалість аудіофайлу у форматі "0:00" або "0 сек"
-// Використовує вбудований ffprobe.
 func GetAudioDuration(path string) (string, error) {
+	seconds, err := GetAudioDurationSeconds(path)
+	if err != nil {
+		return "", err
+	}
+	return FormatDuration(seconds), nil
+}
+
+// GetAudioDurationSeconds повертає тривалість аудіофайлу в секундах
+func GetAudioDurationSeconds(path string) (float64, error) {
 	ffprobePath, err := EnsureEngine("ffprobe")
 	if err != nil {
-		// Якщо вбудованого немає, спробуємо системний (як запасний варіант)
 		ffprobePath = "ffprobe"
 	}
 
-	// ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 path
 	out, err := runHiddenCommand(ffprobePath, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
 	durationStr := strings.TrimSpace(string(out))
 	seconds, err := strconv.ParseFloat(durationStr, 64)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
-	return FormatDuration(seconds), nil
+	return seconds, nil
 }
 
 // FormatDuration форматує секунди у зручний для читання вигляд

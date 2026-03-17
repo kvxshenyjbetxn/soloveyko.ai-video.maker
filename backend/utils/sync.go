@@ -470,25 +470,49 @@ func GetImageTimings(finalDir string, audioDur float64, totalImages int, visualF
 		finalTimings[len(finalTimings)-1].Duration = finalTimings[len(finalTimings)-1].End - finalTimings[len(finalTimings)-1].Start
 	}
 
-	// Handle multiple images per segment (imageCount > 1)
-	imageCount := 1
-	if len(segments) > 0 {
-		imageCount = totalImages / len(segments)
-	}
-	if imageCount < 1 {
-		imageCount = 1
-	}
-
+	// Handle distribution (stretching or splitting)
 	var results []ImageTiming
-	for _, st := range finalTimings {
-		subDur := st.Duration / float64(imageCount)
-		for j := 0; j < imageCount; j++ {
-			results = append(results, ImageTiming{
-				Index:    len(results),
-				Start:    st.Start + float64(j)*subDur,
-				End:      st.Start + float64(j+1)*subDur,
-				Duration: subDur,
-			})
+	if len(segments) > 0 && totalImages < len(segments) && totalImages > 0 {
+		// [STRETCH] We have fewer images than segments. Group segments.
+		groupSize := float64(len(finalTimings)) / float64(totalImages)
+		for i := 0; i < totalImages; i++ {
+			startIdx := int(math.Floor(float64(i) * groupSize))
+			endIdx := int(math.Floor(float64(i+1) * groupSize))
+			if i == totalImages-1 {
+				endIdx = len(finalTimings)
+			}
+
+			if startIdx < len(finalTimings) {
+				sTime := finalTimings[startIdx].Start
+				eTime := finalTimings[endIdx-1].End
+				results = append(results, ImageTiming{
+					Index:    i,
+					Start:    sTime,
+					End:      eTime,
+					Duration: eTime - sTime,
+				})
+			}
+		}
+	} else {
+		// [SPLIT / NORMAL] 1 image per segment (or multiple images per segment)
+		imagePerSeg := 1
+		if len(segments) > 0 {
+			imagePerSeg = totalImages / len(segments)
+		}
+		if imagePerSeg < 1 {
+			imagePerSeg = 1
+		}
+
+		for _, st := range finalTimings {
+			subDur := st.Duration / float64(imagePerSeg)
+			for j := 0; j < imagePerSeg; j++ {
+				results = append(results, ImageTiming{
+					Index:    len(results),
+					Start:    st.Start + float64(j)*subDur,
+					End:      st.Start + float64(j+1)*subDur,
+					Duration: subDur,
+				})
+			}
 		}
 	}
 
@@ -565,7 +589,18 @@ func GetImageTimings(finalDir string, audioDur float64, totalImages int, visualF
 
 	for i, r := range results {
 		// Find which segment this image belongs to
-		segIdx := i / imageCount
+		segIdx := 0
+		if len(segments) > 0 {
+			if totalImages < len(segments) && totalImages > 0 {
+				groupSize := float64(len(segments)) / float64(totalImages)
+				segIdx = int(math.Floor(float64(i) * groupSize))
+			} else if totalImages >= len(segments) && len(segments) > 0 {
+				imagePerSeg := totalImages / len(segments)
+				if imagePerSeg > 0 {
+					segIdx = i / imagePerSeg
+				}
+			}
+		}
 		if segIdx >= len(segments) {
 			segIdx = len(segments) - 1
 		}

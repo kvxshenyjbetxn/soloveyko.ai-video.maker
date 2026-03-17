@@ -876,6 +876,11 @@ func (s *SettingsService) GetConfigDir() string {
 	return filepath.Dir(s.configPath)
 }
 
+// GetPreviewDir повертає шлях до папки прев'ю
+func (s *SettingsService) GetPreviewDir() string {
+	return filepath.Join(s.GetConfigDir(), "preview")
+}
+
 // GetOpenRouterAPIKey повертає API ключ OpenRouter
 func (s *SettingsService) GetOpenRouterAPIKey() string {
 	settings, err := s.LoadSettings()

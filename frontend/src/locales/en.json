@@ -358,7 +358,8 @@
     },
     "other": {
         "statistic": "Statistics",
-        "history": "History"
+        "history": "History",
+        "preview": "Preview"
     },
     "stats": {
         "characters": "Characters:",
@@ -660,6 +661,7 @@
             "image": "2.B Images",
             "subtitle": "3. Subtitles",
             "montage": "4. Montage",
+            "rendering": "Rendering video...",
             "enabled": "Enabled",
             "disabled": "Disabled (original text)",
             "disabled_simple": "Disabled"
@@ -737,6 +739,7 @@
     },
     "common": {
         "setup": "Setup",
+        "ok": "OK",
         "save": "Save",
         "clear": "Clear",
         "open_folder": "Open Folder",
@@ -750,6 +753,9 @@
         "refresh": "Refresh",
         "disabled": "Disabled",
         "loading": "Loading...",
+        "processing": "Processing...",
+        "success": "Success",
+        "error": "Error",
         "yes": "Yes",
         "no": "No",
         "no_all": "No",
@@ -820,8 +826,18 @@
         "montage_apple_title": "Apple (M1/M2/M3)",
         "montage_apple_desc": "Optimized for Apple Silicon chips via Video Toolbox.",
         "ready": "Setup Complete!",
-        "ready_desc": "Basic settings saved. You're ready to start.",
-        "go": "Launch"
+        "ready_desc": "Fundamental parameters are saved. Now you can get to work.",
+        "go": "Let's Go"
+    },
+    "previewTab": {
+        "title": "Preview",
+        "description": "Configure and preview your video style",
+        "no_video": "Click OK to generate preview",
+        "hint": "The preview is rendered using your current settings, allowing you to accurately evaluate the final style and quality.",
+        "limits_title": "Preview limits",
+        "duration_limit": "Duration (sec)",
+        "images_limit": "Max images",
+        "videos_limit": "Max videos"
     },
     "welcome": {
         "title": "Welcome to Soloveyko.AI!",

@@ -32,6 +32,7 @@ import { Performance } from './tabs/settings/performance';
 import { Templates } from './tabs/settings/templates';
 import { Statistic } from './tabs/other/statistic';
 import { History } from './tabs/other/history';
+import { Preview } from './tabs/other/Preview';
 import { Logs } from './tabs/logs';
 import { GoogleIntegration } from './tabs/settings/api/google_integration';
 import NotificationsSettings from './tabs/settings/notifications';
@@ -323,6 +324,7 @@ function App() {
             case 'other.statistic': return <Statistic />;
             case 'other.history': return <History />;
             case 'other.templates': return <Templates />;
+            case 'other.preview': return <Preview />;
 
             // Logs tab
             case 'logs': return <Logs />;
@@ -518,6 +520,12 @@ function App() {
                         onClick={() => setCurrentPath('other.templates')}
                     >
                         {t('settings.templates')}
+                    </div>
+                    <div
+                        className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'other.preview' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('other.preview')}
+                    >
+                        {t('other.preview')}
                     </div>
                 </aside>
             );
