@@ -495,12 +495,13 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 						relEndMs, relEndMs+speed)
 				}
 
-				if karaokeMode == "appear" {
+				switch karaokeMode {
+				case "appear":
 					// Use alpha transformation to make word (including outline and shadow) appear
 					// relStartMs to relStartMs+100 creates a quick fade-in effect
-					textBuilder.WriteString(fmt.Sprintf("{\\alpha&HFF&\\t(%d,%d,\\alpha&H00&)%s}%s ", 
+					textBuilder.WriteString(fmt.Sprintf("{\\alpha&HFF&\\t(%d,%d,\\alpha&H00&)%s}%s ",
 						relStartMs, relStartMs+50, scaleTag, cleanSrtText(w.Word, settings)))
-				} else if karaokeMode == "fill" {
+				case "fill":
 					// 1. Handle delay between currentPos and wStart (especially for the first word in a block or silence gap)
 					gapCs := int((wStart - currentPos) * 100)
 					if gapCs > 0 {
@@ -509,7 +510,7 @@ func JsonToAss(jsonContent string, settings *PipelineSettings, karaokeEffect boo
 					// 2. Use \kf for filling effect (gradual karaoke)
 					// We add a space after the word to separate it from the next one
 					textBuilder.WriteString(fmt.Sprintf("{\\kf%d%s}%s ", durationCs, scaleTag, cleanSrtText(w.Word, settings)))
-				} else {
+				default:
 					if i > 0 {
 						textBuilder.WriteString(" ")
 					}
