@@ -374,11 +374,7 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                     )}
                 </div>
 
-                {task.status === 'running' && (
-                    <div className="progress-bar-container">
-                        <div className="progress-bar-fill" style={{ width: `${task.progress}%` }}></div>
-                    </div>
-                )}
+
 
                 <div className="task-card-footer">{new Date(task.timestamp).toLocaleTimeString()}</div>
             </div>

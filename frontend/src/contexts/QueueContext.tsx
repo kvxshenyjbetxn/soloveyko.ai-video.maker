@@ -19,7 +19,14 @@ export interface QueueTask {
 
 interface QueueDataContextType {
     tasks: QueueTask[]; isProcessing: boolean;
-    completionModal: { isOpen: boolean; duration: string; taskCount: number; };
+    completionModal: { 
+        isOpen: boolean; 
+        duration: string; 
+        activeDuration: string;
+        total_montage: string;
+        avg_montage: string;
+        taskCount: number; 
+    };
     imageControlNotification: { isOpen: boolean; };
     isImageBatchReady: boolean;
     montageControlNotification: { isOpen: boolean; };
@@ -51,7 +58,14 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const { t } = useI18n(); const { showToast } = useToast();
     const [tasks, setTasks] = useState<QueueTask[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [completionModal, setCompletionModal] = useState({ isOpen: false, duration: '', taskCount: 0 });
+    const [completionModal, setCompletionModal] = useState({ 
+        isOpen: false, 
+        duration: '', 
+        activeDuration: '',
+        total_montage: '',
+        avg_montage: '',
+        taskCount: 0 
+    });
     const [imageControlNotification, setImageControlNotification] = useState({ isOpen: false });
     const [isImageBatchReady, setIsImageBatchReady] = useState(false);
     const [montageControlNotification, setMontageControlNotification] = useState({ isOpen: false });
@@ -62,7 +76,36 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const tasksRef = useRef<QueueTask[]>([]);
     const taskContentRef = useRef<Map<string, string>>(new Map());
 
+    // Tracking time
+    const totalPausedTimeRef = useRef(0);
+    const pauseStartRef = useRef<number | null>(null);
+    const montageStartTimesRef = useRef<Map<string, number>>(new Map());
+    const totalMontageTimeRef = useRef(0);
+    const completedMontageCountRef = useRef(0);
+
     useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+
+    // Check if any task is awaiting control to track pause time
+    useEffect(() => {
+        const anyAwaiting = tasks.some(t => t.isAwaitingControl || t.isAwaitingImageControl || t.isAwaitingMontageControl);
+        
+        if (anyAwaiting && pauseStartRef.current === null) {
+            pauseStartRef.current = Date.now();
+        } else if (!anyAwaiting && pauseStartRef.current !== null) {
+            totalPausedTimeRef.current += Date.now() - pauseStartRef.current;
+            pauseStartRef.current = null;
+        }
+    }, [tasks]);
+
+    const formatDuration = (ms: number) => {
+        const dur = Math.round(ms / 1000);
+        const h = Math.floor(dur / 3600);
+        const m = Math.floor((dur % 3600) / 60);
+        const s = dur % 60;
+        if (h > 0) return `${h}${t('common.unit_h')} ${m}${t('common.unit_m')} ${s}${t('common.unit_s')}`;
+        if (m > 0) return `${m}${t('common.unit_m')} ${s}${t('common.unit_s')}`;
+        return `${s}${t('common.unit_s')}`;
+    };
 
     const sendNotification = useCallback(async (msg: string) => {
         try {
@@ -316,6 +359,12 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
 
         setIsProcessing(true); const startTime = Date.now();
+        totalPausedTimeRef.current = 0;
+        pauseStartRef.current = null;
+        totalMontageTimeRef.current = 0;
+        completedMontageCountRef.current = 0;
+        montageStartTimesRef.current.clear();
+
         await ResetQueueCancellation();
         const pendingIds = pending.map(t => t.id);
         activeBatchRef.current = pendingIds;
@@ -367,29 +416,64 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             });
             try { await Promise.all(promises); } finally {
                 setIsProcessing(false); activeBatchRef.current = [];
-                const dur = Math.round((Date.now() - startTime) / 1000);
-                const h = Math.floor(dur / 3600);
-                const m = Math.floor((dur % 3600) / 60);
-                const s = dur % 60;
-                let durStr = "";
-                if (h > 0) durStr = `${h}${t('common.unit_h')} ${m}${t('common.unit_m')} ${s}${t('common.unit_s')}`;
-                else if (m > 0) durStr = `${m}${t('common.unit_m')} ${s}${t('common.unit_s')}`;
-                else durStr = `${s}${t('common.unit_s')}`;
-                setTimeout(() => setCompletionModal({ isOpen: true, taskCount: pending.length, duration: durStr }), 800);
+                
+                // Finish current pause if active
+                let finalPausedTime = totalPausedTimeRef.current;
+                if (pauseStartRef.current !== null) {
+                    finalPausedTime += Date.now() - pauseStartRef.current;
+                }
+
+                const totalMs = Date.now() - startTime;
+                const activeMs = totalMs - finalPausedTime;
+                
+                const durStr = formatDuration(totalMs);
+                const activeDurStr = formatDuration(activeMs);
+                const totalMontageStr = formatDuration(totalMontageTimeRef.current);
+                const avgMontageMs = completedMontageCountRef.current > 0 ? totalMontageTimeRef.current / completedMontageCountRef.current : 0;
+                const avgMontageStr = formatDuration(avgMontageMs);
+
+                setTimeout(() => setCompletionModal({ 
+                    isOpen: true, 
+                    taskCount: pending.length, 
+                    duration: durStr,
+                    activeDuration: activeDurStr,
+                    total_montage: totalMontageStr,
+                    avg_montage: avgMontageStr
+                }), 800);
 
                 // Send Telegram Notification if enabled
-                const msg = `${t('notifications.queue_completed_title')}\n\n${t('notifications.queue_completed_msg')}\n${t('notifications.tasks_completed')}: ${pending.length}\n${t('notifications.duration')}: ${durStr}`;
+                const msg = `${t('notifications.queue_completed_title')}\n\n` +
+                    `${t('notifications.queue_completed_msg')}\n` +
+                    `${t('queue.tasks_completed')}: ${pending.length}\n` +
+                    `${t('queue.total_duration')}: ${durStr}\n` +
+                    `${t('queue.active_duration')}: ${activeDurStr}\n` +
+                    `${t('queue.total_montage')}: ${totalMontageStr}\n` +
+                    `${t('queue.avg_montage')}: ${avgMontageStr}`;
+                    
                 await sendNotification(msg);
             }
         };
         run();
-    }, [tasks, isProcessing, updateTaskStatus]);
+    }, [tasks, isProcessing, updateTaskStatus, t]);
 
     useEffect(() => {
         const uStatus = EventsOn("taskStatus", (id: string, s: string, p: number, l?: number) => {
             setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s as TaskStatus, progress: p, resultLength: l ?? t.resultLength } : t));
         });
         const uStage = EventsOn("stageStatus", (id: string, stage: string, status: string, msg?: string) => {
+            if (stage === 'montage') {
+                if (status === 'running') {
+                    montageStartTimesRef.current.set(id, Date.now());
+                } else if (status === 'completed') {
+                    const start = montageStartTimesRef.current.get(id);
+                    if (start) {
+                        totalMontageTimeRef.current += Date.now() - start;
+                        completedMontageCountRef.current += 1;
+                        montageStartTimesRef.current.delete(id);
+                    }
+                }
+            }
+
             setTasks(prev => prev.map(t => {
                 if (t.id !== id) return t; const s = status as TaskStatus; const up: any = {};
                 if (stage === 'text') up.textStatus = s;

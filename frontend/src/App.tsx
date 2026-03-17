@@ -651,18 +651,20 @@ function App() {
             </div>
 
             <ConfirmModal
-                isOpen={completionModal.isOpen}
-                onClose={closeCompletionModal}
-                onConfirm={closeCompletionModal}
-                title={t('queue.completion_title')}
-                message={t('queue.completion_message')
-                    .replace('{count}', completionModal.taskCount.toString())
-                    .replace('{duration}', completionModal.duration)}
-                confirmText={t('queue.completion_ok')}
-                isDanger={false}
-                type="info"
+               isOpen={completionModal.isOpen}
+               onClose={closeCompletionModal}
+               onConfirm={closeCompletionModal}
+               title={t('queue.completion_title')}
+               message={t('queue.completion_message')
+                   .replace('{count}', completionModal.taskCount.toString())
+                   .replace('{duration}', completionModal.duration)
+                   .replace('{active_duration}', completionModal.activeDuration)
+                   .replace('{total_montage}', completionModal.total_montage)
+                   .replace('{avg_montage}', completionModal.avg_montage)}
+               confirmText={t('queue.completion_ok')}
+               isDanger={false}
+               type="info"
             />
-
             <ConfirmModal
                 isOpen={imageControlNotification.isOpen}
                 onClose={closeImageControlNotification}
