@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './PipelineSidebar.css';
 import { useI18n } from '../contexts/I18nContext';
-import { useQueue } from '../contexts/QueueContext';
+import { useQueueActions } from '../contexts/QueueContext';
 import { useToast } from '../contexts/ToastContext';
 import { useServices } from '../contexts/ServiceContext';
 import { useTemplates } from '../contexts/TemplateContext';
@@ -41,7 +41,7 @@ interface PipelineSidebarProps {
 export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, onToggle, content, setCurrentPath }) => {
     const { t } = useI18n();
     const { showToast } = useToast();
-    const { addTasks, addTask, getNextTaskName } = useQueue();
+    const { addTasks, addTask, getNextTaskName } = useQueueActions();
     const { openRouterKeys, elevenLabsBotKeys, elevenLabsUnlimKeys, elevenLabsUAKeys, voiceMakerKeys, pollinationsKeys, elevenLabsImageKeys } = useServices();
     const [settings, setSettings] = useState<any>(null);
     const [models, setModels] = useState<string[]>([]);

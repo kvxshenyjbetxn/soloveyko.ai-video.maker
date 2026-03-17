@@ -17,12 +17,16 @@ export interface QueueTask {
     voiceDuration?: string; imagesMessage?: string; timestamp: number;
 }
 
-interface QueueContextType {
+interface QueueDataContextType {
     tasks: QueueTask[]; isProcessing: boolean;
     completionModal: { isOpen: boolean; duration: string; taskCount: number; };
     imageControlNotification: { isOpen: boolean; };
     isImageBatchReady: boolean;
     montageControlNotification: { isOpen: boolean; };
+    regeneratingPaths: Set<string>;
+}
+
+interface QueueActionsContextType {
     addTasks: (type: any, content: string, tasksData: any[], name?: string, skippedStages?: string[]) => void;
     addTask: (type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any) => void;
     removeTask: (id: string) => void; clearQueue: () => void; startQueue: () => Promise<void>;
@@ -36,12 +40,12 @@ interface QueueContextType {
     resumeMontageControl: (id: string, resultData: string) => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
     closeCompletionModal: () => void; closeImageControlNotification: () => void; closeMontageControlNotification: () => void;
-    regeneratingPaths: Set<string>;
     addRegeneratingPath: (path: string) => void;
     removeRegeneratingPath: (path: string) => void;
 }
 
-const QueueContext = createContext<QueueContextType | undefined>(undefined);
+const QueueDataContext = createContext<QueueDataContextType | undefined>(undefined);
+const QueueActionsContext = createContext<QueueActionsContextType | undefined>(undefined);
 
 export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { t } = useI18n(); const { showToast } = useToast();
@@ -56,6 +60,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const hasShownImageBatchNotificationRef = useRef(false);
     const hasShownMontageBatchNotificationRef = useRef(false);
     const tasksRef = useRef<QueueTask[]>([]);
+    const taskContentRef = useRef<Map<string, string>>(new Map());
+
     useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
     const sendNotification = useCallback(async (msg: string) => {
@@ -125,10 +131,14 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             ? skippedStages.filter(s => existingData.foundStages.includes(s))
             : skippedStages;
 
+        const id = `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        taskContentRef.current.set(id, content);
+
         const newTask: QueueTask = {
-            id: `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            id,
             name: subName ? `${fName} - ${subName}` : fName, folderName: fName, subName: subName || "",
-            type, content, status: 'pending', progress: 0,
+            type, content: "", // Content moved to Ref
+            status: 'pending', progress: 0,
             textStatus: effectiveSkip?.includes('text') ? 'completed' : 'pending',
             voiceStatus: effectiveSkip?.includes('voice') ? 'completed' : 'pending',
             imageStatus: effectiveSkip?.includes('image') ? 'completed' : 'pending',
@@ -171,10 +181,13 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 imgMsg = parts.join(' ');
             }
 
+            const id = `ts_${now}_${i}_${Math.random().toString(36).substr(2, 5)}`;
+            taskContentRef.current.set(id, content);
+
             return {
-                id: `ts_${now}_${i}_${Math.random().toString(36).substr(2, 5)}`,
+                id,
                 name: d.subName ? `${fName} - ${d.subName}` : fName, folderName: fName, subName: d.subName || "",
-                type, content,
+                type, content: "", // Content moved to Ref
                 settings: {
                     ...d.settings,
                     skippedStages: effectiveSkip,
@@ -197,20 +210,26 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setTasks(prev => [...prev, ...newItems]);
     }, [t]);
 
-    const removeTask = useCallback((id: string) => setTasks(prev => prev.filter(t => t.id !== id)), []);
+    const removeTask = useCallback((id: string) => {
+        setTasks(prev => prev.filter(t => t.id !== id));
+        taskContentRef.current.delete(id);
+    }, []);
     const clearQueue = useCallback(() => {
         setTasks([]);
+        taskContentRef.current.clear();
         setIsProcessing(false);
         setIsImageBatchReady(false);
         ClearGallery();
     }, []);
 
     const resumeTask = async (id: string, text: string) => {
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: false, content: text } : t));
+        taskContentRef.current.set(id, text);
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: false } : t));
         await SendControlAction(id, "confirm", text, {});
     };
 
     const regenerateTask = async (id: string, text: string, settings?: any) => {
+        taskContentRef.current.set(id, text);
         setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: false, status: 'running', textStatus: 'running' } : t));
         await SendControlAction(id, "regenerate", text, settings || {});
     };
@@ -339,7 +358,8 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const run = async () => {
             const promises = pending.map(async (task) => {
                 try {
-                    const res = await ProcessTask(task.id, task.taskNumber || 0, task.type, task.content, task.settings, task.folderName, task.subName);
+                    const content = taskContentRef.current.get(task.id) || "";
+                    const res = await ProcessTask(task.id, task.taskNumber || 0, task.type, content, task.settings, task.folderName, task.subName);
                     updateTaskStatus(task.id, 'completed', 100, res.length);
                 } catch (err) {
                     updateTaskStatus(task.id, 'failed', 0);
@@ -386,6 +406,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 const msg = `${t('notifications.review_translation_title')}\n\n*${t('notifications.task_name')}*: ${task.subName || task.name}\n*${t('notifications.template')}*: ${task.folderName}`;
                 sendNotification(msg);
             }
+            taskContentRef.current.set(id, text); // Update content when control is requested
             setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: true, controlContent: text } : t));
         });
         const uImgReq = EventsOn("requestImageControl", (id: string) => {
@@ -452,18 +473,41 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
     }, [tasks, isProcessing]);
 
+    const dataValue = {
+        tasks, isProcessing, completionModal, imageControlNotification, isImageBatchReady, montageControlNotification, regeneratingPaths
+    };
+
+    const actionsValue = {
+        addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
+        updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles,
+        closeCompletionModal, closeImageControlNotification, closeMontageControlNotification,
+        addRegeneratingPath, removeRegeneratingPath
+    };
+
     return (
-        <QueueContext.Provider value={{
-            tasks, isProcessing, completionModal, imageControlNotification, isImageBatchReady, montageControlNotification,
-            addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
-            updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles, closeCompletionModal, closeImageControlNotification, closeMontageControlNotification,
-            regeneratingPaths, addRegeneratingPath, removeRegeneratingPath
-        }}>{children}</QueueContext.Provider>
+        <QueueDataContext.Provider value={dataValue}>
+            <QueueActionsContext.Provider value={actionsValue}>
+                {children}
+            </QueueActionsContext.Provider>
+        </QueueDataContext.Provider>
     );
 };
 
 export const useQueue = () => {
-    const context = useContext(QueueContext);
-    if (!context) throw new Error('useQueue must be used within a QueueProvider');
+    const data = useContext(QueueDataContext);
+    const actions = useContext(QueueActionsContext);
+    if (!data || !actions) throw new Error('useQueue must be used within a QueueProvider');
+    return { ...data, ...actions };
+};
+
+export const useQueueActions = () => {
+    const context = useContext(QueueActionsContext);
+    if (!context) throw new Error('useQueueActions must be used within a QueueProvider');
+    return context;
+};
+
+export const useQueueData = () => {
+    const context = useContext(QueueDataContext);
+    if (!context) throw new Error('useQueueData must be used within a QueueProvider');
     return context;
 };

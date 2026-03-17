@@ -338,9 +338,16 @@ func (s *LocalWhisperService) TranscribeBase(audioFilePath string, modelName str
 		})
 	}
 
-	wavTempFile := filepath.Join(os.TempDir(), "temp_whisper_input.wav")
+	// Use unique temp files to avoid collisions during concurrent batch processing
+	tempSuffix := strings.ReplaceAll(filepath.Base(audioFilePath), ".", "_")
+	if len(tempSuffix) > 20 {
+		tempSuffix = tempSuffix[:20]
+	}
+	tempSuffix += "_" + utils.RandomString(5)
+
+	wavTempFile := filepath.Join(os.TempDir(), fmt.Sprintf("whisper_local_%s_in.wav", tempSuffix))
 	defer os.Remove(wavTempFile)
-	os.Remove(wavTempFile)
+	_ = os.Remove(wavTempFile)
 
 	ffmpegCmd := exec.CommandContext(s.ctx, ffmpegExe, "-y", "-i", audioFilePath, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wavTempFile)
 	utils.PrepareHiddenCmd(ffmpegCmd)
@@ -355,9 +362,9 @@ func (s *LocalWhisperService) TranscribeBase(audioFilePath string, modelName str
 		})
 	}
 
-	outputSrtBase := filepath.Join(os.TempDir(), "temp_whisper_output")
+	outputSrtBase := filepath.Join(os.TempDir(), fmt.Sprintf("whisper_local_%s_out", tempSuffix))
 	defer os.Remove(outputSrtBase + ".srt")
-	os.Remove(outputSrtBase + ".srt")
+	_ = os.Remove(outputSrtBase + ".srt")
 
 	maxLenStr := fmt.Sprintf("%d", maxLen)
 	if maxLen <= 0 {

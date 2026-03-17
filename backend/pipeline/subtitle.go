@@ -116,14 +116,29 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle stage started. Service: %s, Model: %s", sService, sModel), id, taskLabel)
 	}
 
+	// Detect Orientation for PlayRes
+
+	// Use specific semaphores for AMD and WhisperX to enforce concurrency limits
+	var currentSem chan struct{}
+	releaseCurrent := func() {
+		if currentSem != nil {
+			select {
+			case <-currentSem:
+			default:
+				// Already released or empty
+			}
+			currentSem = nil
+		}
+	}
+	defer releaseCurrent()
+
 	s.emitStageStatus(id, "subtitle", "waiting")
-	s.log("INFO", "[Pipeline] Waiting for subtitle engine slot...", id, taskLabel)
+	s.log("INFO", fmt.Sprintf("[Pipeline] Waiting for %s engine slot...", sService), id, taskLabel)
 
-	sem := s.getSubtitleSem(sService)
-	sem <- struct{}{}
-	defer func() { <-sem }()
+	currentSem = s.getSubtitleSem(sService)
+	currentSem <- struct{}{}
 
-	s.log("INFO", "[Pipeline] Subtitle engine slot acquired, starting transcription...", id, taskLabel)
+	s.log("INFO", fmt.Sprintf("[Pipeline] %s engine slot acquired, starting transcription...", sService), id, taskLabel)
 	s.emitStageStatus(id, "subtitle", "running")
 
 	var result string
@@ -131,9 +146,7 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 
 	switch sService {
 	case "standard":
-		GlobalWhisperMutex.Lock()
 		result, err = s.localWhisper.TranscribeBase(voiceFilePath, sModel, pSettings.SubtitleMaxLen, pSettings.SubtitleThreads)
-		GlobalWhisperMutex.Unlock()
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[LocalWhisper] Failed: %v", err), id, taskLabel)
 			s.emitStageStatus(id, "subtitle", "failed")
@@ -158,10 +171,8 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		maxLen := pSettings.SubtitleMaxLen
 		s.log("INFO", fmt.Sprintf("[AmdWhisper] Starting transcription (karaoke: %v, maxLen: %d)...", karaokeEffect, maxLen), id, taskLabel)
 
-		// Run AMD transcription inside mutex
-		GlobalWhisperMutex.Lock()
+		// Run AMD transcription
 		result, amdJson, err = s.amdWhisper.Transcribe(voiceFilePath, sModel, amdLang, maxLen, karaokeEffect, pSettings.SubtitleAmdThreads)
-		GlobalWhisperMutex.Unlock()
 
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[AmdWhisper] Failed: %v", err), id, taskLabel)
@@ -186,14 +197,19 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			s.log("INFO", fmt.Sprintf("[AmdWhisper] Saved raw JSON to: %s", jsonPath), id, taskLabel)
 
 			if karaokeEffect {
-				// RELEASE AMD slot and ACQUIRE WhisperX slot for alignment stage
-				s.log("INFO", "[Pipeline] Handover: Releasing AMD slot and waiting for WhisperX slot for alignment...", id, taskLabel)
-				<-sem                             // Manually release AMD slot
-				sem = s.getSubtitleSem("whisperx") // Switch variable to WhisperX semaphore
-				sem <- struct{}{}                  // Acquire WhisperX slot
-				// Top-level defer will now release the WhisperX slot when the function finishes
+				// Handover: Release AMD slot and acquire WhisperX slot
+				s.log("INFO", "[Pipeline] AMD transcription finished. Releasing AMD slot...", id, taskLabel)
+				releaseCurrent()
 
-				s.log("INFO", "[WhisperX] Triggering alignment using AMD JSON...", id, taskLabel)
+				s.log("INFO", "[Pipeline] Waiting for WhisperX slot for alignment...", id, taskLabel)
+				s.emitStageStatus(id, "subtitle", "waiting")
+
+				currentSem = s.getSubtitleSem("whisperx")
+				currentSem <- struct{}{}
+
+				s.log("INFO", "[WhisperX] WhisperX slot acquired, starting alignment...", id, taskLabel)
+				s.emitStageStatus(id, "subtitle", "running")
+
 				// Use the raw JSON from AMD to perform precise alignment via WhisperX
 				err = s.ProcessWhisperXAlign(id, taskLabel, finalDir, voiceFilePath, jsonPath, settings, pSettings)
 				if err != nil {
