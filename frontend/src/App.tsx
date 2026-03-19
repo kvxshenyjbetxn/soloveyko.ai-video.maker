@@ -19,7 +19,6 @@ import { General } from './tabs/settings/general';
 import { SystemMonitor } from './components/SystemMonitor';
 import { OpenRouter } from './tabs/settings/api/openrouter';
 import { ServiceBalanceMonitor } from './components/ServiceBalanceMonitor';
-import { QueueMonitor } from './components/QueueMonitor';
 import { ElevenLabsBot } from './tabs/settings/api/voice/elevenlabsbot';
 import { ElevenLabsUnlim } from './tabs/settings/api/voice/elevenlabsunlim';
 import { ElevenLabsUA } from './tabs/settings/api/voice/elevenlabsua';
@@ -646,7 +645,6 @@ function App() {
             }}>
                 <SystemMonitor />
                 <ServiceBalanceMonitor navigateTo={setCurrentPath} />
-                <QueueMonitor navigateTo={setCurrentPath} />
                 <GoogleMonitor navigateTo={setCurrentPath} currentPath={currentPath} />
             </div>
 
