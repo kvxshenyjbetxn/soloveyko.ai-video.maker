@@ -342,6 +342,7 @@
             "filterPlaceholder": "e.g. A:In progress & B:\\d",
             "saveSuccess": "Google settings saved",
             "parse": "Parse Spreadsheet",
+            "clear": "Clear results",
             "parsing": "Parsing...",
             "no_results": "Nothing found by filter",
             "found": "Found: {{count}}",

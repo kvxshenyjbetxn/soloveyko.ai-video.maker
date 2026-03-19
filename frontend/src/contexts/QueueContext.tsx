@@ -8,7 +8,7 @@ export type TaskStatus = 'pending' | 'waiting' | 'running' | 'processing' | 'com
 
 export interface QueueTask {
     id: string; taskNumber?: number; name: string; folderName: string; subName: string;
-    type: 'translate' | 'rewrite' | 'voiceover'; content: string; settings: any;
+    type: 'translate' | 'rewrite' | 'voiceover'; content: string; originalLength?: number; settings: any;
     status: TaskStatus; progress: number; resultLength?: number;
     isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; isAwaitingMontageControl?: boolean; montagePlanData?: string; isAwaitingExistingFilesCheck?: boolean; controlContent?: string;
     existingFilesData?: any;
@@ -180,7 +180,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const newTask: QueueTask = {
             id,
             name: subName ? `${fName} - ${subName}` : fName, folderName: fName, subName: subName || "",
-            type, content: "", // Content moved to Ref
+            type, content: "", originalLength: content.length, // Content moved to Ref
             status: 'pending', progress: 0,
             textStatus: effectiveSkip?.includes('text') ? 'completed' : 'pending',
             voiceStatus: effectiveSkip?.includes('voice') ? 'completed' : 'pending',
@@ -230,7 +230,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             return {
                 id,
                 name: d.subName ? `${fName} - ${d.subName}` : fName, folderName: fName, subName: d.subName || "",
-                type, content: "", // Content moved to Ref
+                type, content: "", originalLength: content.length, // Content moved to Ref
                 settings: {
                     ...d.settings,
                     skippedStages: effectiveSkip,
@@ -273,7 +273,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const regenerateTask = async (id: string, text: string, settings?: any) => {
         taskContentRef.current.set(id, text);
-        setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: false, status: 'running', textStatus: 'running' } : t));
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, isAwaitingControl: false, status: 'running', textStatus: 'running', originalLength: text.length } : t));
         await SendControlAction(id, "regenerate", text, settings || {});
     };
 
@@ -463,7 +463,9 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const uStage = EventsOn("stageStatus", (id: string, stage: string, status: string, msg?: string) => {
             if (stage === 'montage') {
                 if (status === 'running') {
-                    montageStartTimesRef.current.set(id, Date.now());
+                    if (!montageStartTimesRef.current.has(id)) {
+                        montageStartTimesRef.current.set(id, Date.now());
+                    }
                 } else if (status === 'completed') {
                     const start = montageStartTimesRef.current.get(id);
                     if (start) {

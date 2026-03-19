@@ -75,7 +75,7 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
 
     const { t } = useI18n();
 
-    const origLen = task.content?.length || 0;
+    const origLen = task.originalLength || task.content?.length || 0;
     const currLen = text.length;
 
     const editorContent = (

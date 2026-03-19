@@ -89,6 +89,12 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
         });
     };
 
+    const handleClear = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setResults([]);
+        setLastUpdate(null);
+    };
+
     return (
         <div className={`google-monitor-wrapper ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`} ref={wrapperRef}>
             {/* Expanded Panel */}
@@ -96,6 +102,16 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                 <div className="google-mini-header">
                     <span className="google-mini-title">Google Sheets</span>
                     <div className="google-header-controls">
+                        <button
+                            className="mini-refresh-btn"
+                            onClick={handleClear}
+                            title={t('api.googleSettings.clear')}
+                            style={{ color: '#f44336' }}
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                            </svg>
+                        </button>
                         <button
                             className={`mini-refresh-btn ${isParsing ? 'spinning' : ''}`}
                             onClick={handleRefresh}
