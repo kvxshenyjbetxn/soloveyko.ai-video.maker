@@ -181,6 +181,7 @@ interface TemplateContextType {
     isLoading: boolean;
     selectedTemplateIds: string[];
     setSelectedTemplateIds: React.Dispatch<React.SetStateAction<string[]>>;
+    flattenSettings: (obj: any) => any;
 }
 
 const TemplateContext = createContext<TemplateContextType | undefined>(undefined);
@@ -190,6 +191,71 @@ export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }
     const [isLoading, setIsLoading] = useState(true);
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
     const { showToast } = useToast();
+
+    /**
+     * Recursively flattens a nested object into a flat key-value map.
+     */
+    const flattenSettings = useCallback((obj: any): any => {
+        let result: any = {};
+        if (!obj || typeof obj !== 'object') return result;
+
+        // 1. Recursive flattening
+        const flatten = (o: any) => {
+            if (!o || typeof o !== 'object') return;
+            for (const i in o) {
+                const val = o[i];
+                if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+                    flatten(val);
+                } else {
+                    result[i] = val;
+                }
+            }
+        };
+        flatten(obj);
+
+        // 2. Specialized mapping for "stages" group to "Enabled" fields used in the UI
+        if (obj.stages && typeof obj.stages === 'object') {
+            const s = obj.stages;
+            if (s.voiceover !== undefined) result.voiceoverEnabled = s.voiceover;
+            if (s.image !== undefined) result.imageEnabled = s.image;
+            if (s.subtitle !== undefined) result.subtitleEnabled = s.subtitle;
+            if (s.montage !== undefined) result.montageEnabled = s.montage;
+            if (s.translate !== undefined) result.translateEnabled = s.translate;
+            if (s.rewrite !== undefined) result.rewriteEnabled = s.rewrite;
+        }
+
+        // 3. Control section mapping
+        if (obj.control && typeof obj.control === 'object') {
+            if (obj.control.translate !== undefined) result.translateControlEnabled = obj.control.translate;
+            if (obj.control.image !== undefined) result.imageControlEnabled = obj.control.image;
+            if (obj.control.montage !== undefined) result.montageControlEnabled = obj.control.montage;
+        }
+
+        // Ensure critical flags have defaults (false) if missing from template
+        result.translateControlEnabled = result.translateControlEnabled ?? false;
+        result.imageControlEnabled = result.imageControlEnabled ?? false;
+        result.montageControlEnabled = result.montageControlEnabled ?? false;
+        result.customStagesEnabled = result.customStagesEnabled ?? false;
+
+        // Explicitly handle arrays (they should be arrays, not flattened)
+        if (obj.customStages && Array.isArray(obj.customStages)) result.customStages = obj.customStages;
+        else if (result.customStages === undefined) result.customStages = [];
+        
+        if (obj.montageOverlayTriggers && Array.isArray(obj.montageOverlayTriggers)) {
+            result.montageOverlayTriggers = obj.montageOverlayTriggers;
+        } else if (obj.montage && typeof obj.montage === 'object' && Array.isArray(obj.montage.montageOverlayTriggers)) {
+            result.montageOverlayTriggers = obj.montage.montageOverlayTriggers;
+        }
+
+        if (obj.montageIntroVideoPaths && Array.isArray(obj.montageIntroVideoPaths)) {
+            result.montageIntroVideoPaths = obj.montageIntroVideoPaths;
+        } else if (obj.montage && typeof obj.montage === 'object' && Array.isArray(obj.montage.montageIntroVideoPaths)) {
+            result.montageIntroVideoPaths = obj.montage.montageIntroVideoPaths;
+        }
+        result.montageIntroVideoPaths = result.montageIntroVideoPaths ?? [];
+
+        return result;
+    }, []);
 
     const loadTemplates = useCallback(async () => {
         setIsLoading(true);
@@ -250,7 +316,8 @@ export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }
             updateTemplate,
             isLoading,
             selectedTemplateIds,
-            setSelectedTemplateIds
+            setSelectedTemplateIds,
+            flattenSettings
         }}>
             {children}
         </TemplateContext.Provider>

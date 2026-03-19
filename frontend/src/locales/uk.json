@@ -865,5 +865,17 @@
     "duration_limit": "Тривалість (сек)",
     "images_limit": "Макс. фото",
     "videos_limit": "Макс. відео"
+  },
+  "google_monitor": {
+    "create_task": "Створити завдання за шаблоном",
+    "mappings": "Мапінг шаблонів за назвою",
+    "keyword_placeholder": "Ключове слово у назві...",
+    "add_mapping": "Додати мапінг",
+    "no_mappings": "Мапінги ще не налаштовані",
+    "select_templates": "Оберіть шаблони",
+    "display_columns": "Колонки для відображення",
+    "display_columns_placeholder": "Наприклад: A, B, C",
+    "task_name_column": "Колонка для назви завдання",
+    "task_name_column_placeholder": "Наприклад: B"
   }
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useI18n } from '../../../contexts/I18nContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 // @ts-ignore
-import { GetGoogleSheetURL, SaveGoogleSheetURL, GetGoogleFilter, SaveGoogleFilter, ParseGoogleSheet } from '../../../../wailsjs/go/main/App';
+import { GetGoogleSheetURL, SaveGoogleSheetURL, GetGoogleFilter, SaveGoogleFilter, ParseGoogleSheet, GetTemplates, GetGoogleMonitorMappings, SaveGoogleMonitorMappings, GetGoogleMonitorDisplayColumns, SaveGoogleMonitorDisplayColumns, GetGoogleMonitorTaskNameColumn, SaveGoogleMonitorTaskNameColumn } from '../../../../wailsjs/go/main/App';
 import '../general.css';
 
 export const GoogleIntegration = () => {
@@ -10,16 +10,49 @@ export const GoogleIntegration = () => {
     const { accentColor } = useTheme();
     const [sheetUrl, setSheetUrl] = useState('');
     const [filter, setFilter] = useState('');
+    const [mappings, setMappings] = useState<any[]>([]);
+    const [displayColumns, setDisplayColumns] = useState<string>('A');
+    const [taskNameColumn, setTaskNameColumn] = useState<string>('B');
+    const [allTemplates, setAllTemplates] = useState<any[]>([]);
     const [isParsing, setIsParsing] = useState(false);
     const [results, setResults] = useState<any[]>([]);
     const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     useEffect(() => {
         const loadSettings = async () => {
-            const url = await GetGoogleSheetURL();
-            const f = await GetGoogleFilter();
-            setSheetUrl(url || '');
-            setFilter(f || '');
+            try {
+                // Завантажуємо URL та фільтр окремо, щоб вони не залежали від нових функцій
+                try { setSheetUrl(await GetGoogleSheetURL() || ''); } catch(e) { console.error("URL load fail", e); }
+                try { setFilter(await GetGoogleFilter() || ''); } catch(e) { console.error("Filter load fail", e); }
+                
+                // Завантажуємо мапінги
+                try {
+                    const m = await GetGoogleMonitorMappings();
+                    setMappings(m || []);
+                } catch(e) { console.error("Mappings load fail", e); }
+                
+                // Завантажуємо нове налаштування колонок (безпечно)
+                try {
+                    if (typeof GetGoogleMonitorDisplayColumns === 'function') {
+                        const cols = await GetGoogleMonitorDisplayColumns();
+                        setDisplayColumns(cols?.join(', ') || 'A');
+                    }
+                } catch(e) { console.error("Cols load fail", e); }
+                
+                // Завантажуємо нове налаштування колонки назви (безпечно)
+                try {
+                    if (typeof GetGoogleMonitorTaskNameColumn === 'function') {
+                        setTaskNameColumn(await GetGoogleMonitorTaskNameColumn() || 'B');
+                    }
+                } catch(e) { console.error("TaskNameCol load fail", e); }
+                
+                try {
+                    const tpls = await GetTemplates();
+                    setAllTemplates(tpls || []);
+                } catch(e) { console.error("Templates load fail", e); }
+            } catch (err) {
+                console.error("General load settings fail", err);
+            }
         };
         loadSettings();
     }, []);
@@ -27,8 +60,45 @@ export const GoogleIntegration = () => {
     const handleSave = async () => {
         await SaveGoogleSheetURL(sheetUrl);
         await SaveGoogleFilter(filter);
+        await SaveGoogleMonitorMappings(mappings);
+        
+        const colsArray = displayColumns.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+        if (typeof SaveGoogleMonitorDisplayColumns === 'function') {
+            await SaveGoogleMonitorDisplayColumns(colsArray);
+        }
+
+        if (typeof SaveGoogleMonitorTaskNameColumn === 'function') {
+            await SaveGoogleMonitorTaskNameColumn(taskNameColumn.trim().toUpperCase() || 'B');
+        }
+        
         setStatusMsg({ type: 'success', text: t('api.googleSettings.saveSuccess') });
         setTimeout(() => setStatusMsg(null), 3000);
+    };
+
+    const handleAddMapping = () => {
+        setMappings([...mappings, { keyword: '', templateIds: [] }]);
+    };
+
+    const handleRemoveMapping = (index: number) => {
+        const newMappings = [...mappings];
+        newMappings.splice(index, 1);
+        setMappings(newMappings);
+    };
+
+    const handleMappingChange = (index: number, field: string, value: any) => {
+        setMappings(prev => prev.map((m, i) => i === index ? { ...m, [field]: value } : m));
+    };
+
+    const handleToggleTemplate = (mIndex: number, tId: string) => {
+        setMappings(prev => prev.map((m, i) => {
+            if (i !== mIndex) return m;
+            const currentIds = m.templateIds || [];
+            if (currentIds.includes(tId)) {
+                return { ...m, templateIds: currentIds.filter((id: string) => id !== tId) };
+            } else {
+                return { ...m, templateIds: [...currentIds, tId] };
+            }
+        }));
     };
 
     const handleParse = async () => {
@@ -103,6 +173,46 @@ export const GoogleIntegration = () => {
                                 placeholder={t('api.googleSettings.filterPlaceholder')}
                             />
                         </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '8px', opacity: 0.7, fontSize: '0.9em' }}>{t('google_monitor.display_columns')}</label>
+                            <input
+                                type="text"
+                                className="premium-input"
+                                style={{
+                                    width: '100%',
+                                    padding: '12px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    background: 'rgba(0, 0, 0, 0.3)',
+                                    color: '#fff',
+                                    outline: 'none',
+                                    fontSize: '0.95em'
+                                }}
+                                value={displayColumns}
+                                onChange={(e) => setDisplayColumns(e.target.value)}
+                                placeholder={t('google_monitor.display_columns_placeholder')}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: '8px', opacity: 0.7, fontSize: '0.9em' }}>{t('google_monitor.task_name_column')}</label>
+                            <input
+                                type="text"
+                                className="premium-input"
+                                style={{
+                                    width: '100%',
+                                    padding: '12px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    background: 'rgba(0, 0, 0, 0.3)',
+                                    color: '#fff',
+                                    outline: 'none',
+                                    fontSize: '0.95em'
+                                }}
+                                value={taskNameColumn}
+                                onChange={(e) => setTaskNameColumn(e.target.value)}
+                                placeholder={t('google_monitor.task_name_column_placeholder')}
+                            />
+                        </div>
 
                         <div style={{ display: 'flex', gap: '15px', justifyContent: 'flex-end', marginTop: '10px' }}>
                             <button
@@ -147,6 +257,74 @@ export const GoogleIntegration = () => {
                                 {statusMsg.text}
                             </div>
                         )}
+                    </div>
+                </div>
+
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '30px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.1em', opacity: 0.9 }}>{t('google_monitor.mappings')}</h3>
+                        <button 
+                            onClick={handleAddMapping}
+                            className="premium-button"
+                            style={{ padding: '6px 12px', fontSize: '0.85em', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+                        >
+                            + {t('google_monitor.add_mapping')}
+                        </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        {mappings.length === 0 && (
+                            <div style={{ padding: '20px', textAlign: 'center', opacity: 0.5 }}>
+                                {t('google_monitor.no_mappings')}
+                            </div>
+                        )}
+                        {mappings.map((m, mIdx) => (
+                            <div key={mIdx} style={{ background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', alignItems: 'flex-start' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ display: 'block', marginBottom: '6px', opacity: 0.6, fontSize: '0.85em' }}>{t('common.value') || 'Keyword (in Title)'}</label>
+                                        <input 
+                                            type="text" 
+                                            className="premium-input"
+                                            style={{ width: '100%', padding: '8px 12px', fontSize: '0.9em', color: '#fff' }}
+                                            value={m.keyword}
+                                            onChange={(e) => handleMappingChange(mIdx, 'keyword', e.target.value)}
+                                            placeholder={t('google_monitor.keyword_placeholder')}
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={() => handleRemoveMapping(mIdx)}
+                                        style={{ marginTop: '28px', background: 'none', border: 'none', color: '#ff5252', cursor: 'pointer', opacity: 0.7 }}
+                                    >
+                                        &times;
+                                    </button>
+                                </div>
+                                
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', opacity: 0.6, fontSize: '0.85em' }}>{t('google_monitor.select_templates')}</label>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                        {allTemplates.map(tpl => (
+                                            <button
+                                                key={tpl.id}
+                                                onClick={() => handleToggleTemplate(mIdx, tpl.id)}
+                                                style={{
+                                                    padding: '4px 10px',
+                                                    fontSize: '0.8em',
+                                                    borderRadius: '4px',
+                                                    background: m.templateIds?.includes(tpl.id) ? accentColor : 'rgba(255,255,255,0.05)',
+                                                    border: '1px solid ' + (m.templateIds?.includes(tpl.id) ? accentColor : 'rgba(255,255,255,0.1)'),
+                                                    color: m.templateIds?.includes(tpl.id) ? '#fff' : '#aaa',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                {tpl.name} ({tpl.type})
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
 

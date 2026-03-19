@@ -2,8 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import './GoogleMonitor.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useTemplates } from '../contexts/TemplateContext';
+import { useQueueActions } from '../contexts/QueueContext';
+import { useToast } from '../contexts/ToastContext';
 // @ts-ignore
-import { ParseGoogleSheet, GetGoogleSheetURL } from '../../wailsjs/go/main/App';
+import { ParseGoogleSheet, GetGoogleSheetURL, GetGoogleMonitorMappings, CheckExistingTasks, GetGoogleMonitorDisplayColumns, GetGoogleMonitorTaskNameColumn } from '../../wailsjs/go/main/App';
 
 interface GoogleMonitorProps {
     navigateTo?: (path: string) => void;
@@ -13,13 +16,55 @@ interface GoogleMonitorProps {
 export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) => {
     const { t } = useI18n();
     const { accentColor } = useTheme();
+    const { templates, flattenSettings } = useTemplates();
+    const { addTasks, addTask, getNextTaskName } = useQueueActions();
+    const { showToast } = useToast();
+
     const [isExpanded, setIsExpanded] = useState(false);
     const [isParsing, setIsParsing] = useState(false);
     const [results, setResults] = useState<any[]>([]);
+    const [mappings, setMappings] = useState<any[]>([]);
+    const [displayColumns, setDisplayColumns] = useState<string[]>(['A']);
+    const [taskNameColumn, setTaskNameColumn] = useState<string>('B');
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isPinned, setIsPinned] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const loadSettings = async () => {
+            try {
+                let m: any[] = [];
+                let cols = ['A'];
+                let nameCol = 'B';
+                
+                try { 
+                    m = await GetGoogleMonitorMappings(); 
+                } catch(e) { console.error("Monitor mappings load fail", e); }
+                
+                try {
+                    if (typeof GetGoogleMonitorDisplayColumns === 'function') {
+                        cols = await GetGoogleMonitorDisplayColumns();
+                    }
+                } catch(e) { console.error("Monitor cols load fail", e); }
+
+                try {
+                    if (typeof GetGoogleMonitorTaskNameColumn === 'function') {
+                        nameCol = await GetGoogleMonitorTaskNameColumn();
+                    }
+                } catch(e) { console.error("Monitor nameCol load fail", e); }
+                
+                setMappings(m || []);
+                setDisplayColumns(cols || ['A']);
+                setTaskNameColumn(nameCol || 'B');
+            } catch (err) {
+                console.error("Failed to load monitor settings:", err);
+            }
+        };
+        if (isExpanded) {
+            loadSettings();
+        }
+    }, [isExpanded]);
 
     useEffect(() => {
         // @ts-ignore
@@ -95,6 +140,69 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
         setLastUpdate(null);
     };
 
+    const handleCreateTask = async (item: any) => {
+        if (!item.content) {
+            showToast("Content is empty", "error");
+            return;
+        }
+
+        const mapping = mappings.find(m => {
+            if (!m.keyword) return false;
+            const kw = m.keyword.toLowerCase();
+            return item.columns?.some((c: string) => c?.toLowerCase().includes(kw)) || item.title?.toLowerCase().includes(kw);
+        });
+
+        if (!mapping || !mapping.templateIds || mapping.templateIds.length === 0) {
+            showToast("No mapping found for this item", "info");
+            return;
+        }
+
+        // Determine task name from configured column
+        let taskName = getNextTaskName();
+        if (taskNameColumn) {
+            const colIdx = taskNameColumn.toUpperCase().split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
+            const customName = item.columns && item.columns[colIdx];
+            if (customName && customName.trim()) {
+                taskName = customName.trim();
+            }
+        }
+        
+        const content = item.content;
+
+        // Find relevant templates
+        const matchedTemplates = mapping.templateIds
+            .map((id: string) => templates.find(t => t.id === id))
+            .filter(Boolean);
+
+        if (matchedTemplates.length === 0) {
+            showToast("Mapped templates not found", "error");
+            return;
+        }
+
+        // We assume the first template determines the type (translate/rewrite/voiceover)
+        // or we just use 'translate' as default if not clear.
+        // Actually templates HAVE a type.
+        const type = matchedTemplates[0]!.type;
+
+        const tasksToCheck = matchedTemplates.map((tpl: any) => ({
+            taskName,
+            taskType: tpl!.type,
+            subName: tpl!.name,
+            settings: flattenSettings(tpl!.settings)
+        }));
+
+        try {
+            const results = await CheckExistingTasks(tasksToCheck);
+            // We can just add them, CheckExistingTasks is primarily for UI warning which we skip here for speed
+            // because the user wants "automatic" creation.
+            addTasks(type, content, tasksToCheck, taskName);
+            showToast(`Added ${tasksToCheck.length} tasks to queue`, "success");
+        } catch (err) {
+            console.error("Failed to check tasks:", err);
+            addTasks(type, content, tasksToCheck, taskName);
+        }
+    };
+
     return (
         <div className={`google-monitor-wrapper ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`} ref={wrapperRef}>
             {/* Expanded Panel */}
@@ -142,62 +250,109 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                             {isParsing ? t('api.googleSettings.parsing') : t('api.googleSettings.no_results')}
                         </div>
                     ) : (
-                        results.map((item, idx) => (
-                            <div key={idx} className="google-mini-item">
-                                <div className="google-mini-item-top">
-                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', overflow: 'hidden' }}>
-                                        <button
-                                            className="google-mini-copy-btn"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                copyToClipboard(item.title, `title-${idx}`);
-                                            }}
-                                            title={t('common.copy')}
-                                            style={{ padding: '2px', color: copiedId === `title-${idx}` ? '#4caf50' : '#ffc107' }}
-                                        >
-                                            {copiedId === `title-${idx}` ?
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                                :
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                            }
-                                        </button>
-                                        {item.columns && item.columns.length > 8 && item.columns[8] && <span className="google-item-index">{item.columns[8]}</span>}
-                                        {item.title && <span className="google-mini-item-title">{item.title}</span>}
+                        results.map((item, idx) => {
+                            const mapping = mappings.find(m => {
+                                if (!m.keyword) return false;
+                                const kw = m.keyword.toLowerCase();
+                                return item.columns?.some((c: string) => c?.toLowerCase().includes(kw)) || item.title?.toLowerCase().includes(kw);
+                            });
+                            const hasTemplates = mapping && mapping.templateIds && mapping.templateIds.length > 0;
+
+                            return (
+                                <div key={idx} className="google-mini-item">
+                                    <div className="google-mini-item-top">
+                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', overflow: 'hidden' }}>
+                                            <button
+                                                className="google-mini-copy-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    copyToClipboard(item.title, `title-${idx}`);
+                                                }}
+                                                title={t('common.copy')}
+                                                style={{ padding: '2px', color: copiedId === `title-${idx}` ? '#4caf50' : '#ffc107' }}
+                                            >
+                                                {copiedId === `title-${idx}` ?
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                    :
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                                }
+                                            </button>
+                                            {item.columns && item.columns.length > 8 && item.columns[8] && <span className="google-item-index">{item.columns[8]}</span>}
+                                            <div className="google-mini-item-title-container">
+                                                {displayColumns.map((col, cIdx) => {
+                                                    const colIdx = col.toUpperCase().split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
+                                                    const val = item.columns && item.columns[colIdx];
+                                                    if (!val) return null;
+                                                    
+                                                    // Стріпуємо, якщо це дублікат ключа мапінгу
+                                                    const kw = mapping?.keyword?.toLowerCase();
+                                                    if (cIdx > 0 && kw && val.toLowerCase().includes(kw)) return null;
+
+                                                    return (
+                                                        <span key={cIdx} className={`google-mini-item-col-${col}`} style={{ 
+                                                            color: cIdx === 0 ? '#4caf50' : 'rgba(255,255,255,0.7)',
+                                                            fontWeight: cIdx === 0 ? 'bold' : 'normal',
+                                                            marginRight: '6px',
+                                                            whiteSpace: 'nowrap',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis'
+                                                        }}>
+                                                            {val}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                            {hasTemplates && (
+                                                <button
+                                                    className="google-mini-create-btn"
+                                                    onClick={() => handleCreateTask(item)}
+                                                    title={t('google_monitor.create_task') || "Create Task"}
+                                                    style={{ color: '#4caf50' }}
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                                    </svg>
+                                                </button>
+                                            )}
+                                            <button
+                                                className="google-mini-copy-btn"
+                                                style={{ color: copiedId === `content-${idx}` ? '#4caf50' : accentColor }}
+                                                onClick={() => {
+                                                    // Визначаємо куди вставляти
+                                                    let targetType = 'translate';
+                                                    if (currentPath?.includes('rewrite')) targetType = 'rewrite';
+                                                    if (currentPath?.includes('translate')) targetType = 'translate';
+
+                                                    // @ts-ignore
+                                                    window.runtime?.EventsEmit("applyHistoryEntry", {
+                                                        type: targetType,
+                                                        content: item.content,
+                                                        replace: true
+                                                    });
+
+                                                    copyToClipboard(item.content, `content-${idx}`);
+                                                }}
+                                                title={t('api.googleSettings.copy_content')}
+                                            >
+                                                {copiedId === `content-${idx}` ?
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                    :
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                                }
+                                            </button>
+                                        </div>
                                     </div>
-                                    <button
-                                        className="google-mini-copy-btn"
-                                        style={{ color: copiedId === `content-${idx}` ? '#4caf50' : accentColor }}
-                                        onClick={() => {
-                                            // Визначаємо куди вставляти
-                                            let targetType = 'translate';
-                                            if (currentPath?.includes('rewrite')) targetType = 'rewrite';
-                                            if (currentPath?.includes('translate')) targetType = 'translate';
-
-                                            // @ts-ignore
-                                            window.runtime?.EventsEmit("applyHistoryEntry", {
-                                                type: targetType,
-                                                content: item.content,
-                                                replace: true
-                                            });
-
-                                            copyToClipboard(item.content, `content-${idx}`);
-                                        }}
-                                        title={t('api.googleSettings.copy_content')}
-                                    >
-                                        {copiedId === `content-${idx}` ?
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                            :
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                        }
-                                    </button>
+                                    {item.content && (
+                                        <div className="google-mini-content-preview">
+                                            {item.content}
+                                        </div>
+                                    )}
                                 </div>
-                                {item.content && (
-                                    <div className="google-mini-content-preview">
-                                        {item.content}
-                                    </div>
-                                )}
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
 

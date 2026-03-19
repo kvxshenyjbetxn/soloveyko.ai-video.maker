@@ -852,5 +852,17 @@
         "quick_setup": "Quick Setup",
         "get_started": "Get Started",
         "dont_show_again": "Don't show again on login"
+    },
+    "google_monitor": {
+        "create_task": "Create task from template",
+        "mappings": "Template Mapping by Title",
+        "keyword_placeholder": "Keyword in title...",
+        "add_mapping": "Add Mapping",
+        "no_mappings": "Mappings not configured yet",
+        "select_templates": "Select Templates",
+        "display_columns": "Columns to display",
+        "display_columns_placeholder": "e.g. A, B, C",
+        "task_name_column": "Column for task name",
+        "task_name_column_placeholder": "e.g. B"
     }
 }

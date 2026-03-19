@@ -238,54 +238,62 @@ type PipelineSettings struct {
 	CustomStagesCollapsed bool          `json:"customStagesCollapsed"`
 }
 
+type GoogleMonitorMapping struct {
+	Keyword     string   `json:"keyword"`
+	TemplateIDs []string `json:"templateIds"`
+}
+
 type Settings struct {
-	Language                      string           `json:"language"`
-	Theme                         string           `json:"theme"`
-	AccentColor                   string           `json:"accentColor"`
-	OpenRouterAPIKey              string           `json:"openRouterAPIKey"`
-	OpenRouterKeys                []NamedAPIKey    `json:"openRouterKeys"`
-	OpenRouterModels              []string         `json:"openRouterModels"`
-	PollinationsAPIKey            string           `json:"pollinationsAPIKey"`
-	PollinationsKeys              []NamedAPIKey    `json:"pollinationsKeys"`
-	PollinationsModels            []string         `json:"pollinationsModels"`
-	ElevenLabsBotAPIKey           string           `json:"elevenLabsBotAPIKey"`
-	ElevenLabsBotKeys             []NamedAPIKey    `json:"elevenLabsBotKeys"`
-	ElevenLabsUnlimAPIKey         string           `json:"elevenLabsUnlimAPIKey"`
-	ElevenLabsUnlimKeys           []NamedAPIKey    `json:"elevenLabsUnlimKeys"`
-	ElevenLabsUAKeys              []NamedAPIKey    `json:"elevenLabsUAKeys"`
-	VoiceMakerAPIKey              string           `json:"voiceMakerAPIKey"`
-	VoiceMakerKeys                []NamedAPIKey    `json:"voiceMakerKeys"`
-	VoiceMakerBalance             float64          `json:"voiceMakerBalance"`
-	GooglerAPIKey                 string           `json:"googlerAPIKey"`
-	ElevenLabsImageAPIKey         string           `json:"elevenLabsImageAPIKey"`
-	ElevenLabsUAAPIKey            string           `json:"elevenLabsUAAPIKey"`
-	AssemblyAIAPIKey              string           `json:"assemblyAIAPIKey"`
-	OpenRouterMaxConnections      int              `json:"openRouterMaxConnections"`
-	GooglerMaxImageConnections    int              `json:"googlerMaxImageConnections"`
-	GooglerMaxVideoConnections    int              `json:"googlerMaxVideoConnections"`
-	ElevenLabsBotAlertThreshold   float64          `json:"elevenLabsBotAlertThreshold"`
-	ElevenLabsUnlimAlertThreshold float64          `json:"elevenLabsUnlimAlertThreshold"`
-	ElevenLabsUAAlertThreshold    float64          `json:"elevenLabsUAAlertThreshold"`
-	VoiceMakerAlertThreshold      float64          `json:"voiceMakerAlertThreshold"`
-	OpenRouterAlertThreshold      float64          `json:"openRouterAlertThreshold"`
-	GooglerVideoAlertThreshold    float64          `json:"googlerVideoAlertThreshold"`
-	GooglerImageAlertThreshold    float64          `json:"googlerImageAlertThreshold"`
-	ElevenLabsImageKeys           []NamedAPIKey    `json:"elevenLabsImageKeys"`
-	ElevenLabsImageMaxConnections int              `json:"elevenLabsImageMaxConnections"`
-	SubtitleMaxConnections         int              `json:"subtitleMaxConnections"`
-	SubtitleAmdMaxConnections      int              `json:"subtitleAmdMaxConnections"`
-	SubtitleWhisperXMaxConnections int              `json:"subtitleWhisperXMaxConnections"`
-	MontageMaxConnections          int              `json:"montageMaxConnections"`
-	MontageMode                   string           `json:"montageMode"`
-	Pipeline                      PipelineSettings `json:"pipeline"`
-	GoogleSheetURL                string           `json:"googleSheetURL"`
-	GoogleFilter                  string           `json:"googleFilter"`
-	AppAccessKey                  string           `json:"appAccessKey"`
-	TelegramNotificationsEnabled  bool             `json:"telegramNotificationsEnabled"`
-	TelegramChatID                string           `json:"telegramChatID"`
-	SystemNotificationsEnabled    bool             `json:"systemNotificationsEnabled"`
-	FirstRun                      bool             `json:"firstRun"`
-	ShowWelcome                   bool             `json:"showWelcome"`
+	Language                      string                 `json:"language"`
+	Theme                         string                 `json:"theme"`
+	AccentColor                   string                 `json:"accentColor"`
+	OpenRouterAPIKey              string                 `json:"openRouterAPIKey"`
+	OpenRouterKeys                []NamedAPIKey          `json:"openRouterKeys"`
+	OpenRouterModels              []string               `json:"openRouterModels"`
+	PollinationsAPIKey            string                 `json:"pollinationsAPIKey"`
+	PollinationsKeys              []NamedAPIKey          `json:"pollinationsKeys"`
+	PollinationsModels            []string               `json:"pollinationsModels"`
+	ElevenLabsBotAPIKey           string                 `json:"elevenLabsBotAPIKey"`
+	ElevenLabsBotKeys             []NamedAPIKey          `json:"elevenLabsBotKeys"`
+	ElevenLabsUnlimAPIKey         string                 `json:"elevenLabsUnlimAPIKey"`
+	ElevenLabsUnlimKeys           []NamedAPIKey          `json:"elevenLabsUnlimKeys"`
+	ElevenLabsUAKeys              []NamedAPIKey          `json:"elevenLabsUAKeys"`
+	VoiceMakerAPIKey              string                 `json:"voiceMakerAPIKey"`
+	VoiceMakerKeys                []NamedAPIKey          `json:"voiceMakerKeys"`
+	VoiceMakerBalance             float64                `json:"voiceMakerBalance"`
+	GooglerAPIKey                 string                 `json:"googlerAPIKey"`
+	ElevenLabsImageAPIKey         string                 `json:"elevenLabsImageAPIKey"`
+	ElevenLabsUAAPIKey            string                 `json:"elevenLabsUAAPIKey"`
+	AssemblyAIAPIKey              string                 `json:"assemblyAIAPIKey"`
+	OpenRouterMaxConnections      int                    `json:"openRouterMaxConnections"`
+	GooglerMaxImageConnections    int                    `json:"googlerMaxImageConnections"`
+	GooglerMaxVideoConnections    int                    `json:"googlerMaxVideoConnections"`
+	ElevenLabsBotAlertThreshold   float64                `json:"elevenLabsBotAlertThreshold"`
+	ElevenLabsUnlimAlertThreshold float64                `json:"elevenLabsUnlimAlertThreshold"`
+	ElevenLabsUAAlertThreshold    float64                `json:"elevenLabsUAAlertThreshold"`
+	VoiceMakerAlertThreshold      float64                `json:"voiceMakerAlertThreshold"`
+	OpenRouterAlertThreshold      float64                `json:"openRouterAlertThreshold"`
+	GooglerVideoAlertThreshold    float64                `json:"googlerVideoAlertThreshold"`
+	GooglerImageAlertThreshold    float64                `json:"googlerImageAlertThreshold"`
+	ElevenLabsImageKeys           []NamedAPIKey          `json:"elevenLabsImageKeys"`
+	ElevenLabsImageMaxConnections int                    `json:"elevenLabsImageMaxConnections"`
+	SubtitleMaxConnections         int                    `json:"subtitleMaxConnections"`
+	SubtitleAmdMaxConnections      int                    `json:"subtitleAmdMaxConnections"`
+	SubtitleWhisperXMaxConnections int                    `json:"subtitleWhisperXMaxConnections"`
+	MontageMaxConnections          int                    `json:"montageMaxConnections"`
+	MontageMode                   string                 `json:"montageMode"`
+	Pipeline                      PipelineSettings       `json:"pipeline"`
+	GoogleSheetURL                string                 `json:"googleSheetURL"`
+	GoogleFilter                  string                 `json:"googleFilter"`
+	GoogleMonitorMappings         []GoogleMonitorMapping `json:"googleMonitorMappings"`
+	GoogleMonitorDisplayColumns   []string               `json:"googleMonitorDisplayColumns"`
+	GoogleMonitorTaskNameColumn   string                 `json:"googleMonitorTaskNameColumn"`
+	AppAccessKey                  string                 `json:"appAccessKey"`
+	TelegramNotificationsEnabled  bool                   `json:"telegramNotificationsEnabled"`
+	TelegramChatID                string                 `json:"telegramChatID"`
+	SystemNotificationsEnabled    bool                   `json:"systemNotificationsEnabled"`
+	FirstRun                      bool                   `json:"firstRun"`
+	ShowWelcome                   bool                   `json:"showWelcome"`
 }
 
 type SettingsService struct {
@@ -1646,6 +1654,72 @@ func (s *SettingsService) SetGoogleFilter(filter string) error {
 		return err
 	}
 	settings.GoogleFilter = filter
+	return s.SaveSettings(settings)
+}
+
+// GetGoogleMonitorMappings повертає список мапінгів для гугл монітору
+func (s *SettingsService) GetGoogleMonitorMappings() []GoogleMonitorMapping {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []GoogleMonitorMapping{}
+	}
+	if settings.GoogleMonitorMappings == nil {
+		return []GoogleMonitorMapping{}
+	}
+	return settings.GoogleMonitorMappings
+}
+
+// SetGoogleMonitorMappings зберігає список мапінгів для гугл монітору
+func (s *SettingsService) SetGoogleMonitorMappings(mappings []GoogleMonitorMapping) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GoogleMonitorMappings = mappings
+	return s.SaveSettings(settings)
+}
+
+// GetGoogleMonitorDisplayColumns повертає список колонок для відображення в моніторі
+func (s *SettingsService) GetGoogleMonitorDisplayColumns() []string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []string{"A"} // Default to column A
+	}
+	if settings.GoogleMonitorDisplayColumns == nil {
+		return []string{"A"}
+	}
+	return settings.GoogleMonitorDisplayColumns
+}
+
+// SetGoogleMonitorDisplayColumns зберігає список колонок для відображення в моніторі
+func (s *SettingsService) SetGoogleMonitorDisplayColumns(columns []string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GoogleMonitorDisplayColumns = columns
+	return s.SaveSettings(settings)
+}
+
+// GetGoogleMonitorTaskNameColumn повертає колонку для назви завдання
+func (s *SettingsService) GetGoogleMonitorTaskNameColumn() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return "B" // Default to column B
+	}
+	if settings.GoogleMonitorTaskNameColumn == "" {
+		return "B"
+	}
+	return settings.GoogleMonitorTaskNameColumn
+}
+
+// SetGoogleMonitorTaskNameColumn зберігає колонку для назви завдання
+func (s *SettingsService) SetGoogleMonitorTaskNameColumn(column string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GoogleMonitorTaskNameColumn = column
 	return s.SaveSettings(settings)
 }
 

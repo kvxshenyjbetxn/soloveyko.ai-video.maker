@@ -1478,6 +1478,30 @@ func (a *App) SaveGoogleFilter(filter string) error {
 	return a.settings.SetGoogleFilter(filter)
 }
 
+func (a *App) GetGoogleMonitorMappings() []utils.GoogleMonitorMapping {
+	return a.settings.GetGoogleMonitorMappings()
+}
+
+func (a *App) SaveGoogleMonitorMappings(mappings []utils.GoogleMonitorMapping) error {
+	return a.settings.SetGoogleMonitorMappings(mappings)
+}
+
+func (a *App) GetGoogleMonitorDisplayColumns() []string {
+	return a.settings.GetGoogleMonitorDisplayColumns()
+}
+
+func (a *App) SaveGoogleMonitorDisplayColumns(columns []string) error {
+	return a.settings.SetGoogleMonitorDisplayColumns(columns)
+}
+
+func (a *App) GetGoogleMonitorTaskNameColumn() string {
+	return a.settings.GetGoogleMonitorTaskNameColumn()
+}
+
+func (a *App) SaveGoogleMonitorTaskNameColumn(column string) error {
+	return a.settings.SetGoogleMonitorTaskNameColumn(column)
+}
+
 func (a *App) ParseGoogleSheet() ([]api.GoogleParserRow, error) {
 	url := a.settings.GetGoogleSheetURL()
 	filter := a.settings.GetGoogleFilter()

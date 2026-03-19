@@ -853,5 +853,17 @@
         "quick_setup": "Быстрые настройки",
         "get_started": "Начать работу",
         "dont_show_again": "Больше не показывать при входе"
+    },
+    "google_monitor": {
+        "create_task": "Создать задачу по шаблону",
+        "mappings": "Маппинг шаблонов по названию",
+        "keyword_placeholder": "Ключевое слово в названии...",
+        "add_mapping": "Добавить маппинг",
+        "no_mappings": "Маппинги еще не настроены",
+        "select_templates": "Выберите шаблоны",
+        "display_columns": "Колонки для отображения",
+        "display_columns_placeholder": "Например: A, B, C",
+        "task_name_column": "Колонка для названия задачи",
+        "task_name_column_placeholder": "Например: B"
     }
 }
