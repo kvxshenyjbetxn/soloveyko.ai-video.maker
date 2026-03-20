@@ -222,6 +222,12 @@ type PipelineSettings struct {
 	MontageWatermarkOpacity       float64          `json:"montageWatermarkOpacity"`
 	MontageWatermarkSize          int              `json:"montageWatermarkSize"` // percentage of width
 	MontageWatermarkOnIntro       bool             `json:"montageWatermarkOnIntro"`
+	MontageVideoWatermarkEnabled  bool             `json:"montageVideoWatermarkEnabled"`
+	MontageVideoWatermarkPath     string           `json:"montageVideoWatermarkPath,omitempty"`
+	MontageVideoWatermarkPaths    []string         `json:"montageVideoWatermarkPaths,omitempty"`
+	MontageVideoWatermarkPosition string           `json:"montageVideoWatermarkPosition"`
+	MontageVideoWatermarkSize     int              `json:"montageVideoWatermarkSize"`
+	MontageVideoWatermarkRounding int              `json:"montageVideoWatermarkRounding"`
 	MontageOverlayEnabled         bool             `json:"montageOverlayEnabled"`
 	MontageOverlayPath            string           `json:"montageOverlayPath,omitempty"`
 	MontageOverlayOnIntro         bool             `json:"montageOverlayOnIntro"`
@@ -466,6 +472,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 				ImageControlEnabled:     true,
 				MontageControlEnabled:   true,
 				MontageIntroFadeDuration: 0.5,
+				MontageVideoWatermarkPosition: "bottom-right",
+				MontageVideoWatermarkSize:     15,
+				MontageVideoWatermarkRounding: 10,
 			},
 			FirstRun:                 true,
 			ShowWelcome:              true,
@@ -1505,8 +1514,11 @@ func (s *SettingsService) GetPipelineSettings() PipelineSettings {
 	settings, err := s.LoadSettings()
 	if err != nil {
 		return PipelineSettings{
-			TranslateTemperature: 0.7,
-			RewriteTemperature:   0.7,
+			TranslateTemperature:          0.7,
+			RewriteTemperature:            0.7,
+			MontageVideoWatermarkPosition: "bottom-right",
+			MontageVideoWatermarkSize:     15,
+			MontageVideoWatermarkRounding: 10,
 		}
 	}
 	// Якщо налаштування порожні, повертаємо дефолтні
@@ -1520,10 +1532,14 @@ func (s *SettingsService) GetPipelineSettings() PipelineSettings {
 		settings.Pipeline.SidebarWidth = 320
 		settings.Pipeline.TranslateEnabled = true
 		settings.Pipeline.RewriteEnabled = true
+		settings.Pipeline.MontageVideoWatermarkPosition = "bottom-right"
+		settings.Pipeline.MontageVideoWatermarkSize = 15
+		settings.Pipeline.MontageVideoWatermarkRounding = 10
 	}
-	if settings.Pipeline.VoiceMakerCharLimit <= 0 {
-		settings.Pipeline.VoiceMakerCharLimit = 3000 // Дефолтне значення
+	if settings.Pipeline.MontageVideoWatermarkPosition == "" {
+		settings.Pipeline.MontageVideoWatermarkPosition = "bottom-right"
 	}
+
 	return settings.Pipeline
 }
 

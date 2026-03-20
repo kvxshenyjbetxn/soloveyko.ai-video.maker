@@ -994,6 +994,20 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
+	// Randomly select video watermark if multiple paths are provided
+	if pSettings.MontageVideoWatermarkEnabled && len(pSettings.MontageVideoWatermarkPaths) > 0 {
+		validWatermarkPaths := []string{}
+		for _, p := range pSettings.MontageVideoWatermarkPaths {
+			if _, err := os.Stat(p); err == nil {
+				validWatermarkPaths = append(validWatermarkPaths, p)
+			}
+		}
+		if len(validWatermarkPaths) > 0 {
+			pSettings.MontageVideoWatermarkPath = validWatermarkPaths[rand.Intn(len(validWatermarkPaths))]
+			s.log("INFO", fmt.Sprintf("[Montage] Randomly selected video watermark: %s", filepath.Base(pSettings.MontageVideoWatermarkPath)), id, taskLabel)
+		}
+	}
+
 	introEnabled := pSettings.MontageIntroVideoEnabled &&
 		pSettings.MontageIntroVideoPath != "" &&
 		func() bool { _, e := os.Stat(pSettings.MontageIntroVideoPath); return e == nil }()
@@ -1246,6 +1260,48 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		montageV = "v_sub"
 	}
 
+	// Video Watermark preparation
+	videoWatermarkAvailable := false
+	videoWatermarkIdx := -1
+	vwOverlayX := "W-w-20"
+	vwOverlayY := "H-h-20"
+	if pSettings.MontageVideoWatermarkEnabled && pSettings.MontageVideoWatermarkPath != "" {
+		if _, err := os.Stat(pSettings.MontageVideoWatermarkPath); err == nil {
+			videoWatermarkAvailable = true
+			videoWatermarkIdx = len(inputSpecs)
+			inputSpecs = append(inputSpecs, inputSpec{
+				loop:       false,
+				path:       getRel(pSettings.MontageVideoWatermarkPath),
+				streamLoop: true,
+			})
+
+			// Coordinates for video watermark
+			switch pSettings.MontageVideoWatermarkPosition {
+			case "top-left":
+				vwOverlayX = "20"
+				vwOverlayY = "20"
+			case "top-center":
+				vwOverlayX = "(W-w)/2"
+				vwOverlayY = "20"
+			case "top-right":
+				vwOverlayX = "W-w-20"
+				vwOverlayY = "20"
+			case "bottom-left":
+				vwOverlayX = "20"
+				vwOverlayY = "H-h-20"
+			case "bottom-center":
+				vwOverlayX = "(W-w)/2"
+				vwOverlayY = "H-h-20"
+			case "bottom-right":
+				vwOverlayX = "W-w-20"
+				vwOverlayY = "H-h-20"
+			case "center":
+				vwOverlayX = "(W-w)/2"
+				vwOverlayY = "(H-h)/2"
+			}
+		}
+	}
+
 	// Watermark preparation (once for all uses)
 	wmAvailable := false
 	overlayX := "W-w-20"
@@ -1451,6 +1507,35 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	// No intro in main filter graph — watermark/overlay applied to montage only
 	wmMontageTag := "wm"
 	ovlMontageTag := "ovl"
+
+	// Apply Video Watermark to Montage
+	if videoWatermarkAvailable {
+		vwScale := float64(pSettings.MontageVideoWatermarkSize) / 100.0
+		if vwScale <= 0 {
+			vwScale = 0.15
+		}
+
+		// Pre-process video watermark: scale and apply rounding if needed
+		vwScaleStr := fmt.Sprintf("%d*%f:-2", baseW, vwScale)
+		if pSettings.MontageVideoWatermarkRounding > 0 {
+			roundingRadius := fmt.Sprintf("min(W,H)*%f/100", float64(pSettings.MontageVideoWatermarkRounding))
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%d:v]scale=%s,format=yuva420p,geq=lum='p(X,Y)':a='if(gt(abs(W/2-X),W/2-%s)*gt(abs(H/2-Y),H/2-%s),if(lte(hypot(%s-(W/2-abs(W/2-X)),%s-(H/2-abs(H/2-Y))),%s),a(X,Y),0),a(X,Y))'[v_vw_ready]",
+				videoWatermarkIdx, vwScaleStr, roundingRadius, roundingRadius, roundingRadius, roundingRadius, roundingRadius,
+			))
+		} else {
+			filterParts = append(filterParts, fmt.Sprintf(
+				"[%d:v]scale=%s,format=yuva420p[v_vw_ready]",
+				videoWatermarkIdx, vwScaleStr,
+			))
+		}
+
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[%s][v_vw_ready]overlay=x=%s:y=%s:format=yuv420:shortest=0[v_vw_montage]",
+			montageV, vwOverlayX, vwOverlayY,
+		))
+		montageV = "v_vw_montage"
+	}
 
 	// Apply Watermark & Overlay to Montage
 	currentMontageV := montageV

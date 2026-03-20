@@ -665,6 +665,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             'montageUpscaleFactor', 'montageTransitionDuration', 'montageTransitionEffect',
             'montageEncodingPreset', 'montageBitrate', 'montageIntroVideoEnabled', 'montageIntroVideoPath', 'montageIntroVideoPaths',
             'montageWatermarkEnabled', 'montageWatermarkPath', 'montageWatermarkPosition', 'montageWatermarkOpacity', 'montageWatermarkSize', 'montageWatermarkOnIntro',
+            'montageVideoWatermarkEnabled', 'montageVideoWatermarkPaths', 'montageVideoWatermarkPosition', 'montageVideoWatermarkSize', 'montageVideoWatermarkRounding',
             'montageOverlayEnabled', 'montageOverlayPath', 'montageOverlayOnIntro', 'montageMetadataSimulation'
         ];
         montageFields.forEach(f => { if (settings[f] !== undefined) templateData.montage[f] = settings[f]; });
@@ -748,6 +749,13 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             result.montageIntroVideoPaths = obj.montage.montageIntroVideoPaths;
         }
         result.montageIntroVideoPaths = result.montageIntroVideoPaths ?? [];
+
+        if (obj.montageVideoWatermarkPaths && Array.isArray(obj.montageVideoWatermarkPaths)) {
+            result.montageVideoWatermarkPaths = obj.montageVideoWatermarkPaths;
+        } else if (obj.montage && typeof obj.montage === 'object' && Array.isArray(obj.montage.montageVideoWatermarkPaths)) {
+            result.montageVideoWatermarkPaths = obj.montage.montageVideoWatermarkPaths;
+        }
+        result.montageVideoWatermarkPaths = result.montageVideoWatermarkPaths ?? [];
 
         return result;
     };
@@ -912,6 +920,11 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 imageShortVideoFillMode: cleanApplied.imageShortVideoFillMode ?? 'boomerang',
                 montageMetadataSimulation: cleanApplied.montageMetadataSimulation ?? 'None',
                 montageIntroVideoPaths: cleanApplied.montageIntroVideoPaths ?? [],
+                montageVideoWatermarkEnabled: cleanApplied.montageVideoWatermarkEnabled ?? false,
+                montageVideoWatermarkPaths: cleanApplied.montageVideoWatermarkPaths ?? [],
+                montageVideoWatermarkPosition: cleanApplied.montageVideoWatermarkPosition ?? 'bottom-right',
+                montageVideoWatermarkSize: cleanApplied.montageVideoWatermarkSize ?? 15,
+                montageVideoWatermarkRounding: cleanApplied.montageVideoWatermarkRounding ?? 10,
             };
         });
     };

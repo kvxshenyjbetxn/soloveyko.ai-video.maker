@@ -145,6 +145,12 @@ export interface PipelineSettings {
     montageEncodingPreset: string;
     montageBitrate: number;
 
+    montageVideoWatermarkEnabled: boolean;
+    montageVideoWatermarkPaths: string[];
+    montageVideoWatermarkPosition: string;
+    montageVideoWatermarkSize: number;
+    montageVideoWatermarkRounding: number;
+
     sidebarWidth: number;
     apiCollapsed: boolean;
     pathCollapsed: boolean;
@@ -253,6 +259,13 @@ export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }
             result.montageIntroVideoPaths = obj.montage.montageIntroVideoPaths;
         }
         result.montageIntroVideoPaths = result.montageIntroVideoPaths ?? [];
+        
+        if (obj.montageVideoWatermarkPaths && Array.isArray(obj.montageVideoWatermarkPaths)) {
+            result.montageVideoWatermarkPaths = obj.montageVideoWatermarkPaths;
+        } else if (obj.montage && typeof obj.montage === 'object' && Array.isArray(obj.montage.montageVideoWatermarkPaths)) {
+            result.montageVideoWatermarkPaths = obj.montage.montageVideoWatermarkPaths;
+        }
+        result.montageVideoWatermarkPaths = result.montageVideoWatermarkPaths ?? [];
 
         return result;
     }, []);

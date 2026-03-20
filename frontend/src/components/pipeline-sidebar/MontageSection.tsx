@@ -406,6 +406,168 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
 
                     <div style={{ margin: '12px 0', borderTop: '1px solid var(--border-color)', opacity: 0.5 }} />
 
+                    {/* Video Watermark Setting */}
+                    <div className="settings-control">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.montage.video_watermark_enabled')}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.montageVideoWatermarkEnabled || false}
+                                    onChange={(e) => handleChange('montageVideoWatermarkEnabled', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {settings.montageVideoWatermarkEnabled && (
+                        <>
+                            <div className="settings-label" style={{ marginTop: '8px', marginBottom: '8px', fontSize: '11px', opacity: 0.8 }}>
+                                {t('pipeline.montage.video_watermark_list')}
+                            </div>
+                            
+                            <div className="intro-videos-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                                {(settings.montageVideoWatermarkPaths || []).map((path: string, index: number) => (
+                                    <div key={index} className="intro-video-item" style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '8px 12px',
+                                        borderRadius: '10px',
+                                        backgroundColor: 'var(--bg-secondary)',
+                                        border: '1px solid var(--border-color)',
+                                        transition: 'all 0.2s',
+                                        position: 'relative'
+                                    }}>
+                                        <div style={{ fontSize: '16px' }}>🎬</div>
+                                        <div style={{
+                                            flex: 1,
+                                            fontSize: '11px',
+                                            color: 'var(--text-primary)',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            {path.split(/[\\/]/).pop()}
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                const currentPaths = settings.montageVideoWatermarkPaths ? [...settings.montageVideoWatermarkPaths] : [];
+                                                const newPaths = currentPaths.filter((_, i) => i !== index);
+                                                handleChange('montageVideoWatermarkPaths', newPaths);
+                                            }}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: 'var(--text-tertiary)',
+                                                cursor: 'pointer',
+                                                padding: '4px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                borderRadius: '4px'
+                                            }}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                                        </button>
+                                    </div>
+                                ))}
+
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const path = await (window as any).go.main.App.SelectVideo();
+                                            if (path) {
+                                                const currentPaths = settings.montageVideoWatermarkPaths ? [...settings.montageVideoWatermarkPaths] : [];
+                                                if (!currentPaths.includes(path)) {
+                                                    const newPaths = [...currentPaths, path];
+                                                    handleChange('montageVideoWatermarkPaths', newPaths);
+                                                }
+                                            }
+                                        } catch (err) {
+                                            console.error(err);
+                                        }
+                                    }}
+                                    className="add-video-btn"
+                                    style={{
+                                        width: '100%',
+                                        padding: '12px',
+                                        borderRadius: '10px',
+                                        border: '1px dashed var(--bg-tertiary)',
+                                        backgroundColor: 'rgba(var(--accent-rgb), 0.02)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s',
+                                        color: 'var(--text-secondary)',
+                                        fontSize: '11px',
+                                        fontWeight: '600'
+                                    }}
+                                    onMouseOver={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.05)';
+                                        e.currentTarget.style.borderColor = 'var(--accent-color)';
+                                        e.currentTarget.style.color = 'var(--text-primary)';
+                                    }}
+                                    onMouseOut={(e) => {
+                                        e.currentTarget.style.backgroundColor = 'rgba(var(--accent-rgb), 0.02)';
+                                        e.currentTarget.style.borderColor = 'var(--bg-tertiary)';
+                                        e.currentTarget.style.color = 'var(--text-secondary)';
+                                    }}
+                                >
+                                    <span>+ {t('pipeline.montage.video_watermark_add')}</span>
+                                </button>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.montage.video_watermark_position')}</label>
+                                <select
+                                    className="settings-select"
+                                    value={settings.montageVideoWatermarkPosition || 'bottom-right'}
+                                    onChange={(e) => handleChange('montageVideoWatermarkPosition', e.target.value)}
+                                >
+                                    <option value="top-left">{t('pipeline.montage.pos_top_left')}</option>
+                                    <option value="top-center">{t('pipeline.montage.pos_top_center')}</option>
+                                    <option value="top-right">{t('pipeline.montage.pos_top_right')}</option>
+                                    <option value="bottom-left">{t('pipeline.montage.pos_bottom_left')}</option>
+                                    <option value="bottom-center">{t('pipeline.montage.pos_bottom_center')}</option>
+                                    <option value="bottom-right">{t('pipeline.montage.pos_bottom_right')}</option>
+                                    <option value="center">{t('pipeline.montage.pos_center')}</option>
+                                </select>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.montage.video_watermark_scale')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range" min="5" max="50" step="1" className="settings-slider"
+                                        value={settings.montageVideoWatermarkSize || 15}
+                                        onChange={(e) => handleChange('montageVideoWatermarkSize', parseInt(e.target.value))}
+                                        style={{ '--range-progress': `${getProgress(settings.montageVideoWatermarkSize || 15, 5, 50)}%` } as React.CSSProperties}
+                                    />
+                                    <span className="settings-slider-value">{settings.montageVideoWatermarkSize || 15}%</span>
+                                </div>
+                            </div>
+
+                            <div className="settings-control">
+                                <label className="settings-label">{t('pipeline.montage.video_watermark_rounding')}</label>
+                                <div className="settings-slider-container">
+                                    <input
+                                        type="range" min="0" max="50" step="1" className="settings-slider"
+                                        value={settings.montageVideoWatermarkRounding || 0}
+                                        onChange={(e) => handleChange('montageVideoWatermarkRounding', parseInt(e.target.value))}
+                                        style={{ '--range-progress': `${getProgress(settings.montageVideoWatermarkRounding || 0, 0, 50)}%` } as React.CSSProperties}
+                                    />
+                                    <span className="settings-slider-value">{settings.montageVideoWatermarkRounding || 0}%</span>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    <div style={{ margin: '12px 0', borderTop: '1px solid var(--border-color)', opacity: 0.5 }} />
+
                     {/* Overlay Effects Setting */}
                     <div className="settings-control">
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
