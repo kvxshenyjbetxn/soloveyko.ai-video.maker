@@ -243,6 +243,17 @@ type GoogleMonitorMapping struct {
 	TemplateIDs []string `json:"templateIds"`
 }
 
+type GoogleSheetConfig struct {
+	ID                string                 `json:"id"`
+	Name              string                 `json:"name"`
+	URL               string                 `json:"url"`
+	Filter            string                 `json:"filter"`
+	Mappings          []GoogleMonitorMapping `json:"mappings"`
+	GlobalTemplateIDs []string               `json:"globalTemplateIds"`
+	DisplayColumns    []string               `json:"displayColumns"`
+	TaskNameColumn    string                 `json:"taskNameColumn"`
+}
+
 type Settings struct {
 	Language                      string                 `json:"language"`
 	Theme                         string                 `json:"theme"`
@@ -288,6 +299,7 @@ type Settings struct {
 	GoogleMonitorMappings         []GoogleMonitorMapping `json:"googleMonitorMappings"`
 	GoogleMonitorDisplayColumns   []string               `json:"googleMonitorDisplayColumns"`
 	GoogleMonitorTaskNameColumn   string                 `json:"googleMonitorTaskNameColumn"`
+	GoogleSheets                  []GoogleSheetConfig    `json:"googleSheets"`
 	AppAccessKey                  string                 `json:"appAccessKey"`
 	TelegramNotificationsEnabled  bool                   `json:"telegramNotificationsEnabled"`
 	TelegramChatID                string                 `json:"telegramChatID"`
@@ -581,6 +593,21 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 				ID:   "default",
 				Name: "Default",
 				Key:  settings.OpenRouterAPIKey,
+			},
+		}
+	}
+
+	// Міграція для GoogleSheets
+	if len(settings.GoogleSheets) == 0 && settings.GoogleSheetURL != "" {
+		settings.GoogleSheets = []GoogleSheetConfig{
+			{
+				ID:             "default",
+				Name:           "Table 1",
+				URL:            settings.GoogleSheetURL,
+				Filter:         settings.GoogleFilter,
+				Mappings:       settings.GoogleMonitorMappings,
+				DisplayColumns: settings.GoogleMonitorDisplayColumns,
+				TaskNameColumn: settings.GoogleMonitorTaskNameColumn,
 			},
 		}
 	}
@@ -1865,5 +1892,24 @@ func (s *SettingsService) SetGeneralMontageCodec(codec string) error {
 		return err
 	}
 	settings.Pipeline.MontageVideoCodec = codec
+	return s.SaveSettings(settings)
+}
+
+// GetGoogleSheets повертає список налаштованих таблиць
+func (s *SettingsService) GetGoogleSheets() []GoogleSheetConfig {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []GoogleSheetConfig{}
+	}
+	return settings.GoogleSheets
+}
+
+// SetGoogleSheets зберігає список налаштованих таблиць
+func (s *SettingsService) SetGoogleSheets(sheets []GoogleSheetConfig) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GoogleSheets = sheets
 	return s.SaveSettings(settings)
 }

@@ -1502,21 +1502,62 @@ func (a *App) SaveGoogleMonitorTaskNameColumn(column string) error {
 	return a.settings.SetGoogleMonitorTaskNameColumn(column)
 }
 
-func (a *App) ParseGoogleSheet() ([]api.GoogleParserRow, error) {
-	url := a.settings.GetGoogleSheetURL()
-	filter := a.settings.GetGoogleFilter()
-	if url == "" {
+func (a *App) GetGoogleSheets() []utils.GoogleSheetConfig {
+	return a.settings.GetGoogleSheets()
+}
+
+func (a *App) SaveGoogleSheets(sheets []utils.GoogleSheetConfig) error {
+	return a.settings.SetGoogleSheets(sheets)
+}
+
+type MultiSheetResult struct {
+	ID      string                `json:"id"`
+	Name    string                `json:"name"`
+	Results []api.GoogleParserRow `json:"results"`
+	Error   string                `json:"error,omitempty"`
+}
+
+func (a *App) ParseAllGoogleSheets() ([]MultiSheetResult, error) {
+	configs := a.settings.GetGoogleSheets()
+	var results []MultiSheetResult
+
+	for _, cfg := range configs {
+		if cfg.URL == "" {
+			continue
+		}
+
+		res, err := a.googleParser.ParseWithFilter(cfg.URL, cfg.Filter)
+		errStr := ""
+		if err != nil {
+			errStr = err.Error()
+			a.LogToUI("ERROR", fmt.Sprintf("[Google] Parsing failed for %s: %v", cfg.Name, err), "google", "Google Parser")
+		} else {
+			a.LogToUI("SUCCESS", fmt.Sprintf("[Google] Parsed %s: found %d items", cfg.Name, len(res)), "google", "Google Parser")
+		}
+
+		results = append(results, MultiSheetResult{
+			ID:      cfg.ID,
+			Name:    cfg.Name,
+			Results: res,
+			Error:   errStr,
+		})
+	}
+
+	return results, nil
+}
+
+func (a *App) ParseGoogleSheet(cfg utils.GoogleSheetConfig) ([]api.GoogleParserRow, error) {
+	if cfg.URL == "" {
 		return nil, fmt.Errorf("Google Sheet URL is not configured")
 	}
 
-	a.LogToUI("INFO", "[Google] Starting parsing sheet...", "google", "Google Parser")
-	results, err := a.googleParser.ParseWithFilter(url, filter)
+	a.LogToUI("INFO", fmt.Sprintf("[Google] Testing table: %s (Filter: %s)", cfg.Name, cfg.Filter), "google", "Google Parser")
+	results, err := a.googleParser.ParseWithFilter(cfg.URL, cfg.Filter)
 	if err != nil {
 		a.LogToUI("ERROR", fmt.Sprintf("[Google] Parsing failed: %v", err), "google", "Google Parser")
 		return nil, err
 	}
 
-	a.LogToUI("SUCCESS", fmt.Sprintf("[Google] Successfully parsed %d rows", len(results)), "google", "Google Parser")
 	return results, nil
 }
 

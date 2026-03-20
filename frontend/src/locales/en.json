@@ -688,11 +688,11 @@
         "translate_control": "Translation Control",
         "image_control": "Image Control",
         "montage_control_notification": {
-      "title": "Montage Ready for Review",
-      "message": "Tasks are waiting for review. Click the magic wand ✨ icon in each task card to adjust timings and click (Save).\n\nNote: This is a simplified preview editor. Visual effects and subtitle styling are not shown here — they will only appear in the final rendered video.",
-      "ok": "Got it"
-    },
-    "image_control_notification": {
+            "title": "Montage Ready for Review",
+            "message": "Tasks are waiting for review. Click the magic wand ✨ icon in each task card to adjust timings and click (Save).\n\nNote: This is a simplified preview editor. Visual effects and subtitle styling are not shown here — they will only appear in the final rendered video.",
+            "ok": "Got it"
+        },
+        "image_control_notification": {
             "title": "Images Ready",
             "message": "Image and video generation for all tasks is complete. Please go to the Gallery to review and edit before final montage.",
             "go_to_gallery": "Go to Gallery"
@@ -863,6 +863,10 @@
         "display_columns": "Columns to display",
         "display_columns_placeholder": "e.g. A, B, C",
         "task_name_column": "Column for task name",
-        "task_name_column_placeholder": "e.g. B"
+        "task_name_column_placeholder": "e.g. B",
+        "created": "Created {{count}} tasks",
+        "parsing": "Parsing...",
+        "nothing_found": "Nothing found",
+        "error": "Error: {{error}}"
     }
 }

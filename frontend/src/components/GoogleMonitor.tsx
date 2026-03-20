@@ -6,7 +6,25 @@ import { useTemplates } from '../contexts/TemplateContext';
 import { useQueueActions } from '../contexts/QueueContext';
 import { useToast } from '../contexts/ToastContext';
 // @ts-ignore
-import { ParseGoogleSheet, GetGoogleSheetURL, GetGoogleMonitorMappings, CheckExistingTasks, GetGoogleMonitorDisplayColumns, GetGoogleMonitorTaskNameColumn } from '../../wailsjs/go/main/App';
+import { ParseAllGoogleSheets, GetGoogleSheets } from '../../wailsjs/go/main/App';
+
+interface GoogleSheetConfig {
+    id: string;
+    name: string;
+    url: string;
+    filter: string;
+    mappings: Array<{ keyword: string; templateIds: string[] }>;
+    globalTemplateIds: string[];
+    displayColumns: string[];
+    taskNameColumn: string;
+}
+
+interface MultiSheetResult {
+    id: string;
+    name: string;
+    results: any[];
+    error?: string;
+}
 
 interface GoogleMonitorProps {
     navigateTo?: (path: string) => void;
@@ -17,67 +35,33 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
     const { t } = useI18n();
     const { accentColor } = useTheme();
     const { templates, flattenSettings } = useTemplates();
-    const { addTasks, addTask, getNextTaskName } = useQueueActions();
+    const { addTask, getNextTaskName } = useQueueActions();
     const { showToast } = useToast();
 
     const [isExpanded, setIsExpanded] = useState(false);
     const [isParsing, setIsParsing] = useState(false);
-    const [results, setResults] = useState<any[]>([]);
-    const [mappings, setMappings] = useState<any[]>([]);
-    const [displayColumns, setDisplayColumns] = useState<string[]>(['A']);
-    const [taskNameColumn, setTaskNameColumn] = useState<string>('B');
+    const [sheets, setSheets] = useState<GoogleSheetConfig[]>([]);
+    const [sheetResults, setSheetResults] = useState<MultiSheetResult[]>([]);
+    const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isPinned, setIsPinned] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const loadSettings = async () => {
+        const loadSheetsConfig = async () => {
             try {
-                let m: any[] = [];
-                let cols = ['A'];
-                let nameCol = 'B';
-                
-                try { 
-                    m = await GetGoogleMonitorMappings(); 
-                } catch(e) { console.error("Monitor mappings load fail", e); }
-                
-                try {
-                    if (typeof GetGoogleMonitorDisplayColumns === 'function') {
-                        cols = await GetGoogleMonitorDisplayColumns();
-                    }
-                } catch(e) { console.error("Monitor cols load fail", e); }
-
-                try {
-                    if (typeof GetGoogleMonitorTaskNameColumn === 'function') {
-                        nameCol = await GetGoogleMonitorTaskNameColumn();
-                    }
-                } catch(e) { console.error("Monitor nameCol load fail", e); }
-                
-                setMappings(m || []);
-                setDisplayColumns(cols || ['A']);
-                setTaskNameColumn(nameCol || 'B');
+                const s = await GetGoogleSheets();
+                setSheets(s || []);
+                if (s && s.length > 0 && !activeSheetId) {
+                    setActiveSheetId(s[0].id || 'default');
+                }
             } catch (err) {
-                console.error("Failed to load monitor settings:", err);
+                console.error("Monitor load fail", err);
             }
         };
-        if (isExpanded) {
-            loadSettings();
-        }
+        if (isExpanded) loadSheetsConfig();
     }, [isExpanded]);
-
-    useEffect(() => {
-        // @ts-ignore
-        if (window.runtime) {
-            // @ts-ignore
-            const unsub = window.runtime.EventsOn("monitor-opened", (id: string) => {
-                if (id !== 'google' && !isPinned) {
-                    setIsExpanded(false);
-                }
-            });
-            return () => unsub();
-        }
-    }, [isPinned]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -85,11 +69,8 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                 setIsExpanded(false);
             }
         };
-
         document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isExpanded, isPinned]);
 
     const handleExpand = (val: boolean) => {
@@ -100,277 +81,176 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
         }
     };
 
-    const handleRefresh = async (e: React.MouseEvent) => {
-        e.stopPropagation();
+    const handleParse = async (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
         setIsParsing(true);
         try {
-            const data = await ParseGoogleSheet();
-            setResults(data || []);
+            const data = await ParseAllGoogleSheets();
+            setSheetResults(data || []);
             setLastUpdate(new Date());
-        } catch (err) {
-            console.error(err);
+            if (data && data.length > 0) {
+                const total = data.reduce((acc: number, s: any) => acc + (s.results?.length || 0), 0);
+                if (total > 0 && !isExpanded) setIsExpanded(true);
+            }
+        } catch (err: any) {
+            showToast(t('google_monitor.parse_error') || "Parsing Error", 'error' as any);
         } finally {
             setIsParsing(false);
         }
     };
 
-    const copyToClipboard = (text: string, id: string) => {
-        if (!text) return;
-
-        // Спробуємо спочатку стандартний Clipboard API
-        navigator.clipboard.writeText(text).then(() => {
-            setCopiedId(id);
-            setTimeout(() => setCopiedId(null), 2000);
-        }).catch(err => {
-            console.error('Clipboard error:', err);
-            // Фолбек для Wails, якщо доступно
-            // @ts-ignore
-            if (window.runtime?.ClipboardSetText) {
-                // @ts-ignore
-                window.runtime.ClipboardSetText(text);
-                setCopiedId(id);
-                setTimeout(() => setCopiedId(null), 2000);
-            }
-        });
-    };
-
-    const handleClear = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setResults([]);
+    const handleClear = () => {
+        setSheetResults([]);
         setLastUpdate(null);
+        showToast(t('google_monitor.cleared') || "Cleared Monitor Data", 'info' as any);
     };
 
-    const handleCreateTask = async (item: any) => {
-        if (!item.content) {
-            showToast("Content is empty", "error");
-            return;
-        }
-
-        const mapping = mappings.find(m => {
+    const handleCreateTask = async (item: any, sheetConfig: GoogleSheetConfig) => {
+        const mapping = (sheetConfig.mappings || []).find(m => {
             if (!m.keyword) return false;
             const kw = m.keyword.toLowerCase();
             return item.columns?.some((c: string) => c?.toLowerCase().includes(kw)) || item.title?.toLowerCase().includes(kw);
         });
 
-        if (!mapping || !mapping.templateIds || mapping.templateIds.length === 0) {
-            showToast("No mapping found for this item", "info");
+        const globalIds = sheetConfig.globalTemplateIds || [];
+        const mappingIds = mapping?.templateIds || [];
+        const allTemplateIds = Array.from(new Set([...globalIds, ...mappingIds]));
+
+        if (allTemplateIds.length === 0) {
+            showToast(t('google_monitor.no_mapping') || "No mapping for this item", 'error' as any);
             return;
         }
 
-        // Determine task name from configured column
-        let taskName = getNextTaskName();
-        if (taskNameColumn) {
-            const colIdx = taskNameColumn.toUpperCase().split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
-            const customName = item.columns && item.columns[colIdx];
-            if (customName && customName.trim()) {
-                taskName = customName.trim();
-            }
-        }
-        
-        const content = item.content;
-
-        // Find relevant templates
-        const matchedTemplates = mapping.templateIds
-            .map((id: string) => templates.find(t => t.id === id))
-            .filter(Boolean);
-
-        if (matchedTemplates.length === 0) {
-            showToast("Mapped templates not found", "error");
-            return;
+        let taskNameBase = getNextTaskName();
+        if (sheetConfig.taskNameColumn) {
+            const colIdx = sheetConfig.taskNameColumn.toUpperCase().split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
+            const customName = item.columns?.[colIdx];
+            if (customName) taskNameBase = customName;
         }
 
-        // We assume the first template determines the type (translate/rewrite/voiceover)
-        // or we just use 'translate' as default if not clear.
-        // Actually templates HAVE a type.
-        const type = matchedTemplates[0]!.type;
+        const templatesToApply = allTemplateIds.map(id => templates.find(t => t.id === id)).filter(Boolean);
 
-        const tasksToCheck = matchedTemplates.map((tpl: any) => ({
-            taskName,
-            taskType: tpl!.type,
-            subName: tpl!.name,
-            settings: flattenSettings(tpl!.settings)
-        }));
-
-        try {
-            const results = await CheckExistingTasks(tasksToCheck);
-            // We can just add them, CheckExistingTasks is primarily for UI warning which we skip here for speed
-            // because the user wants "automatic" creation.
-            addTasks(type, content, tasksToCheck, taskName);
-            showToast(`Added ${tasksToCheck.length} tasks to queue`, "success");
-        } catch (err) {
-            console.error("Failed to check tasks:", err);
-            addTasks(type, content, tasksToCheck, taskName);
+        if (templatesToApply.length > 0) {
+            templatesToApply.forEach((template: any) => {
+                const activeSettings = flattenSettings(JSON.parse(JSON.stringify(template.settings)));
+                addTask('translate' as any, item.content, activeSettings, taskNameBase, template.name);
+            });
+            showToast(t('google_monitor.created', { count: templatesToApply.length }), 'success');
         }
     };
 
+    const copyToClipboard = (text: string, id: string) => {
+        navigator.clipboard.writeText(text);
+        // @ts-ignore
+        window.runtime?.EventsEmit("applyHistoryEntry", { type: 'translate', content: text, replace: true });
+        if (navigateTo) navigateTo('text.translate');
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 1500);
+    };
+
+    const activeResult = sheetResults.find(r => r.id === activeSheetId) || (sheetResults.length > 0 ? sheetResults[0] : null);
+    const activeConfig = sheets.find(s => s.id === (activeResult?.id || activeSheetId)) || (sheets.length > 0 ? sheets[0] : null);
+    const results = activeResult?.results || [];
+    const displayColumns = activeConfig?.displayColumns || ['A'];
+
+    const totalResultsCount = sheetResults.reduce((acc, s) => acc + (s.results?.length || 0), 0);
+    
+    const resultsWithTemplates = React.useMemo(() => {
+        const mappings = activeConfig?.mappings || [];
+        const hasGlobal = activeConfig?.globalTemplateIds && activeConfig.globalTemplateIds.length > 0;
+        
+        return results.map(item => {
+            if (hasGlobal) return { ...item, hasTemplates: true };
+            const hasMapping = mappings.some(m => {
+                if (!m.keyword || !m.templateIds || m.templateIds.length === 0) return false;
+                const kw = m.keyword.toLowerCase();
+                return item.columns?.some((c: string) => c?.toLowerCase().includes(kw)) || item.title?.toLowerCase().includes(kw);
+            });
+            return { ...item, hasTemplates: hasMapping };
+        });
+    }, [results, activeConfig]);
+
     return (
-        <div className={`google-monitor-wrapper ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`} ref={wrapperRef}>
-            {/* Expanded Panel */}
-            <div className="google-mini-panel">
+        <div ref={wrapperRef} className={`google-monitor-wrapper ${isExpanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`}>
+            {isExpanded && sheetResults.length > 1 && (
+                <div className="google-monitor-tabs-sidebar">
+                    {sheetResults.map(s => (
+                        <div key={s.id} className={`google-tab-item ${activeSheetId === s.id ? 'active' : ''}`} onClick={() => setActiveSheetId(s.id)}>
+                            <span className="google-tab-vertical-text">{s.name}</span>
+                            {s.results?.length > 0 && <span className="google-tab-count">{s.results.length}</span>}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="google-mini-panel premium-glass">
                 <div className="google-mini-header">
-                    <span className="google-mini-title">Google Sheets</span>
-                    <div className="google-header-controls">
-                        <button
-                            className="mini-refresh-btn"
-                            onClick={handleClear}
-                            title={t('api.googleSettings.clear')}
-                            style={{ color: '#f44336' }}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                            </svg>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="3"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                        <span style={{ fontWeight: 800, fontSize: '10px', textTransform: 'uppercase', color: accentColor, letterSpacing: '0.8px' }}>
+                            {activeResult ? activeResult.name : 'Sheet'}
+                        </span>
+                    </div>
+
+                    <div className="google-mini-actions">
+                        <button className={`mini-header-btn ${isParsing ? 'spinning' : ''}`} onClick={handleParse} disabled={isParsing}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button>
+                        <button className="mini-header-btn" onClick={handleClear}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                        <button className={`mini-header-btn ${isPinned ? 'active' : ''}`} onClick={() => setIsPinned(!isPinned)} style={{ border: isPinned ? `1px solid ${accentColor}` : '1px solid rgba(255,255,255,0.1)' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isPinned ? accentColor : "currentColor"} strokeWidth="2.5"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path><path d="m3.3 7 8.7 5 8.7-5"></path><path d="M12 22V12"></path></svg>
                         </button>
-                        <button
-                            className={`mini-refresh-btn ${isParsing ? 'spinning' : ''}`}
-                            onClick={handleRefresh}
-                            disabled={isParsing}
-                            title={t('api.googleSettings.parse')}
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 2v6h-6m-9 10H3v-6m18.1-1.9a9 9 0 1 1-2.2-4.9M3.9 16.1a9 9 0 0 1 2.2 4.9" />
-                            </svg>
-                        </button>
-                        <button
-                            className={`pin-btn ${isPinned ? 'active' : ''}`}
-                            onClick={() => setIsPinned(!isPinned)}
-                            title={isPinned ? t('common.unpin') : t('common.pin')}
-                        >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="12" y1="17" x2="12" y2="22"></line>
-                                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.79-.9A2 2 0 0 1 15 10.76V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3v4.76a2 2 0 0 1-1.11 1.79l-1.79.9A2 2 0 0 0 5 15.24Z"></path>
-                            </svg>
-                        </button>
-                        <button className="google-close-btn" onClick={() => setIsExpanded(false)}>&times;</button>
+                        <button className="mini-header-btn close-btn" onClick={() => setIsExpanded(false)}><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff4d4d" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                     </div>
                 </div>
 
-                <div className="google-mini-list premium-scrollbar">
-                    {results.length === 0 ? (
-                        <div className="google-empty-state">
-                            {isParsing ? t('api.googleSettings.parsing') : t('api.googleSettings.no_results')}
+                <div className="google-mini-list custom-scrollbar">
+                    {activeResult?.error && (
+                        <div style={{ padding: '10px', color: '#ff4d4d', fontSize: '11px', textAlign: 'center', background: 'rgba(255,77,77,0.05)', borderRadius: '8px', margin: '5px' }}>
+                            Помилка: {activeResult.error}
                         </div>
-                    ) : (
-                        results.map((item, idx) => {
-                            const mapping = mappings.find(m => {
-                                if (!m.keyword) return false;
-                                const kw = m.keyword.toLowerCase();
-                                return item.columns?.some((c: string) => c?.toLowerCase().includes(kw)) || item.title?.toLowerCase().includes(kw);
-                            });
-                            const hasTemplates = mapping && mapping.templateIds && mapping.templateIds.length > 0;
+                    )}
+                    {results.length === 0 && !activeResult?.error && (
+                        <div style={{ padding: '20px', opacity: 0.3, fontSize: '11px', textAlign: 'center' }}>
+                            Нічого не знайдено
+                        </div>
+                    )}
+                    {resultsWithTemplates.map((item, idx) => {
 
-                            return (
-                                <div key={idx} className="google-mini-item">
-                                    <div className="google-mini-item-top">
-                                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', overflow: 'hidden' }}>
-                                            <button
-                                                className="google-mini-copy-btn"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    copyToClipboard(item.title, `title-${idx}`);
-                                                }}
-                                                title={t('common.copy')}
-                                                style={{ padding: '2px', color: copiedId === `title-${idx}` ? '#4caf50' : '#ffc107' }}
-                                            >
-                                                {copiedId === `title-${idx}` ?
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                                    :
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                                }
-                                            </button>
-                                            {item.columns && item.columns.length > 8 && item.columns[8] && <span className="google-item-index">{item.columns[8]}</span>}
-                                            <div className="google-mini-item-title-container">
-                                                {displayColumns.map((col, cIdx) => {
-                                                    const colIdx = col.toUpperCase().split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
-                                                    const val = item.columns && item.columns[colIdx];
-                                                    if (!val) return null;
-                                                    
-                                                    // Стріпуємо, якщо це дублікат ключа мапінгу
-                                                    const kw = mapping?.keyword?.toLowerCase();
-                                                    if (cIdx > 0 && kw && val.toLowerCase().includes(kw)) return null;
-
-                                                    return (
-                                                        <span key={cIdx} className={`google-mini-item-col-${col}`} style={{ 
-                                                            color: cIdx === 0 ? '#4caf50' : 'rgba(255,255,255,0.7)',
-                                                            fontWeight: cIdx === 0 ? 'bold' : 'normal',
-                                                            marginRight: '6px',
-                                                            whiteSpace: 'nowrap',
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis'
-                                                        }}>
-                                                            {val}
-                                                        </span>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                            {hasTemplates && (
-                                                <button
-                                                    className="google-mini-create-btn"
-                                                    onClick={() => handleCreateTask(item)}
-                                                    title={t('google_monitor.create_task') || "Create Task"}
-                                                    style={{ color: '#4caf50' }}
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                                                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                                                    </svg>
-                                                </button>
-                                            )}
-                                            <button
-                                                className="google-mini-copy-btn"
-                                                style={{ color: copiedId === `content-${idx}` ? '#4caf50' : accentColor }}
-                                                onClick={() => {
-                                                    // Визначаємо куди вставляти
-                                                    let targetType = 'translate';
-                                                    if (currentPath?.includes('rewrite')) targetType = 'rewrite';
-                                                    if (currentPath?.includes('translate')) targetType = 'translate';
-
-                                                    // @ts-ignore
-                                                    window.runtime?.EventsEmit("applyHistoryEntry", {
-                                                        type: targetType,
-                                                        content: item.content,
-                                                        replace: true
-                                                    });
-
-                                                    copyToClipboard(item.content, `content-${idx}`);
-                                                }}
-                                                title={t('api.googleSettings.copy_content')}
-                                            >
-                                                {copiedId === `content-${idx}` ?
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                                    :
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                                }
-                                            </button>
+                        return (
+                            <div key={`${activeSheetId || 'default'}-${idx}`} className="google-mini-item">
+                                <div className="google-mini-item-main" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', overflow: 'hidden', flex: 1 }}>
+                                        <button className="google-mini-copy-btn" onClick={() => copyToClipboard(item.title, `title-${idx}`)} style={{ color: copiedId === `title-${idx}` ? '#4caf50' : '#ffc107', padding: '0', minWidth: '14px' }}>
+                                            {copiedId === `title-${idx}` ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg> : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>}
+                                        </button>
+                                        <div className="google-mini-item-title-container" style={{ display: 'flex', gap: '4px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                            {displayColumns.map((col, cIdx) => {
+                                                const colIdx = col.toUpperCase().split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
+                                                const val = item.columns?.[colIdx];
+                                                if (!val) return null;
+                                                return <span key={cIdx} style={{ fontSize: '11px', color: cIdx === 0 ? '#4caf50' : 'rgba(255,255,255,0.6)', fontWeight: cIdx === 0 ? '700' : '400', overflow: 'hidden', textOverflow: 'ellipsis' }}>{val}</span>;
+                                            })}
                                         </div>
                                     </div>
-                                    {item.content && (
-                                        <div className="google-mini-content-preview">
-                                            {item.content}
-                                        </div>
-                                    )}
+                                    <div style={{ display: 'flex', gap: '6px', marginLeft: '6px', flexShrink: 0 }}>
+                                        {item.hasTemplates && (
+                                            <button className="google-mini-create-btn" onClick={() => handleCreateTask(item, activeConfig!)} style={{ color: '#4caf50', padding: '2px' }}>
+                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                            </button>
+                                        )}
+                                        <button className="google-mini-copy-btn" onClick={() => copyToClipboard(item.content, `content-${idx}`)} style={{ color: copiedId === `content-${idx}` ? '#4caf50' : accentColor, padding: '2px' }}>
+                                            {copiedId === `content-${idx}` ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>}
+                                        </button>
+                                    </div>
                                 </div>
-                            );
-                        })
-                    )}
+                                {item.content && <div className="google-mini-content-preview" style={{ fontSize: '10.5px', opacity: 0.5, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.content}</div>}
+                            </div>
+                        );
+                    })}
                 </div>
-
-                {lastUpdate && (
-                    <div className="google-mini-footer">
-                        {lastUpdate.toLocaleTimeString()}
-                    </div>
-                )}
             </div>
-
-            {/* Floating Circle Button */}
-            <div
-                className={`google-monitor-circle ${isParsing ? 'is-parsing' : ''}`}
-                onClick={() => handleExpand(!isExpanded)}
-                style={{ backgroundColor: '#2e7d32' }}
-            >
-                {results.length > 0 && <div className="google-count-badge">{results.length}</div>}
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <div className={`google-monitor-circle ${isParsing ? 'is-parsing' : ''}`} onClick={() => handleExpand(!isExpanded)}>
+                {totalResultsCount > 0 && <div className="google-count-badge">{totalResultsCount}</div>}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
             </div>
         </div>
     );

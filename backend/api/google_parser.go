@@ -248,6 +248,13 @@ func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string) ([
 					searchValue = strings.TrimSpace(colMatch[2])
 				}
 
+				// Підтримка оператора заперечення (!)
+				isNot := false
+				if strings.HasPrefix(searchValue, "!") {
+					isNot = true
+					searchValue = strings.TrimSpace(strings.TrimPrefix(searchValue, "!"))
+				}
+
 				// Перевіряємо, чи є searchValue регулярним виразом
 				isRegex := strings.ContainsAny(searchValue, "\\[]*+?")
 				var re *regexp.Regexp
@@ -256,35 +263,44 @@ func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string) ([
 				}
 				valLower := strings.ToLower(searchValue)
 
+				foundMatch := false
 				if targetCol != -1 {
 					// Пошук у конкретній колонці
 					if targetCol < len(row) {
-						cellVal := row[targetCol]
+						cellVal := strings.TrimSpace(row[targetCol])
 						if isRegex && re != nil {
 							if re.MatchString(cellVal) {
-								partMatch = true
+								foundMatch = true
 							}
 						} else {
 							if strings.Contains(strings.ToLower(cellVal), valLower) {
-								partMatch = true
+								foundMatch = true
 							}
 						}
 					}
 				} else {
 					// Пошук по всіх колонках
 					for _, col := range row {
+						cellVal := strings.TrimSpace(col)
 						if isRegex && re != nil {
-							if re.MatchString(col) {
-								partMatch = true
+							if re.MatchString(cellVal) {
+								foundMatch = true
 								break
 							}
 						} else {
-							if strings.Contains(strings.ToLower(col), valLower) {
-								partMatch = true
+							if strings.Contains(strings.ToLower(cellVal), valLower) {
+								foundMatch = true
 								break
 							}
 						}
 					}
+				}
+
+				// Застосовуємо оператор заперечення
+				if isNot {
+					partMatch = !foundMatch
+				} else {
+					partMatch = foundMatch
 				}
 
 				if !partMatch {
@@ -295,6 +311,18 @@ func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string) ([
 		}
 
 		if !matchAll {
+			continue
+		}
+
+		// Перевіряємо чи рядок не порожній (хоча б одна колонка має текст)
+		isEmptyRow := true
+		for _, col := range row {
+			if strings.TrimSpace(col) != "" {
+				isEmptyRow = false
+				break
+			}
+		}
+		if isEmptyRow {
 			continue
 		}
 
@@ -316,27 +344,52 @@ func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string) ([
 			}
 		}
 
+		content := ""
 		if docLink != "" {
 			// Завантажуємо вміст документу
-			content, err := s.FetchDoc(docLink)
+			var err error
+			content, err = s.FetchDoc(docLink)
 			if err != nil {
 				content = fmt.Sprintf("Error: %v", err)
 			}
-
-			// Назва знаходиться у колонці B (індекс 1)
-			title := ""
-			if len(row) > 1 {
-				title = row[1]
+		} else {
+			// Якщо посилання немає — беремо контент із самого рядка (всі колонки через пробіл)
+			var sb strings.Builder
+			for i, col := range row {
+				if strings.TrimSpace(col) != "" {
+					if sb.Len() > 0 {
+						sb.WriteString(" | ")
+					}
+					sb.WriteString(col)
+				}
+				// Обмежуємо контент таблиці якщо він занадто довгий
+				if i > 15 {
+					break
+				}
 			}
-
-			results = append(results, GoogleParserRow{
-				Index:   i,
-				Title:   title,
-				Columns: row,
-				DocLink: docLink,
-				Content: content,
-			})
+			content = sb.String()
 		}
+
+		// Назва знаходиться у колонці B (індекс 1) або перша не порожня
+		title := ""
+		if len(row) > 1 && strings.TrimSpace(row[1]) != "" {
+			title = row[1]
+		} else {
+			for _, col := range row {
+				if strings.TrimSpace(col) != "" {
+					title = col
+					break
+				}
+			}
+		}
+
+		results = append(results, GoogleParserRow{
+			Index:   i,
+			Title:   title,
+			Columns: row,
+			DocLink: docLink,
+			Content: content,
+		})
 	}
 
 	return results, nil

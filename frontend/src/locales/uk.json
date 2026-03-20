@@ -876,6 +876,10 @@
     "display_columns": "Колонки для відображення",
     "display_columns_placeholder": "Наприклад: A, B, C",
     "task_name_column": "Колонка для назви завдання",
-    "task_name_column_placeholder": "Наприклад: B"
+    "task_name_column_placeholder": "Наприклад: B",
+    "created": "Created {{count}} tasks",
+    "parsing": "Parsing...",
+    "nothing_found": "Nothing found",
+    "error": "Error: {{error}}"
   }
 }
