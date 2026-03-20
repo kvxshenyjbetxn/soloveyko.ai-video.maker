@@ -215,7 +215,7 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 	defer func() { <-imgSem }()
 
 	// Fallback list
-	allModels := []string{"whisk", "flow", "grok", "gemini"}
+	allModels := []string{"whisk", "flow", "gemini"}
 	startIndex := -1
 	for i, m := range allModels {
 		if m == model {
@@ -601,7 +601,7 @@ func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt strin
 	defer func() { <-vidSem }()
 
 	// Fallback list
-	allModels := []string{"whisk", "flow", "grok", "gemini"}
+	allModels := []string{"whisk", "flow", "gemini"}
 	startIndex := -1
 	for i, m := range allModels {
 		if m == model {
