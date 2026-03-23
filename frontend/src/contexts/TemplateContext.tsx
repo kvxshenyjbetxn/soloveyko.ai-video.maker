@@ -213,6 +213,11 @@ export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }
                 if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
                     flatten(val);
                 } else {
+                    // EXCLUDE global performance/engine settings from templates
+                    if (i === 'subtitleService' || 
+                        i === 'subtitleThreads' || i === 'subtitleAmdThreads' || i === 'subtitleWhisperXThreads' ||
+                        i === 'montageMax' || i === 'montageMode' || i === 'montageCodec' || i === 'montagePriority') continue;
+                    
                     result[i] = val;
                 }
             }
