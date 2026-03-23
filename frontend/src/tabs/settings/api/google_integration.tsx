@@ -14,6 +14,7 @@ interface GoogleSheetConfig {
     globalTemplateIds: string[];
     displayColumns: string[];
     taskNameColumn: string;
+    ignoreRows: number;
 }
 
 export const GoogleIntegration = () => {
@@ -21,6 +22,7 @@ export const GoogleIntegration = () => {
     const { accentColor } = useTheme();
     const [sheets, setSheets] = useState<GoogleSheetConfig[]>([]);
     const [activeIdx, setActiveIdx] = useState(0);
+    const [displayColsInput, setDisplayColsInput] = useState("");
     const [allTemplates, setAllTemplates] = useState<any[]>([]);
     const [isParsing, setIsParsing] = useState(false);
     const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -33,13 +35,15 @@ export const GoogleIntegration = () => {
                 setAllTemplates(tpls || []);
                 
                 if (s && s.length > 0) {
-                    // Ensure all sheets have globalTemplateIds
-                    setSheets(s.map((sheet: any) => ({
+                    const loadedSheets = s.map((sheet: any) => ({
                         ...sheet,
                         globalTemplateIds: sheet.globalTemplateIds || []
-                    })));
+                    }));
+                    setSheets(loadedSheets);
+                    setActiveIdx(0);
+                    setDisplayColsInput(loadedSheets[0].displayColumns?.join(', ') || "");
                 } else {
-                    setSheets([{
+                    const newSheet: GoogleSheetConfig = {
                         id: Math.random().toString(36).substr(2, 9),
                         name: 'Таблиця 1',
                         url: '',
@@ -47,8 +51,12 @@ export const GoogleIntegration = () => {
                         mappings: [],
                         globalTemplateIds: [],
                         displayColumns: ['A'],
-                        taskNameColumn: 'B'
-                    }]);
+                        taskNameColumn: 'B',
+                        ignoreRows: 0
+                    };
+                    setSheets([newSheet]);
+                    setActiveIdx(0);
+                    setDisplayColsInput(newSheet.displayColumns.join(', ') || "");
                 }
             } catch (err) {
                 console.error("Failed to load sheets", err);
@@ -57,7 +65,13 @@ export const GoogleIntegration = () => {
         load();
     }, []);
 
-    const activeSheet = sheets[activeIdx] || sheets[0];
+    useEffect(() => {
+        if (sheets[activeIdx]) {
+            setDisplayColsInput(sheets[activeIdx].displayColumns?.join(', ') || "");
+        }
+    }, [activeIdx]); // Remove 'sheets' to prevent overwriting during typing
+
+    const activeSheet = sheets[activeIdx];
 
     const updateActiveSheet = (updates: Partial<GoogleSheetConfig>) => {
         setSheets(prev => prev.map((s, i) => i === activeIdx ? { ...s, ...updates } : s));
@@ -82,7 +96,8 @@ export const GoogleIntegration = () => {
             mappings: [],
             globalTemplateIds: [],
             displayColumns: ['A'],
-            taskNameColumn: 'B'
+            taskNameColumn: 'B',
+            ignoreRows: 0
         };
         setSheets([...sheets, newSheet]);
         setActiveIdx(sheets.length);
@@ -93,26 +108,30 @@ export const GoogleIntegration = () => {
         const newSheets = sheets.filter((_, i) => i !== idx);
         setSheets(newSheets);
         if (activeIdx >= newSheets.length) {
-            setActiveIdx(newSheets.length - 1);
+            setActiveIdx(Math.max(0, newSheets.length - 1));
         }
     };
 
     const handleAddMapping = () => {
+        if (!activeSheet) return;
         const newMappings = [...(activeSheet.mappings || []), { keyword: '', templateIds: [] }];
         updateActiveSheet({ mappings: newMappings });
     };
 
     const handleRemoveMapping = (mIdx: number) => {
+        if (!activeSheet) return;
         const newMappings = activeSheet.mappings.filter((_, i) => i !== mIdx);
         updateActiveSheet({ mappings: newMappings });
     };
 
     const handleMappingChange = (mIdx: number, field: string, value: any) => {
+        if (!activeSheet) return;
         const newMappings = activeSheet.mappings.map((m, i) => i === mIdx ? { ...m, [field]: value } : m);
         updateActiveSheet({ mappings: newMappings });
     };
 
     const handleToggleTemplate = (mIdx: number, tId: string) => {
+        if (!activeSheet) return;
         const newMappings = activeSheet.mappings.map((m, i) => {
             if (i !== mIdx) return m;
             const currentIds = m.templateIds || [];
@@ -126,6 +145,7 @@ export const GoogleIntegration = () => {
     };
 
     const handleToggleGlobalTemplate = (tId: string) => {
+        if (!activeSheet) return;
         const currentIds = activeSheet.globalTemplateIds || [];
         if (currentIds.includes(tId)) {
             updateActiveSheet({ globalTemplateIds: currentIds.filter(id => id !== tId) });
@@ -253,7 +273,7 @@ export const GoogleIntegration = () => {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px', marginBottom: '20px' }}>
                                 <div>
                                     <label style={{ display: 'block', marginBottom: '8px', opacity: 0.5, fontSize: '12px' }}>Фільтр (напр. G:!Done)</label>
                                     <input
@@ -269,8 +289,13 @@ export const GoogleIntegration = () => {
                                     <input
                                         type="text"
                                         className="premium-input"
-                                        value={activeSheet.displayColumns?.join(', ')}
-                                        onChange={e => updateActiveSheet({ displayColumns: e.target.value.split(',').map(s => s.trim().toUpperCase()).filter(Boolean) })}
+                                        value={displayColsInput}
+                                        onChange={e => setDisplayColsInput(e.target.value)}
+                                        onBlur={() => {
+                                            const cols = displayColsInput.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+                                            updateActiveSheet({ displayColumns: cols });
+                                            setDisplayColsInput(cols.join(', '));
+                                        }}
                                         style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
                                     />
                                 </div>
@@ -281,6 +306,16 @@ export const GoogleIntegration = () => {
                                         className="premium-input"
                                         value={activeSheet.taskNameColumn}
                                         onChange={e => updateActiveSheet({ taskNameColumn: e.target.value.trim().toUpperCase() })}
+                                        style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', opacity: 0.5, fontSize: '12px' }}>Пропустити рядків (Ignore Rows)</label>
+                                    <input
+                                        type="number"
+                                        className="premium-input"
+                                        value={activeSheet.ignoreRows || 0}
+                                        onChange={e => updateActiveSheet({ ignoreRows: parseInt(e.target.value) || 0 })}
                                         style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
                                     />
                                 </div>

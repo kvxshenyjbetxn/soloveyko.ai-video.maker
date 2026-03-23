@@ -860,6 +860,14 @@
         "dont_show_again": "Don't show again on login"
     },
     "google_monitor": {
+        "title": "Google Monitor",
+        "sync": "Sync",
+        "clear": "Clear",
+        "cleared": "Monitor data cleared",
+        "parse_error": "Error parsing sheets",
+        "no_mapping": "No template mapping found for this item",
+        "last_update": "Last update: {{time}}",
+        "empty": "No results yet. Click 'Sync'.",
         "create_task": "Create task from template",
         "mappings": "Template Mapping by Title",
         "keyword_placeholder": "Keyword in title...",
@@ -870,7 +878,7 @@
         "display_columns_placeholder": "e.g. A, B, C",
         "task_name_column": "Column for task name",
         "task_name_column_placeholder": "e.g. B",
-        "created": "Created {{count}} tasks",
+        "created": "Tasks created: {{count}}",
         "parsing": "Parsing...",
         "nothing_found": "Nothing found",
         "error": "Error: {{error}}"

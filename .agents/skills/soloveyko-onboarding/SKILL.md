@@ -44,6 +44,7 @@ The Go backend is firmly decoupled into distinct responsibilities:
   - LLMs: `openrouter.go`
   - Audio/Voice: `elevenlabsbot.go`, `elevenlabsua.go`, `elevenlabsunlim.go`, `edgetts.go`, `voicemaker.go`, `assemblyai.go`
   - Images/Assets: `pollinations.go`, `elevenlabsimage.go`, `googler.go`, `google_parser.go`
+    - **Google Parser Integration**: Uses official Google Sheets V4 and Google Docs V1 APIs. Requires `credentials.json` (Service Account) in the root directory. Documents must be shared with the service account email.
   - Other: `telegram.go`, `auth.go`
 - **`backend/pipeline/`**: The orchestration heart.
   - `service.go`: Controls the flow state, semaphore concurrency (prevents CPU/GPU overload on heavy tasks), and broadcasts progress/completion events.

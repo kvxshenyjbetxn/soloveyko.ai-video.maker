@@ -873,6 +873,14 @@
     "videos_limit": "Макс. відео"
   },
   "google_monitor": {
+    "title": "Google Монітор",
+    "sync": "Синхронізувати",
+    "clear": "Очистити",
+    "cleared": "Дані монітора очищено",
+    "parse_error": "Помилка парсингу таблиць",
+    "no_mapping": "Для цього пункту не знайдено мапінгу шаблонів",
+    "last_update": "Останнє оновлення: {{time}}",
+    "empty": "Результатів поки немає. Натисніть 'Синхронізувати'.",
     "create_task": "Створити завдання за шаблоном",
     "mappings": "Мапінг шаблонів за назвою",
     "keyword_placeholder": "Ключове слово у назві...",
@@ -883,9 +891,9 @@
     "display_columns_placeholder": "Наприклад: A, B, C",
     "task_name_column": "Колонка для назви завдання",
     "task_name_column_placeholder": "Наприклад: B",
-    "created": "Created {{count}} tasks",
-    "parsing": "Parsing...",
-    "nothing_found": "Nothing found",
-    "error": "Error: {{error}}"
+    "created": "Створено завдань: {{count}}",
+    "parsing": "Парсинг...",
+    "nothing_found": "Нічого не знайдено",
+    "error": "Помилка: {{error}}"
   }
 }

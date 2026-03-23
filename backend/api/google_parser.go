@@ -1,13 +1,21 @@
 package api
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
+
+	"google.golang.org/api/docs/v1"
+	"google.golang.org/api/option"
+	"google.golang.org/api/sheets/v4"
 )
 
 type GoogleParserRow struct {
@@ -19,7 +27,10 @@ type GoogleParserRow struct {
 }
 
 type GoogleParserService struct {
-	client *http.Client
+	client        *http.Client
+	sheetsService *sheets.Service
+	docsService   *docs.Service
+	mu            sync.Mutex
 }
 
 func NewGoogleParserService() *GoogleParserService {
@@ -28,6 +39,39 @@ func NewGoogleParserService() *GoogleParserService {
 			Timeout: 30 * time.Second,
 		},
 	}
+}
+
+func (s *GoogleParserService) initServices() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.sheetsService != nil && s.docsService != nil {
+		return nil
+	}
+
+	ctx := context.Background()
+	credPath := "credentials.json"
+	if _, err := os.Stat(credPath); os.IsNotExist(err) {
+		return fmt.Errorf("credentials.json not found")
+	}
+
+	if s.sheetsService == nil {
+		sheetsSrv, err := sheets.NewService(ctx, option.WithCredentialsFile(credPath))
+		if err != nil {
+			return fmt.Errorf("failed to init sheets service: %v", err)
+		}
+		s.sheetsService = sheetsSrv
+	}
+
+	if s.docsService == nil {
+		docsSrv, err := docs.NewService(ctx, option.WithCredentialsFile(credPath))
+		if err != nil {
+			return fmt.Errorf("failed to init docs service: %v", err)
+		}
+		s.docsService = docsSrv
+	}
+
+	return nil
 }
 
 // ExtractID витягує ID документа та ID конкретної вкладки (gid або tab)
@@ -41,7 +85,6 @@ func (s *GoogleParserService) ExtractID(url string) (id string, kind string, sub
 		kind = "sheet"
 	}
 
-	// 1. Витягуємо основний ID документа
 	dMatch := regexp.MustCompile(`/d/([a-zA-Z0-9-_]+)`).FindStringSubmatch(url)
 	if len(dMatch) > 1 {
 		id = dMatch[1]
@@ -56,7 +99,6 @@ func (s *GoogleParserService) ExtractID(url string) (id string, kind string, sub
 		return "", "", ""
 	}
 
-	// 2. Витягуємо суб-ID (вкладку/лист)
 	if kind == "sheet" {
 		gidMatch := regexp.MustCompile(`gid=([0-9]+)`).FindStringSubmatch(url)
 		if len(gidMatch) > 1 {
@@ -65,12 +107,10 @@ func (s *GoogleParserService) ExtractID(url string) (id string, kind string, sub
 			subId = "0"
 		}
 	} else {
-		// Для Docs вкладка може бути в параметрі tab або в хеші #tab
 		tabMatch := regexp.MustCompile(`tab=([a-zA-Z0-9.\-_]+)`).FindStringSubmatch(url)
 		if len(tabMatch) > 1 {
 			subId = tabMatch[1]
 		} else {
-			// Якщо вкладку не вказано, за замовчуванням це t.0 (перша вкладка)
 			subId = "t.0"
 		}
 	}
@@ -78,24 +118,70 @@ func (s *GoogleParserService) ExtractID(url string) (id string, kind string, sub
 	return id, kind, subId
 }
 
-// FetchSheet завантажує таблицю у форматі CSV (конкретну вкладку)
+func (s *GoogleParserService) getSheetName(spreadsheetId string, gid string) (string, error) {
+	if err := s.initServices(); err != nil {
+		return "", err
+	}
+
+	ss, err := s.sheetsService.Spreadsheets.Get(spreadsheetId).Do()
+	if err != nil {
+		return "", err
+	}
+	for _, sheet := range ss.Sheets {
+		if fmt.Sprintf("%d", sheet.Properties.SheetId) == gid {
+			return sheet.Properties.Title, nil
+		}
+	}
+	if len(ss.Sheets) > 0 && (gid == "" || gid == "0") {
+		return ss.Sheets[0].Properties.Title, nil
+	}
+	return "", fmt.Errorf("sheet with gid %s not found", gid)
+}
+
 func (s *GoogleParserService) FetchSheet(url string) ([][]string, error) {
 	id, kind, gid := s.ExtractID(url)
 	if id == "" || kind != "sheet" {
 		return nil, fmt.Errorf("invalid google sheet url")
 	}
 
-	exportUrl := fmt.Sprintf("https://docs.google.com/spreadsheets/d/%s/export?format=csv&gid=%s", id, gid)
+	if err := s.initServices(); err != nil {
+		return s.fetchSheetUnofficial(id, gid)
+	}
 
+	sheetName, err := s.getSheetName(id, gid)
+	if err != nil {
+		return s.fetchSheetUnofficial(id, gid)
+	}
+
+	resp, err := s.sheetsService.Spreadsheets.Values.Get(id, sheetName+"!A1:Z2000").Do()
+	if err != nil {
+		return s.fetchSheetUnofficial(id, gid)
+	}
+
+	var results [][]string
+	for _, row := range resp.Values {
+		// Завжди робимо рядок довжиною мінімум 26 стовпців (A-Z)
+		size := len(row)
+		if size < 26 {
+			size = 26
+		}
+		strRow := make([]string, size)
+		for i, val := range row {
+			strRow[i] = fmt.Sprintf("%v", val)
+		}
+		results = append(results, strRow)
+	}
+
+	return results, nil
+}
+
+func (s *GoogleParserService) fetchSheetUnofficial(id string, gid string) ([][]string, error) {
+	exportUrl := fmt.Sprintf("https://docs.google.com/spreadsheets/d/%s/export?format=csv&gid=%s", id, gid)
 	resp, err := s.client.Get(exportUrl)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return nil, fmt.Errorf("Access Denied: Is the sheet shared?")
-	}
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %s", resp.Status)
@@ -106,45 +192,76 @@ func (s *GoogleParserService) FetchSheet(url string) ([][]string, error) {
 	return reader.ReadAll()
 }
 
-// FetchDoc завантажує конкретну вкладку документа як текст
+func (s *GoogleParserService) extractTextFromDoc(doc *docs.Document) string {
+	var sb strings.Builder
+	for _, element := range doc.Body.Content {
+		if element.Paragraph != nil {
+			for _, run := range element.Paragraph.Elements {
+				if run.TextRun != nil {
+					sb.WriteString(run.TextRun.Content)
+				}
+			}
+		} else if element.Table != nil {
+			for _, row := range element.Table.TableRows {
+				for _, cell := range row.TableCells {
+					for _, content := range cell.Content {
+						if content.Paragraph != nil {
+							for _, run := range content.Paragraph.Elements {
+								if run.TextRun != nil {
+									sb.WriteString(run.TextRun.Content)
+								}
+							}
+						}
+					}
+					sb.WriteString(" | ")
+				}
+				sb.WriteString("\n")
+			}
+		}
+	}
+	return sb.String()
+}
+
 func (s *GoogleParserService) FetchDoc(url string) (string, error) {
 	id, kind, subId := s.ExtractID(url)
 	if id == "" {
 		return "", fmt.Errorf("invalid google url")
 	}
 
-	var exportUrl string
 	if kind == "sheet" {
-		exportUrl = fmt.Sprintf("https://docs.google.com/spreadsheets/d/%s/export?format=csv&gid=%s", id, subId)
-	} else {
-		// ВИКОРИСТОВУЄМО ТЕХНІКУ ІЗОЛЯЦІЇ ВКЛАДКИ
-		// Google Docs підтримує параметр &tab= для експорту конкретної вкладки
-		exportUrl = fmt.Sprintf("https://docs.google.com/document/d/%s/export?format=txt&tab=%s", id, subId)
+		rows, err := s.FetchSheet(url)
+		if err != nil {
+			return "", err
+		}
+		var sb strings.Builder
+		for _, row := range rows {
+			sb.WriteString(strings.Join(row, " | "))
+			sb.WriteString("\n")
+		}
+		return sb.String(), nil
 	}
 
+	if err := s.initServices(); err != nil {
+		return s.fetchDocUnofficial(id, subId)
+	}
+
+	doc, err := s.docsService.Documents.Get(id).Do()
+	if err != nil {
+		return s.fetchDocUnofficial(id, subId)
+	}
+
+	return s.extractTextFromDoc(doc), nil
+}
+
+func (s *GoogleParserService) fetchDocUnofficial(id string, subId string) (string, error) {
+	exportUrl := fmt.Sprintf("https://docs.google.com/document/d/%s/export?format=txt&tab=%s", id, subId)
 	resp, err := s.client.Get(exportUrl)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return "", fmt.Errorf("ACCESS_DENIED: Share the doc")
-	}
-
 	if resp.StatusCode != http.StatusOK {
-		// Якщо з &tab= помилка, пробуємо без нього як фолбек
-		if kind == "doc" {
-			exportUrl = fmt.Sprintf("https://docs.google.com/document/d/%s/export?format=txt", id)
-			resp2, err2 := s.client.Get(exportUrl)
-			if err2 == nil {
-				defer resp2.Body.Close()
-				if resp2.StatusCode == http.StatusOK {
-					body, _ := io.ReadAll(resp2.Body)
-					return s.clipToFirstTab(string(body)), nil
-				}
-			}
-		}
 		return "", fmt.Errorf("ERROR %s", resp.Status)
 	}
 
@@ -155,19 +272,13 @@ func (s *GoogleParserService) FetchDoc(url string) (string, error) {
 
 	content := string(body)
 	content = strings.TrimPrefix(content, "\ufeff")
-
-	// Якщо ми завантажили документ цілком (без ізоляції вкладки сервером),
-	// обрізаємо його вручну до першої вкладки.
 	return s.clipToFirstTab(content), nil
 }
 
-// clipToFirstTab обрізає текст, залишаючи лише вміст першої вкладки
 func (s *GoogleParserService) clipToFirstTab(content string) string {
-	// 0. Нормалізуємо переноси рядків відразу для стабільної роботи регулярних виразів
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	content = strings.TrimPrefix(content, "\ufeff")
 
-	// 1. Пошук символу Form Feed (\x0c, ^L) - це стандартний роздільник сторінок/вкладок
 	if strings.Contains(content, "\x0c") {
 		parts := strings.Split(content, "\x0c")
 		for _, p := range parts {
@@ -178,32 +289,24 @@ func (s *GoogleParserService) clipToFirstTab(content string) string {
 		}
 	}
 
-	// 2. МЕНШ АГРЕСИВНА ОБРІЗКА ЗА ПУСТИМИ РЯДКАМИ
-	// Збільшуємо ліміт до 9 або більше порожніх рядків підряд, щоб не обрізати легітимний контент
 	reGap := regexp.MustCompile(`\n(\s*\n){9,}`)
 	gapLoc := reGap.FindStringIndex(content)
 	if gapLoc != nil {
-		// Обрізаємо все, що після першого великого пропуску
 		content = content[:gapLoc[0]]
 	}
 
-	// 3. ДОДАТКОВА ОБРІЗКА ЗА ЗАГОЛОВКАМИ
-	// Шукаємо в тексті будь-які згадки нових вкладок/сторінок/розділів (крім першої)
 	reNextTab := regexp.MustCompile(`(?mi)\n.*(Вкладка|Tab|Sheet|Page|Сторінка|Раздел|Section)\s*[23456789].*\n`)
 	loc := reNextTab.FindStringIndex(content)
 	if loc != nil {
 		content = content[:loc[0]]
 	}
 
-	// 4. ОЧИЩЕННЯ ПОЧАТКУ
-	// Видаляємо заголовок самої першої вкладки ("Вкладка 1") з самого верху, якщо він там є
 	reFirstTab := regexp.MustCompile(`(?mi)^.*(Вкладка|Tab|Sheet|Page|Сторінка|Раздел|Section)\s*1.*$`)
 	content = reFirstTab.ReplaceAllString(content, "")
 
 	return strings.TrimSpace(content)
 }
 
-// colLetterToIndex перетворює букву колонки (A, B, C...) в індекс (0, 1, 2...)
 func colLetterToIndex(letter string) int {
 	letter = strings.ToUpper(letter)
 	index := 0
@@ -216,8 +319,7 @@ func colLetterToIndex(letter string) int {
 	return index - 1
 }
 
-// ParseWithFilter виконує повний цикл: парсинг таблиці -> фільтрація -> завантаження контенту з посилань
-func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string) ([]GoogleParserRow, error) {
+func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string, ignoreRows int) ([]GoogleParserRow, error) {
 	rows, err := s.FetchSheet(sheetUrl)
 	if err != nil {
 		return nil, err
@@ -226,8 +328,10 @@ func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string) ([
 	var results []GoogleParserRow
 
 	for i, row := range rows {
-		// Розширене фільтрування: підтримує декілька умов через '&',
-		// конкретні колонки (A:значення) та регулярні вирази
+		// Пропускаємо перші N рядків
+		if i < ignoreRows {
+			continue
+		}
 		matchAll := true
 		if filter != "" {
 			parts := strings.Split(filter, "&")
@@ -238,24 +342,21 @@ func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string) ([
 				}
 
 				partMatch := false
-				targetCol := -1 // -1 означає пошук по всіх колонках
+				targetCol := -1
 				searchValue := part
 
-				// Перевіряємо формат "Буква:Значення" (наприклад A:Done)
 				colMatch := regexp.MustCompile(`^([a-zA-Z]+):(.*)$`).FindStringSubmatch(part)
 				if len(colMatch) > 2 {
 					targetCol = colLetterToIndex(colMatch[1])
 					searchValue = strings.TrimSpace(colMatch[2])
 				}
 
-				// Підтримка оператора заперечення (!)
 				isNot := false
 				if strings.HasPrefix(searchValue, "!") {
 					isNot = true
 					searchValue = strings.TrimSpace(strings.TrimPrefix(searchValue, "!"))
 				}
 
-				// Перевіряємо, чи є searchValue регулярним виразом
 				isRegex := strings.ContainsAny(searchValue, "\\[]*+?")
 				var re *regexp.Regexp
 				if isRegex {
@@ -265,77 +366,44 @@ func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string) ([
 
 				foundMatch := false
 				if targetCol != -1 {
-					// Пошук у конкретній колонці
 					if targetCol < len(row) {
 						cellVal := strings.TrimSpace(row[targetCol])
 						if isRegex && re != nil {
-							if re.MatchString(cellVal) {
-								foundMatch = true
-							}
+							if re.MatchString(cellVal) { foundMatch = true }
 						} else {
-							if strings.Contains(strings.ToLower(cellVal), valLower) {
-								foundMatch = true
-							}
+							if strings.Contains(strings.ToLower(cellVal), valLower) { foundMatch = true }
 						}
 					}
 				} else {
-					// Пошук по всіх колонках
 					for _, col := range row {
 						cellVal := strings.TrimSpace(col)
 						if isRegex && re != nil {
-							if re.MatchString(cellVal) {
-								foundMatch = true
-								break
-							}
+							if re.MatchString(cellVal) { foundMatch = true; break }
 						} else {
-							if strings.Contains(strings.ToLower(cellVal), valLower) {
-								foundMatch = true
-								break
-							}
+							if strings.Contains(strings.ToLower(cellVal), valLower) { foundMatch = true; break }
 						}
 					}
 				}
 
-				// Застосовуємо оператор заперечення
-				if isNot {
-					partMatch = !foundMatch
-				} else {
-					partMatch = foundMatch
-				}
-
-				if !partMatch {
-					matchAll = false
-					break
-				}
+				if isNot { partMatch = !foundMatch } else { partMatch = foundMatch }
+				if !partMatch { matchAll = false; break }
 			}
 		}
 
-		if !matchAll {
-			continue
-		}
+		if !matchAll { continue }
 
-		// Перевіряємо чи рядок не порожній (хоча б одна колонка має текст)
 		isEmptyRow := true
 		for _, col := range row {
-			if strings.TrimSpace(col) != "" {
-				isEmptyRow = false
-				break
-			}
+			if strings.TrimSpace(col) != "" { isEmptyRow = false; break }
 		}
-		if isEmptyRow {
-			continue
-		}
+		if isEmptyRow { continue }
 
-		// Шукаємо посилання на Google Docs/Sheets у рядку
 		var docLink string
-
-		// Пріоритет: стовпчик F (індекс 5), потім C (індекс 2)
 		if len(row) > 5 && strings.Contains(row[5], "docs.google.com") {
 			docLink = row[5]
 		} else if len(row) > 2 && strings.Contains(row[2], "docs.google.com") {
 			docLink = row[2]
 		} else {
-			// Якщо в пріоритетних пусто — шукаємо в будь-якому іншому
 			for _, col := range row {
 				if strings.Contains(col, "docs.google.com") {
 					docLink = col
@@ -344,53 +412,27 @@ func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string) ([
 			}
 		}
 
-		content := ""
-		if docLink != "" {
-			// Завантажуємо вміст документу
-			var err error
-			content, err = s.FetchDoc(docLink)
-			if err != nil {
-				content = fmt.Sprintf("Error: %v", err)
-			}
-		} else {
-			// Якщо посилання немає — беремо контент із самого рядка (всі колонки через пробіл)
-			var sb strings.Builder
-			for i, col := range row {
-				if strings.TrimSpace(col) != "" {
-					if sb.Len() > 0 {
-						sb.WriteString(" | ")
-					}
-					sb.WriteString(col)
-				}
-				// Обмежуємо контент таблиці якщо він занадто довгий
-				if i > 15 {
-					break
-				}
-			}
-			content = sb.String()
-		}
-
-		// Назва знаходиться у колонці B (індекс 1) або перша не порожня
 		title := ""
 		if len(row) > 1 && strings.TrimSpace(row[1]) != "" {
 			title = row[1]
 		} else {
 			for _, col := range row {
-				if strings.TrimSpace(col) != "" {
-					title = col
-					break
-				}
+				if strings.TrimSpace(col) != "" { title = col; break }
 			}
 		}
 
-		results = append(results, GoogleParserRow{
+		finalRow := GoogleParserRow{
 			Index:   i,
 			Title:   title,
-			Columns: row,
+			Columns: rows[i], // Використовуємо рядок з FetchSheet (вже з []string)
 			DocLink: docLink,
-			Content: content,
-		})
+		}
+		results = append(results, finalRow)
 	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Index < results[j].Index
+	})
 
 	return results, nil
 }

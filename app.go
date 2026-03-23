@@ -1519,30 +1519,37 @@ type MultiSheetResult struct {
 
 func (a *App) ParseAllGoogleSheets() ([]MultiSheetResult, error) {
 	configs := a.settings.GetGoogleSheets()
-	var results []MultiSheetResult
+	results := make([]MultiSheetResult, len(configs))
+	var wg sync.WaitGroup
 
-	for _, cfg := range configs {
+	for i, cfg := range configs {
 		if cfg.URL == "" {
+			results[i] = MultiSheetResult{ID: cfg.ID, Name: cfg.Name}
 			continue
 		}
 
-		res, err := a.googleParser.ParseWithFilter(cfg.URL, cfg.Filter)
-		errStr := ""
-		if err != nil {
-			errStr = err.Error()
-			a.LogToUI("ERROR", fmt.Sprintf("[Google] Parsing failed for %s: %v", cfg.Name, err), "google", "Google Parser")
-		} else {
-			a.LogToUI("SUCCESS", fmt.Sprintf("[Google] Parsed %s: found %d items", cfg.Name, len(res)), "google", "Google Parser")
-		}
+		wg.Add(1)
+		go func(idx int, c utils.GoogleSheetConfig) {
+			defer wg.Done()
+			res, err := a.googleParser.ParseWithFilter(c.URL, c.Filter, c.IgnoreRows)
+			errStr := ""
+			if err != nil {
+				errStr = err.Error()
+				a.LogToUI("ERROR", fmt.Sprintf("[Google] Parsing failed for %s: %v", c.Name, err), "google", "Google Parser")
+			} else {
+				a.LogToUI("SUCCESS", fmt.Sprintf("[Google] Parsed %s: found %d items", c.Name, len(res)), "google", "Google Parser")
+			}
 
-		results = append(results, MultiSheetResult{
-			ID:      cfg.ID,
-			Name:    cfg.Name,
-			Results: res,
-			Error:   errStr,
-		})
+			results[idx] = MultiSheetResult{
+				ID:      c.ID,
+				Name:    c.Name,
+				Results: res,
+				Error:   errStr,
+			}
+		}(i, cfg)
 	}
 
+	wg.Wait()
 	return results, nil
 }
 
@@ -1552,13 +1559,20 @@ func (a *App) ParseGoogleSheet(cfg utils.GoogleSheetConfig) ([]api.GoogleParserR
 	}
 
 	a.LogToUI("INFO", fmt.Sprintf("[Google] Testing table: %s (Filter: %s)", cfg.Name, cfg.Filter), "google", "Google Parser")
-	results, err := a.googleParser.ParseWithFilter(cfg.URL, cfg.Filter)
+	results, err := a.googleParser.ParseWithFilter(cfg.URL, cfg.Filter, cfg.IgnoreRows)
 	if err != nil {
 		a.LogToUI("ERROR", fmt.Sprintf("[Google] Parsing failed: %v", err), "google", "Google Parser")
 		return nil, err
 	}
 
 	return results, nil
+}
+
+func (a *App) FetchGoogleDocContent(url string) (string, error) {
+	if url == "" {
+		return "", nil
+	}
+	return a.googleParser.FetchDoc(url)
 }
 
 // Telegram Notifications Methods

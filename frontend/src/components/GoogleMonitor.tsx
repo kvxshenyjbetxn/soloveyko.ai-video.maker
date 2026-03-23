@@ -6,7 +6,7 @@ import { useTemplates } from '../contexts/TemplateContext';
 import { useQueueActions } from '../contexts/QueueContext';
 import { useToast } from '../contexts/ToastContext';
 // @ts-ignore
-import { ParseAllGoogleSheets, GetGoogleSheets } from '../../wailsjs/go/main/App';
+import { ParseAllGoogleSheets, GetGoogleSheets, FetchGoogleDocContent, AddToHistory } from '../../wailsjs/go/main/App';
 
 interface GoogleSheetConfig {
     id: string;
@@ -17,6 +17,7 @@ interface GoogleSheetConfig {
     globalTemplateIds: string[];
     displayColumns: string[];
     taskNameColumn: string;
+    ignoreRows: number;
 }
 
 interface MultiSheetResult {
@@ -46,6 +47,7 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
     const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isPinned, setIsPinned] = useState(false);
+    const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -105,7 +107,27 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
         showToast(t('google_monitor.cleared') || "Cleared Monitor Data", 'info' as any);
     };
 
-    const handleCreateTask = async (item: any, sheetConfig: GoogleSheetConfig) => {
+    const handleCreateTask = async (item: any, sheetConfig: GoogleSheetConfig, idx: number) => {
+        let content = item.content;
+        const itemId = `${sheetConfig.id}-${idx}`;
+
+        if (!content && item.docLink) {
+            setLoadingItemId(itemId);
+            try {
+                content = await FetchGoogleDocContent(item.docLink);
+                // Оновлюємо локальний стан, щоб зберегти контент
+                setSheetResults(prev => prev.map(s => s.id === sheetConfig.id ? {
+                    ...s,
+                    results: s.results.map((r, i) => i === idx ? { ...r, content: content } : r)
+                } : s));
+            } catch (err) {
+                showToast("Помилка завантаження документа", 'error');
+                setLoadingItemId(null);
+                return;
+            }
+            setLoadingItemId(null);
+        }
+
         const mapping = (sheetConfig.mappings || []).find(m => {
             if (!m.keyword) return false;
             const kw = m.keyword.toLowerCase();
@@ -129,20 +151,52 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
         }
 
         const templatesToApply = allTemplateIds.map(id => templates.find(t => t.id === id)).filter(Boolean);
+        const templateNames = templatesToApply.map((t: any) => t.name);
 
         if (templatesToApply.length > 0) {
+            // Record to history
+            try {
+                await AddToHistory(taskNameBase, 'translate', templateNames, content || "");
+            } catch (err) {
+                console.error("Failed to add to history:", err);
+            }
+
             templatesToApply.forEach((template: any) => {
                 const activeSettings = flattenSettings(JSON.parse(JSON.stringify(template.settings)));
-                addTask('translate' as any, item.content, activeSettings, taskNameBase, template.name);
+                addTask('translate' as any, content || "", activeSettings, taskNameBase, template.name);
             });
             showToast(t('google_monitor.created', { count: templatesToApply.length }), 'success');
         }
     };
 
-    const copyToClipboard = (text: string, id: string) => {
-        navigator.clipboard.writeText(text);
+    const copyToClipboard = async (text: string, id: string, docLink?: string, sheetId?: string, idx?: number) => {
+        let content = text;
+        const itemId = `${sheetId}-${idx}`;
+
+        if (!content && docLink) {
+            setLoadingItemId(itemId);
+            try {
+                content = await FetchGoogleDocContent(docLink);
+                // Оновлюємо локальний стан
+                if (sheetId && idx !== undefined) {
+                    setSheetResults(prev => prev.map(s => s.id === sheetId ? {
+                        ...s,
+                        results: s.results.map((r, i) => i === idx ? { ...r, content: content } : r)
+                    } : s));
+                }
+            } catch (err) {
+                showToast("Помилка завантаження документа", 'error');
+                setLoadingItemId(null);
+                return;
+            }
+            setLoadingItemId(null);
+        }
+
+        if (!content) return;
+
+        navigator.clipboard.writeText(content);
         // @ts-ignore
-        window.runtime?.EventsEmit("applyHistoryEntry", { type: 'translate', content: text, replace: true });
+        window.runtime?.EventsEmit("applyHistoryEntry", { type: 'translate', content: content, replace: true });
         if (navigateTo) navigateTo('text.translate');
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 1500);
@@ -222,27 +276,47 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                                         <button className="google-mini-copy-btn" onClick={() => copyToClipboard(item.title, `title-${idx}`)} style={{ color: copiedId === `title-${idx}` ? '#4caf50' : '#ffc107', padding: '0', minWidth: '14px' }}>
                                             {copiedId === `title-${idx}` ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg> : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>}
                                         </button>
-                                        <div className="google-mini-item-title-container" style={{ display: 'flex', gap: '4px', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                        <div className="google-mini-item-title-container" style={{ display: 'flex', gap: '6px', overflow: 'hidden', alignItems: 'center', flexWrap: 'wrap' }}>
                                             {displayColumns.map((col, cIdx) => {
-                                                const colIdx = col.toUpperCase().split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
-                                                const val = item.columns?.[colIdx];
-                                                if (!val) return null;
-                                                return <span key={cIdx} style={{ fontSize: '11px', color: cIdx === 0 ? '#4caf50' : 'rgba(255,255,255,0.6)', fontWeight: cIdx === 0 ? '700' : '400', overflow: 'hidden', textOverflow: 'ellipsis' }}>{val}</span>;
+                                                const cleanCol = col.trim().toUpperCase();
+                                                if (!cleanCol) return null;
+                                                const colIdx = cleanCol.split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
+                                                const val = item.columns?.[colIdx] || "";
+                                                
+                                                if (cIdx === 0) {
+                                                    if (!val) return null;
+                                                    return <span key={cIdx} style={{ fontSize: '11px', color: '#4caf50', fontWeight: '800', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val}</span>;
+                                                }
+                                                return (
+                                                    <span key={cIdx} title={cleanCol} style={{ 
+                                                        fontSize: '9px', 
+                                                        color: val ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.2)', 
+                                                        background: val ? 'rgba(255,255,255,0.08)' : 'transparent',
+                                                        padding: '1px 5px',
+                                                        borderRadius: '4px',
+                                                        border: val ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.05)',
+                                                        fontWeight: '600',
+                                                        whiteSpace: 'nowrap',
+                                                        minWidth: '15px',
+                                                        textAlign: 'center'
+                                                    }}>
+                                                        {val || '-'}
+                                                    </span>
+                                                );
                                             })}
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', gap: '6px', marginLeft: '6px', flexShrink: 0 }}>
                                         {item.hasTemplates && (
-                                            <button className="google-mini-create-btn" onClick={() => handleCreateTask(item, activeConfig!)} style={{ color: '#4caf50', padding: '2px' }}>
-                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                            <button className="google-mini-create-btn" onClick={() => handleCreateTask(item, activeConfig!, idx)} style={{ color: '#4caf50', padding: '2px', position: 'relative' }}>
+                                                {loadingItemId === `${activeSheetId}-${idx}` ? <div className="spinner-mini" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>}
                                             </button>
                                         )}
-                                        <button className="google-mini-copy-btn" onClick={() => copyToClipboard(item.content, `content-${idx}`)} style={{ color: copiedId === `content-${idx}` ? '#4caf50' : accentColor, padding: '2px' }}>
-                                            {copiedId === `content-${idx}` ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>}
+                                        <button className="google-mini-copy-btn" onClick={() => copyToClipboard(item.content, `content-${idx}`, item.docLink, activeSheetId || 'default', idx)} style={{ color: copiedId === `content-${idx}` ? '#4caf50' : accentColor, padding: '2px', position: 'relative' }}>
+                                            {loadingItemId === `${activeSheetId}-${idx}` ? <div className="spinner-mini" /> : (copiedId === `content-${idx}` ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>)}
                                         </button>
                                     </div>
                                 </div>
-                                {item.content && <div className="google-mini-content-preview" style={{ fontSize: '10.5px', opacity: 0.5, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.content}</div>}
                             </div>
                         );
                     })}
