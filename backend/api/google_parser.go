@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -50,9 +51,15 @@ func (s *GoogleParserService) initServices() error {
 	}
 
 	ctx := context.Background()
-	credPath := "credentials.json"
+	
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %v", err)
+	}
+	credPath := filepath.Join(homeDir, "credentials.json")
+
 	if _, err := os.Stat(credPath); os.IsNotExist(err) {
-		return fmt.Errorf("credentials.json not found")
+		return fmt.Errorf("credentials.json not found in %s", homeDir)
 	}
 
 	if s.sheetsService == nil {
