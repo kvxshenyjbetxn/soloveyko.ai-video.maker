@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,6 +51,8 @@ type App struct {
 	authService     *api.AuthService
 	telegramService *api.TelegramService
 	updater         *utils.UpdateManager
+	workerCtx       context.Context
+	workerCancel    context.CancelFunc
 }
 
 // NewApp creates a new App application struct
@@ -483,6 +489,269 @@ func (a *App) startup(ctx context.Context) {
 			a.localWhisper.EnsureWhisperCLI()
 		}
 	}()
+
+	// Start worker mode heartbeat if enabled
+	if a.settings.GetWorkerModeEnabled() {
+		a.workerCtx, a.workerCancel = context.WithCancel(context.Background())
+		go a.startHeartbeatLoop()
+		go a.startTaskPollingLoop()
+	}
+}
+
+// ToggleWorkerMode вмикає або вимикає режим воркера
+func (a *App) ToggleWorkerMode(enabled bool) error {
+	err := a.settings.SetWorkerModeEnabled(enabled)
+	if err != nil {
+		return err
+	}
+
+	if enabled {
+		if a.workerCancel == nil {
+			a.workerCtx, a.workerCancel = context.WithCancel(context.Background())
+			go a.startHeartbeatLoop()
+			go a.startTaskPollingLoop()
+		}
+	} else {
+		if a.workerCancel != nil {
+			a.workerCancel()
+			a.workerCancel = nil
+			a.workerCtx = nil
+		}
+	}
+	return nil
+}
+
+// GetWorkerStatus повертає чи активний зараз режим воркера (чи йде Heartbeat)
+func (a *App) GetWorkerStatus() bool {
+	return a.workerCancel != nil
+}
+
+func (a *App) startHeartbeatLoop() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	hwID := utils.GetHardwareID()
+
+	hostname, _ := os.Hostname()
+
+	// Перший запуск одразу
+	if key := a.settings.GetAppAccessKey(); key != "" {
+		a.sendHeartbeat(key, hwID, hostname, "active")
+	}
+
+	for {
+		select {
+		case <-a.workerCtx.Done():
+			// Відправляємо статус offline перед виходом
+			if key := a.settings.GetAppAccessKey(); key != "" {
+				a.sendHeartbeat(key, hwID, hostname, "offline")
+			}
+			return
+		case <-ticker.C:
+			if key := a.settings.GetAppAccessKey(); key != "" {
+				a.sendHeartbeat(key, hwID, hostname, "active")
+			}
+		}
+	}
+}
+
+func (a *App) startTaskPollingLoop() {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	hwID := utils.GetHardwareID()
+
+	for {
+		select {
+		case <-a.workerCtx.Done():
+			return
+		case <-ticker.C:
+			if key := a.settings.GetAppAccessKey(); key != "" {
+				a.pollAndExecuteTask(key, hwID)
+			}
+		}
+	}
+}
+
+func (a *App) workerCancelDone() <-chan struct{} {
+	// Helper to handle nil check if needed, but here we can just use a internal context
+	// Actually we should use a shared context for worker mode
+	return nil // placeholder, will fix with proper context management
+}
+
+func (a *App) pollAndExecuteTask(key, hwID string) {
+	if key == "" {
+		return
+	}
+
+	key = strings.TrimSpace(key)
+	url := fmt.Sprintf("%s/tasks/claim?key=%s&hardware_id=%s", 
+		"https://new-project-combain-server-production.up.railway.app", url.QueryEscape(key), hwID)
+	
+	resp, err := http.Get(url)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return
+	}
+	defer resp.Body.Close()
+
+	var task struct {
+		ID       string `json:"id"`
+		TaskName string `json:"task_name"`
+		Payload  string `json:"payload"`
+		Settings string `json:"settings"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return
+	}
+
+	a.LogToUI("INFO", fmt.Sprintf("[Worker] Claimed remote task: %s", task.TaskName))
+
+	var settings map[string]interface{}
+	json.Unmarshal([]byte(task.Settings), &settings)
+
+	// Execute task
+	id := task.ID
+	if id == "" {
+		id = fmt.Sprintf("remote_%d", time.Now().Unix())
+	}
+
+	// We'll use task type from settings or payload if needed, 
+	// for now assume "translate" as a safe fallback or extract from naming
+	taskType := "translate" // This should ideally be in the RemoteTask model
+
+	_, err = a.pipeline.ProcessTask(id, 1, taskType, task.Payload, settings, task.TaskName, "")
+	
+	status := "completed"
+	result := ""
+	if err != nil {
+		status = "failed"
+		result = err.Error()
+		a.LogToUI("ERROR", fmt.Sprintf("[Worker] Remote task failed: %v", err))
+	} else {
+		a.LogToUI("SUCCESS", fmt.Sprintf("[Worker] Remote task completed: %s", task.TaskName))
+	}
+
+	// Report result
+	a.sendTaskResult(key, task.ID, status, result)
+}
+
+func (a *App) sendTaskResult(key, taskID, status, result string) {
+	key = strings.TrimSpace(key)
+	url := fmt.Sprintf("%s/tasks/result", "https://new-project-combain-server-production.up.railway.app")
+	payload := map[string]interface{}{
+		"key":     key,
+		"task_id": taskID,
+		"status":  status,
+		"result":  result,
+	}
+	jsonData, _ := json.Marshal(payload)
+	http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+}
+
+func (a *App) sendHeartbeat(key string, hwID string, name string, status string) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return
+	}
+
+	url := fmt.Sprintf("%s/worker/heartbeat", "https://new-project-combain-server-production.up.railway.app")
+	
+	payload := map[string]string{
+		"key":         key,
+		"hardware_id": hwID,
+		"name":        name,
+		"status":      status,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		// Log error to UI if needed
+		return
+	}
+	defer resp.Body.Close()
+}
+
+// GetAvailableWorkers отримує список активних воркерів з сервера
+func (a *App) GetAvailableWorkers() ([]map[string]interface{}, error) {
+	key := a.settings.GetAppAccessKey()
+	if key == "" {
+		return nil, fmt.Errorf("app key is missing")
+	}
+
+	key = strings.TrimSpace(key)
+	url := fmt.Sprintf("%s/workers?key=%s", "https://new-project-combain-server-production.up.railway.app", url.QueryEscape(key))
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned status: %d", resp.StatusCode)
+	}
+
+	var workers []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&workers); err != nil {
+		return nil, err
+	}
+
+	hwID := utils.GetHardwareID()
+	var filtered []map[string]interface{}
+	for _, w := range workers {
+		if wID, ok := w["hardware_id"].(string); ok && wID != hwID {
+			filtered = append(filtered, w)
+		}
+	}
+
+	return filtered, nil
+}
+
+// SendRemoteTask відправляє завдання на сервер для віддаленого виконання
+func (a *App) SendRemoteTask(name, payload string, settings map[string]interface{}) error {
+	key := a.settings.GetAppAccessKey()
+	if key == "" {
+		return fmt.Errorf("app key is missing")
+	}
+
+	hwID := utils.GetHardwareID()
+	settingsJSON, _ := json.Marshal(settings)
+
+	url := fmt.Sprintf("%s/tasks", "https://new-project-combain-server-production.up.railway.app")
+	
+	reqBody := map[string]string{
+		"key":         key,
+		"hardware_id": hwID,
+		"name":        name,
+		"payload":     payload,
+		"settings":    string(settingsJSON),
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server error: %d", resp.StatusCode)
+	}
+
+	a.LogToUI("SUCCESS", fmt.Sprintf("[Remote] Task '%s' sent to render farm", name))
+	return nil
 }
 
 // LogToUI emits a log event to the frontend
@@ -1144,6 +1413,11 @@ func (a *App) SaveAuthKey(key string) error {
 // ClearAuthKey clears the Access Key from settings
 func (a *App) ClearAuthKey() error {
 	return a.settings.SetAppAccessKey("")
+}
+
+// GetMyHardwareID повертає Hardware ID цього ПК для ідентифікації
+func (a *App) GetMyHardwareID() string {
+	return utils.GetHardwareID()
 }
 
 // GetGooglerMaxImageConnections повертає ліміт одночасних запитів Googler (Image)

@@ -313,6 +313,7 @@ type Settings struct {
 	SystemNotificationsEnabled    bool                   `json:"systemNotificationsEnabled"`
 	FirstRun                      bool                   `json:"firstRun"`
 	ShowWelcome                   bool                   `json:"showWelcome"`
+	WorkerModeEnabled             bool                   `json:"workerModeEnabled"`
 }
 
 type SettingsService struct {
@@ -1928,5 +1929,23 @@ func (s *SettingsService) SetGoogleSheets(sheets []GoogleSheetConfig) error {
 		return err
 	}
 	settings.GoogleSheets = sheets
+	return s.SaveSettings(settings)
+}
+// GetWorkerModeEnabled повертає чи увімкнено режим воркера
+func (s *SettingsService) GetWorkerModeEnabled() bool {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return false
+	}
+	return settings.WorkerModeEnabled
+}
+
+// SetWorkerModeEnabled встановлює чи увімкнено режим воркера
+func (s *SettingsService) SetWorkerModeEnabled(enabled bool) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.WorkerModeEnabled = enabled
 	return s.SaveSettings(settings)
 }
