@@ -383,7 +383,11 @@
     "disable_worker_mode": "Вимкнути режим воркера",
     "worker_name_label": "Ім'я цього воркера:",
     "worker_name_placeholder": "Введіть ім'я ПК",
-    "worker_name_disabled": "Вимкніть режим воркера, щоб змінити ім'я"
+    "worker_name_disabled": "Вимкніть режим воркера, щоб змінити ім'я",
+    "ping_worker": "Перевірити зв'язок",
+    "ping_sent": "Запит відправлено",
+    "ping_success": "З'єднання успішне",
+    "ping_error": "Помилка пінгу"
   },
   "stats": {
     "characters": "Символи:",

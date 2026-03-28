@@ -365,7 +365,24 @@
     "other": {
         "statistic": "Statistics",
         "history": "History",
-        "preview": "Preview"
+        "preview": "Preview",
+        "remote_control": "Remote Control",
+        "remote_control_title": "Remote Control",
+        "remote_description": "Manage your render farm. Use the power of multiple PCs for fast video creation.",
+        "available_workers": "Available Devices",
+        "no_workers": "No connected devices",
+        "add_pc": "Worker Mode",
+        "add_pc_title": "Add this PC as a worker",
+        "worker_description": "Enable this mode so this PC can receive render tasks from other devices.",
+        "enable_worker_mode": "Enable Worker Mode",
+        "disable_worker_mode": "Disable Worker Mode",
+        "worker_name_label": "Worker Name:",
+        "worker_name_placeholder": "Enter PC name",
+        "worker_name_disabled": "Disable worker mode to change name",
+        "ping_worker": "Test Connection",
+        "ping_sent": "Ping request sent",
+        "ping_success": "Connection successful",
+        "ping_error": "Ping error"
     },
     "stats": {
         "characters": "Characters:",

@@ -53,6 +53,9 @@ type App struct {
 	updater         *utils.UpdateManager
 	workerCtx       context.Context
 	workerCancel    context.CancelFunc
+	
+	processedPings  map[string]time.Time
+	pingMutex       sync.Mutex
 }
 
 // NewApp creates a new App application struct
@@ -87,6 +90,7 @@ func NewApp() *App {
 	app.productionStats = utils.NewProductionStatsService()
 
 	app.pipeline = pipeline.NewPipelineService(settings, app.openRouter, app.elevenLabs, app.elevenLabsUnlim, app.elevenLabsUA, app.voiceMaker, app.pollinations, app.googler, app.elevenLabsImage, app.localWhisper, app.amdWhisper, app.edgeTTS, app.assemblyAI)
+	app.processedPings = make(map[string]time.Time)
 
 	app.pipeline.OnLog = func(level string, message string, details ...string) {
 		app.LogToUI(level, message, details...)
@@ -584,34 +588,98 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 		return
 	}
 
+	// ПРИМУСОВА ПЕРЕВІРКА: чи цей ПК зараз є воркером?
+	if !a.settings.GetWorkerModeEnabled() {
+		return
+	}
+
 	key = strings.TrimSpace(key)
+	
+	// Перевірка ключа та воркера (тільки для дебагу)
+	// a.LogToUI("DEBUG", fmt.Sprintf("[Worker] Polling with key: %s..., HWID: %s...", key[:4], hwID[:6]))
+
 	url := fmt.Sprintf("%s/tasks/claim?key=%s&hardware_id=%s", 
 		"https://new-project-combain-server-production.up.railway.app", url.QueryEscape(key), hwID)
 	
 	resp, err := http.Get(url)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		if resp != nil {
-			resp.Body.Close()
-		}
+	if err != nil {
+		// Log network error
 		return
 	}
 	defer resp.Body.Close()
+	
+	if resp.StatusCode == http.StatusNoContent {
+		// No tasks available
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		// Server error
+		return
+	}
 
 	var task struct {
-		ID       string `json:"id"`
-		TaskName string `json:"task_name"`
-		Payload  string `json:"payload"`
-		Settings string `json:"settings"`
+		ID       string          `json:"id" mapstructure:"id"`
+		TaskName string          `json:"task_name" mapstructure:"task_name"`
+		Payload  string          `json:"payload" mapstructure:"payload"`
+		Settings json.RawMessage `json:"settings" mapstructure:"settings"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
 		return
 	}
 
-	a.LogToUI("INFO", fmt.Sprintf("[Worker] Claimed remote task: %s", task.TaskName))
-
 	var settings map[string]interface{}
-	json.Unmarshal([]byte(task.Settings), &settings)
+	err = json.Unmarshal(task.Settings, &settings)
+	if err != nil {
+		settings = make(map[string]interface{})
+	}
+
+	// Спробуємо знайти цільовий ID у різних полях
+	targetID, _ := settings["target_hardware_id"].(string)
+	if targetID == "" {
+		targetID, _ = settings["worker_id"].(string)
+	}
+	if targetID == "" {
+		targetID, _ = settings["target_id"].(string)
+	}
+	
+	// ФІЛЬТРАЦІЯ ЗА ЦІЛЬОВИМ ID
+	if targetID != "" && targetID != hwID {
+		// Ця задача призначена не для цього ПК, просто ігноруємо
+		return 
+	}
+
+	if task.TaskName == "PING_TEST" {
+		// Дедуплікація: не показуємо те саме сповіщення двічі протягом хвилини
+		a.pingMutex.Lock()
+		lastSeen, exists := a.processedPings[task.ID]
+		if exists && time.Since(lastSeen) < 1*time.Minute {
+			a.pingMutex.Unlock()
+			return
+		}
+		a.processedPings[task.ID] = time.Now()
+		// Очищуємо стару мапу час від часу
+		if len(a.processedPings) > 100 {
+			for id, t := range a.processedPings {
+				if time.Since(t) > 5*time.Minute {
+					delete(a.processedPings, id)
+				}
+			}
+		}
+		a.pingMutex.Unlock()
+
+		a.LogToUI("SUCCESS", fmt.Sprintf("[Worker] RECEIVED PING TEST. Source: %s", settings["ping_source"]))
+		
+		// Нативне сповіщення
+		_ = beeep.Alert("Soloveyko.AI", "Перевірка зв'язку: Ваш ПК успішно отримав сигнал від мережі!", "")
+		
+		// Звіт про виконання
+		a.sendTaskResult(key, task.ID, "completed", "Ping Received")
+		return
+	}
+
+	a.LogToUI("INFO", fmt.Sprintf("[Worker] Claimed remote task: %s", task.TaskName))
 
 	// Execute task
 	id := task.ID
@@ -751,6 +819,52 @@ func (a *App) SendRemoteTask(name, payload string, settings map[string]interface
 	}
 
 	a.LogToUI("SUCCESS", fmt.Sprintf("[Remote] Task '%s' sent to render farm", name))
+	return nil
+}
+
+// PingWorker відправляє тестовий запит на конкретний воркер
+func (a *App) PingWorker(targetID string) error {
+	key := a.settings.GetAppAccessKey()
+	if key == "" {
+		return fmt.Errorf("app key is missing")
+	}
+
+	hwID := utils.GetHardwareID()
+	url := fmt.Sprintf("%s/tasks", "https://new-project-combain-server-production.up.railway.app")
+	
+	// Надсилаємо settings як об'єкт
+	settingsMap := map[string]interface{}{
+		"target_hardware_id": targetID,
+		"target_id":          targetID,
+		"worker_id":          targetID,
+		"ping_source":        hwID,
+	}
+
+	reqBody := map[string]interface{}{
+		"key":                key,
+		"hardware_id":        hwID,
+		"name":               "PING_TEST",
+		"payload":            "ping",
+		"target_hardware_id": targetID,
+		"settings":           settingsMap,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server error: %d", resp.StatusCode)
+	}
+
+	a.LogToUI("SUCCESS", "[Remote] Ping request sent to worker")
 	return nil
 }
 
