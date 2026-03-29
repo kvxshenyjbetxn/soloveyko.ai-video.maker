@@ -16,6 +16,7 @@ export interface QueueTask {
     subtitleStatus: TaskStatus; montageStatus: TaskStatus; montageMsg?: string;
     voiceDuration?: string; imagesMessage?: string; timestamp: number;
     workerName?: string;
+    remoteId?: string;
 }
 
 interface QueueDataContextType {
@@ -44,7 +45,7 @@ interface QueueActionsContextType {
     regenerateTask: (id: string, text: string, settings?: any) => Promise<void>;
     cancelTask: (id: string) => Promise<void>;
     cancelQueue: () => Promise<void>;
-    startRemoteQueue: (workerId: string) => Promise<void>;
+    startRemoteQueue: (workerId: string, workerName: string) => Promise<void>;
     resumeImageControl: () => Promise<void>;
     resumeMontageControl: (id: string, resultData: string) => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
@@ -336,14 +337,20 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 const content = taskContentRef.current.get(task.id) || "";
                 
                 // @ts-ignore
-                await window.go.main.App.SendRemoteTaskWithTarget(
+                const remoteTask = await window.go.main.App.SendRemoteTaskWithTarget(
                     workerId, 
                     task.name, 
                     content, 
                     task.settings
                 );
                 
-                setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'completed', progress: 100 } : t));
+                // remoteTask is the object returned from the server, it has an ID
+                if (remoteTask && remoteTask.id) {
+                    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, remoteId: remoteTask.id } : t));
+                } else {
+                    // Fallback if ID is not returned directly
+                    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'completed', progress: 100 } : t));
+                }
             }
             
             showToast(t('common.remote_tasks_sent') || "Tasks sent to worker", 'success');
@@ -354,6 +361,58 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setIsProcessing(false);
         }
     }, [tasks, isProcessing, t, showToast]);
+
+    // Remote Task Status Polling Loop
+    useEffect(() => {
+        const hasQueued = tasks.some(task => 
+            task.remoteId && (task.status?.toLowerCase() === 'waiting' || task.status?.toLowerCase() === 'pending')
+        );
+        const hasActive = tasks.some(task => 
+            task.remoteId && (task.status?.toLowerCase() === 'running' || task.status?.toLowerCase() === 'processing')
+        );
+
+        if (!hasQueued && !hasActive) return;
+
+        const pollStatuses = async () => {
+            const activeRemoteIds = tasks
+                .filter(t => t.remoteId && ['waiting', 'pending', 'running', 'processing'].includes(t.status?.toLowerCase() || ''))
+                .map(t => t.remoteId!);
+            
+            if (activeRemoteIds.length === 0) return;
+
+            try {
+                // @ts-ignore
+                const statusMap = await window.go.main.App.GetRemoteTasksStatus(activeRemoteIds);
+                if (statusMap) {
+                    setTasks(prev => prev.map(taskItem => {
+                        if (taskItem.remoteId && statusMap[taskItem.remoteId]) {
+                            let newStatus = statusMap[taskItem.remoteId] as string;
+                            if (newStatus.toLowerCase() === 'prossecing') newStatus = 'processing';
+                            
+                            if (newStatus.toLowerCase() !== taskItem.status?.toLowerCase()) {
+                                let progress = taskItem.progress;
+                                if (newStatus.toLowerCase() === 'completed') {
+                                    progress = 100;
+                                    showToast(`${t('queue.status_completed')}: ${taskItem.name}`, 'success');
+                                } else if (newStatus.toLowerCase() === 'failed') {
+                                    progress = 0;
+                                    showToast(`${t('queue.status_failed')}: ${taskItem.name}`, 'error');
+                                }
+                                return { ...taskItem, status: newStatus as TaskStatus, progress };
+                            }
+                        }
+                        return taskItem;
+                    }));
+                }
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+        };
+
+        const intervalMs = hasQueued ? 5000 : 60000;
+        const interval = setInterval(pollStatuses, intervalMs);
+        return () => clearInterval(interval);
+    }, [tasks]);
 
     const startQueue = useCallback(async () => {
         if (isProcessing) return;

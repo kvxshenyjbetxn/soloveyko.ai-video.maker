@@ -678,6 +678,11 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 		return 
 	}
 
+	a.LogToUI("SUCCESS", fmt.Sprintf("[Worker] Task claimed: %s", task.TaskName))
+
+	// Сповіщаємо сервер, що завдання ПРИЙНЯТО
+	a.sendTaskResult(key, task.ID, "running", "Worker accepted task")
+
 	if task.TaskName == "PING_TEST" {
 		// ... (rest of ping logic)
 		a.pingMutex.Lock()
@@ -706,6 +711,9 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 	}
 
 	a.LogToUI("INFO", fmt.Sprintf("[Worker] Executing task: %s", task.TaskName))
+
+	// Сповіщаємо сервер про початок виконання
+	a.sendTaskResult(key, task.ID, "processing", "Worker started execution")
 
 	// Execute task
 	id := task.ID
@@ -895,14 +903,14 @@ func (a *App) UploadSettingsFile(settings map[string]interface{}) (string, error
 }
 
 // SendRemoteTaskWithTarget відправляє завдання конкретному воркеру
-func (a *App) SendRemoteTaskWithTarget(targetWorkerID, name, payload string, settings map[string]interface{}) error {
+func (a *App) SendRemoteTaskWithTarget(targetWorkerID, name, payload string, settings map[string]interface{}) (map[string]interface{}, error) {
 	// Впорскуємо API ключі перед відправкою, щоб воркер міг їх використовувати
 	a.injectAPIKeys(settings)
 
 	// 1. Завантажуємо налаштування як файл
 	fileID, err := a.UploadSettingsFile(settings)
 	if err != nil {
-		return fmt.Errorf("failed to upload settings: %v", err)
+		return nil, fmt.Errorf("failed to upload settings: %v", err)
 	}
 
 	key := a.settings.GetAppAccessKey()
@@ -927,25 +935,30 @@ func (a *App) SendRemoteTaskWithTarget(targetWorkerID, name, payload string, set
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("server error: %d", resp.StatusCode)
+		return nil, fmt.Errorf("server error: %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
 	}
 
 	a.LogToUI("SUCCESS", fmt.Sprintf("[Remote] Task '%s' sent to worker %s", name, targetWorkerID))
-	return nil
+	return result, nil
 }
 
 // SendRemoteTask відправляє завдання на сервер для віддаленого виконання
-func (a *App) SendRemoteTask(name, payload string, settings map[string]interface{}) error {
+func (a *App) SendRemoteTask(name, payload string, settings map[string]interface{}) (map[string]interface{}, error) {
 	return a.SendRemoteTaskWithTarget("", name, payload, settings)
 }
 
@@ -2440,3 +2453,38 @@ func (a *App) injectAPIKeys(settings map[string]interface{}) {
 	}
 }
 
+
+// GetRemoteTasksStatus отримує статуси вказаних завдань із сервера
+func (a *App) GetRemoteTasksStatus(ids []string) (map[string]string, error) {
+	key := a.settings.GetAppAccessKey()
+	if key == "" {
+		return nil, fmt.Errorf("app key is missing")
+	}
+
+	url := fmt.Sprintf("%s/tasks/status?key=%s&ids=%s", 
+		"https://new-project-combain-server-production.up.railway.app", 
+		url.QueryEscape(key), 
+		strings.Join(ids, ","))
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned status: %d", resp.StatusCode)
+	}
+
+	var statuses map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
+		return nil, err
+	}
+
+	return statuses, nil
+}
+
+// Notify sends a native Windows notification
+func (a *App) Notify(title, message string) {
+	_ = beeep.Alert(title, message, "")
+}

@@ -267,8 +267,8 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                             backgroundColor: 'var(--bg-primary)',
                             padding: '12px 24px',
                             borderRadius: '14px',
-                            border: '1.5px solid var(--accent-color)',
-                            boxShadow: '0 8px 30px rgba(0,0,0,0.5), 0 0 20px var(--accent-color-transparent)',
+                            border: `1.5px solid ${task.status === 'completed' ? '#4caf50' : task.status === 'failed' ? '#f44336' : 'var(--accent-color)'}`,
+                            boxShadow: `0 8px 30px rgba(0,0,0,0.5), 0 0 20px ${task.status === 'completed' ? 'rgba(76, 175, 80, 0.4)' : task.status === 'failed' ? 'rgba(244, 67, 54, 0.4)' : 'var(--accent-color-transparent)'}`,
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
@@ -277,25 +277,30 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                             maxWidth: '85%'
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={task.status === 'completed' ? '#4caf50' : task.status === 'failed' ? '#f44336' : 'var(--accent-color)'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
                                 <span style={{ 
-                                    color: 'var(--accent-color)', 
-                                    fontSize: '10px', 
-                                    fontWeight: 800, 
-                                    letterSpacing: '1.5px',
-                                    textTransform: 'uppercase',
-                                    whiteSpace: 'nowrap'
+                                     color: task.status === 'completed' ? '#4caf50' : task.status === 'failed' ? '#f44336' : 'var(--accent-color)', 
+                                     fontSize: '10px', 
+                                     fontWeight: 800, 
+                                     letterSpacing: '1.5px',
+                                     textTransform: 'uppercase',
+                                     whiteSpace: 'nowrap'
                                 }}>
-                                    {t('common.remote_worker_title')}
+                                    {task.status === 'completed' ? 'ВИКОНАНО ВОРКЕРОМ' : (task.status === 'failed' ? 'ПОМИЛКА ВОРКЕРА' : t('common.remote_worker_title'))}
                                 </span>
                             </div>
                             <span style={{ 
-                                color: 'white', 
-                                fontSize: '14px', 
-                                fontWeight: 700,
-                                textAlign: 'center'
+                                color: task.status === 'completed' ? '#4caf50' : task.status === 'failed' ? '#f44336' : 'white', 
+                                fontSize: '18px', 
+                                fontWeight: 800,
+                                textAlign: 'center',
+                                marginTop: '4px'
                             }}>
-                                {task.workerName}
+                                {task.status?.toLowerCase() === 'running' || task.status?.toLowerCase() === 'processing' ? 'В процесі...' : 
+                                 task.status?.toLowerCase() === 'completed' ? (t('queue.status_completed') || 'Готово') :
+                                 task.status?.toLowerCase() === 'failed' ? (t('queue.status_failed') || 'Помилка') :
+                                 task.status?.toLowerCase() === 'pending' || task.status === 'waiting' ? 'В черзі...' :
+                                 'В черзі...'}
                             </span>
                         </div>
                     </div>
@@ -506,20 +511,21 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
     const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
     const [isWorkerDropdownOpen, setIsWorkerDropdownOpen] = useState(false);
 
+    const fetchWorkers = useCallback(async () => {
+        try {
+            // @ts-ignore
+            const data = await GetAvailableWorkers();
+            if (data) setWorkers(data);
+        } catch (e) {
+            console.error("Failed to fetch workers:", e);
+        }
+    }, []);
+
     useEffect(() => {
-        const fetchWorkers = async () => {
-            try {
-                // @ts-ignore
-                const data = await GetAvailableWorkers();
-                if (data) setWorkers(data);
-            } catch (e) {
-                console.error("Failed to fetch workers:", e);
-            }
-        };
         fetchWorkers();
         const interval = setInterval(fetchWorkers, 30000);
         return () => clearInterval(interval);
-    }, []);
+    }, [fetchWorkers]);
 
     // Close dropdown on click outside
     useEffect(() => {
@@ -528,6 +534,15 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         window.addEventListener('click', handleClick);
         return () => window.removeEventListener('click', handleClick);
     }, [isWorkerDropdownOpen]);
+
+    const toggleWorkerDropdown = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const newState = !isWorkerDropdownOpen;
+        setIsWorkerDropdownOpen(newState);
+        if (newState) {
+            fetchWorkers();
+        }
+    };
 
     const handleStartQueue = () => {
         if (selectedWorkerId) {
@@ -597,7 +612,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                 <div className="queue-title">ЧЕРГА ЗАВДАНЬ</div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center', position: 'relative' }}>
                     {tasks.length > 0 && !isProcessing && (
-                        <div className="custom-worker-selector" onClick={(e) => { e.stopPropagation(); setIsWorkerDropdownOpen(!isWorkerDropdownOpen); }} style={{
+                        <div className="custom-worker-selector" onClick={toggleWorkerDropdown} style={{
                             display: 'flex',
                             alignItems: 'center',
                             backgroundColor: 'rgba(255, 255, 255, 0.03)',
