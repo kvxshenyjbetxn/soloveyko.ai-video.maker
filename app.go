@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -626,13 +627,40 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Worker] Failed to decode task: %v", err))
 		return
 	}
 
+	a.LogToUI("INFO", fmt.Sprintf("[Worker] Task received from server: %s (ID: %s)", task.TaskName, task.ID))
+
 	var settings map[string]interface{}
-	err = json.Unmarshal(task.Settings, &settings)
-	if err != nil {
+	// Try to unmarshal directly
+	if err := json.Unmarshal(task.Settings, &settings); err != nil {
+		// If it fails, it might be a JSON string returned as a string literal
+		var settingsStr string
+		if err2 := json.Unmarshal(task.Settings, &settingsStr); err2 == nil {
+			if err3 := json.Unmarshal([]byte(settingsStr), &settings); err3 != nil {
+				a.LogToUI("ERROR", fmt.Sprintf("[Worker] Failed to unmarshal settings string: %v", err3))
+			}
+		} else {
+			a.LogToUI("ERROR", fmt.Sprintf("[Worker] Failed to unmarshal settings as object or string: %v", err))
+		}
+	}
+
+	if settings == nil {
 		settings = make(map[string]interface{})
+	}
+
+	// ПЕРЕВІРКА НАЯВНОСТІ ФАЙЛУ НАЛАШТУВАНЬ
+	if fileID, ok := settings["settings_file_id"].(string); ok {
+		a.LogToUI("INFO", fmt.Sprintf("[Worker] Downloading full settings file: %s", fileID))
+		downloadedSettings, err := a.DownloadSettingsFile(fileID)
+		if err == nil {
+			settings = downloadedSettings
+			a.LogToUI("SUCCESS", "[Worker] Settings file downloaded and applied")
+		} else {
+			a.LogToUI("ERROR", fmt.Sprintf("[Worker] Failed to download settings file: %v", err))
+		}
 	}
 
 	// Спробуємо знайти цільовий ID у різних полях
@@ -646,12 +674,12 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 	
 	// ФІЛЬТРАЦІЯ ЗА ЦІЛЬОВИМ ID
 	if targetID != "" && targetID != hwID {
-		// Ця задача призначена не для цього ПК, просто ігноруємо
+		a.LogToUI("WARN", fmt.Sprintf("[Worker] Task %s is for worker %s, but I am %s. Ignoring.", task.ID, targetID, hwID))
 		return 
 	}
 
 	if task.TaskName == "PING_TEST" {
-		// Дедуплікація: не показуємо те саме сповіщення двічі протягом хвилини
+		// ... (rest of ping logic)
 		a.pingMutex.Lock()
 		lastSeen, exists := a.processedPings[task.ID]
 		if exists && time.Since(lastSeen) < 1*time.Minute {
@@ -659,27 +687,25 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 			return
 		}
 		a.processedPings[task.ID] = time.Now()
-		// Очищуємо стару мапу час від часу
-		if len(a.processedPings) > 100 {
-			for id, t := range a.processedPings {
-				if time.Since(t) > 5*time.Minute {
-					delete(a.processedPings, id)
-				}
-			}
-		}
 		a.pingMutex.Unlock()
 
 		a.LogToUI("SUCCESS", fmt.Sprintf("[Worker] RECEIVED PING TEST. Source: %s", settings["ping_source"]))
-		
-		// Нативне сповіщення
 		_ = beeep.Alert("Soloveyko.AI", "Перевірка зв'язку: Ваш ПК успішно отримав сигнал від мережі!", "")
-		
-		// Звіт про виконання
 		a.sendTaskResult(key, task.ID, "completed", "Ping Received")
 		return
 	}
 
-	a.LogToUI("INFO", fmt.Sprintf("[Worker] Claimed remote task: %s", task.TaskName))
+	// Емітуємо подію для UI, щоб завдання з'явилося в черзі воркера
+	if a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "remoteTaskClaimed", map[string]interface{}{
+			"id":       task.ID,
+			"name":     task.TaskName,
+			"payload":  task.Payload,
+			"settings": settings,
+		})
+	}
+
+	a.LogToUI("INFO", fmt.Sprintf("[Worker] Executing task: %s", task.TaskName))
 
 	// Execute task
 	id := task.ID
@@ -687,9 +713,13 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 		id = fmt.Sprintf("remote_%d", time.Now().Unix())
 	}
 
-	// We'll use task type from settings or payload if needed, 
-	// for now assume "translate" as a safe fallback or extract from naming
-	taskType := "translate" // This should ideally be in the RemoteTask model
+	taskType, _ := settings["taskType"].(string)
+	if taskType == "" {
+		taskType = "translate"
+		if strings.Contains(strings.ToLower(task.TaskName), "rewrite") {
+			taskType = "rewrite"
+		}
+	}
 
 	_, err = a.pipeline.ProcessTask(id, 1, taskType, task.Payload, settings, task.TaskName, "")
 	
@@ -705,6 +735,29 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 
 	// Report result
 	a.sendTaskResult(key, task.ID, status, result)
+}
+
+// DownloadSettingsFile завантажує налаштування з сервера за ID файлу
+func (a *App) DownloadSettingsFile(fileID string) (map[string]interface{}, error) {
+	key := a.settings.GetAppAccessKey()
+	url := fmt.Sprintf("%s/tasks/download?key=%s&id=%s", 
+		"https://new-project-combain-server-production.up.railway.app", url.QueryEscape(key), fileID)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("download failed: %d", resp.StatusCode)
+	}
+
+	var settings map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&settings); err != nil {
+		return nil, err
+	}
+	return settings, nil
 }
 
 func (a *App) sendTaskResult(key, taskID, status, result string) {
@@ -783,24 +836,90 @@ func (a *App) GetAvailableWorkers() ([]map[string]interface{}, error) {
 	return filtered, nil
 }
 
-// SendRemoteTask відправляє завдання на сервер для віддаленого виконання
-func (a *App) SendRemoteTask(name, payload string, settings map[string]interface{}) error {
+// UploadSettingsFile завантажує налаштування як файл на сервер
+func (a *App) UploadSettingsFile(settings map[string]interface{}) (string, error) {
 	key := a.settings.GetAppAccessKey()
 	if key == "" {
-		return fmt.Errorf("app key is missing")
+		return "", fmt.Errorf("app key is missing")
 	}
 
-	hwID := utils.GetHardwareID()
-	settingsJSON, _ := json.Marshal(settings)
+	settingsJSON, err := json.Marshal(settings)
+	if err != nil {
+		return "", err
+	}
 
+	url := fmt.Sprintf("%s/tasks/upload", "https://new-project-combain-server-production.up.railway.app")
+
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+	
+	// Додаємо ключ
+	if err := w.WriteField("key", key); err != nil {
+		return "", err
+	}
+
+	// Додаємо файл
+	fw, err := w.CreateFormFile("file", "settings.json")
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(fw, bytes.NewReader(settingsJSON)); err != nil {
+		return "", err
+	}
+	w.Close()
+
+	req, err := http.NewRequest("POST", url, &b)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("upload failed with status: %d", resp.StatusCode)
+	}
+
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
+
+	return result.ID, nil
+}
+
+// SendRemoteTaskWithTarget відправляє завдання конкретному воркеру
+func (a *App) SendRemoteTaskWithTarget(targetWorkerID, name, payload string, settings map[string]interface{}) error {
+	// 1. Завантажуємо налаштування як файл
+	fileID, err := a.UploadSettingsFile(settings)
+	if err != nil {
+		return fmt.Errorf("failed to upload settings: %v", err)
+	}
+
+	key := a.settings.GetAppAccessKey()
+	hwID := utils.GetHardwareID()
+	
+	// Створюємо payload для завдання, вказуючи посилання на файл налаштувань
+	remoteSettings := map[string]interface{}{
+		"settings_file_id": fileID,
+		"target_hardware_id": targetWorkerID,
+	}
+	
 	url := fmt.Sprintf("%s/tasks", "https://new-project-combain-server-production.up.railway.app")
 	
-	reqBody := map[string]string{
-		"key":         key,
-		"hardware_id": hwID,
-		"name":        name,
-		"payload":     payload,
-		"settings":    string(settingsJSON),
+	reqBody := map[string]interface{}{
+		"key":                key,
+		"hardware_id":        hwID,
+		"name":               name,
+		"payload":            payload,
+		"settings":           remoteSettings,
+		"target_hardware_id": targetWorkerID,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -818,8 +937,13 @@ func (a *App) SendRemoteTask(name, payload string, settings map[string]interface
 		return fmt.Errorf("server error: %d", resp.StatusCode)
 	}
 
-	a.LogToUI("SUCCESS", fmt.Sprintf("[Remote] Task '%s' sent to render farm", name))
+	a.LogToUI("SUCCESS", fmt.Sprintf("[Remote] Task '%s' sent to worker %s", name, targetWorkerID))
 	return nil
+}
+
+// SendRemoteTask відправляє завдання на сервер для віддаленого виконання
+func (a *App) SendRemoteTask(name, payload string, settings map[string]interface{}) error {
+	return a.SendRemoteTaskWithTarget("", name, payload, settings)
 }
 
 // PingWorker відправляє тестовий запит на конкретний воркер

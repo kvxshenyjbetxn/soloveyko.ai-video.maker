@@ -43,6 +43,7 @@ interface QueueActionsContextType {
     regenerateTask: (id: string, text: string, settings?: any) => Promise<void>;
     cancelTask: (id: string) => Promise<void>;
     cancelQueue: () => Promise<void>;
+    startRemoteQueue: (workerId: string) => Promise<void>;
     resumeImageControl: () => Promise<void>;
     resumeMontageControl: (id: string, resultData: string) => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
@@ -320,6 +321,39 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         await SubmitExistingFilesResult(id, skipStages);
     };
 
+    const startRemoteQueue = useCallback(async (workerId: string) => {
+        if (isProcessing) return;
+        const pending = tasks.filter(t => t.status === 'pending');
+        if (pending.length === 0) return;
+
+        setIsProcessing(true);
+        
+        try {
+            for (const task of pending) {
+                setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'waiting' } : t));
+                
+                const content = taskContentRef.current.get(task.id) || "";
+                
+                // @ts-ignore
+                await window.go.main.App.SendRemoteTaskWithTarget(
+                    workerId, 
+                    task.name, 
+                    content, 
+                    task.settings
+                );
+                
+                setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'completed', progress: 100 } : t));
+            }
+            
+            showToast(t('queue.task_added_success') || "Tasks sent to worker", 'success');
+        } catch (e: any) {
+            console.error("Remote queue failed:", e);
+            showToast(e.toString(), 'error');
+        } finally {
+            setIsProcessing(false);
+        }
+    }, [tasks, isProcessing, t, showToast]);
+
     const startQueue = useCallback(async () => {
         if (isProcessing) return;
         const pending = tasks.filter(t => t.status === 'pending');
@@ -512,7 +546,25 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const uTextResult = EventsOn("textResult", (id: string, length: number) => {
             setTasks(prev => prev.map(t => t.id === id ? { ...t, resultLength: length } : t));
         });
-        return () => { uStatus(); uStage(); uReq(); uImgReq(); uMontageReq(); uFilesReq(); uTextResult(); };
+        const uRemoteTask = EventsOn("remoteTaskClaimed", (data: any) => {
+            const { id, name, payload, settings } = data;
+            if (taskContentRef.current.has(id)) return;
+            taskContentRef.current.set(id, payload);
+            
+            const type = settings?.taskType || (name.toLowerCase().includes('rewrite') ? 'rewrite' : 'translate');
+            
+            const newTask: QueueTask = {
+                id,
+                name: name, folderName: name, subName: "",
+                type: type, content: "", settings,
+                status: 'waiting', progress: 0,
+                textStatus: 'waiting', voiceStatus: 'waiting',
+                imageStatus: 'waiting', subtitleStatus: 'waiting',
+                montageStatus: 'waiting', timestamp: Date.now(),
+            };
+            setTasks(prev => [...prev, newTask]);
+        });
+        return () => { uStatus(); uStage(); uReq(); uImgReq(); uMontageReq(); uFilesReq(); uTextResult(); uRemoteTask(); };
     }, [t]);
 
     useEffect(() => {
@@ -564,7 +616,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     const actionsValue = {
-        addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
+        addTasks, addTask, removeTask, clearQueue, startQueue, startRemoteQueue, getNextTaskName,
         updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles,
         closeCompletionModal, closeImageControlNotification, closeMontageControlNotification,
         addRegeneratingPath, removeRegeneratingPath

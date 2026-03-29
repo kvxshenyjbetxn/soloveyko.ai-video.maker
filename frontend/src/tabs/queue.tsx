@@ -9,7 +9,7 @@ import { ExistingFilesModal } from '../components/ExistingFilesModal';
 import { MontageEditor } from '../components/MontageEditor';
 import { VirtualLogList } from '../components/VirtualLogList';
 // @ts-ignore
-import { GetOpenRouterSavedModels, GetPipelineSettings, OpenPath, ResolveTaskDir } from '../../wailsjs/go/main/App';
+import { GetOpenRouterSavedModels, GetPipelineSettings, OpenPath, ResolveTaskDir, GetAvailableWorkers } from '../../wailsjs/go/main/App';
 
 interface QueueProps {
     setCurrentPath?: (path: string) => void;
@@ -439,11 +439,37 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, startRemoteQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl } = useQueue();
     const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message?: string; onConfirm: () => void; }>({ isOpen: false, title: '', onConfirm: () => { } });
     const [activeMontageTask, setActiveMontageTask] = useState<QueueTask | null>(null);
+
+    const [workers, setWorkers] = useState<any[]>([]);
+    const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
+
+    useEffect(() => {
+        const fetchWorkers = async () => {
+            try {
+                // @ts-ignore
+                const data = await GetAvailableWorkers();
+                if (data) setWorkers(data);
+            } catch (e) {
+                console.error("Failed to fetch workers:", e);
+            }
+        };
+        fetchWorkers();
+        const interval = setInterval(fetchWorkers, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleStartQueue = () => {
+        if (selectedWorkerId) {
+            startRemoteQueue(selectedWorkerId);
+        } else {
+            startQueue();
+        }
+    };
 
     useEffect(() => {
         if (tasks.length === 0 && setCurrentPath) {
@@ -503,11 +529,35 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
             <div className="queue-header">
                 <div className="queue-title">ЧЕРГА ЗАВДАНЬ</div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    {tasks.length > 0 && !isProcessing && (
+                        <select 
+                            className="worker-select-queue"
+                            value={selectedWorkerId}
+                            onChange={(e) => setSelectedWorkerId(e.target.value)}
+                            style={{
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                color: 'white',
+                                border: '1px solid rgba(255, 255, 255, 0.1)',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                outline: 'none',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <option value="">{t('common.local_processing') || 'Локально'}</option>
+                            {workers.map(w => (
+                                <option key={w.hardware_id} value={w.hardware_id}>
+                                    {w.hostname || w.name} ({(w.hardware_id || '').substring(0, 8)})
+                                </option>
+                            ))}
+                        </select>
+                    )}
                     {tasks.length > 0 && (
                         <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing}>{t('queue.clear_all') || 'Clear All'}</button>
                     )}
                     {tasks.length > 0 && (
-                        <button className={`start-queue-btn ${isProcessing ? 'processing' : ''}`} onClick={startQueue} disabled={isProcessing}>
+                        <button className={`start-queue-btn ${isProcessing ? 'processing' : ''}`} onClick={handleStartQueue} disabled={isProcessing}>
                             {isProcessing ? (<><div className="spinner-small" /><span>{t('queue.processing')}</span></>) : (<><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg><span>{t('queue.start')}</span></>)}
                         </button>
                     )}
