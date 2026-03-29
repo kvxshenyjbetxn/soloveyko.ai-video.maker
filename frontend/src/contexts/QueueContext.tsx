@@ -15,6 +15,7 @@ export interface QueueTask {
     textStatus: TaskStatus; voiceStatus: TaskStatus; imageStatus: TaskStatus;
     subtitleStatus: TaskStatus; montageStatus: TaskStatus; montageMsg?: string;
     voiceDuration?: string; imagesMessage?: string; timestamp: number;
+    workerName?: string;
 }
 
 interface QueueDataContextType {
@@ -321,7 +322,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         await SubmitExistingFilesResult(id, skipStages);
     };
 
-    const startRemoteQueue = useCallback(async (workerId: string) => {
+    const startRemoteQueue = useCallback(async (workerId: string, workerName: string) => {
         if (isProcessing) return;
         const pending = tasks.filter(t => t.status === 'pending');
         if (pending.length === 0) return;
@@ -330,7 +331,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         
         try {
             for (const task of pending) {
-                setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'waiting' } : t));
+                setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'waiting', workerName } : t));
                 
                 const content = taskContentRef.current.get(task.id) || "";
                 
@@ -345,7 +346,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'completed', progress: 100 } : t));
             }
             
-            showToast(t('queue.task_added_success') || "Tasks sent to worker", 'success');
+            showToast(t('common.remote_tasks_sent') || "Tasks sent to worker", 'success');
         } catch (e: any) {
             console.error("Remote queue failed:", e);
             showToast(e.toString(), 'error');

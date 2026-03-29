@@ -796,8 +796,12 @@
         "unit_m": "m",
         "unit_s": "s",
         "stage": "Pipeline Stage",
-        "select": "Select..."
-    },
+        "select": "Select...",
+        "local_processing": "Local Processing",
+        "remote_worker_title": "EXECUTING BY WORKER",
+        "remote_tasks_sent": "Tasks successfully sent to worker"
+        },
+
     "notifications": {
         "tab_title": "Notifications",
         "description": "Telegram and System Notification Settings",

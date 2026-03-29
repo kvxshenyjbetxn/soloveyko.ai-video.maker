@@ -780,8 +780,11 @@
         "unit_m": "мин",
         "unit_s": "с",
         "stage": "Этап пайплайна",
-        "select": "Выбрать..."
-    },
+        "select": "Выбрать...",
+        "local_processing": "Локальная обработка",
+        "remote_worker_title": "ВЫПОЛНЯЕТ ВОРКЕР",
+        "remote_tasks_sent": "Задания успешно отправлены воркеру"
+        },
     "notifications": {
         "tab_title": "Уведомления",
         "description": "Настройки уведомлений в Telegram и системе",

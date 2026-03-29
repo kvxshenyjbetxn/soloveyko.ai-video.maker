@@ -244,14 +244,71 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
             <div
                 className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${task.isAwaitingControl ? 'awaiting-control' : ''} ${task.isAwaitingMontageControl ? 'awaiting-montage-control' : ''}`}
                 onClick={() => !task.isAwaitingControl && onToggle(task.id)}
+                style={{ position: 'relative', overflow: 'hidden' }}
             >
+                {task.workerName && (
+                    <div className="remote-execution-overlay" style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        backdropFilter: 'blur(4px) grayscale(0.2)',
+                        borderRadius: '12px',
+                        zIndex: 10,
+                        pointerEvents: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px dashed var(--accent-color-transparent)'
+                    }}>
+                        <div style={{
+                            backgroundColor: 'var(--bg-primary)',
+                            padding: '12px 24px',
+                            borderRadius: '14px',
+                            border: '1.5px solid var(--accent-color)',
+                            boxShadow: '0 8px 30px rgba(0,0,0,0.5), 0 0 20px var(--accent-color-transparent)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transform: 'rotate(-7deg)',
+                            maxWidth: '85%'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                                <span style={{ 
+                                    color: 'var(--accent-color)', 
+                                    fontSize: '10px', 
+                                    fontWeight: 800, 
+                                    letterSpacing: '1.5px',
+                                    textTransform: 'uppercase',
+                                    whiteSpace: 'nowrap'
+                                }}>
+                                    {t('common.remote_worker_title')}
+                                </span>
+                            </div>
+                            <span style={{ 
+                                color: 'white', 
+                                fontSize: '14px', 
+                                fontWeight: 700,
+                                textAlign: 'center'
+                            }}>
+                                {task.workerName}
+                            </span>
+                        </div>
+                    </div>
+                )}
                 {task.isAwaitingControl && (
                     <ControlEditor task={task} onConfirm={resumeTask} />
                 )}
                 <div className="task-card-header">
-                    <span className={`task-type-badge ${task.type}`}>
-                        {displayMainLabel}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className={`task-type-badge ${task.type}`}>
+                            {displayMainLabel}
+                        </span>
+                    </div>
                     <div className="task-card-header-actions">
                         {settings.montageControlEnabled && (
                             <button
@@ -447,6 +504,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
 
     const [workers, setWorkers] = useState<any[]>([]);
     const [selectedWorkerId, setSelectedWorkerId] = useState<string>("");
+    const [isWorkerDropdownOpen, setIsWorkerDropdownOpen] = useState(false);
 
     useEffect(() => {
         const fetchWorkers = async () => {
@@ -463,9 +521,18 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         return () => clearInterval(interval);
     }, []);
 
+    // Close dropdown on click outside
+    useEffect(() => {
+        if (!isWorkerDropdownOpen) return;
+        const handleClick = () => setIsWorkerDropdownOpen(false);
+        window.addEventListener('click', handleClick);
+        return () => window.removeEventListener('click', handleClick);
+    }, [isWorkerDropdownOpen]);
+
     const handleStartQueue = () => {
         if (selectedWorkerId) {
-            startRemoteQueue(selectedWorkerId);
+            const workerName = selectedWorker?.hostname || selectedWorker?.name || "Remote Worker";
+            startRemoteQueue(selectedWorkerId, workerName);
         } else {
             startQueue();
         }
@@ -519,39 +586,118 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
     }, [resumeMontageControl]);
 
     const handleMontageCancel = useCallback((taskId: string) => {
-        // We could send a cancel signal or just close the editor and keep waiting.
-        // For now, let's just close the editor. If user wants to cancel the task, they can use the main cancel button.
         setActiveMontageTask(null);
     }, []);
+
+    const selectedWorker = workers.find(w => w.hardware_id === selectedWorkerId);
 
     return (
         <div className="content-wrapper animate-fade">
             <div className="queue-header">
                 <div className="queue-title">ЧЕРГА ЗАВДАНЬ</div>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', position: 'relative' }}>
                     {tasks.length > 0 && !isProcessing && (
-                        <select 
-                            className="worker-select-queue"
-                            value={selectedWorkerId}
-                            onChange={(e) => setSelectedWorkerId(e.target.value)}
-                            style={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                                color: 'white',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                borderRadius: '4px',
-                                padding: '4px 8px',
-                                fontSize: '12px',
-                                outline: 'none',
-                                cursor: 'pointer'
-                            }}
-                        >
-                            <option value="">{t('common.local_processing') || 'Локально'}</option>
-                            {workers.map(w => (
-                                <option key={w.hardware_id} value={w.hardware_id}>
-                                    {w.hostname || w.name} ({(w.hardware_id || '').substring(0, 8)})
-                                </option>
-                            ))}
-                        </select>
+                        <div className="custom-worker-selector" onClick={(e) => { e.stopPropagation(); setIsWorkerDropdownOpen(!isWorkerDropdownOpen); }} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            borderRadius: '8px',
+                            padding: '0 12px',
+                            gap: '10px',
+                            height: '36px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                            userSelect: 'none',
+                            minWidth: '180px',
+                            boxShadow: isWorkerDropdownOpen ? '0 0 0 2px var(--accent-color-transparent)' : 'none',
+                            borderColor: isWorkerDropdownOpen ? 'var(--accent-color)' : 'rgba(255, 255, 255, 0.08)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={selectedWorkerId ? 'var(--accent-color)' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: selectedWorkerId ? 1 : 0.6 }}><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                                <span style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.9)' }}>
+                                    {selectedWorkerId ? (selectedWorker?.hostname || selectedWorker?.name || t('other.remote_control')) : t('common.local_processing')}
+                                </span>
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ 
+                                opacity: 0.4, 
+                                transition: 'transform 0.3s ease',
+                                transform: isWorkerDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+                            }}><path d="m6 9 6 6 6-6"/></svg>
+
+                            {isWorkerDropdownOpen && (
+                                <div className="worker-dropdown-menu animate-slide-down" style={{
+                                    position: 'absolute',
+                                    top: 'calc(100% + 8px)',
+                                    right: 0,
+                                    width: '100%',
+                                    minWidth: '220px',
+                                    backgroundColor: 'var(--bg-secondary)',
+                                    backgroundImage: 'linear-gradient(rgba(255,255,255,0.03), rgba(255,255,255,0))',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '10px',
+                                    padding: '6px',
+                                    zIndex: 1000,
+                                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5), 0 8px 10px -6px rgba(0,0,0,0.5)',
+                                    backdropFilter: 'blur(10px)'
+                                }}>
+                                    <div 
+                                        className={`worker-dropdown-item ${!selectedWorkerId ? 'active' : ''}`}
+                                        onClick={() => setSelectedWorkerId("")}
+                                        style={{
+                                            padding: '8px 10px',
+                                            borderRadius: '6px',
+                                            fontSize: '12px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            color: !selectedWorkerId ? 'white' : 'var(--text-secondary)',
+                                            backgroundColor: !selectedWorkerId ? 'rgba(255,255,255,0.08)' : 'transparent',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: !selectedWorkerId ? 'var(--accent-color)' : 'rgba(255,255,255,0.2)' }} />
+                                        <div style={{ flex: 1 }}>{t('common.local_processing')}</div>
+                                        {!selectedWorkerId && <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                    </div>
+
+                                    {workers.length > 0 && <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '4px 6px' }} />}
+
+                                    {workers.map(w => (
+                                        <div 
+                                            key={w.hardware_id}
+                                            className={`worker-dropdown-item ${selectedWorkerId === w.hardware_id ? 'active' : ''}`}
+                                            onClick={() => setSelectedWorkerId(w.hardware_id)}
+                                            style={{
+                                                padding: '8px 10px',
+                                                borderRadius: '6px',
+                                                fontSize: '12px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '10px',
+                                                color: selectedWorkerId === w.hardware_id ? 'white' : 'var(--text-secondary)',
+                                                backgroundColor: selectedWorkerId === w.hardware_id ? 'rgba(255,255,255,0.08)' : 'transparent',
+                                                transition: 'all 0.15s ease',
+                                                marginTop: '2px'
+                                            }}
+                                        >
+                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: w.status === 'ready' ? '#4caf50' : '#ff9800' }} />
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                                <span style={{ fontWeight: 500 }}>{w.hostname || w.name}</span>
+                                                <span style={{ fontSize: '10px', opacity: 0.5 }}>ID: {(w.hardware_id || '').substring(0, 8)}</span>
+                                            </div>
+                                            {selectedWorkerId === w.hardware_id && <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                        </div>
+                                    ))}
+
+                                    {workers.length === 0 && (
+                                        <div style={{ padding: '12px', textAlign: 'center', fontSize: '11px', opacity: 0.4 }}>
+                                            {t('other.no_workers')}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     )}
                     {tasks.length > 0 && (
                         <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing}>{t('queue.clear_all') || 'Clear All'}</button>

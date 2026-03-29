@@ -811,7 +811,10 @@
     "unit_m": "хв",
     "unit_s": "с",
     "stage": "Етап пайплайну",
-    "select": "Вибрати..."
+    "select": "Вибрати...",
+    "local_processing": "Локальна обробка",
+    "remote_worker_title": "ВИКОНУЄ ВОРКЕР",
+    "remote_tasks_sent": "Завдання успішно відправлені воркеру"
   },
   "notifications": {
     "tab_title": "Сповіщення",
