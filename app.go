@@ -503,6 +503,20 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 
+// shutdown is called when the application is closing
+func (a *App) shutdown(ctx context.Context) {
+	// Якщо у нас активний режим воркера — повідомимо сервер про вихід
+	if a.settings.GetWorkerModeEnabled() {
+		hwID := utils.GetHardwareID()
+		hostname, _ := os.Hostname()
+		if key := a.settings.GetAppAccessKey(); key != "" {
+			// На відміну від HeartbeatLoop, тут ми робимо прямий виклик 
+			// щоб встигнути відправити статус до закриття процесу
+			a.sendHeartbeat(key, hwID, hostname, "offline")
+		}
+	}
+}
+
 // ToggleWorkerMode вмикає або вимикає режим воркера
 func (a *App) ToggleWorkerMode(enabled bool) error {
 	err := a.settings.SetWorkerModeEnabled(enabled)
