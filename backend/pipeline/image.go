@@ -302,19 +302,33 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 	// Fetch OpenRouter API Key for prompt generation
 	orKeyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
+	orApiKey, _ := settings[taskType+"OpenRouterAPIKey"].(string)
 	orKeys := s.settings.GetOpenRouterKeys()
-	var orApiKey, orKeyName string
-	for _, k := range orKeys {
-		if k.ID == orKeyID {
-			orApiKey = k.Key
-			orKeyName = k.Name
-			break
+	var orKeyName string
+
+	if orApiKey == "" {
+		for _, k := range orKeys {
+			if k.ID == orKeyID {
+				orApiKey = k.Key
+				orKeyName = k.Name
+				break
+			}
+		}
+		if orApiKey == "" && len(orKeys) > 0 {
+			orApiKey = orKeys[0].Key
+			orKeyName = orKeys[0].Name
+		}
+	} else {
+		// Try to find name if we have the key but it might be just "Remote"
+		orKeyName = "Remote"
+		for _, k := range orKeys {
+			if k.Key == orApiKey {
+				orKeyName = k.Name
+				break
+			}
 		}
 	}
-	if orApiKey == "" && len(orKeys) > 0 {
-		orApiKey = orKeys[0].Key
-		orKeyName = orKeys[0].Name
-	}
+
 	if orApiKey == "" {
 		s.log("ERROR", "[Pipeline] OpenRouter API Key missing! Required for interpreting prompts.", id, taskLabel)
 		return fmt.Errorf("OpenRouter API Key required")
@@ -598,16 +612,18 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			iKeyID = pSettings.ImagePollinationsKeyID
 		}
 
-		iApiKey := ""
-		iKeys := s.settings.GetPollinationsKeys()
-		for _, k := range iKeys {
-			if k.ID == iKeyID {
-				iApiKey = k.Key
-				break
+		iApiKey, _ := settings["imagePollinationsAPIKey"].(string)
+		if iApiKey == "" {
+			iKeys := s.settings.GetPollinationsKeys()
+			for _, k := range iKeys {
+				if k.ID == iKeyID {
+					iApiKey = k.Key
+					break
+				}
 			}
-		}
-		if iApiKey == "" && len(iKeys) > 0 {
-			iApiKey = iKeys[0].Key
+			if iApiKey == "" && len(iKeys) > 0 {
+				iApiKey = iKeys[0].Key
+			}
 		}
 
 		iModel, _ := settings["imageModel"].(string)
@@ -691,7 +707,10 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			return fmt.Errorf("failed to generate any images")
 		}
 	} else if iService == "googler" {
-		iApiKey := s.googler.GetAPIKey()
+		iApiKey, _ := settings["googlerAPIKey"].(string)
+		if iApiKey == "" {
+			iApiKey = s.googler.GetAPIKey()
+		}
 
 		iModel, _ := settings["imageGooglerModel"].(string)
 		if iModel == "" {
@@ -966,16 +985,18 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			iKeyID = pSettings.ElevenLabsImageKeyID
 		}
 
-		iApiKey := ""
-		iKeys := s.settings.GetElevenLabsImageKeys()
-		for _, k := range iKeys {
-			if k.ID == iKeyID {
-				iApiKey = k.Key
-				break
+		iApiKey, _ := settings["elevenLabsImageAPIKey"].(string)
+		if iApiKey == "" {
+			iKeys := s.settings.GetElevenLabsImageKeys()
+			for _, k := range iKeys {
+				if k.ID == iKeyID {
+					iApiKey = k.Key
+					break
+				}
 			}
-		}
-		if iApiKey == "" && len(iKeys) > 0 {
-			iApiKey = iKeys[0].Key
+			if iApiKey == "" && len(iKeys) > 0 {
+				iApiKey = iKeys[0].Key
+			}
 		}
 
 		iRatio, _ := settings["elevenLabsImageAspectRatio"].(string)

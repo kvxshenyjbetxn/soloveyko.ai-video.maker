@@ -34,14 +34,18 @@ func (s *PipelineService) ProcessText(id string, taskLabel string, taskType stri
 
 	// Handle OpenRouter Keys
 	keys := s.settings.GetOpenRouterKeys()
-	for _, k := range keys {
-		if k.ID == keyID {
-			apiKey = k.Key
-			break
+	apiKey, _ = settings[taskType+"OpenRouterAPIKey"].(string)
+
+	if apiKey == "" {
+		for _, k := range keys {
+			if k.ID == keyID {
+				apiKey = k.Key
+				break
+			}
 		}
-	}
-	if apiKey == "" && len(keys) > 0 {
-		apiKey = keys[0].Key
+		if apiKey == "" && len(keys) > 0 {
+			apiKey = keys[0].Key
+		}
 	}
 
 	if apiKey == "" {

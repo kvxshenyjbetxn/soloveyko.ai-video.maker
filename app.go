@@ -896,6 +896,9 @@ func (a *App) UploadSettingsFile(settings map[string]interface{}) (string, error
 
 // SendRemoteTaskWithTarget відправляє завдання конкретному воркеру
 func (a *App) SendRemoteTaskWithTarget(targetWorkerID, name, payload string, settings map[string]interface{}) error {
+	// Впорскуємо API ключі перед відправкою, щоб воркер міг їх використовувати
+	a.injectAPIKeys(settings)
+
 	// 1. Завантажуємо налаштування як файл
 	fileID, err := a.UploadSettingsFile(settings)
 	if err != nil {
@@ -2342,3 +2345,98 @@ func (a *App) ReadFile(path string) (string, error) {
 	}
 	return string(data), nil
 }
+
+func (a *App) injectAPIKeys(settings map[string]interface{}) {
+	// 1. OpenRouter
+	orKeys := a.settings.GetOpenRouterKeys()
+	if id, ok := settings["translateOpenRouterKeyID"].(string); ok {
+		for _, k := range orKeys {
+			if k.ID == id {
+				settings["translateOpenRouterAPIKey"] = k.Key
+				break
+			}
+		}
+	}
+	if id, ok := settings["rewriteOpenRouterKeyID"].(string); ok {
+		for _, k := range orKeys {
+			if k.ID == id {
+				settings["rewriteOpenRouterAPIKey"] = k.Key
+				break
+			}
+		}
+	}
+
+	// 2. ElevenLabs
+	elBotKeys := a.settings.GetElevenLabsBotKeys()
+	if id, ok := settings["voiceoverElevenLabsBotKeyID"].(string); ok {
+		for _, k := range elBotKeys {
+			if k.ID == id {
+				settings["voiceoverElevenLabsBotAPIKey"] = k.Key
+				break
+			}
+		}
+	}
+
+	elUnlimKeys := a.settings.GetElevenLabsUnlimKeys()
+	if id, ok := settings["voiceoverElevenLabsUnlimKeyID"].(string); ok {
+		for _, k := range elUnlimKeys {
+			if k.ID == id {
+				settings["voiceoverElevenLabsUnlimAPIKey"] = k.Key
+				break
+			}
+		}
+	}
+
+	elUAKeys := a.settings.GetElevenLabsUAKeys()
+	if id, ok := settings["voiceoverElevenLabsUAKeyID"].(string); ok {
+		for _, k := range elUAKeys {
+			if k.ID == id {
+				settings["voiceoverElevenLabsUAAPIKey"] = k.Key
+				break
+			}
+		}
+	}
+
+	elImgKeys := a.settings.GetElevenLabsImageKeys()
+	if id, ok := settings["elevenLabsImageKeyID"].(string); ok {
+		for _, k := range elImgKeys {
+			if k.ID == id {
+				settings["elevenLabsImageAPIKey"] = k.Key
+				break
+			}
+		}
+	}
+
+	// 3. VoiceMaker
+	vmKeys := a.settings.GetVoiceMakerKeys()
+	if id, ok := settings["voiceoverVoiceMakerKeyID"].(string); ok {
+		for _, k := range vmKeys {
+			if k.ID == id {
+				settings["voiceoverVoiceMakerAPIKey"] = k.Key
+				break
+			}
+		}
+	}
+
+	// 4. Pollinations
+	pKeys := a.settings.GetPollinationsKeys()
+	if id, ok := settings["imagePollinationsKeyID"].(string); ok {
+		for _, k := range pKeys {
+			if k.ID == id {
+				settings["imagePollinationsAPIKey"] = k.Key
+				break
+			}
+		}
+	}
+
+	// 5. AssemblyAI
+	if key := a.settings.GetAssemblyAIAPIKey(); key != "" {
+		settings["assemblyAIAPIKey"] = key
+	}
+
+	// 6. Googler
+	if key := a.settings.GetGooglerAPIKey(); key != "" {
+		settings["googlerAPIKey"] = key
+	}
+}
+

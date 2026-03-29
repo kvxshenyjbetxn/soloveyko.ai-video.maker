@@ -89,16 +89,18 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 			return fmt.Errorf("voice template not selected")
 		}
 
-		vApiKey := ""
-		vKeys := s.settings.GetElevenLabsBotKeys()
-		for _, k := range vKeys {
-			if k.ID == vKeyID {
-				vApiKey = k.Key
-				break
+		vApiKey, _ := settings["voiceoverElevenLabsBotAPIKey"].(string)
+		if vApiKey == "" {
+			vKeys := s.settings.GetElevenLabsBotKeys()
+			for _, k := range vKeys {
+				if k.ID == vKeyID {
+					vApiKey = k.Key
+					break
+				}
 			}
-		}
-		if vApiKey == "" && len(vKeys) > 0 {
-			vApiKey = vKeys[0].Key
+			if vApiKey == "" && len(vKeys) > 0 {
+				vApiKey = vKeys[0].Key
+			}
 		}
 
 		if vApiKey == "" {
@@ -145,16 +147,18 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 			vKeyID = pSettings.VoiceoverElevenLabsUnlimKeyID
 		}
 
-		vApiKey := ""
-		vKeys := s.settings.GetElevenLabsUnlimKeys()
-		for _, k := range vKeys {
-			if k.ID == vKeyID {
-				vApiKey = k.Key
-				break
+		vApiKey, _ := settings["voiceoverElevenLabsUnlimAPIKey"].(string)
+		if vApiKey == "" {
+			vKeys := s.settings.GetElevenLabsUnlimKeys()
+			for _, k := range vKeys {
+				if k.ID == vKeyID {
+					vApiKey = k.Key
+					break
+				}
 			}
-		}
-		if vApiKey == "" && len(vKeys) > 0 {
-			vApiKey = vKeys[0].Key
+			if vApiKey == "" && len(vKeys) > 0 {
+				vApiKey = vKeys[0].Key
+			}
 		}
 
 		if vApiKey == "" {
@@ -242,16 +246,18 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 			vKeyID = pSettings.VoiceoverElevenLabsUAKeyID
 		}
 
-		vApiKey := ""
-		vKeys := s.settings.GetElevenLabsUAKeys()
-		for _, k := range vKeys {
-			if k.ID == vKeyID {
-				vApiKey = k.Key
-				break
+		vApiKey, _ := settings["voiceoverElevenLabsUAAPIKey"].(string)
+		if vApiKey == "" {
+			vKeys := s.settings.GetElevenLabsUAKeys()
+			for _, k := range vKeys {
+				if k.ID == vKeyID {
+					vApiKey = k.Key
+					break
+				}
 			}
-		}
-		if vApiKey == "" && len(vKeys) > 0 {
-			vApiKey = vKeys[0].Key
+			if vApiKey == "" && len(vKeys) > 0 {
+				vApiKey = vKeys[0].Key
+			}
 		}
 
 		if vApiKey == "" {
@@ -357,16 +363,18 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 			charLimit = 3000
 		}
 
-		vApiKey := ""
-		vKeys := s.settings.GetVoiceMakerKeys()
-		for _, k := range vKeys {
-			if k.ID == vKeyID {
-				vApiKey = k.Key
-				break
+		vApiKey, _ := settings["voiceoverVoiceMakerAPIKey"].(string)
+		if vApiKey == "" {
+			vKeys := s.settings.GetVoiceMakerKeys()
+			for _, k := range vKeys {
+				if k.ID == vKeyID {
+					vApiKey = k.Key
+					break
+				}
 			}
-		}
-		if vApiKey == "" && len(vKeys) > 0 {
-			vApiKey = vKeys[0].Key
+			if vApiKey == "" && len(vKeys) > 0 {
+				vApiKey = vKeys[0].Key
+			}
 		}
 
 		if vApiKey == "" {

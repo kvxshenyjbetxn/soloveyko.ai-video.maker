@@ -74,8 +74,10 @@ func (s *AssemblyAIService) SetContext(ctx context.Context) {
 	// We'll accept ctx in Transcribe method per convention, or use a field.
 }
 
-func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath string) (string, string, error) {
-	apiKey := s.GetAPIKey()
+func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath string, apiKey string) (string, string, error) {
+	if apiKey == "" {
+		apiKey = s.GetAPIKey()
+	}
 	if apiKey == "" {
 		return "", "", fmt.Errorf("AssemblyAI API Key is not configured")
 	}
@@ -222,7 +224,7 @@ func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath st
 	return string(srtBytes), string(fullBody), nil
 }
 
-func (s *AssemblyAIService) Transcribe(ctx context.Context, audioFilePath string) (string, error) {
-	srt, _, err := s.TranscribeFull(ctx, audioFilePath)
+func (s *AssemblyAIService) Transcribe(ctx context.Context, audioFilePath string, apiKey string) (string, error) {
+	srt, _, err := s.TranscribeFull(ctx, audioFilePath, apiKey)
 	return srt, err
 }
