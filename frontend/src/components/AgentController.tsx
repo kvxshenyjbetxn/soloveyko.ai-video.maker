@@ -4,7 +4,7 @@ import { useTemplates } from '../contexts/TemplateContext';
 import { useEditorDrafts } from '../contexts/EditorDraftContext';
 import { useI18n } from '../contexts/I18nContext';
 // @ts-ignore
-import { AddToHistory, CheckExistingTasks, GetPipelineSettings } from '../../wailsjs/go/main/App';
+import { AddToHistory, CheckExistingTasks, GetGalleryImages, GetPipelineSettings } from '../../wailsjs/go/main/App';
 // @ts-ignore
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 
@@ -29,6 +29,15 @@ const getTaskTypeFromPath = (path: string): AgentTextTab => {
 };
 
 const uniqueStrings = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
+
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v']);
+
+const getMediaType = (path: string, url?: string) => {
+    const value = (path || url || '').toLowerCase();
+    const dotIndex = value.lastIndexOf('.');
+    const extension = dotIndex >= 0 ? value.slice(dotIndex) : '';
+    return VIDEO_EXTENSIONS.has(extension) ? 'video' : 'image';
+};
 
 export const AgentController = ({ currentPath, setCurrentPath }: AgentControllerProps) => {
     const { t } = useI18n();
@@ -254,6 +263,93 @@ export const AgentController = ({ currentPath, setCurrentPath }: AgentController
             };
         };
 
+        const getGalleryPreview = async (params: any) => {
+            const galleryTasks = await GetGalleryImages();
+            const limitPerTask = Math.max(1, Number(params?.limitPerTask) || 3);
+            const limitPerTemplate = Math.max(1, Number(params?.limitPerTemplate) || limitPerTask);
+            const includePrompts = params?.includePrompts !== false;
+            const onlyAwaitingImageControl = params?.onlyAwaitingImageControl !== false;
+            const requestedTaskNames = uniqueStrings(
+                Array.isArray(params?.taskNames)
+                    ? params.taskNames.filter((value: unknown): value is string => typeof value === 'string')
+                    : []
+            );
+            const awaitingTaskNames = uniqueStrings(
+                tasks
+                    .filter(task => task.isAwaitingImageControl)
+                    .map(task => task.folderName)
+            );
+
+            let allowedTaskNames = requestedTaskNames;
+            if (onlyAwaitingImageControl) {
+                const awaitingSet = new Set(awaitingTaskNames);
+                allowedTaskNames = requestedTaskNames.length > 0
+                    ? requestedTaskNames.filter(name => awaitingSet.has(name))
+                    : awaitingTaskNames;
+            }
+
+            const allowedSet = allowedTaskNames.length > 0 ? new Set(allowedTaskNames) : null;
+
+            const previewTasks = (galleryTasks || [])
+                .filter(task => !allowedSet || allowedSet.has(task.name))
+                .map(task => {
+                    let taskItemCount = 0;
+                    const templatesPreview = (task.templates || [])
+                        .map(template => {
+                            const remainingForTask = Math.max(0, limitPerTask - taskItemCount);
+                            if (remainingForTask === 0) {
+                                return null;
+                            }
+
+                            const items = (template.images || [])
+                                .slice(0, Math.min(limitPerTemplate, remainingForTask))
+                                .map(image => {
+                                    const mediaType = getMediaType(image.path, image.url);
+                                    return {
+                                        name: image.name,
+                                        path: image.path,
+                                        url: image.url,
+                                        mediaType,
+                                        canRenderInChat: mediaType === 'image',
+                                        prompt: includePrompts ? (image.prompt || '') : undefined,
+                                    };
+                                });
+
+                            taskItemCount += items.length;
+                            if (items.length === 0) {
+                                return null;
+                            }
+
+                            return {
+                                name: template.name,
+                                itemCount: items.length,
+                                items,
+                            };
+                        })
+                        .filter(Boolean);
+
+                    const itemCount = templatesPreview.reduce((sum, template) => sum + (template?.itemCount || 0), 0);
+                    return {
+                        name: task.name,
+                        templateCount: templatesPreview.length,
+                        itemCount,
+                        templates: templatesPreview,
+                    };
+                })
+                .filter(task => task.itemCount > 0);
+
+            return {
+                ok: true,
+                onlyAwaitingImageControl,
+                requestedTaskNames,
+                awaitingTaskNames,
+                returnedTaskCount: previewTasks.length,
+                limitPerTask,
+                limitPerTemplate,
+                tasks: previewTasks,
+            };
+        };
+
         const handleRequest = async (request: AgentRequestEnvelope) => {
             if (!request?.id || !request?.action) return;
 
@@ -349,6 +445,10 @@ export const AgentController = ({ currentPath, setCurrentPath }: AgentController
                     }
                     case 'get_queue_state': {
                         await respond(request.id, getQueueState());
+                        return;
+                    }
+                    case 'get_gallery_preview': {
+                        await respond(request.id, await getGalleryPreview(request.params || {}));
                         return;
                     }
                     case 'clear_queue': {

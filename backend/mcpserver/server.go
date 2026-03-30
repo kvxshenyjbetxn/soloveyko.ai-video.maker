@@ -76,6 +76,14 @@ type ConfirmTextControlArgs struct {
 	Text   string `json:"text,omitempty" jsonschema:"optional final text to confirm; defaults to the current staged draft"`
 }
 
+type GetGalleryPreviewArgs struct {
+	LimitPerTask             int      `json:"limitPerTask,omitempty" jsonschema:"maximum number of media items to return per task; defaults to 3"`
+	LimitPerTemplate         int      `json:"limitPerTemplate,omitempty" jsonschema:"maximum number of media items to return per template before applying the task-wide limit"`
+	TaskNames                []string `json:"taskNames,omitempty" jsonschema:"optional task names to include"`
+	IncludePrompts           *bool    `json:"includePrompts,omitempty" jsonschema:"include the original generation prompt for each media item; defaults to true"`
+	OnlyAwaitingImageControl *bool    `json:"onlyAwaitingImageControl,omitempty" jsonschema:"limit results to tasks currently waiting for image control; defaults to true"`
+}
+
 type NavigateArgs struct {
 	Path string `json:"path" jsonschema:"target UI path such as text.translate, queue, or gallery"`
 }
@@ -258,6 +266,15 @@ func addTools(server *mcp.Server, invoke Invoker) {
 	mcp.AddTool(server, &mcp.Tool{Name: "get_queue_state", Description: "Read the current queue state, task statuses, and completion signal."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
 			out, err := invokeMap(ctx, invoke, "get_queue_state", map[string]any{})
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonTextResult(out), out, nil
+		})
+
+	mcp.AddTool(server, &mcp.Tool{Name: "get_gallery_preview", Description: "Read the first image or video items from the gallery for each task, including absolute file paths that the agent can show in chat."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, args GetGalleryPreviewArgs) (*mcp.CallToolResult, map[string]any, error) {
+			out, err := invokeMap(ctx, invoke, "get_gallery_preview", args)
 			if err != nil {
 				return nil, nil, err
 			}

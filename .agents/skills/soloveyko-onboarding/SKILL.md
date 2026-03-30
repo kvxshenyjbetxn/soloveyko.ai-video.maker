@@ -129,9 +129,11 @@ Built with React and Vite. It heavily relies on global Context API for state man
   - start queue
   - continue image control
   - list/update/confirm text-control reviews
+  - get gallery preview
   - get queue state
   - clear queue
 - Read-oriented MCP tools like `get_main_text`, `get_pending_text_controls`, and `get_queue_state` should keep the actual JSON payload visible in `Content`, not only in structured output, because some MCP clients surface only the text content to the agent model.
+- `get_gallery_preview` should return absolute local `path` values plus `mediaType` so the agent can embed image previews in chat when the client supports local markdown images; videos should still be returned as metadata/paths unless you add a thumbnail extraction step later.
 - `QueueContext` now also exposes `updateControlDraft(id, text)` so agents can edit a pending mini-editor draft before confirming it.
 - The mini editor in `frontend/src/tabs/queue.tsx` keeps its own local textarea state, so it must sync from `task.controlContent` via `useEffect`; otherwise MCP updates can report success while the visible text in the open editor stays stale.
 - If you expand this system, prefer adding **high-level app actions** to `AgentController` and exposing them via MCP tools, rather than automating visible button clicks.
