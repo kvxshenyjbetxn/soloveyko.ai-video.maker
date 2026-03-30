@@ -113,3 +113,29 @@ Built with React and Vite. It heavily relies on global Context API for state man
   - `segments.json`: Audio interval mappings.
   - `result.txt`: Final processed transcript.
   - `final.mp4`: The assembled master file.
+
+## 8. Agent Control & MCP Integration
+- The app now includes a **local MCP control layer** for high-level agent automation. This is intentionally built around actions like queue control, text draft updates, template selection, and review confirmation instead of DOM-level UI clicking.
+- **Frontend shared draft state** lives in `frontend/src/contexts/EditorDraftContext.tsx`. Both `tabs/text/translate.tsx` and `tabs/text/rewrite.tsx` read from this shared context so external agent actions can safely set/read the main draft text even when views remount.
+- **Frontend agent bridge** lives in `frontend/src/components/AgentController.tsx`. It listens for `agent:request` Wails runtime events and executes the requested action through existing React contexts (`QueueContext`, `TemplateContext`, `EditorDraftContext`) plus existing Wails bindings.
+- **Go-side broker** lives in `app_agent.go`. It emits `agent:request` events into the frontend, waits for `ResolveAgentRequest(...)`, and exposes `GetLocalMCPStatus()` for discovery/debugging.
+- **MCP server package** lives in `backend/mcpserver/server.go` and uses the official `github.com/modelcontextprotocol/go-sdk` package with **Streamable HTTP** transport.
+- Default local MCP endpoint: `http://127.0.0.1:39245/mcp`
+  - Override with env var: `SOLOVEYKO_MCP_ADDR`
+- Current MCP tools/actions cover:
+  - set/get main text
+  - select templates
+  - enqueue task
+  - start queue
+  - continue image control
+  - list/update/confirm text-control reviews
+  - get queue state
+  - clear queue
+- Read-oriented MCP tools like `get_main_text`, `get_pending_text_controls`, and `get_queue_state` should keep the actual JSON payload visible in `Content`, not only in structured output, because some MCP clients surface only the text content to the agent model.
+- `QueueContext` now also exposes `updateControlDraft(id, text)` so agents can edit a pending mini-editor draft before confirming it.
+- The mini editor in `frontend/src/tabs/queue.tsx` keeps its own local textarea state, so it must sync from `task.controlContent` via `useEffect`; otherwise MCP updates can report success while the visible text in the open editor stays stale.
+- If you expand this system, prefer adding **high-level app actions** to `AgentController` and exposing them via MCP tools, rather than automating visible button clicks.
+
+
+
+

@@ -9,6 +9,7 @@ import { ServiceProvider } from './contexts/ServiceContext';
 import { QueueProvider } from './contexts/QueueContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { TemplateProvider } from './contexts/TemplateContext';
+import { EditorDraftProvider } from './contexts/EditorDraftContext';
 
 const container = document.getElementById('root');
 
@@ -22,9 +23,11 @@ root.render(
                     <ServiceProvider>
                         <ToastProvider>
                             <TemplateProvider>
-                                <QueueProvider>
-                                    <App />
-                                </QueueProvider>
+                                <EditorDraftProvider>
+                                    <QueueProvider>
+                                        <App />
+                                    </QueueProvider>
+                                </EditorDraftProvider>
                             </TemplateProvider>
                         </ToastProvider>
                     </ServiceProvider>
@@ -33,3 +36,4 @@ root.render(
         </I18nProvider>
     </React.StrictMode>
 );
+

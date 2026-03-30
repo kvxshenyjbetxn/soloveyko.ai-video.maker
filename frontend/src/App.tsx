@@ -40,6 +40,7 @@ import { GoogleMonitor } from './components/GoogleMonitor';
 import { UpdateModal } from './components/UpdateModal';
 import { InitialSetup } from './components/InitialSetup';
 import { WelcomeWindow } from './components/WelcomeWindow';
+import { AgentController } from './components/AgentController';
 import { utils as models } from '../wailsjs/go/models';
 
 // Simple Icons (SVG)
@@ -703,8 +704,10 @@ function App() {
                     onClose={() => setIsUpdateModalOpen(false)}
                 />
             )}
+            <AgentController currentPath={currentPath} setCurrentPath={setCurrentPath} />
         </div>
     )
 }
 
 export default App
+

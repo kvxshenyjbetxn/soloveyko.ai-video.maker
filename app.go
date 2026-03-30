@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"soloveyko/backend/api"
+	"soloveyko/backend/mcpserver"
 	"soloveyko/backend/pipeline"
 	"soloveyko/backend/utils"
 	"strings"
@@ -54,9 +55,15 @@ type App struct {
 	updater         *utils.UpdateManager
 	workerCtx       context.Context
 	workerCancel    context.CancelFunc
-	
+
 	processedPings  map[string]time.Time
 	pingMutex       sync.Mutex
+	agentPending    map[string]chan agentActionResponse
+	agentPendingMu  sync.Mutex
+	agentReqCounter uint64
+	agentReadyCh    chan struct{}
+	agentReadyOnce  sync.Once
+	mcpController   *mcpserver.Server
 }
 
 // NewApp creates a new App application struct
@@ -316,7 +323,7 @@ func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 // GeneratePreview здійснює швидкий рендер фрагмента для попереднього перегляду
 func (a *App) GeneratePreview(settings map[string]interface{}) (string, error) {
 	previewDir := a.settings.GetPreviewDir()
-	
+
 	// Створюємо папку, якщо не існує
 	if err := os.MkdirAll(previewDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create preview directory: %v", err)
@@ -346,47 +353,125 @@ func (a *App) GeneratePreview(settings map[string]interface{}) (string, error) {
 	// Оновлюємо pSettings з тими, що прийшли з фронтенда (з вкладки Preview)
 	// Це дозволяє бачити зміни в реальному часі після натискання ОК
 	// Оновлюємо субтитри
-	if val, ok := settings["subtitleEnabled"].(bool); ok { pSettings.SubtitleEnabled = val }
-	if val, ok := settings["subtitleService"].(string); ok { pSettings.SubtitleService = val }
-	if val, ok := settings["subtitleModel"].(string); ok { pSettings.SubtitleModel = val }
-	if val, ok := settings["subtitleFont"].(string); ok { pSettings.SubtitleFont = val }
-	if val, ok := settings["subtitleSize"].(float64); ok { pSettings.SubtitleSize = int(val) }
-	if val, ok := settings["subtitleColor"].(string); ok { pSettings.SubtitleColor = val }
-	if val, ok := settings["subtitleOutlineColor"].(string); ok { pSettings.SubtitleOutlineColor = val }
-	if val, ok := settings["subtitleOutlineWidth"].(float64); ok { pSettings.SubtitleOutlineWidth = val }
-	if val, ok := settings["subtitleShadowColor"].(string); ok { pSettings.SubtitleShadowColor = val }
-	if val, ok := settings["subtitleShadowWidth"].(float64); ok { pSettings.SubtitleShadowWidth = val }
-	if val, ok := settings["subtitleBlur"].(float64); ok { pSettings.SubtitleBlur = val }
-	if val, ok := settings["subtitleUppercase"].(bool); ok { pSettings.SubtitleUppercase = val }
-	if val, ok := settings["subtitlePosition"].(string); ok { pSettings.SubtitlePosition = val }
-	if val, ok := settings["subtitleMarginV"].(float64); ok { pSettings.SubtitleMarginV = int(val) }
-	if val, ok := settings["subtitleAnimation"].(string); ok { pSettings.SubtitleAnimation = val }
-	if val, ok := settings["subtitleFadeEnabled"].(bool); ok { pSettings.SubtitleFadeEnabled = val }
-	if val, ok := settings["subtitleFadeIn"].(float64); ok { pSettings.SubtitleFadeIn = int(val) }
-	if val, ok := settings["subtitleFadeOut"].(float64); ok { pSettings.SubtitleFadeOut = int(val) }
-	if val, ok := settings["subtitleKaraokeEffect"].(bool); ok { pSettings.SubtitleKaraokeEffect = val }
-	if val, ok := settings["subtitleKaraokeColor"].(string); ok { pSettings.SubtitleKaraokeColor = val }
-	if val, ok := settings["subtitleKaraokeMode"].(string); ok { pSettings.SubtitleKaraokeMode = val }
-	if val, ok := settings["subtitleKaraokeScale"].(float64); ok { pSettings.SubtitleKaraokeScale = val }
-	if val, ok := settings["subtitleKaraokeSpeed"].(float64); ok { pSettings.SubtitleKaraokeSpeed = int(val) }
-	if val, ok := settings["subtitleMaxLen"].(float64); ok { pSettings.SubtitleMaxLen = int(val) }
-	if val, ok := settings["subtitleMaxWords"].(float64); ok { pSettings.SubtitleMaxWords = int(val) }
-	if val, ok := settings["subtitleWhisperxLanguage"].(string); ok { pSettings.SubtitleWhisperxLanguage = val }
-	if val, ok := settings["subtitleAmdLanguage"].(string); ok { pSettings.SubtitleAmdLanguage = val }
-	
+	if val, ok := settings["subtitleEnabled"].(bool); ok {
+		pSettings.SubtitleEnabled = val
+	}
+	if val, ok := settings["subtitleService"].(string); ok {
+		pSettings.SubtitleService = val
+	}
+	if val, ok := settings["subtitleModel"].(string); ok {
+		pSettings.SubtitleModel = val
+	}
+	if val, ok := settings["subtitleFont"].(string); ok {
+		pSettings.SubtitleFont = val
+	}
+	if val, ok := settings["subtitleSize"].(float64); ok {
+		pSettings.SubtitleSize = int(val)
+	}
+	if val, ok := settings["subtitleColor"].(string); ok {
+		pSettings.SubtitleColor = val
+	}
+	if val, ok := settings["subtitleOutlineColor"].(string); ok {
+		pSettings.SubtitleOutlineColor = val
+	}
+	if val, ok := settings["subtitleOutlineWidth"].(float64); ok {
+		pSettings.SubtitleOutlineWidth = val
+	}
+	if val, ok := settings["subtitleShadowColor"].(string); ok {
+		pSettings.SubtitleShadowColor = val
+	}
+	if val, ok := settings["subtitleShadowWidth"].(float64); ok {
+		pSettings.SubtitleShadowWidth = val
+	}
+	if val, ok := settings["subtitleBlur"].(float64); ok {
+		pSettings.SubtitleBlur = val
+	}
+	if val, ok := settings["subtitleUppercase"].(bool); ok {
+		pSettings.SubtitleUppercase = val
+	}
+	if val, ok := settings["subtitlePosition"].(string); ok {
+		pSettings.SubtitlePosition = val
+	}
+	if val, ok := settings["subtitleMarginV"].(float64); ok {
+		pSettings.SubtitleMarginV = int(val)
+	}
+	if val, ok := settings["subtitleAnimation"].(string); ok {
+		pSettings.SubtitleAnimation = val
+	}
+	if val, ok := settings["subtitleFadeEnabled"].(bool); ok {
+		pSettings.SubtitleFadeEnabled = val
+	}
+	if val, ok := settings["subtitleFadeIn"].(float64); ok {
+		pSettings.SubtitleFadeIn = int(val)
+	}
+	if val, ok := settings["subtitleFadeOut"].(float64); ok {
+		pSettings.SubtitleFadeOut = int(val)
+	}
+	if val, ok := settings["subtitleKaraokeEffect"].(bool); ok {
+		pSettings.SubtitleKaraokeEffect = val
+	}
+	if val, ok := settings["subtitleKaraokeColor"].(string); ok {
+		pSettings.SubtitleKaraokeColor = val
+	}
+	if val, ok := settings["subtitleKaraokeMode"].(string); ok {
+		pSettings.SubtitleKaraokeMode = val
+	}
+	if val, ok := settings["subtitleKaraokeScale"].(float64); ok {
+		pSettings.SubtitleKaraokeScale = val
+	}
+	if val, ok := settings["subtitleKaraokeSpeed"].(float64); ok {
+		pSettings.SubtitleKaraokeSpeed = int(val)
+	}
+	if val, ok := settings["subtitleMaxLen"].(float64); ok {
+		pSettings.SubtitleMaxLen = int(val)
+	}
+	if val, ok := settings["subtitleMaxWords"].(float64); ok {
+		pSettings.SubtitleMaxWords = int(val)
+	}
+	if val, ok := settings["subtitleWhisperxLanguage"].(string); ok {
+		pSettings.SubtitleWhisperxLanguage = val
+	}
+	if val, ok := settings["subtitleAmdLanguage"].(string); ok {
+		pSettings.SubtitleAmdLanguage = val
+	}
+
 	// Оновлюємо монтаж
-	if val, ok := settings["montageSwayFactor"].(float64); ok { pSettings.MontageSwayFactor = val }
-	if val, ok := settings["montageZoomFactor"].(float64); ok { pSettings.MontageZoomFactor = val }
-	if val, ok := settings["montageTransitionDuration"].(float64); ok { pSettings.MontageTransitionDuration = val }
-	if val, ok := settings["montageTransitionEffect"].(string); ok { pSettings.MontageTransitionEffect = val }
-	if val, ok := settings["montageOrientation"].(string); ok { pSettings.MontageOrientation = val }
-	if val, ok := settings["montageWatermarkEnabled"].(bool); ok { pSettings.MontageWatermarkEnabled = val }
-	if val, ok := settings["montageWatermarkPath"].(string); ok { pSettings.MontageWatermarkPath = val }
-	if val, ok := settings["montageWatermarkPosition"].(string); ok { pSettings.MontageWatermarkPosition = val }
-	if val, ok := settings["montageWatermarkOpacity"].(float64); ok { pSettings.MontageWatermarkOpacity = val }
-	if val, ok := settings["montageWatermarkSize"].(float64); ok { pSettings.MontageWatermarkSize = int(val) }
-	if val, ok := settings["montageIntroVideoEnabled"].(bool); ok { pSettings.MontageIntroVideoEnabled = val }
-	if val, ok := settings["montageIntroVideoPath"].(string); ok { pSettings.MontageIntroVideoPath = val }
+	if val, ok := settings["montageSwayFactor"].(float64); ok {
+		pSettings.MontageSwayFactor = val
+	}
+	if val, ok := settings["montageZoomFactor"].(float64); ok {
+		pSettings.MontageZoomFactor = val
+	}
+	if val, ok := settings["montageTransitionDuration"].(float64); ok {
+		pSettings.MontageTransitionDuration = val
+	}
+	if val, ok := settings["montageTransitionEffect"].(string); ok {
+		pSettings.MontageTransitionEffect = val
+	}
+	if val, ok := settings["montageOrientation"].(string); ok {
+		pSettings.MontageOrientation = val
+	}
+	if val, ok := settings["montageWatermarkEnabled"].(bool); ok {
+		pSettings.MontageWatermarkEnabled = val
+	}
+	if val, ok := settings["montageWatermarkPath"].(string); ok {
+		pSettings.MontageWatermarkPath = val
+	}
+	if val, ok := settings["montageWatermarkPosition"].(string); ok {
+		pSettings.MontageWatermarkPosition = val
+	}
+	if val, ok := settings["montageWatermarkOpacity"].(float64); ok {
+		pSettings.MontageWatermarkOpacity = val
+	}
+	if val, ok := settings["montageWatermarkSize"].(float64); ok {
+		pSettings.MontageWatermarkSize = int(val)
+	}
+	if val, ok := settings["montageIntroVideoEnabled"].(bool); ok {
+		pSettings.MontageIntroVideoEnabled = val
+	}
+	if val, ok := settings["montageIntroVideoPath"].(string); ok {
+		pSettings.MontageIntroVideoPath = val
+	}
 	if val, ok := settings["montageIntroVideoPaths"].([]interface{}); ok {
 		paths := make([]string, 0, len(val))
 		for _, v := range val {
@@ -412,39 +497,39 @@ func (a *App) GeneratePreview(settings map[string]interface{}) (string, error) {
 	// Use settings from left panel
 
 	// 1. Обробка субтитрів
-	 voicePath := filepath.Join(previewDir, "voice.mp3")
-	 if _, err := os.Stat(voicePath); os.IsNotExist(err) {
-		 return "", fmt.Errorf("voice.mp3 not found in preview folder. Please add it for preview.")
-	 }
+	voicePath := filepath.Join(previewDir, "voice.mp3")
+	if _, err := os.Stat(voicePath); os.IsNotExist(err) {
+		return "", fmt.Errorf("voice.mp3 not found in preview folder. Please add it for preview.")
+	}
 
-	 err := a.pipeline.ProcessSubtitle("preview_task", "Preview", previewDir, settings, &pSettings)
-	 if err != nil {
-		 a.LogToUI("ERROR", fmt.Sprintf("[Preview] Subtitle stage failed: %v", err))
-		 return "", err
-	 }
+	err := a.pipeline.ProcessSubtitle("preview_task", "Preview", previewDir, settings, &pSettings)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Preview] Subtitle stage failed: %v", err))
+		return "", err
+	}
 
-	 // 2. Обробка монтажу
-	 err = a.pipeline.ProcessMontage("preview_task", "Preview", previewDir, settings, &pSettings, "Preview", "")
-	 if err != nil {
-		 a.LogToUI("ERROR", fmt.Sprintf("[Preview] Montage stage failed: %v", err))
-		 return "", err
-	 }
+	// 2. Обробка монтажу
+	err = a.pipeline.ProcessMontage("preview_task", "Preview", previewDir, settings, &pSettings, "Preview", "")
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Preview] Montage stage failed: %v", err))
+		return "", err
+	}
 
-	 finalVideo := filepath.Join(previewDir, "final.mp4")
-	 if _, err := os.Stat(finalVideo); err != nil {
-		 // Debug: list files to see what was actually generated
-		 files, _ := os.ReadDir(previewDir)
-		 var foundFiles []string
-		 for _, f := range files {
-			 if !f.IsDir() && strings.HasSuffix(f.Name(), ".mp4") {
-				 foundFiles = append(foundFiles, f.Name())
-			 }
-		 }
-		 return "", fmt.Errorf("final video was not generated. Found MP4s: %v", foundFiles)
-	 }
+	finalVideo := filepath.Join(previewDir, "final.mp4")
+	if _, err := os.Stat(finalVideo); err != nil {
+		// Debug: list files to see what was actually generated
+		files, _ := os.ReadDir(previewDir)
+		var foundFiles []string
+		for _, f := range files {
+			if !f.IsDir() && strings.HasSuffix(f.Name(), ".mp4") {
+				foundFiles = append(foundFiles, f.Name())
+			}
+		}
+		return "", fmt.Errorf("final video was not generated. Found MP4s: %v", foundFiles)
+	}
 
-	 a.LogToUI("SUCCESS", "[Preview] Preview generated successfully!")
-	 return finalVideo, nil
+	a.LogToUI("SUCCESS", "[Preview] Preview generated successfully!")
+	return finalVideo, nil
 }
 
 // GetPreviewPath повертає шлях до папки прев'ю
@@ -510,7 +595,7 @@ func (a *App) shutdown(ctx context.Context) {
 		hwID := utils.GetHardwareID()
 		hostname, _ := os.Hostname()
 		if key := a.settings.GetAppAccessKey(); key != "" {
-			// На відміну від HeartbeatLoop, тут ми робимо прямий виклик 
+			// На відміну від HeartbeatLoop, тут ми робимо прямий виклик
 			// щоб встигнути відправити статус до закриття процесу
 			a.sendHeartbeat(key, hwID, hostname, "offline")
 		}
@@ -609,20 +694,20 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 	}
 
 	key = strings.TrimSpace(key)
-	
+
 	// Перевірка ключа та воркера (тільки для дебагу)
 	// a.LogToUI("DEBUG", fmt.Sprintf("[Worker] Polling with key: %s..., HWID: %s...", key[:4], hwID[:6]))
 
-	url := fmt.Sprintf("%s/tasks/claim?key=%s&hardware_id=%s", 
+	url := fmt.Sprintf("%s/tasks/claim?key=%s&hardware_id=%s",
 		"https://new-project-combain-server-production.up.railway.app", url.QueryEscape(key), hwID)
-	
+
 	resp, err := http.Get(url)
 	if err != nil {
 		// Log network error
 		return
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode == http.StatusNoContent {
 		// No tasks available
 		return
@@ -685,11 +770,11 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 	if targetID == "" {
 		targetID, _ = settings["target_id"].(string)
 	}
-	
+
 	// ФІЛЬТРАЦІЯ ЗА ЦІЛЬОВИМ ID
 	if targetID != "" && targetID != hwID {
 		a.LogToUI("WARN", fmt.Sprintf("[Worker] Task %s is for worker %s, but I am %s. Ignoring.", task.ID, targetID, hwID))
-		return 
+		return
 	}
 
 	a.LogToUI("SUCCESS", fmt.Sprintf("[Worker] Task claimed: %s", task.TaskName))
@@ -744,7 +829,7 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 	}
 
 	_, err = a.pipeline.ProcessTask(id, 1, taskType, task.Payload, settings, task.TaskName, "")
-	
+
 	status := "completed"
 	result := ""
 	if err != nil {
@@ -762,7 +847,7 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 // DownloadSettingsFile завантажує налаштування з сервера за ID файлу
 func (a *App) DownloadSettingsFile(fileID string) (map[string]interface{}, error) {
 	key := a.settings.GetAppAccessKey()
-	url := fmt.Sprintf("%s/tasks/download?key=%s&id=%s", 
+	url := fmt.Sprintf("%s/tasks/download?key=%s&id=%s",
 		"https://new-project-combain-server-production.up.railway.app", url.QueryEscape(key), fileID)
 
 	resp, err := http.Get(url)
@@ -802,7 +887,7 @@ func (a *App) sendHeartbeat(key string, hwID string, name string, status string)
 	}
 
 	url := fmt.Sprintf("%s/worker/heartbeat", "https://new-project-combain-server-production.up.railway.app")
-	
+
 	payload := map[string]string{
 		"key":         key,
 		"hardware_id": hwID,
@@ -874,7 +959,7 @@ func (a *App) UploadSettingsFile(settings map[string]interface{}) (string, error
 
 	var b bytes.Buffer
 	w := multipart.NewWriter(&b)
-	
+
 	// Додаємо ключ
 	if err := w.WriteField("key", key); err != nil {
 		return "", err
@@ -929,15 +1014,15 @@ func (a *App) SendRemoteTaskWithTarget(targetWorkerID, name, payload string, set
 
 	key := a.settings.GetAppAccessKey()
 	hwID := utils.GetHardwareID()
-	
+
 	// Створюємо payload для завдання, вказуючи посилання на файл налаштувань
 	remoteSettings := map[string]interface{}{
-		"settings_file_id": fileID,
+		"settings_file_id":   fileID,
 		"target_hardware_id": targetWorkerID,
 	}
-	
+
 	url := fmt.Sprintf("%s/tasks", "https://new-project-combain-server-production.up.railway.app")
-	
+
 	reqBody := map[string]interface{}{
 		"key":                key,
 		"hardware_id":        hwID,
@@ -985,7 +1070,7 @@ func (a *App) PingWorker(targetID string) error {
 
 	hwID := utils.GetHardwareID()
 	url := fmt.Sprintf("%s/tasks", "https://new-project-combain-server-production.up.railway.app")
-	
+
 	// Надсилаємо settings як об'єкт
 	settingsMap := map[string]interface{}{
 		"target_hardware_id": targetID,
@@ -2467,7 +2552,6 @@ func (a *App) injectAPIKeys(settings map[string]interface{}) {
 	}
 }
 
-
 // GetRemoteTasksStatus отримує статуси вказаних завдань із сервера
 func (a *App) GetRemoteTasksStatus(ids []string) (map[string]string, error) {
 	key := a.settings.GetAppAccessKey()
@@ -2475,9 +2559,9 @@ func (a *App) GetRemoteTasksStatus(ids []string) (map[string]string, error) {
 		return nil, fmt.Errorf("app key is missing")
 	}
 
-	url := fmt.Sprintf("%s/tasks/status?key=%s&ids=%s", 
-		"https://new-project-combain-server-production.up.railway.app", 
-		url.QueryEscape(key), 
+	url := fmt.Sprintf("%s/tasks/status?key=%s&ids=%s",
+		"https://new-project-combain-server-production.up.railway.app",
+		url.QueryEscape(key),
 		strings.Join(ids, ","))
 
 	resp, err := http.Get(url)

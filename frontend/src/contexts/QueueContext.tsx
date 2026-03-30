@@ -41,6 +41,7 @@ interface QueueActionsContextType {
     removeTask: (id: string) => void; clearQueue: () => void; startQueue: () => Promise<void>;
     getNextTaskName: () => string;
     updateTaskStatus: (id: string, s: TaskStatus, p?: number, l?: number) => void;
+    updateControlDraft: (id: string, text: string) => void;
     resumeTask: (id: string, text: string) => Promise<void>;
     regenerateTask: (id: string, text: string, settings?: any) => Promise<void>;
     cancelTask: (id: string) => Promise<void>;
@@ -266,6 +267,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setIsProcessing(false);
         setIsImageBatchReady(false);
         ClearGallery();
+    }, []);
+
+    const updateControlDraft = useCallback((id: string, text: string) => {
+        taskContentRef.current.set(id, text);
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, controlContent: text } : t));
     }, []);
 
     const resumeTask = async (id: string, text: string) => {
@@ -677,7 +683,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     const actionsValue = {
         addTasks, addTask, removeTask, clearQueue, startQueue, startRemoteQueue, getNextTaskName,
-        updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles,
+        updateTaskStatus, updateControlDraft, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles,
         closeCompletionModal, closeImageControlNotification, closeMontageControlNotification,
         addRegeneratingPath, removeRegeneratingPath
     };
@@ -709,3 +715,4 @@ export const useQueueData = () => {
     if (!context) throw new Error('useQueueData must be used within a QueueProvider');
     return context;
 };
+

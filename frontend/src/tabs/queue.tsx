@@ -73,6 +73,10 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
         fetchModels();
     }, []);
 
+    useEffect(() => {
+        setText(task.controlContent || '');
+    }, [task.id, task.controlContent]);
+
     const { t } = useI18n();
 
     const origLen = task.originalLength || task.content?.length || 0;
@@ -771,3 +775,4 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         </div>
     );
 };
+
