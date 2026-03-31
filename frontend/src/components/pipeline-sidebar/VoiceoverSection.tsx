@@ -3,6 +3,7 @@ import { useI18n } from '../../contexts/I18nContext';
 import SearchableSelect from '../SearchableSelect';
 
 interface VoiceoverSectionProps {
+    type: 'translate' | 'rewrite' | 'voiceover';
     settings: any;
     handleChange: (field: string, value: any) => void;
     setSettings: React.Dispatch<React.SetStateAction<any>>;
@@ -27,9 +28,14 @@ const VoiceIcon = () => (
 );
 
 export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
-    settings, handleChange, setSettings, fetchVoiceTemplates, fetchVoiceMakerVoices, fetchEdgeTTSVoices, voiceTemplates, voiceMakerVoices, edgeTTSVoices, loadingTemplates, isCollapsed: externalIsCollapsed, onToggleCollapse
+    type, settings, handleChange, setSettings, fetchVoiceTemplates, fetchVoiceMakerVoices, fetchEdgeTTSVoices, voiceTemplates, voiceMakerVoices, edgeTTSVoices, loadingTemplates, isCollapsed: externalIsCollapsed, onToggleCollapse
 }) => {
     const { t } = useI18n();
+
+    // Визначаємо поле для зберігання UUID шаблону
+    let templateField = 'voiceoverTemplate';
+    if (type === 'translate') templateField = 'translateElevenLabsBotVoiceUUID';
+    else if (type === 'rewrite') templateField = 'rewriteElevenLabsBotVoiceUUID';
 
     const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : settings.voiceoverCollapsed;
 
@@ -107,7 +113,10 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                                 const val = e.target.value;
                                 handleChange('voiceoverService', val);
                                 if (val === 'elevenlabsbot') {
-                                    fetchVoiceTemplates();
+                                    let keyID = settings.voiceoverElevenLabsBotKeyID;
+                                    if (type === 'translate') keyID = settings.translateElevenLabsBotKeyID;
+                                    else if (type === 'rewrite') keyID = settings.rewriteElevenLabsBotKeyID;
+                                    fetchVoiceTemplates(keyID);
                                 } else if (val === 'voicemaker') {
                                     fetchVoiceMakerVoices();
                                 } else if (val === 'edgetts') {
@@ -130,13 +139,13 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                                 <select
                                     className="settings-select"
                                     style={{ flex: 1 }}
-                                    value={settings.voiceoverTemplate}
-                                    onChange={(e) => handleChange('voiceoverTemplate', e.target.value)}
+                                    value={settings[templateField] || ''}
+                                    onChange={(e) => handleChange(templateField, e.target.value)}
                                     disabled={loadingTemplates}
                                 >
                                     <option value="">{loadingTemplates ? (t('common.loading') || 'Loading...') : (t('common.select_template') || 'Select template...')}</option>
-                                    {settings.voiceoverTemplate && !voiceTemplates.find(t => t.uuid === settings.voiceoverTemplate) && (
-                                        <option value={settings.voiceoverTemplate}>Unknown ({settings.voiceoverTemplate})</option>
+                                    {settings[templateField] && !voiceTemplates.find(t => t.uuid === settings[templateField]) && (
+                                        <option value={settings[templateField]}>Unknown ({settings[templateField]})</option>
                                     )}
                                     {voiceTemplates.map(tpl => (
                                         <option key={tpl.uuid} value={tpl.uuid}>{tpl.name}</option>
@@ -145,7 +154,12 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                                 <button
                                     className="premium-btn-sm"
                                     style={{ padding: '0 10px', height: '32px', minWidth: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    onClick={() => fetchVoiceTemplates()}
+                                    onClick={() => {
+                                        let keyID = settings.voiceoverElevenLabsBotKeyID;
+                                        if (type === 'translate') keyID = settings.translateElevenLabsBotKeyID;
+                                        else if (type === 'rewrite') keyID = settings.rewriteElevenLabsBotKeyID;
+                                        fetchVoiceTemplates(keyID);
+                                    }}
                                     disabled={loadingTemplates}
                                     title={t('common.refresh') || 'Refresh'}
                                 >

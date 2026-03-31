@@ -12,14 +12,9 @@ import (
 )
 
 // ProcessVoiceover handles voice synthesis using ElevenLabs
-func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
-	var vEnabled bool
-	if val, ok := settings["voiceoverEnabled"].(bool); ok {
-		vEnabled = val
-	} else {
-		vEnabled = pSettings.VoiceoverEnabled
-	}
-
+func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, taskType string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
+	// Пріоритет налаштувань забезпечення через pSettings (вже синхронізовано в service.go)
+	vEnabled := pSettings.VoiceoverEnabled
 	if !vEnabled {
 		s.log("INFO", "[Pipeline] Voiceover stage is disabled, skipping.", id, taskLabel)
 		return nil
@@ -34,50 +29,48 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 		return nil
 	}
 
-	vService, _ := settings["voiceoverService"].(string)
-	if vService == "" {
-		vService = pSettings.VoiceoverService
-	}
-	vTemplate, _ := settings["voiceoverTemplate"].(string)
-	if vTemplate == "" {
-		vTemplate = pSettings.VoiceoverTemplate
-	}
-	vKeyID, _ := settings["voiceoverElevenLabsBotKeyID"].(string)
-	if vKeyID == "" {
-		vKeyID = pSettings.VoiceoverElevenLabsBotKeyID
+	vService := pSettings.VoiceoverService
+	vTemplate := pSettings.VoiceoverTemplate
+
+	// !!! УВАГА МАЙБУТНІМ АГЕНТАМ !!!
+	// ЯКЩО ОБРАНО ШАБЛОН (ЗАВДАННЯ TRANSLATE АБО REWRITE), ВИКОРИСТОВУЮТЬСЯ ЛИШЕ НАЛАШТУВАННЯ З ЦЬОГО ШАБЛОНУ!
+	// ЖОДНЕ НАЛАШТУВАННЯ З ГЛОБАЛЬНОЇ ПАНЕЛІ НЕ МАЄ ПЕРЕКРИВАТИ ЦІ ПОЛЯ!
+	vKeyID := pSettings.VoiceoverElevenLabsBotKeyID
+	if taskType == "translate" || taskType == "translation" {
+		if pSettings.TranslateElevenLabsBotKeyID != "" {
+			vKeyID = pSettings.TranslateElevenLabsBotKeyID
+		}
+		if pSettings.TranslateElevenLabsBotVoiceUUID != "" {
+			vTemplate = pSettings.TranslateElevenLabsBotVoiceUUID
+		}
+	} else if taskType == "rewrite" {
+		if pSettings.RewriteElevenLabsBotKeyID != "" {
+			vKeyID = pSettings.RewriteElevenLabsBotKeyID
+		}
+		if pSettings.RewriteElevenLabsBotVoiceUUID != "" {
+			vTemplate = pSettings.RewriteElevenLabsBotVoiceUUID
+		}
 	}
 
 	// Conditional logging based on service type
 	switch vService {
 	case "edgetts":
-		vID, _ := settings["edgeTTSVoiceID"].(string)
-		if vID == "" {
-			vID = pSettings.EdgeTTSVoiceID
-		}
+		vID := pSettings.EdgeTTSVoiceID
 		if vID == "" {
 			vID = "uk-UA-PolinaNeural"
 		}
 		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice: %s", vService, vID), id, taskLabel)
 	case "voicemaker":
-		vID, _ := settings["voiceMakerVoiceID"].(string)
-		if vID == "" {
-			vID = pSettings.VoiceMakerVoiceID
-		}
+		vID := pSettings.VoiceMakerVoiceID
 		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice: %s", vService, vID), id, taskLabel)
 	case "elevenlabsunlim":
-		vID, _ := settings["elevenLabsUnlimVoiceID"].(string)
-		if vID == "" {
-			vID = pSettings.ElevenLabsUnlimVoiceID
-		}
+		vID := pSettings.ElevenLabsUnlimVoiceID
 		if vID == "" {
 			vID = "AB9XsbSA4eLG12t2myjN"
 		}
 		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice: %s", vService, vID), id, taskLabel)
 	case "elevenlabsua":
-		vID, _ := settings["elevenLabsUAVoiceID"].(string)
-		if vID == "" {
-			vID = pSettings.ElevenLabsUAVoiceID
-		}
+		vID := pSettings.ElevenLabsUAVoiceID
 		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Voice: %s", vService, vID), id, taskLabel)
 	default:
 		s.log("INFO", fmt.Sprintf("[Pipeline] Voiceover stage started. Service: %s, Template: %s", vService, vTemplate), id, taskLabel)
@@ -89,18 +82,19 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, processe
 			return fmt.Errorf("voice template not selected")
 		}
 
-		vApiKey, _ := settings["voiceoverElevenLabsBotAPIKey"].(string)
-		if vApiKey == "" {
-			vKeys := s.settings.GetElevenLabsBotKeys()
-			for _, k := range vKeys {
-				if k.ID == vKeyID {
-					vApiKey = k.Key
-					break
-				}
+		vApiKey := ""
+		vKeys := s.settings.GetElevenLabsBotKeys()
+		for _, k := range vKeys {
+			if k.ID == vKeyID {
+				vApiKey = k.Key
+				break
 			}
-			if vApiKey == "" && len(vKeys) > 0 {
-				vApiKey = vKeys[0].Key
-			}
+		}
+		if vApiKey == "" && len(vKeys) > 0 {
+			// Якщо специфічний ключ не знайдено, але ключі взагалі є, логуємо попередження
+			// та використовуємо перший доступний (запасний варіант)
+			vApiKey = vKeys[0].Key
+			s.log("WARNING", fmt.Sprintf("[ElevenLabsBot] Специфічний ключ (ID: %s) не знайдено. Використовую запасний.", vKeyID), id, taskLabel)
 		}
 
 		if vApiKey == "" {

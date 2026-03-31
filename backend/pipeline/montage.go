@@ -338,80 +338,10 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			pSettings.MontageIntroVideoPaths = slice
 		}
 	}
-	if val, ok := settings["montageIntroFadeDuration"].(float64); ok {
-		pSettings.MontageIntroFadeDuration = val
-	}
-	if val, ok := settings["imageShortVideoFillMode"].(string); ok {
-		pSettings.ImageShortVideoFillMode = val
-	}
-	if val, ok := settings["montageWatermarkEnabled"].(bool); ok {
-		pSettings.MontageWatermarkEnabled = val
-	}
-	if val, ok := settings["montageWatermarkPath"].(string); ok {
-		pSettings.MontageWatermarkPath = val
-	}
-	if val, ok := settings["montageWatermarkPosition"].(string); ok {
-		pSettings.MontageWatermarkPosition = val
-	}
-	if val, ok := settings["montageWatermarkOpacity"].(float64); ok {
-		pSettings.MontageWatermarkOpacity = val
-	}
-	if val, ok := settings["montageWatermarkSize"]; ok {
-		switch v := val.(type) {
-		case float64:
-			pSettings.MontageWatermarkSize = int(v)
-		case int:
-			pSettings.MontageWatermarkSize = v
-		}
-	}
-	if val, ok := settings["montageWatermarkOnIntro"].(bool); ok {
-		pSettings.MontageWatermarkOnIntro = val
-	}
-	if val, ok := settings["montageOverlayEnabled"].(bool); ok {
-		pSettings.MontageOverlayEnabled = val
-	}
-	if val, ok := settings["montageOverlayPath"].(string); ok {
-		pSettings.MontageOverlayPath = val
-	}
-	if val, ok := settings["montageOverlayOnIntro"].(bool); ok {
-		pSettings.MontageOverlayOnIntro = val
-	}
-	if val, ok := settings["montageOverlayTriggersEnabled"].(bool); ok {
-		pSettings.MontageOverlayTriggersEnabled = val
-	}
-	if val, ok := settings["montageOverlayTriggers"].([]interface{}); ok {
-		var triggers []utils.OverlayTrigger
-		for _, v := range val {
-			if m, ok := v.(map[string]interface{}); ok {
-				var tr utils.OverlayTrigger
-				if phrase, ok := m["phrase"].(string); ok {
-					tr.Phrase = phrase
-				}
-				if path, ok := m["path"].(string); ok {
-					tr.Path = path
-				}
-				if x, ok := m["x"].(float64); ok {
-					tr.X = int(x)
-				}
-				if y, ok := m["y"].(float64); ok {
-					tr.Y = int(y)
-				}
-				if tr.Phrase != "" && tr.Path != "" {
-					triggers = append(triggers, tr)
-				}
-			}
-		}
-		if len(triggers) > 0 {
-			pSettings.MontageOverlayTriggers = triggers
-		}
-	}
-
-	if val, ok := settings["montageMetadataSimulation"].(string); ok {
-		pSettings.MontageMetadataSimulation = val
-	}
-	if val, ok := settings["montageOrientation"].(string); ok {
-		pSettings.MontageOrientation = val
-	}
+	// !!! УВАГА !!!
+	// Ручна синхронізація параметрів видалена, оскільки SyncFromMap у service.go
+	// вже оновив pSettings найактуальнішими даними з урахуванням пріоритету шаблонів.
+	// БУДЬ-ЯКА РУЧНА СИНХРОНІЗАЦІЯ ТУТ ПРИЗВЕДЕ ДО "ПРОТІКАННЯ" НАЛАШТУВАНЬ З ПАНЕЛІ.
 
 	// Derived variables from finalized pSettings
 	transDur := pSettings.MontageTransitionDuration

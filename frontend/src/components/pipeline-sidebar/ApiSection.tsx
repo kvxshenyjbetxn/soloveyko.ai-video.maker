@@ -124,6 +124,12 @@ export const ApiSection: React.FC<ApiSectionProps> = ({
                                 else if (isRewrite) field = 'rewriteElevenLabsBotKeyID';
                                 else field = 'voiceoverElevenLabsBotKeyID';
                                 handleChange(field, val);
+                                
+                                const w = window as any;
+                                if (w.go && w.go.main && w.go.main.App && w.go.main.App.LogFromUI) {
+                                    w.go.main.App.LogFromUI("INFO", `[Frontend] Обрано новий ключ ElevenLabs Bot: ${val} для поля ${field}`);
+                                }
+
                                 if (val !== "MANAGE_KEYS" && settings.voiceoverService === 'elevenlabsbot') {
                                     fetchVoiceTemplates(val);
                                 }

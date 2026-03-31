@@ -69,23 +69,38 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         // @ts-ignore
         const app = window.go.main.App as any;
 
-        // 1. Пріоритет: переданий ID -> settings зі стейту -> settings з пропсів (якщо є)
-        const id = keyID || settings?.voiceoverElevenLabsBotKeyID;
+        // Пріоритет вибору ключа залежно від завдання
+        let id = keyID;
+        if (!id && settings) {
+            if (type === 'translate') id = settings.translateElevenLabsBotKeyID;
+            else if (type === 'rewrite') id = settings.rewriteElevenLabsBotKeyID;
+            else id = settings.voiceoverElevenLabsBotKeyID;
+        }
 
         if (app && app.LogFromUI) {
-            app.LogFromUI("INFO", "[Frontend] Запит на отримання шаблонів ElevenLabs Bot...");
+            app.LogFromUI("INFO", `[Frontend] Запит на шаблони ElevenLabs Bot (ID: ${id || 'default'})`);
         }
 
         let keyObj = elevenLabsBotKeys.find((k: any) => k.id === id);
 
-        // Якщо за ID не знайшли або ID "default", беремо перший доступний ключ
-        if ((!keyObj || id === 'default') && elevenLabsBotKeys.length > 0) {
+        // Якщо id не знайдено, але id було передано або вже встановлено, не робимо fallback автоматично,
+        // щоб не заплутати користувача шаблонами від іншого ключа.
+        if (!keyObj && id && id !== 'default') {
+            if (app && app.LogFromUI) app.LogFromUI("WARNING", `[Frontend] Ключ з ID ${id} не знайдено в списку доступних.`);
+            setVoiceTemplates([]);
+            setLoadingTemplates(false);
+            return;
+        }
+
+        if (!keyObj && elevenLabsBotKeys.length > 0) {
             keyObj = elevenLabsBotKeys[0];
-            if (app && app.LogFromUI) app.LogFromUI("INFO", "[Frontend] Використовую ключ: " + keyObj.name);
+            if (app && app.LogFromUI) app.LogFromUI("INFO", "[Frontend] Автоматичний вибір першого доступного ключа: " + keyObj.name);
         }
 
         if (!keyObj) {
-            if (app && app.LogFromUI) app.LogFromUI("ERROR", "[Frontend] Помилка: Ключі ElevenLabs Bot не знайдені в системі!");
+            if (app && app.LogFromUI) app.LogFromUI("ERROR", "[Frontend] Помилка: Ключі ElevenLabs Bot не знайдені.");
+            setVoiceTemplates([]);
+            setLoadingTemplates(false);
             return;
         }
 
@@ -95,10 +110,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             if (results && results.length > 0) {
                 setVoiceTemplates(results);
                 if (app && app.LogFromUI) {
-                    app.LogFromUI("SUCCESS", `[Frontend] Шаблони успішно завантажені (кількість: ${results.length})`);
+                    app.LogFromUI("SUCCESS", `[Frontend] Шаблони завантажені: ${results.length}`);
                 }
             } else {
-                if (app && app.LogFromUI) app.LogFromUI("WARN", "[Frontend] Сервер повернув порожній список шаблонів.");
                 setVoiceTemplates([]);
             }
         } catch (err: any) {
@@ -269,16 +283,23 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     useEffect(() => {
         if (!settings) return;
 
+        // Визначаємо правильний ключ залежно від типу завдання
+        let currentKeyID = '';
+        if (type === 'translate') currentKeyID = settings.translateElevenLabsBotKeyID;
+        else if (type === 'rewrite') currentKeyID = settings.rewriteElevenLabsBotKeyID;
+        else currentKeyID = settings.voiceoverElevenLabsBotKeyID;
+
         // Fetch ElevenLabs Bot templates if service is active and key exists
-        if (settings.voiceoverService === 'elevenlabsbot' && settings.voiceoverElevenLabsBotKeyID && elevenLabsBotKeys.length > 0) {
-            fetchVoiceTemplates(settings.voiceoverElevenLabsBotKeyID);
+        if (settings.voiceoverService === 'elevenlabsbot' && currentKeyID && elevenLabsBotKeys.length > 0) {
+            fetchVoiceTemplates(currentKeyID);
         }
 
         // Fetch VoiceMaker voices if service is active and key exists
+        // (Для VoiceMaker наразі використовується один спільний ключ voiceoverVoiceMakerKeyID)
         if (settings.voiceoverService === 'voicemaker' && settings.voiceoverVoiceMakerKeyID && voiceMakerKeys.length > 0) {
             fetchVoiceMakerVoices(settings.voiceoverVoiceMakerKeyID);
         }
-    }, [settings?.voiceoverService, settings?.voiceoverElevenLabsBotKeyID, settings?.voiceoverVoiceMakerKeyID, elevenLabsBotKeys, voiceMakerKeys]);
+    }, [type, settings?.voiceoverService, settings?.voiceoverElevenLabsBotKeyID, settings?.translateElevenLabsBotKeyID, settings?.rewriteElevenLabsBotKeyID, settings?.voiceoverVoiceMakerKeyID, elevenLabsBotKeys, voiceMakerKeys]);
 
     useEffect(() => {
         const init = async () => {
@@ -303,9 +324,19 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     if (!s.rewriteOpenRouterKeyID || s.rewriteOpenRouterKeyID === "") { s.rewriteOpenRouterKeyID = openRouterKeys[0].id; updated = true; }
                 }
 
-                if (elevenLabsBotKeys.length > 0 && (!s.voiceoverElevenLabsBotKeyID || s.voiceoverElevenLabsBotKeyID === "")) {
-                    s.voiceoverElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
-                    updated = true;
+                if (elevenLabsBotKeys.length > 0) {
+                    if (!s.voiceoverElevenLabsBotKeyID || s.voiceoverElevenLabsBotKeyID === "") {
+                        s.voiceoverElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
+                        updated = true;
+                    }
+                    if (!s.translateElevenLabsBotKeyID || s.translateElevenLabsBotKeyID === "") {
+                        s.translateElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
+                        updated = true;
+                    }
+                    if (!s.rewriteElevenLabsBotKeyID || s.rewriteElevenLabsBotKeyID === "") {
+                        s.rewriteElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
+                        updated = true;
+                    }
                 }
 
                 if (voiceMakerKeys.length > 0 && (!s.voiceoverVoiceMakerKeyID || s.voiceoverVoiceMakerKeyID === "")) {
@@ -576,8 +607,8 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         const apiKeys = Object.keys(settings).filter(k => k.endsWith('KeyID'));
         apiKeys.forEach(k => {
             // Exclude irrelevant text pipeline keys
-            if (type === 'translate' && k === 'rewriteOpenRouterKeyID') return;
-            if (type === 'rewrite' && k === 'translateOpenRouterKeyID') return;
+            if (type === 'translate' && k.startsWith('rewrite')) return;
+            if (type === 'rewrite' && k.startsWith('translate')) return;
 
             if (settings[k] !== undefined) templateData.api[k] = settings[k];
         });
@@ -607,7 +638,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 
         // Voiceover Service Specific Groups
         const voServices: any = {
-            elevenlabsbot: ['voiceoverTemplate'],
+            elevenlabsbot: ['voiceoverTemplate', 'translateElevenLabsBotVoiceUUID', 'rewriteElevenLabsBotVoiceUUID', 'voiceoverElevenLabsBotKeyID', 'translateElevenLabsBotKeyID', 'rewriteElevenLabsBotKeyID'],
             elevenlabsunlim: ['elevenLabsUnlimVoiceID', 'elevenLabsUnlimStability', 'elevenLabsUnlimSimilarity', 'elevenLabsUnlimStyle', 'elevenLabsUnlimSpeakerBoost'],
             elevenlabsua: ['elevenLabsUAVoiceID', 'elevenLabsUAStability', 'elevenLabsUASimilarity', 'elevenLabsUAStyle', 'elevenLabsUASpeakerBoost', 'elevenLabsUAModel'],
             voicemaker: ['voiceMakerVoiceID', 'voiceMakerLanguageCode', 'voiceMakerCharLimit'],
@@ -1157,6 +1188,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 
 
                         <VoiceoverSection
+                            type={type} 
                             settings={settings} 
                             handleChange={handleChange} 
                             setSettings={setSettings}

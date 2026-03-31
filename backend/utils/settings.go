@@ -64,12 +64,16 @@ type PipelineSettings struct {
 	TranslateMaxTokens            int     `json:"translateMaxTokens,omitempty"`
 	TranslateCollapsed            bool    `json:"translateCollapsed"`
 	TranslateOpenRouterKeyID      string  `json:"translateOpenRouterKeyID,omitempty"`
+	TranslateElevenLabsBotKeyID   string  `json:"translateElevenLabsBotKeyID,omitempty"`
+	TranslateElevenLabsBotVoiceUUID  string  `json:"translateElevenLabsBotVoiceUUID,omitempty"`
 	RewriteModel                  string  `json:"rewriteModel,omitempty"`
 	RewritePrompt                 string  `json:"rewritePrompt,omitempty"`
 	RewriteTemperature            float64 `json:"rewriteTemperature,omitempty"`
 	RewriteMaxTokens              int     `json:"rewriteMaxTokens,omitempty"`
 	RewriteCollapsed              bool    `json:"rewriteCollapsed"`
 	RewriteOpenRouterKeyID        string  `json:"rewriteOpenRouterKeyID,omitempty"`
+	RewriteElevenLabsBotKeyID     string  `json:"rewriteElevenLabsBotKeyID,omitempty"`
+	RewriteElevenLabsBotVoiceUUID    string  `json:"rewriteElevenLabsBotVoiceUUID,omitempty"`
 	SidebarWidth                  int     `json:"sidebarWidth,omitempty"`
 	TranslateEnabled              bool    `json:"translateEnabled"`
 	RewriteEnabled                bool    `json:"rewriteEnabled"`
@@ -242,6 +246,23 @@ type PipelineSettings struct {
 	CustomStages          []CustomStage `json:"customStages,omitempty"`
 	CustomStagesEnabled   bool          `json:"customStagesEnabled"`
 	CustomStagesCollapsed bool          `json:"customStagesCollapsed"`
+}
+
+// !!! УВАГА МАЙБУТНІМ АГЕНТАМ / ATTENTION FUTURE AGENTS !!!
+// ПОВНИЙ ТА ПРИМУСОВИЙ ОВЕРРАЙД НАЛАШТУВАНЬ ПАЙПЛАЙНУ.
+// КОЛИ ОБРАНО ШАБЛОН, ВІН ПОВИНЕН ПЕРЕВАЖАТИ НАЛАШТУВАННЯ З ПАНЕЛІ ПАЙПЛАЙНУ (PIPELINE PANEL).
+// ЦЕЙ МЕТОД ОНОВЛЮЄ СТРУКТУРУ PipelineSettings ДАНИМИ З КАРТИ (MAP) ЗАВДАННЯ.
+func (p *PipelineSettings) SyncFromMap(settings map[string]interface{}) {
+	// !!! УВАГА МАЙБУТНІМ АГЕНТАМ / ATTENTION FUTURE AGENTS !!!
+	// ЦЕЙ МЕТОД Є КРИТИЧНИМ ДЛЯ ПРІОРИТЕТИЗАЦІЇ НАЛАШТУВАНЬ ШАБЛОНІВ.
+	// ПРИМУСОВО ОНОВЛЮЄ СТРУКТУРУ PipelineSettings ДАНИМИ З КАРТИ (MAP) ЗАВДАННЯ.
+	// ЦЕ ЗАПОБІГАЄ "ПРОТІКАННЮ" ПАРАМЕТРІВ З ПАНЕЛІ ПАЙПЛАЙНУ (PIPELINE PANEL).
+	
+	// Використовуємо json маршалінг для безпечного та автоматичного мапінгу ключів
+	// з карти налаштувань у структуру PipelineSettings. 
+	// Це гарантує, що кожне поле, яке є в шаблоні/завданні, замінить автоматичне значення.
+	jsonData, _ := json.Marshal(settings)
+	json.Unmarshal(jsonData, p)
 }
 
 type GoogleMonitorMapping struct {

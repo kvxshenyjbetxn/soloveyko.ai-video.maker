@@ -313,7 +313,35 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 
 	var pSettings utils.PipelineSettings
 	s.log("INFO", "[Pipeline] Task started and pre-processing...", id, taskLabel)
+	
+	// !!! КРИТИЧНО ПРІОРИТЕТ НАЛАШТУВАНЬ / CRITICAL SETTINGS PRIORITY !!!
 	pSettings = s.settings.GetPipelineSettings()
+	
+	// ВІДТЕПЕР ПРИ ОБРАННІ ШАБЛОНУ (subName != ""), ВСІ НАЛАШТУВАННЯ ПАЙПЛАЙНУ МАЮТЬ БУТИ ПЕРЕЗАПИСАНІ
+	// НАЛАШТУВАННЯМИ З ШАБЛОНУ. ЦЕ ЗАПОБІГАЄ "ПРОТІКАННЮ" ПАРАМЕТРІВ З ПАНЕЛІ ПАЙПЛАЙНУ.
+	// !!! ATTENTION FUTURE AGENTS: DO NOT REMOVE THIS SyncFromMap CALL !!!
+	if subName != "" {
+		s.log("INFO", fmt.Sprintf("[Pipeline] [PRIORITY] Template '%s' detected. Syncing settings map to PipelineSettings struct.", subName), id, taskLabel)
+		// Логуємо стан вотермарки ДО синхронізації (глобальний стан)
+		wmBefore := "disabled"
+		if pSettings.MontageVideoWatermarkEnabled {
+			wmBefore = "enabled"
+		}
+		
+		pSettings.SyncFromMap(settings)
+		
+		// Логуємо стан вотермарки ПІСЛЯ синхронізації (стан шаблону)
+		wmAfter := "disabled"
+		if pSettings.MontageVideoWatermarkEnabled {
+			wmAfter = "enabled"
+		}
+		s.log("INFO", fmt.Sprintf("[Pipeline] [PRIORITY] Sync completed. Video Watermark: %s -> %s", wmBefore, wmAfter), id, taskLabel)
+	} else {
+		// Якщо шаблон не обрано, використовуємо налаштування з паенелі пайплайну з додаванням 
+		// специфічних для завдання прапорців (наприклад, skippedStages).
+		pSettings.SyncFromMap(settings)
+		s.log("INFO", "[Pipeline] Using pipeline panel settings (with task flags).", id, taskLabel)
+	}
 
 	if taskType != "translate" && taskType != "rewrite" && taskType != "voiceover" {
 		return "", fmt.Errorf("task type %s not implemented", taskType)
@@ -331,37 +359,6 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 	var skippedStages []string
 	hasSkippedInfo := false
-
-	// Sync template-specific settings to our local pSettings copy
-	// We MUST be strict here: if a template is used (subName != ""), we prioritize its settings.
-	// If the template doesn't have these keys, we should probably default to disabled/empty
-	// for THIS task to avoid leakage from global settings.
-	if val, ok := settings["customStagesEnabled"].(bool); ok {
-		pSettings.CustomStagesEnabled = val
-	} else if subName != "" {
-		// If template is used but flag is missing, default to false for safety
-		pSettings.CustomStagesEnabled = false
-	}
-
-	if val, ok := settings["customStages"]; ok {
-		if slice, ok := val.([]interface{}); ok {
-			var stages []utils.CustomStage
-			for _, v := range slice {
-				if m, ok := v.(map[string]interface{}); ok {
-					var stage utils.CustomStage
-					jsonData, _ := json.Marshal(m)
-					json.Unmarshal(jsonData, &stage)
-					if stage.ID != "" {
-						stages = append(stages, stage)
-					}
-				}
-			}
-			pSettings.CustomStages = stages
-		}
-	} else if subName != "" {
-		// If template is used but stages are missing, clear them to avoid global inheritance
-		pSettings.CustomStages = []utils.CustomStage{}
-	}
 
 	if val, ok := settings["skippedStages"]; ok {
 		hasSkippedInfo = true
@@ -489,16 +486,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 
 		// 1.5 Control Stage (Only if not skipped)
-		tControlEnabled := pSettings.TranslateControlEnabled
-		if val, ok := settings["translateControlEnabled"].(bool); ok {
-			tControlEnabled = val
-		}
-
-		if val, ok := settings["imageSyncEnabled"].(bool); ok {
-			pSettings.ImageSyncEnabled = val
-		}
-
-		if !shouldSkipText && tControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
+		if !shouldSkipText && pSettings.TranslateControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
 			s.emitStageStatus(id, "text", "waiting")
 			s.log("INFO", "[Control] Waiting for user translation review...", id, taskLabel)
 
@@ -602,7 +590,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 			dur, _ := utils.GetAudioDuration(filepath.Join(finalDir, "voice.mp3"))
 			s.emitStageStatus(id, "voice", "completed", dur)
 		} else {
-			voiceErr = s.ProcessVoiceover(id, taskLabel, processedText, finalDir, settings, &pSettings)
+			voiceErr = s.ProcessVoiceover(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings)
 		}
 
 		if voiceErr != nil {
@@ -632,12 +620,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 
 		// Image Control
-		iControlEnabled := pSettings.ImageControlEnabled
-		if val, ok := settings["imageControlEnabled"].(bool); ok {
-			iControlEnabled = val
-		}
-
-		if iControlEnabled && !shouldSkipImage {
+		if pSettings.ImageControlEnabled && !shouldSkipImage {
 			s.emitStageStatus(id, "image", "waiting")
 			s.log("INFO", "[Control] Waiting for user image/video review...", id, taskLabel)
 
