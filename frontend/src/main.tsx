@@ -10,6 +10,7 @@ import { QueueProvider } from './contexts/QueueContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { TemplateProvider } from './contexts/TemplateContext';
 import { EditorDraftProvider } from './contexts/EditorDraftContext';
+import { GoogleMonitorProvider } from './contexts/GoogleMonitorContext';
 
 const container = document.getElementById('root');
 
@@ -25,7 +26,9 @@ root.render(
                             <TemplateProvider>
                                 <EditorDraftProvider>
                                     <QueueProvider>
-                                        <App />
+                                        <GoogleMonitorProvider>
+                                            <App />
+                                        </GoogleMonitorProvider>
                                     </QueueProvider>
                                 </EditorDraftProvider>
                             </TemplateProvider>
@@ -36,4 +39,3 @@ root.render(
         </I18nProvider>
     </React.StrictMode>
 );
-

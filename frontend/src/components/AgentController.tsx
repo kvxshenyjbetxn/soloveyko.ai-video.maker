@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQueue } from '../contexts/QueueContext';
 import { useTemplates } from '../contexts/TemplateContext';
 import { useEditorDrafts } from '../contexts/EditorDraftContext';
+import { useGoogleMonitor } from '../contexts/GoogleMonitorContext';
 import { useI18n } from '../contexts/I18nContext';
 // @ts-ignore
 import { AddToHistory, CheckExistingTasks, GetGalleryImages, GetPipelineSettings } from '../../wailsjs/go/main/App';
@@ -65,6 +66,25 @@ export const AgentController = ({ currentPath, setCurrentPath }: AgentController
         getTextForTab,
         setTextForTab,
     } = useEditorDrafts();
+    const {
+        sheetsConfig,
+        sheetResults,
+        scanSheets,
+        handleCreateTask
+    } = useGoogleMonitor();
+
+    // Use refs to avoid stale closures in the MCP message handler
+    const sheetsConfigRef = useRef(sheetsConfig);
+    const sheetResultsRef = useRef(sheetResults);
+    const scanSheetsRef = useRef(scanSheets);
+    const handleCreateTaskRef = useRef(handleCreateTask);
+
+    useEffect(() => {
+        sheetsConfigRef.current = sheetsConfig;
+        sheetResultsRef.current = sheetResults;
+        scanSheetsRef.current = scanSheets;
+        handleCreateTaskRef.current = handleCreateTask;
+    }, [sheetsConfig, sheetResults, scanSheets, handleCreateTask]);
 
     useEffect(() => {
         const app = window.go?.main?.App as any;
@@ -462,6 +482,105 @@ export const AgentController = ({ currentPath, setCurrentPath }: AgentController
                         setCurrentPath(path);
                         await respond(request.id, { ok: true, path });
                         return;
+                    }
+                    case 'get_gallery_images': {
+                        const images = await GetGalleryImages();
+                        await respond(request.id, images);
+                        break;
+                    }
+
+                    // Google Monitor Tools
+                    case 'google_monitor_scan': {
+                        const results = await scanSheetsRef.current();
+                        await respond(request.id, { 
+                            success: true, 
+                            count: results.length,
+                            sheets: results.map(s => ({ id: s.id, name: s.name })),
+                            message: `Google Sheets scan completed successfully. Found ${results.length} sheets: ${results.map(s => s.name).join(", ")}`
+                        });
+                        break;
+                    }
+
+                    case 'google_monitor_get_tabs': {
+                        const tabs = (sheetsConfig || []).map((s: any) => ({
+                            id: s.id,
+                            name: s.name,
+                            url: s.url
+                        }));
+                        await respond(request.id, { results: tabs });
+                        break;
+                    }
+
+                    case 'google_monitor_get_items': {
+                        const sheetIdOrName = request.params?.sheetId;
+                        if (!sheetIdOrName) throw new Error("sheetId is required");
+                        
+                        console.log(`[MCP Agent] Getting items for sheet: ${sheetIdOrName}`);
+                        
+                        // If we have no results yet, try to scan automatically
+                        let currentResults = sheetResultsRef.current;
+                        if (currentResults.length === 0) {
+                            console.log(`[MCP Agent] No results found, auto-scanning...`);
+                            currentResults = await scanSheetsRef.current();
+                        }
+
+                        const sheet = currentResults.find((s: any) => s.id === sheetIdOrName || s.name === sheetIdOrName);
+                        const items = (sheet?.results || []).map((item: any) => {
+                            // Return only necessary fields for the agent to save context
+                            return {
+                                index: item.index,
+                                title: item.title,
+                                status: item.columns?.[6] || "",
+                                channel: item.columns?.[8] || "",
+                                date: item.columns?.[9] || "",
+                                docLink: item.docLink
+                            };
+                        });
+                        
+                        await respond(request.id, { items });
+                        break;
+                    }
+
+                    case 'google_monitor_create_task': {
+                        const { sheetId: sheetIdOrName, rowIndex } = request.params as { sheetId: string; rowIndex: number };
+                        
+                        let currentResults = sheetResultsRef.current;
+                        // Auto-scan if results are empty
+                        if (!currentResults || currentResults.length === 0) {
+                            currentResults = await scanSheetsRef.current();
+                        }
+
+                        const config = sheetsConfigRef.current.find((s: any) => s.id === sheetIdOrName || s.name === sheetIdOrName);
+                        const sheet = currentResults.find((s: any) => s.id === sheetIdOrName || s.name === sheetIdOrName || (config && s.id === config.id));
+                        
+                        if (!sheet) {
+                            await respond(request.id, { success: false, error: `Sheet not found: ${sheetIdOrName}` });
+                            break;
+                        }
+
+                        // Find the actual array index in results where r.index === rowIndex
+                        const arrayIdx = (sheet.results || []).findIndex((r: any) => r.index === rowIndex);
+                        
+                        if (arrayIdx === -1) {
+                            await respond(request.id, { 
+                                success: false, 
+                                error: `Row index ${rowIndex} not found in results for sheet ${sheet.name}. Array size: ${sheet.results?.length}` 
+                            });
+                            break;
+                        }
+
+                        try {
+                            const result = await handleCreateTaskRef.current(sheet.id, arrayIdx);
+                            await respond(request.id, { 
+                                success: true, 
+                                count: result.count, 
+                                taskNames: result.taskNames,
+                                message: `Successfully created ${result.count} tasks: ${result.taskNames.join(", ")}` 
+                            });
+                        } catch (err: any) {
+                            await respond(request.id, { success: false, error: err?.message || String(err) });
+                        }
+                        break;
                     }
                     default:
                         throw new Error(`Unknown agent action: ${request.action}`);

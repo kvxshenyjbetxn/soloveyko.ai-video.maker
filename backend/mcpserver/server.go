@@ -88,6 +88,15 @@ type NavigateArgs struct {
 	Path string `json:"path" jsonschema:"target UI path such as text.translate, queue, or gallery"`
 }
 
+type GoogleMonitorGetItemsArgs struct {
+	SheetID string `json:"sheetId" jsonschema:"id of the target google sheet tab"`
+}
+
+type GoogleMonitorCreateTaskArgs struct {
+	SheetID  string `json:"sheetId" jsonschema:"id of the target google sheet tab"`
+	RowIndex int    `json:"rowIndex" jsonschema:"index of the row to create a task from"`
+}
+
 func Start(invoke Invoker, logger *slog.Logger) (*Server, error) {
 	implementation := &mcp.Implementation{
 		Name:    "soloveyko-agent-control",
@@ -251,7 +260,44 @@ func addTools(server *mcp.Server, invoke Invoker) {
 			if err != nil {
 				return nil, nil, err
 			}
-			return textResult("Updated the pending text control draft."), out, nil
+			return textResult("Updated text control draft."), out, nil
+		})
+
+	// Google Monitor Tools
+	mcp.AddTool(server, &mcp.Tool{Name: "google_monitor_scan", Description: "Trigger a fresh scan of all configured Google Sheets in the monitor."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+			out, err := invokeMap(ctx, invoke, "google_monitor_scan", map[string]any{})
+			if err != nil {
+				return nil, nil, err
+			}
+			return textResult("Google Monitor scan completed."), out, nil
+		})
+
+	mcp.AddTool(server, &mcp.Tool{Name: "google_monitor_get_tabs", Description: "List all configured Google Sheet tabs in the monitor."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+			out, err := invokeMap(ctx, invoke, "google_monitor_get_tabs", map[string]any{})
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonTextResult(out), out, nil
+		})
+
+	mcp.AddTool(server, &mcp.Tool{Name: "google_monitor_get_items", Description: "Retrieve scanned items for a specific Google Sheet tab."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, args GoogleMonitorGetItemsArgs) (*mcp.CallToolResult, map[string]any, error) {
+			out, err := invokeMap(ctx, invoke, "google_monitor_get_items", args)
+			if err != nil {
+				return nil, nil, err
+			}
+			return jsonTextResult(out), out, nil
+		})
+
+	mcp.AddTool(server, &mcp.Tool{Name: "google_monitor_create_task", Description: "Create a queue task from a specific row in a Google Sheet monitor tab."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, args GoogleMonitorCreateTaskArgs) (*mcp.CallToolResult, map[string]any, error) {
+			out, err := invokeMap(ctx, invoke, "google_monitor_create_task", args)
+			if err != nil {
+				return nil, nil, err
+			}
+			return textResult("Task creation triggered from Google Monitor."), out, nil
 		})
 
 	mcp.AddTool(server, &mcp.Tool{Name: "confirm_text_control", Description: "Confirm a pending text-control review and continue the pipeline."},

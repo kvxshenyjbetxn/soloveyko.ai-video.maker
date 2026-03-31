@@ -2,32 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import './GoogleMonitor.css';
 import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { useTemplates } from '../contexts/TemplateContext';
-import { useQueueActions } from '../contexts/QueueContext';
+import { useGoogleMonitor } from '../contexts/GoogleMonitorContext';
 import { useToast } from '../contexts/ToastContext';
-// @ts-ignore
-import { ParseAllGoogleSheets, GetGoogleSheets, FetchGoogleDocContent, AddToHistory, UpdateGoogleSheetStatus } from '../../wailsjs/go/main/App';
-
-interface GoogleSheetConfig {
-    id: string;
-    name: string;
-    url: string;
-    filter: string;
-    mappings: Array<{ keyword: string; templateIds: string[] }>;
-    globalTemplateIds: string[];
-    displayColumns: string[];
-    taskNameColumn: string;
-    statusColumn: string;
-    statusValue: string;
-    ignoreRows: number;
-}
-
-interface MultiSheetResult {
-    id: string;
-    name: string;
-    results: any[];
-    error?: string;
-}
 
 interface GoogleMonitorProps {
     navigateTo?: (path: string) => void;
@@ -37,35 +13,24 @@ interface GoogleMonitorProps {
 export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) => {
     const { t } = useI18n();
     const { accentColor } = useTheme();
-    const { templates, flattenSettings } = useTemplates();
-    const { addTask, getNextTaskName } = useQueueActions();
     const { showToast } = useToast();
+    const { 
+        isParsing, 
+        sheetResults, 
+        activeSheetId, 
+        setActiveSheetId, 
+        scanSheets, 
+        clearResults,
+        handleCreateTask,
+        fetchContentIfNeeded,
+        loadingItemId,
+        sheetsConfig
+    } = useGoogleMonitor();
 
     const [isExpanded, setIsExpanded] = useState(false);
-    const [isParsing, setIsParsing] = useState(false);
-    const [sheets, setSheets] = useState<GoogleSheetConfig[]>([]);
-    const [sheetResults, setSheetResults] = useState<MultiSheetResult[]>([]);
-    const [activeSheetId, setActiveSheetId] = useState<string | null>(null);
-    const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isPinned, setIsPinned] = useState(false);
-    const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const loadSheetsConfig = async () => {
-            try {
-                const s = await GetGoogleSheets();
-                setSheets(s || []);
-                if (s && s.length > 0 && !activeSheetId) {
-                    setActiveSheetId(s[0].id || 'default');
-                }
-            } catch (err) {
-                console.error("Monitor load fail", err);
-            }
-        };
-        if (isExpanded) loadSheetsConfig();
-    }, [isExpanded]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -85,125 +50,28 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
         }
     };
 
-    const handleParse = async (e?: React.MouseEvent) => {
+    const onScan = async (e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
-        setIsParsing(true);
         try {
-            const data = await ParseAllGoogleSheets();
-            setSheetResults(data || []);
-            setLastUpdate(new Date());
+            const data = await scanSheets();
             if (data && data.length > 0) {
                 const total = data.reduce((acc: number, s: any) => acc + (s.results?.length || 0), 0);
                 if (total > 0 && !isExpanded) setIsExpanded(true);
             }
-        } catch (err: any) {
-            showToast(t('google_monitor.parse_error') || "Parsing Error", 'error' as any);
-        } finally {
-            setIsParsing(false);
-        }
-    };
-
-    const handleClear = () => {
-        setSheetResults([]);
-        setLastUpdate(null);
-        showToast(t('google_monitor.cleared') || "Cleared Monitor Data", 'info' as any);
-    };
-
-    const handleCreateTask = async (item: any, sheetConfig: GoogleSheetConfig, idx: number) => {
-        let content = item.content;
-        const itemId = `${sheetConfig.id}-${idx}`;
-
-        if (!content && item.docLink) {
-            setLoadingItemId(itemId);
-            try {
-                content = await FetchGoogleDocContent(item.docLink);
-                // Оновлюємо локальний стан, щоб зберегти контент
-                setSheetResults(prev => prev.map(s => s.id === sheetConfig.id ? {
-                    ...s,
-                    results: s.results.map((r, i) => i === idx ? { ...r, content: content } : r)
-                } : s));
-            } catch (err) {
-                showToast("Помилка завантаження документа", 'error');
-                setLoadingItemId(null);
-                return;
-            }
-            setLoadingItemId(null);
-        }
-
-        const mapping = (sheetConfig.mappings || []).find(m => {
-            if (!m.keyword) return false;
-            const kw = m.keyword.toLowerCase();
-            return item.columns?.some((c: string) => c?.toLowerCase().includes(kw)) || item.title?.toLowerCase().includes(kw);
-        });
-
-        const globalIds = sheetConfig.globalTemplateIds || [];
-        const mappingIds = mapping?.templateIds || [];
-        const allTemplateIds = Array.from(new Set([...globalIds, ...mappingIds]));
-
-        if (allTemplateIds.length === 0) {
-            showToast(t('google_monitor.no_mapping') || "No mapping for this item", 'error' as any);
-            return;
-        }
-
-        let taskNameBase = getNextTaskName();
-        if (sheetConfig.taskNameColumn) {
-            const colIdx = sheetConfig.taskNameColumn.toUpperCase().split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
-            const customName = item.columns?.[colIdx];
-            if (customName) taskNameBase = customName;
-        }
-
-        const templatesToApply = allTemplateIds.map(id => templates.find(t => t.id === id)).filter(Boolean);
-        const templateNames = templatesToApply.map((t: any) => t.name);
-
-        if (templatesToApply.length > 0) {
-            // Record to history
-            try {
-                await AddToHistory(taskNameBase, 'translate', templateNames, content || "");
-            } catch (err) {
-                console.error("Failed to add to history:", err);
-            }
-
-            templatesToApply.forEach((template: any) => {
-                const activeSettings = flattenSettings(JSON.parse(JSON.stringify(template.settings)));
-                addTask('translate' as any, content || "", activeSettings, taskNameBase, template.name);
-            });
-
-            // Update status in Google Sheets if configured
-            if (sheetConfig.statusColumn && sheetConfig.statusValue) {
-                try {
-                    await UpdateGoogleSheetStatus(sheetConfig.url, item.index, sheetConfig.statusColumn, sheetConfig.statusValue);
-                    showToast(t('google_monitor.status_updated') || "Статус у таблиці оновлено", 'success');
-                } catch (err: any) {
-                    console.error("Failed to update status in Google Sheets:", err);
-                    showToast(`${t('google_monitor.status_error') || "Помилка оновлення статусу"}: ${err?.message || err}`, 'error');
-                }
-            }
-
-            showToast(t('google_monitor.created', { count: templatesToApply.length }), 'success');
+        } catch (err) {
+            // Error is handled in context/toast
         }
     };
 
     const copyToClipboard = async (text: string, id: string, docLink?: string, sheetId?: string, idx?: number) => {
         let content = text;
-        const itemId = `${sheetId}-${idx}`;
-
-        if (!content && docLink) {
-            setLoadingItemId(itemId);
+        
+        if (!content && docLink && sheetId && idx !== undefined) {
             try {
-                content = await FetchGoogleDocContent(docLink);
-                // Оновлюємо локальний стан
-                if (sheetId && idx !== undefined) {
-                    setSheetResults(prev => prev.map(s => s.id === sheetId ? {
-                        ...s,
-                        results: s.results.map((r, i) => i === idx ? { ...r, content: content } : r)
-                    } : s));
-                }
+                content = await fetchContentIfNeeded(sheetId, idx);
             } catch (err) {
-                showToast("Помилка завантаження документа", 'error');
-                setLoadingItemId(null);
-                return;
+                return; // Error handled in fetchContentIfNeeded
             }
-            setLoadingItemId(null);
         }
 
         if (!content) return;
@@ -217,7 +85,7 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
     };
 
     const activeResult = sheetResults.find(r => r.id === activeSheetId) || (sheetResults.length > 0 ? sheetResults[0] : null);
-    const activeConfig = sheets.find(s => s.id === (activeResult?.id || activeSheetId)) || (sheets.length > 0 ? sheets[0] : null);
+    const activeConfig = sheetsConfig.find(s => s.id === (activeResult?.id || activeSheetId)) || (sheetsConfig.length > 0 ? sheetsConfig[0] : null);
     const results = activeResult?.results || [];
     const displayColumns = activeConfig?.displayColumns || ['A'];
 
@@ -261,8 +129,8 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                     </div>
 
                     <div className="google-mini-actions">
-                        <button className={`mini-header-btn ${isParsing ? 'spinning' : ''}`} onClick={handleParse} disabled={isParsing}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button>
-                        <button className="mini-header-btn" onClick={handleClear}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                        <button className={`mini-header-btn ${isParsing ? 'spinning' : ''}`} onClick={onScan} disabled={isParsing}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg></button>
+                        <button className="mini-header-btn" onClick={clearResults}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
                         <button className={`mini-header-btn ${isPinned ? 'active' : ''}`} onClick={() => setIsPinned(!isPinned)} style={{ border: isPinned ? `1px solid ${accentColor}` : '1px solid rgba(255,255,255,0.1)' }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isPinned ? accentColor : "currentColor"} strokeWidth="2.5"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path><path d="m3.3 7 8.7 5 8.7-5"></path><path d="M12 22V12"></path></svg>
                         </button>
@@ -282,9 +150,9 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                         </div>
                     )}
                     {resultsWithTemplates.map((item, idx) => {
-
+                        const itemId = `${activeSheetId}-${idx}`;
                         return (
-                            <div key={`${activeSheetId || 'default'}-${idx}`} className="google-mini-item">
+                            <div key={itemId} className="google-mini-item">
                                 <div className="google-mini-item-main" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', overflow: 'hidden', flex: 1 }}>
                                         <button className="google-mini-copy-btn" onClick={() => copyToClipboard(item.title, `title-${idx}`)} style={{ color: copiedId === `title-${idx}` ? '#4caf50' : '#ffc107', padding: '0', minWidth: '14px' }}>
@@ -294,7 +162,7 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                                             {displayColumns.map((col, cIdx) => {
                                                 const cleanCol = col.trim().toUpperCase();
                                                 if (!cleanCol) return null;
-                                                const colIdx = cleanCol.split('').reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
+                                                const colIdx = cleanCol.split('').reduce((acc: number, char: string) => acc * 26 + (char.charCodeAt(0) - 64), 0) - 1;
                                                 const val = item.columns?.[colIdx] || "";
                                                 
                                                 if (cIdx === 0) {
@@ -322,12 +190,12 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                                     </div>
                                     <div style={{ display: 'flex', gap: '6px', marginLeft: '6px', flexShrink: 0 }}>
                                         {item.hasTemplates && (
-                                            <button className="google-mini-create-btn" onClick={() => handleCreateTask(item, activeConfig!, idx)} style={{ color: '#4caf50', padding: '2px', position: 'relative' }}>
-                                                {loadingItemId === `${activeSheetId}-${idx}` ? <div className="spinner-mini" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>}
+                                            <button className="google-mini-create-btn" onClick={() => handleCreateTask(activeSheetId!, idx)} style={{ color: '#4caf50', padding: '2px', position: 'relative' }}>
+                                                {loadingItemId === itemId ? <div className="spinner-mini" /> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>}
                                             </button>
                                         )}
                                         <button className="google-mini-copy-btn" onClick={() => copyToClipboard(item.content, `content-${idx}`, item.docLink, activeSheetId || 'default', idx)} style={{ color: copiedId === `content-${idx}` ? '#4caf50' : accentColor, padding: '2px', position: 'relative' }}>
-                                            {loadingItemId === `${activeSheetId}-${idx}` ? <div className="spinner-mini" /> : (copiedId === `content-${idx}` ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>)}
+                                            {loadingItemId === itemId ? <div className="spinner-mini" /> : (copiedId === `content-${idx}` ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg> : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>)}
                                         </button>
                                     </div>
                                 </div>
