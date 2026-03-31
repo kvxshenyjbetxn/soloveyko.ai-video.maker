@@ -6,7 +6,7 @@ import { useTemplates } from '../contexts/TemplateContext';
 import { useQueueActions } from '../contexts/QueueContext';
 import { useToast } from '../contexts/ToastContext';
 // @ts-ignore
-import { ParseAllGoogleSheets, GetGoogleSheets, FetchGoogleDocContent, AddToHistory } from '../../wailsjs/go/main/App';
+import { ParseAllGoogleSheets, GetGoogleSheets, FetchGoogleDocContent, AddToHistory, UpdateGoogleSheetStatus } from '../../wailsjs/go/main/App';
 
 interface GoogleSheetConfig {
     id: string;
@@ -17,6 +17,8 @@ interface GoogleSheetConfig {
     globalTemplateIds: string[];
     displayColumns: string[];
     taskNameColumn: string;
+    statusColumn: string;
+    statusValue: string;
     ignoreRows: number;
 }
 
@@ -165,6 +167,18 @@ export const GoogleMonitor = ({ navigateTo, currentPath }: GoogleMonitorProps) =
                 const activeSettings = flattenSettings(JSON.parse(JSON.stringify(template.settings)));
                 addTask('translate' as any, content || "", activeSettings, taskNameBase, template.name);
             });
+
+            // Update status in Google Sheets if configured
+            if (sheetConfig.statusColumn && sheetConfig.statusValue) {
+                try {
+                    await UpdateGoogleSheetStatus(sheetConfig.url, item.index, sheetConfig.statusColumn, sheetConfig.statusValue);
+                    showToast(t('google_monitor.status_updated') || "Статус у таблиці оновлено", 'success');
+                } catch (err: any) {
+                    console.error("Failed to update status in Google Sheets:", err);
+                    showToast(`${t('google_monitor.status_error') || "Помилка оновлення статусу"}: ${err?.message || err}`, 'error');
+                }
+            }
+
             showToast(t('google_monitor.created', { count: templatesToApply.length }), 'success');
         }
     };

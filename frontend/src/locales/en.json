@@ -902,6 +902,8 @@
         "created": "Tasks created: {{count}}",
         "parsing": "Parsing...",
         "nothing_found": "Nothing found",
+        "status_updated": "Table status updated",
+        "status_error": "Failed to update status",
         "error": "Error: {{error}}"
     }
 }

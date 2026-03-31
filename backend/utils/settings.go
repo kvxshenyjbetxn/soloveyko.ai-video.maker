@@ -258,6 +258,8 @@ type GoogleSheetConfig struct {
 	GlobalTemplateIDs []string               `json:"globalTemplateIds"`
 	DisplayColumns    []string               `json:"displayColumns"`
 	TaskNameColumn    string                 `json:"taskNameColumn"`
+	StatusColumn      string                 `json:"statusColumn"`
+	StatusValue       string                 `json:"statusValue"`
 	IgnoreRows        int                    `json:"ignoreRows"`
 }
 

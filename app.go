@@ -1570,6 +1570,28 @@ func (a *App) GetGooglerAPIKey() string {
 	return a.googler.GetAPIKey()
 }
 
+// UpdateGoogleSheetStatus оновлює конкретну комірку в Google таблиці
+func (a *App) UpdateGoogleSheetStatus(url string, rowIndex int, colLetter string, value string) error {
+	spreadsheetId, _, gid := a.googleParser.ExtractID(url)
+	if spreadsheetId == "" {
+		return fmt.Errorf("invalid google sheet url")
+	}
+
+	sheetName, err := a.googleParser.GetSheetName(spreadsheetId, gid)
+	if err != nil {
+		return err
+	}
+
+	err = a.googleParser.UpdateCell(spreadsheetId, sheetName, rowIndex, colLetter, value)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Google Sheets] Failed to update cell: %v", err))
+		return err
+	}
+
+	a.LogToUI("SUCCESS", fmt.Sprintf("[Google Sheets] Оновлено комірку %s%d на '%s'", colLetter, rowIndex+1, value))
+	return nil
+}
+
 // ElevenLabsImage Methods
 
 // SaveElevenLabsImageAPIKey saves API key
