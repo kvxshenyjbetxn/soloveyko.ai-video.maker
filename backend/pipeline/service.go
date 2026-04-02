@@ -1112,6 +1112,14 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 		outPath = pSettings.OutputPath
 	}
 
+	// Перевіряємо, чи доступний вказаний шлях (наприклад, чи існує диск)
+	if outPath != "" {
+		if err := os.MkdirAll(outPath, 0755); err != nil {
+			s.log("WARN", fmt.Sprintf("[Resolve] Вказаний шлях недоступний (%s): %v. Перемикаємося на стандартну папку.", outPath, err))
+			outPath = ""
+		}
+	}
+
 	if outPath == "" {
 		home, _ := os.UserHomeDir()
 		if runtime.GOOS == "darwin" {
