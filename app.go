@@ -828,6 +828,7 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 		}
 	}
 
+	a.injectAPIKeys(settings)
 	_, err = a.pipeline.ProcessTask(id, 1, taskType, task.Payload, settings, task.TaskName, "")
 
 	status := "completed"
@@ -2278,88 +2279,33 @@ func (a *App) getIconPath() string {
 	return ""
 }
 
-// SendSystemNotification sends a native notification using the operating system's API
-func (a *App) SendSystemNotification(title, text string) error {
-	if !a.GetSystemNotificationsEnabled() {
+func (a *App) SendSystemNotification(title, message string) error {
+	if !a.settings.GetSystemNotificationsEnabled() {
 		return nil
 	}
-
-	// Remove markdown-like bold (**) if any
-	cleanTitle := strings.ReplaceAll(title, "**", "")
-	cleanTitle = strings.ReplaceAll(cleanTitle, "*", "")
-
-	cleanText := strings.ReplaceAll(text, "**", "")
-	cleanText = strings.ReplaceAll(cleanText, "*", "")
-
-	// Providing the icon path helps identity the application name on Windows
-	return beeep.Notify(cleanTitle, cleanText, a.getIconPath())
+	iconPath := a.getIconPath()
+	return beeep.Alert(title, message, iconPath)
 }
 
 func (a *App) TestSystemNotification() error {
-	return a.SendSystemNotification("System Notifications", "🔔 Тестове сповіщення успішно налаштоване!")
+	return a.SendSystemNotification("🔔 Тестове сповіщення", "Soloveyko.AI Video Maker готовий до роботи!")
 }
 
-// WhisperX Management Methods
-
-// IsWhisperXInstalled checks if WhisperX is installed in the user's bin folder
 func (a *App) IsWhisperXInstalled() bool {
-	configDir := a.settings.GetConfigDir()
-	binDir := filepath.Join(configDir, "bin")
-
-	folderName := "whisperx-win"
-	if runtime.GOOS == "darwin" {
-		folderName = "whisperx-mac"
-	}
-
-	targetDir := filepath.Join(binDir, folderName)
-	if _, err := os.Stat(targetDir); err == nil {
-		return true
-	}
-	return false
+	p, _ := utils.EnsureEngine("whisperx")
+	return p != ""
 }
 
-// DownloadWhisperX downloads and installs WhisperX engine
 func (a *App) DownloadWhisperX() error {
-	url := "https://github.com/kvxshenyjbetxn/video.maker.releases/releases/download/whisperx/whisperx-win.zip"
-	if runtime.GOOS == "darwin" {
-		url = "https://github.com/kvxshenyjbetxn/video.maker.releases/releases/download/whisperx/whisperx-mac.zip"
-	}
-
-	a.LogToUI("INFO", "[WhisperX] Starting engine download...")
-
-	progressChan := make(chan int)
-	go func() {
-		for progress := range progressChan {
-			if a.ctx != nil {
-				wruntime.EventsEmit(a.ctx, "whisperxDownloadProgress", progress)
-			}
-		}
-	}()
-
-	pkgPath, err := a.updater.Download(url, progressChan)
-	close(progressChan) // Close after download finishes
+	a.LogToUI("INFO", "[WhisperX] Starting engine installation...")
+	exePath, err := utils.EnsureEngine("whisperx")
 	if err != nil {
-		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Download failed: %v", err))
-		return err
-	}
-	defer os.Remove(pkgPath)
-
-	a.LogToUI("INFO", "[WhisperX] Extracting engine...")
-
-	configDir := a.settings.GetConfigDir()
-	binDir := filepath.Join(configDir, "bin")
-	os.MkdirAll(binDir, 0755)
-
-	err = a.updater.Unzip(pkgPath, binDir)
-	if err != nil {
-		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Extraction failed: %v", err))
+		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Installation failed: %v", err))
 		return err
 	}
 
-	// For Mac, ensure binary is executable
-	if runtime.GOOS == "darwin" {
-		exePath := filepath.Join(binDir, "whisperx-mac", "whisperx_cli")
-		os.Chmod(exePath, 0755)
+	if runtime.GOOS != "windows" {
+		_ = os.Chmod(exePath, 0755)
 	}
 
 	a.LogToUI("SUCCESS", "[WhisperX] Engine installed successfully!")
@@ -2377,6 +2323,90 @@ type ImportMediaData struct {
 	ActualDuration float64 `json:"actualDuration"`
 }
 
+// injectAPIKeys - рекурсивно вприскує API ключі в налаштування,
+// враховуючи можливі префікси або вкладеність
+func (a *App) injectAPIKeys(settings map[string]interface{}) {
+	s, err := a.settings.LoadSettings()
+	if err != nil || s == nil {
+		return
+	}
+
+	// Helper to find a key by ID
+	findKey := func(sets []utils.NamedAPIKey, id string) string {
+		for _, k := range sets {
+			if k.ID == id {
+				return k.Key
+			}
+		}
+		return ""
+	}
+
+	var inject func(map[string]interface{}, string)
+	inject = func(curr map[string]interface{}, prefix string) {
+		// Список мапінгів для вприскування
+		mappings := []struct {
+			idKey  string
+			valKey string
+			set    []utils.NamedAPIKey
+		}{
+			{"openRouterKeyID", "openRouterAPIKey", s.OpenRouterKeys},
+			{"elevenLabsBotKeyID", "elevenLabsBotAPIKey", s.ElevenLabsBotKeys},
+			{"elevenLabsUnlimKeyID", "elevenLabsUnlimAPIKey", s.ElevenLabsUnlimKeys},
+			{"elevenLabsUAKeyID", "elevenLabsUAAPIKey", s.ElevenLabsUAKeys},
+			{"elevenLabsImageKeyID", "elevenLabsImageAPIKey", s.ElevenLabsImageKeys},
+			{"voiceMakerKeyID", "voiceMakerAPIKey", s.VoiceMakerKeys},
+			{"pollinationsKeyID", "pollinationsAPIKey", s.PollinationsKeys},
+		}
+
+		for _, m := range mappings {
+			// Перевіряємо ключі з можливими префіксами (наприклад, translateOpenRouterKeyID)
+			commonPrefixes := []string{"", "voiceover", "translate", "rewrite", "image", "subtitle"}
+			
+			for _, cp := range commonPrefixes {
+				idKey := m.idKey
+				if cp != "" {
+					idKey = cp + strings.ToUpper(idKey[:1]) + idKey[1:]
+				}
+
+				if id, ok := curr[idKey].(string); ok && id != "" {
+					key := findKey(m.set, id)
+					if key != "" {
+						// Встановлюємо плоский ключ
+						curr[m.valKey] = key
+						
+						// Встановлюємо версію з префіксом для PipelineSettings
+						pref := cp
+						if pref == "" {
+							pref = prefix
+						}
+						
+						if pref != "" {
+							resKey := pref + strings.ToUpper(m.valKey[:1]) + m.valKey[1:]
+							curr[resKey] = key
+						}
+					}
+				}
+			}
+		}
+
+		// Рекурсивний крок
+		for k, v := range curr {
+			if sub, ok := v.(map[string]interface{}); ok {
+				inject(sub, k)
+			}
+		}
+	}
+
+	inject(settings, "")
+
+	// Глобальні фолбеки
+	if s.AssemblyAIAPIKey != "" {
+		if _, ok := settings["assemblyAIAPIKey"]; !ok { settings["assemblyAIAPIKey"] = s.AssemblyAIAPIKey }
+	}
+	if s.GooglerAPIKey != "" {
+		if _, ok := settings["googlerAPIKey"]; !ok { settings["googlerAPIKey"] = s.GooglerAPIKey }
+	}
+}
 func (a *App) getMediaMetadata(targetPath string, ext string) (*ImportMediaData, error) {
 	videoExts := map[string]bool{".mp4": true, ".mkv": true, ".mov": true, ".avi": true, ".webm": true}
 	imageExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true}
@@ -2478,100 +2508,6 @@ func (a *App) ReadFile(path string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
-}
-
-func (a *App) injectAPIKeys(settings map[string]interface{}) {
-	// 1. OpenRouter
-	orKeys := a.settings.GetOpenRouterKeys()
-	if id, ok := settings["translateOpenRouterKeyID"].(string); ok {
-		for _, k := range orKeys {
-			if k.ID == id {
-				settings["translateOpenRouterAPIKey"] = k.Key
-				break
-			}
-		}
-	}
-	if id, ok := settings["rewriteOpenRouterKeyID"].(string); ok {
-		for _, k := range orKeys {
-			if k.ID == id {
-				settings["rewriteOpenRouterAPIKey"] = k.Key
-				break
-			}
-		}
-	}
-
-	// 2. ElevenLabs
-	elBotKeys := a.settings.GetElevenLabsBotKeys()
-	if id, ok := settings["voiceoverElevenLabsBotKeyID"].(string); ok {
-		for _, k := range elBotKeys {
-			if k.ID == id {
-				settings["voiceoverElevenLabsBotAPIKey"] = k.Key
-				break
-			}
-		}
-	}
-
-	elUnlimKeys := a.settings.GetElevenLabsUnlimKeys()
-	if id, ok := settings["voiceoverElevenLabsUnlimKeyID"].(string); ok {
-		for _, k := range elUnlimKeys {
-			if k.ID == id {
-				settings["voiceoverElevenLabsUnlimAPIKey"] = k.Key
-				break
-			}
-		}
-	}
-
-	elUAKeys := a.settings.GetElevenLabsUAKeys()
-	if id, ok := settings["voiceoverElevenLabsUAKeyID"].(string); ok {
-		for _, k := range elUAKeys {
-			if k.ID == id {
-				settings["voiceoverElevenLabsUAAPIKey"] = k.Key
-				break
-			}
-		}
-	}
-
-	elImgKeys := a.settings.GetElevenLabsImageKeys()
-	if id, ok := settings["elevenLabsImageKeyID"].(string); ok {
-		for _, k := range elImgKeys {
-			if k.ID == id {
-				settings["elevenLabsImageAPIKey"] = k.Key
-				break
-			}
-		}
-	}
-
-	// 3. VoiceMaker
-	vmKeys := a.settings.GetVoiceMakerKeys()
-	if id, ok := settings["voiceoverVoiceMakerKeyID"].(string); ok {
-		for _, k := range vmKeys {
-			if k.ID == id {
-				settings["voiceoverVoiceMakerAPIKey"] = k.Key
-				break
-			}
-		}
-	}
-
-	// 4. Pollinations
-	pKeys := a.settings.GetPollinationsKeys()
-	if id, ok := settings["imagePollinationsKeyID"].(string); ok {
-		for _, k := range pKeys {
-			if k.ID == id {
-				settings["imagePollinationsAPIKey"] = k.Key
-				break
-			}
-		}
-	}
-
-	// 5. AssemblyAI
-	if key := a.settings.GetAssemblyAIAPIKey(); key != "" {
-		settings["assemblyAIAPIKey"] = key
-	}
-
-	// 6. Googler
-	if key := a.settings.GetGooglerAPIKey(); key != "" {
-		settings["googlerAPIKey"] = key
-	}
 }
 
 // GetRemoteTasksStatus отримує статуси вказаних завдань із сервера
