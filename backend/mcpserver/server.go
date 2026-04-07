@@ -181,7 +181,8 @@ func resolveAddress() string {
 	if addr := strings.TrimSpace(os.Getenv("SOLOVEYKO_MCP_ADDR")); addr != "" {
 		return addr
 	}
-	return "127.0.0.1:39245"
+	// Змінено з 127.0.0.1 на 0.0.0.0, щоб дозволити доступ з локальної мережі
+	return "0.0.0.0:39245"
 }
 
 func addTools(server *mcp.Server, invoke Invoker) {
