@@ -17,29 +17,15 @@ func (s *PipelineService) ProcessWhisperX(id string, taskLabel string, finalDir 
 	s.log("INFO", "[WhisperX] Starting WhisperX transcription process...", id, taskLabel)
 
 	// 1. Resolve paths
-	configDir := s.settings.GetConfigDir()
-	
-	// Check multiple possible locations for the executable
-	possibleExes := []string{
-		filepath.Join(configDir, "bin", "whisperx_cli.exe"),
-		filepath.Join(configDir, "bin", "whisperx_aligner_win", "whisperx_cli.exe"),
-		filepath.Join(configDir, "bin", "whisperx-win", "whisperx_cli.exe"),
-		filepath.Join(configDir, "bin", "whisperx-mac", "whisperx_cli"),
-	}
-
-
-	var whisperxExe string
-	for _, p := range possibleExes {
-		if _, err := os.Stat(p); err == nil {
-			whisperxExe = p
-			break
-		}
-	}
+	// Використовуємо уніфіковану детекцію бінарних файлів, щоб уникнути помилок шляхів
+	whisperxExe := utils.GetWhisperXExePath()
 
 	if whisperxExe == "" {
-		s.log("ERROR", "[WhisperX] WhisperX executable not found. Looked in: "+strings.Join(possibleExes, ", "), id, taskLabel)
+		s.log("ERROR", "[WhisperX] WhisperX executable not found.", id, taskLabel)
 		return fmt.Errorf("whisperx executable not found. Please ensure whisperx_cli.exe is in your user/bin folder")
 	}
+
+	configDir := s.settings.GetConfigDir()
 
 	ffmpegName := "ffmpeg"
 	if runtime.GOOS == "windows" {
@@ -166,26 +152,14 @@ func (s *PipelineService) ProcessWhisperXAlign(id string, taskLabel string, fina
 	s.log("INFO", "[WhisperX] Starting WhisperX alignment process...", id, taskLabel)
 
 	// 1. Resolve paths
-	configDir := s.settings.GetConfigDir()
-	possibleExes := []string{
-		filepath.Join(configDir, "bin", "whisperx_cli.exe"),
-		filepath.Join(configDir, "bin", "whisperx_aligner_win", "whisperx_cli.exe"),
-		filepath.Join(configDir, "bin", "whisperx-win", "whisperx_cli.exe"),
-		filepath.Join(configDir, "bin", "whisperx-mac", "whisperx_cli"),
-	}
-
-	var whisperxExe string
-	for _, p := range possibleExes {
-		if _, err := os.Stat(p); err == nil {
-			whisperxExe = p
-			break
-		}
-	}
+	whisperxExe := utils.GetWhisperXExePath()
 
 	if whisperxExe == "" {
 		s.log("ERROR", "[WhisperX] WhisperX executable not found.", id, taskLabel)
 		return fmt.Errorf("whisperx executable not found")
 	}
+
+	configDir := s.settings.GetConfigDir()
 
 	ffmpegName := "ffmpeg"
 	if runtime.GOOS == "windows" {

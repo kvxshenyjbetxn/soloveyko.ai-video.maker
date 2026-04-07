@@ -2321,23 +2321,46 @@ func (a *App) TestSystemNotification() error {
 }
 
 func (a *App) IsWhisperXInstalled() bool {
-	p, _ := utils.EnsureEngine("whisperx")
-	return p != ""
+	// Використовуємо централізовану перевірку декількох можливих шляхів
+	return utils.GetWhisperXExePath() != ""
 }
 
+// DownloadWhisperX ініціює процес завантаження та встановлення двигуна WhisperX, 
+// якщо він не знайдений у системі, та інформує фронтенд через події.
 func (a *App) DownloadWhisperX() error {
-	a.LogToUI("INFO", "[WhisperX] Starting engine installation...")
-	exePath, err := utils.EnsureEngine("whisperx")
+	a.LogToUI("INFO", "[WhisperX] Перевірка встановлення двигуна...")
+	
+	// Якщо файл уже знайдено за одним із підтримуваних шляхів - нічого не робимо
+	exePath := utils.GetWhisperXExePath()
+	if exePath != "" {
+		a.LogToUI("SUCCESS", "[WhisperX] Двигун уже встановлено та знайдено!")
+		if a.ctx != nil {
+			wruntime.EventsEmit(a.ctx, "whisperxInstalled")
+		}
+		return nil
+	}
+
+	a.LogToUI("INFO", "[WhisperX] Починаємо завантаження двигуна...")
+	
+	err := utils.DownloadAndInstallWhisperX(func(status string, percent float64) {
+		if a.ctx != nil {
+			// Виправлено: Додано надсилання специфічної події whisperxDownloadProgress, 
+			// щоб прогрес-бар у вкладці Performance почав працювати (раніше він очікував лише це ім'я).
+			wruntime.EventsEmit(a.ctx, "whisperxDownloadProgress", int(percent))
+
+			wruntime.EventsEmit(a.ctx, "download_progress", map[string]interface{}{
+				"status":  status,
+				"percent": int(percent),
+			})
+		}
+	})
+
 	if err != nil {
-		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Installation failed: %v", err))
+		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Помилка завантаження: %v", err))
 		return err
 	}
 
-	if runtime.GOOS != "windows" {
-		_ = os.Chmod(exePath, 0755)
-	}
-
-	a.LogToUI("SUCCESS", "[WhisperX] Engine installed successfully!")
+	a.LogToUI("SUCCESS", "[WhisperX] Двигун успішно встановлено!")
 	if a.ctx != nil {
 		wruntime.EventsEmit(a.ctx, "whisperxInstalled")
 	}
