@@ -1040,6 +1040,7 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 	}
 	safeTaskName := utils.SanitizeFilename(taskName)
 	safeTemplateDir := utils.SanitizeFilename(templateDir)
+	flatFolderName := safeTemplateDir + " - " + safeTaskName
 	if runtime.GOOS != "windows" && outPath != "" { outPath = strings.ReplaceAll(outPath, "\\", "/") }
-	return filepath.Join(outPath, safeTaskName, safeTemplateDir)
+	return filepath.Join(outPath, flatFolderName)
 }

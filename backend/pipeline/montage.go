@@ -885,7 +885,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		if len(taskRunes) > availableForTask {
 			safeTask = string(taskRunes[:availableForTask])
 		}
-		finalBaseName = strings.TrimRight(safeTask, ". ") + " - " + safeTpl
+		finalBaseName = safeTpl + " - " + strings.TrimRight(safeTask, ". ")
 	} else {
 		taskRunes := []rune(safeTask)
 		if len(taskRunes) > limit {
