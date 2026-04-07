@@ -558,7 +558,21 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     useEffect(() => {
         const uStatus = EventsOn("taskStatus", (id: string, s: string, p: number, l?: number) => {
-            setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s as TaskStatus, progress: p, resultLength: l ?? t.resultLength } : t));
+            setTasks(prev => {
+                const nextTasks = prev.map(t => t.id === id ? { ...t, status: s as TaskStatus, progress: p, resultLength: l ?? t.resultLength } : t);
+                
+                // Якщо всі завдання в активному пакеті завершені (успішно або з помилкою),
+                // вимикаємо режим обробки. Це важливо для воркера.
+                if (activeBatchRef.current.includes(id) && (s === 'completed' || s === 'failed')) {
+                    const hasActive = nextTasks.some(t => activeBatchRef.current.includes(t.id) && t.status !== 'completed' && t.status !== 'failed');
+                    if (!hasActive) {
+                        setIsProcessing(false);
+                        activeBatchRef.current = [];
+                    }
+                }
+                
+                return nextTasks;
+            });
         });
         const uStage = EventsOn("stageStatus", (id: string, stage: string, status: string, msg?: string) => {
             if (stage === 'montage') {
@@ -629,6 +643,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 montageStatus: 'waiting', timestamp: Date.now(),
             };
             setTasks(prev => [...prev, newTask]);
+            setIsProcessing(true);
+            if (!activeBatchRef.current.includes(id)) {
+                activeBatchRef.current.push(id);
+            }
         });
         return () => { uStatus(); uStage(); uReq(); uImgReq(); uMontageReq(); uFilesReq(); uTextResult(); uRemoteTask(); };
     }, [t]);

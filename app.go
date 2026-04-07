@@ -671,26 +671,45 @@ func (a *App) startTaskPollingLoop() {
 			return
 		case <-ticker.C:
 			if key := a.settings.GetAppAccessKey(); key != "" {
-				a.pollAndExecuteTask(key, hwID)
+				var tasksToRun []*RemoteTask
+
+				// Збираємо всі доступні завдання з черги (доки вони не закінчаться)
+				for {
+					if !a.settings.GetWorkerModeEnabled() {
+						break
+					}
+					t := a.pollTask(key, hwID)
+					if t == nil {
+						break
+					}
+					tasksToRun = append(tasksToRun, t)
+				}
+
+				// Якщо зібрали завдання, запускаємо їх усі разом (паралельно)
+				for _, t := range tasksToRun {
+					go a.executeRemoteTask(key, t)
+				}
 			}
 		}
 	}
 }
 
-func (a *App) workerCancelDone() <-chan struct{} {
-	// Helper to handle nil check if needed, but here we can just use a internal context
-	// Actually we should use a shared context for worker mode
-	return nil // placeholder, will fix with proper context management
+// Структура для зберігання витягнутого завдання
+type RemoteTask struct {
+	ID       string
+	TaskName string
+	Payload  string
+	Settings map[string]interface{}
 }
 
-func (a *App) pollAndExecuteTask(key, hwID string) {
+func (a *App) pollTask(key, hwID string) *RemoteTask {
 	if key == "" {
-		return
+		return nil
 	}
 
 	// ПРИМУСОВА ПЕРЕВІРКА: чи цей ПК зараз є воркером?
 	if !a.settings.GetWorkerModeEnabled() {
-		return
+		return nil
 	}
 
 	key = strings.TrimSpace(key)
@@ -704,18 +723,18 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 	resp, err := http.Get(url)
 	if err != nil {
 		// Log network error
-		return
+		return nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNoContent {
 		// No tasks available
-		return
+		return nil
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		// Server error
-		return
+		return nil
 	}
 
 	var task struct {
@@ -727,7 +746,7 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 
 	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
 		a.LogToUI("ERROR", fmt.Sprintf("[Worker] Failed to decode task: %v", err))
-		return
+		return nil
 	}
 
 	a.LogToUI("INFO", fmt.Sprintf("[Worker] Task received from server: %s (ID: %s)", task.TaskName, task.ID))
@@ -774,7 +793,7 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 	// ФІЛЬТРАЦІЯ ЗА ЦІЛЬОВИМ ID
 	if targetID != "" && targetID != hwID {
 		a.LogToUI("WARN", fmt.Sprintf("[Worker] Task %s is for worker %s, but I am %s. Ignoring.", task.ID, targetID, hwID))
-		return
+		return nil
 	}
 
 	a.LogToUI("SUCCESS", fmt.Sprintf("[Worker] Task claimed: %s", task.TaskName))
@@ -788,7 +807,7 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 		lastSeen, exists := a.processedPings[task.ID]
 		if exists && time.Since(lastSeen) < 1*time.Minute {
 			a.pingMutex.Unlock()
-			return
+			return nil
 		}
 		a.processedPings[task.ID] = time.Now()
 		a.pingMutex.Unlock()
@@ -796,7 +815,7 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 		a.LogToUI("SUCCESS", fmt.Sprintf("[Worker] RECEIVED PING TEST. Source: %s", settings["ping_source"]))
 		_ = beeep.Alert("Soloveyko.AI", "Перевірка зв'язку: Ваш ПК успішно отримав сигнал від мережі!", "")
 		a.sendTaskResult(key, task.ID, "completed", "Ping Received")
-		return
+		return nil
 	}
 
 	// Емітуємо подію для UI, щоб завдання з'явилося в черзі воркера
@@ -809,6 +828,16 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 		})
 	}
 
+	return &RemoteTask{
+		ID:       task.ID,
+		TaskName: task.TaskName,
+		Payload:  task.Payload,
+		Settings: settings,
+	}
+}
+
+// executeRemoteTask обробляє одне витягнуте завдання 
+func (a *App) executeRemoteTask(key string, task *RemoteTask) {
 	a.LogToUI("INFO", fmt.Sprintf("[Worker] Executing task: %s", task.TaskName))
 
 	// Сповіщаємо сервер про початок виконання
@@ -820,7 +849,7 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 		id = fmt.Sprintf("remote_%d", time.Now().Unix())
 	}
 
-	taskType, _ := settings["taskType"].(string)
+	taskType, _ := task.Settings["taskType"].(string)
 	if taskType == "" {
 		taskType = "translate"
 		if strings.Contains(strings.ToLower(task.TaskName), "rewrite") {
@@ -828,8 +857,8 @@ func (a *App) pollAndExecuteTask(key, hwID string) {
 		}
 	}
 
-	a.injectAPIKeys(settings)
-	_, err = a.pipeline.ProcessTask(id, 1, taskType, task.Payload, settings, task.TaskName, "")
+	a.injectAPIKeys(task.Settings)
+	_, err := a.pipeline.ProcessTask(id, 1, taskType, task.Payload, task.Settings, task.TaskName, "")
 
 	status := "completed"
 	result := ""
