@@ -977,20 +977,26 @@ func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskTyp
 		content, _ := os.ReadFile(textPath)
 		data.TextChars = len([]rune(string(content)))
 	}
-	voicePath := filepath.Join(finalDir, "voice.mp3")
-	if info, err := os.Stat(voicePath); err == nil && !info.IsDir() {
-		data.FoundStages = append(data.FoundStages, "voice")
-		if !skipExtra {
-			dur, err := utils.GetAudioDuration(voicePath)
-			if err == nil { data.VoiceDuration = dur }
+	voiceFiles := []string{"voice.mp3", "voice.wav", "Voice.mp3", "Voice.wav"}
+	for _, f := range voiceFiles {
+		p := filepath.Join(finalDir, f)
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			data.FoundStages = append(data.FoundStages, "voice")
+			if !skipExtra {
+				dur, err := utils.GetAudioDuration(p)
+				if err == nil { data.VoiceDuration = dur }
+			}
+			break
 		}
 	}
-	subtitleSrt := filepath.Join(finalDir, "subtitle.srt")
-	subtitleAss := filepath.Join(finalDir, "subtitle.ass")
-	if _, errSrt := os.Stat(subtitleSrt); errSrt == nil {
-		data.FoundStages = append(data.FoundStages, "subtitle")
-	} else if _, errAss := os.Stat(subtitleAss); errAss == nil {
-		data.FoundStages = append(data.FoundStages, "subtitle")
+	
+	subFiles := []string{"subtitle.srt", "subtitle.ass", "subtitles.srt", "subtitles.ass", "Subtitle.srt", "Subtitle.ass"}
+	for _, f := range subFiles {
+		p := filepath.Join(finalDir, f)
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			data.FoundStages = append(data.FoundStages, "subtitle")
+			break
+		}
 	}
 	scanDir := func(dir string) {
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
@@ -1020,27 +1026,102 @@ func (s *PipelineService) SubmitExistingFilesResult(id string, skipStages []stri
 
 func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subName string, settings map[string]interface{}) string {
 	pSettings := s.settings.GetPipelineSettings()
-	outPath, _ := settings[taskType+"OutputPath"].(string)
-	if outPath == "" {
-		if taskType == "rewrite" { outPath = pSettings.RewriteOutputPath } else { outPath = pSettings.TranslateOutputPath }
+	
+	// Збираємо всі можливі базові шляхи
+	basePaths := []string{}
+	
+	// 1. Шлях із налаштувань конкретного завдання
+	if out, ok := settings[taskType+"OutputPath"].(string); ok && out != "" {
+		basePaths = append(basePaths, out)
 	}
-	if outPath == "" { outPath = pSettings.OutputPath }
-	if outPath != "" {
-		if err := os.MkdirAll(outPath, 0755); err != nil { outPath = "" }
+	
+	// 2. Специфічні шляхи типів із глобальних налаштувань
+	if taskType == "rewrite" && pSettings.RewriteOutputPath != "" {
+		basePaths = append(basePaths, pSettings.RewriteOutputPath)
+	} else if taskType != "rewrite" && pSettings.TranslateOutputPath != "" {
+		basePaths = append(basePaths, pSettings.TranslateOutputPath)
 	}
-	if outPath == "" {
-		home, _ := os.UserHomeDir()
-		if runtime.GOOS == "darwin" { outPath = filepath.Join(home, "Movies") } else { outPath = filepath.Join(home, "Videos") }
+	
+	// 3. Загальний шлях виводу
+	if pSettings.OutputPath != "" {
+		basePaths = append(basePaths, pSettings.OutputPath)
 	}
+	
+	// 4. Системний шлях "Відео"
+	home, _ := os.UserHomeDir()
+	sysVideos := ""
+	if runtime.GOOS == "darwin" {
+		sysVideos = filepath.Join(home, "Movies")
+	} else {
+		sysVideos = filepath.Join(home, "Videos")
+	}
+	basePaths = append(basePaths, sysVideos)
+
 	templateDir := subName
 	if templateDir == "" {
 		pipelineName, _ := settings[taskType+"PipelineName"].(string)
 		templateDir = pipelineName
-		if templateDir == "" { templateDir = "Default" }
+		if templateDir == "" {
+			templateDir = "Default"
+		}
 	}
+
 	safeTaskName := utils.SanitizeFilename(taskName)
 	safeTemplateDir := utils.SanitizeFilename(templateDir)
-	flatFolderName := safeTemplateDir + " - " + safeTaskName
-	if runtime.GOOS != "windows" && outPath != "" { outPath = strings.ReplaceAll(outPath, "\\", "/") }
-	return filepath.Join(outPath, flatFolderName)
+
+	// Варіанти папок для перевірки
+	candidates := []string{
+		templateDir + " - " + taskName + " - " + templateDir, // [NEW] Паттерн користувача: Template - Task - Template
+		templateDir + " - " + taskName,                        // Новий стандарт (плоский, оригінальні назви)
+		taskName + " - " + templateDir,                        // Альтернативний плоский (Task - Template)
+		safeTemplateDir + " - " + safeTaskName,                // Плоский санітизований
+		safeTaskName + " - " + safeTemplateDir,                // Альтернативний санітизований
+		filepath.Join(safeTaskName, safeTemplateDir),            // Старий вкладений (Task/Template)
+		taskName,                                              // Просто назва (оригінал)
+		safeTaskName,                                          // Просто назва (санітизована)
+	}
+
+	// Використовуємо map для унікальних шляхів, щоб не перевіряти двічі
+	checkedPaths := make(map[string]bool)
+
+	for _, basePath := range basePaths {
+		if basePath == "" || checkedPaths[basePath] {
+			continue
+		}
+		checkedPaths[basePath] = true
+
+		// Перевіряємо, чи існує сама база (якщо ні - пробуємо створити, крім системних)
+		if _, err := os.Stat(basePath); os.IsNotExist(err) && basePath != sysVideos {
+			_ = os.MkdirAll(basePath, 0755)
+		}
+
+		for i, candidate := range candidates {
+			fullPath := filepath.Join(basePath, candidate)
+			if runtime.GOOS != "windows" {
+				fullPath = strings.ReplaceAll(fullPath, "\\", "/")
+			}
+
+			if _, err := os.Stat(fullPath); err == nil {
+				s.log("INFO", fmt.Sprintf("[Resolve] Знайдено існуючу папку в %s (%d): %s", basePath, i+1, fullPath))
+				return fullPath
+			}
+		}
+	}
+
+	// Якщо нічого не знайдено, повертаємо шлях за замовчуванням у ПЕРШОМУ доступному базовому шляху
+	targetBase := basePaths[0]
+	// Якщо перший шлях недоступний (наприклад, диск не підключено), шукаємо перший існуючий
+	for _, b := range basePaths {
+		if _, err := os.Stat(b); err == nil {
+			targetBase = b
+			break
+		}
+	}
+
+	defaultPath := filepath.Join(targetBase, templateDir+" - "+taskName)
+	if runtime.GOOS != "windows" {
+		defaultPath = strings.ReplaceAll(defaultPath, "\\", "/")
+	}
+	return defaultPath
 }
+

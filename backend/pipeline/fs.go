@@ -3,14 +3,24 @@ package pipeline
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"soloveyko/backend/utils"
+	"strings"
 )
 
-// EnsureDirectory creates the task directory structure
+// EnsureDirectory creates the task directory structure (Flat format)
 func (s *PipelineService) EnsureDirectory(outPath string, taskName string, templateDir string) (string, error) {
 	safeTask := utils.SanitizeFilename(taskName)
 	safeTemplate := utils.SanitizeFilename(templateDir)
-	finalDir := filepath.Join(outPath, safeTask, safeTemplate)
+
+	// Використовуємо нову плоску структуру: "Шаблон - Назва"
+	flatFolderName := safeTemplate + " - " + safeTask
+	finalDir := filepath.Join(outPath, flatFolderName)
+
+	if runtime.GOOS != "windows" && outPath != "" {
+		finalDir = strings.ReplaceAll(finalDir, "\\", "/")
+	}
+
 	err := os.MkdirAll(finalDir, 0755)
 	return finalDir, err
 }
