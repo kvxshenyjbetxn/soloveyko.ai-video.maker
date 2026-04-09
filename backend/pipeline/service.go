@@ -1071,14 +1071,14 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 
 	// Варіанти папок для перевірки
 	candidates := []string{
-		templateDir + " - " + taskName + " - " + templateDir, // [NEW] Паттерн користувача: Template - Task - Template
-		templateDir + " - " + taskName,                        // Новий стандарт (плоский, оригінальні назви)
-		taskName + " - " + templateDir,                        // Альтернативний плоский (Task - Template)
-		safeTemplateDir + " - " + safeTaskName,                // Плоский санітизований
-		safeTaskName + " - " + safeTemplateDir,                // Альтернативний санітизований
-		filepath.Join(safeTaskName, safeTemplateDir),            // Старий вкладений (Task/Template)
-		taskName,                                              // Просто назва (оригінал)
-		safeTaskName,                                          // Просто назва (санітизована)
+		safeTemplateDir + " - " + safeTaskName + " - " + safeTemplateDir, // [NEW] Паттерн користувача: Template - Task - Template
+		safeTemplateDir + " - " + safeTaskName,                            // Новий стандарт (плоский, санітизовані назви)
+		safeTaskName + " - " + safeTemplateDir,                            // Альтернативний плоский (Task - Template)
+		templateDir + " - " + taskName,                                    // Старі оригінальні назви (для зворотної сумісності)
+		taskName + " - " + templateDir,                                    // Альтернативний старий (для зворотної сумісності)
+		filepath.Join(safeTaskName, safeTemplateDir),                      // Старий вкладений (Task/Template, санітизований)
+		safeTaskName,                                                      // Просто назва (санітизована)
+		taskName,                                                          // Просто назва (оригінал)
 	}
 
 	// Використовуємо map для унікальних шляхів, щоб не перевіряти двічі
@@ -1118,7 +1118,7 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 		}
 	}
 
-	defaultPath := filepath.Join(targetBase, templateDir+" - "+taskName)
+	defaultPath := filepath.Join(targetBase, safeTemplateDir+" - "+safeTaskName)
 	if runtime.GOOS != "windows" {
 		defaultPath = strings.ReplaceAll(defaultPath, "\\", "/")
 	}
