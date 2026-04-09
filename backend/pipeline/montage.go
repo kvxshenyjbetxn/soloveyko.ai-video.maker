@@ -1185,6 +1185,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			cleanPath = cleanPath[2:]
 		}
 		escapedAssPath := drivePrefix + cleanPath
+		// Apostrophes in file/folder names break subtitles='...'. Escape them for ffmpeg filter parsing.
+		escapedAssPath = strings.ReplaceAll(escapedAssPath, "'", "\\'")
 		
 		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles='%s'[v_sub]", montageV, escapedAssPath))
 		montageV = "v_sub"
@@ -1726,6 +1728,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	speedRegex := regexp.MustCompile(`speed=\s*(\d+\.\d+)x`)
 
 	scanner := bufio.NewScanner(stderr)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		if atEOF && len(data) == 0 {
 			return 0, nil, nil
