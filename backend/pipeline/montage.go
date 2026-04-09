@@ -519,21 +519,21 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 
 		type MontagePlan struct {
-			AudioDuration float64          `json:"audioDuration"`
-			AudioPath     string           `json:"audioPath"`
-			SubtitlePath  string           `json:"subtitlePath"`
-			TransDuration float64          `json:"transDuration"`
-			IsFadeFast    bool             `json:"isFadeFast"`
-			Clips         []MontageClip    `json:"clips"`
-			AudioSegments []MontageSegment `json:"audioSegments"`
-			Triggers      []MontageTrigger `json:"triggers"`
-			Watermarks    []MontageWatermark `json:"watermarks"`
+			AudioDuration float64              `json:"audioDuration"`
+			AudioPath     string               `json:"audioPath"`
+			SubtitlePath  string               `json:"subtitlePath"`
+			TransDuration float64              `json:"transDuration"`
+			IsFadeFast    bool                 `json:"isFadeFast"`
+			Clips         []MontageClip        `json:"clips"`
+			AudioSegments []MontageSegment     `json:"audioSegments"`
+			Triggers      []MontageTrigger     `json:"triggers"`
+			Watermarks    []MontageWatermark   `json:"watermarks"`
 			ExtraTracks   []utils.OverlayTrack `json:"extraTracks"`
-			BaseW         int              `json:"baseW"`
-			BaseH         int              `json:"baseH"`
-			IntroPath     string           `json:"introPath,omitempty"`
-			IntroDuration float64          `json:"introDuration,omitempty"`
-			IntroIsVideo  bool             `json:"introIsVideo,omitempty"`
+			BaseW         int                  `json:"baseW"`
+			BaseH         int                  `json:"baseH"`
+			IntroPath     string               `json:"introPath,omitempty"`
+			IntroDuration float64              `json:"introDuration,omitempty"`
+			IntroIsVideo  bool                 `json:"introIsVideo,omitempty"`
 		}
 
 		plan := MontagePlan{
@@ -563,7 +563,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		if pSettings.MontageOverlayTriggersEnabled && len(pSettings.MontageOverlayTriggers) > 0 {
 			assPath := filepath.Join(finalDir, "subtitle.ass")
 			srtPath := filepath.Join(finalDir, "subtitle.srt")
-			
+
 			// Determine which subtitle file to use for finding timings
 			activeSubPath := assPath
 			if _, err := os.Stat(assPath); err != nil {
@@ -743,7 +743,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 								w, _ := strconv.Atoi(bits[6])
 								h, _ := strconv.Atoi(bits[7])
 								opacity, _ := strconv.ParseFloat(bits[8], 64)
-								
+
 								tid := ""
 								if len(bits) >= 10 {
 									tid = bits[9]
@@ -1137,11 +1137,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			for _, seg := range audioSegments {
 				utilsSegments = append(utilsSegments, utils.AudioSegment{Start: seg.Start, End: seg.End})
 			}
-			
+
 			trimmedJson, err := utils.TrimJsonResult(string(jsonBytes), utilsSegments)
 			if err == nil {
 				_ = os.WriteFile(filepath.Join(finalDir, "subtitle_trimmed.json"), []byte(trimmedJson), 0644)
-				
+
 				karaokeEffect := pSettings.SubtitleKaraokeEffect
 				trimmedAss, err := utils.JsonToAss(trimmedJson, pSettings, karaokeEffect)
 				if err == nil {
@@ -1187,7 +1187,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		escapedAssPath := drivePrefix + cleanPath
 		// Apostrophes in file/folder names break subtitles='...'. Escape them for ffmpeg filter parsing.
 		escapedAssPath = strings.ReplaceAll(escapedAssPath, "'", "\\'")
-		
+
 		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles='%s'[v_sub]", montageV, escapedAssPath))
 		montageV = "v_sub"
 	}
@@ -1397,7 +1397,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			} else {
 				startT = s.findTextTiming(assPath, tr.Phrase, taskLabel)
 			}
-			
+
 			if startT != nil {
 				s.log("INFO", fmt.Sprintf("[Montage] Active trigger '%s' at %.2fs", tr.Phrase, *startT), id, taskLabel)
 				tIdx := len(inputSpecs)
@@ -1406,7 +1406,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				inputSpecs = append(inputSpecs, inputSpec{
 					loop:       !isTrVideo,
 					path:       getRel(tr.Path),
-					streamLoop: false, 
+					streamLoop: false,
 				})
 
 				trDur := 3.0
@@ -1493,8 +1493,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 		// Fallback for 0 dimensions
 		targetW, targetH := tr.w, tr.h
-		if targetW <= 0 { targetW = baseW }
-		if targetH <= 0 { targetH = baseH }
+		if targetW <= 0 {
+			targetW = baseW
+		}
+		if targetH <= 0 {
+			targetH = baseH
+		}
 		// Ensure even dimensions for yuv420p
 		targetW = (targetW / 2) * 2
 		targetH = (targetH / 2) * 2
@@ -1527,7 +1531,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	for i, wm := range activeCustomWatermarks {
 		wmDur := wm.duration
 		wmProcessedLabel := fmt.Sprintf("v_pwm_ready_%d", i)
-		
+
 		opacity := wm.opacity
 		if opacity <= 0 {
 			opacity = 1.0
@@ -1535,8 +1539,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 		// Fallback and even dimensions
 		targetW, targetH := wm.w, wm.h
-		if targetW <= 0 { targetW = 200 }
-		if targetH <= 0 { targetH = 200 }
+		if targetW <= 0 {
+			targetW = 200
+		}
+		if targetH <= 0 {
+			targetH = 200
+		}
 		targetW = (targetW / 2) * 2
 		targetH = (targetH / 2) * 2
 
@@ -1602,7 +1610,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		finalA = "a_cut"
 	}
 
-
 	// Write filter script
 	fullGraph := strings.Join(filterParts, ";")
 	s.log("INFO", fmt.Sprintf("[Montage] Filter Graph Length: %d characters, Labels: %d", len(fullGraph), len(filterParts)), id, taskLabel)
@@ -1662,13 +1669,13 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	case "h264_videotoolbox":
 		cmdArgs = append(cmdArgs, "-b:v", bitrateStr)
 	}
-	
+
 	cmdArgs = append(cmdArgs,
 		"-pix_fmt", "yuv420p",
 		"-r", strconv.Itoa(fps),
 		"-t", fmt.Sprintf("%.3f", audioDur),
 	)
-	
+
 	// DaVinci Resolve metadata simulation
 	if pSettings.MontageMetadataSimulation == "DaVinci Resolve Studio" {
 		currentTime := time.Now().UTC().Format("2006-01-02T15:04:05.000") + "Z"
@@ -1748,12 +1755,20 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	var lastPercent float64 = -1
 	lastLogTime := time.Now()
 
+	var stderrLines []string
 	go func() {
 		for scanner.Scan() {
 			line := scanner.Text()
 			if line == "" {
 				continue
 			}
+			stderrLines = append(stderrLines, line)
+
+			// Log error-level messages from ffmpeg
+			if strings.Contains(strings.ToLower(line), "error") || strings.Contains(strings.ToLower(line), "failed") {
+				s.log("ERROR", fmt.Sprintf("[Montage FFmpeg] %s", line), id, taskLabel)
+			}
+
 			timeMatch := timeRegex.FindStringSubmatch(line)
 			if len(timeMatch) > 1 {
 				h, _ := strconv.Atoi(timeMatch[1])
@@ -1781,7 +1796,17 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}()
 
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("ffmpeg failed: %v", err)
+		errMsg := fmt.Sprintf("ffmpeg failed: %v", err)
+		if len(stderrLines) > 0 {
+			errMsg += "\n[FFmpeg stderr tail]:\n"
+			// Show last 20 lines of stderr for debugging
+			start := len(stderrLines) - 20
+			if start < 0 {
+				start = 0
+			}
+			errMsg += strings.Join(stderrLines[start:], "\n")
+		}
+		return fmt.Errorf("%s", errMsg)
 	}
 
 	// [POST-PROCESS 1] Prepend intro — reads outputFile + intro, writes to combined tmp, then replaces
@@ -1794,7 +1819,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			baseW, baseH, fps, videoCodec,
 			pSettings.MontageEncodingPreset,
 			pSettings.MontageBitrate,
-			transDur,
 			pSettings.MontageIntroFadeDuration,
 			audioDur, // Pass the precise duration of the montage
 			id, taskLabel,
@@ -1832,8 +1856,7 @@ func (s *PipelineService) prependIntroVideo(
 	baseW, baseH, fps int,
 	videoCodec, preset string,
 	bitrate int,
-	transDur float64, // existing general transDur (might be used for other things)
-	fadeDur float64,  // our specialized intro fade duration
+	fadeDur float64, // our specialized intro fade duration
 	mainDur float64,
 	id, taskLabel string,
 ) error {
@@ -1853,7 +1876,9 @@ func (s *PipelineService) prependIntroVideo(
 
 	// Clamp fade duration
 	ef := fadeDur
-	if ef < 0 { ef = 0 }
+	if ef < 0 {
+		ef = 0
+	}
 
 	var fp []string
 
@@ -1896,22 +1921,24 @@ func (s *PipelineService) prependIntroVideo(
 
 	if fadeDur > 0 {
 		foSt := introDur - fadeDur
-		if foSt < 0 { foSt = 0 }
-		
+		if foSt < 0 {
+			foSt = 0
+		}
+
 		// Intro fades out
 		fp = append(fp, fmt.Sprintf("[%s]fade=t=out:st=%.3f:d=%.3f[iv_f_out]", finalIV, foSt, fadeDur))
 		fp = append(fp, fmt.Sprintf("[%s]afade=t=out:st=%.3f:d=%.3f[ia_f_out]", finalIA, foSt, fadeDur))
-		
+
 		// Main video fades in ON TOP of the static/delayed start
 		fp = append(fp, fmt.Sprintf("[%s]fade=t=in:st=0:d=%.3f[mv_f_in]", finalMV, fadeDur))
 		fp = append(fp, fmt.Sprintf("[%s]afade=t=in:st=%.3f:d=%.3f[ma_f_in]", finalMA, fadeDur, fadeDur))
-		
+
 		finalIV, finalMV = "iv_f_out", "mv_f_in"
 		finalIA, finalMA = "ia_f_out", "ma_f_in"
 	}
 
 	// concat filter expects [v0][a0][v1][a1] order for v=1:a=1
-	fp = append(fp, fmt.Sprintf("[%s][%s][%s][%s]concat=n=2:v=1:a=1[vout][aout]", 
+	fp = append(fp, fmt.Sprintf("[%s][%s][%s][%s]concat=n=2:v=1:a=1[vout][aout]",
 		finalIV, finalIA, finalMV, finalMA))
 	audioMap := "[aout]"
 
@@ -1977,7 +2004,7 @@ func (s *PipelineService) getDuration(ffprobePath, path string) (float64, error)
 	if ffprobePath == "" {
 		return 0, fmt.Errorf("ffprobe not found")
 	}
-	
+
 	// Try format duration first
 	cmd := exec.Command(ffprobePath, "-v", "error", "-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1", path)
@@ -2085,7 +2112,7 @@ func (s *PipelineService) findTextTiming(subPath string, phrase string, taskLabe
 	var subWords []subWord
 
 	tagRe := regexp.MustCompile(`\{.*?\}`)
-	
+
 	if isAss {
 		reAss := regexp.MustCompile(`Dialogue: \d+,(\d+:\d+:\d+\.\d+),(\d+:\d+:\d+\.\d+),.*,,(.*)`)
 		for _, line := range lines {
@@ -2146,7 +2173,6 @@ func (s *PipelineService) findTextTiming(subPath string, phrase string, taskLabe
 			}
 		}
 	}
-
 
 	threshold := 0.60
 	if len(targetWords) <= 2 {
