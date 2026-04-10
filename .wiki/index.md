@@ -1,6 +1,6 @@
 # Soloveyko.AI Video Maker — Project Index
 
-> **Версія**: 0.40.5 | **Дата останньої індексації**: 2026-04-10
+> **Версія**: 0.40.6 | **Дата останньої індексації**: 2026-04-10
 
 ## Огляд проєкту
 
@@ -84,7 +84,7 @@ soloveyko.ai-video.maker.go/
 │   │   ├── full_history.go    # Розширена історія
 │   │   ├── production_stats.go # Статистика виробництва
 │   │   ├── updater.go         # Автооновлення
-│   │   ├── version.go         # Версія (0.40.5)
+│   │   ├── version.go         # Версія (0.40.6)
 │   │   └── ...інші утиліти
 │   └── bin/                   # Embedded бінарники (platform-specific)
 ├── frontend/

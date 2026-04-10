@@ -1,6 +1,6 @@
 # Architecture & System Design
 
-> Докладний опис архітектури Soloveyko.AI Video Maker v0.40.5
+> Докладний опис архітектури Soloveyko.AI Video Maker v0.40.6
 
 ## Загальна архітектура
 

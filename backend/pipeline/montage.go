@@ -1176,14 +1176,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	assPath := filepath.Join(finalDir, assName)
 	if _, err := os.Stat(assPath); err == nil {
-		// FFmpeg subtitles path parsing is fragile across OSes.
-		// Use unquoted filename with explicit escaping to avoid quote-breaking paths like "She's ...".
-		escapedAssPath := strings.ReplaceAll(assPath, "\\", "/")
-		escapedAssPath = strings.ReplaceAll(escapedAssPath, ":", "\\:")
-		escapedAssPath = strings.ReplaceAll(escapedAssPath, " ", "\\ ")
-		escapedAssPath = strings.ReplaceAll(escapedAssPath, "'", "\\'")
-
-		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles=%s[v_sub]", montageV, escapedAssPath))
+		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles=%s[v_sub]", montageV, assName))
 		montageV = "v_sub"
 	}
 
