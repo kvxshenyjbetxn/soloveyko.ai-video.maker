@@ -82,7 +82,7 @@
 [5] Montage Stage (FFmpeg — фінальний рендер)
                  │
                  ▼
-            final.mp4
+            {taskName}.mp4
 ```
 
 **Керування паралелізмом**:
@@ -155,6 +155,7 @@
 - Intro-відео, кастомні водяні знаки
 - Автовизначення GPU-кодувальника (NVIDIA/AMD/Apple → libx264 fallback)
 - Режим монтажу: single-pass або контрольний (user review)
+- Ім'я фінального відео: лише sanitized `taskName`; `preview_task` зберігається як `final.mp4`
 
 ### 5. Utils Layer (`backend/utils/`)
 
@@ -232,7 +233,7 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
           ProcessImage() → LLM промпти → Image API → images[]
       → Barrier: чекає voice + image
       → ProcessSubtitle() → Whisper/AssemblyAI → subtitles.ass
-      → ProcessMontage() → FFmpeg → final.mp4
+      → ProcessMontage() → FFmpeg → `{taskName}.mp4` (для preview: `final.mp4`)
   → Frontend отримує подію "taskStatus" / "stageStatus"
 ```
 

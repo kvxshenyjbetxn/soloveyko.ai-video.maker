@@ -858,15 +858,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		return p
 	}
 
-	// Build final filename: TaskName + TemplateName
+	// Build final filename from task name only.
 	limit := 180
-	tplName := subName
-	if tplName == "" || tplName == "Default" {
-		tplName = ""
-	}
-
 	safeTask := utils.SanitizeFilename(taskName)
-	safeTpl := utils.SanitizeFilename(tplName)
 
 	if safeTask == "" {
 		safeTask = "Task"
@@ -875,17 +869,6 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	var finalBaseName string
 	if id == "preview_task" {
 		finalBaseName = "final"
-	} else if safeTpl != "" {
-		tplRunes := []rune(safeTpl)
-		availableForTask := limit - len(tplRunes) - 3
-		if availableForTask < 20 {
-			availableForTask = 20
-		}
-		taskRunes := []rune(safeTask)
-		if len(taskRunes) > availableForTask {
-			safeTask = string(taskRunes[:availableForTask])
-		}
-		finalBaseName = safeTpl + " - " + strings.TrimRight(safeTask, ". ")
 	} else {
 		taskRunes := []rune(safeTask)
 		if len(taskRunes) > limit {
