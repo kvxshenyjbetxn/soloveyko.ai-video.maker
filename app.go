@@ -25,6 +25,12 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+const (
+	remoteFolderNameKey = "__remoteFolderName"
+	remoteSubNameKey    = "__remoteSubName"
+	remoteTemplatesKey  = "__remoteTemplates"
+)
+
 // App struct
 type App struct {
 	ctx             context.Context
@@ -696,10 +702,97 @@ func (a *App) startTaskPollingLoop() {
 
 // Структура для зберігання витягнутого завдання
 type RemoteTask struct {
-	ID       string
-	TaskName string
-	Payload  string
-	Settings map[string]interface{}
+	ID         string
+	TaskName   string
+	FolderName string
+	SubName    string
+	TaskType   string
+	Templates  []string
+	Payload    string
+	Settings   map[string]interface{}
+}
+
+func readStringSlice(value interface{}) []string {
+	switch v := value.(type) {
+	case []string:
+		return append([]string(nil), v...)
+	case []interface{}:
+		items := make([]string, 0, len(v))
+		for _, raw := range v {
+			text, ok := raw.(string)
+			if ok && strings.TrimSpace(text) != "" {
+				items = append(items, text)
+			}
+		}
+		return items
+	case string:
+		if strings.TrimSpace(v) != "" {
+			return []string{strings.TrimSpace(v)}
+		}
+	}
+	return nil
+}
+
+func inferRemoteTaskType(taskName string) string {
+	lowerName := strings.ToLower(taskName)
+	switch {
+	case strings.Contains(lowerName, "rewrite"):
+		return "rewrite"
+	case strings.Contains(lowerName, "voiceover"), strings.Contains(lowerName, "voice over"):
+		return "voiceover"
+	default:
+		return "translate"
+	}
+}
+
+func resolveRemoteTaskMetadata(rawTaskName string, settings map[string]interface{}) (taskType string, folderName string, subName string, templates []string) {
+	taskType, _ = settings["taskType"].(string)
+	if taskType == "" {
+		taskType = inferRemoteTaskType(rawTaskName)
+	}
+
+	_, hasRemoteSubName := settings[remoteSubNameKey]
+	folderName, _ = settings[remoteFolderNameKey].(string)
+	subName, _ = settings[remoteSubNameKey].(string)
+	templates = readStringSlice(settings[remoteTemplatesKey])
+
+	if subName == "" && !hasRemoteSubName {
+		if pipelineName, ok := settings[taskType+"PipelineName"].(string); ok {
+			subName = strings.TrimSpace(pipelineName)
+		}
+	}
+
+	folderName = strings.TrimSpace(folderName)
+	if folderName == "" {
+		folderName = rawTaskName
+	}
+
+	if subName != "" {
+		suffix := " - " + subName
+		if folderName == rawTaskName && strings.HasSuffix(rawTaskName, suffix) {
+			if trimmed := strings.TrimSpace(strings.TrimSuffix(rawTaskName, suffix)); trimmed != "" {
+				folderName = trimmed
+			}
+		}
+	}
+
+	if len(templates) == 0 {
+		if subName != "" {
+			templates = []string{subName}
+		} else {
+			templates = []string{"Default"}
+		}
+	}
+
+	return taskType, folderName, subName, templates
+}
+
+func (a *App) addHistoryEntry(name string, taskType string, templates []string, content string, subName string, settingsSnapshot map[string]interface{}) error {
+	err := a.history.AddEntryDetailed(name, taskType, templates, content, subName, settingsSnapshot)
+	if err == nil && a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "historyUpdate")
+	}
+	return err
 }
 
 func (a *App) pollTask(key, hwID string) *RemoteTask {
@@ -771,10 +864,19 @@ func (a *App) pollTask(key, hwID string) *RemoteTask {
 
 	// ПЕРЕВІРКА НАЯВНОСТІ ФАЙЛУ НАЛАШТУВАНЬ
 	if fileID, ok := settings["settings_file_id"].(string); ok {
+		wrappedTargetID, _ := settings["target_hardware_id"].(string)
 		a.LogToUI("INFO", fmt.Sprintf("[Worker] Downloading full settings file: %s", fileID))
 		downloadedSettings, err := a.DownloadSettingsFile(fileID)
 		if err == nil {
 			settings = downloadedSettings
+			if settings == nil {
+				settings = make(map[string]interface{})
+			}
+			if wrappedTargetID != "" {
+				if _, exists := settings["target_hardware_id"]; !exists {
+					settings["target_hardware_id"] = wrappedTargetID
+				}
+			}
 			a.LogToUI("SUCCESS", "[Worker] Settings file downloaded and applied")
 		} else {
 			a.LogToUI("ERROR", fmt.Sprintf("[Worker] Failed to download settings file: %v", err))
@@ -818,27 +920,45 @@ func (a *App) pollTask(key, hwID string) *RemoteTask {
 		return nil
 	}
 
+	taskType, folderName, subName, templates := resolveRemoteTaskMetadata(task.TaskName, settings)
+
+	if err := a.addHistoryEntry(folderName, taskType, templates, task.Payload, subName, settings); err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Worker] Failed to write short history for %s: %v", folderName, err))
+	}
+
 	// Емітуємо подію для UI, щоб завдання з'явилося в черзі воркера
 	if a.ctx != nil {
 		wruntime.EventsEmit(a.ctx, "remoteTaskClaimed", map[string]interface{}{
-			"id":       task.ID,
-			"name":     task.TaskName,
-			"payload":  task.Payload,
-			"settings": settings,
+			"id":         task.ID,
+			"name":       task.TaskName,
+			"folderName": folderName,
+			"subName":    subName,
+			"templates":  templates,
+			"taskType":   taskType,
+			"payload":    task.Payload,
+			"settings":   settings,
 		})
 	}
 
 	return &RemoteTask{
-		ID:       task.ID,
-		TaskName: task.TaskName,
-		Payload:  task.Payload,
-		Settings: settings,
+		ID:         task.ID,
+		TaskName:   folderName,
+		FolderName: folderName,
+		SubName:    subName,
+		TaskType:   taskType,
+		Templates:  templates,
+		Payload:    task.Payload,
+		Settings:   settings,
 	}
 }
 
-// executeRemoteTask обробляє одне витягнуте завдання 
+// executeRemoteTask обробляє одне витягнуте завдання
 func (a *App) executeRemoteTask(key string, task *RemoteTask) {
-	a.LogToUI("INFO", fmt.Sprintf("[Worker] Executing task: %s", task.TaskName))
+	displayName := task.FolderName
+	if task.SubName != "" {
+		displayName = fmt.Sprintf("%s - %s", task.FolderName, task.SubName)
+	}
+	a.LogToUI("INFO", fmt.Sprintf("[Worker] Executing task: %s", displayName))
 
 	// Сповіщаємо сервер про початок виконання
 	a.sendTaskResult(key, task.ID, "processing", "Worker started execution")
@@ -849,16 +969,16 @@ func (a *App) executeRemoteTask(key string, task *RemoteTask) {
 		id = fmt.Sprintf("remote_%d", time.Now().Unix())
 	}
 
-	taskType, _ := task.Settings["taskType"].(string)
+	taskType := task.TaskType
 	if taskType == "" {
-		taskType = "translate"
-		if strings.Contains(strings.ToLower(task.TaskName), "rewrite") {
-			taskType = "rewrite"
+		taskType, task.FolderName, task.SubName, task.Templates = resolveRemoteTaskMetadata(task.TaskName, task.Settings)
+		if task.FolderName == "" {
+			task.FolderName = task.TaskName
 		}
 	}
 
 	a.injectAPIKeys(task.Settings)
-	_, err := a.pipeline.ProcessTask(id, 1, taskType, task.Payload, task.Settings, task.TaskName, "")
+	_, err := a.pipeline.ProcessTask(id, 1, taskType, task.Payload, task.Settings, task.FolderName, task.SubName)
 
 	status := "completed"
 	result := ""
@@ -867,7 +987,7 @@ func (a *App) executeRemoteTask(key string, task *RemoteTask) {
 		result = err.Error()
 		a.LogToUI("ERROR", fmt.Sprintf("[Worker] Remote task failed: %v", err))
 	} else {
-		a.LogToUI("SUCCESS", fmt.Sprintf("[Worker] Remote task completed: %s", task.TaskName))
+		a.LogToUI("SUCCESS", fmt.Sprintf("[Worker] Remote task completed: %s", displayName))
 	}
 
 	// Report result
@@ -2085,11 +2205,7 @@ func (a *App) SelectVideo() (string, error) {
 
 // AddToHistory adds a new entry to the task history
 func (a *App) AddToHistory(name string, taskType string, templates []string, content string) error {
-	err := a.history.AddEntry(name, taskType, templates, content)
-	if err == nil && a.ctx != nil {
-		wruntime.EventsEmit(a.ctx, "historyUpdate")
-	}
-	return err
+	return a.addHistoryEntry(name, taskType, templates, content, "", nil)
 }
 
 // GetHistory returns the task history (last 2 days)
@@ -2325,11 +2441,11 @@ func (a *App) IsWhisperXInstalled() bool {
 	return utils.GetWhisperXExePath() != ""
 }
 
-// DownloadWhisperX ініціює процес завантаження та встановлення двигуна WhisperX, 
+// DownloadWhisperX ініціює процес завантаження та встановлення двигуна WhisperX,
 // якщо він не знайдений у системі, та інформує фронтенд через події.
 func (a *App) DownloadWhisperX() error {
 	a.LogToUI("INFO", "[WhisperX] Перевірка встановлення двигуна...")
-	
+
 	// Якщо файл уже знайдено за одним із підтримуваних шляхів - нічого не робимо
 	exePath := utils.GetWhisperXExePath()
 	if exePath != "" {
@@ -2341,10 +2457,10 @@ func (a *App) DownloadWhisperX() error {
 	}
 
 	a.LogToUI("INFO", "[WhisperX] Починаємо завантаження двигуна...")
-	
+
 	err := utils.DownloadAndInstallWhisperX(func(status string, percent float64) {
 		if a.ctx != nil {
-			// Виправлено: Додано надсилання специфічної події whisperxDownloadProgress, 
+			// Виправлено: Додано надсилання специфічної події whisperxDownloadProgress,
 			// щоб прогрес-бар у вкладці Performance почав працювати (раніше він очікував лише це ім'я).
 			wruntime.EventsEmit(a.ctx, "whisperxDownloadProgress", int(percent))
 
@@ -2413,7 +2529,7 @@ func (a *App) injectAPIKeys(settings map[string]interface{}) {
 		for _, m := range mappings {
 			// Перевіряємо ключі з можливими префіксами (наприклад, translateOpenRouterKeyID)
 			commonPrefixes := []string{"", "voiceover", "translate", "rewrite", "image", "subtitle"}
-			
+
 			for _, cp := range commonPrefixes {
 				idKey := m.idKey
 				if cp != "" {
@@ -2425,13 +2541,13 @@ func (a *App) injectAPIKeys(settings map[string]interface{}) {
 					if key != "" {
 						// Встановлюємо плоский ключ
 						curr[m.valKey] = key
-						
+
 						// Встановлюємо версію з префіксом для PipelineSettings
 						pref := cp
 						if pref == "" {
 							pref = prefix
 						}
-						
+
 						if pref != "" {
 							resKey := pref + strings.ToUpper(m.valKey[:1]) + m.valKey[1:]
 							curr[resKey] = key
@@ -2453,10 +2569,14 @@ func (a *App) injectAPIKeys(settings map[string]interface{}) {
 
 	// Глобальні фолбеки
 	if s.AssemblyAIAPIKey != "" {
-		if _, ok := settings["assemblyAIAPIKey"]; !ok { settings["assemblyAIAPIKey"] = s.AssemblyAIAPIKey }
+		if _, ok := settings["assemblyAIAPIKey"]; !ok {
+			settings["assemblyAIAPIKey"] = s.AssemblyAIAPIKey
+		}
 	}
 	if s.GooglerAPIKey != "" {
-		if _, ok := settings["googlerAPIKey"]; !ok { settings["googlerAPIKey"] = s.GooglerAPIKey }
+		if _, ok := settings["googlerAPIKey"]; !ok {
+			settings["googlerAPIKey"] = s.GooglerAPIKey
+		}
 	}
 }
 func (a *App) getMediaMetadata(targetPath string, ext string) (*ImportMediaData, error) {

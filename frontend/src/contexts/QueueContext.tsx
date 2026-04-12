@@ -341,13 +341,18 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'waiting', workerName } : t));
                 
                 const content = taskContentRef.current.get(task.id) || "";
+                const remoteSettings = JSON.parse(JSON.stringify(task.settings || {}));
+                remoteSettings.taskType = task.type;
+                remoteSettings.__remoteFolderName = task.folderName;
+                remoteSettings.__remoteSubName = task.subName || "";
+                remoteSettings.__remoteTemplates = task.subName ? [task.subName] : ['Default'];
                 
                 // @ts-ignore
                 const remoteTask = await window.go.main.App.SendRemoteTaskWithTarget(
                     workerId, 
                     task.name, 
                     content, 
-                    task.settings
+                    remoteSettings
                 );
                 
                 // remoteTask is the object returned from the server, it has an ID
@@ -627,15 +632,19 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setTasks(prev => prev.map(t => t.id === id ? { ...t, resultLength: length } : t));
         });
         const uRemoteTask = EventsOn("remoteTaskClaimed", (data: any) => {
-            const { id, name, payload, settings } = data;
+            const { id, name, folderName, subName, payload, settings, taskType } = data;
             if (taskContentRef.current.has(id)) return;
             taskContentRef.current.set(id, payload);
             
-            const type = settings?.taskType || (name.toLowerCase().includes('rewrite') ? 'rewrite' : 'translate');
+            const type = taskType || settings?.taskType || (name.toLowerCase().includes('rewrite') ? 'rewrite' : 'translate');
+            const resolvedFolderName = (folderName || name || '').trim();
+            const resolvedSubName = (subName || '').trim();
             
             const newTask: QueueTask = {
                 id,
-                name: name, folderName: name, subName: "",
+                name: resolvedSubName ? `${resolvedFolderName} - ${resolvedSubName}` : resolvedFolderName,
+                folderName: resolvedFolderName,
+                subName: resolvedSubName,
                 type: type, content: "", settings,
                 status: 'waiting', progress: 0,
                 textStatus: 'waiting', voiceStatus: 'waiting',

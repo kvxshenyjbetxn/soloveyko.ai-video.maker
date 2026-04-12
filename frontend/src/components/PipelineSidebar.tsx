@@ -53,6 +53,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [pendingTaskName, setPendingTaskName] = useState<string>("");
     const [pendingContent, setPendingContent] = useState<string>("");
     const [historyOverride, setHistoryOverride] = useState<{ content: string, templateIds: string[], taskName: string } | null>(null);
+    const [pendingHistorySnapshot, setPendingHistorySnapshot] = useState<{ settings: any, subName: string } | null>(null);
     const { templates, saveTemplate, removeTemplate, selectedTemplateIds, setSelectedTemplateIds } = useTemplates();
     const [voiceTemplates, setVoiceTemplates] = useState<{ uuid: string; name: string }[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -849,6 +850,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 setExistingFilesData(results); // Тепер це масив
                 setPendingTaskName(resolvedName);
                 setPendingContent(finalContent);
+                setPendingHistorySnapshot(null);
                 return;
             }
         } catch (err) {
@@ -886,6 +888,70 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             }
         }
     }, [type, content, settings, templates, selectedTemplateIds, addTask, addTasks, setSelectedTemplateIds]);
+
+    const addSnapshotTask = useCallback((taskName: string, taskContent: string, snapshotSettings: any, subName: string, skippedStages: string[], existingData?: any, settingsOverrides?: any) => {
+        const clonedSettings = JSON.parse(JSON.stringify(snapshotSettings || {}));
+        clonedSettings.taskType = clonedSettings.taskType || type;
+        const finalSettings = settingsOverrides ? { ...clonedSettings, ...settingsOverrides } : clonedSettings;
+        setSelectedTemplateIds([]);
+        addTask(type, taskContent, finalSettings, taskName, subName, skippedStages, existingData);
+    }, [addTask, setSelectedTemplateIds, type]);
+
+    const restoreHistoryEntry = useCallback(async (entry: any) => {
+        if (!settings) {
+            console.warn("[Sidebar] Settings not ready, cannot apply history entry");
+            return;
+        }
+
+        const snapshot = entry?.settingsSnapshot && typeof entry.settingsSnapshot === 'object'
+            ? JSON.parse(JSON.stringify(entry.settingsSnapshot))
+            : null;
+
+        if (snapshot) {
+            const restoredName = typeof entry.taskName === 'string' && entry.taskName.trim()
+                ? entry.taskName
+                : getNextTaskName();
+            const restoredContent = typeof entry.content === 'string' ? entry.content : '';
+            const restoredSubName = typeof entry.subName === 'string' ? entry.subName : '';
+            snapshot.taskType = snapshot.taskType || type;
+
+            setSelectedTemplateIds([]);
+
+            try {
+                const results = await CheckExistingTasks([{
+                    taskName: restoredName,
+                    taskType: type,
+                    subName: restoredSubName,
+                    settings: snapshot,
+                }]);
+
+                if (results && results.length > 0) {
+                    setPendingTaskName(restoredName);
+                    setPendingContent(restoredContent);
+                    setPendingHistorySnapshot({ settings: snapshot, subName: restoredSubName });
+                    setExistingFilesData(results);
+                    return;
+                }
+            } catch (err) {
+                console.error("CheckExistingTasks for history snapshot failed:", err);
+            }
+
+            addSnapshotTask(restoredName, restoredContent, snapshot, restoredSubName, []);
+            showToast(t('pipeline.task_added_success') || 'Task added to queue', 'success');
+            return;
+        }
+
+        const matchedIds: string[] = [];
+        if (entry.templates && entry.templates.length > 0) {
+            entry.templates.forEach((tplName: string) => {
+                const tpl = templates.find(t => t.name === tplName && t.type === type);
+                if (tpl) matchedIds.push(tpl.id);
+            });
+        }
+
+        setSelectedTemplateIds(matchedIds);
+        handleAddTask(entry.taskName, entry.content, matchedIds, true);
+    }, [settings, getNextTaskName, type, setSelectedTemplateIds, templates, handleAddTask, addSnapshotTask, showToast, t]);
 
     const applyTemplate = (tpl: any) => {
         if (!tpl || !tpl.settings) return;
@@ -1023,29 +1089,13 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         // @ts-ignore
         const unsub = EventsOn("applyHistoryEntry", (entry: any) => {
             if (entry.type === type) {
-                if (!settings) {
-                    console.warn("[Sidebar] Settings not ready, cannot apply history entry");
-                    return;
-                }
-                // Find template IDs by names
-                const matchedIds: string[] = [];
-                if (entry.templates && entry.templates.length > 0) {
-                    entry.templates.forEach((tplName: string) => {
-                        const tpl = templates.find(t => t.name === tplName && t.type === type);
-                        if (tpl) matchedIds.push(tpl.id);
-                    });
-                }
-
-                setSelectedTemplateIds(matchedIds);
-
-                // Skip the modal and call handleAddTask directly
-                handleAddTask(entry.taskName, entry.content, matchedIds, true);
+                restoreHistoryEntry(entry);
             }
         });
         return () => {
             if (unsub) unsub();
         };
-    }, [type, templates, settings, handleAddTask, setSelectedTemplateIds]);
+    }, [type, restoreHistoryEntry]);
 
     useEffect(() => {
         document.documentElement.style.setProperty('--sidebar-toggle-width', '36px');
@@ -1292,7 +1342,13 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                         }
                         if (allFound.has('subtitle') && !skip.includes('subtitle')) regenOverrides.subtitleRegenerate = true;
 
-                        proceedAddTask(pendingTaskName, skip, existingFilesData, undefined, pendingContent, regenOverrides);
+                        if (pendingHistorySnapshot) {
+                            const existing = Array.isArray(existingFilesData) ? existingFilesData[0] : undefined;
+                            addSnapshotTask(pendingTaskName, pendingContent, pendingHistorySnapshot.settings, pendingHistorySnapshot.subName, skip, existing, regenOverrides);
+                            setPendingHistorySnapshot(null);
+                        } else {
+                            proceedAddTask(pendingTaskName, skip, existingFilesData, undefined, pendingContent, regenOverrides);
+                        }
                         setExistingFilesData(null);
                     }}
                     onCancel={() => {
@@ -1303,7 +1359,14 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                             subtitleRegenerate: true,
                             imageElevenLabsImageRegenerate: true
                         };
-                        proceedAddTask(pendingTaskName, [], existingFilesData, undefined, pendingContent, regenOverrides);
+
+                        if (pendingHistorySnapshot) {
+                            const existing = Array.isArray(existingFilesData) ? existingFilesData[0] : undefined;
+                            addSnapshotTask(pendingTaskName, pendingContent, pendingHistorySnapshot.settings, pendingHistorySnapshot.subName, [], existing, regenOverrides);
+                            setPendingHistorySnapshot(null);
+                        } else {
+                            proceedAddTask(pendingTaskName, [], existingFilesData, undefined, pendingContent, regenOverrides);
+                        }
                         setExistingFilesData(null);
                     }}
                 />

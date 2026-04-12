@@ -169,7 +169,7 @@
 | Templates | `templates.go` | Шаблони пайплайнів (CRUD) |
 | Stats | `stats.go` | CPU/RAM/Disk/GPU моніторинг |
 | Gallery | `gallery.go` | In-memory галерея згенерованих зображень |
-| History | `history.go` | Легка історія (auto-cleanup 2 дні) |
+| History | `history.go` | Легка історія (auto-cleanup 2 дні), short restore entries, worker snapshots |
 | Full History | `full_history.go` | Детальна історія з оригінальним/обробленим текстом |
 | Production Stats | `production_stats.go` | Щоденна статистика виробництва |
 | Updater | `updater.go` | Автооновлення (download + apply) |
@@ -241,7 +241,9 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 ```
 Віддалений сервер (Railway)
   → App.pollTask() кожні 15с
-    → claim task → executeRemoteTask()
+    → claim task → відновлення folderName/subName + запис short history snapshot
+    → подія "remoteTaskClaimed" → Frontend worker queue
+    → executeRemoteTask()
       → PipelineService.ProcessTask()
       → sendTaskResult() → сервер
 ```

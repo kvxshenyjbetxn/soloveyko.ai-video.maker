@@ -10,12 +10,14 @@ import (
 )
 
 type HistoryEntry struct {
-	ID        string   `json:"id"`
-	TaskName  string   `json:"taskName"`
-	Type      string   `json:"type"`
-	Templates []string `json:"templates"`
-	Content   string   `json:"content"`
-	Timestamp string   `json:"timestamp"` // RFC3339 string
+	ID               string                 `json:"id"`
+	TaskName         string                 `json:"taskName"`
+	Type             string                 `json:"type"`
+	Templates        []string               `json:"templates"`
+	Content          string                 `json:"content"`
+	SubName          string                 `json:"subName,omitempty"`
+	SettingsSnapshot map[string]interface{} `json:"settingsSnapshot,omitempty"`
+	Timestamp        string                 `json:"timestamp"` // RFC3339 string
 }
 
 type HistoryService struct {
@@ -80,6 +82,11 @@ func (s *HistoryService) SaveHistory(history []HistoryEntry) error {
 
 // AddEntry додає новий запис до історії та виконує очистку застарілих записів
 func (s *HistoryService) AddEntry(name string, taskType string, templates []string, content string) error {
+	return s.AddEntryDetailed(name, taskType, templates, content, "", nil)
+}
+
+// AddEntryDetailed adds a history entry with optional sub-name and exact settings snapshot.
+func (s *HistoryService) AddEntryDetailed(name string, taskType string, templates []string, content string, subName string, settingsSnapshot map[string]interface{}) error {
 	history, err := s.LoadHistory()
 	if err != nil {
 		// Якщо не вдалося завантажити, починаємо з порожньої історії
@@ -87,12 +94,14 @@ func (s *HistoryService) AddEntry(name string, taskType string, templates []stri
 	}
 
 	entry := HistoryEntry{
-		ID:        time.Now().Format("20060102150405"),
-		TaskName:  name,
-		Type:      taskType,
-		Templates: templates,
-		Content:   content,
-		Timestamp: time.Now().Format(time.RFC3339),
+		ID:               time.Now().Format("20060102150405"),
+		TaskName:         name,
+		Type:             taskType,
+		Templates:        templates,
+		Content:          content,
+		SubName:          subName,
+		SettingsSnapshot: cloneHistorySettingsSnapshot(settingsSnapshot),
+		Timestamp:        time.Now().Format(time.RFC3339),
 	}
 
 	history = append(history, entry)
@@ -101,6 +110,24 @@ func (s *HistoryService) AddEntry(name string, taskType string, templates []stri
 	history = s.Cleanup(history)
 
 	return s.SaveHistory(history)
+}
+
+func cloneHistorySettingsSnapshot(settingsSnapshot map[string]interface{}) map[string]interface{} {
+	if len(settingsSnapshot) == 0 {
+		return nil
+	}
+
+	data, err := json.Marshal(settingsSnapshot)
+	if err != nil {
+		return nil
+	}
+
+	var cloned map[string]interface{}
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return nil
+	}
+
+	return cloned
 }
 
 // Cleanup видаляє записи старші за 2 дні
