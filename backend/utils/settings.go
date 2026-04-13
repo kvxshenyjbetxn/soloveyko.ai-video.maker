@@ -58,66 +58,66 @@ type CustomStage struct {
 }
 
 type PipelineSettings struct {
-	TranslateModel                string  `json:"translateModel,omitempty"`
-	TranslatePrompt               string  `json:"translatePrompt,omitempty"`
-	TranslateTemperature          float64 `json:"translateTemperature,omitempty"`
-	TranslateMaxTokens            int     `json:"translateMaxTokens,omitempty"`
-	TranslateCollapsed            bool    `json:"translateCollapsed"`
-	TranslateOpenRouterKeyID      string  `json:"translateOpenRouterKeyID,omitempty"`
-	TranslateElevenLabsBotKeyID   string  `json:"translateElevenLabsBotKeyID,omitempty"`
-	TranslateElevenLabsBotVoiceUUID  string  `json:"translateElevenLabsBotVoiceUUID,omitempty"`
-	RewriteModel                  string  `json:"rewriteModel,omitempty"`
-	RewritePrompt                 string  `json:"rewritePrompt,omitempty"`
-	RewriteTemperature            float64 `json:"rewriteTemperature,omitempty"`
-	RewriteMaxTokens              int     `json:"rewriteMaxTokens,omitempty"`
-	RewriteCollapsed              bool    `json:"rewriteCollapsed"`
-	RewriteOpenRouterKeyID        string  `json:"rewriteOpenRouterKeyID,omitempty"`
-	RewriteElevenLabsBotKeyID     string  `json:"rewriteElevenLabsBotKeyID,omitempty"`
-	RewriteElevenLabsBotVoiceUUID    string  `json:"rewriteElevenLabsBotVoiceUUID,omitempty"`
-	SidebarWidth                  int     `json:"sidebarWidth,omitempty"`
-	TranslateEnabled              bool    `json:"translateEnabled"`
-	RewriteEnabled                bool    `json:"rewriteEnabled"`
-	ApiCollapsed                  bool    `json:"apiCollapsed"`
-	TranslateOutputPath           string  `json:"translateOutputPath,omitempty"`
-	RewriteOutputPath             string  `json:"rewriteOutputPath,omitempty"`
-	PathCollapsed                 bool    `json:"pathCollapsed"`
-	TranslatePipelineName         string  `json:"translatePipelineName,omitempty"`
-	RewritePipelineName           string  `json:"rewritePipelineName,omitempty"`
-	TemplatesCollapsed            bool    `json:"templatesCollapsed"`
-	TranslateTemplatesCollapsed   bool    `json:"translateTemplatesCollapsed"`
-	RewriteTemplatesCollapsed     bool    `json:"rewriteTemplatesCollapsed"`
-	VoiceoverElevenLabsBotKeyID   string  `json:"voiceoverElevenLabsBotKeyID,omitempty"`
-	VoiceoverCollapsed            bool    `json:"voiceoverCollapsed"`
-	VoiceoverEnabled              bool    `json:"voiceoverEnabled"`
-	VoiceoverPipelineName         string  `json:"voiceoverPipelineName,omitempty"`
-	VoiceoverTemplatesCollapsed   bool    `json:"voiceoverTemplatesCollapsed"`
-	VoiceoverService              string  `json:"voiceoverService,omitempty"`
-	VoiceoverTemplate             string  `json:"voiceoverTemplate,omitempty"`
-	VoiceoverVoiceMakerKeyID      string  `json:"voiceoverVoiceMakerKeyID,omitempty"`
-	VoiceMakerVoiceID             string  `json:"voiceMakerVoiceID,omitempty"`
-	VoiceMakerLanguageCode        string  `json:"voiceMakerLanguageCode,omitempty"`
-	VoiceMakerCharLimit           int     `json:"voiceMakerCharLimit,omitempty"`
-	ElevenLabsUnlimVoiceID        string  `json:"elevenLabsUnlimVoiceID,omitempty"`
-	ElevenLabsUnlimStability      float64 `json:"elevenLabsUnlimStability,omitempty"`
-	ElevenLabsUnlimSimilarity     float64 `json:"elevenLabsUnlimSimilarity,omitempty"`
-	ElevenLabsUnlimStyle          float64 `json:"elevenLabsUnlimStyle,omitempty"`
-	ElevenLabsUnlimSpeakerBoost   bool    `json:"elevenLabsUnlimSpeakerBoost,omitempty"`
-	VoiceoverElevenLabsUnlimKeyID string  `json:"voiceoverElevenLabsUnlimKeyID,omitempty"`
-	VoiceoverElevenLabsUAKeyID    string  `json:"voiceoverElevenLabsUAKeyID,omitempty"`
-	ElevenLabsUAVoiceID           string  `json:"elevenLabsUAVoiceID,omitempty"`
-	ElevenLabsUAStability         float64 `json:"elevenLabsUAStability,omitempty"`
-	ElevenLabsUASimilarity        float64 `json:"elevenLabsUASimilarity,omitempty"`
-	ElevenLabsUAStyle             float64 `json:"elevenLabsUAStyle,omitempty"`
-	ElevenLabsUASpeakerBoost      bool    `json:"elevenLabsUASpeakerBoost,omitempty"`
-	ElevenLabsUAModel             string  `json:"elevenLabsUAModel,omitempty"`
-	EdgeTTSVoiceID                string  `json:"edgeTTSVoiceID,omitempty"`
-	EdgeTTSRate                   string  `json:"edgeTTSRate,omitempty"`
-	EdgeTTSPitch                  string  `json:"edgeTTSPitch,omitempty"`
-	EdgeTTSVolume                 string  `json:"edgeTTSVolume,omitempty"`
-	TranslateControlEnabled       bool    `json:"translateControlEnabled"`
-	ImageControlEnabled           bool    `json:"imageControlEnabled"`
-	MontageControlEnabled         bool    `json:"montageControlEnabled"`
-	ControlCollapsed              bool    `json:"controlCollapsed"`
+	TranslateModel                  string  `json:"translateModel,omitempty"`
+	TranslatePrompt                 string  `json:"translatePrompt,omitempty"`
+	TranslateTemperature            float64 `json:"translateTemperature,omitempty"`
+	TranslateMaxTokens              int     `json:"translateMaxTokens,omitempty"`
+	TranslateCollapsed              bool    `json:"translateCollapsed"`
+	TranslateOpenRouterKeyID        string  `json:"translateOpenRouterKeyID,omitempty"`
+	TranslateElevenLabsBotKeyID     string  `json:"translateElevenLabsBotKeyID,omitempty"`
+	TranslateElevenLabsBotVoiceUUID string  `json:"translateElevenLabsBotVoiceUUID,omitempty"`
+	RewriteModel                    string  `json:"rewriteModel,omitempty"`
+	RewritePrompt                   string  `json:"rewritePrompt,omitempty"`
+	RewriteTemperature              float64 `json:"rewriteTemperature,omitempty"`
+	RewriteMaxTokens                int     `json:"rewriteMaxTokens,omitempty"`
+	RewriteCollapsed                bool    `json:"rewriteCollapsed"`
+	RewriteOpenRouterKeyID          string  `json:"rewriteOpenRouterKeyID,omitempty"`
+	RewriteElevenLabsBotKeyID       string  `json:"rewriteElevenLabsBotKeyID,omitempty"`
+	RewriteElevenLabsBotVoiceUUID   string  `json:"rewriteElevenLabsBotVoiceUUID,omitempty"`
+	SidebarWidth                    int     `json:"sidebarWidth,omitempty"`
+	TranslateEnabled                bool    `json:"translateEnabled"`
+	RewriteEnabled                  bool    `json:"rewriteEnabled"`
+	ApiCollapsed                    bool    `json:"apiCollapsed"`
+	TranslateOutputPath             string  `json:"translateOutputPath,omitempty"`
+	RewriteOutputPath               string  `json:"rewriteOutputPath,omitempty"`
+	PathCollapsed                   bool    `json:"pathCollapsed"`
+	TranslatePipelineName           string  `json:"translatePipelineName,omitempty"`
+	RewritePipelineName             string  `json:"rewritePipelineName,omitempty"`
+	TemplatesCollapsed              bool    `json:"templatesCollapsed"`
+	TranslateTemplatesCollapsed     bool    `json:"translateTemplatesCollapsed"`
+	RewriteTemplatesCollapsed       bool    `json:"rewriteTemplatesCollapsed"`
+	VoiceoverElevenLabsBotKeyID     string  `json:"voiceoverElevenLabsBotKeyID,omitempty"`
+	VoiceoverCollapsed              bool    `json:"voiceoverCollapsed"`
+	VoiceoverEnabled                bool    `json:"voiceoverEnabled"`
+	VoiceoverPipelineName           string  `json:"voiceoverPipelineName,omitempty"`
+	VoiceoverTemplatesCollapsed     bool    `json:"voiceoverTemplatesCollapsed"`
+	VoiceoverService                string  `json:"voiceoverService,omitempty"`
+	VoiceoverTemplate               string  `json:"voiceoverTemplate,omitempty"`
+	VoiceoverVoiceMakerKeyID        string  `json:"voiceoverVoiceMakerKeyID,omitempty"`
+	VoiceMakerVoiceID               string  `json:"voiceMakerVoiceID,omitempty"`
+	VoiceMakerLanguageCode          string  `json:"voiceMakerLanguageCode,omitempty"`
+	VoiceMakerCharLimit             int     `json:"voiceMakerCharLimit,omitempty"`
+	ElevenLabsUnlimVoiceID          string  `json:"elevenLabsUnlimVoiceID,omitempty"`
+	ElevenLabsUnlimStability        float64 `json:"elevenLabsUnlimStability,omitempty"`
+	ElevenLabsUnlimSimilarity       float64 `json:"elevenLabsUnlimSimilarity,omitempty"`
+	ElevenLabsUnlimStyle            float64 `json:"elevenLabsUnlimStyle,omitempty"`
+	ElevenLabsUnlimSpeakerBoost     bool    `json:"elevenLabsUnlimSpeakerBoost,omitempty"`
+	VoiceoverElevenLabsUnlimKeyID   string  `json:"voiceoverElevenLabsUnlimKeyID,omitempty"`
+	VoiceoverElevenLabsUAKeyID      string  `json:"voiceoverElevenLabsUAKeyID,omitempty"`
+	ElevenLabsUAVoiceID             string  `json:"elevenLabsUAVoiceID,omitempty"`
+	ElevenLabsUAStability           float64 `json:"elevenLabsUAStability,omitempty"`
+	ElevenLabsUASimilarity          float64 `json:"elevenLabsUASimilarity,omitempty"`
+	ElevenLabsUAStyle               float64 `json:"elevenLabsUAStyle,omitempty"`
+	ElevenLabsUASpeakerBoost        bool    `json:"elevenLabsUASpeakerBoost,omitempty"`
+	ElevenLabsUAModel               string  `json:"elevenLabsUAModel,omitempty"`
+	EdgeTTSVoiceID                  string  `json:"edgeTTSVoiceID,omitempty"`
+	EdgeTTSRate                     string  `json:"edgeTTSRate,omitempty"`
+	EdgeTTSPitch                    string  `json:"edgeTTSPitch,omitempty"`
+	EdgeTTSVolume                   string  `json:"edgeTTSVolume,omitempty"`
+	TranslateControlEnabled         bool    `json:"translateControlEnabled"`
+	ImageControlEnabled             bool    `json:"imageControlEnabled"`
+	MontageControlEnabled           bool    `json:"montageControlEnabled"`
+	ControlCollapsed                bool    `json:"controlCollapsed"`
 
 	// Subtitle settings
 	SubtitleEnabled          bool    `json:"subtitleEnabled"`
@@ -153,7 +153,7 @@ type PipelineSettings struct {
 	SubtitlePlayResY         int     `json:"subtitlePlayResY,omitempty"`
 	SubtitleThreads          int     `json:"subtitleThreads,omitempty"`
 	SubtitleAmdThreads       int     `json:"subtitleAmdThreads,omitempty"`
-	SubtitleWhisperXThreads   int     `json:"subtitleWhisperXThreads,omitempty"`
+	SubtitleWhisperXThreads  int     `json:"subtitleWhisperXThreads,omitempty"`
 
 	// Image settings
 	ImageEnabled                   bool    `json:"imageEnabled"`
@@ -202,40 +202,40 @@ type PipelineSettings struct {
 
 	OutputPath string `json:"outputPath,omitempty"`
 
-	MontageEnabled                bool             `json:"montageEnabled"`
-	MontageCollapsed              bool             `json:"montageCollapsed"`
-	MontageSwayFactor             float64          `json:"montageSwayFactor"`
-	MontageTransitionDuration     float64          `json:"montageTransitionDuration"`
-	MontageTransitionEffect       string           `json:"montageTransitionEffect"`
-	MontageZoomFactor             float64          `json:"montageZoomFactor"`
-	MontageEncodingPreset         string           `json:"montageEncodingPreset"`
-	MontageBitrate                int              `json:"montageBitrate"`
-	MontageResolution             string           `json:"montageResolution"`
-	MontageFPS                    int              `json:"montageFPS"`
-	MontageUpscaleFactor          float64          `json:"montageUpscaleFactor"`
-	MontageVideoCodec             string           `json:"montageVideoCodec"`
-	MontageThreadsPerProcess      int              `json:"montageThreadsPerProcess"`
-	MontageProcessPriority        string           `json:"montageProcessPriority"`
-	MontageCPUCores               int              `json:"montageCPUCores"`
-	MontageIntroVideoEnabled      bool             `json:"montageIntroVideoEnabled"`
-	MontageIntroVideoPath         string           `json:"montageIntroVideoPath,omitempty"`
-	MontageIntroVideoPaths        []string         `json:"montageIntroVideoPaths,omitempty"`
-	MontageWatermarkEnabled       bool             `json:"montageWatermarkEnabled"`
-	MontageWatermarkPath          string           `json:"montageWatermarkPath,omitempty"`
-	MontageWatermarkPosition      string           `json:"montageWatermarkPosition"` // top-left, top-right, bottom-left, bottom-right, center
-	MontageWatermarkOpacity       float64          `json:"montageWatermarkOpacity"`
-	MontageWatermarkSize          int              `json:"montageWatermarkSize"` // percentage of width
-	MontageWatermarkOnIntro       bool             `json:"montageWatermarkOnIntro"`
-	MontageVideoWatermarkEnabled  bool             `json:"montageVideoWatermarkEnabled"`
-	MontageVideoWatermarkPath     string           `json:"montageVideoWatermarkPath,omitempty"`
-	MontageVideoWatermarkPaths    []string         `json:"montageVideoWatermarkPaths,omitempty"`
-	MontageVideoWatermarkPosition string           `json:"montageVideoWatermarkPosition"`
-	MontageVideoWatermarkSize     int              `json:"montageVideoWatermarkSize"`
-	MontageVideoWatermarkRounding int              `json:"montageVideoWatermarkRounding"`
-	MontageOverlayEnabled         bool             `json:"montageOverlayEnabled"`
-	MontageOverlayPath            string           `json:"montageOverlayPath,omitempty"`
-	MontageOverlayOnIntro         bool             `json:"montageOverlayOnIntro"`
-	MontageOverlayTriggersEnabled bool             `json:"montageOverlayTriggersEnabled"`
+	MontageEnabled                bool               `json:"montageEnabled"`
+	MontageCollapsed              bool               `json:"montageCollapsed"`
+	MontageSwayFactor             float64            `json:"montageSwayFactor"`
+	MontageTransitionDuration     float64            `json:"montageTransitionDuration"`
+	MontageTransitionEffect       string             `json:"montageTransitionEffect"`
+	MontageZoomFactor             float64            `json:"montageZoomFactor"`
+	MontageEncodingPreset         string             `json:"montageEncodingPreset"`
+	MontageBitrate                int                `json:"montageBitrate"`
+	MontageResolution             string             `json:"montageResolution"`
+	MontageFPS                    int                `json:"montageFPS"`
+	MontageUpscaleFactor          float64            `json:"montageUpscaleFactor"`
+	MontageVideoCodec             string             `json:"montageVideoCodec"`
+	MontageThreadsPerProcess      int                `json:"montageThreadsPerProcess"`
+	MontageProcessPriority        string             `json:"montageProcessPriority"`
+	MontageCPUCores               int                `json:"montageCPUCores"`
+	MontageIntroVideoEnabled      bool               `json:"montageIntroVideoEnabled"`
+	MontageIntroVideoPath         string             `json:"montageIntroVideoPath,omitempty"`
+	MontageIntroVideoPaths        []string           `json:"montageIntroVideoPaths,omitempty"`
+	MontageWatermarkEnabled       bool               `json:"montageWatermarkEnabled"`
+	MontageWatermarkPath          string             `json:"montageWatermarkPath,omitempty"`
+	MontageWatermarkPosition      string             `json:"montageWatermarkPosition"` // top-left, top-right, bottom-left, bottom-right, center
+	MontageWatermarkOpacity       float64            `json:"montageWatermarkOpacity"`
+	MontageWatermarkSize          int                `json:"montageWatermarkSize"` // percentage of width
+	MontageWatermarkOnIntro       bool               `json:"montageWatermarkOnIntro"`
+	MontageVideoWatermarkEnabled  bool               `json:"montageVideoWatermarkEnabled"`
+	MontageVideoWatermarkPath     string             `json:"montageVideoWatermarkPath,omitempty"`
+	MontageVideoWatermarkPaths    []string           `json:"montageVideoWatermarkPaths,omitempty"`
+	MontageVideoWatermarkPosition string             `json:"montageVideoWatermarkPosition"`
+	MontageVideoWatermarkSize     int                `json:"montageVideoWatermarkSize"`
+	MontageVideoWatermarkRounding int                `json:"montageVideoWatermarkRounding"`
+	MontageOverlayEnabled         bool               `json:"montageOverlayEnabled"`
+	MontageOverlayPath            string             `json:"montageOverlayPath,omitempty"`
+	MontageOverlayOnIntro         bool               `json:"montageOverlayOnIntro"`
+	MontageOverlayTriggersEnabled bool               `json:"montageOverlayTriggersEnabled"`
 	MontageOverlayTriggers        []OverlayTrigger   `json:"montageOverlayTriggers,omitempty"`
 	MontageWatermarks             []OverlayWatermark `json:"montageWatermarks,omitempty"`
 	MontageExtraTracks            []OverlayTrack     `json:"montageExtraTracks,omitempty"`
@@ -257,9 +257,9 @@ func (p *PipelineSettings) SyncFromMap(settings map[string]interface{}) {
 	// ЦЕЙ МЕТОД Є КРИТИЧНИМ ДЛЯ ПРІОРИТЕТИЗАЦІЇ НАЛАШТУВАНЬ ШАБЛОНІВ.
 	// ПРИМУСОВО ОНОВЛЮЄ СТРУКТУРУ PipelineSettings ДАНИМИ З КАРТИ (MAP) ЗАВДАННЯ.
 	// ЦЕ ЗАПОБІГАЄ "ПРОТІКАННЮ" ПАРАМЕТРІВ З ПАНЕЛІ ПАЙПЛАЙНУ (PIPELINE PANEL).
-	
+
 	// Використовуємо json маршалінг для безпечного та автоматичного мапінгу ключів
-	// з карти налаштувань у структуру PipelineSettings. 
+	// з карти налаштувань у структуру PipelineSettings.
 	// Це гарантує, що кожне поле, яке є в шаблоні/завданні, замінить автоматичне значення.
 	jsonData, _ := json.Marshal(settings)
 	json.Unmarshal(jsonData, p)
@@ -285,58 +285,59 @@ type GoogleSheetConfig struct {
 }
 
 type Settings struct {
-	Language                      string                 `json:"language"`
-	Theme                         string                 `json:"theme"`
-	AccentColor                   string                 `json:"accentColor"`
-	OpenRouterAPIKey              string                 `json:"openRouterAPIKey"`
-	OpenRouterKeys                []NamedAPIKey          `json:"openRouterKeys"`
-	OpenRouterModels              []string               `json:"openRouterModels"`
-	PollinationsAPIKey            string                 `json:"pollinationsAPIKey"`
-	PollinationsKeys              []NamedAPIKey          `json:"pollinationsKeys"`
-	PollinationsModels            []string               `json:"pollinationsModels"`
-	ElevenLabsBotAPIKey           string                 `json:"elevenLabsBotAPIKey"`
-	ElevenLabsBotKeys             []NamedAPIKey          `json:"elevenLabsBotKeys"`
-	ElevenLabsUnlimAPIKey         string                 `json:"elevenLabsUnlimAPIKey"`
-	ElevenLabsUnlimKeys           []NamedAPIKey          `json:"elevenLabsUnlimKeys"`
-	ElevenLabsUAKeys              []NamedAPIKey          `json:"elevenLabsUAKeys"`
-	VoiceMakerAPIKey              string                 `json:"voiceMakerAPIKey"`
-	VoiceMakerKeys                []NamedAPIKey          `json:"voiceMakerKeys"`
-	VoiceMakerBalance             float64                `json:"voiceMakerBalance"`
-	GooglerAPIKey                 string                 `json:"googlerAPIKey"`
-	ElevenLabsImageAPIKey         string                 `json:"elevenLabsImageAPIKey"`
-	ElevenLabsUAAPIKey            string                 `json:"elevenLabsUAAPIKey"`
-	AssemblyAIAPIKey              string                 `json:"assemblyAIAPIKey"`
-	OpenRouterMaxConnections      int                    `json:"openRouterMaxConnections"`
-	GooglerMaxImageConnections    int                    `json:"googlerMaxImageConnections"`
-	GooglerMaxVideoConnections    int                    `json:"googlerMaxVideoConnections"`
-	ElevenLabsBotAlertThreshold   float64                `json:"elevenLabsBotAlertThreshold"`
-	ElevenLabsUnlimAlertThreshold float64                `json:"elevenLabsUnlimAlertThreshold"`
-	ElevenLabsUAAlertThreshold    float64                `json:"elevenLabsUAAlertThreshold"`
-	VoiceMakerAlertThreshold      float64                `json:"voiceMakerAlertThreshold"`
-	OpenRouterAlertThreshold      float64                `json:"openRouterAlertThreshold"`
-	GooglerVideoAlertThreshold    float64                `json:"googlerVideoAlertThreshold"`
-	GooglerImageAlertThreshold    float64                `json:"googlerImageAlertThreshold"`
-	ElevenLabsImageKeys           []NamedAPIKey          `json:"elevenLabsImageKeys"`
-	ElevenLabsImageMaxConnections int                    `json:"elevenLabsImageMaxConnections"`
+	Language                       string                 `json:"language"`
+	Theme                          string                 `json:"theme"`
+	AccentColor                    string                 `json:"accentColor"`
+	OpenRouterAPIKey               string                 `json:"openRouterAPIKey"`
+	OpenRouterKeys                 []NamedAPIKey          `json:"openRouterKeys"`
+	OpenRouterModels               []string               `json:"openRouterModels"`
+	PollinationsAPIKey             string                 `json:"pollinationsAPIKey"`
+	PollinationsKeys               []NamedAPIKey          `json:"pollinationsKeys"`
+	PollinationsModels             []string               `json:"pollinationsModels"`
+	ElevenLabsBotAPIKey            string                 `json:"elevenLabsBotAPIKey"`
+	ElevenLabsBotKeys              []NamedAPIKey          `json:"elevenLabsBotKeys"`
+	ElevenLabsUnlimAPIKey          string                 `json:"elevenLabsUnlimAPIKey"`
+	ElevenLabsUnlimKeys            []NamedAPIKey          `json:"elevenLabsUnlimKeys"`
+	ElevenLabsUAKeys               []NamedAPIKey          `json:"elevenLabsUAKeys"`
+	VoiceMakerAPIKey               string                 `json:"voiceMakerAPIKey"`
+	VoiceMakerKeys                 []NamedAPIKey          `json:"voiceMakerKeys"`
+	VoiceMakerBalance              float64                `json:"voiceMakerBalance"`
+	GooglerAPIKey                  string                 `json:"googlerAPIKey"`
+	ElevenLabsImageAPIKey          string                 `json:"elevenLabsImageAPIKey"`
+	ElevenLabsUAAPIKey             string                 `json:"elevenLabsUAAPIKey"`
+	AssemblyAIAPIKey               string                 `json:"assemblyAIAPIKey"`
+	OpenRouterMaxConnections       int                    `json:"openRouterMaxConnections"`
+	GooglerMaxImageConnections     int                    `json:"googlerMaxImageConnections"`
+	GooglerMaxVideoConnections     int                    `json:"googlerMaxVideoConnections"`
+	ElevenLabsBotAlertThreshold    float64                `json:"elevenLabsBotAlertThreshold"`
+	ElevenLabsUnlimAlertThreshold  float64                `json:"elevenLabsUnlimAlertThreshold"`
+	ElevenLabsUAAlertThreshold     float64                `json:"elevenLabsUAAlertThreshold"`
+	VoiceMakerAlertThreshold       float64                `json:"voiceMakerAlertThreshold"`
+	OpenRouterAlertThreshold       float64                `json:"openRouterAlertThreshold"`
+	GooglerVideoAlertThreshold     float64                `json:"googlerVideoAlertThreshold"`
+	GooglerImageAlertThreshold     float64                `json:"googlerImageAlertThreshold"`
+	ElevenLabsImageKeys            []NamedAPIKey          `json:"elevenLabsImageKeys"`
+	ElevenLabsImageMaxConnections  int                    `json:"elevenLabsImageMaxConnections"`
 	SubtitleMaxConnections         int                    `json:"subtitleMaxConnections"`
 	SubtitleAmdMaxConnections      int                    `json:"subtitleAmdMaxConnections"`
 	SubtitleWhisperXMaxConnections int                    `json:"subtitleWhisperXMaxConnections"`
 	MontageMaxConnections          int                    `json:"montageMaxConnections"`
-	MontageMode                   string                 `json:"montageMode"`
-	Pipeline                      PipelineSettings       `json:"pipeline"`
-	GoogleSheetURL                string                 `json:"googleSheetURL"`
-	GoogleFilter                  string                 `json:"googleFilter"`
-	GoogleMonitorMappings         []GoogleMonitorMapping `json:"googleMonitorMappings"`
-	GoogleMonitorDisplayColumns   []string               `json:"googleMonitorDisplayColumns"`
-	GoogleMonitorTaskNameColumn   string                 `json:"googleMonitorTaskNameColumn"`
-	GoogleSheets                  []GoogleSheetConfig    `json:"googleSheets"`
-	AppAccessKey                  string                 `json:"appAccessKey"`
-	TelegramNotificationsEnabled  bool                   `json:"telegramNotificationsEnabled"`
-	TelegramChatID                string                 `json:"telegramChatID"`
-	SystemNotificationsEnabled    bool                   `json:"systemNotificationsEnabled"`
-	FirstRun                      bool                   `json:"firstRun"`
-	ShowWelcome                   bool                   `json:"showWelcome"`
-	WorkerModeEnabled             bool                   `json:"workerModeEnabled"`
+	MontageMode                    string                 `json:"montageMode"`
+	Pipeline                       PipelineSettings       `json:"pipeline"`
+	GoogleSheetURL                 string                 `json:"googleSheetURL"`
+	GoogleFilter                   string                 `json:"googleFilter"`
+	GoogleMonitorMappings          []GoogleMonitorMapping `json:"googleMonitorMappings"`
+	GoogleMonitorDisplayColumns    []string               `json:"googleMonitorDisplayColumns"`
+	GoogleMonitorTaskNameColumn    string                 `json:"googleMonitorTaskNameColumn"`
+	GoogleSheets                   []GoogleSheetConfig    `json:"googleSheets"`
+	AppAccessKey                   string                 `json:"appAccessKey"`
+	TelegramNotificationsEnabled   bool                   `json:"telegramNotificationsEnabled"`
+	TelegramChatID                 string                 `json:"telegramChatID"`
+	SystemNotificationsEnabled     bool                   `json:"systemNotificationsEnabled"`
+	FirstRun                       bool                   `json:"firstRun"`
+	ShowWelcome                    bool                   `json:"showWelcome"`
+	WorkerModeEnabled              bool                   `json:"workerModeEnabled"`
+	MCPAutoForwardEnabled          bool                   `json:"mcpAutoForwardEnabled"`
 }
 
 type SettingsService struct {
@@ -422,35 +423,35 @@ Don't write anything unnecessary! Write the translation text right away! Don't w
 
 story:
 `,
-				TranslateTemperature:    1.0,
-				TranslateEnabled:        true,
-				TranslateCollapsed:      true,
-				RewriteModel:            "google/gemini-2.5-flash",
-				RewriteTemperature:      1.0,
-				RewriteEnabled:          true,
-				RewriteCollapsed:        true,
-				ApiCollapsed:            true,
-				PathCollapsed:           true,
-				TemplatesCollapsed:      true,
+				TranslateTemperature:        1.0,
+				TranslateEnabled:            true,
+				TranslateCollapsed:          true,
+				RewriteModel:                "google/gemini-2.5-flash",
+				RewriteTemperature:          1.0,
+				RewriteEnabled:              true,
+				RewriteCollapsed:            true,
+				ApiCollapsed:                true,
+				PathCollapsed:               true,
+				TemplatesCollapsed:          true,
 				TranslateTemplatesCollapsed: true,
-				RewriteTemplatesCollapsed: true,
+				RewriteTemplatesCollapsed:   true,
 				VoiceoverTemplatesCollapsed: true,
-				ControlCollapsed:        true,
-				SubtitleCollapsed:       true,
-				ImageTemplatesCollapsed: true,
-				ImageCollapsed:          true,
-				CustomStagesCollapsed:   true,
-				SubtitleKaraokeEffect:   false,
-				SubtitleKaraokeSpeed:    100,
-				ImageEnabled:            true,
-				ImageSyncEnabled:        true,
-				ImageGenerationMethod:   "sentences",
-				ImageGroupSentences:     false,
-				ImageMode:               "normal",
-				ImageDetermineCharacters: false,
-				ImageModel:              "zimage",
-				ImageNoLogo:             true,
-				ImagePromptTemperature:  1.0,
+				ControlCollapsed:            true,
+				SubtitleCollapsed:           true,
+				ImageTemplatesCollapsed:     true,
+				ImageCollapsed:              true,
+				CustomStagesCollapsed:       true,
+				SubtitleKaraokeEffect:       false,
+				SubtitleKaraokeSpeed:        100,
+				ImageEnabled:                true,
+				ImageSyncEnabled:            true,
+				ImageGenerationMethod:       "sentences",
+				ImageGroupSentences:         false,
+				ImageMode:                   "normal",
+				ImageDetermineCharacters:    false,
+				ImageModel:                  "zimage",
+				ImageNoLogo:                 true,
+				ImagePromptTemperature:      1.0,
 				ImagePrompt: `Role: You are an expert AI Cinematographer and Prompt Engineer specializing in ultra-realistic photography for continuous storytelling pipelines. 
 Task: Convert the provided story excerpt into a single, highly detailed image generation prompt in English. The prompt must strictly reflect the current action while maintaining visual continuity with the characters and previous context.
 
@@ -468,35 +469,35 @@ Output Format: Respond ONLY with the raw image generation prompt in English. No 
 
 Prompt Structure:
 Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (performing ONE realistic action OR a neutral/passive pose if text is a Call-to-Action), (Detailed Environment perfectly matching Previous Context), (Lighting/Atmosphere), shot on 35mm lens, realistic textures, natural lighting, strictly grounded in reality, completely textless, 8k raw photo.`,
-				VoiceoverEnabled:        true,
-				VoiceoverService:        "edgetts",
-				EdgeTTSVoiceID:          "uk-UA-OstapNeural",
-				VoiceoverCollapsed:      true,
-				SubtitleEnabled:         true,
-				SubtitleMaxLen:          40,
-				SubtitleMaxWords:        10,
-				SubtitleColor:           "#ffffff",
-				SubtitleSize:            70,
-				SubtitleFont:            "Impact",
-				SubtitleOutlineColor:    "#000000",
-				SubtitleOutlineWidth:    2.0,
-				SubtitleShadowColor:     "#000000",
-				SubtitleShadowWidth:     1.0,
-				SubtitleBlur:            0.0,
-				SubtitleFadeEnabled:     true,
-				SubtitleFadeIn:          150,
-				SubtitleFadeOut:         150,
-				SidebarWidth:            320,
-				MontageEnabled:          true,
-				MontageCollapsed:        true,
-				MontageSwayFactor:       1.0,
-				MontageZoomFactor:       1.0,
-				ImageMemoryType:         "primitive",
-				ImageMemoryChars:        1000,
-				TranslateControlEnabled: true,
-				ImageControlEnabled:     true,
-				MontageControlEnabled:   true,
-				MontageIntroFadeDuration: 0.5,
+				VoiceoverEnabled:              true,
+				VoiceoverService:              "edgetts",
+				EdgeTTSVoiceID:                "uk-UA-OstapNeural",
+				VoiceoverCollapsed:            true,
+				SubtitleEnabled:               true,
+				SubtitleMaxLen:                40,
+				SubtitleMaxWords:              10,
+				SubtitleColor:                 "#ffffff",
+				SubtitleSize:                  70,
+				SubtitleFont:                  "Impact",
+				SubtitleOutlineColor:          "#000000",
+				SubtitleOutlineWidth:          2.0,
+				SubtitleShadowColor:           "#000000",
+				SubtitleShadowWidth:           1.0,
+				SubtitleBlur:                  0.0,
+				SubtitleFadeEnabled:           true,
+				SubtitleFadeIn:                150,
+				SubtitleFadeOut:               150,
+				SidebarWidth:                  320,
+				MontageEnabled:                true,
+				MontageCollapsed:              true,
+				MontageSwayFactor:             1.0,
+				MontageZoomFactor:             1.0,
+				ImageMemoryType:               "primitive",
+				ImageMemoryChars:              1000,
+				TranslateControlEnabled:       true,
+				ImageControlEnabled:           true,
+				MontageControlEnabled:         true,
+				MontageIntroFadeDuration:      0.5,
 				MontageVideoWatermarkPosition: "bottom-right",
 				MontageVideoWatermarkSize:     15,
 				MontageVideoWatermarkRounding: 10,
@@ -1954,6 +1955,7 @@ func (s *SettingsService) SetGoogleSheets(sheets []GoogleSheetConfig) error {
 	settings.GoogleSheets = sheets
 	return s.SaveSettings(settings)
 }
+
 // GetWorkerModeEnabled повертає чи увімкнено режим воркера
 func (s *SettingsService) GetWorkerModeEnabled() bool {
 	settings, err := s.LoadSettings()
@@ -1970,5 +1972,24 @@ func (s *SettingsService) SetWorkerModeEnabled(enabled bool) error {
 		return err
 	}
 	settings.WorkerModeEnabled = enabled
+	return s.SaveSettings(settings)
+}
+
+// GetMCPAutoForwardEnabled повертає чи увімкнений автозапуск MCP forward bat
+func (s *SettingsService) GetMCPAutoForwardEnabled() bool {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return false
+	}
+	return settings.MCPAutoForwardEnabled
+}
+
+// SetMCPAutoForwardEnabled зберігає стан автозапуску MCP forward bat
+func (s *SettingsService) SetMCPAutoForwardEnabled(enabled bool) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.MCPAutoForwardEnabled = enabled
 	return s.SaveSettings(settings)
 }

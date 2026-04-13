@@ -49,6 +49,13 @@
 - `pipeline` — `*pipeline.PipelineService` — пайплайн обробки
 - `openRouter`, `elevenLabs`, `pollinations`, ... — API-клієнти
 - `mcpController` — `*mcpserver.Server` — MCP сервер для агентів
+- `mcpForwardMu` / `mcpForwardCmd` — життєвий цикл прихованого SSH reverse tunnel для доступу до MCP з VPS
+
+**Окремий MCP tunnel lifecycle**:
+- На Windows `startup()` може автоматично запускати `startVPS.bat`, якщо в налаштуваннях увімкнено `MCPAutoForwardEnabled`
+- Скрипт піднімає `ssh -R 127.0.0.1:39245:127.0.0.1:39245`, щоб VPS-агент бачив локальний MCP як `http://127.0.0.1:39245/mcp`
+- Процес стартує приховано (`cmd.exe` без видимого вікна) і при `shutdown()` завершується разом із застосунком
+- Статус у UI визначається не лише по локальному `exec.Cmd`, а й через пошук реального `ssh.exe` з потрібною `-R` сигнатурою, щоб не було false negative після ручного/попереднього старту
 
 ### 2. Pipeline Service (`backend/pipeline/service.go`)
 
@@ -179,6 +186,9 @@
 | Text Utils | `text.go` | Чанкінг, Levenshtein, Sanitize filename |
 | Zip | `zip.go` | ZIP-розпакування з ZipSlip-захистом |
 
+**Додаткові користувацькі налаштування**:
+- `MCPAutoForwardEnabled` — прапорець автозапуску `startVPS.bat` на Windows для прокидання локального MCP на VPS
+
 ### 6. MCP Server (`backend/mcpserver/server.go`)
 
 Model Context Protocol сервер для зовнішніх агентів/LLM.
@@ -191,6 +201,11 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 - `get_gallery_preview` — перегляд галереї
 - `navigate` — навігація в UI
 - `google_monitor_*` — Google Sheets моніторинг
+
+**Сумісність із зовнішніми MCP-клієнтами**:
+- Zero-arg tools більше не описуються через порожній `struct{}`
+- Для таких методів використовується `NoArgs` із optional placeholder-полем, щоб клієнти на кшталт OpenClaw не відхиляли schema з помилкою `object schema missing properties`
+- Це стосується, зокрема, `continue_image_control`, `get_pending_text_controls`, `google_monitor_scan`, `google_monitor_get_tabs`, `get_queue_state`, `clear_queue`
 
 **Потік**: MCP-клієнт → HTTP endpoint → `Invoker` callback → `app.invokeAgentAction()` → Wails Event → Frontend → Response channel
 
@@ -216,6 +231,7 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 - `SystemMonitor` — CPU/RAM/GPU
 - `GoogleMonitor` — Google Sheets моніторинг
 - `AgentController` — MCP/Agent панель
+- `MCPSettings` — вкладка `Налаштування -> MCP` для автозапуску reverse tunnel та перегляду статусу tunnel/script/PID
 - `AuthWindow` — ліцензування
 - `InitialSetup` / `WelcomeWindow` — перший запуск
 
@@ -259,6 +275,24 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
           → Response channel → MCP Server → HTTP Response
 ```
 
+### MCP Tunnel Helper (Windows)
+```
+Користувач вмикає "Автоматично запускати MCP forward"
+  → SettingsService зберігає MCPAutoForwardEnabled
+  → App.startup() викликає startMCPForwardIfEnabled()
+    → resolveMCPForwardScriptPath() шукає startVPS.bat
+      ├─ у корені проєкту (wails dev)
+      └─ поруч із .exe (compiled build)
+    → hidden cmd.exe /c startVPS.bat
+      → ssh.exe -R 127.0.0.1:39245:127.0.0.1:39245
+        → VPS агент ходить у http://127.0.0.1:39245/mcp
+
+UI вкладка MCP
+  → GetMCPForwardStatus()
+    → перевіряє локальний exec.Cmd або шукає ssh.exe за command-line signature
+    → показує running/scriptFound/PID
+```
+
 ## Зовнішні інтеграції
 
 | Сервіс | API Endpoint | Призначення |
@@ -293,4 +327,4 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 - **Шаблони**: збереження/завантаження конфігурацій пайплайнів
 
 ---
-*Оновлено: 2026-04-10*
+*Оновлено: 2026-04-13*

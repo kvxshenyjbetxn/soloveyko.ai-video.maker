@@ -162,6 +162,7 @@
         "general": "General",
         "api": "API",
         "performance": "Performance",
+        "mcp": "MCP",
         "templates": "Templates",
         "text": {
             "enabled": "Enabled",
@@ -826,6 +827,27 @@
         "task_name": "Task Name",
         "template": "Template",
         "message": "Message"
+    },
+    "mcpTab": {
+        "title": "MCP Forward",
+        "description": "Automatically run the batch file that starts the SSH forward after the app launches.",
+        "auto_forward": "Automatically launch startVPS.bat",
+        "auto_forward_desc": "After the app starts, startVPS.bat will be opened automatically if the file is found.",
+        "windows_only": "This setting is available only on Windows.",
+        "status_autostart_on": "Autostart enabled",
+        "status_autostart_off": "Autostart disabled",
+        "status_script_found": "Script found",
+        "status_script_missing": "Script missing",
+        "status_tunnel_running": "Tunnel running",
+        "status_tunnel_stopped": "Tunnel stopped",
+        "script_name": "Script",
+        "platform": "Platform",
+        "lookup_order": "Lookup order",
+        "lookup_order_value": "project root first (wails dev), then the folder next to the exe",
+        "resolved_path": "Resolved path",
+        "process_id": "Process PID",
+        "no_process": "none",
+        "not_found": "Not found"
     },
     "initial_setup": {
         "title": "Initial Setup",

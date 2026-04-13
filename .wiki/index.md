@@ -1,6 +1,6 @@
 # Soloveyko.AI Video Maker — Project Index
 
-> **Версія**: 0.40.6 | **Дата останньої індексації**: 2026-04-12
+> **Версія**: 0.40.6 | **Дата останньої індексації**: 2026-04-13
 
 ## Огляд проєкту
 
@@ -24,7 +24,7 @@
 | **LLM** | OpenRouter API |
 | **TTS** | ElevenLabs (3 сервіси), VoiceMaker, Edge TTS |
 | **Зображення** | Pollinations.ai, Googler.fast-gen.ai, ElevenLabs Image |
-| **Агент** | MCP (Model Context Protocol) Server |
+| **Агент** | MCP Server + Windows SSH reverse tunnel helper |
 | **Платформи** | Windows, macOS |
 
 ## Основні розділи Wiki
@@ -40,6 +40,10 @@ soloveyko.ai-video.maker.go/
 ├── main.go                    # Точка входу Wails-додатку
 ├── app.go                     # Головний App struct (оркестратор)
 ├── app_agent.go               # MCP Agent інтеграція
+├── app_mcp_forward.go         # MCP tunnel auto-start/status orchestration
+├── app_mcp_forward_windows.go # Windows lifecycle for hidden SSH reverse tunnel
+├── app_mcp_forward_nonwindows.go # Заглушки для non-Windows платформ
+├── startVPS.bat               # SSH reverse tunnel script для VPS-доступу до MCP
 ├── go.mod / go.sum            # Go-залежності
 ├── wails.json                 # Конфігурація Wails
 ├── backend/
@@ -92,7 +96,7 @@ soloveyko.ai-video.maker.go/
 │       ├── App.tsx            # Головний React-компонент
 │       ├── components/        # UI-компоненти
 │       ├── contexts/          # React Context (стан)
-│       ├── tabs/              # Вкладки: text, settings, gallery, logs, queue
+│       ├── tabs/              # Вкладки: text, settings, gallery, logs, queue, settings/mcp
 │       └── locales/           # Переклади (uk, en, ru)
 ├── models/                    # (порожня, моделі завантажуються runtime)
 ├── build/                     # Build конфігурації
@@ -107,4 +111,4 @@ soloveyko.ai-video.maker.go/
 - **Мова**: переважно українська та англійська
 
 ---
-*Індексовано: 2026-04-12*
+*Індексовано: 2026-04-13*

@@ -97,6 +97,12 @@ type GoogleMonitorCreateTaskArgs struct {
 	RowIndex int    `json:"rowIndex" jsonschema:"index of the row to create a task from"`
 }
 
+// NoArgs keeps zero-argument tools compatible with clients that reject
+// object schemas without declared properties.
+type NoArgs struct {
+	Placeholder *bool `json:"placeholder,omitempty" jsonschema:"optional placeholder; ignored by the server"`
+}
+
 func Start(invoke Invoker, logger *slog.Logger) (*Server, error) {
 	implementation := &mcp.Implementation{
 		Name:    "soloveyko-agent-control",
@@ -238,7 +244,7 @@ func addTools(server *mcp.Server, invoke Invoker) {
 		})
 
 	mcp.AddTool(server, &mcp.Tool{Name: "continue_image_control", Description: "Continue processing after image control is ready in the gallery stage."},
-		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ NoArgs) (*mcp.CallToolResult, map[string]any, error) {
 			out, err := invokeMap(ctx, invoke, "continue_image_control", map[string]any{})
 			if err != nil {
 				return nil, nil, err
@@ -247,7 +253,7 @@ func addTools(server *mcp.Server, invoke Invoker) {
 		})
 
 	mcp.AddTool(server, &mcp.Tool{Name: "get_pending_text_controls", Description: "List queue tasks that are waiting for text control review in the mini editor."},
-		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ NoArgs) (*mcp.CallToolResult, map[string]any, error) {
 			out, err := invokeMap(ctx, invoke, "get_pending_text_controls", map[string]any{})
 			if err != nil {
 				return nil, nil, err
@@ -266,7 +272,7 @@ func addTools(server *mcp.Server, invoke Invoker) {
 
 	// Google Monitor Tools
 	mcp.AddTool(server, &mcp.Tool{Name: "google_monitor_scan", Description: "Trigger a fresh scan of all configured Google Sheets in the monitor."},
-		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ NoArgs) (*mcp.CallToolResult, map[string]any, error) {
 			out, err := invokeMap(ctx, invoke, "google_monitor_scan", map[string]any{})
 			if err != nil {
 				return nil, nil, err
@@ -275,7 +281,7 @@ func addTools(server *mcp.Server, invoke Invoker) {
 		})
 
 	mcp.AddTool(server, &mcp.Tool{Name: "google_monitor_get_tabs", Description: "List all configured Google Sheet tabs in the monitor."},
-		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ NoArgs) (*mcp.CallToolResult, map[string]any, error) {
 			out, err := invokeMap(ctx, invoke, "google_monitor_get_tabs", map[string]any{})
 			if err != nil {
 				return nil, nil, err
@@ -311,7 +317,7 @@ func addTools(server *mcp.Server, invoke Invoker) {
 		})
 
 	mcp.AddTool(server, &mcp.Tool{Name: "get_queue_state", Description: "Read the current queue state, task statuses, and completion signal."},
-		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ NoArgs) (*mcp.CallToolResult, map[string]any, error) {
 			out, err := invokeMap(ctx, invoke, "get_queue_state", map[string]any{})
 			if err != nil {
 				return nil, nil, err
@@ -329,7 +335,7 @@ func addTools(server *mcp.Server, invoke Invoker) {
 		})
 
 	mcp.AddTool(server, &mcp.Tool{Name: "clear_queue", Description: "Clear all queued tasks and reset queue state."},
-		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, map[string]any, error) {
+		func(ctx context.Context, _ *mcp.CallToolRequest, _ NoArgs) (*mcp.CallToolResult, map[string]any, error) {
 			out, err := invokeMap(ctx, invoke, "clear_queue", map[string]any{})
 			if err != nil {
 				return nil, nil, err
