@@ -11,8 +11,6 @@ import (
 	"syscall"
 )
 
-const createNoWindow = 0x08000000
-
 func (a *App) launchMCPForwardScript() error {
 	scriptPath, err := resolveMCPForwardScriptPath()
 	if err != nil {
@@ -33,12 +31,8 @@ func (a *App) launchMCPForwardScript() error {
 		a.mcpForwardCmd = nil
 	}
 
-	cmd := exec.Command("cmd.exe", "/c", scriptPath)
+	cmd := exec.Command("cmd.exe", "/c", "start", "", "/d", filepath.Dir(scriptPath), scriptPath)
 	cmd.Dir = filepath.Dir(scriptPath)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow:    true,
-		CreationFlags: createNoWindow,
-	}
 
 	if err := cmd.Start(); err != nil {
 		return err

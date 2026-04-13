@@ -41,7 +41,7 @@ soloveyko.ai-video.maker.go/
 ├── app.go                     # Головний App struct (оркестратор)
 ├── app_agent.go               # MCP Agent інтеграція
 ├── app_mcp_forward.go         # MCP tunnel auto-start/status orchestration
-├── app_mcp_forward_windows.go # Windows lifecycle for hidden SSH reverse tunnel
+├── app_mcp_forward_windows.go # Windows lifecycle for cmd-launched SSH reverse tunnel window
 ├── app_mcp_forward_nonwindows.go # Заглушки для non-Windows платформ
 ├── startVPS.bat               # SSH reverse tunnel script для VPS-доступу до MCP
 ├── go.mod / go.sum            # Go-залежності

@@ -2,6 +2,15 @@
 
 Хронологічний список усіх значущих змін у проєкті.
 
+## [2026-04-13] | fix(mcp): відновлено видимий запуск bat і зафіксовано reconnect flow
+- **Задача**: Повернути стабільний сценарій, де програма просто відкриває `startVPS.bat` у видимому `cmd`, і задокументувати, чому після рестарту desktop app OpenClaw треба перепідключати.
+- **Зміни**:
+  - У `app_mcp_forward_windows.go` автозапуск tunnel повернуто до прямого `cmd /c start ... startVPS.bat`, щоб користувач бачив окреме вікно батніка
+  - У wiki зафіксовано, що `healthz=true` не гарантує валідність старої MCP session, бо `streamable_http` session state живе лише в пам'яті поточного desktop app процесу
+  - Додано явний reconnect flow: після закриття/рестарту програми треба дочекатися нового tunnel і створити нову OpenClaw/chat session
+- **Файли**: `app_mcp_forward_windows.go`, [[architecture]], [[decisions]], [[index]], [[log]]
+- **Результат**: Автозапуск знову працює через звичне видиме вікно `cmd`, а процедура повторного підключення MCP після рестарту програми зафіксована в wiki без двозначностей
+
 ## [2026-04-13] | feat(mcp): додано автофорвард SSH tunnel і вкладку MCP у налаштуваннях
 - **Задача**: Дати VPS-агентам доступ до локального MCP програми без ручного Tabby та показати живий статус tunnel у UI.
 - **Зміни**:
@@ -12,7 +21,7 @@
   - Статус tunnel більше не спирається лише на локальний `exec.Cmd`: застосунок шукає реальний `ssh.exe` за command-line signature і тому коректно бачить уже піднятий tunnel
   - Автостарт не плодить дублікати `ssh.exe`, а при закритті програми завершує знайдений процес tunnel
 - **Файли**: `app.go`, `app_mcp_forward.go`, `app_mcp_forward_windows.go`, `app_mcp_forward_nonwindows.go`, `backend/utils/settings.go`, `frontend/src/App.tsx`, `frontend/src/tabs/settings/mcp.tsx`, `frontend/src/locales/uk.json`, `frontend/src/locales/en.json`, `frontend/src/locales/ru.json`, `startVPS.bat`, [[architecture]], [[decisions]], [[index]], [[log]]
-- **Результат**: Windows-додаток сам піднімає й показує стан SSH reverse tunnel для MCP, а VPS-агенти можуть стабільно підключатися до локального MCP без ручного відкриття терміналу
+- **Результат**: Windows-додаток сам піднімає й показує стан SSH reverse tunnel для MCP, а VPS-агенти можуть підключатися до локального MCP через автоматично відкритий `startVPS.bat`
 
 ## [2026-04-13] | fix(mcp): zero-arg tools стали сумісні з OpenClaw
 - **Задача**: Прибрати падіння OpenClaw на етапі читання MCP schema з помилкою `object schema missing properties`.
