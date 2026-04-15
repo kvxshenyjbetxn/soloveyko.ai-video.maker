@@ -211,8 +211,6 @@ type ReferenceImage struct {
 // GenerateImage генерує картинку за допомогою Googler з автоматичними повторами
 func (s *GooglerService) GenerateImage(apiKey string, model string, prompt string, aspectRatio string, outputPath string) error {
 	imgSem, _ := s.ensureSemaphores()
-	imgSem <- struct{}{}
-	defer func() { <-imgSem }()
 
 	// Fallback list
 	allModels := []string{"whisk", "flow", "gemini"}
@@ -276,10 +274,14 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying %s (%d/3) in 5s...", currentModel, attempt))
 					}
 				}
+				// Release semaphore during sleep so other goroutines can proceed
 				time.Sleep(waitTime)
 			}
 
+			// Acquire semaphore only around the actual API call
+			imgSem <- struct{}{}
 			err := s.generateImageOnce(apiKey, currentModel, prompt, apiRatio, outputPath)
+			<-imgSem
 			if err == nil {
 				return nil
 			}
@@ -452,8 +454,6 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 // RemixImage генерує картинку на основі референсів (Style/Subject/Scene) з автоматичними повторами та фалбеком
 func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string) error {
 	imgSem, _ := s.ensureSemaphores()
-	imgSem <- struct{}{}
-	defer func() { <-imgSem }()
 	var lastErr error
 	for attempt := 1; ; attempt++ {
 		if attempt > 1 {
@@ -473,10 +473,14 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying remix (%d/3) in 5s...", attempt))
 				}
 			}
+			// Release semaphore during sleep so other goroutines can proceed
 			time.Sleep(waitTime)
 		}
 
+		// Acquire semaphore only around the actual API call
+		imgSem <- struct{}{}
 		err := s.remixImageOnce(apiKey, prompt, referenceImages, aspectRatio, strictMode, outputPath)
+		<-imgSem
 		if err == nil {
 			return nil
 		}
@@ -597,8 +601,6 @@ func (s *GooglerService) remixImageOnce(apiKey string, prompt string, referenceI
 // GenerateVideo генерує відео за допомогою Googler (text-to-video або image-to-video) з автоматичними повторами та фалбеком
 func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string) error {
 	_, vidSem := s.ensureSemaphores()
-	vidSem <- struct{}{}
-	defer func() { <-vidSem }()
 
 	// Fallback list
 	allModels := []string{"whisk", "flow", "gemini"}
@@ -636,10 +638,14 @@ func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt strin
 						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying video (%s) [%d/3] in 5s...", currentModel, attempt))
 					}
 				}
+				// Release semaphore during sleep so other goroutines can proceed
 				time.Sleep(waitTime)
 			}
 
+			// Acquire semaphore only around the actual API call
+			vidSem <- struct{}{}
 			err := s.generateVideoOnce(apiKey, currentModel, prompt, imageBase64, aspectRatio, upscale, outputPath)
+			<-vidSem
 			if err == nil {
 				return nil
 			}

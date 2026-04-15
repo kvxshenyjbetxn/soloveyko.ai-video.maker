@@ -295,7 +295,7 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 
 - **Subtitle connections**: окремі ліміти для `standard`, `amd`, `whisperx`
 - **Montage connections**: глобальний ліміт одночасних рендерів
-- **Image generation**: семафори на рівні API-клієнтів (Pollinations: 3, ElevenLabs Image: 3, Googler: окремі для image/video)
+- **Image generation**: семафори на рівні API-клієнтів (Pollinations: 3, ElevenLabs Image: 3, Googler: окремі `imgSem`/`vidSem` для image/video); семафор утримується лише під час активного HTTP-запиту — під час паузи (rate-limit sleep) слот звільняється, що дозволяє image та video генерації працювати паралельно незалежно
 - **Worker polling**: 15с інтервал, паралельне виконання отриманих задач
 
 ## Керування конфігурацією
