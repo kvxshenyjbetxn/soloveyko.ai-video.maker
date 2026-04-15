@@ -32,6 +32,7 @@
 ```
 
 ## Компоненти
+<!-- ARCHITECTURE_COMPONENTS -->
 
 ### 1. App Struct (`app.go`)
 
@@ -237,6 +238,7 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 - `InitialSetup` / `WelcomeWindow` — перший запуск
 
 ## Потоки даних
+<!-- ARCHITECTURE_DATAFLOW -->
 
 ### Основний потік (Pipeline)
 ```
@@ -300,6 +302,7 @@ UI вкладка MCP
 ```
 
 ## Зовнішні інтеграції
+<!-- ARCHITECTURE_API -->
 
 | Сервіс | API Endpoint | Призначення |
 |--------|-------------|-------------|
@@ -331,6 +334,8 @@ UI вкладка MCP
 - **200+ полів** у `PipelineSettings`: переклад, переписування, озвучка, зображення, субтитри, монтаж, overlays, watermarks, custom stages
 - **Named API Keys**: підтримка кількох ключів для кожного сервісу
 - **Шаблони**: збереження/завантаження конфігурацій пайплайнів
+
+<!-- ARCHITECTURE_END -->
 
 ---
 *Оновлено: 2026-04-13*

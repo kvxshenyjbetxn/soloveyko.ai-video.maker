@@ -33,6 +33,21 @@
 - [[log|Журнал змін]] — хронологія робіт
 - [[decisions|Прийняті рішення]] — архітектурні рішення (ADR)
 
+## 📁 Інструкції для агентів (instruction/)
+
+- [[instruction/skill-start-wiki|skill-start-wiki]] — початок сесії (відновлення контексту)
+- [[instruction/skill-checkpoint-wiki|skill-checkpoint-wiki]] — збереження прогресу під час роботи
+- [[instruction/skill-end-wiki|skill-end-wiki]] — завершення сесії
+- [[instruction/skill-index-wiki|skill-index-wiki]] — оновлення index та architecture
+- [[instruction/skill-link-wiki|skill-link-wiki]] — зв'язування wiki з Obsidian
+- [[instruction/skill-commit-massage|skill-commit-massage]] — генерація commit-повідомлень
+- [[instruction/skill-init-wiki|skill-init-wiki]] — ініціалізація wiki для нового проєкту
+- [[instruction/skill-migrate-wiki|skill-migrate-wiki]] — міграція wiki до нової версії
+
+## 📐 Правила
+
+- [[SCHEMA]] — правила, заборони та позиційні маркери wiki
+
 ## Структура каталогів
 
 ```
