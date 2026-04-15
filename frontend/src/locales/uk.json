@@ -168,7 +168,6 @@
     "general": "Загальні",
     "api": "API",
     "performance": "Продуктивність",
-    "mcp": "MCP",
     "templates": "Шаблони",
     "text": {
       "enabled": "Увімкнено",
@@ -841,27 +840,6 @@
     "task_name": "Назва завдання",
     "template": "Шаблон",
     "message": "Повідомлення"
-  },
-  "mcpTab": {
-    "title": "MCP Forward",
-    "description": "Автозапуск bat-файлу для SSH forward після старту програми.",
-    "auto_forward": "Автоматично запускати startVPS.bat",
-    "auto_forward_desc": "Після старту програми буде автоматично відкрито startVPS.bat, якщо файл знайдено.",
-    "windows_only": "Це налаштування працює лише на Windows.",
-    "status_autostart_on": "Автозапуск увімкнено",
-    "status_autostart_off": "Автозапуск вимкнено",
-    "status_script_found": "Скрипт знайдено",
-    "status_script_missing": "Скрипт не знайдено",
-    "status_tunnel_running": "Tunnel запущений",
-    "status_tunnel_stopped": "Tunnel не запущений",
-    "script_name": "Скрипт",
-    "platform": "Платформа",
-    "lookup_order": "Де шукається",
-    "lookup_order_value": "спочатку корінь проєкту (wails dev), потім папка поруч з exe",
-    "resolved_path": "Знайдений шлях",
-    "process_id": "PID процесу",
-    "no_process": "немає",
-    "not_found": "Не знайдено"
   },
   "initial_setup": {
     "title": "Первинне налаштування",

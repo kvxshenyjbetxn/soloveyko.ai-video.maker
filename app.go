@@ -70,8 +70,6 @@ type App struct {
 	agentReadyCh    chan struct{}
 	agentReadyOnce  sync.Once
 	mcpController   *mcpserver.Server
-	mcpForwardMu    sync.Mutex
-	mcpForwardCmd   *exec.Cmd
 }
 
 // NewApp creates a new App application struct
@@ -595,7 +593,6 @@ func (a *App) startup(ctx context.Context) {
 		go a.startTaskPollingLoop()
 	}
 
-	a.startMCPForwardIfEnabled()
 }
 
 // shutdown is called when the application is closing
@@ -611,7 +608,6 @@ func (a *App) shutdown(ctx context.Context) {
 		}
 	}
 
-	a.stopMCPForwardProcess()
 }
 
 // ToggleWorkerMode вмикає або вимикає режим воркера

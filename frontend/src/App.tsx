@@ -29,7 +29,6 @@ import { ElevenLabsImage } from './tabs/settings/api/image/elevenlabsimage';
 import { AssemblyAI } from './tabs/settings/api/assemblyai';
 import { Performance } from './tabs/settings/performance';
 import { Templates } from './tabs/settings/templates';
-import MCPSettings from './tabs/settings/mcp';
 import { Statistic } from './tabs/other/statistic';
 import { History } from './tabs/other/history';
 import { Preview } from './tabs/other/Preview';
@@ -321,7 +320,6 @@ function App() {
             case 'settings.api.google': return <GoogleIntegration />;
             case 'settings.performance': return <Performance />;
             case 'settings.notifications': return <NotificationsSettings />;
-            case 'settings.mcp': return <MCPSettings />;
 
             // Other tabs
             case 'other.statistic': return <Statistic />;
@@ -386,13 +384,6 @@ function App() {
                         onClick={() => setCurrentPath('settings.notifications')}
                     >
                         {t('notifications.tab_title')}
-                    </div>
-
-                    <div
-                        className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'settings.mcp' ? 'active' : ''}`}
-                        onClick={() => setCurrentPath('settings.mcp')}
-                    >
-                        {t('settings.mcp')}
                     </div>
 
                     {/* API Section */}

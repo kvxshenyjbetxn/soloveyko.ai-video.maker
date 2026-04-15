@@ -337,7 +337,6 @@ type Settings struct {
 	FirstRun                       bool                   `json:"firstRun"`
 	ShowWelcome                    bool                   `json:"showWelcome"`
 	WorkerModeEnabled              bool                   `json:"workerModeEnabled"`
-	MCPAutoForwardEnabled          bool                   `json:"mcpAutoForwardEnabled"`
 }
 
 type SettingsService struct {
@@ -1972,24 +1971,5 @@ func (s *SettingsService) SetWorkerModeEnabled(enabled bool) error {
 		return err
 	}
 	settings.WorkerModeEnabled = enabled
-	return s.SaveSettings(settings)
-}
-
-// GetMCPAutoForwardEnabled повертає чи увімкнений автозапуск MCP forward bat
-func (s *SettingsService) GetMCPAutoForwardEnabled() bool {
-	settings, err := s.LoadSettings()
-	if err != nil {
-		return false
-	}
-	return settings.MCPAutoForwardEnabled
-}
-
-// SetMCPAutoForwardEnabled зберігає стан автозапуску MCP forward bat
-func (s *SettingsService) SetMCPAutoForwardEnabled(enabled bool) error {
-	settings, err := s.LoadSettings()
-	if err != nil {
-		return err
-	}
-	settings.MCPAutoForwardEnabled = enabled
 	return s.SaveSettings(settings)
 }

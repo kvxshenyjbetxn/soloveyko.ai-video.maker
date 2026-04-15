@@ -4,6 +4,21 @@
 
 <!-- NEW_LOG_ENTRY -->
 
+## [2026-04-15] | refactor(mcp): видалено SSH tunnel автозапуск і MCP вкладку; bump v0.40.7
+- **Задача**: Прибрати весь код, що відповідав за автоматичний запуск `startVPS.bat` та UI-вкладку MCP у налаштуваннях — залишити лише самі MCP-інструменти (server.go).
+- **Зміни**:
+  - Видалено 3 Go-файли: `app_mcp_forward.go`, `app_mcp_forward_windows.go`, `app_mcp_forward_nonwindows.go` (~290 рядків)
+  - Видалено frontend-компонент `frontend/src/tabs/settings/mcp.tsx` (~180 рядків)
+  - З `app.go` видалено поля `mcpForwardMu`/`mcpForwardCmd` та виклики `startMCPForwardIfEnabled()` / `stopMCPForwardProcess()` в `startup`/`shutdown`
+  - З `backend/utils/settings.go` видалено поле `MCPAutoForwardEnabled` зі struct та обидві функції `GetMCPAutoForwardEnabled` / `SetMCPAutoForwardEnabled`
+  - З `App.tsx` видалено import `MCPSettings`, case `settings.mcp` та пункт sidebar
+  - З усіх 3 локалей (`uk.json`, `en.json`, `ru.json`) видалено блок `mcpTab` та ключ `settings.mcp`
+  - TypeScript оновлено `4.9.5` → `5.9.3`, додано `"ignoreDeprecations": "5.0"` у `tsconfig.json`
+  - Версію програми підвищено з `0.40.6` до `0.40.7`
+- **Файли**: `app.go`, `app_mcp_forward*.go` (видалено), `backend/utils/settings.go`, `frontend/src/App.tsx`, `frontend/src/tabs/settings/mcp.tsx` (видалено), `frontend/src/locales/*.json`, `frontend/tsconfig.json`, `frontend/package.json`, `backend/utils/version.go`, [[architecture]], [[decisions]], [[index]], [[log]]
+- **Статус**: ✅ Завершено
+- **Результат**: Кодова база спрощена — 574 рядки видалено, Go та TypeScript компілюються чисто. MCP-інструменти у `backend/mcpserver/server.go` залишились без змін.
+
 ## [2026-04-13] | fix(mcp): відновлено видимий запуск bat і зафіксовано reconnect flow
 - **Задача**: Повернути стабільний сценарій, де програма просто відкриває `startVPS.bat` у видимому `cmd`, і задокументувати, чому після рестарту desktop app OpenClaw треба перепідключати.
 - **Зміни**:

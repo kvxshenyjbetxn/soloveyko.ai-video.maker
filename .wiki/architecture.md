@@ -1,6 +1,6 @@
 # Architecture & System Design
 
-> Докладний опис архітектури Soloveyko.AI Video Maker v0.40.6
+> Докладний опис архітектури Soloveyko.AI Video Maker v0.40.7
 
 ## Загальна архітектура
 
@@ -50,13 +50,6 @@
 - `pipeline` — `*pipeline.PipelineService` — пайплайн обробки
 - `openRouter`, `elevenLabs`, `pollinations`, ... — API-клієнти
 - `mcpController` — `*mcpserver.Server` — MCP сервер для агентів
-- `mcpForwardMu` / `mcpForwardCmd` — життєвий цикл SSH reverse tunnel для доступу до MCP з VPS
-
-**Окремий MCP tunnel lifecycle**:
-- На Windows `startup()` може автоматично запускати `startVPS.bat`, якщо в налаштуваннях увімкнено `MCPAutoForwardEnabled`
-- Скрипт піднімає `ssh -R 127.0.0.1:39245:127.0.0.1:39245`, щоб VPS-агент бачив локальний MCP як `http://127.0.0.1:39245/mcp`
-- Процес стартує у звичайному видимому `cmd.exe` вікні й при `shutdown()` завершується разом із застосунком
-- Статус у UI визначається не лише по локальному `exec.Cmd`, а й через пошук реального `ssh.exe` з потрібною `-R` сигнатурою, щоб не було false negative після ручного/попереднього старту
 
 ### 2. Pipeline Service (`backend/pipeline/service.go`)
 
@@ -276,29 +269,6 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
         → Wails Event "agent:request" → Frontend
         → Frontend обробляє → app.ResolveAgentRequest()
           → Response channel → MCP Server → HTTP Response
-```
-
-### MCP Tunnel Helper (Windows)
-```
-Користувач вмикає "Автоматично запускати MCP forward"
-  → SettingsService зберігає MCPAutoForwardEnabled
-  → App.startup() викликає startMCPForwardIfEnabled()
-    → resolveMCPForwardScriptPath() шукає startVPS.bat
-      ├─ у корені проєкту (wails dev)
-      └─ поруч із .exe (compiled build)
-    → cmd.exe /c start "" /d <scriptDir> startVPS.bat
-      → ssh.exe -R 127.0.0.1:39245:127.0.0.1:39245
-        → VPS агент ходить у http://127.0.0.1:39245/mcp
-
-UI вкладка MCP
-  → GetMCPForwardStatus()
-    → перевіряє локальний exec.Cmd або шукає ssh.exe за command-line signature
-    → показує running/scriptFound/PID
-
-Після рестарту desktop app
-  → локальний MCP сервер стартує заново з новим in-memory session state
-  → старі OpenClaw/chat sessions можуть отримувати `session not found`
-  → потрібно відкрити нову agent/chat session після того, як `healthz` і tunnel знову живі
 ```
 
 ## Зовнішні інтеграції

@@ -1,6 +1,6 @@
 # Soloveyko.AI Video Maker — Project Index
 
-> **Версія**: 0.40.6 | **Дата останньої індексації**: 2026-04-13
+> **Версія**: 0.40.7 | **Дата останньої індексації**: 2026-04-15
 
 ## Огляд проєкту
 
@@ -24,7 +24,7 @@
 | **LLM** | OpenRouter API |
 | **TTS** | ElevenLabs (3 сервіси), VoiceMaker, Edge TTS |
 | **Зображення** | Pollinations.ai, Googler.fast-gen.ai, ElevenLabs Image |
-| **Агент** | MCP Server + Windows SSH reverse tunnel helper |
+| **Агент** | MCP Server |
 | **Платформи** | Windows, macOS |
 
 ## Основні розділи Wiki
@@ -55,10 +55,6 @@ soloveyko.ai-video.maker.go/
 ├── main.go                    # Точка входу Wails-додатку
 ├── app.go                     # Головний App struct (оркестратор)
 ├── app_agent.go               # MCP Agent інтеграція
-├── app_mcp_forward.go         # MCP tunnel auto-start/status orchestration
-├── app_mcp_forward_windows.go # Windows lifecycle for cmd-launched SSH reverse tunnel window
-├── app_mcp_forward_nonwindows.go # Заглушки для non-Windows платформ
-├── startVPS.bat               # SSH reverse tunnel script для VPS-доступу до MCP
 ├── go.mod / go.sum            # Go-залежності
 ├── wails.json                 # Конфігурація Wails
 ├── backend/

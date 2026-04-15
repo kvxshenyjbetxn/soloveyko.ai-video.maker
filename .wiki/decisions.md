@@ -5,6 +5,8 @@
 | Дата | Рішення | Контекст | Наслідки |
 | :--- | :--- | :--- | :--- |
 <!-- NEW_DECISION_ENTRY -->
+| 2026-04-15 | Видалено MCP SSH tunnel автозапуск та вкладку у налаштуваннях | Функція запуску `startVPS.bat` ускладнювала кодову базу і не входить до основного UX; MCP tools залишаються, tunnel запускається вручну | Видалено `app_mcp_forward*.go`, вкладку `settings/mcp.tsx`, поле `MCPAutoForwardEnabled` зі struct та локалей; MCP сервер і інструменти не зачеплені |
+| 2026-04-15 | TypeScript оновлено з 4.9 до 5.x, додано `ignoreDeprecations` | TS 4.9 не підтримує сучасний `moduleResolution` та deprecated `esModuleInterop=false`; попередження заважали IDE | Додано `"ignoreDeprecations": "5.0"` у `tsconfig.json`; збірка і type check чисті |
 | 2026-04-10 | Використання Markdown для Вікі | Потрібна проста, текстова база знань | Легко читати ШІ та людям |
 | 2026-04-10 | `.wiki` залишається в проєкті, Obsidian через Junction | Зручніше редагувати wiki поруч з кодом; Obsidian як переглядач | Obsidian має Junction-посилання; єдине джерело даних — `.wiki/` в репозиторії |
 | 2026-04-10 | Відносні шляхи для `subtitles` filter у FFmpeg | Абсолютні шляхи з кирилицею/пробілами ламають парсер опцій FFmpeg (`original_size` error) | Використовуємо `assName` замість `assPath` + `cmd.Dir = finalDir`; працює кросплатформенно |

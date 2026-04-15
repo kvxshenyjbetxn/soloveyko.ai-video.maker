@@ -162,7 +162,6 @@
         "general": "Общие",
         "api": "API",
         "performance": "Производительность",
-        "mcp": "MCP",
         "templates": "Шаблоны",
         "text": {
             "enabled": "Включено",
@@ -810,27 +809,6 @@
         "task_name": "Название задачи",
         "template": "Шаблон",
         "message": "Сообщение"
-    },
-    "mcpTab": {
-        "title": "MCP Forward",
-        "description": "Автозапуск bat-файла для SSH forward после старта программы.",
-        "auto_forward": "Автоматически запускать startVPS.bat",
-        "auto_forward_desc": "После запуска программы startVPS.bat будет автоматически открыт, если файл найден.",
-        "windows_only": "Эта настройка доступна только на Windows.",
-        "status_autostart_on": "Автозапуск включён",
-        "status_autostart_off": "Автозапуск выключен",
-        "status_script_found": "Скрипт найден",
-        "status_script_missing": "Скрипт не найден",
-        "status_tunnel_running": "Tunnel запущен",
-        "status_tunnel_stopped": "Tunnel не запущен",
-        "script_name": "Скрипт",
-        "platform": "Платформа",
-        "lookup_order": "Где ищется",
-        "lookup_order_value": "сначала корень проекта (wails dev), потом папка рядом с exe",
-        "resolved_path": "Найденный путь",
-        "process_id": "PID процесса",
-        "no_process": "нет",
-        "not_found": "Не найдено"
     },
     "initial_setup": {
         "title": "Первичная настройка",
