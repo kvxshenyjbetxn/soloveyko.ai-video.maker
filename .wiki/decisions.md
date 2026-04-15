@@ -5,6 +5,7 @@
 | Дата | Рішення | Контекст | Наслідки |
 | :--- | :--- | :--- | :--- |
 <!-- NEW_DECISION_ENTRY -->
+| 2026-04-15 | FFmpeg concat demuxer замість байтової конкатенації MP3 | `mergeAudioFiles` зливала MP3 chunk-и через `io.Copy`, що лишало ID3/Xing заголовки всередині файлу; FFmpeg `mp3float` декодер періодично видавав `Invalid data found` | FFmpeg concat demuxer (`-f concat -safe 0 -c copy`) генерує коректний MP3 без перекодування; впливає на VoiceMaker та Edge TTS (сервіси з чанкуванням тексту) |
 | 2026-04-15 | Видалено MCP SSH tunnel автозапуск та вкладку у налаштуваннях | Функція запуску `startVPS.bat` ускладнювала кодову базу і не входить до основного UX; MCP tools залишаються, tunnel запускається вручну | Видалено `app_mcp_forward*.go`, вкладку `settings/mcp.tsx`, поле `MCPAutoForwardEnabled` зі struct та локалей; MCP сервер і інструменти не зачеплені |
 | 2026-04-15 | TypeScript оновлено з 4.9 до 5.x, додано `ignoreDeprecations` | TS 4.9 не підтримує сучасний `moduleResolution` та deprecated `esModuleInterop=false`; попередження заважали IDE | Додано `"ignoreDeprecations": "5.0"` у `tsconfig.json`; збірка і type check чисті |
 | 2026-04-10 | Використання Markdown для Вікі | Потрібна проста, текстова база знань | Легко читати ШІ та людям |

@@ -55,16 +55,16 @@ type PipelineService struct {
 	pendingControl sync.Map // Map taskID -> chan string
 	pendingSkip    sync.Map // Map taskID -> chan []string
 
-	elevenLabsSem      chan struct{}
-	elevenLabsUnlimSem chan struct{}
-	elevenLabsUASem    chan struct{}
-	subtitleSem      chan struct{}
-	subtitleSemSize    int
-	subtitleAmdSem     chan struct{}
-	subtitleAmdSemSize int
-	subtitleWhisperXSem chan struct{}
+	elevenLabsSem           chan struct{}
+	elevenLabsUnlimSem      chan struct{}
+	elevenLabsUASem         chan struct{}
+	subtitleSem             chan struct{}
+	subtitleSemSize         int
+	subtitleAmdSem          chan struct{}
+	subtitleAmdSemSize      int
+	subtitleWhisperXSem     chan struct{}
 	subtitleWhisperXSemSize int
-	subtitleSemMu      sync.Mutex
+	subtitleSemMu           sync.Mutex
 
 	montageSem     chan struct{}
 	montageSemSize int
@@ -72,19 +72,19 @@ type PipelineService struct {
 
 	edgeTTSSem chan struct{}
 	cancelled  atomic.Bool
-	
+
 	montageSync struct {
 		sync.Mutex
-		cond           *sync.Cond
-		pendingTasks   map[string]bool // taskID -> confirmed
-		totalExpected  int
-		activeBatchID  string
+		cond          *sync.Cond
+		pendingTasks  map[string]bool // taskID -> confirmed
+		totalExpected int
+		activeBatchID string
 	}
 
 	subtitleBarrier struct {
 		sync.Mutex
-		cond           *sync.Cond
-		inFlightCount  int32
+		cond          *sync.Cond
+		inFlightCount int32
 	}
 }
 
@@ -105,31 +105,31 @@ func NewPipelineService(
 	assemblyAI *api.AssemblyAIService,
 ) *PipelineService {
 	s := &PipelineService{
-		settings:           settings,
-		openRouter:         openRouter,
-		elevenLabs:         elevenLabs,
-		elevenLabsUnlim:    elevenLabsUnlim,
-		elevenLabsUA:       elevenLabsUA,
-		voiceMaker:         voiceMaker,
-		pollinations:       pollinations,
-		googler:            googler,
-		elevenLabsImage:    elevenLabsImage,
-		localWhisper:       localWhisper,
-		amdWhisper:         amdWhisper,
-		edgeTTS:            edgeTTS,
-		assemblyAI:         assemblyAI,
-		elevenLabsSem:      make(chan struct{}, 5),
-		elevenLabsUnlimSem: make(chan struct{}, 5),
-		elevenLabsUASem:    make(chan struct{}, 5),
-		subtitleSemSize:    settings.GetSubtitleMaxConnections(),
-		subtitleSem:        make(chan struct{}, settings.GetSubtitleMaxConnections()),
-		subtitleAmdSemSize: settings.GetSubtitleAmdMaxConnections(),
-		subtitleAmdSem:     make(chan struct{}, settings.GetSubtitleAmdMaxConnections()),
+		settings:                settings,
+		openRouter:              openRouter,
+		elevenLabs:              elevenLabs,
+		elevenLabsUnlim:         elevenLabsUnlim,
+		elevenLabsUA:            elevenLabsUA,
+		voiceMaker:              voiceMaker,
+		pollinations:            pollinations,
+		googler:                 googler,
+		elevenLabsImage:         elevenLabsImage,
+		localWhisper:            localWhisper,
+		amdWhisper:              amdWhisper,
+		edgeTTS:                 edgeTTS,
+		assemblyAI:              assemblyAI,
+		elevenLabsSem:           make(chan struct{}, 5),
+		elevenLabsUnlimSem:      make(chan struct{}, 5),
+		elevenLabsUASem:         make(chan struct{}, 5),
+		subtitleSemSize:         settings.GetSubtitleMaxConnections(),
+		subtitleSem:             make(chan struct{}, settings.GetSubtitleMaxConnections()),
+		subtitleAmdSemSize:      settings.GetSubtitleAmdMaxConnections(),
+		subtitleAmdSem:          make(chan struct{}, settings.GetSubtitleAmdMaxConnections()),
 		subtitleWhisperXSemSize: settings.GetSubtitleWhisperXMaxConnections(),
-		subtitleWhisperXSem:    make(chan struct{}, settings.GetSubtitleWhisperXMaxConnections()),
-		montageSemSize:     settings.GetMontageMaxConnections(),
-		montageSem:         make(chan struct{}, settings.GetMontageMaxConnections()),
-		edgeTTSSem:         make(chan struct{}, 5),
+		subtitleWhisperXSem:     make(chan struct{}, settings.GetSubtitleWhisperXMaxConnections()),
+		montageSemSize:          settings.GetMontageMaxConnections(),
+		montageSem:              make(chan struct{}, settings.GetMontageMaxConnections()),
+		edgeTTSSem:              make(chan struct{}, 5),
 	}
 	s.montageSync.cond = sync.NewCond(&s.montageSync.Mutex)
 	s.montageSync.pendingTasks = make(map[string]bool)
@@ -312,10 +312,10 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 
 	var pSettings utils.PipelineSettings
 	s.log("INFO", "[Pipeline] Task started and pre-processing...", id, taskLabel)
-	
+
 	// !!! КРИТИЧНО ПРІОРИТЕТ НАЛАШТУВАНЬ / CRITICAL SETTINGS PRIORITY !!!
 	pSettings = s.settings.GetPipelineSettings()
-	
+
 	// ВІДТЕПЕР ПРИ ОБРАННІ ШАБЛОНУ (subName != ""), ВСІ НАЛАШТУВАННЯ ПАЙПЛАЙНУ МАЮТЬ БУТИ ПЕРЕЗАПИСАНІ
 	// НАЛАШТУВАННЯМИ З ШАБЛОНУ. ЦЕ ЗАПОБІГАЄ "ПРОТІКАННЮ" ПАРАМЕТРІВ З ПАНЕЛІ ПАЙПЛАЙНУ.
 	// !!! ATTENTION FUTURE AGENTS: DO NOT REMOVE THIS SyncFromMap CALL !!!
@@ -325,11 +325,11 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		if v, ok := settings["montageIntroVideoPaths"]; ok {
 			s.log("INFO", fmt.Sprintf("[Pipeline] [DEBUG] Montage Intro Paths found in template: %v", v), id, taskLabel)
 		}
-		
+
 		pSettings.SyncFromMap(settings)
 		s.log("INFO", "[Pipeline] [PRIORITY] Sync completed. Template overrides applied successfully.", id, taskLabel)
 	} else {
-		// Якщо шаблон не обрано, використовуємо налаштування з панелі пайплайну з додаванням 
+		// Якщо шаблон не обрано, використовуємо налаштування з панелі пайплайну з додаванням
 		// специфічних для завдання прапорців (наприклад, skippedStages).
 		pSettings.SyncFromMap(settings)
 		s.log("INFO", fmt.Sprintf("[Pipeline] Using pipeline panel settings. Flattened keys: %d", len(settings)), id, taskLabel)
@@ -804,14 +804,14 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskT
 // враховуючи префікси для вкладених блоків (montage, voiceover тощо)
 func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]interface{} {
 	res := make(map[string]interface{})
-	
+
 	var flatten func(map[string]interface{}, string)
 	flatten = func(current map[string]interface{}, prefix string) {
 		for k, v := range current {
 			// Визначаємо фінальний ключ з урахуванням префікса
 			fullKey := k
 			if prefix != "" && !strings.HasPrefix(strings.ToLower(k), strings.ToLower(prefix)) {
-				// Якщо префікс є (наприклад, "montage"), а ключ "enabled", 
+				// Якщо префікс є (наприклад, "montage"), а ключ "enabled",
 				// робимо "montageEnabled" (перша літера ключа стає великою)
 				if len(k) > 0 {
 					fullKey = prefix + strings.ToUpper(k[:1]) + k[1:]
@@ -823,32 +823,49 @@ func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]i
 			// Спеціальна обробка блоків, які в struct PipelineSettings є плоскими з префіксом
 			if sub, ok := v.(map[string]interface{}); ok {
 				lowerK := strings.ToLower(k)
-				if lowerK == "montage" || lowerK == "voiceover" || lowerK == "image" || 
-				   lowerK == "subtitle" || lowerK == "translate" || lowerK == "rewrite" ||
-				   lowerK == "control" || lowerK == "stages" {
-					
+				switch lowerK {
+				case "montage", "voiceover", "image", "subtitle", "translate", "rewrite", "control", "stages":
 					// Для "stages" та "control" префікс не потрібен, бо вони мапляться вручну або мають власні назви
 					newPrefix := k
 					if lowerK == "stages" || lowerK == "control" {
 						newPrefix = ""
 					}
-					
+
 					// Додаємо також мапінги для самих назв блоків (ImageEnabled тощо)
-					if lowerK == "stages" {
-						if val, ok := sub["image"].(bool); ok { res["imageEnabled"] = val }
-						if val, ok := sub["voiceover"].(bool); ok { res["voiceoverEnabled"] = val }
-						if val, ok := sub["subtitle"].(bool); ok { res["subtitleEnabled"] = val }
-						if val, ok := sub["translate"].(bool); ok { res["translateEnabled"] = val }
-						if val, ok := sub["montage"].(bool); ok { res["montageEnabled"] = val }
-						if val, ok := sub["rewrite"].(bool); ok { res["rewriteEnabled"] = val }
-					} else if lowerK == "control" {
-						if val, ok := sub["image"].(bool); ok { res["imageControlEnabled"] = val }
-						if val, ok := sub["translate"].(bool); ok { res["translateControlEnabled"] = val }
-						if val, ok := sub["montage"].(bool); ok { res["montageControlEnabled"] = val }
+					switch lowerK {
+					case "stages":
+						if val, ok := sub["image"].(bool); ok {
+							res["imageEnabled"] = val
+						}
+						if val, ok := sub["voiceover"].(bool); ok {
+							res["voiceoverEnabled"] = val
+						}
+						if val, ok := sub["subtitle"].(bool); ok {
+							res["subtitleEnabled"] = val
+						}
+						if val, ok := sub["translate"].(bool); ok {
+							res["translateEnabled"] = val
+						}
+						if val, ok := sub["montage"].(bool); ok {
+							res["montageEnabled"] = val
+						}
+						if val, ok := sub["rewrite"].(bool); ok {
+							res["rewriteEnabled"] = val
+						}
+					case "control":
+						if val, ok := sub["image"].(bool); ok {
+							res["imageControlEnabled"] = val
+						}
+						if val, ok := sub["translate"].(bool); ok {
+							res["translateControlEnabled"] = val
+						}
+						if val, ok := sub["montage"].(bool); ok {
+							res["montageControlEnabled"] = val
+						}
 					}
-					
+
 					flatten(sub, newPrefix)
-				} else {
+				default:
 					// Звичайна вкладеність (без префікса блоку)
 					flatten(sub, prefix)
 				}
@@ -858,9 +875,9 @@ func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]i
 			}
 		}
 	}
-	
+
 	flatten(m, "")
-	
+
 	// DEBUG: Логуємо наявність важливих ключів після розплющення
 	criticalKeys := []string{"montageIntroVideoPaths", "montageOverlayTriggers", "montageOverlayEnabled", "montageOverlayTriggersEnabled"}
 	for _, ck := range criticalKeys {
@@ -868,10 +885,9 @@ func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]i
 			s.log("INFO", fmt.Sprintf("[Pipeline] [FLATTEN] Found critical key '%s': %v", ck, val))
 		}
 	}
-	
+
 	return res
 }
-
 
 // SubmitControlResult resumes a paused pipeline with updated text
 func (s *PipelineService) SubmitControlResult(id string, text string) {
@@ -909,18 +925,26 @@ func (s *PipelineService) UpdateSubtitleSemaphore(newSize int, engine ...string)
 	s.subtitleSemMu.Lock()
 	defer s.subtitleSemMu.Unlock()
 	eng := "standard"
-	if len(engine) > 0 { eng = engine[0] }
+	if len(engine) > 0 {
+		eng = engine[0]
+	}
 	switch eng {
 	case "amd":
-		if newSize == s.subtitleAmdSemSize { return }
+		if newSize == s.subtitleAmdSemSize {
+			return
+		}
 		s.subtitleAmdSem = make(chan struct{}, newSize)
 		s.subtitleAmdSemSize = newSize
 	case "whisperx":
-		if newSize == s.subtitleWhisperXSemSize { return }
+		if newSize == s.subtitleWhisperXSemSize {
+			return
+		}
 		s.subtitleWhisperXSem = make(chan struct{}, newSize)
 		s.subtitleWhisperXSemSize = newSize
 	default:
-		if newSize == s.subtitleSemSize { return }
+		if newSize == s.subtitleSemSize {
+			return
+		}
 		s.subtitleSem = make(chan struct{}, newSize)
 		s.subtitleSemSize = newSize
 	}
@@ -930,16 +954,21 @@ func (s *PipelineService) getSubtitleSem(engine string) chan struct{} {
 	s.subtitleSemMu.Lock()
 	defer s.subtitleSemMu.Unlock()
 	switch engine {
-	case "amd": return s.subtitleAmdSem
-	case "whisperx": return s.subtitleWhisperXSem
-	default: return s.subtitleSem
+	case "amd":
+		return s.subtitleAmdSem
+	case "whisperx":
+		return s.subtitleWhisperXSem
+	default:
+		return s.subtitleSem
 	}
 }
 
 func (s *PipelineService) UpdateMontageSemaphore(newSize int) {
 	s.montageSemMu.Lock()
 	defer s.montageSemMu.Unlock()
-	if newSize == s.montageSemSize { return }
+	if newSize == s.montageSemSize {
+		return
+	}
 	s.montageSem = make(chan struct{}, newSize)
 	s.montageSemSize = newSize
 }
@@ -984,12 +1013,14 @@ func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskTyp
 			data.FoundStages = append(data.FoundStages, "voice")
 			if !skipExtra {
 				dur, err := utils.GetAudioDuration(p)
-				if err == nil { data.VoiceDuration = dur }
+				if err == nil {
+					data.VoiceDuration = dur
+				}
 			}
 			break
 		}
 	}
-	
+
 	subFiles := []string{"subtitle.srt", "subtitle.ass", "subtitles.srt", "subtitles.ass", "Subtitle.srt", "Subtitle.ass"}
 	for _, f := range subFiles {
 		p := filepath.Join(finalDir, f)
@@ -1002,18 +1033,26 @@ func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskTyp
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
 			files, _ := os.ReadDir(dir)
 			for _, f := range files {
-				if f.IsDir() { continue }
+				if f.IsDir() {
+					continue
+				}
 				ext := strings.ToLower(filepath.Ext(f.Name()))
 				switch ext {
-				case ".png", ".jpg", ".jpeg", ".webp": data.ImageCount++
-				case ".mp4", ".mov", ".avi", ".mkv", ".webm": data.VideoCount++
+				case ".png", ".jpg", ".jpeg", ".webp":
+					data.ImageCount++
+				case ".mp4", ".mov", ".avi", ".mkv", ".webm":
+					data.VideoCount++
 				}
 			}
 		}
 	}
 	scanDir(filepath.Join(finalDir, "images"))
-	if data.ImageCount == 0 && data.VideoCount == 0 { scanDir(finalDir) }
-	if data.ImageCount > 0 || data.VideoCount > 0 { data.FoundStages = append(data.FoundStages, "image") }
+	if data.ImageCount == 0 && data.VideoCount == 0 {
+		scanDir(finalDir)
+	}
+	if data.ImageCount > 0 || data.VideoCount > 0 {
+		data.FoundStages = append(data.FoundStages, "image")
+	}
 	return data
 }
 
@@ -1026,27 +1065,27 @@ func (s *PipelineService) SubmitExistingFilesResult(id string, skipStages []stri
 
 func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subName string, settings map[string]interface{}) string {
 	pSettings := s.settings.GetPipelineSettings()
-	
+
 	// Збираємо всі можливі базові шляхи
 	basePaths := []string{}
-	
+
 	// 1. Шлях із налаштувань конкретного завдання
 	if out, ok := settings[taskType+"OutputPath"].(string); ok && out != "" {
 		basePaths = append(basePaths, out)
 	}
-	
+
 	// 2. Специфічні шляхи типів із глобальних налаштувань
 	if taskType == "rewrite" && pSettings.RewriteOutputPath != "" {
 		basePaths = append(basePaths, pSettings.RewriteOutputPath)
 	} else if taskType != "rewrite" && pSettings.TranslateOutputPath != "" {
 		basePaths = append(basePaths, pSettings.TranslateOutputPath)
 	}
-	
+
 	// 3. Загальний шлях виводу
 	if pSettings.OutputPath != "" {
 		basePaths = append(basePaths, pSettings.OutputPath)
 	}
-	
+
 	// 4. Системний шлях "Відео"
 	home, _ := os.UserHomeDir()
 	sysVideos := ""
@@ -1072,13 +1111,13 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 	// Варіанти папок для перевірки
 	candidates := []string{
 		safeTemplateDir + " - " + safeTaskName + " - " + safeTemplateDir, // [NEW] Паттерн користувача: Template - Task - Template
-		safeTemplateDir + " - " + safeTaskName,                            // Новий стандарт (плоский, санітизовані назви)
-		safeTaskName + " - " + safeTemplateDir,                            // Альтернативний плоский (Task - Template)
-		templateDir + " - " + taskName,                                    // Старі оригінальні назви (для зворотної сумісності)
-		taskName + " - " + templateDir,                                    // Альтернативний старий (для зворотної сумісності)
-		filepath.Join(safeTaskName, safeTemplateDir),                      // Старий вкладений (Task/Template, санітизований)
-		safeTaskName,                                                      // Просто назва (санітизована)
-		taskName,                                                          // Просто назва (оригінал)
+		safeTemplateDir + " - " + safeTaskName,                           // Новий стандарт (плоский, санітизовані назви)
+		safeTaskName + " - " + safeTemplateDir,                           // Альтернативний плоский (Task - Template)
+		templateDir + " - " + taskName,                                   // Старі оригінальні назви (для зворотної сумісності)
+		taskName + " - " + templateDir,                                   // Альтернативний старий (для зворотної сумісності)
+		filepath.Join(safeTaskName, safeTemplateDir),                     // Старий вкладений (Task/Template, санітизований)
+		safeTaskName, // Просто назва (санітизована)
+		taskName,     // Просто назва (оригінал)
 	}
 
 	// Використовуємо map для унікальних шляхів, щоб не перевіряти двічі
@@ -1124,4 +1163,3 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 	}
 	return defaultPath
 }
-

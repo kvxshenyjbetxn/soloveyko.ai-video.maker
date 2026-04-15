@@ -4,6 +4,18 @@
 
 <!-- NEW_LOG_ENTRY -->
 
+## [2026-04-15] | fix(montage): виправлено періодичну помилку FFmpeg MP3 decoder + linter cleanup
+- **Задача**: Під час монтажу періодично виникала помилка `[aist#83:0/mp3] Error submitting packet to decoder: Invalid data found when processing input`. Потрібно діагностувати та виправити.
+- **Зміни**:
+  - **Коренева причина**: функція `mergeAudioFiles` у `voice.go` робила просту байтову конкатенацію MP3-файлів через `io.Copy`. Кожен chunk мав свій MP3-заголовок (ID3/Xing/VBR), і при злитті вони ставали "сміттям" всередині фінального `voice.mp3`. FFmpeg `mp3float` декодер періодично натикався на них.
+  - Замінено байтову конкатенацію на **FFmpeg concat demuxer** (`-f concat -safe 0 -i list.txt -c copy`) — коректне злиття без перекодування.
+  - Для одного файлу — `os.Rename` (без FFmpeg).
+  - Виправлено 2 linter-підказки: `if/else if` на `switch` у `voice.go` та `service.go`.
+  -.Formatter auto-formatted `service.go` (alignment, trailing whitespace, one-line if→multi-line).
+- **Файли**: `backend/pipeline/voice.go` (mergeAudioFiles переписана, імпорти оновлені), `backend/pipeline/service.go` (linter fix + formatter)
+- **Статус**: ✅ Завершено
+- **Результат**: `voice.mp3` тепер завжди коректний; помилка `Invalid data found` більше не виникатиме. Білд чистий.
+
 ## [2026-04-15] | refactor(mcp): видалено SSH tunnel автозапуск і MCP вкладку; bump v0.40.7
 - **Задача**: Прибрати весь код, що відповідав за автоматичний запуск `startVPS.bat` та UI-вкладку MCP у налаштуваннях — залишити лише самі MCP-інструменти (server.go).
 - **Зміни**:

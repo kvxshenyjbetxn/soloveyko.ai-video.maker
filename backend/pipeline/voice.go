@@ -2,11 +2,12 @@ package pipeline
 
 import (
 	"fmt"
-	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,14 +37,15 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, taskType
 	// ЯКЩО ОБРАНО ШАБЛОН (ЗАВДАННЯ TRANSLATE АБО REWRITE), ВИКОРИСТОВУЮТЬСЯ ЛИШЕ НАЛАШТУВАННЯ З ЦЬОГО ШАБЛОНУ!
 	// ЖОДНЕ НАЛАШТУВАННЯ З ГЛОБАЛЬНОЇ ПАНЕЛІ НЕ МАЄ ПЕРЕКРИВАТИ ЦІ ПОЛЯ!
 	vKeyID := pSettings.VoiceoverElevenLabsBotKeyID
-	if taskType == "translate" || taskType == "translation" {
+	switch taskType {
+	case "translate", "translation":
 		if pSettings.TranslateElevenLabsBotKeyID != "" {
 			vKeyID = pSettings.TranslateElevenLabsBotKeyID
 		}
 		if pSettings.TranslateElevenLabsBotVoiceUUID != "" {
 			vTemplate = pSettings.TranslateElevenLabsBotVoiceUUID
 		}
-	} else if taskType == "rewrite" {
+	case "rewrite":
 		if pSettings.RewriteElevenLabsBotKeyID != "" {
 			vKeyID = pSettings.RewriteElevenLabsBotKeyID
 		}
@@ -557,27 +559,75 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, taskType
 	return nil
 }
 
-// mergeAudioFiles concatenates multiple audio files into one
+// mergeAudioFiles concatenates multiple audio files into one using FFmpeg.
+// This replaces the old byte-concatenation approach that produced invalid MP3 files
+// (stray ID3/Xing headers between chunks caused "Error submitting packet to decoder:
+// Invalid data found" during montage).
 func (s *PipelineService) mergeAudioFiles(files []string, outputPath string) error {
-	out, err := os.Create(outputPath)
-	if err != nil {
-		return err
+	if len(files) == 0 {
+		return fmt.Errorf("no audio files to merge")
 	}
-	defer out.Close()
 
+	// Filter out empty paths
+	var validFiles []string
 	for _, f := range files {
-		if f == "" {
-			continue
-		}
-		in, err := os.Open(f)
-		if err != nil {
-			return err
-		}
-		_, err = io.Copy(out, in)
-		in.Close()
-		if err != nil {
-			return err
+		if f != "" {
+			validFiles = append(validFiles, f)
 		}
 	}
+	if len(validFiles) == 0 {
+		return fmt.Errorf("no valid audio files to merge")
+	}
+
+	// Single file — just rename
+	if len(validFiles) == 1 {
+		return os.Rename(validFiles[0], outputPath)
+	}
+
+	// Multiple files — use FFmpeg concat demuxer for proper merging
+	ffmpegPath, err := utils.EnsureEngine("ffmpeg")
+	if err != nil {
+		return fmt.Errorf("failed to find ffmpeg for audio merge: %v", err)
+	}
+
+	// Create concat list file in the same directory as output
+	concatDir := filepath.Dir(outputPath)
+	concatListPath := filepath.Join(concatDir, "concat_list.txt")
+
+	var concatLines []string
+	for _, f := range validFiles {
+		// Use relative path or properly escaped path
+		rel, err := filepath.Rel(concatDir, f)
+		if err != nil {
+			rel = f
+		}
+		// Escape single quotes and backslashes for concat format
+		escaped := strings.ReplaceAll(rel, `\`, `/`)
+		escaped = strings.ReplaceAll(escaped, `'`, `'\''`)
+		concatLines = append(concatLines, fmt.Sprintf("file '%s'", escaped))
+	}
+
+	if err := os.WriteFile(concatListPath, []byte(strings.Join(concatLines, "\n")+"\n"), 0644); err != nil {
+		return fmt.Errorf("failed to write concat list: %v", err)
+	}
+	defer os.Remove(concatListPath)
+
+	// Use concat demuxer + stream copy (no re-encoding needed for same-format files)
+	args := []string{
+		"-y", "-hide_banner", "-loglevel", "error",
+		"-f", "concat", "-safe", "0",
+		"-i", concatListPath,
+		"-c", "copy",
+		outputPath,
+	}
+
+	cmd := exec.Command(ffmpegPath, args...)
+	utils.PrepareHiddenCmd(cmd)
+	cmd.Dir = concatDir
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ffmpeg concat failed: %v\n%s", err, string(out))
+	}
+
 	return nil
 }
