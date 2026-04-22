@@ -7,7 +7,7 @@ import './general.css';
 
 export const General = () => {
     const { t, locale, setLocale } = useI18n();
-    const { theme, setTheme, accentColor, setAccentColor } = useTheme();
+    const { theme, setTheme, accentColor, setAccentColor, uiStyle, setUIStyle } = useTheme();
     const colorInputRef = useRef<HTMLInputElement>(null);
     const [version, setVersion] = useState<string>('...');
 
@@ -74,6 +74,24 @@ export const General = () => {
                             value={accentColor}
                             onChange={(e) => setAccentColor(e.target.value)}
                         />
+                    </div>
+                </div>
+
+                <div className="settings-section">
+                    <h3 className="section-title">{t('general.uiStyle')}</h3>
+                    <div className="language-selector">
+                        <div
+                            className={`language-option ${uiStyle === 'rounded' ? 'active' : ''}`}
+                            onClick={() => setUIStyle('rounded')}
+                        >
+                            <span className="language-name">{t('general.uiStyleRounded')}</span>
+                        </div>
+                        <div
+                            className={`language-option ${uiStyle === 'sharp' ? 'active' : ''}`}
+                            onClick={() => setUIStyle('sharp')}
+                        >
+                            <span className="language-name">{t('general.uiStyleSharp')}</span>
+                        </div>
                     </div>
                 </div>
 

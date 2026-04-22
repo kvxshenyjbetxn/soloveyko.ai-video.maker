@@ -210,7 +210,7 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 | Context | Призначення |
 |---------|-------------|
 | `I18nContext` | Локалізація (uk/en/ru) |
-| `ThemeContext` | Темна/світла тема, accent color |
+| `ThemeContext` | Тема (dark/amoled), accent color, стиль UI (`rounded` / `sharp`: класи `style-rounded` / `style-sharp` на `body`, збереження `uiStyle` у JSON-налаштуваннях) |
 | `QueueContext` | Черга задач пайплайну |
 | `TemplateContext` | Шаблони пайплайнів |
 | `LoggerContext` | Вивід логів |
@@ -226,7 +226,6 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 - `SystemMonitor` — CPU/RAM/GPU
 - `GoogleMonitor` — Google Sheets моніторинг
 - `AgentController` — MCP/Agent панель
-- `MCPSettings` — вкладка `Налаштування -> MCP` для автозапуску reverse tunnel та перегляду статусу tunnel/script/PID
 - `AuthWindow` — ліцензування
 - `InitialSetup` / `WelcomeWindow` — перший запуск
 
@@ -301,6 +300,7 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 ## Керування конфігурацією
 
 - **Файл налаштувань**: JSON у config directory (~/.soloveyko.ai/ або OS-specific)
+- **Глобальні поля** (корінь `Settings`): мова, `theme`, `accentColor`, `uiStyle` (`rounded` | `sharp`)
 - **200+ полів** у `PipelineSettings`: переклад, переписування, озвучка, зображення, субтитри, монтаж, overlays, watermarks, custom stages
 - **Named API Keys**: підтримка кількох ключів для кожного сервісу
 - **Шаблони**: збереження/завантаження конфігурацій пайплайнів
@@ -308,4 +308,4 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 <!-- ARCHITECTURE_END -->
 
 ---
-*Оновлено: 2026-04-13*
+*Оновлено: 2026-04-22*

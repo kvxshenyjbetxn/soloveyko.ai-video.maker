@@ -4,6 +4,23 @@
 
 <!-- NEW_LOG_ENTRY -->
 
+## [2026-04-22] | feat(ui): перемикач стилю інтерфейсу — округлений / строгий
+- **Задача**: Додати в налаштуваннях перемикач стилю UI між "Округленим" (поточний) та "Строгим" (Windows 10, без заокруглень).
+- **Зміни**:
+  - У `Settings` struct додано поле `UIStyle string` з json-ключем `uiStyle`
+  - Дефолт `"rounded"` для нових та існуючих конфігів (без поля)
+  - У `SettingsService` додано `GetUIStyle()`/`SetUIStyle()` методи
+  - У `App` додано wrapper-методи `GetUIStyle()`/`SetUIStyle()`
+  - У `ThemeContext.tsx` додано стан `uiStyle` ('rounded'|'sharp'), завантаження з бекенду, функція `setUIStyle`, клас `style-sharp`/`style-rounded` застосовується до `document.body` разом з `theme-*`
+  - У `style.css` додано `body.style-sharp * { border-radius: 0 !important }` + виняток для scrollbar thumb (2px)
+  - У `general.tsx` після секції акцент-кольору додано секцію "Стиль інтерфейсу" з двома кнопками-опціями
+  - Додано переклади `uiStyle`/`uiStyleRounded`/`uiStyleSharp` до `uk.json`, `en.json`, `ru.json`
+  - **Фіналізація сесії (wiki)**: оновлено [[architecture]] (ThemeContext, `Settings.uiStyle`, прибрано застаріле про вкладку MCP), дата оновлення в [[index]]; додано ADR у [[decisions]] про глобальний override заокруглень
+  - Видалено `startVPS.bat` з репозиторію (локальний SSH tunnel-скрипт; не зберігати в проєкті)
+- **Файли**: `backend/utils/settings.go`, `app.go`, `frontend/src/style.css`, `frontend/src/contexts/ThemeContext.tsx`, `frontend/src/tabs/settings/general.tsx`, `frontend/src/locales/uk.json`, `frontend/src/locales/en.json`, `frontend/src/locales/ru.json`, `startVPS.bat` (видалено), `[[architecture]]`, `[[decisions]]`, `[[index]]`
+- **Статус**: ✅ Завершено
+- **Результат**: Go компілюється чисто; при виборі "Строгий" — всі `border-radius` зникають глобально через CSS клас на `body`, при "Округлений" — повертається звичайний вигляд; налаштування зберігається між запусками. Wiki узгоджена з кодом, рішення зафіксовано в ADR
+
 ## [2026-04-15] | fix(googler): виправлено блокування паралельної генерації image/video при rate limit
 - **Задача**: Користувач помітив, що коли відео-ліміт Googler API вичерпується і відео-горутини переходять в 5-хвилинне очікування, картинки також перестають генеруватись — хоча image-ліміт ще вільний. Потрібно перевірити та виправити.
 - **Зміни**:

@@ -8,6 +8,17 @@
     --transition-slow: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ===== UI Style: Sharp (Angular) ===== */
+body.style-sharp *,
+body.style-sharp *::before,
+body.style-sharp *::after {
+    border-radius: 0 !important;
+}
+
+body.style-sharp ::-webkit-scrollbar-thumb {
+    border-radius: 2px !important;
+}
+
 /* Dark Theme (Default) */
 .theme-dark {
     --bg-primary: #1a1a1a;

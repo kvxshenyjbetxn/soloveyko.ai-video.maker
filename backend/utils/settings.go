@@ -288,6 +288,7 @@ type Settings struct {
 	Language                       string                 `json:"language"`
 	Theme                          string                 `json:"theme"`
 	AccentColor                    string                 `json:"accentColor"`
+	UIStyle                        string                 `json:"uiStyle"`
 	OpenRouterAPIKey               string                 `json:"openRouterAPIKey"`
 	OpenRouterKeys                 []NamedAPIKey          `json:"openRouterKeys"`
 	OpenRouterModels               []string               `json:"openRouterModels"`
@@ -375,6 +376,7 @@ func (s *SettingsService) LoadSettings() (*Settings, error) {
 			Language:    "uk",
 			Theme:       "amoled",
 			AccentColor: "#0078d4", // Синій за замовчуванням
+			UIStyle:     "rounded",
 			OpenRouterModels: []string{
 				"google/gemini-2.5-flash",
 				"z-ai/glm-4.5-air:free",
@@ -526,6 +528,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 	}
 	if settings.AccentColor == "" {
 		settings.AccentColor = "#ff00c3"
+	}
+	if settings.UIStyle == "" {
+		settings.UIStyle = "rounded"
 	}
 	if settings.OpenRouterMaxConnections <= 0 {
 		settings.OpenRouterMaxConnections = 10
@@ -792,6 +797,26 @@ func (s *SettingsService) SetAccentColor(color string) error {
 	}
 
 	settings.AccentColor = color
+	return s.SaveSettings(settings)
+}
+
+// GetUIStyle повертає поточний стиль інтерфейсу
+func (s *SettingsService) GetUIStyle() string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return "rounded"
+	}
+	return settings.UIStyle
+}
+
+// SetUIStyle встановлює стиль інтерфейсу та зберігає налаштування
+func (s *SettingsService) SetUIStyle(style string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+
+	settings.UIStyle = style
 	return s.SaveSettings(settings)
 }
 

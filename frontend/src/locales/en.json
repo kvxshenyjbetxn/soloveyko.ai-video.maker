@@ -406,6 +406,9 @@
         "themeDark": "Dark",
         "themeAmoled": "Black AMOLED",
         "accentColor": "Accent Color",
+        "uiStyle": "Interface Style",
+        "uiStyleRounded": "Rounded",
+        "uiStyleSharp": "Sharp",
         "googlerLimits": "Googler Limits",
         "googlerMaxImages": "Max image connections",
         "googlerMaxVideos": "Max video connections"

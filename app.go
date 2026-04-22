@@ -1379,6 +1379,16 @@ func (a *App) SetAccentColor(color string) error {
 	return a.settings.SetAccentColor(color)
 }
 
+// GetUIStyle повертає поточний стиль інтерфейсу
+func (a *App) GetUIStyle() string {
+	return a.settings.GetUIStyle()
+}
+
+// SetUIStyle встановлює стиль інтерфейсу та зберігає у файл
+func (a *App) SetUIStyle(style string) error {
+	return a.settings.SetUIStyle(style)
+}
+
 // IsFirstRun повертає чи це перший запуск програми
 func (a *App) IsFirstRun() bool {
 	return a.settings.IsFirstRun()
