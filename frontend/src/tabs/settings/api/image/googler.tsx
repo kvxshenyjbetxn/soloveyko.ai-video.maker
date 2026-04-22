@@ -3,8 +3,85 @@ import { useI18n } from '../../../../contexts/I18nContext';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { useServices } from '../../../../contexts/ServiceContext';
 // @ts-ignore
-import { GetGooglerAPIKey, SaveGooglerAPIKey, SaveGooglerVideoAlertThreshold, SaveGooglerImageAlertThreshold, SaveGooglerMaxImageConnections, SaveGooglerMaxVideoConnections } from '../../../../../wailsjs/go/main/App';
+import { GetGooglerAPIKey, SaveGooglerAPIKey, SaveGooglerVideoAlertThreshold, SaveGooglerImageAlertThreshold, SaveGooglerMaxImageConnections, SaveGooglerMaxVideoConnections, GetGooglerImageFallbackOrder, SaveGooglerImageFallbackOrder, GetGooglerVideoFallbackOrder, SaveGooglerVideoFallbackOrder } from '../../../../../wailsjs/go/main/App';
 import '../../general.css';
+
+const PROVIDER_LABELS: Record<string, string> = {
+    whisk: 'Whisk',
+    flow: 'Flow',
+    gemini: 'Gemini (Imagen 4)',
+    grok: 'Grok',
+};
+
+interface FallbackListProps {
+    items: string[];
+    allProviders: string[];
+    accentColor: string;
+    onMove: (from: number, to: number) => void;
+    onToggle: (provider: string) => void;
+    labelPrefix: string;
+}
+
+const FallbackList: React.FC<FallbackListProps> = ({ items, allProviders, accentColor, onMove, onToggle, labelPrefix }) => {
+    const disabled = allProviders.filter(p => !items.includes(p));
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {items.map((provider, idx) => (
+                <div key={provider} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    background: 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${accentColor}44`,
+                    borderRadius: '8px', padding: '8px 12px',
+                }}>
+                    <span style={{ fontSize: '0.75em', opacity: 0.4, minWidth: '18px', fontWeight: '600' }}>
+                        {labelPrefix}{idx + 1}
+                    </span>
+                    <span style={{ flex: 1, fontSize: '0.9em', fontWeight: '500' }}>
+                        {PROVIDER_LABELS[provider] || provider}
+                    </span>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                            disabled={idx === 0}
+                            onClick={() => onMove(idx, idx - 1)}
+                            style={{ background: 'rgba(255,255,255,0.07)', border: 'none', color: '#fff', borderRadius: '4px', width: '24px', height: '24px', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 0.8, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Move up"
+                        >▲</button>
+                        <button
+                            disabled={idx === items.length - 1}
+                            onClick={() => onMove(idx, idx + 1)}
+                            style={{ background: 'rgba(255,255,255,0.07)', border: 'none', color: '#fff', borderRadius: '4px', width: '24px', height: '24px', cursor: idx === items.length - 1 ? 'default' : 'pointer', opacity: idx === items.length - 1 ? 0.3 : 0.8, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Move down"
+                        >▼</button>
+                        <button
+                            onClick={() => onToggle(provider)}
+                            style={{ background: 'rgba(255,82,82,0.12)', border: '1px solid rgba(255,82,82,0.2)', color: '#ff5252', borderRadius: '4px', width: '24px', height: '24px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Remove from fallback"
+                        >×</button>
+                    </div>
+                </div>
+            ))}
+            {disabled.map(provider => (
+                <div key={provider} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    background: 'rgba(255,255,255,0.01)',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    borderRadius: '8px', padding: '8px 12px',
+                    opacity: 0.4,
+                }}>
+                    <span style={{ fontSize: '0.75em', minWidth: '18px' }}>—</span>
+                    <span style={{ flex: 1, fontSize: '0.9em' }}>
+                        {PROVIDER_LABELS[provider] || provider}
+                    </span>
+                    <button
+                        onClick={() => onToggle(provider)}
+                        style={{ background: 'rgba(76,175,80,0.12)', border: '1px solid rgba(76,175,80,0.2)', color: '#4caf50', borderRadius: '4px', width: '24px', height: '24px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 1 }}
+                        title="Add to fallback"
+                    >+</button>
+                </div>
+            ))}
+        </div>
+    );
+};
 
 export const Googler = () => {
     const { t } = useI18n();
@@ -23,11 +100,16 @@ export const Googler = () => {
         setGooglerMaxVideos
     } = useServices();
 
+    const ALL_PROVIDERS = ['whisk', 'flow', 'gemini', 'grok'];
+    const DEFAULT_FALLBACK = ['flow', 'gemini'];
+
     const [apiKey, setApiKey] = useState('');
     const [videoThreshold, setVideoThreshold] = useState<string>('0');
     const [imageThreshold, setImageThreshold] = useState<string>('0');
     const [isLoaded, setIsLoaded] = useState(false);
     const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    const [imageFallback, setImageFallback] = useState<string[]>(DEFAULT_FALLBACK);
+    const [videoFallback, setVideoFallback] = useState<string[]>(DEFAULT_FALLBACK);
 
     useEffect(() => {
         const loadKey = async () => {
@@ -35,6 +117,12 @@ export const Googler = () => {
             setApiKey(key || '');
             setVideoThreshold(googlerVideoThreshold.toString());
             setImageThreshold(googlerImageThreshold.toString());
+            try {
+                const imgFb = await GetGooglerImageFallbackOrder();
+                setImageFallback(imgFb && imgFb.length > 0 ? imgFb : DEFAULT_FALLBACK);
+                const vidFb = await GetGooglerVideoFallbackOrder();
+                setVideoFallback(vidFb && vidFb.length > 0 ? vidFb : DEFAULT_FALLBACK);
+            } catch (_) {}
             setIsLoaded(true);
         };
         loadKey();
@@ -59,6 +147,28 @@ export const Googler = () => {
         }, 1000);
         return () => clearTimeout(timer);
     }, [apiKey, videoThreshold, imageThreshold, isLoaded]);
+
+    const moveFallback = (list: string[], from: number, to: number): string[] => {
+        const next = [...list];
+        const [item] = next.splice(from, 1);
+        next.splice(to, 0, item);
+        return next;
+    };
+
+    const toggleFallback = (list: string[], provider: string): string[] => {
+        if (list.includes(provider)) return list.filter(p => p !== provider);
+        return [...list, provider];
+    };
+
+    const handleImageFallbackChange = (next: string[]) => {
+        setImageFallback(next);
+        SaveGooglerImageFallbackOrder(next);
+    };
+
+    const handleVideoFallbackChange = (next: string[]) => {
+        setVideoFallback(next);
+        SaveGooglerVideoFallbackOrder(next);
+    };
 
     const handleCheckUsage = async () => {
         setStatusMsg(null);
@@ -310,6 +420,40 @@ export const Googler = () => {
                                 value={imageThreshold}
                                 onChange={(e) => setImageThreshold(e.target.value)}
                                 placeholder={t('api.googlerSettings.imageThresholdPlaceholder')}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Fallback Priority Section */}
+                <div className="settings-section glass-panel" style={{ padding: '25px', borderRadius: '12px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', marginTop: '25px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '6px', fontSize: '1.1em', opacity: 0.9 }}>{t('api.googlerSettings.fallbackTitle')}</h3>
+                    <p style={{ fontSize: '0.82em', opacity: 0.45, marginBottom: '22px', lineHeight: '1.5' }}>{t('api.googlerSettings.fallbackDesc')}</p>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
+                        {/* Image Fallback */}
+                        <div>
+                            <div style={{ fontSize: '0.8em', opacity: 0.55, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{t('api.googlerSettings.fallbackImage')}</div>
+                            <FallbackList
+                                items={imageFallback}
+                                allProviders={ALL_PROVIDERS}
+                                accentColor={accentColor}
+                                onMove={(from, to) => handleImageFallbackChange(moveFallback(imageFallback, from, to))}
+                                onToggle={(p) => handleImageFallbackChange(toggleFallback(imageFallback, p))}
+                                labelPrefix={t('api.googlerSettings.fallbackLabel')}
+                            />
+                        </div>
+
+                        {/* Video Fallback */}
+                        <div>
+                            <div style={{ fontSize: '0.8em', opacity: 0.55, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{t('api.googlerSettings.fallbackVideo')}</div>
+                            <FallbackList
+                                items={videoFallback}
+                                allProviders={ALL_PROVIDERS}
+                                accentColor={accentColor}
+                                onMove={(from, to) => handleVideoFallbackChange(moveFallback(videoFallback, from, to))}
+                                onToggle={(p) => handleVideoFallbackChange(toggleFallback(videoFallback, p))}
+                                labelPrefix={t('api.googlerSettings.fallbackLabel')}
                             />
                         </div>
                     </div>

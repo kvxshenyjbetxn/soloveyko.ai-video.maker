@@ -317,6 +317,8 @@ type Settings struct {
 	OpenRouterAlertThreshold       float64                `json:"openRouterAlertThreshold"`
 	GooglerVideoAlertThreshold     float64                `json:"googlerVideoAlertThreshold"`
 	GooglerImageAlertThreshold     float64                `json:"googlerImageAlertThreshold"`
+	GooglerImageFallbackOrder      []string               `json:"googlerImageFallbackOrder,omitempty"`
+	GooglerVideoFallbackOrder      []string               `json:"googlerVideoFallbackOrder,omitempty"`
 	ElevenLabsImageKeys            []NamedAPIKey          `json:"elevenLabsImageKeys"`
 	ElevenLabsImageMaxConnections  int                    `json:"elevenLabsImageMaxConnections"`
 	SubtitleMaxConnections         int                    `json:"subtitleMaxConnections"`
@@ -1556,6 +1558,50 @@ func (s *SettingsService) SetGooglerMaxVideoConnections(max int) error {
 		return err
 	}
 	settings.GooglerMaxVideoConnections = max
+	return s.SaveSettings(settings)
+}
+
+// GetGooglerImageFallbackOrder повертає порядок фалбек-провайдерів для зображень
+func (s *SettingsService) GetGooglerImageFallbackOrder() []string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []string{"flow", "gemini"}
+	}
+	if len(settings.GooglerImageFallbackOrder) == 0 {
+		return []string{"flow", "gemini"}
+	}
+	return settings.GooglerImageFallbackOrder
+}
+
+// SetGooglerImageFallbackOrder зберігає порядок фалбек-провайдерів для зображень
+func (s *SettingsService) SetGooglerImageFallbackOrder(order []string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GooglerImageFallbackOrder = order
+	return s.SaveSettings(settings)
+}
+
+// GetGooglerVideoFallbackOrder повертає порядок фалбек-провайдерів для відео
+func (s *SettingsService) GetGooglerVideoFallbackOrder() []string {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return []string{"flow", "gemini"}
+	}
+	if len(settings.GooglerVideoFallbackOrder) == 0 {
+		return []string{"flow", "gemini"}
+	}
+	return settings.GooglerVideoFallbackOrder
+}
+
+// SetGooglerVideoFallbackOrder зберігає порядок фалбек-провайдерів для відео
+func (s *SettingsService) SetGooglerVideoFallbackOrder(order []string) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.GooglerVideoFallbackOrder = order
 	return s.SaveSettings(settings)
 }
 

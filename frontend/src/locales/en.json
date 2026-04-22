@@ -280,7 +280,12 @@
             "videoAlertThreshold": "Video Threshold (per hour)",
             "imageAlertThreshold": "Image Threshold (per hour)",
             "videoThresholdPlaceholder": "e.g. 10",
-            "imageThresholdPlaceholder": "e.g. 1000"
+            "imageThresholdPlaceholder": "e.g. 1000",
+            "fallbackTitle": "Fallback Provider Priority",
+            "fallbackDesc": "The primary provider is always taken from the Pipeline settings. Below is the order of fallback providers if the primary one fails. Use ▲▼ to reorder.",
+            "fallbackImage": "Image Fallbacks",
+            "fallbackVideo": "Video Fallbacks",
+            "fallbackLabel": "↳ "
         },
         "openrouterSettings": {
             "apikey": "API Key",

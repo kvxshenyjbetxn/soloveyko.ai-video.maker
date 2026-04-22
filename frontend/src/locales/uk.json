@@ -286,7 +286,12 @@
       "videoAlertThreshold": "Поріг відео (в годину)",
       "imageAlertThreshold": "Поріг картинок (в годину)",
       "videoThresholdPlaceholder": "Наприклад: 10",
-      "imageThresholdPlaceholder": "Наприклад: 1000"
+      "imageThresholdPlaceholder": "Наприклад: 1000",
+      "fallbackTitle": "Пріоритет фалбек-провайдерів",
+      "fallbackDesc": "Первинний провайдер завжди береться з налаштувань Пайплайну. Нижче — порядок запасних провайдерів, якщо основний не зміг згенерувати. Тягніть ▲▼ для зміни пріоритету.",
+      "fallbackImage": "Фалбеки для зображень",
+      "fallbackVideo": "Фалбеки для відео",
+      "fallbackLabel": "↳ "
     },
     "openrouterSettings": {
       "apikey": "API Ключ",

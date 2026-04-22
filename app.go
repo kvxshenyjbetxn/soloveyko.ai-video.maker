@@ -1977,6 +1977,26 @@ func (a *App) SaveGooglerMaxVideoConnections(max int) error {
 	return a.settings.SetGooglerMaxVideoConnections(max)
 }
 
+// GetGooglerImageFallbackOrder повертає порядок фалбек-провайдерів для зображень
+func (a *App) GetGooglerImageFallbackOrder() []string {
+	return a.settings.GetGooglerImageFallbackOrder()
+}
+
+// SaveGooglerImageFallbackOrder зберігає порядок фалбек-провайдерів для зображень
+func (a *App) SaveGooglerImageFallbackOrder(order []string) error {
+	return a.settings.SetGooglerImageFallbackOrder(order)
+}
+
+// GetGooglerVideoFallbackOrder повертає порядок фалбек-провайдерів для відео
+func (a *App) GetGooglerVideoFallbackOrder() []string {
+	return a.settings.GetGooglerVideoFallbackOrder()
+}
+
+// SaveGooglerVideoFallbackOrder зберігає порядок фалбек-провайдерів для відео
+func (a *App) SaveGooglerVideoFallbackOrder(order []string) error {
+	return a.settings.SetGooglerVideoFallbackOrder(order)
+}
+
 // Pipeline Methods
 
 // GetPipelineSettings returns pipeline configuration

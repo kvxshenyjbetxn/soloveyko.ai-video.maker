@@ -104,7 +104,7 @@
 |--------|------|-------------|
 | OpenRouter | `openrouter.go` | LLM (GPT, Claude, Gemini через єдиний API) |
 | Pollinations.ai | `pollinations.go` | Безкоштовна генерація зображень |
-| Googler | `googler.go` | Генерація зображень/відео, ремікс |
+| Googler | `googler.go` | Генерація зображень/відео, ремікс; фалбек-провайдери з `Settings` + primary з пайплайну |
 | ElevenLabs Bot | `elevenlabsbot.go` | TTS через проксі `voiceapi.csv666.ru` |
 | ElevenLabs Unlim | `elevenlabsunlim.go` | TTS безліміт через `voicer.mat3u.com` |
 | ElevenLabs UA | `elevenlabsua.go` | TTS українська через `11tts.net` |
@@ -301,6 +301,7 @@ Model Context Protocol сервер для зовнішніх агентів/LLM
 
 - **Файл налаштувань**: JSON у config directory (~/.soloveyko.ai/ або OS-specific)
 - **Глобальні поля** (корінь `Settings`): мова, `theme`, `accentColor`, `uiStyle` (`rounded` | `sharp`)
+- **Googler (fallback)**: у `AppSettings` зберігаються `GooglerImageFallbackOrder` та `GooglerVideoFallbackOrder` (список ідентифікаторів провайдерів: whisk, flow, gemini, grok). Первинний провайдер для кожного запиту задається в `PipelineSettings` (модель зображення/відео в Пайплайні); `buildFallbackList` у `backend/api/googler.go` збирає ланцюжок: primary перший, далі фалбеки з налаштувань без дублікатів primary. UI: `frontend/src/tabs/settings/api/image/googler.tsx`
 - **200+ полів** у `PipelineSettings`: переклад, переписування, озвучка, зображення, субтитри, монтаж, overlays, watermarks, custom stages
 - **Named API Keys**: підтримка кількох ключів для кожного сервісу
 - **Шаблони**: збереження/завантаження конфігурацій пайплайнів

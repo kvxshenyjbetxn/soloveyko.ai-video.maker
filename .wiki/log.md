@@ -4,6 +4,29 @@
 
 <!-- NEW_LOG_ENTRY -->
 
+## [2026-04-22] | docs: фіналізація сесії (end wiki) — архітектура та коміт після Googler fallback
+- **Задача**: Завершити сесію за `skill-end-wiki`: узгодити wiki з кодом, перевірити ADR та посилання, зафіксувати зміни в репозиторії.
+- **Зміни**:
+  - [[architecture]]: у розділі «Керування конфігурацією» додано опис `GooglerImageFallbackOrder` / `GooglerVideoFallbackOrder` та `buildFallbackList`; у таблиці API Layer оновлено рядок Googler
+  - [[decisions]]: виправлено формат рядка таблиці (подвійний `|`); уточнено текст ADR про Googler fallback
+  - Виконано `wails generate module` — у згенерованих біндінгах з’явилися `Get/SaveGooglerImageFallbackOrder` та `Get/SaveGooglerVideoFallbackOrder` (`frontend/wailsjs/go/` у `.gitignore`, оновлюється локально при збірці/dev)
+  - Підготовлено git commit (Conventional Commits, українською) коду та wiki
+- **Файли**: [[architecture]], [[decisions]], [[log]]
+- **Статус**: ✅ Завершено
+- **Результат**: Документація відображає потік primary (пайплайн) + налаштовані фалбеки; репозиторій готовий до коміту одним атомарним знімком
+
+## [2026-04-22] | feat(googler): налаштування пріоритету фалбек-провайдерів у GOOGLER
+- **Задача**: Дати можливість вручну налаштовувати порядок запасних (fallback) провайдерів для генерації зображень та відео в GOOGLER. Первинний провайдер завжди береться з налаштувань Пайплайну; решта — конфігурований список у API→Зображення→GOOGLER.
+- **Зміни**:
+  - `backend/utils/settings.go`: у `AppSettings` додано поля `GooglerImageFallbackOrder []string` та `GooglerVideoFallbackOrder []string`; додано `GetGooglerImageFallbackOrder` / `SetGooglerImageFallbackOrder` / `GetGooglerVideoFallbackOrder` / `SetGooglerVideoFallbackOrder` (дефолт: `["flow", "gemini"]`)
+  - `app.go`: додано 4 публічні методи `GetGooglerImageFallbackOrder`, `SaveGooglerImageFallbackOrder`, `GetGooglerVideoFallbackOrder`, `SaveGooglerVideoFallbackOrder`
+  - `backend/api/googler.go`: хардкодений `allModels := []string{"whisk","flow","gemini"}` замінено на `buildFallbackList(primary, fallbackOrder)` — primary (з пайплайну) завжди перший, далі фалбеки з settings без дублікатів
+  - `frontend/src/tabs/settings/api/image/googler.tsx`: нова секція "Пріоритет фалбек-провайдерів" — окремо для зображень та відео; кожен провайдер (whisk/flow/gemini/grok) можна увімкнути/вимкнути та переставити ↑↓; inactive-провайдери показуються сірими з кнопкою "+"
+  - `frontend/src/locales/*.json`: додано ключі `fallbackTitle`, `fallbackDesc`, `fallbackImage`, `fallbackVideo`, `fallbackLabel` у блок `api.googlerSettings`
+- **Файли**: `backend/utils/settings.go`, `app.go`, `backend/api/googler.go`, `frontend/src/tabs/settings/api/image/googler.tsx`, `frontend/src/locales/uk.json`, `frontend/src/locales/en.json`, `frontend/src/locales/ru.json`, [[log]], [[decisions]]
+- **Статус**: ✅ Завершено
+- **Результат**: Користувач може в UI вибирати порядок запасних провайдерів (1-й фалбек, 2-й фалбек...) окремо для зображень та відео; первинний провайдер як і раніше задається в Пайплайні
+
 ## [2026-04-22] | feat(ui): перемикач стилю інтерфейсу — округлений / строгий
 - **Задача**: Додати в налаштуваннях перемикач стилю UI між "Округленим" (поточний) та "Строгим" (Windows 10, без заокруглень).
 - **Зміни**:

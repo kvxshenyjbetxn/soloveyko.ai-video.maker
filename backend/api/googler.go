@@ -208,23 +208,25 @@ type ReferenceImage struct {
 	Image    string `json:"image"`
 }
 
+// buildFallbackList будує список провайдерів: primary + fallbacks (без дублікатів)
+func buildFallbackList(primary string, fallbacks []string) []string {
+	result := []string{primary}
+	for _, f := range fallbacks {
+		if f != primary {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
 // GenerateImage генерує картинку за допомогою Googler з автоматичними повторами
 func (s *GooglerService) GenerateImage(apiKey string, model string, prompt string, aspectRatio string, outputPath string) error {
 	imgSem, _ := s.ensureSemaphores()
 
-	// Fallback list
-	allModels := []string{"whisk", "flow", "gemini"}
-	startIndex := -1
-	for i, m := range allModels {
-		if m == model {
-			startIndex = i
-			break
-		}
-	}
-	if startIndex == -1 {
-		allModels = append([]string{model}, allModels...)
-		startIndex = 0
-	}
+	// Build fallback list: primary model first, then user-configured fallbacks
+	fallbackOrder := s.settings.GetGooglerImageFallbackOrder()
+	allModels := buildFallbackList(model, fallbackOrder)
+	startIndex := 0
 
 	var lastErr error
 	for i := startIndex; i < len(allModels); i++ {
@@ -602,19 +604,10 @@ func (s *GooglerService) remixImageOnce(apiKey string, prompt string, referenceI
 func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string) error {
 	_, vidSem := s.ensureSemaphores()
 
-	// Fallback list
-	allModels := []string{"whisk", "flow", "gemini"}
-	startIndex := -1
-	for i, m := range allModels {
-		if m == model {
-			startIndex = i
-			break
-		}
-	}
-	if startIndex == -1 {
-		allModels = append([]string{model}, allModels...)
-		startIndex = 0
-	}
+	// Build fallback list: primary model first, then user-configured fallbacks
+	fallbackOrder := s.settings.GetGooglerVideoFallbackOrder()
+	allModels := buildFallbackList(model, fallbackOrder)
+	startIndex := 0
 
 	var lastErr error
 	for i := startIndex; i < len(allModels); i++ {

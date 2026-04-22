@@ -1,10 +1,11 @@
-# ⚖️ Decision Log (ADRs)
+﻿# ⚖️ Decision Log (ADRs)
 
 Журнал важливих архітектурних та технічних рішень.
 
 | Дата | Рішення | Контекст | Наслідки |
 | :--- | :--- | :--- | :--- |
 <!-- NEW_DECISION_ENTRY -->
+| 2026-04-22 | Googler fallback order зберігається окремо від primary; `buildFallbackList` завжди ставить primary першим | Первинний провайдер з Пайплайну; fallback-и з API→Зображення→GOOGLER | `GooglerImageFallbackOrder` / `GooglerVideoFallbackOrder` — лише запасні; `buildFallbackList` дедуплікує повтор primary; дефолт `["flow","gemini"]` |
 | 2026-04-22 | Режим «строгий» UI через глобальний `border-radius: 0` на `body.style-sharp` | Потрібен швидкий перемикач «округлений / Win10-подібний» без переписування десятків CSS-файлів | Один клас на `body` + селектор `body.style-sharp *` з `!important`; для scrollbar thumb залишено мінімальне заокруглення (2px); режим «округлений» не додає правил — візуально як до змін |
 | 2026-04-15 | Googler семафор звільняється під час rate-limit sleep | `GenerateImage`/`RemixImage`/`GenerateVideo` утримували `imgSem`/`vidSem` протягом 5-хвилинної паузи після 429 — всі слоти заповнювались сплячими горутинами, і картинки переставали генеруватись поки відео чекали на відновлення ліміту | Семафор тепер обгортає лише безпосередній виклик `generateImageOnce`/`generateVideoOnce`/`remixImageOnce`; sleep відбувається поза семафором; паралелізм image та video генерацій незалежний |
 | 2026-04-15 | FFmpeg concat demuxer замість байтової конкатенації MP3 | `mergeAudioFiles` зливала MP3 chunk-и через `io.Copy`, що лишало ID3/Xing заголовки всередині файлу; FFmpeg `mp3float` декодер періодично видавав `Invalid data found` | FFmpeg concat demuxer (`-f concat -safe 0 -c copy`) генерує коректний MP3 без перекодування; впливає на VoiceMaker та Edge TTS (сервіси з чанкуванням тексту) |
@@ -22,4 +23,6 @@
 ---
 *Записуйте сюди рішення, про які ви можете пошкодувати (або які доведеться пояснювати) через місяць.*
 
-*Нові записи — після <!-- NEW_DECISION_ENTRY --> (зверху!)*
+*Нові записи — після <!-- NEW_DECISION_ENTRY -->
+|| 2026-04-22 | Googler fallback order - buildFallbackList primary завжди перший | Primary провайдер з Пайплайну, fallback-и з окремих налаштувань | GooglerImageFallbackOrder / GooglerVideoFallbackOrder містять лише запасних; buildFallbackList дедуплікує; дефолт [flow,gemini] |
+ (зверху!)*

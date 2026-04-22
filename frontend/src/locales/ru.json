@@ -279,7 +279,12 @@
             "videoAlertThreshold": "Порог видео (в час)",
             "imageAlertThreshold": "Порог картинок (в час)",
             "videoThresholdPlaceholder": "Например: 10",
-            "imageThresholdPlaceholder": "Например: 1000"
+            "imageThresholdPlaceholder": "Например: 1000",
+            "fallbackTitle": "Приоритет резервных провайдеров",
+            "fallbackDesc": "Основной провайдер всегда берётся из настроек Пайплайна. Ниже — порядок резервных провайдеров при сбое основного. Используйте ▲▼ для изменения порядка.",
+            "fallbackImage": "Резервы для изображений",
+            "fallbackVideo": "Резервы для видео",
+            "fallbackLabel": "↳ "
         },
         "openrouterSettings": {
             "apikey": "API Ключ",
