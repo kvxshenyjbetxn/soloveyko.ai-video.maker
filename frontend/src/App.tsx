@@ -95,22 +95,38 @@ function App() {
     };
 
     useEffect(() => {
+        if (isAuthLoading || !user) {
+            return;
+        }
+
+        let isCancelled = false;
+
         const initializeApp = async () => {
             checkUpdates();
             // @ts-ignore
             const firstRun = await window.go.main.App.IsFirstRun();
+            if (isCancelled) return;
+
             if (firstRun) {
                 setShowInitialSetup(true);
                 return;
             }
+
             // @ts-ignore
             const showWelcome = await window.go.main.App.GetShowWelcome();
+            if (isCancelled) return;
+
             if (showWelcome) {
                 setShowWelcomeWindow(true);
             }
         };
-        initializeApp();
-    }, []);
+
+        void initializeApp();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [isAuthLoading, user]);
 
     const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification, montageControlNotification, closeMontageControlNotification } = useQueue();
     const pendingCount = tasks.filter(t => t.status === 'pending').length;

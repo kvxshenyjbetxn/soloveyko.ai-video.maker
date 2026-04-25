@@ -10,6 +10,7 @@ import {
     type User
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { trackUserPresence } from '../lib/presence';
 
 interface AuthContextValue {
     user: User | null;
@@ -33,6 +34,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         return unsubscribe;
     }, []);
+
+    useEffect(() => {
+        if (!user) {
+            return;
+        }
+
+        const stopTracking = trackUserPresence(user);
+
+        return () => {
+            stopTracking();
+        };
+    }, [user]);
 
     const signIn = async (email: string, password: string, rememberMe: boolean) => {
         await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
