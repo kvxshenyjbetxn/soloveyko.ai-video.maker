@@ -51,7 +51,6 @@ export const AgentController = ({ currentPath, setCurrentPath }: AgentController
         addTasks,
         clearQueue,
         startQueue,
-        startRemoteQueue,
         resumeTask,
         resumeImageControl,
         updateControlDraft,
@@ -409,14 +408,9 @@ export const AgentController = ({ currentPath, setCurrentPath }: AgentController
                         return;
                     }
                     case 'start_queue': {
-                        if (request.params?.workerId) {
-                            const workerName = typeof request.params?.workerName === 'string' ? request.params.workerName : 'Remote Worker';
-                            await startRemoteQueue(request.params.workerId, workerName);
-                        } else {
-                            await startQueue();
-                        }
+                        await startQueue();
                         setCurrentPath('queue');
-                        await respond(request.id, { ok: true, mode: request.params?.workerId ? 'remote' : 'local' });
+                        await respond(request.id, { ok: true, mode: 'local' });
                         return;
                     }
                     case 'continue_image_control': {
@@ -614,7 +608,6 @@ export const AgentController = ({ currentPath, setCurrentPath }: AgentController
         setSelectedTemplateIds,
         setTextForTab,
         startQueue,
-        startRemoteQueue,
         t,
         tasks,
         templates,

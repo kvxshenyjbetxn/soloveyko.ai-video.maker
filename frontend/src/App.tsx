@@ -29,7 +29,6 @@ import { Templates } from './tabs/settings/templates';
 import { Statistic } from './tabs/other/statistic';
 import { History } from './tabs/other/history';
 import { Preview } from './tabs/other/Preview';
-import { RemoteControl } from './tabs/other/RemoteControl';
 import { Logs } from './tabs/logs';
 import { GoogleIntegration } from './tabs/settings/api/google_integration';
 import NotificationsSettings from './tabs/settings/notifications';
@@ -255,7 +254,6 @@ function App() {
             case 'other.history': return <History />;
             case 'other.templates': return <Templates />;
             case 'other.preview': return <Preview />;
-            case 'other.remote': return <RemoteControl />;
 
             // Logs tab
             case 'logs': return <Logs />;
@@ -457,12 +455,6 @@ function App() {
                         onClick={() => setCurrentPath('other.preview')}
                     >
                         {t('other.preview')}
-                    </div>
-                    <div
-                        className={`sidebar-item animate-sidebar-item stagger-5 ${currentPath === 'other.remote' ? 'active' : ''}`}
-                        onClick={() => setCurrentPath('other.remote')}
-                    >
-                        {t('other.remote_control') || 'Віддалене керування'}
                     </div>
                 </aside>
             );

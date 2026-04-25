@@ -61,10 +61,7 @@ type EnqueueTaskArgs struct {
 	SelectTemplates *bool    `json:"selectTemplates,omitempty" jsonschema:"persist the chosen templates in UI selection; defaults to true when omitted"`
 }
 
-type StartQueueArgs struct {
-	WorkerID   string `json:"workerId,omitempty" jsonschema:"optional remote worker id"`
-	WorkerName string `json:"workerName,omitempty" jsonschema:"optional remote worker display name"`
-}
+type StartQueueArgs struct{}
 
 type UpdateTextControlArgs struct {
 	TaskID string `json:"taskId" jsonschema:"queue task id awaiting text control"`
@@ -233,7 +230,7 @@ func addTools(server *mcp.Server, invoke Invoker) {
 			return textResult("Task was added to the queue."), out, nil
 		})
 
-	mcp.AddTool(server, &mcp.Tool{Name: "start_queue", Description: "Start processing the current queue locally or on a selected remote worker."},
+	mcp.AddTool(server, &mcp.Tool{Name: "start_queue", Description: "Start processing the current queue."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, args StartQueueArgs) (*mcp.CallToolResult, map[string]any, error) {
 			out, err := invokeMap(ctx, invoke, "start_queue", args)
 			if err != nil {

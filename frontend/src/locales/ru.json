@@ -769,10 +769,7 @@
         "unit_m": "мин",
         "unit_s": "с",
         "stage": "Этап пайплайна",
-        "select": "Выбрать...",
-        "local_processing": "Локальная обработка",
-        "remote_worker_title": "ВЫПОЛНЯЕТ ВОРКЕР",
-        "remote_tasks_sent": "Задания успешно отправлены воркеру"
+        "select": "Выбрать..."
         },
     "notifications": {
         "tab_title": "Уведомления",

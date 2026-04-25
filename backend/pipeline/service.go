@@ -342,15 +342,15 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	finalDir := s.ResolveFinalDir(taskName, taskType, subName, settings)
 	s.log("INFO", fmt.Sprintf("[Pipeline] Final directory resolved: %s", finalDir), id, taskLabel)
 
-	// DEBUG: Зберігаємо налаштування, які отримав воркер, у фінальну папку для аналізу
+	// DEBUG: Зберігаємо фінальні налаштування у папку задачі для аналізу
 	if err := os.MkdirAll(finalDir, 0755); err == nil {
 		// 1. Raw Map (те, що пройшло через flattenSettings)
 		if rawData, err := json.MarshalIndent(settings, "", "  "); err == nil {
-			_ = os.WriteFile(filepath.Join(finalDir, "debug_worker_received_map.json"), rawData, 0644)
+			_ = os.WriteFile(filepath.Join(finalDir, "debug_pipeline_input_map.json"), rawData, 0644)
 		}
 		// 2. Struct (те, що було реально застосовано до пайплайну)
 		if structData, err := json.MarshalIndent(pSettings, "", "  "); err == nil {
-			_ = os.WriteFile(filepath.Join(finalDir, "debug_worker_applied_settings.json"), structData, 0644)
+			_ = os.WriteFile(filepath.Join(finalDir, "debug_pipeline_applied_settings.json"), structData, 0644)
 		}
 		s.log("INFO", "[Pipeline] [DEBUG] Saved settings dumps to final directory", id, taskLabel)
 	}

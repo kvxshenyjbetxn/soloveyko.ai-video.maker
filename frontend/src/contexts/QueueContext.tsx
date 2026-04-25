@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { ProcessTask, SubmitImageControlResult, SubmitExistingFilesResult, ClearGallery, SendControlAction, CancelQueue, ResetQueueCancellation } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
-import { useToast } from './ToastContext';
 import { useI18n } from './I18nContext';
 
 export type TaskStatus = 'pending' | 'waiting' | 'running' | 'processing' | 'completed' | 'failed';
@@ -15,8 +14,6 @@ export interface QueueTask {
     textStatus: TaskStatus; voiceStatus: TaskStatus; imageStatus: TaskStatus;
     subtitleStatus: TaskStatus; montageStatus: TaskStatus; montageMsg?: string;
     voiceDuration?: string; imagesMessage?: string; timestamp: number;
-    workerName?: string;
-    remoteId?: string;
 }
 
 interface QueueDataContextType {
@@ -46,7 +43,6 @@ interface QueueActionsContextType {
     regenerateTask: (id: string, text: string, settings?: any) => Promise<void>;
     cancelTask: (id: string) => Promise<void>;
     cancelQueue: () => Promise<void>;
-    startRemoteQueue: (workerId: string, workerName: string) => Promise<void>;
     resumeImageControl: () => Promise<void>;
     resumeMontageControl: (id: string, resultData: string) => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
@@ -59,7 +55,7 @@ const QueueDataContext = createContext<QueueDataContextType | undefined>(undefin
 const QueueActionsContext = createContext<QueueActionsContextType | undefined>(undefined);
 
 export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { t } = useI18n(); const { showToast } = useToast();
+    const { t } = useI18n();
     const [tasks, setTasks] = useState<QueueTask[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [completionModal, setCompletionModal] = useState({ 
@@ -329,102 +325,6 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         await SubmitExistingFilesResult(id, skipStages);
     };
 
-    const startRemoteQueue = useCallback(async (workerId: string, workerName: string) => {
-        if (isProcessing) return;
-        const pending = tasks.filter(t => t.status === 'pending');
-        if (pending.length === 0) return;
-
-        setIsProcessing(true);
-        
-        try {
-            for (const task of pending) {
-                setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'waiting', workerName } : t));
-                
-                const content = taskContentRef.current.get(task.id) || "";
-                const remoteSettings = JSON.parse(JSON.stringify(task.settings || {}));
-                remoteSettings.taskType = task.type;
-                remoteSettings.__remoteFolderName = task.folderName;
-                remoteSettings.__remoteSubName = task.subName || "";
-                remoteSettings.__remoteTemplates = task.subName ? [task.subName] : ['Default'];
-                
-                // @ts-ignore
-                const remoteTask = await window.go.main.App.SendRemoteTaskWithTarget(
-                    workerId, 
-                    task.name, 
-                    content, 
-                    remoteSettings
-                );
-                
-                // remoteTask is the object returned from the server, it has an ID
-                if (remoteTask && remoteTask.id) {
-                    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, remoteId: remoteTask.id } : t));
-                } else {
-                    // Fallback if ID is not returned directly
-                    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'completed', progress: 100 } : t));
-                }
-            }
-            
-            showToast(t('common.remote_tasks_sent') || "Tasks sent to worker", 'success');
-        } catch (e: any) {
-            console.error("Remote queue failed:", e);
-            showToast(e.toString(), 'error');
-        } finally {
-            setIsProcessing(false);
-        }
-    }, [tasks, isProcessing, t, showToast]);
-
-    // Remote Task Status Polling Loop
-    useEffect(() => {
-        const hasQueued = tasks.some(task => 
-            task.remoteId && (task.status?.toLowerCase() === 'waiting' || task.status?.toLowerCase() === 'pending')
-        );
-        const hasActive = tasks.some(task => 
-            task.remoteId && (task.status?.toLowerCase() === 'running' || task.status?.toLowerCase() === 'processing')
-        );
-
-        if (!hasQueued && !hasActive) return;
-
-        const pollStatuses = async () => {
-            const activeRemoteIds = tasks
-                .filter(t => t.remoteId && ['waiting', 'pending', 'running', 'processing'].includes(t.status?.toLowerCase() || ''))
-                .map(t => t.remoteId!);
-            
-            if (activeRemoteIds.length === 0) return;
-
-            try {
-                // @ts-ignore
-                const statusMap = await window.go.main.App.GetRemoteTasksStatus(activeRemoteIds);
-                if (statusMap) {
-                    setTasks(prev => prev.map(taskItem => {
-                        if (taskItem.remoteId && statusMap[taskItem.remoteId]) {
-                            let newStatus = statusMap[taskItem.remoteId] as string;
-                            if (newStatus.toLowerCase() === 'prossecing') newStatus = 'processing';
-                            
-                            if (newStatus.toLowerCase() !== taskItem.status?.toLowerCase()) {
-                                let progress = taskItem.progress;
-                                if (newStatus.toLowerCase() === 'completed') {
-                                    progress = 100;
-                                    showToast(`${t('queue.status_completed')}: ${taskItem.name}`, 'success');
-                                } else if (newStatus.toLowerCase() === 'failed') {
-                                    progress = 0;
-                                    showToast(`${t('queue.status_failed')}: ${taskItem.name}`, 'error');
-                                }
-                                return { ...taskItem, status: newStatus as TaskStatus, progress };
-                            }
-                        }
-                        return taskItem;
-                    }));
-                }
-            } catch (err) {
-                console.error("Polling error:", err);
-            }
-        };
-
-        const intervalMs = hasQueued ? 5000 : 60000;
-        const interval = setInterval(pollStatuses, intervalMs);
-        return () => clearInterval(interval);
-    }, [tasks]);
-
     const startQueue = useCallback(async () => {
         if (isProcessing) return;
         const pending = tasks.filter(t => t.status === 'pending');
@@ -534,7 +434,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 const nextTasks = prev.map(t => t.id === id ? { ...t, status: s as TaskStatus, progress: p, resultLength: l ?? t.resultLength } : t);
                 
                 // Якщо всі завдання в активному пакеті завершені (успішно або з помилкою),
-                // вимикаємо режим обробки. Це важливо для воркера.
+                // вимикаємо режим обробки.
                 if (activeBatchRef.current.includes(id) && (s === 'completed' || s === 'failed')) {
                     const hasActive = nextTasks.some(t => activeBatchRef.current.includes(t.id) && t.status !== 'completed' && t.status !== 'failed');
                     if (!hasActive) {
@@ -598,33 +498,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const uTextResult = EventsOn("textResult", (id: string, length: number) => {
             setTasks(prev => prev.map(t => t.id === id ? { ...t, resultLength: length } : t));
         });
-        const uRemoteTask = EventsOn("remoteTaskClaimed", (data: any) => {
-            const { id, name, folderName, subName, payload, settings, taskType } = data;
-            if (taskContentRef.current.has(id)) return;
-            taskContentRef.current.set(id, payload);
-            
-            const type = taskType || settings?.taskType || (name.toLowerCase().includes('rewrite') ? 'rewrite' : 'translate');
-            const resolvedFolderName = (folderName || name || '').trim();
-            const resolvedSubName = (subName || '').trim();
-            
-            const newTask: QueueTask = {
-                id,
-                name: resolvedSubName ? `${resolvedFolderName} - ${resolvedSubName}` : resolvedFolderName,
-                folderName: resolvedFolderName,
-                subName: resolvedSubName,
-                type: type, content: "", settings,
-                status: 'waiting', progress: 0,
-                textStatus: 'waiting', voiceStatus: 'waiting',
-                imageStatus: 'waiting', subtitleStatus: 'waiting',
-                montageStatus: 'waiting', timestamp: Date.now(),
-            };
-            setTasks(prev => [...prev, newTask]);
-            setIsProcessing(true);
-            if (!activeBatchRef.current.includes(id)) {
-                activeBatchRef.current.push(id);
-            }
-        });
-        return () => { uStatus(); uStage(); uReq(); uImgReq(); uMontageReq(); uFilesReq(); uTextResult(); uRemoteTask(); };
+        return () => { uStatus(); uStage(); uReq(); uImgReq(); uMontageReq(); uFilesReq(); uTextResult(); };
     }, [t]);
 
     useEffect(() => {
@@ -676,7 +550,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     const actionsValue = {
-        addTasks, addTask, removeTask, clearQueue, startQueue, startRemoteQueue, getNextTaskName,
+        addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
         updateTaskStatus, updateControlDraft, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles,
         closeCompletionModal, closeImageControlNotification, closeMontageControlNotification,
         addRegeneratingPath, removeRegeneratingPath
