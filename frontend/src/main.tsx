@@ -11,6 +11,7 @@ import { ToastProvider } from './contexts/ToastContext';
 import { TemplateProvider } from './contexts/TemplateContext';
 import { EditorDraftProvider } from './contexts/EditorDraftContext';
 import { GoogleMonitorProvider } from './contexts/GoogleMonitorContext';
+import { AuthProvider } from './contexts/AuthContext';
 
 const container = document.getElementById('root');
 
@@ -27,7 +28,9 @@ root.render(
                                 <EditorDraftProvider>
                                     <QueueProvider>
                                         <GoogleMonitorProvider>
-                                            <App />
+                                            <AuthProvider>
+                                                <App />
+                                            </AuthProvider>
                                         </GoogleMonitorProvider>
                                     </QueueProvider>
                                 </EditorDraftProvider>

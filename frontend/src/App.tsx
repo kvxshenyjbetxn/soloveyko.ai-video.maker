@@ -38,6 +38,8 @@ import { InitialSetup } from './components/InitialSetup';
 import { WelcomeWindow } from './components/WelcomeWindow';
 import { AgentController } from './components/AgentController';
 import { utils as models } from '../wailsjs/go/models';
+import { useAuth } from './contexts/AuthContext';
+import { AuthModal } from './components/AuthModal';
 
 // Simple Icons (SVG)
 const ScriptIcon = () => (
@@ -69,6 +71,7 @@ type TabPath = string;
 
 function App() {
     const { t } = useI18n();
+    const { user, isLoading: isAuthLoading, logOut } = useAuth();
 
     // Update State
     const [updateManifest, setUpdateManifest] = useState<models.UpdateManifest | null>(null);
@@ -463,6 +466,14 @@ function App() {
         return null;
     };
 
+    if (isAuthLoading) {
+        return <div className="app-container app-auth-loading">Перевірка авторизації...</div>;
+    }
+
+    if (!user) {
+        return <AuthModal />;
+    }
+
     return (
         <div className="app-container">
             {showInitialSetup && (
@@ -541,6 +552,18 @@ function App() {
                             <span>{t('tabs.logs')}</span>
                         </div>
                     </nav>
+
+                    <div className="auth-user-panel">
+                        <span className="auth-user-email">{user.email}</span>
+                        <button
+                            className="auth-logout-btn"
+                            onClick={() => {
+                                void logOut();
+                            }}
+                        >
+                            Вийти
+                        </button>
+                    </div>
 
                 </div>
             </header>
