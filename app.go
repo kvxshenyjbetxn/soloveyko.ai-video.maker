@@ -56,7 +56,6 @@ type App struct {
 	fullHistory     *utils.FullHistoryService
 	productionStats *utils.ProductionStatsService
 	googleParser    *api.GoogleParserService
-	authService     *api.AuthService
 	telegramService *api.TelegramService
 	updater         *utils.UpdateManager
 	workerCtx       context.Context
@@ -91,7 +90,6 @@ func NewApp() *App {
 		assemblyAI:      api.NewAssemblyAIService(settings),
 		templates:       utils.NewTemplateService(),
 		googleParser:    api.NewGoogleParserService(),
-		authService:     api.NewAuthService(),
 		telegramService: api.NewTelegramService(),
 		updater:         utils.NewUpdateManager(utils.AppVersion),
 	}
@@ -1927,29 +1925,6 @@ func (a *App) GetGooglerImageAlertThreshold() float64 {
 // SaveGooglerImageAlertThreshold saves alert threshold
 func (a *App) SaveGooglerImageAlertThreshold(threshold float64) error {
 	return a.settings.SetGooglerImageAlertThreshold(threshold)
-}
-
-// Auth Methods
-
-// ValidateKey validates the provided key against the manager bot
-func (a *App) ValidateKey(key string) (*api.AuthResponse, error) {
-	hwID := utils.GetHardwareID()
-	return a.authService.ValidateKey(key, hwID)
-}
-
-// GetSavedAuthKey returns the saved Access Key
-func (a *App) GetSavedAuthKey() string {
-	return a.settings.GetAppAccessKey()
-}
-
-// SaveAuthKey saves the Access Key to settings
-func (a *App) SaveAuthKey(key string) error {
-	return a.settings.SetAppAccessKey(key)
-}
-
-// ClearAuthKey clears the Access Key from settings
-func (a *App) ClearAuthKey() error {
-	return a.settings.SetAppAccessKey("")
 }
 
 // GetMyHardwareID повертає Hardware ID цього ПК для ідентифікації

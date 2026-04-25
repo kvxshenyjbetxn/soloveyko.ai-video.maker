@@ -430,39 +430,6 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const pending = tasks.filter(t => t.status === 'pending');
         if (pending.length === 0) return;
 
-        // Check validation before starting
-        try {
-            // @ts-ignore
-            const savedKey = await window.go.main.App.GetSavedAuthKey();
-            const sessionKey = sessionStorage.getItem('current_auth_key');
-            const key = savedKey || sessionKey || "";
-
-            // @ts-ignore
-            const response = await window.go.main.App.ValidateKey(key);
-
-            if (!response || !response.valid) {
-                showToast(t('auth.error_expired'), 'error');
-                return;
-            }
-        } catch (e: any) {
-            console.error("Queue start auth check failed:", e);
-            const errMsg = e?.toString() || "";
-            const lowerMsg = errMsg.toLowerCase();
-
-            // If we are already in the app (starting queue), and there is an auth error, 
-            // it's almost 100% a subscription issue, even if the server says something generic.
-            if (lowerMsg.includes("expired") || lowerMsg.includes("subscription") || lowerMsg.includes("403")) {
-                showToast(t('auth.error_expired'), 'error');
-            } else if (lowerMsg.includes("hardware")) {
-                showToast(t('auth.error_hardware_mismatch'), 'error');
-            } else {
-                // If we are here, something is wrong, and since the user already logged in before,
-                // the most likely culprit is still the subscription/access.
-                showToast(t('auth.error_expired'), 'error');
-            }
-            return;
-        }
-
         setIsProcessing(true); const startTime = Date.now();
         totalPausedTimeRef.current = 0;
         pauseStartRef.current = null;

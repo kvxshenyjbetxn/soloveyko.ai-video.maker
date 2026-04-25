@@ -5,9 +5,6 @@ import { useQueue } from './contexts/QueueContext';
 import { useLogger } from './contexts/LoggerContext';
 import logo from './assets/logo.png';
 import { ConfirmModal } from './components/ConfirmModal';
-import { AuthWindow } from './components/AuthWindow';
-import { Profile } from './components/Profile';
-import { api } from '../wailsjs/go/models';
 
 // Import all tab components
 import { Translate } from './tabs/text/translate';
@@ -74,12 +71,6 @@ type TabPath = string;
 function App() {
     const { t } = useI18n();
 
-    // Auth State
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [authResponse, setAuthResponse] = useState<api.AuthResponse | null>(null);
-    const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-    const [authError, setAuthError] = useState<string | undefined>(undefined);
-
     // Update State
     const [updateManifest, setUpdateManifest] = useState<models.UpdateManifest | null>(null);
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
@@ -102,84 +93,22 @@ function App() {
     };
 
     useEffect(() => {
-        const checkAuth = async () => {
-            try {
-                // @ts-ignore
-                const key = await window.go.main.App.GetSavedAuthKey();
-                if (key) {
-                    // @ts-ignore
-                    const response = await window.go.main.App.ValidateKey(key);
-                    if (response && response.valid) {
-                        setIsAuthenticated(true);
-                        setAuthResponse(response);
-                        sessionStorage.setItem('current_auth_key', key);
-                        if (response.telegram_id) sessionStorage.setItem('telegram_id', response.telegram_id.toString());
-                        checkUpdates();
-
-                        // Check if it's the first run
-                        // @ts-ignore
-                        const firstRun = await window.go.main.App.IsFirstRun();
-                        if (firstRun) {
-                            setShowInitialSetup(true);
-                        } else {
-                            // Only check for welcome window if not first run
-                            // @ts-ignore
-                            const showWelcome = await window.go.main.App.GetShowWelcome();
-                            if (showWelcome) {
-                                setShowWelcomeWindow(true);
-                            }
-                        }
-                    }
-                }
-            } catch (e: any) {
-                console.error("Auth check failed:", e);
-                if (e && e.includes && e.includes("Subscription expired")) {
-                    setAuthError(e);
-                }
-            } finally {
-                setIsLoadingAuth(false);
+        const initializeApp = async () => {
+            checkUpdates();
+            // @ts-ignore
+            const firstRun = await window.go.main.App.IsFirstRun();
+            if (firstRun) {
+                setShowInitialSetup(true);
+                return;
             }
-        };
-        checkAuth();
-    }, []);
-
-    const handleAuthentication = async (response: api.AuthResponse, key: string, save: boolean) => {
-        setIsAuthenticated(true);
-        setAuthResponse(response);
-        sessionStorage.setItem('current_auth_key', key);
-        if (response.telegram_id) sessionStorage.setItem('telegram_id', response.telegram_id.toString());
-        if (save) {
-            // @ts-ignore
-            await window.go.main.App.SaveAuthKey(key);
-        } else {
-            // @ts-ignore
-            await window.go.main.App.ClearAuthKey();
-        }
-        checkUpdates();
-
-        // Check if it's the first run
-        // @ts-ignore
-        const firstRun = await window.go.main.App.IsFirstRun();
-        if (firstRun) {
-            setShowInitialSetup(true);
-        } else {
-            // Check if welcome should be shown
             // @ts-ignore
             const showWelcome = await window.go.main.App.GetShowWelcome();
             if (showWelcome) {
                 setShowWelcomeWindow(true);
             }
-        }
-    };
-
-    const handleLogout = async () => {
-        setIsAuthenticated(false);
-        setAuthResponse(null);
-        sessionStorage.removeItem('current_auth_key');
-        sessionStorage.removeItem('telegram_id');
-        // @ts-ignore
-        await window.go.main.App.ClearAuthKey();
-    };
+        };
+        initializeApp();
+    }, []);
 
     const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification, montageControlNotification, closeMontageControlNotification } = useQueue();
     const pendingCount = tasks.filter(t => t.status === 'pending').length;
@@ -542,14 +471,6 @@ function App() {
         return null;
     };
 
-    if (isLoadingAuth) {
-        return <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>Loading...</div>;
-    }
-
-    if (!isAuthenticated) {
-        return <AuthWindow onAuthenticated={handleAuthentication} error={authError} />;
-    }
-
     return (
         <div className="app-container">
             {showInitialSetup && (
@@ -629,7 +550,6 @@ function App() {
                         </div>
                     </nav>
 
-                    <Profile authResponse={authResponse} onLogout={handleLogout} />
                 </div>
             </header>
 
