@@ -1352,7 +1352,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			})
 		}
 	}
-	if len(pSettings.MontageOverlayTriggers) > 0 {
+	if pSettings.MontageOverlayTriggersEnabled && len(pSettings.MontageOverlayTriggers) > 0 {
 		for _, tr := range pSettings.MontageOverlayTriggers {
 			if tr.Phrase == "" || tr.Path == "" {
 				continue
