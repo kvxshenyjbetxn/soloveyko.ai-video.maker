@@ -793,6 +793,12 @@ func (a *App) GetTemplates() ([]utils.PipelineTemplate, error) {
 	return a.templates.LoadTemplates()
 }
 
+// GetPipelineTemplatesDir повертає абсолютний шлях до папки з JSON-шаблонами пайплайну (джерело для синхронізації в Firebase).
+func (a *App) GetPipelineTemplatesDir() string {
+	return a.templates.Dir()
+}
+
+
 // AddTemplate додає новий шаблон пайплайну
 func (a *App) AddTemplate(tplType string, name string, data map[string]interface{}) (*utils.PipelineTemplate, error) {
 	return a.templates.AddTemplate(tplType, name, data)

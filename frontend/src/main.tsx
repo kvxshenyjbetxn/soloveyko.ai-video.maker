@@ -24,17 +24,17 @@ root.render(
                 <LoggerProvider>
                     <ServiceProvider>
                         <ToastProvider>
-                            <TemplateProvider>
-                                <EditorDraftProvider>
-                                    <QueueProvider>
-                                        <GoogleMonitorProvider>
-                                            <AuthProvider>
+                            <AuthProvider>
+                                <TemplateProvider>
+                                    <EditorDraftProvider>
+                                        <QueueProvider>
+                                            <GoogleMonitorProvider>
                                                 <App />
-                                            </AuthProvider>
-                                        </GoogleMonitorProvider>
-                                    </QueueProvider>
-                                </EditorDraftProvider>
-                            </TemplateProvider>
+                                            </GoogleMonitorProvider>
+                                        </QueueProvider>
+                                    </EditorDraftProvider>
+                                </TemplateProvider>
+                            </AuthProvider>
                         </ToastProvider>
                     </ServiceProvider>
                 </LoggerProvider>

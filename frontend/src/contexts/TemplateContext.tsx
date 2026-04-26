@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 // @ts-ignore
 import { GetTemplates, AddTemplate, DeleteTemplate, UpdateTemplate } from '../../wailsjs/go/main/App';
 import { useToast } from './ToastContext';
+import { useAuth } from './AuthContext';
+import { formatTemplateSyncError, syncLocalTemplatesToCloud } from '../lib/templateCloudSync';
 
 export interface CustomStage {
     id: string;
@@ -185,6 +187,10 @@ interface TemplateContextType {
     removeTemplate: (id: string) => Promise<void>;
     updateTemplate: (id: string, name: string, data: any) => Promise<void>;
     isLoading: boolean;
+    isTemplateCloudSyncing: boolean;
+    templateCloudSyncError: string | null;
+    lastTemplateCloudSyncAt: number | null;
+    syncTemplatesToCloudNow: () => Promise<void>;
     selectedTemplateIds: string[];
     setSelectedTemplateIds: React.Dispatch<React.SetStateAction<string[]>>;
     flattenSettings: (obj: any) => any;
@@ -195,8 +201,12 @@ const TemplateContext = createContext<TemplateContextType | undefined>(undefined
 export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [templates, setTemplates] = useState<PipelineTemplate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isTemplateCloudSyncing, setIsTemplateCloudSyncing] = useState(false);
+    const [templateCloudSyncError, setTemplateCloudSyncError] = useState<string | null>(null);
+    const [lastTemplateCloudSyncAt, setLastTemplateCloudSyncAt] = useState<number | null>(null);
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
     const { showToast } = useToast();
+    const { user } = useAuth();
 
     /**
      * Recursively flattens a nested object into a flat key-value map.
@@ -275,18 +285,64 @@ export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }
         return result;
     }, []);
 
-    const loadTemplates = useCallback(async () => {
-        setIsLoading(true);
+    const syncTemplatesToCloudNow = useCallback(async () => {
+        if (!user) {
+            return;
+        }
+        setIsTemplateCloudSyncing(true);
+        setTemplateCloudSyncError(null);
         try {
             const temps = await GetTemplates();
-            setTemplates((temps as PipelineTemplate[]) || []);
+            const list = (temps as PipelineTemplate[]) || [];
+            setTemplates(list);
+            await syncLocalTemplatesToCloud(user, list);
+            setLastTemplateCloudSyncAt(Date.now());
+        } catch (err) {
+            console.error('Template cloud sync failed:', err);
+            setTemplateCloudSyncError(formatTemplateSyncError(err));
+        } finally {
+            setIsTemplateCloudSyncing(false);
+        }
+    }, [user]);
+
+    const loadTemplates = useCallback(async () => {
+        setIsLoading(true);
+        setTemplateCloudSyncError(null);
+        let list: PipelineTemplate[] = [];
+        let loadOk = false;
+        try {
+            const temps = await GetTemplates();
+            list = (temps as PipelineTemplate[]) || [];
+            setTemplates(list);
+            loadOk = true;
         } catch (error) {
             console.error('Failed to load templates:', error);
             showToast('Помилка завантаження шаблонів', 'error');
         } finally {
             setIsLoading(false);
         }
-    }, [showToast]);
+
+        if (!loadOk) {
+            return;
+        }
+
+        if (!user) {
+            setLastTemplateCloudSyncAt(null);
+            return;
+        }
+
+        setIsTemplateCloudSyncing(true);
+        setTemplateCloudSyncError(null);
+        try {
+            await syncLocalTemplatesToCloud(user, list);
+            setLastTemplateCloudSyncAt(Date.now());
+        } catch (err) {
+            console.error('Template cloud sync failed:', err);
+            setTemplateCloudSyncError(formatTemplateSyncError(err));
+        } finally {
+            setIsTemplateCloudSyncing(false);
+        }
+    }, [showToast, user]);
 
     const saveTemplate = useCallback(async (tplType: 'translate' | 'rewrite' | 'voiceover', name: string, data: PipelineSettings) => {
         try {
@@ -333,6 +389,10 @@ export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }
             removeTemplate,
             updateTemplate,
             isLoading,
+            isTemplateCloudSyncing,
+            templateCloudSyncError,
+            lastTemplateCloudSyncAt,
+            syncTemplatesToCloudNow,
             selectedTemplateIds,
             setSelectedTemplateIds,
             flattenSettings
