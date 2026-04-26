@@ -38,6 +38,12 @@ export function useRemoteWorkerListener(
 ) {
     const currentDeviceId = useMemo(() => getOrCreateDeviceId(), []);
 
+    // Always keep latest callbacks in refs so effect closures never go stale
+    const addTaskRef = useRef(addTask);
+    const startQueueRef = useRef(startQueue);
+    useEffect(() => { addTaskRef.current = addTask; }, [addTask]);
+    useEffect(() => { startQueueRef.current = startQueue; }, [startQueue]);
+
     // jobId of the remote job currently being processed
     const [activeJob, setActiveJob] = useState<string | null>(null);
 
@@ -63,13 +69,14 @@ export function useRemoteWorkerListener(
             try {
                 await acceptJob(user, job.jobId);
                 const tasks = await fetchJobTasks(user, job.jobId);
+                console.log('[RemoteWorker] fetched tasks:', tasks.length, 'for job:', job.jobId);
 
                 totalTasksRef.current = tasks.length;
                 completedCountRef.current = 0;
                 jobTaskIdsRef.current = new Set(tasks.map((t) => t.id));
 
                 for (const task of tasks) {
-                    addTask(
+                    addTaskRef.current(
                         task.type,
                         task.content,
                         task.settings,
@@ -80,12 +87,16 @@ export function useRemoteWorkerListener(
                         task.id,
                     );
                 }
+                console.log('[RemoteWorker] all tasks added to local queue');
 
                 setActiveJob(job.jobId);
                 await markJobRunning(user, job.jobId);
 
-                // Small delay to let React flush state before queue starts
-                setTimeout(() => void startQueue(), 400);
+                // Delay lets React flush all setTasks calls before startQueue reads them
+                setTimeout(() => {
+                    console.log('[RemoteWorker] calling startQueue');
+                    void startQueueRef.current();
+                }, 600);
             } catch (err) {
                 console.error('[RemoteWorker] Failed to accept job', err);
                 acceptingRef.current = false;
