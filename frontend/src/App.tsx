@@ -41,6 +41,7 @@ import { AgentController } from './components/AgentController';
 import { utils as models } from '../wailsjs/go/models';
 import { useAuth } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
+import { useRemoteWorkerListener } from './lib/useRemoteWorkerListener';
 
 // Simple Icons (SVG)
 const ScriptIcon = () => (
@@ -129,7 +130,9 @@ function App() {
         };
     }, [isAuthLoading, user]);
 
-    const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification, montageControlNotification, closeMontageControlNotification } = useQueue();
+    const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification, montageControlNotification, closeMontageControlNotification, addTask, startQueue } = useQueue();
+
+    useRemoteWorkerListener(user, addTask, startQueue);
     const pendingCount = tasks.filter(t => t.status === 'pending').length;
     const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');

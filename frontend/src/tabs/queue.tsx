@@ -8,6 +8,8 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { ExistingFilesModal } from '../components/ExistingFilesModal';
 import { MontageEditor } from '../components/MontageEditor';
 import { VirtualLogList } from '../components/VirtualLogList';
+import { useAuth } from '../contexts/AuthContext';
+import { useMyDevices } from '../lib/devicePresence';
 // @ts-ignore
 import { GetOpenRouterSavedModels, GetPipelineSettings, OpenPath, ResolveTaskDir } from '../../wailsjs/go/main/App';
 
@@ -312,6 +314,12 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                             {task.subName}
                         </div>
                     )}
+                    {task.remoteWorkerName && (
+                        <div className="task-remote-badge" title={task.remoteWorkerName}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+                            {task.remoteWorkerName}
+                        </div>
+                    )}
                 </div>
 
                 <div className="task-stages-list">
@@ -321,7 +329,8 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                             {task.textStatus === 'completed' ? (t('queue.chars', { count: task.resultLength || 0 }) || `${task.resultLength || 0} chars`) :
                                 task.textStatus === 'running' ? (t('queue.status_running') || 'Processing...') :
                                     task.textStatus === 'waiting' ? (t('queue.status_waiting') || 'В черзі') :
-                                        task.textStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                        task.textStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                            task.textStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                         </span>
                     </div>
 
@@ -332,7 +341,8 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                 {task.voiceStatus === 'completed' ? (task.voiceDuration || t('queue.voice_saved') || 'MP3 saved') :
                                     task.voiceStatus === 'running' ? (t('queue.status_running') || 'Synthesizing...') :
                                         task.voiceStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                            task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                            task.voiceStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                                task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                             </span>
                         </div>
                     )}
@@ -346,9 +356,10 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                 ) : task.imageStatus === 'running' ? (
                                     task.imagesMessage ? renderStatusLines(task.imagesMessage, false) : (t('queue.status_running') || 'Generating...')
                                 ) : task.imageStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                    task.imageStatus === 'failed' ? (
-                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
-                                    ) : t('queue.status_pending')}
+                                    task.imageStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                        task.imageStatus === 'failed' ? (
+                                            task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
+                                        ) : t('queue.status_pending')}
                             </div>
                         </div>
                     )}
@@ -360,7 +371,8 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                 {task.subtitleStatus === 'completed' ? (t('queue.subtitle_saved') || 'SRT збережено') :
                                     task.subtitleStatus === 'running' ? (t('queue.status_running') || 'Transcribing...') :
                                         task.subtitleStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                            task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                            task.subtitleStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                                task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                             </span>
                         </div>
                     )}
@@ -373,9 +385,10 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                     task.montageStatus === 'running' ? (
                                         task.montageMsg ? renderStatusLines(task.montageMsg, false) : t('queue.status_running')
                                     ) : task.montageStatus === 'waiting' ? t('queue.status_waiting') :
-                                        task.montageStatus === 'failed' ? (
-                                            task.montageMsg ? renderStatusLines(task.montageMsg, true) : t('queue.status_failed')
-                                        ) : t('queue.status_pending')}
+                                        task.montageStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                            task.montageStatus === 'failed' ? (
+                                                task.montageMsg ? renderStatusLines(task.montageMsg, true) : t('queue.status_failed')
+                                            ) : t('queue.status_pending')}
                             </div>
                         </div>
                     )}
@@ -446,14 +459,34 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl, dispatchToWorker } = useQueue();
+    const { user } = useAuth();
+    const devices = useMyDevices(user);
     const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message?: string; onConfirm: () => void; }>({ isOpen: false, title: '', onConfirm: () => { } });
     const [activeMontageTask, setActiveMontageTask] = useState<QueueTask | null>(null);
+    const [selectedWorkerDeviceId, setSelectedWorkerDeviceId] = useState<string>('');
+    const [isDispatching, setIsDispatching] = useState(false);
 
-    const handleStartQueue = () => {
-        startQueue();
+    const onlineRemoteDevices = useMemo(
+        () => devices.filter((d) => d.state === 'online' && !d.isCurrent),
+        [devices],
+    );
+
+    const handleStartQueue = async () => {
+        if (selectedWorkerDeviceId) {
+            const device = onlineRemoteDevices.find((d) => d.deviceId === selectedWorkerDeviceId);
+            if (!device) return;
+            setIsDispatching(true);
+            try {
+                await dispatchToWorker(device.deviceId, device.name);
+            } finally {
+                setIsDispatching(false);
+            }
+        } else {
+            startQueue();
+        }
     };
 
     useEffect(() => {
@@ -511,13 +544,35 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         <div className="content-wrapper animate-fade">
             <div className="queue-header">
                 <div className="queue-title">ЧЕРГА ЗАВДАНЬ</div>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', position: 'relative' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative' }}>
                     {tasks.length > 0 && (
-                        <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing}>{t('queue.clear_all') || 'Clear All'}</button>
+                        <select
+                            className="worker-device-select"
+                            value={selectedWorkerDeviceId}
+                            onChange={(e) => setSelectedWorkerDeviceId(e.target.value)}
+                            disabled={isProcessing || isDispatching || onlineRemoteDevices.length === 0}
+                            title={t('queue.run_on_device') || 'Обрати пристрій для виконання'}
+                        >
+                            <option value="">{onlineRemoteDevices.length === 0 ? (t('queue.no_remote_devices') || 'Немає онлайн пристроїв') : (t('queue.run_locally') || 'Локально')}</option>
+                            {onlineRemoteDevices.map((d) => (
+                                <option key={d.deviceId} value={d.deviceId}>{d.name}</option>
+                            ))}
+                        </select>
                     )}
                     {tasks.length > 0 && (
-                        <button className={`start-queue-btn ${isProcessing ? 'processing' : ''}`} onClick={handleStartQueue} disabled={isProcessing}>
-                            {isProcessing ? (<><div className="spinner-small" /><span>{t('queue.processing')}</span></>) : (<><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg><span>{t('queue.start')}</span></>)}
+                        <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing || isDispatching}>{t('queue.clear_all') || 'Clear All'}</button>
+                    )}
+                    {tasks.length > 0 && (
+                        <button
+                            className={`start-queue-btn ${isProcessing || isDispatching ? 'processing' : ''} ${selectedWorkerDeviceId ? 'remote' : ''}`}
+                            onClick={handleStartQueue}
+                            disabled={isProcessing || isDispatching}
+                        >
+                            {isProcessing || isDispatching
+                                ? (<><div className="spinner-small" /><span>{isDispatching ? (t('queue.dispatching') || 'Делегування...') : t('queue.processing')}</span></>)
+                                : selectedWorkerDeviceId
+                                    ? (<><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span>{t('queue.start_remote') || 'Запустити на пристрої'}</span></>)
+                                    : (<><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg><span>{t('queue.start')}</span></>)}
                         </button>
                     )}
                 </div>

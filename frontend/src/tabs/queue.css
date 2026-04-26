@@ -354,6 +354,30 @@
     flex-shrink: 0;
 }
 
+.task-remote-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #6c63ff;
+    background: rgba(108, 99, 255, 0.12);
+    border: 1px solid rgba(108, 99, 255, 0.3);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    animation: pulse-remote 2.5s ease-in-out infinite;
+}
+
+@keyframes pulse-remote {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.65; }
+}
+
 .task-card-name {
     display: none; /* Replaced by container above */
 }
@@ -466,6 +490,16 @@
 .status-failed .montage-icon {
     color: #ff5252;
     opacity: 1 !important;
+}
+
+.status-dispatched .lightbulb-icon,
+.status-dispatched .voice-icon,
+.status-dispatched .image-icon,
+.status-dispatched .subtitle-icon,
+.status-dispatched .montage-icon {
+    color: #6c63ff;
+    opacity: 0.9;
+    animation: blue-pulse 2.5s infinite;
 }
 
 @keyframes bulb-pulse {

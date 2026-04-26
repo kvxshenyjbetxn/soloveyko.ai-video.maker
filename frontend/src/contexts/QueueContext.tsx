@@ -2,8 +2,17 @@ import React, { createContext, useContext, useState, useCallback, ReactNode, use
 import { ProcessTask, SubmitImageControlResult, SubmitExistingFilesResult, ClearGallery, SendControlAction, CancelQueue, ResetQueueCancellation } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { useI18n } from './I18nContext';
+import {
+    dispatchJobToWorker,
+    listenToJobStatuses,
+    listenToJobStatus,
+    type RemoteTaskPayload,
+    type RemoteJobStatus,
+} from '../lib/remoteQueue';
+import { getOrCreateDeviceId } from '../lib/deviceId';
+import { useAuth } from './AuthContext';
 
-export type TaskStatus = 'pending' | 'waiting' | 'running' | 'processing' | 'completed' | 'failed';
+export type TaskStatus = 'pending' | 'waiting' | 'running' | 'processing' | 'completed' | 'failed' | 'dispatched';
 
 export interface QueueTask {
     id: string; taskNumber?: number; name: string; folderName: string; subName: string;
@@ -14,6 +23,10 @@ export interface QueueTask {
     textStatus: TaskStatus; voiceStatus: TaskStatus; imageStatus: TaskStatus;
     subtitleStatus: TaskStatus; montageStatus: TaskStatus; montageMsg?: string;
     voiceDuration?: string; imagesMessage?: string; timestamp: number;
+    // remote delegation
+    remoteJobId?: string;
+    remoteWorkerDeviceId?: string;
+    remoteWorkerName?: string;
 }
 
 interface QueueDataContextType {
@@ -34,7 +47,8 @@ interface QueueDataContextType {
 
 interface QueueActionsContextType {
     addTasks: (type: any, content: string, tasksData: any[], name?: string, skippedStages?: string[]) => void;
-    addTask: (type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any) => void;
+    addTask: (type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any, taskId?: string) => void;
+    dispatchToWorker: (workerDeviceId: string, workerName: string) => Promise<void>;
     removeTask: (id: string) => void; clearQueue: () => void; startQueue: () => Promise<void>;
     getNextTaskName: () => string;
     updateTaskStatus: (id: string, s: TaskStatus, p?: number, l?: number) => void;
@@ -56,6 +70,7 @@ const QueueActionsContext = createContext<QueueActionsContextType | undefined>(u
 
 export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { t } = useI18n();
+    const { user } = useAuth();
     const [tasks, setTasks] = useState<QueueTask[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [completionModal, setCompletionModal] = useState({ 
@@ -70,11 +85,16 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const [isImageBatchReady, setIsImageBatchReady] = useState(false);
     const [montageControlNotification, setMontageControlNotification] = useState({ isOpen: false });
     const taskCounterRef = useRef(1);
+    const isProcessingRef = useRef(false);
     const activeBatchRef = useRef<string[]>([]);
     const hasShownImageBatchNotificationRef = useRef(false);
     const hasShownMontageBatchNotificationRef = useRef(false);
     const tasksRef = useRef<QueueTask[]>([]);
     const taskContentRef = useRef<Map<string, string>>(new Map());
+
+    // Remote job tracking (master side)
+    const remoteJobUnsubsRef = useRef<Array<() => void>>([]);
+    const currentDeviceId = getOrCreateDeviceId();
 
     // Tracking time
     const totalPausedTimeRef = useRef(0);
@@ -84,6 +104,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const completedMontageCountRef = useRef(0);
 
     useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+    useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
 
     // Check if any task is awaiting control to track pause time
     useEffect(() => {
@@ -158,7 +179,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return `${t('queue.task_default_name')} ${taskCounterRef.current}`;
     }, [t]);
 
-    const addTask = useCallback((type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any) => {
+    const addTask = useCallback((type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any, taskId?: string) => {
         const nr = taskCounterRef.current++; const fName = name?.trim() || `${t('queue.task_default_name')} ${nr}`;
 
         let imgMsg = "";
@@ -174,7 +195,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             ? skippedStages.filter(s => existingData.foundStages.includes(s))
             : skippedStages;
 
-        const id = `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const id = taskId || `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
         taskContentRef.current.set(id, content);
 
         const newTask: QueueTask = {
@@ -326,8 +347,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     const startQueue = useCallback(async () => {
-        if (isProcessing) return;
-        const pending = tasks.filter(t => t.status === 'pending');
+        // Read from refs: callers from setTimeout (e.g. remote worker) may hold a stale
+        // useCallback closure where `tasks` / `isProcessing` were from before addTask() ran.
+        if (isProcessingRef.current) return;
+        const pending = tasksRef.current.filter((t) => t.status === 'pending');
         if (pending.length === 0) return;
 
         setIsProcessing(true); const startTime = Date.now();
@@ -426,7 +449,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             }
         };
         run();
-    }, [tasks, isProcessing, updateTaskStatus, t]);
+    }, [updateTaskStatus, t, sendNotification]);
 
     useEffect(() => {
         const uStatus = EventsOn("taskStatus", (id: string, s: string, p: number, l?: number) => {
@@ -549,11 +572,103 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         tasks, isProcessing, completionModal, imageControlNotification, isImageBatchReady, montageControlNotification, regeneratingPaths
     };
 
+    const dispatchToWorker = useCallback(async (workerDeviceId: string, workerName: string) => {
+        if (!user) throw new Error('Not authenticated');
+        const pending = tasksRef.current.filter((t) => t.status === 'pending');
+        if (pending.length === 0) return;
+
+        const payloads: RemoteTaskPayload[] = pending.map((task, order) => ({
+            id: task.id,
+            type: task.type,
+            content: taskContentRef.current.get(task.id) || '',
+            folderName: task.folderName,
+            subName: task.subName,
+            settings: task.settings,
+            taskNumber: task.taskNumber ?? order,
+            order,
+        }));
+
+        const jobId = await dispatchJobToWorker(user, currentDeviceId, workerDeviceId, payloads);
+
+        // Mark local tasks as dispatched
+        const pendingIds = pending.map((t) => t.id);
+        setTasks((prev) =>
+            prev.map((t) =>
+                pendingIds.includes(t.id)
+                    ? {
+                          ...t,
+                          status: 'dispatched' as TaskStatus,
+                          textStatus: 'dispatched' as TaskStatus,
+                          voiceStatus: t.settings?.voiceoverEnabled ? ('dispatched' as TaskStatus) : t.voiceStatus,
+                          imageStatus: t.settings?.imageEnabled ? ('dispatched' as TaskStatus) : t.imageStatus,
+                          subtitleStatus: t.settings?.subtitleEnabled ? ('dispatched' as TaskStatus) : t.subtitleStatus,
+                          montageStatus: t.settings?.montageEnabled ? ('dispatched' as TaskStatus) : t.montageStatus,
+                          remoteJobId: jobId,
+                          remoteWorkerDeviceId: workerDeviceId,
+                          remoteWorkerName: workerName,
+                      }
+                    : t,
+            ),
+        );
+
+        // Clean up any previous remote subscriptions
+        remoteJobUnsubsRef.current.forEach((u) => u());
+        remoteJobUnsubsRef.current = [];
+
+        // Listen to per-task status updates from the worker
+        const unsubStatuses = listenToJobStatuses(user, jobId, (taskId, status) => {
+            setTasks((prev) =>
+                prev.map((t) => {
+                    if (t.id !== taskId) return t;
+                    const up: Partial<QueueTask> = {};
+                    if (status.overallStatus) up.status = status.overallStatus as TaskStatus;
+                    if (status.textStatus) up.textStatus = status.textStatus as TaskStatus;
+                    if (status.voiceStatus) {
+                        up.voiceStatus = status.voiceStatus as TaskStatus;
+                        if (status.voiceDuration) up.voiceDuration = status.voiceDuration;
+                    }
+                    if (status.imageStatus) {
+                        up.imageStatus = status.imageStatus as TaskStatus;
+                        if (status.imagesMessage) up.imagesMessage = status.imagesMessage;
+                    }
+                    if (status.subtitleStatus) up.subtitleStatus = status.subtitleStatus as TaskStatus;
+                    if (status.montageStatus) {
+                        up.montageStatus = status.montageStatus as TaskStatus;
+                        if (status.montageMsg) up.montageMsg = status.montageMsg;
+                    }
+                    if (status.resultLength !== undefined) up.resultLength = status.resultLength;
+                    return { ...t, ...up };
+                }),
+            );
+        });
+
+        // Listen to job-level completion
+        const unsubJob = listenToJobStatus(user, jobId, (jobStatus: RemoteJobStatus) => {
+            if (jobStatus === 'completed' || jobStatus === 'failed') {
+                remoteJobUnsubsRef.current.forEach((u) => u());
+                remoteJobUnsubsRef.current = [];
+                setTimeout(() => {
+                    setCompletionModal({
+                        isOpen: true,
+                        taskCount: pending.length,
+                        duration: '-',
+                        activeDuration: '-',
+                        total_montage: '-',
+                        avg_montage: '-',
+                    });
+                }, 800);
+            }
+        });
+
+        remoteJobUnsubsRef.current = [unsubStatuses, unsubJob];
+    }, [user, currentDeviceId]);
+
     const actionsValue = {
         addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
         updateTaskStatus, updateControlDraft, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles,
         closeCompletionModal, closeImageControlNotification, closeMontageControlNotification,
-        addRegeneratingPath, removeRegeneratingPath
+        addRegeneratingPath, removeRegeneratingPath,
+        dispatchToWorker,
     };
 
     return (

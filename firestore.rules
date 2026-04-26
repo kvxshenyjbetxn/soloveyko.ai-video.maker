@@ -1,14 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Підколекція: users/{uid}/pipelineTemplates/{id}
-    // (офіційний вкладений match — list/getDocs, set, delete у batch)
     match /users/{userId} {
       match /pipelineTemplates/{templateId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
       match /devices/{deviceId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /remoteJobs/{jobId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        match /tasks/{taskId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
+        match /statuses/{taskId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
       }
     }
   }
