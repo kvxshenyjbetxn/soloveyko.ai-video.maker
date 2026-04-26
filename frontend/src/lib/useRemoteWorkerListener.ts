@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import type { User } from 'firebase/auth';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import {
@@ -38,42 +38,45 @@ export function useRemoteWorkerListener(
 ) {
     const currentDeviceId = useMemo(() => getOrCreateDeviceId(), []);
 
-    // Always keep latest callbacks in refs so effect closures never go stale
     const addTaskRef = useRef(addTask);
     const startQueueRef = useRef(startQueue);
     useEffect(() => { addTaskRef.current = addTask; }, [addTask]);
     useEffect(() => { startQueueRef.current = startQueue; }, [startQueue]);
 
-    // jobId of the remote job currently being processed
-    const [activeJob, setActiveJob] = useState<string | null>(null);
-
-    // master task IDs that belong to the current remote job
     const jobTaskIdsRef = useRef<Set<string>>(new Set());
     const totalTasksRef = useRef(0);
     const completedCountRef = useRef(0);
-    // guard against accepting two jobs simultaneously
+    const activeJobRef = useRef<string | null>(null);
     const acceptingRef = useRef(false);
 
-    // keep latest user in a ref so event callbacks always have fresh value
     const userRef = useRef(user);
     useEffect(() => { userRef.current = user; }, [user]);
 
-    // Listen for incoming jobs when idle
+    // Listener stays stable for the lifetime of the user session.
+    // activeJobRef/acceptingRef prevent double-processing without tearing down the subscription.
     useEffect(() => {
         if (!user) return;
+        console.log('[RemoteWorker] setting up incoming job listener, deviceId:', currentDeviceId);
 
         const unsub = listenToIncomingJobs(user, currentDeviceId, async (job) => {
-            if (activeJob || acceptingRef.current) return;
+            console.log('[RemoteWorker] incoming job:', job.jobId, 'activeJob:', activeJobRef.current, 'accepting:', acceptingRef.current);
+            if (activeJobRef.current || acceptingRef.current) {
+                console.log('[RemoteWorker] already busy, ignoring job');
+                return;
+            }
             acceptingRef.current = true;
 
             try {
+                console.log('[RemoteWorker] accepting job:', job.jobId);
                 await acceptJob(user, job.jobId);
+
                 const tasks = await fetchJobTasks(user, job.jobId);
-                console.log('[RemoteWorker] fetched tasks:', tasks.length, 'for job:', job.jobId);
+                console.log('[RemoteWorker] fetched', tasks.length, 'tasks for job:', job.jobId);
 
                 totalTasksRef.current = tasks.length;
                 completedCountRef.current = 0;
                 jobTaskIdsRef.current = new Set(tasks.map((t) => t.id));
+                activeJobRef.current = job.jobId;
 
                 for (const task of tasks) {
                     addTaskRef.current(
@@ -87,34 +90,35 @@ export function useRemoteWorkerListener(
                         task.id,
                     );
                 }
-                console.log('[RemoteWorker] all tasks added to local queue');
+                console.log('[RemoteWorker] all tasks added to queue');
 
-                setActiveJob(job.jobId);
                 await markJobRunning(user, job.jobId);
 
-                // Delay lets React flush all setTasks calls before startQueue reads them
                 setTimeout(() => {
                     console.log('[RemoteWorker] calling startQueue');
                     void startQueueRef.current();
                 }, 600);
             } catch (err) {
-                console.error('[RemoteWorker] Failed to accept job', err);
+                console.error('[RemoteWorker] error processing job:', err);
                 acceptingRef.current = false;
+                activeJobRef.current = null;
             }
         });
 
-        return () => unsub();
-    }, [user, currentDeviceId, activeJob]);
+        return () => {
+            console.log('[RemoteWorker] tearing down listener');
+            unsub();
+        };
+    }, [user, currentDeviceId]);
 
-    // Once a job is active, forward Wails events to Firestore
+    // Forward Wails events to Firestore whenever a job is active.
+    // Uses refs so this effect never needs to re-mount.
     useEffect(() => {
-        if (!activeJob) return;
-        const jobId = activeJob;
-
         const unsubTextResult = EventsOn(
             'textResult',
             async (id: string, length: number) => {
-                if (!jobTaskIdsRef.current.has(id)) return;
+                const jobId = activeJobRef.current;
+                if (!jobId || !jobTaskIdsRef.current.has(id)) return;
                 const u = userRef.current;
                 if (!u) return;
                 try { await writeTaskStatus(u, jobId, id, { resultLength: length }); } catch { /* non-fatal */ }
@@ -124,7 +128,8 @@ export function useRemoteWorkerListener(
         const unsubStage = EventsOn(
             'stageStatus',
             async (id: string, stage: string, status: string, msg?: string) => {
-                if (!jobTaskIdsRef.current.has(id)) return;
+                const jobId = activeJobRef.current;
+                if (!jobId || !jobTaskIdsRef.current.has(id)) return;
                 const u = userRef.current;
                 if (!u) return;
 
@@ -148,7 +153,8 @@ export function useRemoteWorkerListener(
         const unsubStatus = EventsOn(
             'taskStatus',
             async (id: string, status: string) => {
-                if (!jobTaskIdsRef.current.has(id)) return;
+                const jobId = activeJobRef.current;
+                if (!jobId || !jobTaskIdsRef.current.has(id)) return;
                 const u = userRef.current;
                 if (!u) return;
 
@@ -157,18 +163,16 @@ export function useRemoteWorkerListener(
                 if (status === 'completed' || status === 'failed') {
                     completedCountRef.current += 1;
                     if (completedCountRef.current >= totalTasksRef.current) {
-                        // Determine final job status: failed if any task failed
-                        const allSnap = Array.from(jobTaskIdsRef.current);
-                        const _ = allSnap; // used implicitly via completedCount
                         const finalStatus: 'completed' | 'failed' =
                             status === 'failed' ? 'failed' : 'completed';
                         try { await markJobFinished(u, jobId, finalStatus); } catch { /* non-fatal */ }
 
-                        setActiveJob(null);
+                        activeJobRef.current = null;
+                        acceptingRef.current = false;
                         jobTaskIdsRef.current.clear();
                         completedCountRef.current = 0;
                         totalTasksRef.current = 0;
-                        acceptingRef.current = false;
+                        console.log('[RemoteWorker] job finished:', finalStatus);
                     }
                 }
             },
@@ -179,5 +183,5 @@ export function useRemoteWorkerListener(
             unsubStage();
             unsubStatus();
         };
-    }, [activeJob]);
+    }, []);
 }
