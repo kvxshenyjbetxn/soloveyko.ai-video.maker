@@ -10,6 +10,7 @@ import { MontageEditor } from '../components/MontageEditor';
 import { VirtualLogList } from '../components/VirtualLogList';
 import { useAuth } from '../contexts/AuthContext';
 import { useMyDevices } from '../lib/devicePresence';
+import { useToast } from '../contexts/ToastContext';
 // @ts-ignore
 import { GetOpenRouterSavedModels, GetPipelineSettings, OpenPath, ResolveTaskDir } from '../../wailsjs/go/main/App';
 
@@ -461,6 +462,7 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
     const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl, dispatchToWorker } = useQueue();
     const { user } = useAuth();
+    const { showToast } = useToast();
     const devices = useMyDevices(user);
     const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
@@ -481,6 +483,9 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
             setIsDispatching(true);
             try {
                 await dispatchToWorker(device.deviceId, device.name);
+            } catch (err: any) {
+                console.error('[Queue] dispatchToWorker failed:', err);
+                showToast(err?.message || 'Помилка делегування задач', 'error');
             } finally {
                 setIsDispatching(false);
             }

@@ -55,13 +55,18 @@ const MAX_BATCH_OPS = 450;
  * Master dispatches tasks to a remote worker device.
  * Writes job doc + all task docs in batches.
  */
+const FIRESTORE_DOC_LIMIT_BYTES = 900_000; // 900KB — safe margin under 1MB limit
+
 export async function dispatchJobToWorker(
     user: User,
     masterDeviceId: string,
     workerDeviceId: string,
     tasks: RemoteTaskPayload[],
 ): Promise<string> {
+    console.log('[RemoteQueue] dispatchJobToWorker start, tasks:', tasks.length);
     await refreshAuthForFirestore(user);
+    console.log('[RemoteQueue] auth refreshed');
+
     const uid = user.uid;
     const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const jobRef = doc(firestore, 'users', uid, 'remoteJobs', jobId);
@@ -73,17 +78,26 @@ export async function dispatchJobToWorker(
         createdAt: Date.now(),
         totalTasks: tasks.length,
     });
+    console.log('[RemoteQueue] job doc written:', jobId);
 
     for (let i = 0; i < tasks.length; i += MAX_BATCH_OPS) {
         const batch = writeBatch(firestore);
         const slice = tasks.slice(i, i + MAX_BATCH_OPS);
         for (const task of slice) {
+            const contentBytes = new TextEncoder().encode(task.content as string).length;
+            if (contentBytes > FIRESTORE_DOC_LIMIT_BYTES) {
+                throw new Error(
+                    `Задача "${task.folderName}" містить занадто великий текст (${Math.round(contentBytes / 1024)} KB). Ліміт Firestore — 900 KB на документ.`,
+                );
+            }
             const taskRef = doc(firestore, 'users', uid, 'remoteJobs', jobId, 'tasks', task.id);
             batch.set(taskRef, task);
         }
         await batch.commit();
+        console.log('[RemoteQueue] batch committed, tasks written:', Math.min(i + MAX_BATCH_OPS, tasks.length));
     }
 
+    console.log('[RemoteQueue] all tasks dispatched, jobId:', jobId);
     return jobId;
 }
 
