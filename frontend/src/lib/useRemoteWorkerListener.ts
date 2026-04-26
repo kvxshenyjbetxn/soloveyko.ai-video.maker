@@ -8,6 +8,7 @@ import {
     markJobRunning,
     markJobFinished,
     writeTaskStatus,
+    deleteRemoteJob,
     type RemoteTaskStatus,
 } from './remoteQueue';
 import { getOrCreateDeviceId } from './deviceId';
@@ -142,6 +143,7 @@ export function useRemoteWorkerListener(
                         const finalStatus: 'completed' | 'failed' =
                             status === 'failed' ? 'failed' : 'completed';
                         try { await markJobFinished(u, jobId, finalStatus); } catch { /* non-fatal */ }
+                        void deleteRemoteJob(u, jobId);
 
                         setActiveJob(null);
                         jobTaskIdsRef.current.clear();

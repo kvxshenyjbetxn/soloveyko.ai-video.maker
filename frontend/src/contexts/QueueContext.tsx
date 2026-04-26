@@ -6,6 +6,7 @@ import {
     dispatchJobToWorker,
     listenToJobStatuses,
     listenToJobStatus,
+    deleteRemoteJob,
     type RemoteTaskPayload,
     type RemoteJobStatus,
 } from '../lib/remoteQueue';
@@ -647,6 +648,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             if (jobStatus === 'completed' || jobStatus === 'failed') {
                 remoteJobUnsubsRef.current.forEach((u) => u());
                 remoteJobUnsubsRef.current = [];
+                void deleteRemoteJob(user, jobId);
                 setTimeout(() => {
                     setCompletionModal({
                         isOpen: true,

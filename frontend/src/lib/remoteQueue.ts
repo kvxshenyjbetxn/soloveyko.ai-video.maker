@@ -9,6 +9,7 @@ import {
     query,
     where,
     Unsubscribe,
+    deleteDoc,
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { firestore, refreshAuthForFirestore } from './firebase';
@@ -204,6 +205,40 @@ export async function markJobFinished(
     await refreshAuthForFirestore(user);
     const ref = doc(firestore, 'users', user.uid, 'remoteJobs', jobId);
     await updateDoc(ref, { status });
+}
+
+const DELETE_BATCH = 500;
+
+/** Deletes a job document and all subcollection docs (tasks, statuses). Firestore does not cascade. */
+async function deleteSubcollection(uid: string, jobId: string, sub: 'tasks' | 'statuses'): Promise<void> {
+    const col = collection(firestore, 'users', uid, 'remoteJobs', jobId, sub);
+    const snap = await getDocs(col);
+    const ids: string[] = [];
+    snap.forEach((d) => ids.push(d.id));
+    for (let i = 0; i < ids.length; i += DELETE_BATCH) {
+        const batch = writeBatch(firestore);
+        for (const id of ids.slice(i, i + DELETE_BATCH)) {
+            batch.delete(doc(firestore, 'users', uid, 'remoteJobs', jobId, sub, id));
+        }
+        await batch.commit();
+    }
+}
+
+export async function deleteRemoteJob(user: User, jobId: string): Promise<void> {
+    try {
+        await refreshAuthForFirestore(user);
+    } catch {
+        return;
+    }
+    const uid = user.uid;
+    try {
+        await deleteSubcollection(uid, jobId, 'statuses');
+        await deleteSubcollection(uid, jobId, 'tasks');
+        await deleteDoc(doc(firestore, 'users', uid, 'remoteJobs', jobId));
+        console.log('[RemoteQueue] deleted job from Firestore:', jobId);
+    } catch (err) {
+        console.warn('[RemoteQueue] deleteRemoteJob failed:', err);
+    }
 }
 
 export async function writeTaskStatus(
