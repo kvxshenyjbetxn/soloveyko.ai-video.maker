@@ -55,7 +55,17 @@ const MAX_BATCH_OPS = 450;
  * Master dispatches tasks to a remote worker device.
  * Writes job doc + all task docs in batches.
  */
-const FIRESTORE_DOC_LIMIT_BYTES = 900_000; // 900KB — safe margin under 1MB limit
+const FIRESTORE_DOC_LIMIT_BYTES = 900_000;
+
+/** Recursively replaces undefined values with null so Firestore doesn't reject them. */
+function sanitizeForFirestore(value: unknown): unknown {
+    if (value === undefined) return null;
+    if (value === null || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(sanitizeForFirestore);
+    return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, sanitizeForFirestore(v)]),
+    );
+} // 900KB — safe margin under 1MB limit
 
 export async function dispatchJobToWorker(
     user: User,
@@ -91,7 +101,7 @@ export async function dispatchJobToWorker(
                 );
             }
             const taskRef = doc(firestore, 'users', uid, 'remoteJobs', jobId, 'tasks', task.id);
-            batch.set(taskRef, task);
+            batch.set(taskRef, sanitizeForFirestore(task) as RemoteTaskPayload);
         }
         await batch.commit();
         console.log('[RemoteQueue] batch committed, tasks written:', Math.min(i + MAX_BATCH_OPS, tasks.length));
