@@ -271,6 +271,104 @@ export function listenToJobStatuses(
     );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Translation Control (worker ↔ master text review via Firestore)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TranslationControlStatus = 'pending' | 'resolved';
+
+export type TranslationControlRequest = {
+    status: TranslationControlStatus;
+    text: string;
+    requestedAt: number;
+    resolvedAt?: number;
+    action?: 'confirm' | 'regenerate' | 'cancel';
+    approvedText?: string;
+};
+
+/** Worker: writes a translation control request for the master to review. */
+export async function writeTranslationControlRequest(
+    user: User,
+    jobId: string,
+    taskId: string,
+    text: string,
+): Promise<void> {
+    await refreshAuthForFirestore(user);
+    const ref = doc(firestore, 'users', user.uid, 'remoteJobs', jobId, 'translationControls', taskId);
+    await setDoc(ref, {
+        status: 'pending' as TranslationControlStatus,
+        text,
+        requestedAt: Date.now(),
+    });
+}
+
+/** Master: submits the approved/edited text back to the worker. */
+export async function submitTranslationControlResponse(
+    user: User,
+    jobId: string,
+    taskId: string,
+    action: 'confirm' | 'regenerate' | 'cancel',
+    approvedText: string,
+): Promise<void> {
+    await refreshAuthForFirestore(user);
+    const ref = doc(firestore, 'users', user.uid, 'remoteJobs', jobId, 'translationControls', taskId);
+    await updateDoc(ref, {
+        status: 'resolved' as TranslationControlStatus,
+        action,
+        approvedText,
+        resolvedAt: Date.now(),
+    });
+}
+
+/**
+ * Worker: listens for the master's response on a single translation control.
+ * Calls cb once when status becomes 'resolved', then the caller should unsub.
+ */
+export function listenToTranslationControlResponse(
+    user: User,
+    jobId: string,
+    taskId: string,
+    onResponse: (action: string, approvedText: string) => void,
+): Unsubscribe {
+    const ref = doc(firestore, 'users', user.uid, 'remoteJobs', jobId, 'translationControls', taskId);
+    return onSnapshot(
+        ref,
+        (snap) => {
+            if (!snap.exists()) return;
+            const data = snap.data() as TranslationControlRequest;
+            if (data.status === 'resolved' && data.action) {
+                onResponse(data.action, data.approvedText ?? data.text);
+            }
+        },
+        (err) => console.error('[RemoteQueue] listenToTranslationControlResponse error:', err),
+    );
+}
+
+/**
+ * Master: listens for incoming translation control requests from a worker.
+ * Fires cb for every 'added' or 'modified' document that has status='pending'.
+ */
+export function listenToTranslationControls(
+    user: User,
+    jobId: string,
+    onControl: (taskId: string, request: TranslationControlRequest) => void,
+): Unsubscribe {
+    const col = collection(firestore, 'users', user.uid, 'remoteJobs', jobId, 'translationControls');
+    return onSnapshot(
+        col,
+        (snap) => {
+            snap.docChanges().forEach((change) => {
+                if (change.type !== 'added' && change.type !== 'modified') return;
+                const data = change.doc.data() as TranslationControlRequest;
+                if (data.status === 'pending') {
+                    onControl(change.doc.id, data);
+                }
+            });
+        },
+        (err) => console.error('[RemoteQueue] listenToTranslationControls error:', err),
+    );
+}
+
 export function listenToJobStatus(
     user: User,
     jobId: string,

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import type { User } from 'firebase/auth';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
+// @ts-ignore
+import { SendControlAction } from '../../wailsjs/go/main/App';
 import {
     listenToIncomingJobs,
     fetchJobTasks,
@@ -9,6 +11,8 @@ import {
     markJobFinished,
     writeTaskStatus,
     deleteRemoteJob,
+    writeTranslationControlRequest,
+    listenToTranslationControlResponse,
     type RemoteTaskStatus,
 } from './remoteQueue';
 import { getOrCreateDeviceId } from './deviceId';
@@ -107,6 +111,28 @@ export function useRemoteWorkerListener(
             },
         );
 
+        const unsubRequestControl = EventsOn(
+            'requestControl',
+            async (id: string, text: string) => {
+                if (!jobTaskIdsRef.current.has(id)) return;
+                const u = userRef.current;
+                if (!u) return;
+
+                try {
+                    await writeTranslationControlRequest(u, jobId, id, text);
+                    await writeTaskStatus(u, jobId, id, { textStatus: 'waiting' });
+                } catch (err) {
+                    console.error('[RemoteWorker] writeTranslationControlRequest failed:', err);
+                    return;
+                }
+
+                const unsub = listenToTranslationControlResponse(u, jobId, id, (action, approvedText) => {
+                    unsub();
+                    try { SendControlAction(id, action, approvedText, {}); } catch { /* non-fatal */ }
+                });
+            },
+        );
+
         const unsubStage = EventsOn(
             'stageStatus',
             async (id: string, stage: string, status: string, msg?: string) => {
@@ -165,6 +191,7 @@ export function useRemoteWorkerListener(
 
         return () => {
             unsubTextResult();
+            unsubRequestControl();
             unsubStage();
             unsubStatus();
         };

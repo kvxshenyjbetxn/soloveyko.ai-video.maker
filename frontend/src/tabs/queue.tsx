@@ -52,7 +52,12 @@ const FolderIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
 );
 
-const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: string, text: string) => void }) => {
+const ControlEditor = ({ task, onConfirm, onCancel, onRegenerate }: {
+    task: QueueTask,
+    onConfirm: (id: string, text: string) => void,
+    onCancel?: (id: string) => void,
+    onRegenerate?: (id: string, text: string, settings?: any) => void,
+}) => {
     const { regenerateTask, cancelTask } = useQueue();
     const [text, setText] = useState(task.controlContent || '');
     const [isFullScreen, setIsFullScreen] = useState(false);
@@ -168,7 +173,11 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
                                 }
                                 newSettings.temperature = temperature;
                                 newSettings.maxTokens = maxTokens;
-                                regenerateTask(task.id, text, newSettings);
+                                if (onRegenerate) {
+                                    onRegenerate(task.id, text, newSettings);
+                                } else {
+                                    regenerateTask(task.id, text, newSettings);
+                                }
                             }}
                         >
                             {t('queue.apply_and_regenerate')}
@@ -178,7 +187,7 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
 
                 <div className="control-actions">
                     <div style={{ flex: 1 }} />
-                    <button className="control-cancel-btn" onClick={() => cancelTask(task.id)} title={t('common.cancel')}>
+                    <button className="control-cancel-btn" onClick={() => onCancel ? onCancel(task.id) : cancelTask(task.id)} title={t('common.cancel')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
                         {isFullScreen && <span>{t('common.cancel')}</span>}
                     </button>
@@ -192,7 +201,7 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
                     }} title={t('queue.edit_settings')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
                     </button>
-                    <button className="control-regen-btn" onClick={() => regenerateTask(task.id, text)} title={t('queue.regenerate')}>
+                    <button className="control-regen-btn" onClick={() => onRegenerate ? onRegenerate(task.id, text) : regenerateTask(task.id, text)} title={t('queue.regenerate')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
                         {isFullScreen && <span>{t('queue.regenerate')}</span>}
                     </button>
@@ -229,7 +238,7 @@ const MagicWandIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.21 1.21 0 0 0 1.72 0L21.64 5.36a1.21 1.21 0 0 0 0-1.72Z"></path><path d="m14 7 3 3"></path><path d="M5 6v.01"></path><path d="M19 14v.01"></path><path d="M10 2v.01"></path><path d="M7 21v.01"></path><path d="M14 22v.01"></path></svg>
 );
 
-const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, onOpenMontageEditor, isProcessing, t, resumeTask, logs }: any) => {
+const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, onOpenMontageEditor, isProcessing, t, resumeTask, onConfirmRemote, onCancelRemote, onRegenerateRemote, logs }: any) => {
     const settings = task.settings || {};
     const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
     const isVoiceEnabled = settings.voiceoverEnabled === true;
@@ -249,12 +258,20 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
     return (
         <div className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
             <div
-                className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${task.isAwaitingControl ? 'awaiting-control' : ''} ${task.isAwaitingMontageControl ? 'awaiting-montage-control' : ''}`}
-                onClick={() => !task.isAwaitingControl && onToggle(task.id)}
+                className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${(task.isAwaitingControl || task.isAwaitingRemoteTranslationControl) ? 'awaiting-control' : ''} ${task.isAwaitingMontageControl ? 'awaiting-montage-control' : ''}`}
+                onClick={() => !(task.isAwaitingControl || task.isAwaitingRemoteTranslationControl) && onToggle(task.id)}
                 style={{ position: 'relative', overflow: 'hidden' }}
             >
                 {task.isAwaitingControl && (
                     <ControlEditor task={task} onConfirm={resumeTask} />
+                )}
+                {task.isAwaitingRemoteTranslationControl && (
+                    <ControlEditor
+                        task={task}
+                        onConfirm={(id: string, text: string) => onConfirmRemote(id, text)}
+                        onCancel={(id: string) => onCancelRemote(id)}
+                        onRegenerate={(id: string, text: string, settings?: any) => onRegenerateRemote(id, text, settings)}
+                    />
                 )}
                 <div className="task-card-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -460,7 +477,7 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl, dispatchToWorker } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl, resumeRemoteTranslationControl, dispatchToWorker } = useQueue();
     const { user } = useAuth();
     const { showToast } = useToast();
     const devices = useMyDevices(user);
@@ -603,6 +620,9 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                 isProcessing={isProcessing}
                                 t={t}
                                 resumeTask={resumeTask}
+                                onConfirmRemote={(id: string, text: string) => resumeRemoteTranslationControl(id, text, 'confirm')}
+                                onCancelRemote={(id: string) => resumeRemoteTranslationControl(id, '', 'cancel')}
+                                onRegenerateRemote={(id: string, text: string) => resumeRemoteTranslationControl(id, text, 'regenerate')}
                                 logs={logs}
                             />
                         ))}

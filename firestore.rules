@@ -16,6 +16,9 @@ service cloud.firestore {
         match /statuses/{taskId} {
           allow read, write: if request.auth != null && request.auth.uid == userId;
         }
+        match /translationControls/{taskId} {
+          allow read, write: if request.auth != null && request.auth.uid == userId;
+        }
       }
     }
   }
