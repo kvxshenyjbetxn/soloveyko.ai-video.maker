@@ -50,11 +50,6 @@ export type RemoteJob = {
 };
 
 const MAX_BATCH_OPS = 450;
-
-/**
- * Master dispatches tasks to a remote worker device.
- * Writes job doc + all task docs in batches.
- */
 const FIRESTORE_DOC_LIMIT_BYTES = 900_000;
 
 /** Recursively replaces undefined values with null so Firestore doesn't reject them. */
@@ -65,7 +60,7 @@ function sanitizeForFirestore(value: unknown): unknown {
     return Object.fromEntries(
         Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, sanitizeForFirestore(v)]),
     );
-} // 900KB — safe margin under 1MB limit
+}
 
 export async function dispatchJobToWorker(
     user: User,
@@ -104,19 +99,38 @@ export async function dispatchJobToWorker(
             batch.set(taskRef, sanitizeForFirestore(task) as RemoteTaskPayload);
         }
         await batch.commit();
-        console.log('[RemoteQueue] batch committed, tasks written:', Math.min(i + MAX_BATCH_OPS, tasks.length));
+        console.log('[RemoteQueue] batch committed:', Math.min(i + MAX_BATCH_OPS, tasks.length), 'tasks');
     }
 
-    console.log('[RemoteQueue] all tasks dispatched, jobId:', jobId);
+    console.log('[RemoteQueue] dispatched jobId:', jobId);
     return jobId;
+}
+
+function buildJobFromDoc(d: any): RemoteJob | null {
+    const data = d.data() as {
+        status?: string;
+        masterDeviceId?: string;
+        workerDeviceId?: string;
+        createdAt?: number;
+        totalTasks?: number;
+    };
+    if (data.status !== 'pending') return null;
+    console.log('[RemoteQueue] pending job found:', d.id);
+    return {
+        jobId: d.id,
+        masterDeviceId: data.masterDeviceId ?? '',
+        workerDeviceId: data.workerDeviceId ?? '',
+        status: data.status as RemoteJobStatus,
+        createdAt: data.createdAt ?? 0,
+        totalTasks: data.totalTasks ?? 0,
+    };
 }
 
 /**
  * Worker: listens for incoming jobs assigned to this device.
- * Calls onJob when a new 'pending' job arrives.
  *
- * Query uses only `workerDeviceId` (single equality) so no Firestore composite index
- * is required; `status` is filtered client-side.
+ * Also does a one-time getDocs() immediately after subscribing so jobs that
+ * already exist in Firestore are not missed (e.g. if the app started after dispatch).
  */
 export function listenToIncomingJobs(
     user: User,
@@ -125,36 +139,31 @@ export function listenToIncomingJobs(
 ): Unsubscribe {
     const uid = user.uid;
     const col = collection(firestore, 'users', uid, 'remoteJobs');
-    // NOTE: do NOT add `where('status'...)` here without a composite index in
-    // `firestore.indexes.json` + `firebase deploy --only firestore`.
     const q = query(col, where('workerDeviceId', '==', workerDeviceId));
+
+    // One-time catch for already-existing pending jobs
+    getDocs(q)
+        .then((snap) => {
+            console.log('[RemoteQueue] getDocs: found', snap.size, 'docs for deviceId:', workerDeviceId);
+            snap.forEach((d) => {
+                const job = buildJobFromDoc(d);
+                if (job) onJob(job);
+            });
+        })
+        .catch((err) => console.error('[RemoteQueue] getDocs error:', err));
+
+    // Real-time listener for future jobs
     return onSnapshot(
         q,
         (snap) => {
             snap.docChanges().forEach((change) => {
-                if (change.type !== 'added') return;
-                const d = change.doc;
-                const data = d.data() as {
-                    status?: string;
-                    masterDeviceId?: string;
-                    workerDeviceId?: string;
-                    createdAt?: number;
-                    totalTasks?: number;
-                };
-                if (data.status !== 'pending') return;
-                onJob({
-                    jobId: d.id,
-                    masterDeviceId: data.masterDeviceId ?? '',
-                    workerDeviceId: data.workerDeviceId ?? '',
-                    status: data.status as RemoteJobStatus,
-                    createdAt: data.createdAt ?? 0,
-                    totalTasks: data.totalTasks ?? 0,
-                });
+                // 'added' — new job; 'modified' — e.g. status reset to pending
+                if (change.type !== 'added' && change.type !== 'modified') return;
+                const job = buildJobFromDoc(change.doc);
+                if (job) onJob(job);
             });
         },
-        (err) => {
-            console.error('[RemoteQueue] listenToIncomingJobs onSnapshot error', err);
-        },
+        (err) => console.error('[RemoteQueue] onSnapshot error:', err),
     );
 }
 
@@ -174,27 +183,18 @@ export async function fetchJobTasks(
     return tasks;
 }
 
-/**
- * Worker: marks job as accepted so master knows work has begun.
- */
 export async function acceptJob(user: User, jobId: string): Promise<void> {
     await refreshAuthForFirestore(user);
     const ref = doc(firestore, 'users', user.uid, 'remoteJobs', jobId);
     await updateDoc(ref, { status: 'accepted' as RemoteJobStatus });
 }
 
-/**
- * Worker: marks job as running.
- */
 export async function markJobRunning(user: User, jobId: string): Promise<void> {
     await refreshAuthForFirestore(user);
     const ref = doc(firestore, 'users', user.uid, 'remoteJobs', jobId);
     await updateDoc(ref, { status: 'running' as RemoteJobStatus });
 }
 
-/**
- * Worker: marks job as completed or failed.
- */
 export async function markJobFinished(
     user: User,
     jobId: string,
@@ -205,9 +205,6 @@ export async function markJobFinished(
     await updateDoc(ref, { status });
 }
 
-/**
- * Worker: writes / merges task status update so master can see it in real-time.
- */
 export async function writeTaskStatus(
     user: User,
     jobId: string,
@@ -218,10 +215,6 @@ export async function writeTaskStatus(
     await setDoc(ref, { ...patch, updatedAt: Date.now() }, { merge: true });
 }
 
-/**
- * Master: subscribes to real-time status updates for all tasks in a job.
- * onUpdate is called with the taskId and partial status on every change.
- */
 export function listenToJobStatuses(
     user: User,
     jobId: string,
@@ -238,13 +231,10 @@ export function listenToJobStatuses(
                 }
             });
         },
-        (err) => console.error('[RemoteQueue] listenToJobStatuses onSnapshot error', err),
+        (err) => console.error('[RemoteQueue] listenToJobStatuses error:', err),
     );
 }
 
-/**
- * Master: subscribes to job-level status changes (pending → accepted → running → completed).
- */
 export function listenToJobStatus(
     user: User,
     jobId: string,
@@ -258,6 +248,6 @@ export function listenToJobStatus(
                 onUpdate(snap.data().status as RemoteJobStatus);
             }
         },
-        (err) => console.error('[RemoteQueue] listenToJobStatus onSnapshot error', err),
+        (err) => console.error('[RemoteQueue] listenToJobStatus error:', err),
     );
 }
