@@ -1809,9 +1809,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	videoWeight := s.getVideoSizeGB(ffprobePath, filepath.Join(finalDir, outputFile))
 
 	s.emitStageStatus(id, "montage", "completed", videoWeight)
-	if s.OnTaskStatus != nil {
-		s.OnTaskStatus(id, "completed", 100)
-	}
+	// Task-level OnTaskStatus("completed") is emitted once in service.go after ProcessMontage
+	// (after OnPipelineSuccess) — avoid duplicating here, or remote workers count 2x per task.
 
 	return nil
 }

@@ -38,6 +38,8 @@ export function useRemoteWorkerListener(
     const jobTaskIdsRef = useRef<Set<string>>(new Set());
     const totalTasksRef = useRef(0);
     const completedCountRef = useRef(0);
+    /** Terminal status per task — guard against duplicate Go emissions for the same id */
+    const terminalTaskIdsRef = useRef<Set<string>>(new Set());
     const acceptingRef = useRef(false);
 
     const userRef = useRef(user);
@@ -59,6 +61,7 @@ export function useRemoteWorkerListener(
 
                 totalTasksRef.current = tasks.length;
                 completedCountRef.current = 0;
+                terminalTaskIdsRef.current = new Set();
                 jobTaskIdsRef.current = new Set(tasks.map((t) => t.id));
 
                 for (const task of tasks) {
@@ -138,6 +141,10 @@ export function useRemoteWorkerListener(
                 try { await writeTaskStatus(u, jobId, id, { overallStatus: status }); } catch { /* non-fatal */ }
 
                 if (status === 'completed' || status === 'failed') {
+                    if (terminalTaskIdsRef.current.has(id)) {
+                        return;
+                    }
+                    terminalTaskIdsRef.current.add(id);
                     completedCountRef.current += 1;
                     if (completedCountRef.current >= totalTasksRef.current) {
                         const finalStatus: 'completed' | 'failed' =
@@ -147,6 +154,7 @@ export function useRemoteWorkerListener(
 
                         setActiveJob(null);
                         jobTaskIdsRef.current.clear();
+                        terminalTaskIdsRef.current.clear();
                         completedCountRef.current = 0;
                         totalTasksRef.current = 0;
                         acceptingRef.current = false;
