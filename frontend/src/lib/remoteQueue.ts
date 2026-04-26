@@ -76,15 +76,7 @@ export async function dispatchJobToWorker(
     const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const jobRef = doc(firestore, 'users', uid, 'remoteJobs', jobId);
 
-    await setDoc(jobRef, {
-        masterDeviceId,
-        workerDeviceId,
-        status: 'pending' as RemoteJobStatus,
-        createdAt: Date.now(),
-        totalTasks: tasks.length,
-    });
-    console.log('[RemoteQueue] job doc written:', jobId);
-
+    // Write tasks FIRST so they exist before the worker sees the 'pending' job doc.
     for (let i = 0; i < tasks.length; i += MAX_BATCH_OPS) {
         const batch = writeBatch(firestore);
         const slice = tasks.slice(i, i + MAX_BATCH_OPS);
@@ -102,6 +94,15 @@ export async function dispatchJobToWorker(
         console.log('[RemoteQueue] batch committed:', Math.min(i + MAX_BATCH_OPS, tasks.length), 'tasks');
     }
 
+    // Only after all tasks are written — create the job doc with status 'pending'.
+    // Worker listens for this document and fetches tasks only after it appears.
+    await setDoc(jobRef, {
+        masterDeviceId,
+        workerDeviceId,
+        status: 'pending' as RemoteJobStatus,
+        createdAt: Date.now(),
+        totalTasks: tasks.length,
+    });
     console.log('[RemoteQueue] dispatched jobId:', jobId);
     return jobId;
 }
