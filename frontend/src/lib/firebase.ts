@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
 
@@ -18,3 +19,11 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const firestore = getFirestore(app);
 export const realtimeDb = getDatabase(app);
+
+export const refreshAuthForFirestore = async (user: User): Promise<void> => {
+    const session = auth.currentUser;
+    if (!session || session.uid !== user.uid) {
+        throw new Error('Firebase Auth: немає активної сесії. Вийдіть і увійдіть знову.');
+    }
+    await session.getIdToken(true);
+};

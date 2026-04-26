@@ -1,0 +1,8 @@
+{
+  "name": "soloveyko-ai-video-maker",
+  "private": true,
+  "scripts": {
+    "firebase:verify-project": "node scripts/verify-firebase-project.mjs",
+    "firebase:deploy-rules": "node scripts/firebase-deploy-rules.mjs"
+  }
+}

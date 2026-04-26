@@ -348,6 +348,8 @@
     },
     "other": {
         "statistic": "Статистика",
+        "remote_control": "Удалённое управление",
+        "remote_control_description": "Устройства аккаунта и статус «онлайн» (Realtime). Имена удобны для будущих функций удалённого управления.",
         "history": "История",
         "preview": "Предварительный просмотр"
     },
@@ -379,7 +381,18 @@
         "googlerLimits": "Лимиты Googler",
         "googlerMaxImages": "Макс. соединений для фото",
         "googlerMaxVideos": "Макс. соединений для видео",
-        "elevenlabsimageMaxConnections": "Макс. соединений для ElevenLabs Image"
+        "elevenlabsimageMaxConnections": "Макс. соединений для ElevenLabs Image",
+        "devicesTitle": "Устройства",
+        "devicesDescription": "Устройства, с которых вы входили в аккаунт. Статус «онлайн» обновляется в реальном времени через Realtime Database.",
+        "devicesOnline": "Онлайн",
+        "devicesOffline": "Офлайн",
+        "devicesThisPc": "этот ПК",
+        "devicesRename": "Переименовать",
+        "devicesSave": "Сохранить",
+        "devicesCancel": "Отмена",
+        "devicesSignInHint": "Войдите в облачный аккаунт, чтобы увидеть список устройств.",
+        "devicesRealtimeOff": "URL Realtime Database не задан: индикатор онлайн может не работать, но список устройств в облаке сохраняется.",
+        "devicesRenamed": "Название устройства сохранено"
     },
     "systemMonitor": {
         "cpu": "Процессор",

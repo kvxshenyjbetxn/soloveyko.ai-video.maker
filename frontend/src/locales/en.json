@@ -350,6 +350,8 @@
     },
     "other": {
         "statistic": "Statistics",
+        "remote_control": "Remote control",
+        "remote_control_description": "Your account devices and online status (Realtime). Names help with future remote-control features.",
         "history": "History",
         "preview": "Preview"
     },
@@ -380,7 +382,18 @@
         "uiStyleSharp": "Sharp",
         "googlerLimits": "Googler Limits",
         "googlerMaxImages": "Max image connections",
-        "googlerMaxVideos": "Max video connections"
+        "googlerMaxVideos": "Max video connections",
+        "devicesTitle": "Devices",
+        "devicesDescription": "Devices that have signed in to your account. Online status updates in real time when Realtime Database is configured.",
+        "devicesOnline": "Online",
+        "devicesOffline": "Offline",
+        "devicesThisPc": "this PC",
+        "devicesRename": "Rename",
+        "devicesSave": "Save",
+        "devicesCancel": "Cancel",
+        "devicesSignInHint": "Sign in to your cloud account to see your devices.",
+        "devicesRealtimeOff": "Realtime Database URL is not set: the online indicator may not work, but the device list is still stored.",
+        "devicesRenamed": "Device name saved"
     },
     "systemMonitor": {
         "cpu": "CPU",

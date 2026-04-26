@@ -29,6 +29,7 @@ import { Templates } from './tabs/settings/templates';
 import { Statistic } from './tabs/other/statistic';
 import { History } from './tabs/other/history';
 import { Preview } from './tabs/other/Preview';
+import { RemoteControl } from './tabs/other/remote_control';
 import { Logs } from './tabs/logs';
 import { GoogleIntegration } from './tabs/settings/api/google_integration';
 import NotificationsSettings from './tabs/settings/notifications';
@@ -270,6 +271,7 @@ function App() {
 
             // Other tabs
             case 'other.statistic': return <Statistic />;
+            case 'other.remote_control': return <RemoteControl />;
             case 'other.history': return <History />;
             case 'other.templates': return <Templates />;
             case 'other.preview': return <Preview />;
@@ -458,19 +460,25 @@ function App() {
                         {t('other.statistic')}
                     </div>
                     <div
-                        className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'other.history' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'other.remote_control' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('other.remote_control')}
+                    >
+                        {t('other.remote_control')}
+                    </div>
+                    <div
+                        className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'other.history' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('other.history')}
                     >
                         {t('other.history')}
                     </div>
                     <div
-                        className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'other.templates' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'other.templates' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('other.templates')}
                     >
                         {t('settings.templates')}
                     </div>
                     <div
-                        className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'other.preview' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-5 ${currentPath === 'other.preview' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('other.preview')}
                     >
                         {t('other.preview')}

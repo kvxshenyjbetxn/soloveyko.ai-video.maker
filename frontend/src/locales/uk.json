@@ -355,6 +355,8 @@
   },
   "other": {
     "statistic": "Статистика",
+    "remote_control": "Віддалене керування",
+    "remote_control_description": "Пристрої вашого акаунту та статус «онлайн» (Realtime). Назви зручні для майбутніх функцій віддаленого керування.",
     "history": "Історія",
     "preview": "Попередній перегляд"
   },
@@ -386,7 +388,18 @@
     "googlerLimits": "Ліміти Googler",
     "googlerMaxImages": "Макс. з'єднань для фото",
     "googlerMaxVideos": "Макс. з'єднань для відео",
-    "elevenlabsimageMaxConnections": "Макс. з'єднань для ElevenLabs Image"
+    "elevenlabsimageMaxConnections": "Макс. з'єднань для ElevenLabs Image",
+    "devicesTitle": "Пристрої",
+    "devicesDescription": "Пристрої, з яких ви заходили в акаунт. Статус «онлайн» оновлюється в реальному часі через Realtime Database.",
+    "devicesOnline": "Онлайн",
+    "devicesOffline": "Офлайн",
+    "devicesThisPc": "цей ПК",
+    "devicesRename": "Перейменувати",
+    "devicesSave": "Зберегти",
+    "devicesCancel": "Скасувати",
+    "devicesSignInHint": "Увійдіть у хмарний акаунт, щоб бачити список пристроїв.",
+    "devicesRealtimeOff": "Realtime Database URL не заданий: індикатор онлайн може не працювати, але список пристроїв у хмарі зберігається.",
+    "devicesRenamed": "Назву пристрою збережено"
   },
   "systemMonitor": {
     "cpu": "Процесор",
