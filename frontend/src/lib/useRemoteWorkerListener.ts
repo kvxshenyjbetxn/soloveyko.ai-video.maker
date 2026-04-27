@@ -149,6 +149,7 @@ export function useRemoteWorkerListener(
                 }
 
                 const unsub = listenToTranslationControlResponse(u, jobId, id, (action, approvedText) => {
+                    console.log(`[RemoteWorker] listenToTranslationControlResponse fired for ${id}: action=${action}, approvedText length=${approvedText?.length}`);
                     unsub();
                     if (onControlRespondedRef.current) {
                         onControlRespondedRef.current(id, approvedText, action);

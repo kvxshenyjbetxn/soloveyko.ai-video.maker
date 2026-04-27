@@ -310,6 +310,7 @@ export async function submitTranslationControlResponse(
     action: 'confirm' | 'regenerate' | 'cancel',
     approvedText: string,
 ): Promise<void> {
+    console.log(`[RemoteQueue] submitTranslationControlResponse: action=${action}, approvedText len=${approvedText?.length}`);
     await refreshAuthForFirestore(user);
     const ref = doc(firestore, 'users', user.uid, 'remoteJobs', jobId, 'translationControls', taskId);
     await updateDoc(ref, {
@@ -337,7 +338,9 @@ export function listenToTranslationControlResponse(
             if (!snap.exists()) return;
             const data = snap.data() as TranslationControlRequest;
             if (data.status === 'resolved' && data.action) {
-                onResponse(data.action, data.approvedText ?? data.text);
+                const finalText = (data.approvedText !== undefined && data.approvedText !== null) ? data.approvedText : data.text;
+                console.log(`[RemoteQueue] Translation resolved. action: ${data.action}, approvedText len: ${data.approvedText?.length}, finalText len: ${finalText?.length}`);
+                onResponse(data.action, finalText);
             }
         },
         (err) => console.error('[RemoteQueue] listenToTranslationControlResponse error:', err),
