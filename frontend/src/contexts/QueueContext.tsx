@@ -387,95 +387,101 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         completedMontageCountRef.current = 0;
         montageStartTimesRef.current.clear();
 
-        await ResetQueueCancellation();
-        const pendingIds = pending.map(t => t.id);
-        activeBatchRef.current = pendingIds;
-        hasShownImageBatchNotificationRef.current = false;
-        setIsImageBatchReady(false);
-        hasShownMontageBatchNotificationRef.current = false;
+        try {
+            await ResetQueueCancellation();
+            const pendingIds = pending.map(t => t.id);
+            activeBatchRef.current = pendingIds;
+            hasShownImageBatchNotificationRef.current = false;
+            setIsImageBatchReady(false);
+            hasShownMontageBatchNotificationRef.current = false;
 
-        // Prepare montage synchronization for this batch
-        const controlledTaskIds = pending
-            .filter(t => {
-                const s = t.settings as any;
-                // Settings can be nested or flat depending on where they come from
-                const mEnabled = s?.montageEnabled ?? s?.stages?.montage;
-                const mControl = s?.montageControlEnabled ?? s?.control?.montage;
-                return mEnabled && mControl;
-            })
-            .map(t => t.id);
+            // Prepare montage synchronization for this batch
+            const controlledTaskIds = pending
+                .filter(t => {
+                    const s = t.settings as any;
+                    // Settings can be nested or flat depending on where they come from
+                    const mEnabled = s?.montageEnabled ?? s?.stages?.montage;
+                    const mControl = s?.montageControlEnabled ?? s?.control?.montage;
+                    return mEnabled && mControl;
+                })
+                .map(t => t.id);
 
-        // @ts-ignore
-        if (window.go?.main?.App?.PrepareMontageBatch && controlledTaskIds.length > 0) {
             // @ts-ignore
-            await window.go.main.App.PrepareMontageBatch(controlledTaskIds);
-        }
-
-        setTasks(prev => prev.map(t => pendingIds.includes(t.id) ? {
-            ...t,
-            status: 'waiting',
-            textStatus: t.textStatus === 'pending' ? 'waiting' : t.textStatus,
-            voiceStatus: t.voiceStatus === 'pending' ? 'waiting' : t.voiceStatus,
-            imageStatus: t.imageStatus === 'pending' ? 'waiting' : t.imageStatus,
-            subtitleStatus: t.subtitleStatus === 'pending' ? 'waiting' : t.subtitleStatus,
-            montageStatus: t.montageStatus === 'pending' ? 'waiting' : t.montageStatus,
-            progress: 0
-        } : t));
-
-        // Use a small timeout to let the state update propagate before starting Go processes
-        // to avoid race conditions with immediate 'completed' events.
-        await new Promise(resolve => setTimeout(resolve, 50));
-
-        const run = async () => {
-            const promises = pending.map(async (task) => {
-                try {
-                    const content = taskContentRef.current.get(task.id) || "";
-                    const res = await ProcessTask(task.id, task.taskNumber || 0, task.type, content, task.settings, task.folderName, task.subName);
-                    updateTaskStatus(task.id, 'completed', 100, res.length);
-                } catch (err) {
-                    updateTaskStatus(task.id, 'failed', 0);
-                }
-            });
-            try { await Promise.all(promises); } finally {
-                setIsProcessing(false); activeBatchRef.current = [];
-                
-                // Finish current pause if active
-                let finalPausedTime = totalPausedTimeRef.current;
-                if (pauseStartRef.current !== null) {
-                    finalPausedTime += Date.now() - pauseStartRef.current;
-                }
-
-                const totalMs = Date.now() - startTime;
-                const activeMs = totalMs - finalPausedTime;
-                
-                const durStr = formatDuration(totalMs);
-                const activeDurStr = formatDuration(activeMs);
-                const totalMontageStr = formatDuration(totalMontageTimeRef.current);
-                const avgMontageMs = completedMontageCountRef.current > 0 ? totalMontageTimeRef.current / completedMontageCountRef.current : 0;
-                const avgMontageStr = formatDuration(avgMontageMs);
-
-                setTimeout(() => setCompletionModal({ 
-                    isOpen: true, 
-                    taskCount: pending.length, 
-                    duration: durStr,
-                    activeDuration: activeDurStr,
-                    total_montage: totalMontageStr,
-                    avg_montage: avgMontageStr
-                }), 800);
-
-                // Send Telegram Notification if enabled
-                const msg = `${t('notifications.queue_completed_title')}\n\n` +
-                    `${t('notifications.queue_completed_msg')}\n` +
-                    `${t('queue.tasks_completed')}: ${pending.length}\n` +
-                    `${t('queue.total_duration')}: ${durStr}\n` +
-                    `${t('queue.active_duration')}: ${activeDurStr}\n` +
-                    `${t('queue.total_montage')}: ${totalMontageStr}\n` +
-                    `${t('queue.avg_montage')}: ${avgMontageStr}`;
-                    
-                await sendNotification(msg);
+            if (window.go?.main?.App?.PrepareMontageBatch && controlledTaskIds.length > 0) {
+                // @ts-ignore
+                await window.go.main.App.PrepareMontageBatch(controlledTaskIds);
             }
-        };
-        run();
+
+            setTasks(prev => prev.map(t => pendingIds.includes(t.id) ? {
+                ...t,
+                status: 'waiting',
+                textStatus: t.textStatus === 'pending' ? 'waiting' : t.textStatus,
+                voiceStatus: t.voiceStatus === 'pending' ? 'waiting' : t.voiceStatus,
+                imageStatus: t.imageStatus === 'pending' ? 'waiting' : t.imageStatus,
+                subtitleStatus: t.subtitleStatus === 'pending' ? 'waiting' : t.subtitleStatus,
+                montageStatus: t.montageStatus === 'pending' ? 'waiting' : t.montageStatus,
+                progress: 0
+            } : t));
+
+            // Use a small timeout to let the state update propagate before starting Go processes
+            // to avoid race conditions with immediate 'completed' events.
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            const run = async () => {
+                const promises = pending.map(async (task) => {
+                    try {
+                        const content = taskContentRef.current.get(task.id) || "";
+                        const res = await ProcessTask(task.id, task.taskNumber || 0, task.type, content, task.settings, task.folderName, task.subName);
+                        updateTaskStatus(task.id, 'completed', 100, res.length);
+                    } catch (err) {
+                        updateTaskStatus(task.id, 'failed', 0);
+                    }
+                });
+                try { await Promise.all(promises); } finally {
+                    setIsProcessing(false); activeBatchRef.current = [];
+                    
+                    // Finish current pause if active
+                    let finalPausedTime = totalPausedTimeRef.current;
+                    if (pauseStartRef.current !== null) {
+                        finalPausedTime += Date.now() - pauseStartRef.current;
+                    }
+
+                    const totalMs = Date.now() - startTime;
+                    const activeMs = totalMs - finalPausedTime;
+                    
+                    const durStr = formatDuration(totalMs);
+                    const activeDurStr = formatDuration(activeMs);
+                    const totalMontageStr = formatDuration(totalMontageTimeRef.current);
+                    const avgMontageMs = completedMontageCountRef.current > 0 ? totalMontageTimeRef.current / completedMontageCountRef.current : 0;
+                    const avgMontageStr = formatDuration(avgMontageMs);
+
+                    setTimeout(() => setCompletionModal({ 
+                        isOpen: true, 
+                        taskCount: pending.length, 
+                        duration: durStr,
+                        activeDuration: activeDurStr,
+                        total_montage: totalMontageStr,
+                        avg_montage: avgMontageStr
+                    }), 800);
+
+                    // Send Telegram Notification if enabled
+                    const msg = `${t('notifications.queue_completed_title')}\n\n` +
+                        `${t('notifications.queue_completed_msg')}\n` +
+                        `${t('queue.tasks_completed')}: ${pending.length}\n` +
+                        `${t('queue.total_duration')}: ${durStr}\n` +
+                        `${t('queue.active_duration')}: ${activeDurStr}\n` +
+                        `${t('queue.total_montage')}: ${totalMontageStr}\n` +
+                        `${t('queue.avg_montage')}: ${avgMontageStr}`;
+                        
+                    await sendNotification(msg);
+                }
+            };
+            run();
+        } catch (err) {
+            console.error('[Queue] startQueue failed before run:', err);
+            setIsProcessing(false);
+            activeBatchRef.current = [];
+        }
     }, [updateTaskStatus, t, sendNotification]);
 
     useEffect(() => {

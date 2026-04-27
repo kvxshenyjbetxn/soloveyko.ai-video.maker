@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import type { User } from 'firebase/auth';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 // @ts-ignore
@@ -30,6 +30,11 @@ type AddTaskFn = (
 
 type StartQueueFn = () => Promise<void>;
 
+/**
+ * Слухач віддалених джобів для воркера.
+ * Підписка Firestore тримається стабільною на весь сеанс (deps лише user + deviceId),
+ * щоб зміна активного джоба не пересоздавала listener і не ламала автозапуск черги.
+ */
 export function useRemoteWorkerListener(
     user: User | null,
     addTask: AddTaskFn,
@@ -37,13 +42,17 @@ export function useRemoteWorkerListener(
 ) {
     const currentDeviceId = useMemo(() => getOrCreateDeviceId(), []);
 
-    const [activeJob, setActiveJob] = useState<string | null>(null);
+    const addTaskRef = useRef(addTask);
+    const startQueueRef = useRef(startQueue);
+    useEffect(() => { addTaskRef.current = addTask; }, [addTask]);
+    useEffect(() => { startQueueRef.current = startQueue; }, [startQueue]);
 
     const jobTaskIdsRef = useRef<Set<string>>(new Set());
     const totalTasksRef = useRef(0);
     const completedCountRef = useRef(0);
     /** Terminal status per task — guard against duplicate Go emissions for the same id */
     const terminalTaskIdsRef = useRef<Set<string>>(new Set());
+    const activeJobRef = useRef<string | null>(null);
     const acceptingRef = useRef(false);
 
     const userRef = useRef(user);
@@ -54,8 +63,15 @@ export function useRemoteWorkerListener(
         console.log('[RemoteWorker] listener active, deviceId:', currentDeviceId);
 
         const unsub = listenToIncomingJobs(user, currentDeviceId, async (job) => {
-            console.log('[RemoteWorker] incoming job:', job.jobId, 'busy:', !!activeJob || acceptingRef.current);
-            if (activeJob || acceptingRef.current) return;
+            console.log(
+                '[RemoteWorker] incoming job:',
+                job.jobId,
+                'activeJob:',
+                activeJobRef.current,
+                'accepting:',
+                acceptingRef.current,
+            );
+            if (activeJobRef.current || acceptingRef.current) return;
             acceptingRef.current = true;
 
             try {
@@ -67,9 +83,10 @@ export function useRemoteWorkerListener(
                 completedCountRef.current = 0;
                 terminalTaskIdsRef.current = new Set();
                 jobTaskIdsRef.current = new Set(tasks.map((t) => t.id));
+                activeJobRef.current = job.jobId;
 
                 for (const task of tasks) {
-                    addTask(
+                    addTaskRef.current(
                         task.type,
                         task.content,
                         task.settings,
@@ -81,30 +98,28 @@ export function useRemoteWorkerListener(
                     );
                 }
 
-                setActiveJob(job.jobId);
                 await markJobRunning(user, job.jobId);
 
                 setTimeout(() => {
                     console.log('[RemoteWorker] calling startQueue');
-                    void startQueue();
+                    void startQueueRef.current();
                 }, 400);
             } catch (err) {
                 console.error('[RemoteWorker] error:', err);
                 acceptingRef.current = false;
+                activeJobRef.current = null;
             }
         });
 
         return () => unsub();
-    }, [user, currentDeviceId, activeJob]);
+    }, [user, currentDeviceId]);
 
     useEffect(() => {
-        if (!activeJob) return;
-        const jobId = activeJob;
-
         const unsubTextResult = EventsOn(
             'textResult',
             async (id: string, length: number) => {
-                if (!jobTaskIdsRef.current.has(id)) return;
+                const jobId = activeJobRef.current;
+                if (!jobId || !jobTaskIdsRef.current.has(id)) return;
                 const u = userRef.current;
                 if (!u) return;
                 try { await writeTaskStatus(u, jobId, id, { resultLength: length }); } catch { /* non-fatal */ }
@@ -114,7 +129,8 @@ export function useRemoteWorkerListener(
         const unsubRequestControl = EventsOn(
             'requestControl',
             async (id: string, text: string) => {
-                if (!jobTaskIdsRef.current.has(id)) return;
+                const jobId = activeJobRef.current;
+                if (!jobId || !jobTaskIdsRef.current.has(id)) return;
                 const u = userRef.current;
                 if (!u) return;
 
@@ -136,7 +152,8 @@ export function useRemoteWorkerListener(
         const unsubStage = EventsOn(
             'stageStatus',
             async (id: string, stage: string, status: string, msg?: string) => {
-                if (!jobTaskIdsRef.current.has(id)) return;
+                const jobId = activeJobRef.current;
+                if (!jobId || !jobTaskIdsRef.current.has(id)) return;
                 const u = userRef.current;
                 if (!u) return;
 
@@ -160,7 +177,8 @@ export function useRemoteWorkerListener(
         const unsubStatus = EventsOn(
             'taskStatus',
             async (id: string, status: string) => {
-                if (!jobTaskIdsRef.current.has(id)) return;
+                const jobId = activeJobRef.current;
+                if (!jobId || !jobTaskIdsRef.current.has(id)) return;
                 const u = userRef.current;
                 if (!u) return;
 
@@ -178,7 +196,7 @@ export function useRemoteWorkerListener(
                         try { await markJobFinished(u, jobId, finalStatus); } catch { /* non-fatal */ }
                         void deleteRemoteJob(u, jobId);
 
-                        setActiveJob(null);
+                        activeJobRef.current = null;
                         jobTaskIdsRef.current.clear();
                         terminalTaskIdsRef.current.clear();
                         completedCountRef.current = 0;
@@ -195,5 +213,5 @@ export function useRemoteWorkerListener(
             unsubStage();
             unsubStatus();
         };
-    }, [activeJob]);
+    }, []);
 }
