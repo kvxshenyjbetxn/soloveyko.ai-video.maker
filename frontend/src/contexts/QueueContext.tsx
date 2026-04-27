@@ -50,7 +50,7 @@ interface QueueDataContextType {
 
 interface QueueActionsContextType {
     addTasks: (type: any, content: string, tasksData: any[], name?: string, skippedStages?: string[]) => void;
-    addTask: (type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any, taskId?: string) => void;
+    addTask: (type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any, taskId?: string, taskNumber?: number) => void;
     dispatchToWorker: (workerDeviceId: string, workerName: string) => Promise<void>;
     removeTask: (id: string) => void; clearQueue: () => void; startQueue: () => Promise<void>;
     getNextTaskName: () => string;
@@ -108,7 +108,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const completedMontageCountRef = useRef(0);
 
     useEffect(() => { tasksRef.current = tasks; }, [tasks]);
-    useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
+
+    const setProcessing = useCallback((next: boolean) => {
+        isProcessingRef.current = next;
+        setIsProcessing(next);
+    }, []);
 
     // Check if any task is awaiting control to track pause time
     useEffect(() => {
@@ -183,7 +187,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return `${t('queue.task_default_name')} ${taskCounterRef.current}`;
     }, [t]);
 
-    const addTask = useCallback((type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any, taskId?: string) => {
+    const addTask = useCallback((type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any, taskId?: string, taskNumber?: number) => {
         const nr = taskCounterRef.current++; const fName = name?.trim() || `${t('queue.task_default_name')} ${nr}`;
 
         let imgMsg = "";
@@ -204,6 +208,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
         const newTask: QueueTask = {
             id,
+            taskNumber: taskNumber !== undefined ? taskNumber : undefined,
             name: subName ? `${fName} - ${subName}` : fName, folderName: fName, subName: subName || "",
             type, content: "", originalLength: content.length, // Content moved to Ref
             status: 'pending', progress: 0,
@@ -300,10 +305,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             return [];
         });
         taskContentRef.current.clear();
-        setIsProcessing(false);
+        setProcessing(false);
         setIsImageBatchReady(false);
         ClearGallery();
-    }, []);
+    }, [setProcessing]);
 
     const updateControlDraft = useCallback((id: string, text: string) => {
         taskContentRef.current.set(id, text);
@@ -330,7 +335,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const cancelQueue = async () => {
         await CancelQueue();
         setTasks(prev => prev.map(t => (t.status === 'running' || t.status === 'waiting') ? { ...t, status: 'failed' } : t));
-        setIsProcessing(false);
+        setProcessing(false);
     };
 
     const resumeImageControl = async () => {
@@ -391,11 +396,23 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const startQueue = useCallback(async () => {
         // Read from refs: callers from setTimeout (e.g. remote worker) may hold a stale
         // useCallback closure where `tasks` / `isProcessing` were from before addTask() ran.
-        if (isProcessingRef.current) return;
+        if (isProcessingRef.current) {
+            console.warn('[Queue] startQueue пропущено: isProcessingRef уже true');
+            return;
+        }
         const pending = tasksRef.current.filter((t) => t.status === 'pending');
-        if (pending.length === 0) return;
+        if (pending.length === 0) {
+            console.warn(
+                '[Queue] startQueue пропущено: немає pending; задач у ref:',
+                tasksRef.current.length,
+                tasksRef.current.map((t) => `${t.id.slice(0, 12)}:${t.status}`).join(', ') || '(порожньо)',
+            );
+            return;
+        }
 
-        setIsProcessing(true); const startTime = Date.now();
+        setProcessing(true);
+        console.log('[Queue] startQueue: старт', pending.length, 'pending-задач');
+        const startTime = Date.now();
         totalPausedTimeRef.current = 0;
         pauseStartRef.current = null;
         totalMontageTimeRef.current = 0;
@@ -427,16 +444,20 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 await window.go.main.App.PrepareMontageBatch(controlledTaskIds);
             }
 
-            setTasks(prev => prev.map(t => pendingIds.includes(t.id) ? {
-                ...t,
-                status: 'waiting',
-                textStatus: t.textStatus === 'pending' ? 'waiting' : t.textStatus,
-                voiceStatus: t.voiceStatus === 'pending' ? 'waiting' : t.voiceStatus,
-                imageStatus: t.imageStatus === 'pending' ? 'waiting' : t.imageStatus,
-                subtitleStatus: t.subtitleStatus === 'pending' ? 'waiting' : t.subtitleStatus,
-                montageStatus: t.montageStatus === 'pending' ? 'waiting' : t.montageStatus,
-                progress: 0
-            } : t));
+            setTasks(prev => {
+                const next = prev.map((t): QueueTask => pendingIds.includes(t.id) ? {
+                    ...t,
+                    status: 'waiting',
+                    textStatus: t.textStatus === 'pending' ? 'waiting' : t.textStatus,
+                    voiceStatus: t.voiceStatus === 'pending' ? 'waiting' : t.voiceStatus,
+                    imageStatus: t.imageStatus === 'pending' ? 'waiting' : t.imageStatus,
+                    subtitleStatus: t.subtitleStatus === 'pending' ? 'waiting' : t.subtitleStatus,
+                    montageStatus: t.montageStatus === 'pending' ? 'waiting' : t.montageStatus,
+                    progress: 0
+                } : t);
+                tasksRef.current = next;
+                return next;
+            });
 
             // Use a small timeout to let the state update propagate before starting Go processes
             // to avoid race conditions with immediate 'completed' events.
@@ -453,7 +474,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                     }
                 });
                 try { await Promise.all(promises); } finally {
-                    setIsProcessing(false); activeBatchRef.current = [];
+                    setProcessing(false); activeBatchRef.current = [];
                     
                     // Finish current pause if active
                     let finalPausedTime = totalPausedTimeRef.current;
@@ -494,10 +515,10 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             run();
         } catch (err) {
             console.error('[Queue] startQueue failed before run:', err);
-            setIsProcessing(false);
+            setProcessing(false);
             activeBatchRef.current = [];
         }
-    }, [updateTaskStatus, t, sendNotification]);
+    }, [updateTaskStatus, t, sendNotification, setProcessing]);
 
     useEffect(() => {
         const uStatus = EventsOn("taskStatus", (id: string, s: string, p: number, l?: number) => {
@@ -509,7 +530,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 if (activeBatchRef.current.includes(id) && (s === 'completed' || s === 'failed')) {
                     const hasActive = nextTasks.some(t => activeBatchRef.current.includes(t.id) && t.status !== 'completed' && t.status !== 'failed');
                     if (!hasActive) {
-                        setIsProcessing(false);
+                        setProcessing(false);
                         activeBatchRef.current = [];
                     }
                 }
@@ -570,7 +591,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setTasks(prev => prev.map(t => t.id === id ? { ...t, resultLength: length } : t));
         });
         return () => { uStatus(); uStage(); uReq(); uImgReq(); uMontageReq(); uFilesReq(); uTextResult(); };
-    }, [t]);
+    }, [t, setProcessing]);
 
     useEffect(() => {
         if (!isProcessing || activeBatchRef.current.length === 0) return;

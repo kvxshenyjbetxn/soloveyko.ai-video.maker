@@ -26,6 +26,7 @@ type AddTaskFn = (
     skippedStages?: string[],
     existingData?: any,
     taskId?: string,
+    taskNumber?: number,
 ) => void;
 
 type StartQueueFn = () => Promise<void>;
@@ -95,6 +96,7 @@ export function useRemoteWorkerListener(
                         undefined,
                         undefined,
                         task.id,
+                        task.taskNumber,
                     );
                 }
 
