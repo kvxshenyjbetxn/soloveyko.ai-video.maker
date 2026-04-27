@@ -604,15 +604,37 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 }
             }
 
-            setTasks(prev => prev.map(t => {
-                if (t.id !== id) return t; const s = status as TaskStatus; const up: any = {};
-                if (stage === 'text') up.textStatus = s;
-                else if (stage === 'voice') { up.voiceStatus = s; if (msg) up.voiceDuration = msg; }
-                else if (stage === 'image') { up.imageStatus = s; if (msg) up.imagesMessage = msg; }
-                else if (stage === 'subtitle') up.subtitleStatus = s;
-                else if (stage === 'montage') { up.montageStatus = s; if (msg) up.montageMsg = msg; }
-                return { ...t, ...up };
-            }));
+            setTasks(prev => {
+                let clearedImageControl = false;
+                const next = prev.map(t => {
+                    if (t.id !== id) return t;
+                    const s = status as TaskStatus;
+                    const up: any = {};
+                    if (stage === 'text') up.textStatus = s;
+                    else if (stage === 'voice') { up.voiceStatus = s; if (msg) up.voiceDuration = msg; }
+                    else if (stage === 'image') {
+                        up.imageStatus = s;
+                        if (msg) up.imagesMessage = msg;
+                        // Після відповіді (локально / з майстра через Go) у черзі лишається isAwaitingImageControl —
+                        // скидаємо, коли пайплайн виходить з паузи (не waiting).
+                        if (t.isAwaitingImageControl && s !== 'waiting') {
+                            up.isAwaitingImageControl = false;
+                            clearedImageControl = true;
+                        }
+                    }
+                    else if (stage === 'subtitle') up.subtitleStatus = s;
+                    else if (stage === 'montage') { up.montageStatus = s; if (msg) up.montageMsg = msg; }
+                    return { ...t, ...up };
+                });
+                if (clearedImageControl && !next.some(t => t.isAwaitingImageControl)) {
+                    queueMicrotask(() => {
+                        setImageControlNotification({ isOpen: false });
+                        setIsImageBatchReady(false);
+                        hasShownImageBatchNotificationRef.current = false;
+                    });
+                }
+                return next;
+            });
         });
         const uReq = EventsOn("requestControl", (id: string, text: string) => {
             const task = tasksRef.current.find(t => t.id === id);
