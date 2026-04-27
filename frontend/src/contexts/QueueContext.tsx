@@ -199,9 +199,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             imgMsg = parts.join(' ');
         }
 
-        const effectiveSkip = (skippedStages && existingData && existingData.foundStages)
-            ? skippedStages.filter(s => existingData.foundStages.includes(s))
-            : skippedStages;
+        const effectiveSkip = skippedStages !== undefined
+            ? ((existingData && existingData.foundStages)
+                ? skippedStages.filter(s => existingData.foundStages.includes(s))
+                : skippedStages)
+            : settings.skippedStages;
 
         const id = taskId || `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
         taskContentRef.current.set(id, content);
@@ -245,9 +247,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             // For batch adding, skippedStages is the union of all found stages.
             // We MUST intersect it with this specific task's foundStages to avoid marking
             // non-existent files as "completed" for templates that don't have them.
-            const effectiveSkip = (skippedStages && existingData && existingData.foundStages)
-                ? skippedStages.filter(s => existingData.foundStages.includes(s))
-                : skippedStages;
+            const effectiveSkip = skippedStages !== undefined
+                ? ((existingData && existingData.foundStages)
+                    ? skippedStages.filter(s => existingData.foundStages.includes(s))
+                    : skippedStages)
+                : d.settings.skippedStages;
 
             let imgMsg = "";
             if (existingData?.imageCount > 0 || existingData?.videoCount > 0 || existingData?.promptCount > 0) {
