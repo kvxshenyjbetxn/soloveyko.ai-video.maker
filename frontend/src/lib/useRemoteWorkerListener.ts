@@ -2,7 +2,7 @@ import { useEffect, useRef, useMemo } from 'react';
 import type { User } from 'firebase/auth';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 // @ts-ignore
-import { SendControlAction } from '../../wailsjs/go/main/App';
+import { SendControlAction, SubmitImageControlResult } from '../../wailsjs/go/main/App';
 import {
     listenToIncomingJobs,
     fetchJobTasks,
@@ -13,6 +13,8 @@ import {
     deleteRemoteJob,
     writeTranslationControlRequest,
     listenToTranslationControlResponse,
+    uploadImageControlRequest,
+    listenToImageControlResponse,
     type RemoteTaskStatus,
 } from './remoteQueue';
 import { getOrCreateDeviceId } from './deviceId';
@@ -160,6 +162,34 @@ export function useRemoteWorkerListener(
             },
         );
 
+        const unsubRequestImageControl = EventsOn(
+            'requestImageControl',
+            async (id: string, files: string[]) => {
+                const jobId = activeJobRef.current;
+                if (!jobId || !jobTaskIdsRef.current.has(id)) return;
+                const u = userRef.current;
+                if (!u) return;
+
+                try {
+                    await uploadImageControlRequest(u, jobId, id, files || []);
+                    await writeTaskStatus(u, jobId, id, { imageStatus: 'waiting' });
+                } catch (err) {
+                    console.error('[RemoteWorker] uploadImageControlRequest failed:', err);
+                    return;
+                }
+
+                const unsub = listenToImageControlResponse(u, jobId, id, (action) => {
+                    console.log(`[RemoteWorker] listenToImageControlResponse fired for ${id}: action=${action}`);
+                    unsub();
+                    if (onControlRespondedRef.current) {
+                        onControlRespondedRef.current(id, '', action);
+                    } else {
+                        try { SubmitImageControlResult(id, action); } catch { /* non-fatal */ }
+                    }
+                });
+            },
+        );
+
         const unsubStage = EventsOn(
             'stageStatus',
             async (id: string, stage: string, status: string, msg?: string) => {
@@ -221,6 +251,7 @@ export function useRemoteWorkerListener(
         return () => {
             unsubTextResult();
             unsubRequestControl();
+            unsubRequestImageControl();
             unsubStage();
             unsubStatus();
         };

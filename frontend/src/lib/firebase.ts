@@ -3,6 +3,7 @@ import { getAuth } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
+import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,6 +20,7 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const firestore = getFirestore(app);
 export const realtimeDb = getDatabase(app);
+export const storage = getStorage(app);
 
 export const refreshAuthForFirestore = async (user: User): Promise<void> => {
     const session = auth.currentUser;

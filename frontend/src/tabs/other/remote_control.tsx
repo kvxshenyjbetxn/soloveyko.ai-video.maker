@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { renameMyDevice, useMyDevices } from '../../lib/devicePresence';
+import { GetRemotePreviewLimit, SaveRemotePreviewLimit } from '../../../wailsjs/go/main/App';
 import './remote_control.css';
 
 export const RemoteControl = () => {
@@ -13,6 +14,32 @@ export const RemoteControl = () => {
     const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
     const [deviceNameDraft, setDeviceNameDraft] = useState('');
     const [renaming, setRenaming] = useState(false);
+    
+    const [previewLimit, setPreviewLimit] = useState<number>(3);
+    const [savingLimit, setSavingLimit] = useState(false);
+
+    useEffect(() => {
+        GetRemotePreviewLimit().then(limit => {
+            setPreviewLimit(limit);
+        }).catch(err => console.error("Failed to load preview limit:", err));
+    }, []);
+
+    const handleLimitChange = async (newLimit: number) => {
+        if (newLimit < 1) newLimit = 1;
+        if (newLimit > 50) newLimit = 50;
+        setPreviewLimit(newLimit);
+        setSavingLimit(true);
+        try {
+            await SaveRemotePreviewLimit(newLimit);
+            showToast(t('general.saved_successfully') || 'Saved', 'success');
+        } catch (err) {
+            console.error("Failed to save preview limit:", err);
+            showToast(t('general.save_error') || 'Error saving', 'error');
+        } finally {
+            setSavingLimit(false);
+        }
+    };
+
     const hasRealtimePresence = Boolean(import.meta.env.VITE_FIREBASE_DATABASE_URL);
 
     return (
@@ -109,6 +136,29 @@ export const RemoteControl = () => {
                             {!hasRealtimePresence && (
                                 <p className="devices-hint">{t('general.devicesRealtimeOff')}</p>
                             )}
+
+                            <div className="settings-section" style={{ marginTop: '2rem' }}>
+                                <h3>{t('other.remote_preview_settings') || 'Налаштування прев\'ю'}</h3>
+                                <p className="section-description">
+                                    {t('other.remote_preview_desc') || 'Вкажіть кількість перших зображень/відео, які будуть передаватись на Майстер ПК для віддаленого контролю кожного завдання.'}
+                                </p>
+                                <div className="setting-row">
+                                    <label className="setting-label">
+                                        {t('other.remote_preview_limit') || 'Кількість медіа (N):'}
+                                    </label>
+                                    <input 
+                                        type="number" 
+                                        className="device-name-input" 
+                                        style={{ width: '80px', marginLeft: '1rem' }}
+                                        value={previewLimit}
+                                        min={1}
+                                        max={50}
+                                        disabled={savingLimit}
+                                        onChange={(e) => setPreviewLimit(parseInt(e.target.value) || 1)}
+                                        onBlur={(e) => handleLimitChange(parseInt(e.target.value) || 1)}
+                                    />
+                                </div>
+                            </div>
                         </>
                     )}
                 </div>

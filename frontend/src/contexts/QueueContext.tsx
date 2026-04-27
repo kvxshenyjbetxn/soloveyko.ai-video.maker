@@ -9,6 +9,8 @@ import {
     deleteRemoteJob,
     submitTranslationControlResponse,
     listenToTranslationControls,
+    submitImageControlResponse,
+    listenToImageControls,
     type RemoteTaskPayload,
     type RemoteJobStatus,
 } from '../lib/remoteQueue';
@@ -21,7 +23,7 @@ export interface QueueTask {
     id: string; taskNumber?: number; name: string; folderName: string; subName: string;
     type: 'translate' | 'rewrite' | 'voiceover'; content: string; originalLength?: number; settings: any;
     status: TaskStatus; progress: number; resultLength?: number;
-    isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; isAwaitingMontageControl?: boolean; montagePlanData?: string; isAwaitingExistingFilesCheck?: boolean; isAwaitingRemoteTranslationControl?: boolean; controlContent?: string;
+    isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; isAwaitingMontageControl?: boolean; montagePlanData?: string; isAwaitingExistingFilesCheck?: boolean; isAwaitingRemoteTranslationControl?: boolean; isAwaitingRemoteImageControl?: boolean; controlContent?: string; remotePreviewUrls?: string[];
     existingFilesData?: any;
     textStatus: TaskStatus; voiceStatus: TaskStatus; imageStatus: TaskStatus;
     subtitleStatus: TaskStatus; montageStatus: TaskStatus; montageMsg?: string;
@@ -64,6 +66,7 @@ interface QueueActionsContextType {
     resumeMontageControl: (id: string, resultData: string) => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
     resumeRemoteTranslationControl: (taskId: string, text: string, action?: string) => Promise<void>;
+    resumeRemoteImageControl: (taskId: string, action: string) => Promise<void>;
     closeCompletionModal: () => void; closeImageControlNotification: () => void; closeMontageControlNotification: () => void;
     addRegeneratingPath: (path: string) => void;
     removeRegeneratingPath: (path: string) => void;
@@ -381,6 +384,23 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             );
         } catch (err) {
             console.error('[Queue] resumeRemoteTranslationControl failed:', err);
+        }
+    }, [user]);
+
+    const resumeRemoteImageControl = useCallback(async (taskId: string, action: string) => {
+        const task = tasksRef.current.find(t => t.id === taskId);
+        if (!task || !task.remoteJobId || !user) return;
+
+        setTasks(prev => prev.map(t =>
+            t.id === taskId
+                ? { ...t, isAwaitingRemoteImageControl: false, imageStatus: 'running' as TaskStatus }
+                : t
+        ));
+
+        try {
+            await submitImageControlResponse(user, task.remoteJobId, taskId, action);
+        } catch (err) {
+            console.error('[Queue] resumeRemoteImageControl failed:', err);
         }
     }, [user]);
 
@@ -747,11 +767,23 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             }
         });
         remoteJobUnsubsRef.current.push(unsubControls);
+
+        // Listen for image control requests sent by the worker
+        const unsubImageControls = listenToImageControls(user, jobId, (taskId, request) => {
+            if (request.status === 'pending') {
+                setTasks(prev => prev.map(t =>
+                    t.id === taskId
+                        ? { ...t, isAwaitingRemoteImageControl: true, remotePreviewUrls: request.previewUrls }
+                        : t
+                ));
+            }
+        });
+        remoteJobUnsubsRef.current.push(unsubImageControls);
     }, [user, currentDeviceId]);
 
     const actionsValue = {
         addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
-        updateTaskStatus, updateControlDraft, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles, resumeRemoteTranslationControl,
+        updateTaskStatus, updateControlDraft, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles, resumeRemoteTranslationControl, resumeRemoteImageControl,
         closeCompletionModal, closeImageControlNotification, closeMontageControlNotification,
         addRegeneratingPath, removeRegeneratingPath,
         dispatchToWorker,

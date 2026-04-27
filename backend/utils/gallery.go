@@ -63,8 +63,8 @@ func (m *GalleryManager) AddImage(taskName, templateName, imageName, imgPath, pr
 	m.tasks[taskName][templateName] = append(m.tasks[taskName][templateName], image)
 }
 
-// naturalLess compares two strings using natural sort order (e.g. "2.jpg" < "10.jpg")
-func naturalLess(s1, s2 string) bool {
+// NaturalLess compares two strings using natural sort order (e.g. "2.jpg" < "10.jpg")
+func NaturalLess(s1, s2 string) bool {
 	i, j := 0, 0
 	for i < len(s1) && j < len(s2) {
 		c1, c2 := s1[i], s2[j]
@@ -112,7 +112,7 @@ func (m *GalleryManager) GetGalleryData() []GalleryTask {
 
 			// sort images by name naturally
 			sort.Slice(copies, func(i, j int) bool {
-				return naturalLess(copies[i].Name, copies[j].Name)
+				return NaturalLess(copies[i].Name, copies[j].Name)
 			})
 
 			templates = append(templates, GalleryTemplate{
@@ -123,7 +123,7 @@ func (m *GalleryManager) GetGalleryData() []GalleryTask {
 
 		// Sort templates naturally
 		sort.Slice(templates, func(i, j int) bool {
-			return naturalLess(templates[i].Name, templates[j].Name)
+			return NaturalLess(templates[i].Name, templates[j].Name)
 		})
 
 		results = append(results, GalleryTask{
@@ -134,7 +134,7 @@ func (m *GalleryManager) GetGalleryData() []GalleryTask {
 
 	// Sort tasks naturally
 	sort.Slice(results, func(i, j int) bool {
-		return naturalLess(results[i].Name, results[j].Name)
+		return NaturalLess(results[i].Name, results[j].Name)
 	})
 
 	return results

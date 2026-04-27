@@ -4,11 +4,11 @@ import { getSyncedFirebaseProjectId, repoRoot } from './firebase-project-sync.mj
 
 try {
     const project = getSyncedFirebaseProjectId();
-    console.error(`Deploying Firestore + Realtime rules to "${project}"…`);
+    console.error(`Deploying Firestore + Realtime + Storage rules to "${project}"…`);
 
     const result = spawnSync(
         'firebase',
-        ['deploy', '--only', 'firestore:rules,database', '--project', project],
+        ['deploy', '--only', 'firestore:rules,database,storage', '--project', project],
         {
             cwd: repoRoot,
             stdio: 'inherit',
