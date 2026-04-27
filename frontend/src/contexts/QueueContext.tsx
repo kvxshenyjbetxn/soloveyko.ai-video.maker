@@ -806,7 +806,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                         void AddRemoteGalleryImage(
                             task.folderName,
                             templateName,
-                            `remote-preview-${i + 1}`,
+                            `remote-preview-${String(i + 1).padStart(2, '0')}`,
                             url,
                             '',
                         ).catch((err) => console.error('[Queue] AddRemoteGalleryImage failed:', err));

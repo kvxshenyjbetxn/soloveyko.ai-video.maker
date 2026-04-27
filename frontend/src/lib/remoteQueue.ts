@@ -30,17 +30,17 @@ export async function uploadImageControlRequest(
     }
 
     const uploadedUrls: string[] = [];
-    
-    // Завантажуємо всі файли паралельно
-    await Promise.all(localPaths.map(async (localPath, index) => {
+
+    // Порядок у масиві = порядок локальних шляхів (як зібрано на воркері, 1..N). Паралельний
+    // push раніше плутав порядок відображення на майстрі.
+    for (let index = 0; index < localPaths.length; index++) {
+        const localPath = localPaths[index];
         try {
-            // Використовуємо Wails local endpoint для завантаження файлу
             const cleanPath = localPath.replace(/\\/g, '/');
             const response = await fetch(`local/${encodeURIComponent(cleanPath)}`);
             if (!response.ok) throw new Error(`Failed to read file ${localPath}`);
             const blob = await response.blob();
 
-            // Завантажуємо в Firebase Storage
             const ext = cleanPath.split('.').pop();
             const fileName = `previews/${jobId}/${taskId}/${index}.${ext}`;
             const sRef = storageRef(storage, `users/${user.uid}/${fileName}`);
@@ -50,7 +50,7 @@ export async function uploadImageControlRequest(
         } catch (e) {
             console.error(`[RemoteWorker] Error uploading preview ${localPath}:`, e);
         }
-    }));
+    }
 
     if (localPaths.length > 0 && uploadedUrls.length === 0) {
         console.warn(

@@ -15,10 +15,40 @@ interface SelectedMedia {
 
 import { RegenerateModal } from '../components/RegenerateModal';
 
+function isHttpUrl(url: string): boolean {
+    return url.startsWith('http://') || url.startsWith('https://');
+}
+
+function pathBeforeQuery(url: string): string {
+    const i = url.indexOf('?');
+    return i === -1 ? url : url.slice(0, i);
+}
+
+function isVideoUrl(url: string): boolean {
+    const p = pathBeforeQuery(url).toLowerCase();
+    return p.endsWith('.mp4') || p.endsWith('.webm') || p.endsWith('.m4v') || p.endsWith('.mov');
+}
+
+function withCacheBuster(url: string, buster: number): string {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}v=${buster}`;
+}
+
+/** Локальні: thumb через Wails. https (Firebase) — без thumb, інакше ламається другий `?` у токен-URL. */
+function gridImageSrc(url: string, buster: number): string {
+    if (isHttpUrl(url)) {
+        return withCacheBuster(url, buster);
+    }
+    return `${url}?thumb=1&v=${buster}`;
+}
+
+function gridVideoSrc(url: string, buster: number): string {
+    return isHttpUrl(url) ? withCacheBuster(url, buster) : `${url}?v=${buster}`;
+}
 
 // Memoized Card Component
 const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick, onSelectionToggle, onDelete, onRegenerate, isRegenerating, buster, isDeleted }: any) => {
-    const isVideo = img.url.toLowerCase().endsWith('.mp4');
+    const isVideo = isVideoUrl(img.url);
     const [showPrompt, setShowPrompt] = useState(false);
     const [isInView, setIsInView] = useState(false);
     const cardRef = useRef<HTMLDivElement>(null);
@@ -61,7 +91,7 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
                     </div>
                 ) : isVideo ? (
                     <video
-                        src={`${img.url}?v=${buster}`}
+                        src={gridVideoSrc(img.url, buster)}
                         muted
                         loop
                         playsInline
@@ -73,7 +103,7 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
                         }}
                     />
                 ) : (
-                    <img src={`${img.url}?thumb=1&v=${buster}`} alt={img.name} loading="lazy" />
+                    <img src={gridImageSrc(img.url, buster)} alt={img.name} loading="lazy" />
                 )}
 
                 {isRegenerating && (
@@ -575,7 +605,7 @@ export const Gallery = ({ setCurrentPath }: { setCurrentPath?: (path: any) => vo
                             </div>
                         </div>
                         <div className="modal-image-wrapper">
-                            {selectedMedia.url.toLowerCase().endsWith('.mp4') ? (
+                            {isVideoUrl(selectedMedia.url) ? (
                                 <video src={selectedMedia.url} className="animate-fade" controls autoPlay loop playsInline onClick={e => e.stopPropagation()} />
                             ) : (
                                 <img src={selectedMedia.url} alt={selectedMedia.name} className="animate-fade" onClick={e => e.stopPropagation()} />
