@@ -25,6 +25,10 @@ export async function uploadImageControlRequest(
 ): Promise<void> {
     await refreshAuthForFirestore(user);
 
+    if (!localPaths || localPaths.length === 0) {
+        console.warn('[RemoteWorker] uploadImageControlRequest: no local paths, Firestore will get empty previewUrls');
+    }
+
     const uploadedUrls: string[] = [];
     
     // Завантажуємо всі файли паралельно
@@ -47,6 +51,16 @@ export async function uploadImageControlRequest(
             console.error(`[RemoteWorker] Error uploading preview ${localPath}:`, e);
         }
     }));
+
+    if (localPaths.length > 0 && uploadedUrls.length === 0) {
+        console.warn(
+            '[RemoteWorker] uploadImageControlRequest: 0/',
+            localPaths.length,
+            'previews uploaded (check local/ fetch or Storage rules)',
+        );
+    } else {
+        console.log(`[RemoteWorker] uploadImageControlRequest: ${uploadedUrls.length} preview(s) ready for task ${taskId}`);
+    }
 
     // Зберігаємо запит у Firestore
     const ref = doc(firestore, 'users', user.uid, 'remoteJobs', jobId, 'imageControls', taskId);

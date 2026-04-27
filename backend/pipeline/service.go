@@ -634,37 +634,8 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 			s.pendingControl.Store(id+"_image", resChan)
 
 			if s.OnRequestImageControl != nil {
-				// Отримуємо перші N зображень/відео для прев'ю
 				limit := s.settings.GetRemotePreviewLimit()
-				var previewFiles []string
-				
-				// Шукаємо зображення або відео у finalDir
-				files, err := os.ReadDir(finalDir)
-				if err == nil {
-					// Відбираємо тільки медіафайли
-					var mediaFiles []string
-					for _, f := range files {
-						if f.IsDir() {
-							continue
-						}
-						ext := strings.ToLower(filepath.Ext(f.Name()))
-						if ext == ".jpg" || ext == ".png" || ext == ".mp4" || ext == ".webm" {
-							mediaFiles = append(mediaFiles, f.Name())
-						}
-					}
-					
-					// Сортуємо як у галереї
-					sort.Slice(mediaFiles, func(i, j int) bool {
-						return utils.NaturalLess(mediaFiles[i], mediaFiles[j])
-					})
-					
-					for i, mf := range mediaFiles {
-						if i >= limit {
-							break
-						}
-						previewFiles = append(previewFiles, filepath.Join(finalDir, mf))
-					}
-				}
+				previewFiles := s.collectImageControlPreviewPaths(finalDir, limit, id, taskLabel)
 				s.OnRequestImageControl(id, previewFiles)
 			}
 
@@ -1203,4 +1174,57 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 		defaultPath = strings.ReplaceAll(defaultPath, "\\", "/")
 	}
 	return defaultPath
+}
+
+// collectImageControlPreviewPaths збирає до limit абсолютних шляхів до медіа для прев'ю віддаленого контролю.
+// Згенеровані кадри лежать у finalDir/images; додатково перевіряємо корінь finalDir.
+func (s *PipelineService) collectImageControlPreviewPaths(finalDir string, limit int, id string, taskLabel string) []string {
+	if limit <= 0 {
+		return nil
+	}
+	extOK := map[string]bool{
+		".png": true, ".jpg": true, ".jpeg": true, ".webp": true,
+		".mp4": true, ".webm": true, ".gif": true,
+	}
+	var out []string
+	addFromDir := func(dir string) {
+		if len(out) >= limit {
+			return
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		var names []string
+		for _, f := range entries {
+			if f.IsDir() {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(f.Name()))
+			if !extOK[ext] {
+				continue
+			}
+			names = append(names, f.Name())
+		}
+		sort.Slice(names, func(i, j int) bool {
+			return utils.NaturalLess(names[i], names[j])
+		})
+		for _, n := range names {
+			if len(out) >= limit {
+				break
+			}
+			out = append(out, filepath.Join(dir, n))
+		}
+	}
+	imagesDir := filepath.Join(finalDir, "images")
+	if st, err := os.Stat(imagesDir); err == nil && st.IsDir() {
+		addFromDir(imagesDir)
+	}
+	if len(out) < limit {
+		addFromDir(finalDir)
+	}
+	if len(out) == 0 {
+		s.log("WARN", fmt.Sprintf("[Control] Не знайдено медіафайлів для прев'ю (очікувались у %s/images або в корені)", finalDir), id, taskLabel)
+	}
+	return out
 }

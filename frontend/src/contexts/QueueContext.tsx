@@ -354,11 +354,18 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const resumeImageControl = async () => {
         setImageControlNotification({ isOpen: false });
         setIsImageBatchReady(false);
-        const ids = tasks.filter(t => t.isAwaitingImageControl).map(t => t.id);
+        const snapshot = tasksRef.current;
+        const ids = snapshot
+            .filter(t => t.isAwaitingImageControl || t.isAwaitingRemoteImageControl)
+            .map(t => t.id);
         if (ids.length === 0) return;
-        setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, isAwaitingImageControl: false, imageStatus: 'processing' } : t));
+        setTasks(prev => prev.map(t =>
+            ids.includes(t.id)
+                ? { ...t, isAwaitingImageControl: false, isAwaitingRemoteImageControl: false, imageStatus: 'processing' as TaskStatus }
+                : t,
+        ));
         for (const id of ids) {
-            const task = tasks.find(t => t.id === id);
+            const task = snapshot.find(t => t.id === id);
             if (task?.remoteJobId && user) {
                 // It's a remote task, so we send the response to Firebase
                 try {
@@ -787,7 +794,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         });
         remoteJobUnsubsRef.current.push(unsubControls);
 
-        // Listen for image control requests sent by the worker
+        // Listen for image control requests sent by the worker (майстер: як локальна черга — модалка + галерея)
         const unsubImageControls = listenToImageControls(user, jobId, (taskId, request) => {
             if (request.status === 'pending') {
                 const previewUrls = request.previewUrls ?? [];
@@ -805,6 +812,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                         ).catch((err) => console.error('[Queue] AddRemoteGalleryImage failed:', err));
                     });
                 }
+                setImageControlNotification({ isOpen: true });
+                setIsImageBatchReady(true);
+                void sendNotification(
+                    `${t('notifications.review_images_title')}\n\n${t('pipeline.image_control_notification.message')}`,
+                );
                 setTasks((prev) =>
                     prev.map((t) =>
                         t.id === taskId
@@ -815,7 +827,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             }
         });
         remoteJobUnsubsRef.current.push(unsubImageControls);
-    }, [user, currentDeviceId]);
+    }, [user, currentDeviceId, sendNotification, t]);
 
     const actionsValue = {
         addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
