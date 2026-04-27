@@ -224,7 +224,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             voiceDuration: existingData?.voiceDuration || "",
             imagesMessage: imgMsg
         };
-        setTasks(prev => [...prev, newTask]);
+        setTasks(prev => {
+            const next = [...prev, newTask];
+            tasksRef.current = next;
+            return next;
+        });
     }, [t]);
 
     const addTasks = useCallback((type: any, content: string, tasksData: any[], name?: string, skippedStages?: string[]) => {
@@ -275,15 +279,26 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 imagesMessage: imgMsg
             };
         });
-        setTasks(prev => [...prev, ...newItems]);
+        setTasks(prev => {
+            const next = [...prev, ...newItems];
+            tasksRef.current = next;
+            return next;
+        });
     }, [t]);
 
     const removeTask = useCallback((id: string) => {
-        setTasks(prev => prev.filter(t => t.id !== id));
+        setTasks(prev => {
+            const next = prev.filter(t => t.id !== id);
+            tasksRef.current = next;
+            return next;
+        });
         taskContentRef.current.delete(id);
     }, []);
     const clearQueue = useCallback(() => {
-        setTasks([]);
+        setTasks(() => {
+            tasksRef.current = [];
+            return [];
+        });
         taskContentRef.current.clear();
         setIsProcessing(false);
         setIsImageBatchReady(false);
