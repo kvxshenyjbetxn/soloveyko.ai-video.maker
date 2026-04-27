@@ -12,7 +12,86 @@ import {
     deleteDoc,
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
-import { firestore, refreshAuthForFirestore } from './firebase';
+import { firestore, refreshAuthForFirestore, storage } from './firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+export type ImageControlStatus = 'pending' | 'resolved';
+
+export async function uploadImageControlRequest(
+    user: User,
+    jobId: string,
+    taskId: string,
+    localPaths: string[],
+): Promise<void> {
+    await refreshAuthForFirestore(user);
+
+    const uploadedUrls: string[] = [];
+    
+    // Завантажуємо всі файли паралельно
+    await Promise.all(localPaths.map(async (localPath, index) => {
+        try {
+            // Використовуємо Wails local endpoint для завантаження файлу
+            const cleanPath = localPath.replace(/\\/g, '/');
+            const response = await fetch(`local/${encodeURIComponent(cleanPath)}`);
+            if (!response.ok) throw new Error(`Failed to read file ${localPath}`);
+            const blob = await response.blob();
+
+            // Завантажуємо в Firebase Storage
+            const ext = cleanPath.split('.').pop();
+            const fileName = `previews/${jobId}/${taskId}/${index}.${ext}`;
+            const sRef = storageRef(storage, `users/${user.uid}/${fileName}`);
+            await uploadBytes(sRef, blob);
+            const url = await getDownloadURL(sRef);
+            uploadedUrls.push(url);
+        } catch (e) {
+            console.error(`[RemoteWorker] Error uploading preview ${localPath}:`, e);
+        }
+    }));
+
+    // Зберігаємо запит у Firestore
+    const ref = doc(firestore, 'users', user.uid, 'remoteJobs', jobId, 'imageControls', taskId);
+    await setDoc(ref, {
+        status: 'pending' as ImageControlStatus,
+        previewUrls: uploadedUrls,
+        requestedAt: Date.now(),
+    });
+}
+
+export function listenToImageControlResponse(
+    user: User,
+    jobId: string,
+    taskId: string,
+    onResponded: (action: string) => void,
+): () => void {
+    const refPath = doc(firestore, 'users', user.uid, 'remoteJobs', jobId, 'imageControls', taskId);
+    return onSnapshot(
+        refPath,
+        (snap) => {
+            const data = snap.data();
+            if (!data) return;
+            if (data.status === 'resolved' && data.action) {
+                onResponded(data.action);
+            }
+        },
+        (err) => console.warn('[RemoteWorker] image control listener error:', err),
+    );
+}
+
+export async function submitImageControlResponse(
+    user: User,
+    jobId: string,
+    taskId: string,
+    action: string, // 'confirm', 'regenerate', 'cancel'
+): Promise<void> {
+    await refreshAuthForFirestore(user);
+    const refPath = doc(firestore, 'users', user.uid, 'remoteJobs', jobId, 'imageControls', taskId);
+    await updateDoc(refPath, {
+        status: 'resolved' as ImageControlStatus,
+        action,
+        resolvedAt: Date.now(),
+    });
+}
+
 
 export type RemoteJobStatus = 'pending' | 'accepted' | 'running' | 'completed' | 'failed';
 
@@ -351,6 +430,34 @@ export function listenToTranslationControlResponse(
  * Master: listens for incoming translation control requests from a worker.
  * Fires cb for every 'added' or 'modified' document that has status='pending'.
  */
+export interface ImageControlRequest {
+    status: ImageControlStatus;
+    previewUrls?: string[];
+    requestedAt: number;
+    action?: string;
+}
+
+export function listenToImageControls(
+    user: User,
+    jobId: string,
+    onControl: (taskId: string, request: ImageControlRequest) => void,
+): Unsubscribe {
+    const col = collection(firestore, 'users', user.uid, 'remoteJobs', jobId, 'imageControls');
+    return onSnapshot(
+        col,
+        (snap) => {
+            snap.docChanges().forEach((change) => {
+                if (change.type !== 'added' && change.type !== 'modified') return;
+                const data = change.doc.data() as ImageControlRequest;
+                if (data.status === 'pending') {
+                    onControl(change.doc.id, data);
+                }
+            });
+        },
+        (err) => console.error('[RemoteQueue] listenToImageControls error:', err),
+    );
+}
+
 export function listenToTranslationControls(
     user: User,
     jobId: string,

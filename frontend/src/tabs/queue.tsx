@@ -238,7 +238,80 @@ const MagicWandIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.21 1.21 0 0 0 1.72 0L21.64 5.36a1.21 1.21 0 0 0 0-1.72Z"></path><path d="m14 7 3 3"></path><path d="M5 6v.01"></path><path d="M19 14v.01"></path><path d="M10 2v.01"></path><path d="M7 21v.01"></path><path d="M14 22v.01"></path></svg>
 );
 
-const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, onOpenMontageEditor, isProcessing, t, resumeTask, onConfirmRemote, onCancelRemote, onRegenerateRemote, logs }: any) => {
+const RemoteImageControl = ({ task, onConfirm, onCancel, onRegenerate, t }: any) => {
+    return (
+        <div className="control-editor-wrapper animate-slide-down" onClick={(e) => e.stopPropagation()}>
+            <div className="control-header">
+                <span className="control-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                    {t('pipeline.image_control_notification.title') || 'Віддалений контроль зображень'}
+                </span>
+                <span className="control-status waiting pulse-text">{t('pipeline.waiting_for_user') || 'Очікує дії'}</span>
+            </div>
+
+            <div className="remote-gallery-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                gap: '10px',
+                marginTop: '15px',
+                marginBottom: '15px'
+            }}>
+                {task.remotePreviewUrls?.map((url: string, index: number) => {
+                    const isVideo = url.includes('.mp4') || url.includes('.webm');
+                    return (
+                        <div key={index} style={{
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            backgroundColor: 'rgba(0,0,0,0.2)',
+                            aspectRatio: '1',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            border: '1px solid var(--border-color)'
+                        }}>
+                            {isVideo ? (
+                                <video src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay loop muted playsInline />
+                            ) : (
+                                <img src={url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div className="control-actions">
+                <div style={{ flex: 1 }} />
+                <button
+                    className="btn-control-cancel"
+                    onClick={() => onCancel(task.id)}
+                    title={t('common.cancel')}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    {t('common.cancel')}
+                </button>
+
+                <button
+                    className="btn-control-secondary"
+                    onClick={() => onRegenerate(task.id)}
+                    title={t('gallery.regenerate_modal.generate')}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /></svg>
+                    {t('gallery.regenerate_modal.generate')}
+                </button>
+
+                <button
+                    className="btn-control-confirm pulse-btn"
+                    onClick={() => onConfirm(task.id)}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><polyline points="20 6 9 17 4 12" /></svg>
+                    {t('pipeline.continue_processing') || 'Продовжити'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, onOpenMontageEditor, isProcessing, t, resumeTask, onConfirmRemote, onCancelRemote, onRegenerateRemote, onConfirmRemoteImage, onCancelRemoteImage, onRegenerateRemoteImage, logs }: any) => {
     const settings = task.settings || {};
     const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
     const isVoiceEnabled = settings.voiceoverEnabled === true;
@@ -258,8 +331,8 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
     return (
         <div className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
             <div
-                className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${(task.isAwaitingControl || task.isAwaitingRemoteTranslationControl) ? 'awaiting-control' : ''} ${task.isAwaitingMontageControl ? 'awaiting-montage-control' : ''}`}
-                onClick={() => !(task.isAwaitingControl || task.isAwaitingRemoteTranslationControl) && onToggle(task.id)}
+                className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${(task.isAwaitingControl || task.isAwaitingRemoteTranslationControl || task.isAwaitingRemoteImageControl) ? 'awaiting-control' : ''} ${task.isAwaitingMontageControl ? 'awaiting-montage-control' : ''}`}
+                onClick={() => !(task.isAwaitingControl || task.isAwaitingRemoteTranslationControl || task.isAwaitingRemoteImageControl) && onToggle(task.id)}
                 style={{ position: 'relative', overflow: 'hidden' }}
             >
                 {task.isAwaitingControl && (
@@ -271,6 +344,15 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                         onConfirm={(id: string, text: string) => onConfirmRemote(id, text)}
                         onCancel={(id: string) => onCancelRemote(id)}
                         onRegenerate={(id: string, text: string, settings?: any) => onRegenerateRemote(id, text, settings)}
+                    />
+                )}
+                {task.isAwaitingRemoteImageControl && (
+                    <RemoteImageControl
+                        task={task}
+                        t={t}
+                        onConfirm={(id: string) => onConfirmRemoteImage(id)}
+                        onCancel={(id: string) => onCancelRemoteImage(id)}
+                        onRegenerate={(id: string) => onRegenerateRemoteImage(id)}
                     />
                 )}
                 <div className="task-card-header">
@@ -477,7 +559,7 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl, resumeRemoteTranslationControl, dispatchToWorker } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl, resumeRemoteTranslationControl, resumeRemoteImageControl, dispatchToWorker } = useQueue();
     const { user } = useAuth();
     const { showToast } = useToast();
     const devices = useMyDevices(user);
@@ -623,6 +705,9 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                 onConfirmRemote={(id: string, text: string) => resumeRemoteTranslationControl(id, text, 'confirm')}
                                 onCancelRemote={(id: string) => resumeRemoteTranslationControl(id, '', 'cancel')}
                                 onRegenerateRemote={(id: string, text: string) => resumeRemoteTranslationControl(id, text, 'regenerate')}
+                                onConfirmRemoteImage={(id: string) => resumeRemoteImageControl(id, 'confirm')}
+                                onCancelRemoteImage={(id: string) => resumeRemoteImageControl(id, 'cancel')}
+                                onRegenerateRemoteImage={(id: string) => resumeRemoteImageControl(id, 'regenerate')}
                                 logs={logs}
                             />
                         ))}

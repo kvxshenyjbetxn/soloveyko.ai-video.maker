@@ -126,9 +126,9 @@ func NewApp() *App {
 			wruntime.EventsEmit(app.ctx, "requestControl", id, text)
 		}
 	}
-	app.pipeline.OnRequestImageControl = func(id string) {
+	app.pipeline.OnRequestImageControl = func(id string, files []string) {
 		if app.ctx != nil {
-			wruntime.EventsEmit(app.ctx, "requestImageControl", id)
+			wruntime.EventsEmit(app.ctx, "requestImageControl", id, files)
 		}
 	}
 	app.pipeline.OnRequestMontageControl = func(id string, planData string) {
@@ -300,6 +300,16 @@ func (a *App) GetMontageMode() string {
 // SaveMontageMode встановлює режим монтажу
 func (a *App) SaveMontageMode(mode string) error {
 	return a.settings.SetMontageMode(mode)
+}
+
+// GetRemotePreviewLimit повертає ліміт прев'ю
+func (a *App) GetRemotePreviewLimit() int {
+	return a.settings.GetRemotePreviewLimit()
+}
+
+// SaveRemotePreviewLimit встановлює ліміт прев'ю
+func (a *App) SaveRemotePreviewLimit(limit int) error {
+	return a.settings.SetRemotePreviewLimit(limit)
 }
 
 // GetSystemStats повертає поточну статистику системи
@@ -1447,8 +1457,8 @@ func (a *App) ResolveTaskDir(taskName string, taskType string, subName string, s
 }
 
 // SubmitImageControlResult resumes a paused task after image review
-func (a *App) SubmitImageControlResult(taskId string) {
-	a.pipeline.SubmitImageControlResult(taskId)
+func (a *App) SubmitImageControlResult(taskId string, action string) {
+	a.pipeline.SubmitImageControlResult(taskId, action)
 }
 
 // SubmitMontageControlResult resumes a paused task after montage review

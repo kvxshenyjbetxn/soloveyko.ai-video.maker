@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
 	"strings"
@@ -44,7 +45,7 @@ type PipelineService struct {
 	OnStageStatus               func(id string, stage string, status string, message string)
 	OnTextResult                func(id string, resultText string)
 	OnRequestControl            func(id string, text string)
-	OnRequestImageControl       func(id string)
+	OnRequestImageControl       func(id string, files []string)
 	OnRequestMontageControl     func(id string, planData string)
 	OnTaskStatus                func(id string, status string, progress int)
 	OnImageGenerated            func(taskName string, templateName string, imageName string, path string, prompt string)
@@ -633,12 +634,49 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 			s.pendingControl.Store(id+"_image", resChan)
 
 			if s.OnRequestImageControl != nil {
-				s.OnRequestImageControl(id)
+				// Отримуємо перші N зображень/відео для прев'ю
+				limit := s.settings.GetRemotePreviewLimit()
+				var previewFiles []string
+				
+				// Шукаємо зображення або відео у finalDir
+				files, err := os.ReadDir(finalDir)
+				if err == nil {
+					// Відбираємо тільки медіафайли
+					var mediaFiles []string
+					for _, f := range files {
+						if f.IsDir() {
+							continue
+						}
+						ext := strings.ToLower(filepath.Ext(f.Name()))
+						if ext == ".jpg" || ext == ".png" || ext == ".mp4" || ext == ".webm" {
+							mediaFiles = append(mediaFiles, f.Name())
+						}
+					}
+					
+					// Сортуємо як у галереї
+					sort.Slice(mediaFiles, func(i, j int) bool {
+						return utils.NaturalLess(mediaFiles[i], mediaFiles[j])
+					})
+					
+					for i, mf := range mediaFiles {
+						if i >= limit {
+							break
+						}
+						previewFiles = append(previewFiles, filepath.Join(finalDir, mf))
+					}
+				}
+				s.OnRequestImageControl(id, previewFiles)
 			}
 
 			// Block goroutine until result received or timeout/context cancel
 			select {
-			case <-resChan:
+			case action := <-resChan:
+				if action == "cancel" || action == "reject" || action == "regenerate" {
+					s.log("ERROR", "[Control] Media rejected or regeneration requested by user.", id, taskLabel)
+					imageErr = fmt.Errorf("media rejected in control phase")
+					s.emitStageStatus(id, "image", "failed")
+					return
+				}
 				s.log("SUCCESS", "[Control] Media approved.", id, taskLabel)
 				s.emitStageStatus(id, "image", "completed")
 			case <-s.ctx.Done():
@@ -906,10 +944,13 @@ func (s *PipelineService) SubmitControlAction(id string, action *ControlAction) 
 }
 
 // SubmitImageControlResult resumes a paused pipeline after image review
-func (s *PipelineService) SubmitImageControlResult(id string) {
+func (s *PipelineService) SubmitImageControlResult(id string, action string) {
 	if val, ok := s.pendingControl.Load(id + "_image"); ok {
 		ch := val.(chan string)
-		ch <- "confirm"
+		if action == "" {
+			action = "confirm"
+		}
+		ch <- action
 	}
 }
 

@@ -337,6 +337,7 @@ type Settings struct {
 	TelegramNotificationsEnabled   bool                   `json:"telegramNotificationsEnabled"`
 	TelegramChatID                 string                 `json:"telegramChatID"`
 	SystemNotificationsEnabled     bool                   `json:"systemNotificationsEnabled"`
+	RemotePreviewLimit             int                    `json:"remotePreviewLimit"`
 	FirstRun                       bool                   `json:"firstRun"`
 	ShowWelcome                    bool                   `json:"showWelcome"`
 }
@@ -504,9 +505,10 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 				MontageVideoWatermarkSize:     15,
 				MontageVideoWatermarkRounding: 10,
 			},
-			FirstRun:                 true,
-			ShowWelcome:              true,
-			OpenRouterMaxConnections: 10,
+			FirstRun:                   true,
+			ShowWelcome:                true,
+			RemotePreviewLimit:         3,
+			OpenRouterMaxConnections:   10,
 		}, nil
 	}
 
@@ -547,6 +549,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 	}
 	if settings.SubtitleMaxConnections <= 0 {
 		settings.SubtitleMaxConnections = 2
+	}
+	if settings.RemotePreviewLimit <= 0 {
+		settings.RemotePreviewLimit = 3
 	}
 	if settings.SubtitleAmdMaxConnections <= 0 {
 		settings.SubtitleAmdMaxConnections = 1
@@ -1289,6 +1294,28 @@ func (s *SettingsService) GetVoiceMakerBalance() float64 {
 		return 0
 	}
 	return settings.VoiceMakerBalance
+}
+
+// GetRemotePreviewLimit повертає ліміт прев'ю для віддаленого контролю
+func (s *SettingsService) GetRemotePreviewLimit() int {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return 3
+	}
+	if settings.RemotePreviewLimit <= 0 {
+		return 3
+	}
+	return settings.RemotePreviewLimit
+}
+
+// SetRemotePreviewLimit зберігає ліміт прев'ю для віддаленого контролю
+func (s *SettingsService) SetRemotePreviewLimit(limit int) error {
+	settings, err := s.LoadSettings()
+	if err != nil {
+		return err
+	}
+	settings.RemotePreviewLimit = limit
+	return s.SaveSettings(settings)
 }
 
 // SetVoiceMakerBalance зберігає баланс VoiceMaker
