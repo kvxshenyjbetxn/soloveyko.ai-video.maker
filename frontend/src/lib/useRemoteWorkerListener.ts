@@ -181,11 +181,8 @@ export function useRemoteWorkerListener(
                 const unsub = listenToImageControlResponse(u, jobId, id, (action) => {
                     console.log(`[RemoteWorker] listenToImageControlResponse fired for ${id}: action=${action}`);
                     unsub();
-                    if (onControlRespondedRef.current) {
-                        onControlRespondedRef.current(id, '', action);
-                    } else {
-                        try { SubmitImageControlResult(id, action); } catch { /* non-fatal */ }
-                    }
+                    // onControlResponded (App) лише для перекладу (resumeTask); для зображень завжди Go.
+                    try { SubmitImageControlResult(id, action); } catch { /* non-fatal */ }
                 });
             },
         );
