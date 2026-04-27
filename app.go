@@ -1486,6 +1486,14 @@ func (a *App) RegenerateGalleryImage(imgPath string, prompt string, service stri
 	return a.pipeline.RegenerateImage(imgPath, prompt, service, settings)
 }
 
+// AddRemoteGalleryImage adds a remote URL to the local gallery manually
+func (a *App) AddRemoteGalleryImage(taskName, templateName, imageName, url, prompt string) {
+	a.galleryManager.AddImage(taskName, templateName, imageName, url, prompt)
+	if a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "galleryUpdate")
+	}
+}
+
 // DeleteGalleryImage removes an image from session memory and deletes the file from disk
 func (a *App) DeleteGalleryImage(imgPath string) bool {
 	// 1. Remove from Memory

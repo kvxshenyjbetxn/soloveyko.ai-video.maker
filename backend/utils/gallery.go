@@ -3,6 +3,7 @@ package utils
 import (
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -52,11 +53,15 @@ func (m *GalleryManager) AddImage(taskName, templateName, imageName, imgPath, pr
 	}
 	m.tasks[taskName][templateName] = filteredImages
 
-	urlPath := filepath.ToSlash(imgPath)
+	url := "local/" + filepath.ToSlash(imgPath)
+	if strings.HasPrefix(imgPath, "http://") || strings.HasPrefix(imgPath, "https://") {
+		url = imgPath
+	}
+
 	image := GalleryImage{
 		Name:   imageName,
-		Path:   imgPath,
-		URL:    "local/" + urlPath,
+		Path:   imgPath, // For remote, path is the URL too
+		URL:    url,
 		Prompt: prompt,
 	}
 

@@ -288,8 +288,12 @@ export async function markJobFinished(
 
 const DELETE_BATCH = 500;
 
-/** Deletes a job document and all subcollection docs (tasks, statuses). Firestore does not cascade. */
-async function deleteSubcollection(uid: string, jobId: string, sub: 'tasks' | 'statuses'): Promise<void> {
+/** Deletes a job document and all subcollection docs. Firestore does not cascade. */
+async function deleteSubcollection(
+    uid: string,
+    jobId: string,
+    sub: 'tasks' | 'statuses' | 'translationControls' | 'imageControls',
+): Promise<void> {
     const col = collection(firestore, 'users', uid, 'remoteJobs', jobId, sub);
     const snap = await getDocs(col);
     const ids: string[] = [];
@@ -313,6 +317,8 @@ export async function deleteRemoteJob(user: User, jobId: string): Promise<void> 
     try {
         await deleteSubcollection(uid, jobId, 'statuses');
         await deleteSubcollection(uid, jobId, 'tasks');
+        await deleteSubcollection(uid, jobId, 'translationControls');
+        await deleteSubcollection(uid, jobId, 'imageControls');
         await deleteDoc(doc(firestore, 'users', uid, 'remoteJobs', jobId));
         console.log('[RemoteQueue] deleted job from Firestore:', jobId);
     } catch (err) {

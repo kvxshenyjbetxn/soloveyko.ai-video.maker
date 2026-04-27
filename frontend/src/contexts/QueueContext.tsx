@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
-import { ProcessTask, SubmitImageControlResult, SubmitExistingFilesResult, ClearGallery, SendControlAction, CancelQueue, ResetQueueCancellation } from '../../wailsjs/go/main/App';
+import { ProcessTask, SubmitImageControlResult, SubmitExistingFilesResult, ClearGallery, SendControlAction, CancelQueue, ResetQueueCancellation, AddRemoteGalleryImage } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { useI18n } from './I18nContext';
 import {
@@ -119,7 +119,13 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     // Check if any task is awaiting control to track pause time
     useEffect(() => {
-        const anyAwaiting = tasks.some(t => t.isAwaitingControl || t.isAwaitingImageControl || t.isAwaitingMontageControl);
+        const anyAwaiting = tasks.some(t =>
+            t.isAwaitingControl ||
+            t.isAwaitingImageControl ||
+            t.isAwaitingMontageControl ||
+            t.isAwaitingRemoteTranslationControl ||
+            t.isAwaitingRemoteImageControl,
+        );
         
         if (anyAwaiting && pauseStartRef.current === null) {
             pauseStartRef.current = Date.now();
@@ -351,7 +357,20 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         const ids = tasks.filter(t => t.isAwaitingImageControl).map(t => t.id);
         if (ids.length === 0) return;
         setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, isAwaitingImageControl: false, imageStatus: 'processing' } : t));
-        for (const id of ids) await SubmitImageControlResult(id, 'confirm');
+        for (const id of ids) {
+            const task = tasks.find(t => t.id === id);
+            if (task?.remoteJobId && user) {
+                // It's a remote task, so we send the response to Firebase
+                try {
+                    await submitImageControlResponse(user, task.remoteJobId, id, 'confirm');
+                } catch (e) {
+                    console.error('Failed to submit remote image control response', e);
+                }
+            } else {
+                // Local task
+                await SubmitImageControlResult(id, 'confirm');
+            }
+        }
     };
 
     const resumeMontageControl = async (id: string, resultData: string) => {
@@ -771,11 +790,28 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         // Listen for image control requests sent by the worker
         const unsubImageControls = listenToImageControls(user, jobId, (taskId, request) => {
             if (request.status === 'pending') {
-                setTasks(prev => prev.map(t =>
-                    t.id === taskId
-                        ? { ...t, isAwaitingRemoteImageControl: true, remotePreviewUrls: request.previewUrls }
-                        : t
-                ));
+                const previewUrls = request.previewUrls ?? [];
+                const task = tasksRef.current.find((t) => t.id === taskId);
+                if (task && previewUrls.length > 0) {
+                    const templateName = task.subName || '';
+                    previewUrls.forEach((url, i) => {
+                        if (!url) return;
+                        void AddRemoteGalleryImage(
+                            task.folderName,
+                            templateName,
+                            `remote-preview-${i + 1}`,
+                            url,
+                            '',
+                        ).catch((err) => console.error('[Queue] AddRemoteGalleryImage failed:', err));
+                    });
+                }
+                setTasks((prev) =>
+                    prev.map((t) =>
+                        t.id === taskId
+                            ? { ...t, isAwaitingRemoteImageControl: true, remotePreviewUrls: previewUrls }
+                            : t,
+                    ),
+                );
             }
         });
         remoteJobUnsubsRef.current.push(unsubImageControls);
