@@ -130,9 +130,13 @@ function App() {
         };
     }, [isAuthLoading, user]);
 
-    const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification, montageControlNotification, closeMontageControlNotification, addTask, startQueue } = useQueue();
+    const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification, montageControlNotification, closeMontageControlNotification, addTask, startQueue, resumeTask, regenerateTask, cancelTask } = useQueue();
 
-    useRemoteWorkerListener(user, addTask, startQueue);
+    useRemoteWorkerListener(user, addTask, startQueue, (id, text, action) => {
+        if (action === 'confirm') void resumeTask(id, text);
+        else if (action === 'regenerate') void regenerateTask(id, text);
+        else if (action === 'cancel') void cancelTask(id);
+    });
     const pendingCount = tasks.filter(t => t.status === 'pending').length;
     const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');

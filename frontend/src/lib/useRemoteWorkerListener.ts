@@ -40,13 +40,17 @@ export function useRemoteWorkerListener(
     user: User | null,
     addTask: AddTaskFn,
     startQueue: StartQueueFn,
+    onControlResponded?: (id: string, text: string, action: string) => void,
 ) {
     const currentDeviceId = useMemo(() => getOrCreateDeviceId(), []);
 
     const addTaskRef = useRef(addTask);
     const startQueueRef = useRef(startQueue);
+    const onControlRespondedRef = useRef(onControlResponded);
+    
     useEffect(() => { addTaskRef.current = addTask; }, [addTask]);
     useEffect(() => { startQueueRef.current = startQueue; }, [startQueue]);
+    useEffect(() => { onControlRespondedRef.current = onControlResponded; }, [onControlResponded]);
 
     const jobTaskIdsRef = useRef<Set<string>>(new Set());
     const totalTasksRef = useRef(0);
@@ -146,7 +150,11 @@ export function useRemoteWorkerListener(
 
                 const unsub = listenToTranslationControlResponse(u, jobId, id, (action, approvedText) => {
                     unsub();
-                    try { SendControlAction(id, action, approvedText, {}); } catch { /* non-fatal */ }
+                    if (onControlRespondedRef.current) {
+                        onControlRespondedRef.current(id, approvedText, action);
+                    } else {
+                        try { SendControlAction(id, action, approvedText, {}); } catch { /* non-fatal */ }
+                    }
                 });
             },
         );
