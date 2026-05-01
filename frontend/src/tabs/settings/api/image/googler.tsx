@@ -9,8 +9,13 @@ import '../../general.css';
 const PROVIDER_LABELS: Record<string, string> = {
     whisk: 'Whisk',
     flow: 'Flow',
+    flow_gempix2: 'Flow Nano Pro',
+    flow_imagen4: 'Flow Imagen 4',
+    flow_narwhal: 'Flow Nano Banana 2',
     gemini: 'Gemini (Imagen 4)',
     grok: 'Grok',
+    flower: 'Flower (Veo 3.1)',
+    openai: 'OpenAI (ChatGPT)',
 };
 
 interface FallbackListProps {
@@ -100,7 +105,8 @@ export const Googler = () => {
         setGooglerMaxVideos
     } = useServices();
 
-    const ALL_PROVIDERS = ['whisk', 'flow', 'gemini', 'grok'];
+    const ALL_IMAGE_PROVIDERS = ['whisk', 'flow', 'flow_gempix2', 'flow_imagen4', 'flow_narwhal', 'gemini', 'grok', 'flower', 'openai'];
+    const ALL_VIDEO_PROVIDERS = ['flow', 'whisk', 'grok', 'gemini', 'flower'];
     const DEFAULT_FALLBACK = ['flow', 'gemini'];
 
     const [apiKey, setApiKey] = useState('');
@@ -436,7 +442,7 @@ export const Googler = () => {
                             <div style={{ fontSize: '0.8em', opacity: 0.55, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{t('api.googlerSettings.fallbackImage')}</div>
                             <FallbackList
                                 items={imageFallback}
-                                allProviders={ALL_PROVIDERS}
+                                allProviders={ALL_IMAGE_PROVIDERS}
                                 accentColor={accentColor}
                                 onMove={(from, to) => handleImageFallbackChange(moveFallback(imageFallback, from, to))}
                                 onToggle={(p) => handleImageFallbackChange(toggleFallback(imageFallback, p))}
@@ -449,7 +455,7 @@ export const Googler = () => {
                             <div style={{ fontSize: '0.8em', opacity: 0.55, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{t('api.googlerSettings.fallbackVideo')}</div>
                             <FallbackList
                                 items={videoFallback}
-                                allProviders={ALL_PROVIDERS}
+                                allProviders={ALL_VIDEO_PROVIDERS}
                                 accentColor={accentColor}
                                 onMove={(from, to) => handleVideoFallbackChange(moveFallback(videoFallback, from, to))}
                                 onToggle={(p) => handleVideoFallbackChange(toggleFallback(videoFallback, p))}

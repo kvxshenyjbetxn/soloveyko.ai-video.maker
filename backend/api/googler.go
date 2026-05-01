@@ -234,7 +234,7 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 
 		// Map aspect ratio for current model
 		apiRatio := aspectRatio
-		if currentModel == "grok" {
+		if currentModel == "grok" || currentModel == "flower" || currentModel == "openai" {
 			switch apiRatio {
 			case "IMAGE_ASPECT_RATIO_LANDSCAPE":
 				apiRatio = "16:9"
@@ -337,6 +337,28 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 		reqBody = FlowImageRequest{
 			Prompt:      prompt,
 			AspectRatio: apiRatio,
+			Model:       "GEM_PIX_2",
+		}
+	case "flow_gempix2":
+		url = fmt.Sprintf("%s/v4/flow/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = FlowImageRequest{
+			Prompt:      prompt,
+			AspectRatio: apiRatio,
+			Model:       "GEM_PIX_2",
+		}
+	case "flow_imagen4":
+		url = fmt.Sprintf("%s/v4/flow/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = FlowImageRequest{
+			Prompt:      prompt,
+			AspectRatio: apiRatio,
+			Model:       "IMAGEN_3_5",
+		}
+	case "flow_narwhal":
+		url = fmt.Sprintf("%s/v4/flow/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = FlowImageRequest{
+			Prompt:      prompt,
+			AspectRatio: apiRatio,
+			Model:       "NARWHAL",
 		}
 	case "whisk":
 		url = fmt.Sprintf("%s/v4/whisk/image/generate?api_key=%s", s.baseUrl, apiKey)
@@ -355,6 +377,20 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 		url = fmt.Sprintf("%s/v4/gemini/image/generate?api_key=%s", s.baseUrl, apiKey)
 		reqBody = map[string]interface{}{
 			"prompt": prompt,
+		}
+	case "flower":
+		// Flower (Nano Banana 2) — використовує короткий формат aspect_ratio
+		url = fmt.Sprintf("%s/v4/flower/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = map[string]interface{}{
+			"prompt":       prompt,
+			"aspect_ratio": apiRatio,
+		}
+	case "openai":
+		// OpenAI (ChatGPT web image flow) — використовує короткий формат aspect_ratio
+		url = fmt.Sprintf("%s/v4/openai/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = map[string]interface{}{
+			"prompt":       prompt,
+			"aspect_ratio": apiRatio,
 		}
 	default:
 		return fmt.Errorf("unknown model: %s", model)
@@ -667,7 +703,7 @@ func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt s
 
 	// Map aspect ratio
 	apiRatio := aspectRatio
-	if model == "grok" {
+	if model == "grok" || model == "flower" {
 		switch apiRatio {
 		case "IMAGE_ASPECT_RATIO_LANDSCAPE":
 			apiRatio = "16:9"
@@ -718,6 +754,14 @@ func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt s
 				"prompt":           prompt,
 				"reference_images": []string{imageBase64},
 			}
+		case "flower":
+			// Flower (Veo 3.1) — image-to-video
+			url = fmt.Sprintf("%s/v4/flower/video/from-image?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":       prompt,
+				"image":        imageBase64,
+				"aspect_ratio": apiRatio,
+			}
 		default:
 			return fmt.Errorf("unknown video model: %s", model)
 		}
@@ -746,6 +790,13 @@ func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt s
 			url = fmt.Sprintf("%s/v4/gemini/video/generate?api_key=%s", s.baseUrl, apiKey)
 			reqBody = map[string]interface{}{
 				"prompt": prompt,
+			}
+		case "flower":
+			// Flower (Veo 3.1) — text-to-video
+			url = fmt.Sprintf("%s/v4/flower/video/from-text?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":       prompt,
+				"aspect_ratio": apiRatio,
 			}
 		default:
 			return fmt.Errorf("unknown video model: %s", model)

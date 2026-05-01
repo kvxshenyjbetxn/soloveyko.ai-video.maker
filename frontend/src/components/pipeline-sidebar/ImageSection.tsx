@@ -743,8 +743,13 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                 >
                                     <option value="whisk">Whisk (v4)</option>
                                     <option value="flow">Flow (v4)</option>
+                                    <option value="flow_gempix2">Flow Nano Pro (v4)</option>
+                                    <option value="flow_imagen4">Flow Imagen 4 (v4)</option>
+                                    <option value="flow_narwhal">Flow Nano Banana 2 (v4)</option>
                                     <option value="grok">Grok (v4)</option>
                                     <option value="gemini">Gemini (v4)</option>
+                                    <option value="flower">Flower / Veo 3.1 (v4)</option>
+                                    <option value="openai">OpenAI / ChatGPT (v4)</option>
                                 </select>
                             </div>
 
@@ -920,6 +925,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             <option value="flow">Flow</option>
                                             <option value="grok">Grok</option>
                                             <option value="gemini">Gemini</option>
+                                            <option value="flower">Flower / Veo 3.1</option>
                                         </select>
                                     </div>
                                     <div className="settings-control">
