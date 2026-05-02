@@ -22,7 +22,7 @@ type AssemblyAIService struct {
 func NewAssemblyAIService(settings *utils.SettingsService) *AssemblyAIService {
 	return &AssemblyAIService{
 		settings: settings,
-		baseUrl:  "https://api.assemblyai.com/v2",
+		baseUrl:  "https://api.eu.assemblyai.com/v2",
 	}
 }
 
@@ -97,8 +97,8 @@ func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath st
 	}
 	req.Header.Set("Authorization", apiKey)
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	uploadClient := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := uploadClient.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("помилка виконання запиту на завантаження: %w", err)
 	}
@@ -117,6 +117,7 @@ func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath st
 	}
 
 	// 2. Submit transcription request
+	client := &http.Client{Timeout: 30 * time.Second}
 	transcriptReqBody := map[string]interface{}{
 		"audio_url":          uploadResp.UploadURL,
 		"language_detection": true,

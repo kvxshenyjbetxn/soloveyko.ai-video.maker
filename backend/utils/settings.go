@@ -505,10 +505,10 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 				MontageVideoWatermarkSize:     15,
 				MontageVideoWatermarkRounding: 10,
 			},
-			FirstRun:                   true,
-			ShowWelcome:                true,
-			RemotePreviewLimit:         3,
-			OpenRouterMaxConnections:   10,
+			FirstRun:                 true,
+			ShowWelcome:              true,
+			RemotePreviewLimit:       3,
+			OpenRouterMaxConnections: 10,
 		}, nil
 	}
 
@@ -2051,4 +2051,3 @@ func (s *SettingsService) SetGoogleSheets(sheets []GoogleSheetConfig) error {
 	settings.GoogleSheets = sheets
 	return s.SaveSettings(settings)
 }
-
