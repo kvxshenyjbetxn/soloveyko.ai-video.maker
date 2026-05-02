@@ -505,6 +505,8 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 if (s.imageGooglerVideoUpscale === undefined) { s.imageGooglerVideoUpscale = false; updated = true; }
                 if (s.imageGooglerVideoEnabled === undefined) { s.imageGooglerVideoEnabled = false; updated = true; }
                 if (s.imageSyncEnabled === undefined) { s.imageSyncEnabled = true; updated = true; }
+                if (!s.imageVideoDistribution) { s.imageVideoDistribution = 'sequential'; updated = true; }
+                if (s.imageVideoStartCount === undefined) { s.imageVideoStartCount = 0; updated = true; }
                 if (s.imageGenerationMethod === undefined) { s.imageGenerationMethod = "sentences"; updated = true; }
                 if (s.imageGroupSentences === undefined) { s.imageGroupSentences = false; updated = true; }
                 if (s.imageShortVideoFillMode === undefined) { s.imageShortVideoFillMode = "boomerang"; updated = true; }
@@ -654,7 +656,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         });
 
         // 3. Image Settings
-        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic', 'imageShortVideoFillMode'];
+        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic', 'imageShortVideoFillMode', 'imageVideoDistribution', 'imageVideoStartCount'];
         imageBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.image[f] = settings[f]; });
 
         // Image Service Specific Groups
@@ -1020,6 +1022,8 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 imagePromptTemperature: cleanApplied.imagePromptTemperature ?? 0.7,
                 imagePromptMaxTokens: cleanApplied.imagePromptMaxTokens ?? 0,
                 imageShortVideoFillMode: cleanApplied.imageShortVideoFillMode ?? 'boomerang',
+                imageVideoDistribution: cleanApplied.imageVideoDistribution ?? 'sequential',
+                imageVideoStartCount: cleanApplied.imageVideoStartCount ?? 0,
                 montageMetadataSimulation: cleanApplied.montageMetadataSimulation ?? 'None',
                 montageIntroVideoPaths: cleanApplied.montageIntroVideoPaths ?? [],
                 montageVideoWatermarkEnabled: cleanApplied.montageVideoWatermarkEnabled ?? false,

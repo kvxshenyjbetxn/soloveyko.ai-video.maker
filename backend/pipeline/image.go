@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	bapi "soloveyko/backend/api"
@@ -10,6 +11,52 @@ import (
 	"strings"
 	"sync"
 )
+
+// buildVideoSet returns a set of validIdx positions that should be videos.
+// If random=true, positions are spread evenly across the range with randomness.
+// startCount forces the first N positions to always be videos (before the random spread).
+func buildVideoSet(validPrompts, videoCount, startCount int, random bool) map[int]bool {
+	set := make(map[int]bool)
+	if videoCount <= 0 || validPrompts <= 0 {
+		return set
+	}
+	if videoCount >= validPrompts {
+		for i := 0; i < validPrompts; i++ {
+			set[i] = true
+		}
+		return set
+	}
+	if random {
+		// First, fill forced start positions
+		forced := startCount
+		if forced > videoCount {
+			forced = videoCount
+		}
+		for i := 0; i < forced; i++ {
+			set[i] = true
+		}
+		// Distribute remaining videos evenly across the rest of the range
+		remaining := videoCount - forced
+		if remaining > 0 {
+			rangeStart := forced
+			rangeLen := validPrompts - rangeStart
+			for i := 0; i < remaining; i++ {
+				segStart := rangeStart + i*rangeLen/remaining
+				segEnd := rangeStart + (i+1)*rangeLen/remaining
+				if segEnd <= segStart {
+					segEnd = segStart + 1
+				}
+				pick := segStart + rand.Intn(segEnd-segStart)
+				set[pick] = true
+			}
+		}
+	} else {
+		for i := 0; i < videoCount; i++ {
+			set[i] = true
+		}
+	}
+	return set
+}
 
 // splitIntoLines splits text by line breaks
 func splitIntoLines(text string) []string {
@@ -785,6 +832,27 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			iVideoUpscale = pSettings.ImageGooglerVideoUpscale
 		}
 
+		iVideoDistribution, _ := settings["imageVideoDistribution"].(string)
+		if iVideoDistribution == "" {
+			iVideoDistribution = pSettings.ImageVideoDistribution
+		}
+		if iVideoDistribution == "" {
+			iVideoDistribution = "sequential"
+		}
+
+		iVideoStartCount := 0
+		if val, ok := settings["imageVideoStartCount"]; ok {
+			switch v := val.(type) {
+			case float64:
+				iVideoStartCount = int(v)
+			case int:
+				iVideoStartCount = v
+			}
+		}
+		if iVideoStartCount <= 0 {
+			iVideoStartCount = pSettings.ImageVideoStartCount
+		}
+
 		var refImages []bapi.ReferenceImage
 		if iRemixEnabled && iRefImage != "" && iModel == "whisk" {
 			b64, err := utils.GetImageAsBase64(iRefImage)
@@ -827,6 +895,8 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 		s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d i:0/%d v:0/%d", validPrompts, totalImages, totalVideos))
 
+		videoSet := buildVideoSet(validPrompts, iVideoCount, iVideoStartCount, iVideoEnabled && iVideoDistribution == "random")
+
 		successCount := 0
 		imagesCount := 0
 		videosCount := 0
@@ -846,7 +916,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			go func(aIdx int, vIdx int, p string) {
 				defer imageWg.Done()
 
-				isVideo := iVideoEnabled && vIdx < iVideoCount
+				isVideo := iVideoEnabled && videoSet[vIdx]
 				imgName := fmt.Sprintf("%d.png", aIdx+1)
 				vidName := fmt.Sprintf("%d.mp4", aIdx+1)
 				imgPath := filepath.Join(imagesDir, imgName)

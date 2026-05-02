@@ -115,6 +115,87 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                 <div className="settings-group">
 
                     <div className="settings-group-title" style={{ marginBottom: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
+                        {t('pipeline.image.video_sequence_mode')}
+                    </div>
+
+                    <div className="settings-control" style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px' }}>
+                            <button
+                                title={t('pipeline.image.video_distribution_sequential_desc')}
+                                className={`method-toggle-btn ${(settings.imageVideoDistribution || 'sequential') === 'sequential' ? 'active' : ''}`}
+                                onClick={() => handleChange('imageVideoDistribution', 'sequential')}
+                                style={{
+                                    flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                    background: (settings.imageVideoDistribution || 'sequential') === 'sequential' ? 'var(--bg-primary)' : 'transparent',
+                                    color: (settings.imageVideoDistribution || 'sequential') === 'sequential' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    fontSize: '12px', fontWeight: (settings.imageVideoDistribution || 'sequential') === 'sequential' ? 500 : 400,
+                                    boxShadow: (settings.imageVideoDistribution || 'sequential') === 'sequential' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                                {t('pipeline.image.video_distribution_sequential')}
+                            </button>
+                            <button
+                                title={t('pipeline.image.video_distribution_random_desc')}
+                                className={`method-toggle-btn ${settings.imageVideoDistribution === 'random' ? 'active' : ''}`}
+                                onClick={() => handleChange('imageVideoDistribution', 'random')}
+                                style={{
+                                    flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                    background: settings.imageVideoDistribution === 'random' ? 'var(--bg-primary)' : 'transparent',
+                                    color: settings.imageVideoDistribution === 'random' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    fontSize: '12px', fontWeight: settings.imageVideoDistribution === 'random' ? 500 : 400,
+                                    boxShadow: settings.imageVideoDistribution === 'random' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+                                {t('pipeline.image.video_distribution_random')}
+                            </button>
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: '1.4' }}>
+                            {settings.imageVideoDistribution === 'random'
+                                ? t('pipeline.image.video_distribution_random_desc')
+                                : t('pipeline.image.video_distribution_sequential_desc')}
+                        </div>
+                        {settings.imageVideoDistribution === 'random' && (
+                            <div style={{ marginTop: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                    <label className="settings-label" style={{ marginBottom: 0 }} title={t('pipeline.image.video_start_count_desc')}>
+                                        {t('pipeline.image.video_start_count')}
+                                    </label>
+                                    <label className="stage-switch small">
+                                        <input
+                                            type="checkbox"
+                                            checked={(settings.imageVideoStartCount ?? 0) > 0}
+                                            onChange={(e) => handleChange('imageVideoStartCount', e.target.checked ? 1 : 0)}
+                                        />
+                                        <span className="stage-slider"></span>
+                                    </label>
+                                </div>
+                                {(settings.imageVideoStartCount ?? 0) > 0 && (
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="99"
+                                        value={settings.imageVideoStartCount ?? 1}
+                                        onChange={(e) => handleChange('imageVideoStartCount', Math.max(1, parseInt(e.target.value) || 1))}
+                                        style={{
+                                            marginTop: '8px', width: '100%', padding: '6px 10px',
+                                            borderRadius: '6px', border: '1px solid var(--border-color)',
+                                            background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                            fontSize: '13px', boxSizing: 'border-box'
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="settings-group-title" style={{ marginBottom: '16px' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
                         {t('pipeline.image.sync_mode')}
                     </div>

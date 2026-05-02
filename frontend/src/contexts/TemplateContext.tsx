@@ -71,6 +71,8 @@ export interface PipelineSettings {
     imageGooglerVideoMode: string;
     imageGooglerVideoCount: number;
     imageGooglerVideoUpscale: boolean;
+    imageVideoDistribution: string;
+    imageVideoStartCount: number;
 
     imageService: string;
     imageModel: string;
