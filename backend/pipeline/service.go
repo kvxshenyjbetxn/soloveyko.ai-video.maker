@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -582,11 +582,22 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 	}
 
+	// Determine if image stage needs subtitle.srt (subtitle_duration mode).
+	// In that case we must serialize: run voice+subtitle first, then image.
+	imageVideoDistribution, _ := settings["imageVideoDistribution"].(string)
+	if imageVideoDistribution == "" {
+		imageVideoDistribution = pSettings.ImageVideoDistribution
+	}
+	needsSubtitleFirst := imageVideoDistribution == "subtitle_duration" && !shouldSkipSubtitle && !shouldSkipVoice
+
 	// 3 & 4. Voiceover and Image Generation Stages logic in parallel
 	var stagesWg sync.WaitGroup
 	var voiceErr error
 	var imageErr error
 	var subtitleErr error
+
+	// Channel used to signal that subtitle stage is done (for subtitle_duration mode).
+	subtitleDone := make(chan struct{})
 
 	stagesWg.Add(1)
 	go func() {
@@ -614,11 +625,26 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 				s.log("ERROR", fmt.Sprintf("[Pipeline] Subtitle stage failed: %v", subtitleErr), id, taskLabel)
 			}
 		}
+		// Signal that subtitle (and voice) are done, regardless of errors.
+		close(subtitleDone)
 	}()
 
 	stagesWg.Add(1)
 	go func() {
 		defer stagesWg.Done()
+		// In subtitle_duration mode we must wait for subtitle.srt before generating images.
+		if needsSubtitleFirst {
+			select {
+			case <-subtitleDone:
+			case <-s.ctx.Done():
+				return
+			}
+			if subtitleErr != nil || voiceErr != nil {
+				imageErr = fmt.Errorf("skipping image stage: voice/subtitle failed")
+				s.emitStageStatus(id, "image", "failed")
+				return
+			}
+		}
 		imageErr = s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings, taskName, templateDir)
 		if imageErr != nil {
 			s.log("ERROR", fmt.Sprintf("[Pipeline] Image stage failed: %v", imageErr), id, taskLabel)

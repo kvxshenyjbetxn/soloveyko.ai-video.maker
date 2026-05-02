@@ -155,12 +155,53 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
                                 {t('pipeline.image.video_distribution_random')}
                             </button>
+                            <button
+                                title={t('pipeline.image.video_distribution_subtitle_desc')}
+                                className={`method-toggle-btn ${settings.imageVideoDistribution === 'subtitle_duration' ? 'active' : ''}`}
+                                onClick={() => handleChange('imageVideoDistribution', 'subtitle_duration')}
+                                style={{
+                                    flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                    background: settings.imageVideoDistribution === 'subtitle_duration' ? 'var(--bg-primary)' : 'transparent',
+                                    color: settings.imageVideoDistribution === 'subtitle_duration' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    fontSize: '12px', fontWeight: settings.imageVideoDistribution === 'subtitle_duration' ? 500 : 400,
+                                    boxShadow: settings.imageVideoDistribution === 'subtitle_duration' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                                {t('pipeline.image.video_distribution_subtitle')}
+                            </button>
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: '1.4' }}>
                             {settings.imageVideoDistribution === 'random'
                                 ? t('pipeline.image.video_distribution_random_desc')
+                                : settings.imageVideoDistribution === 'subtitle_duration'
+                                ? t('pipeline.image.video_distribution_subtitle_desc')
                                 : t('pipeline.image.video_distribution_sequential_desc')}
                         </div>
+                        {settings.imageVideoDistribution === 'subtitle_duration' && (
+                            <div style={{ marginTop: '12px' }}>
+                                <label className="settings-label" style={{ fontSize: '11px' }}>
+                                    {t('pipeline.image.video_subtitle_threshold')}
+                                </label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                                    <input
+                                        type="range"
+                                        className="settings-slider"
+                                        min="1"
+                                        max="15"
+                                        step="0.5"
+                                        value={settings.imageVideoSubtitleThreshold ?? 3}
+                                        style={{ '--range-progress': `${((settings.imageVideoSubtitleThreshold ?? 3) - 1) / 14 * 100}%`, flex: 1 } as React.CSSProperties}
+                                        onChange={(e) => handleChange('imageVideoSubtitleThreshold', parseFloat(e.target.value))}
+                                    />
+                                    <span style={{ fontSize: '12px', minWidth: '32px', textAlign: 'right', fontWeight: 500 }}>
+                                        {(settings.imageVideoSubtitleThreshold ?? 3).toFixed(1)}s
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                         {settings.imageVideoDistribution === 'random' && (
                             <div style={{ marginTop: '12px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>

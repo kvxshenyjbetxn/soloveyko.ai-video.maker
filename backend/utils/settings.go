@@ -196,9 +196,10 @@ type PipelineSettings struct {
 	ImageDetermineCharactersMode   string  `json:"imageDetermineCharactersMode,omitempty"`
 	ImageDetermineCharactersPrompt string  `json:"imageDetermineCharactersPrompt,omitempty"`
 	ImageDetermineCharactersStatic string  `json:"imageDetermineCharactersStatic,omitempty"`
-	ImageShortVideoFillMode        string  `json:"imageShortVideoFillMode,omitempty"` // boomerang, mirror
-	ImageVideoDistribution         string  `json:"imageVideoDistribution,omitempty"`  // sequential, random
-	ImageVideoStartCount           int     `json:"imageVideoStartCount,omitempty"`    // videos forced at start in random mode
+	ImageShortVideoFillMode        string  `json:"imageShortVideoFillMode,omitempty"`     // boomerang, mirror
+	ImageVideoDistribution         string  `json:"imageVideoDistribution,omitempty"`      // sequential, random, subtitle_duration
+	ImageVideoStartCount           int     `json:"imageVideoStartCount,omitempty"`        // videos forced at start in random mode
+	ImageVideoSubtitleThreshold    float64 `json:"imageVideoSubtitleThreshold,omitempty"` // seconds threshold for subtitle_duration mode
 
 	// Keep outputPath for migration if needed
 
