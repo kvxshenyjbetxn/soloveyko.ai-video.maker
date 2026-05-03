@@ -336,6 +336,13 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		s.log("INFO", fmt.Sprintf("[Pipeline] Using pipeline panel settings. Flattened keys: %d", len(settings)), id, taskLabel)
 	}
 
+	// Захист від "протікання" глобальних налаштувань у задачі зі старих шаблонів.
+	// SyncFromMap (json.Unmarshal) не скидає поля відсутні у JSON шаблону, тому поля
+	// що з'явились нещодавно можуть успадковувати глобальне значення.
+	if v, ok := settings["imageVideoDistribution"]; !ok || v == "" {
+		pSettings.ImageVideoDistribution = "sequential"
+	}
+
 	if taskType != "translate" && taskType != "rewrite" && taskType != "voiceover" {
 		return "", fmt.Errorf("task type %s not implemented", taskType)
 	}
