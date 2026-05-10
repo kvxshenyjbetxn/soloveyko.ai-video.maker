@@ -1027,18 +1027,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			}
 
 			// Calculate exact frame count for zoompan to produce precise duration.
-			// Using d=<frames> instead of d=1 ensures zoompan generates exactly the
-			// right number of frames, preventing rate mismatches with the input stream.
-			// Cap at 90 frames (3s@30fps) — zoompan buffers ALL frames in RAM before
-			// outputting; huge d= values (e.g. 1800 for 60s) cause massive GPU/RAM
-			// spikes that can crash the system when 2+ montage threads run in parallel.
-			// trim=duration below cuts the output to the actual paddedDur regardless.
+			// Using d=<frames> ensures zoompan generates exactly the right number of
+			// frames, so trim=duration cuts to the exact paddedDur needed.
 			exactFrames := int(math.Round(paddedDur * float64(fps)))
 			if exactFrames < 1 {
 				exactFrames = 1
-			}
-			if exactFrames > 90 {
-				exactFrames = 90
 			}
 			filterParts = append(filterParts, fmt.Sprintf(
 				"[%s]zoompan=z='%s':x='%s':y='%s':d=%d:s=%dx%d:fps=%d,format=yuv420p,setsar=1,settb=AVTB,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
