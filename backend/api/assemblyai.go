@@ -22,7 +22,7 @@ type AssemblyAIService struct {
 func NewAssemblyAIService(settings *utils.SettingsService) *AssemblyAIService {
 	return &AssemblyAIService{
 		settings: settings,
-		baseUrl:  "https://api.assemblyai.com/v2",
+		baseUrl:  "https://api.eu.assemblyai.com/v2",
 	}
 }
 
@@ -74,8 +74,10 @@ func (s *AssemblyAIService) SetContext(ctx context.Context) {
 	// We'll accept ctx in Transcribe method per convention, or use a field.
 }
 
-func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath string) (string, string, error) {
-	apiKey := s.GetAPIKey()
+func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath string, apiKey string) (string, string, error) {
+	if apiKey == "" {
+		apiKey = s.GetAPIKey()
+	}
 	if apiKey == "" {
 		return "", "", fmt.Errorf("AssemblyAI API Key is not configured")
 	}
@@ -95,8 +97,8 @@ func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath st
 	}
 	req.Header.Set("Authorization", apiKey)
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
+	uploadClient := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := uploadClient.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("помилка виконання запиту на завантаження: %w", err)
 	}
@@ -115,6 +117,7 @@ func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath st
 	}
 
 	// 2. Submit transcription request
+	client := &http.Client{Timeout: 30 * time.Second}
 	transcriptReqBody := map[string]interface{}{
 		"audio_url":          uploadResp.UploadURL,
 		"language_detection": true,
@@ -222,7 +225,7 @@ func (s *AssemblyAIService) TranscribeFull(ctx context.Context, audioFilePath st
 	return string(srtBytes), string(fullBody), nil
 }
 
-func (s *AssemblyAIService) Transcribe(ctx context.Context, audioFilePath string) (string, error) {
-	srt, _, err := s.TranscribeFull(ctx, audioFilePath)
+func (s *AssemblyAIService) Transcribe(ctx context.Context, audioFilePath string, apiKey string) (string, error) {
+	srt, _, err := s.TranscribeFull(ctx, audioFilePath, apiKey)
 	return srt, err
 }

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"soloveyko/backend/api"
+	"soloveyko/backend/mcpserver"
 	"soloveyko/backend/pipeline"
 	"soloveyko/backend/utils"
 	"strings"
@@ -44,9 +45,14 @@ type App struct {
 	fullHistory     *utils.FullHistoryService
 	productionStats *utils.ProductionStatsService
 	googleParser    *api.GoogleParserService
-	authService     *api.AuthService
 	telegramService *api.TelegramService
 	updater         *utils.UpdateManager
+	agentPending    map[string]chan agentActionResponse
+	agentPendingMu  sync.Mutex
+	agentReqCounter uint64
+	agentReadyCh    chan struct{}
+	agentReadyOnce  sync.Once
+	mcpController   *mcpserver.Server
 }
 
 // NewApp creates a new App application struct
@@ -68,7 +74,6 @@ func NewApp() *App {
 		assemblyAI:      api.NewAssemblyAIService(settings),
 		templates:       utils.NewTemplateService(),
 		googleParser:    api.NewGoogleParserService(),
-		authService:     api.NewAuthService(),
 		telegramService: api.NewTelegramService(),
 		updater:         utils.NewUpdateManager(utils.AppVersion),
 	}
@@ -121,9 +126,9 @@ func NewApp() *App {
 			wruntime.EventsEmit(app.ctx, "requestControl", id, text)
 		}
 	}
-	app.pipeline.OnRequestImageControl = func(id string) {
+	app.pipeline.OnRequestImageControl = func(id string, files []string) {
 		if app.ctx != nil {
-			wruntime.EventsEmit(app.ctx, "requestImageControl", id)
+			wruntime.EventsEmit(app.ctx, "requestImageControl", id, files)
 		}
 	}
 	app.pipeline.OnRequestMontageControl = func(id string, planData string) {
@@ -297,6 +302,16 @@ func (a *App) SaveMontageMode(mode string) error {
 	return a.settings.SetMontageMode(mode)
 }
 
+// GetRemotePreviewLimit повертає ліміт прев'ю
+func (a *App) GetRemotePreviewLimit() int {
+	return a.settings.GetRemotePreviewLimit()
+}
+
+// SaveRemotePreviewLimit встановлює ліміт прев'ю
+func (a *App) SaveRemotePreviewLimit(limit int) error {
+	return a.settings.SetRemotePreviewLimit(limit)
+}
+
 // GetSystemStats повертає поточну статистику системи
 func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 	return a.stats.GetSystemStats()
@@ -305,7 +320,7 @@ func (a *App) GetSystemStats() (*utils.SystemStats, error) {
 // GeneratePreview здійснює швидкий рендер фрагмента для попереднього перегляду
 func (a *App) GeneratePreview(settings map[string]interface{}) (string, error) {
 	previewDir := a.settings.GetPreviewDir()
-	
+
 	// Створюємо папку, якщо не існує
 	if err := os.MkdirAll(previewDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create preview directory: %v", err)
@@ -335,47 +350,125 @@ func (a *App) GeneratePreview(settings map[string]interface{}) (string, error) {
 	// Оновлюємо pSettings з тими, що прийшли з фронтенда (з вкладки Preview)
 	// Це дозволяє бачити зміни в реальному часі після натискання ОК
 	// Оновлюємо субтитри
-	if val, ok := settings["subtitleEnabled"].(bool); ok { pSettings.SubtitleEnabled = val }
-	if val, ok := settings["subtitleService"].(string); ok { pSettings.SubtitleService = val }
-	if val, ok := settings["subtitleModel"].(string); ok { pSettings.SubtitleModel = val }
-	if val, ok := settings["subtitleFont"].(string); ok { pSettings.SubtitleFont = val }
-	if val, ok := settings["subtitleSize"].(float64); ok { pSettings.SubtitleSize = int(val) }
-	if val, ok := settings["subtitleColor"].(string); ok { pSettings.SubtitleColor = val }
-	if val, ok := settings["subtitleOutlineColor"].(string); ok { pSettings.SubtitleOutlineColor = val }
-	if val, ok := settings["subtitleOutlineWidth"].(float64); ok { pSettings.SubtitleOutlineWidth = val }
-	if val, ok := settings["subtitleShadowColor"].(string); ok { pSettings.SubtitleShadowColor = val }
-	if val, ok := settings["subtitleShadowWidth"].(float64); ok { pSettings.SubtitleShadowWidth = val }
-	if val, ok := settings["subtitleBlur"].(float64); ok { pSettings.SubtitleBlur = val }
-	if val, ok := settings["subtitleUppercase"].(bool); ok { pSettings.SubtitleUppercase = val }
-	if val, ok := settings["subtitlePosition"].(string); ok { pSettings.SubtitlePosition = val }
-	if val, ok := settings["subtitleMarginV"].(float64); ok { pSettings.SubtitleMarginV = int(val) }
-	if val, ok := settings["subtitleAnimation"].(string); ok { pSettings.SubtitleAnimation = val }
-	if val, ok := settings["subtitleFadeEnabled"].(bool); ok { pSettings.SubtitleFadeEnabled = val }
-	if val, ok := settings["subtitleFadeIn"].(float64); ok { pSettings.SubtitleFadeIn = int(val) }
-	if val, ok := settings["subtitleFadeOut"].(float64); ok { pSettings.SubtitleFadeOut = int(val) }
-	if val, ok := settings["subtitleKaraokeEffect"].(bool); ok { pSettings.SubtitleKaraokeEffect = val }
-	if val, ok := settings["subtitleKaraokeColor"].(string); ok { pSettings.SubtitleKaraokeColor = val }
-	if val, ok := settings["subtitleKaraokeMode"].(string); ok { pSettings.SubtitleKaraokeMode = val }
-	if val, ok := settings["subtitleKaraokeScale"].(float64); ok { pSettings.SubtitleKaraokeScale = val }
-	if val, ok := settings["subtitleKaraokeSpeed"].(float64); ok { pSettings.SubtitleKaraokeSpeed = int(val) }
-	if val, ok := settings["subtitleMaxLen"].(float64); ok { pSettings.SubtitleMaxLen = int(val) }
-	if val, ok := settings["subtitleMaxWords"].(float64); ok { pSettings.SubtitleMaxWords = int(val) }
-	if val, ok := settings["subtitleWhisperxLanguage"].(string); ok { pSettings.SubtitleWhisperxLanguage = val }
-	if val, ok := settings["subtitleAmdLanguage"].(string); ok { pSettings.SubtitleAmdLanguage = val }
-	
+	if val, ok := settings["subtitleEnabled"].(bool); ok {
+		pSettings.SubtitleEnabled = val
+	}
+	if val, ok := settings["subtitleService"].(string); ok {
+		pSettings.SubtitleService = val
+	}
+	if val, ok := settings["subtitleModel"].(string); ok {
+		pSettings.SubtitleModel = val
+	}
+	if val, ok := settings["subtitleFont"].(string); ok {
+		pSettings.SubtitleFont = val
+	}
+	if val, ok := settings["subtitleSize"].(float64); ok {
+		pSettings.SubtitleSize = int(val)
+	}
+	if val, ok := settings["subtitleColor"].(string); ok {
+		pSettings.SubtitleColor = val
+	}
+	if val, ok := settings["subtitleOutlineColor"].(string); ok {
+		pSettings.SubtitleOutlineColor = val
+	}
+	if val, ok := settings["subtitleOutlineWidth"].(float64); ok {
+		pSettings.SubtitleOutlineWidth = val
+	}
+	if val, ok := settings["subtitleShadowColor"].(string); ok {
+		pSettings.SubtitleShadowColor = val
+	}
+	if val, ok := settings["subtitleShadowWidth"].(float64); ok {
+		pSettings.SubtitleShadowWidth = val
+	}
+	if val, ok := settings["subtitleBlur"].(float64); ok {
+		pSettings.SubtitleBlur = val
+	}
+	if val, ok := settings["subtitleUppercase"].(bool); ok {
+		pSettings.SubtitleUppercase = val
+	}
+	if val, ok := settings["subtitlePosition"].(string); ok {
+		pSettings.SubtitlePosition = val
+	}
+	if val, ok := settings["subtitleMarginV"].(float64); ok {
+		pSettings.SubtitleMarginV = int(val)
+	}
+	if val, ok := settings["subtitleAnimation"].(string); ok {
+		pSettings.SubtitleAnimation = val
+	}
+	if val, ok := settings["subtitleFadeEnabled"].(bool); ok {
+		pSettings.SubtitleFadeEnabled = val
+	}
+	if val, ok := settings["subtitleFadeIn"].(float64); ok {
+		pSettings.SubtitleFadeIn = int(val)
+	}
+	if val, ok := settings["subtitleFadeOut"].(float64); ok {
+		pSettings.SubtitleFadeOut = int(val)
+	}
+	if val, ok := settings["subtitleKaraokeEffect"].(bool); ok {
+		pSettings.SubtitleKaraokeEffect = val
+	}
+	if val, ok := settings["subtitleKaraokeColor"].(string); ok {
+		pSettings.SubtitleKaraokeColor = val
+	}
+	if val, ok := settings["subtitleKaraokeMode"].(string); ok {
+		pSettings.SubtitleKaraokeMode = val
+	}
+	if val, ok := settings["subtitleKaraokeScale"].(float64); ok {
+		pSettings.SubtitleKaraokeScale = val
+	}
+	if val, ok := settings["subtitleKaraokeSpeed"].(float64); ok {
+		pSettings.SubtitleKaraokeSpeed = int(val)
+	}
+	if val, ok := settings["subtitleMaxLen"].(float64); ok {
+		pSettings.SubtitleMaxLen = int(val)
+	}
+	if val, ok := settings["subtitleMaxWords"].(float64); ok {
+		pSettings.SubtitleMaxWords = int(val)
+	}
+	if val, ok := settings["subtitleWhisperxLanguage"].(string); ok {
+		pSettings.SubtitleWhisperxLanguage = val
+	}
+	if val, ok := settings["subtitleAmdLanguage"].(string); ok {
+		pSettings.SubtitleAmdLanguage = val
+	}
+
 	// Оновлюємо монтаж
-	if val, ok := settings["montageSwayFactor"].(float64); ok { pSettings.MontageSwayFactor = val }
-	if val, ok := settings["montageZoomFactor"].(float64); ok { pSettings.MontageZoomFactor = val }
-	if val, ok := settings["montageTransitionDuration"].(float64); ok { pSettings.MontageTransitionDuration = val }
-	if val, ok := settings["montageTransitionEffect"].(string); ok { pSettings.MontageTransitionEffect = val }
-	if val, ok := settings["montageOrientation"].(string); ok { pSettings.MontageOrientation = val }
-	if val, ok := settings["montageWatermarkEnabled"].(bool); ok { pSettings.MontageWatermarkEnabled = val }
-	if val, ok := settings["montageWatermarkPath"].(string); ok { pSettings.MontageWatermarkPath = val }
-	if val, ok := settings["montageWatermarkPosition"].(string); ok { pSettings.MontageWatermarkPosition = val }
-	if val, ok := settings["montageWatermarkOpacity"].(float64); ok { pSettings.MontageWatermarkOpacity = val }
-	if val, ok := settings["montageWatermarkSize"].(float64); ok { pSettings.MontageWatermarkSize = int(val) }
-	if val, ok := settings["montageIntroVideoEnabled"].(bool); ok { pSettings.MontageIntroVideoEnabled = val }
-	if val, ok := settings["montageIntroVideoPath"].(string); ok { pSettings.MontageIntroVideoPath = val }
+	if val, ok := settings["montageSwayFactor"].(float64); ok {
+		pSettings.MontageSwayFactor = val
+	}
+	if val, ok := settings["montageZoomFactor"].(float64); ok {
+		pSettings.MontageZoomFactor = val
+	}
+	if val, ok := settings["montageTransitionDuration"].(float64); ok {
+		pSettings.MontageTransitionDuration = val
+	}
+	if val, ok := settings["montageTransitionEffect"].(string); ok {
+		pSettings.MontageTransitionEffect = val
+	}
+	if val, ok := settings["montageOrientation"].(string); ok {
+		pSettings.MontageOrientation = val
+	}
+	if val, ok := settings["montageWatermarkEnabled"].(bool); ok {
+		pSettings.MontageWatermarkEnabled = val
+	}
+	if val, ok := settings["montageWatermarkPath"].(string); ok {
+		pSettings.MontageWatermarkPath = val
+	}
+	if val, ok := settings["montageWatermarkPosition"].(string); ok {
+		pSettings.MontageWatermarkPosition = val
+	}
+	if val, ok := settings["montageWatermarkOpacity"].(float64); ok {
+		pSettings.MontageWatermarkOpacity = val
+	}
+	if val, ok := settings["montageWatermarkSize"].(float64); ok {
+		pSettings.MontageWatermarkSize = int(val)
+	}
+	if val, ok := settings["montageIntroVideoEnabled"].(bool); ok {
+		pSettings.MontageIntroVideoEnabled = val
+	}
+	if val, ok := settings["montageIntroVideoPath"].(string); ok {
+		pSettings.MontageIntroVideoPath = val
+	}
 	if val, ok := settings["montageIntroVideoPaths"].([]interface{}); ok {
 		paths := make([]string, 0, len(val))
 		for _, v := range val {
@@ -401,39 +494,39 @@ func (a *App) GeneratePreview(settings map[string]interface{}) (string, error) {
 	// Use settings from left panel
 
 	// 1. Обробка субтитрів
-	 voicePath := filepath.Join(previewDir, "voice.mp3")
-	 if _, err := os.Stat(voicePath); os.IsNotExist(err) {
-		 return "", fmt.Errorf("voice.mp3 not found in preview folder. Please add it for preview.")
-	 }
+	voicePath := filepath.Join(previewDir, "voice.mp3")
+	if _, err := os.Stat(voicePath); os.IsNotExist(err) {
+		return "", fmt.Errorf("voice.mp3 not found in preview folder. Please add it for preview.")
+	}
 
-	 err := a.pipeline.ProcessSubtitle("preview_task", "Preview", previewDir, settings, &pSettings)
-	 if err != nil {
-		 a.LogToUI("ERROR", fmt.Sprintf("[Preview] Subtitle stage failed: %v", err))
-		 return "", err
-	 }
+	err := a.pipeline.ProcessSubtitle("preview_task", "Preview", previewDir, settings, &pSettings)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Preview] Subtitle stage failed: %v", err))
+		return "", err
+	}
 
-	 // 2. Обробка монтажу
-	 err = a.pipeline.ProcessMontage("preview_task", "Preview", previewDir, settings, &pSettings, "Preview", "")
-	 if err != nil {
-		 a.LogToUI("ERROR", fmt.Sprintf("[Preview] Montage stage failed: %v", err))
-		 return "", err
-	 }
+	// 2. Обробка монтажу
+	err = a.pipeline.ProcessMontage("preview_task", "Preview", previewDir, settings, &pSettings, "Preview", "")
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Preview] Montage stage failed: %v", err))
+		return "", err
+	}
 
-	 finalVideo := filepath.Join(previewDir, "final.mp4")
-	 if _, err := os.Stat(finalVideo); err != nil {
-		 // Debug: list files to see what was actually generated
-		 files, _ := os.ReadDir(previewDir)
-		 var foundFiles []string
-		 for _, f := range files {
-			 if !f.IsDir() && strings.HasSuffix(f.Name(), ".mp4") {
-				 foundFiles = append(foundFiles, f.Name())
-			 }
-		 }
-		 return "", fmt.Errorf("final video was not generated. Found MP4s: %v", foundFiles)
-	 }
+	finalVideo := filepath.Join(previewDir, "final.mp4")
+	if _, err := os.Stat(finalVideo); err != nil {
+		// Debug: list files to see what was actually generated
+		files, _ := os.ReadDir(previewDir)
+		var foundFiles []string
+		for _, f := range files {
+			if !f.IsDir() && strings.HasSuffix(f.Name(), ".mp4") {
+				foundFiles = append(foundFiles, f.Name())
+			}
+		}
+		return "", fmt.Errorf("final video was not generated. Found MP4s: %v", foundFiles)
+	}
 
-	 a.LogToUI("SUCCESS", "[Preview] Preview generated successfully!")
-	 return finalVideo, nil
+	a.LogToUI("SUCCESS", "[Preview] Preview generated successfully!")
+	return finalVideo, nil
 }
 
 // GetPreviewPath повертає шлях до папки прев'ю
@@ -483,6 +576,19 @@ func (a *App) startup(ctx context.Context) {
 			a.localWhisper.EnsureWhisperCLI()
 		}
 	}()
+
+}
+
+// shutdown is called when the application is closing
+func (a *App) shutdown(ctx context.Context) {
+}
+
+func (a *App) addHistoryEntry(name string, taskType string, templates []string, content string, subName string, settingsSnapshot map[string]interface{}) error {
+	err := a.history.AddEntryDetailed(name, taskType, templates, content, subName, settingsSnapshot)
+	if err == nil && a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "historyUpdate")
+	}
+	return err
 }
 
 // LogToUI emits a log event to the frontend
@@ -605,6 +711,16 @@ func (a *App) SetAccentColor(color string) error {
 	return a.settings.SetAccentColor(color)
 }
 
+// GetUIStyle повертає поточний стиль інтерфейсу
+func (a *App) GetUIStyle() string {
+	return a.settings.GetUIStyle()
+}
+
+// SetUIStyle встановлює стиль інтерфейсу та зберігає у файл
+func (a *App) SetUIStyle(style string) error {
+	return a.settings.SetUIStyle(style)
+}
+
 // IsFirstRun повертає чи це перший запуск програми
 func (a *App) IsFirstRun() bool {
 	return a.settings.IsFirstRun()
@@ -686,6 +802,12 @@ func (a *App) GetConfigPath() string {
 func (a *App) GetTemplates() ([]utils.PipelineTemplate, error) {
 	return a.templates.LoadTemplates()
 }
+
+// GetPipelineTemplatesDir повертає абсолютний шлях до папки з JSON-шаблонами пайплайну (джерело для синхронізації в Firebase).
+func (a *App) GetPipelineTemplatesDir() string {
+	return a.templates.Dir()
+}
+
 
 // AddTemplate додає новий шаблон пайплайну
 func (a *App) AddTemplate(tplType string, name string, data map[string]interface{}) (*utils.PipelineTemplate, error) {
@@ -948,6 +1070,28 @@ func (a *App) GetGooglerAPIKey() string {
 	return a.googler.GetAPIKey()
 }
 
+// UpdateGoogleSheetStatus оновлює конкретну комірку в Google таблиці
+func (a *App) UpdateGoogleSheetStatus(url string, rowIndex int, colLetter string, value string) error {
+	spreadsheetId, _, gid := a.googleParser.ExtractID(url)
+	if spreadsheetId == "" {
+		return fmt.Errorf("invalid google sheet url")
+	}
+
+	sheetName, err := a.googleParser.GetSheetName(spreadsheetId, gid)
+	if err != nil {
+		return err
+	}
+
+	err = a.googleParser.UpdateCell(spreadsheetId, sheetName, rowIndex, colLetter, value)
+	if err != nil {
+		a.LogToUI("ERROR", fmt.Sprintf("[Google Sheets] Failed to update cell: %v", err))
+		return err
+	}
+
+	a.LogToUI("SUCCESS", fmt.Sprintf("[Google Sheets] Оновлено комірку %s%d на '%s'", colLetter, rowIndex+1, value))
+	return nil
+}
+
 // ElevenLabsImage Methods
 
 // SaveElevenLabsImageAPIKey saves API key
@@ -1123,29 +1267,6 @@ func (a *App) SaveGooglerImageAlertThreshold(threshold float64) error {
 	return a.settings.SetGooglerImageAlertThreshold(threshold)
 }
 
-// Auth Methods
-
-// ValidateKey validates the provided key against the manager bot
-func (a *App) ValidateKey(key string) (*api.AuthResponse, error) {
-	hwID := utils.GetHardwareID()
-	return a.authService.ValidateKey(key, hwID)
-}
-
-// GetSavedAuthKey returns the saved Access Key
-func (a *App) GetSavedAuthKey() string {
-	return a.settings.GetAppAccessKey()
-}
-
-// SaveAuthKey saves the Access Key to settings
-func (a *App) SaveAuthKey(key string) error {
-	return a.settings.SetAppAccessKey(key)
-}
-
-// ClearAuthKey clears the Access Key from settings
-func (a *App) ClearAuthKey() error {
-	return a.settings.SetAppAccessKey("")
-}
-
 // GetGooglerMaxImageConnections повертає ліміт одночасних запитів Googler (Image)
 func (a *App) GetGooglerMaxImageConnections() int {
 	return a.settings.GetGooglerMaxImageConnections()
@@ -1164,6 +1285,26 @@ func (a *App) GetGooglerMaxVideoConnections() int {
 // SaveGooglerMaxVideoConnections встановлює ліміт одночасних запитів Googler (Video)
 func (a *App) SaveGooglerMaxVideoConnections(max int) error {
 	return a.settings.SetGooglerMaxVideoConnections(max)
+}
+
+// GetGooglerImageFallbackOrder повертає порядок фалбек-провайдерів для зображень
+func (a *App) GetGooglerImageFallbackOrder() []string {
+	return a.settings.GetGooglerImageFallbackOrder()
+}
+
+// SaveGooglerImageFallbackOrder зберігає порядок фалбек-провайдерів для зображень
+func (a *App) SaveGooglerImageFallbackOrder(order []string) error {
+	return a.settings.SetGooglerImageFallbackOrder(order)
+}
+
+// GetGooglerVideoFallbackOrder повертає порядок фалбек-провайдерів для відео
+func (a *App) GetGooglerVideoFallbackOrder() []string {
+	return a.settings.GetGooglerVideoFallbackOrder()
+}
+
+// SaveGooglerVideoFallbackOrder зберігає порядок фалбек-провайдерів для відео
+func (a *App) SaveGooglerVideoFallbackOrder(order []string) error {
+	return a.settings.SetGooglerVideoFallbackOrder(order)
 }
 
 // Pipeline Methods
@@ -1316,8 +1457,8 @@ func (a *App) ResolveTaskDir(taskName string, taskType string, subName string, s
 }
 
 // SubmitImageControlResult resumes a paused task after image review
-func (a *App) SubmitImageControlResult(taskId string) {
-	a.pipeline.SubmitImageControlResult(taskId)
+func (a *App) SubmitImageControlResult(taskId string, action string) {
+	a.pipeline.SubmitImageControlResult(taskId, action)
 }
 
 // SubmitMontageControlResult resumes a paused task after montage review
@@ -1343,6 +1484,14 @@ func (a *App) GetGalleryImages() []utils.GalleryTask {
 // RegenerateGalleryImage regenerates a single image in the gallery
 func (a *App) RegenerateGalleryImage(imgPath string, prompt string, service string, settings map[string]interface{}) (string, error) {
 	return a.pipeline.RegenerateImage(imgPath, prompt, service, settings)
+}
+
+// AddRemoteGalleryImage adds a remote URL to the local gallery manually
+func (a *App) AddRemoteGalleryImage(taskName, templateName, imageName, url, prompt string) {
+	a.galleryManager.AddImage(taskName, templateName, imageName, url, prompt)
+	if a.ctx != nil {
+		wruntime.EventsEmit(a.ctx, "galleryUpdate")
+	}
 }
 
 // DeleteGalleryImage removes an image from session memory and deletes the file from disk
@@ -1406,11 +1555,7 @@ func (a *App) SelectVideo() (string, error) {
 
 // AddToHistory adds a new entry to the task history
 func (a *App) AddToHistory(name string, taskType string, templates []string, content string) error {
-	err := a.history.AddEntry(name, taskType, templates, content)
-	if err == nil && a.ctx != nil {
-		wruntime.EventsEmit(a.ctx, "historyUpdate")
-	}
-	return err
+	return a.addHistoryEntry(name, taskType, templates, content, "", nil)
 }
 
 // GetHistory returns the task history (last 2 days)
@@ -1629,91 +1774,59 @@ func (a *App) getIconPath() string {
 	return ""
 }
 
-// SendSystemNotification sends a native notification using the operating system's API
-func (a *App) SendSystemNotification(title, text string) error {
-	if !a.GetSystemNotificationsEnabled() {
+func (a *App) SendSystemNotification(title, message string) error {
+	if !a.settings.GetSystemNotificationsEnabled() {
 		return nil
 	}
-
-	// Remove markdown-like bold (**) if any
-	cleanTitle := strings.ReplaceAll(title, "**", "")
-	cleanTitle = strings.ReplaceAll(cleanTitle, "*", "")
-
-	cleanText := strings.ReplaceAll(text, "**", "")
-	cleanText = strings.ReplaceAll(cleanText, "*", "")
-
-	// Providing the icon path helps identity the application name on Windows
-	return beeep.Notify(cleanTitle, cleanText, a.getIconPath())
+	iconPath := a.getIconPath()
+	return beeep.Alert(title, message, iconPath)
 }
 
 func (a *App) TestSystemNotification() error {
-	return a.SendSystemNotification("System Notifications", "🔔 Тестове сповіщення успішно налаштоване!")
+	return a.SendSystemNotification("🔔 Тестове сповіщення", "Soloveyko.AI Video Maker готовий до роботи!")
 }
 
-// WhisperX Management Methods
-
-// IsWhisperXInstalled checks if WhisperX is installed in the user's bin folder
 func (a *App) IsWhisperXInstalled() bool {
-	configDir := a.settings.GetConfigDir()
-	binDir := filepath.Join(configDir, "bin")
-
-	folderName := "whisperx-win"
-	if runtime.GOOS == "darwin" {
-		folderName = "whisperx-mac"
-	}
-
-	targetDir := filepath.Join(binDir, folderName)
-	if _, err := os.Stat(targetDir); err == nil {
-		return true
-	}
-	return false
+	// Використовуємо централізовану перевірку декількох можливих шляхів
+	return utils.GetWhisperXExePath() != ""
 }
 
-// DownloadWhisperX downloads and installs WhisperX engine
+// DownloadWhisperX ініціює процес завантаження та встановлення двигуна WhisperX,
+// якщо він не знайдений у системі, та інформує фронтенд через події.
 func (a *App) DownloadWhisperX() error {
-	url := "https://github.com/kvxshenyjbetxn/video.maker.releases/releases/download/whisperx/whisperx-win.zip"
-	if runtime.GOOS == "darwin" {
-		url = "https://github.com/kvxshenyjbetxn/video.maker.releases/releases/download/whisperx/whisperx-mac.zip"
-	}
+	a.LogToUI("INFO", "[WhisperX] Перевірка встановлення двигуна...")
 
-	a.LogToUI("INFO", "[WhisperX] Starting engine download...")
-
-	progressChan := make(chan int)
-	go func() {
-		for progress := range progressChan {
-			if a.ctx != nil {
-				wruntime.EventsEmit(a.ctx, "whisperxDownloadProgress", progress)
-			}
+	// Якщо файл уже знайдено за одним із підтримуваних шляхів - нічого не робимо
+	exePath := utils.GetWhisperXExePath()
+	if exePath != "" {
+		a.LogToUI("SUCCESS", "[WhisperX] Двигун уже встановлено та знайдено!")
+		if a.ctx != nil {
+			wruntime.EventsEmit(a.ctx, "whisperxInstalled")
 		}
-	}()
+		return nil
+	}
 
-	pkgPath, err := a.updater.Download(url, progressChan)
-	close(progressChan) // Close after download finishes
+	a.LogToUI("INFO", "[WhisperX] Починаємо завантаження двигуна...")
+
+	err := utils.DownloadAndInstallWhisperX(func(status string, percent float64) {
+		if a.ctx != nil {
+			// Виправлено: Додано надсилання специфічної події whisperxDownloadProgress,
+			// щоб прогрес-бар у вкладці Performance почав працювати (раніше він очікував лише це ім'я).
+			wruntime.EventsEmit(a.ctx, "whisperxDownloadProgress", int(percent))
+
+			wruntime.EventsEmit(a.ctx, "download_progress", map[string]interface{}{
+				"status":  status,
+				"percent": int(percent),
+			})
+		}
+	})
+
 	if err != nil {
-		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Download failed: %v", err))
+		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Помилка завантаження: %v", err))
 		return err
 	}
-	defer os.Remove(pkgPath)
 
-	a.LogToUI("INFO", "[WhisperX] Extracting engine...")
-
-	configDir := a.settings.GetConfigDir()
-	binDir := filepath.Join(configDir, "bin")
-	os.MkdirAll(binDir, 0755)
-
-	err = a.updater.Unzip(pkgPath, binDir)
-	if err != nil {
-		a.LogToUI("ERROR", fmt.Sprintf("[WhisperX] Extraction failed: %v", err))
-		return err
-	}
-
-	// For Mac, ensure binary is executable
-	if runtime.GOOS == "darwin" {
-		exePath := filepath.Join(binDir, "whisperx-mac", "whisperx_cli")
-		os.Chmod(exePath, 0755)
-	}
-
-	a.LogToUI("SUCCESS", "[WhisperX] Engine installed successfully!")
+	a.LogToUI("SUCCESS", "[WhisperX] Двигун успішно встановлено!")
 	if a.ctx != nil {
 		wruntime.EventsEmit(a.ctx, "whisperxInstalled")
 	}
@@ -1829,4 +1942,9 @@ func (a *App) ReadFile(path string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+// Notify sends a native Windows notification
+func (a *App) Notify(title, message string) {
+	_ = beeep.Alert(title, message, "")
 }

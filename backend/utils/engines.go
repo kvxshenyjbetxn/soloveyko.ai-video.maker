@@ -2,10 +2,12 @@ package utils
 
 import (
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"fmt"
 	"soloveyko/backend/bin"
 )
 
@@ -173,4 +175,125 @@ func EnsureExifTool() (string, error) {
 	}
 
 	return "", nil
+}
+// Виправлено: Логіка детекції шляху тепер перевіряє декілька варіантів (Mac/Win), 
+// щоб коректно знаходити WhisperX навіть за наявності вкладених папок в архіві.
+func GetWhisperXExePath() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		homeDir, _ := os.UserHomeDir()
+		configDir = homeDir
+	}
+
+	binDir := filepath.Join(configDir, "Soloveyko", "bin")
+
+	possiblePaths := []string{
+		filepath.Join(binDir, "whisperx_cli.exe"),
+		filepath.Join(binDir, "whisperx_aligner_win", "whisperx_cli.exe"),
+		filepath.Join(binDir, "whisperx-win", "whisperx_cli.exe"),
+		filepath.Join(binDir, "whisperx-mac", "whisperx_cli"),
+	}
+
+	for _, p := range possiblePaths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+
+	return ""
+}
+
+// Додано: Нова функція для автоматизації встановлення WhisperX, яка об'єднує завантаження 
+// та розпакування з єдиним прогресом для UI.
+func DownloadAndInstallWhisperX(progressFunc func(string, float64)) error {
+	var url string
+	switch runtime.GOOS {
+	case "windows":
+		url = "https://github.com/kvxshenyjbetxn/video.maker.releases/releases/download/whisperx/whisperx-win.zip"
+	case "darwin":
+		url = "https://github.com/kvxshenyjbetxn/video.maker.releases/releases/download/whisperx/whisperx-mac.zip"
+	default:
+		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		homeDir, _ := os.UserHomeDir()
+		configDir = homeDir
+	}
+	binDir := filepath.Join(configDir, "Soloveyko", "bin")
+	os.MkdirAll(binDir, 0755)
+
+	tempZip := filepath.Join(binDir, "whisperx_download.zip")
+	defer os.Remove(tempZip)
+
+	// 1. Завантаження
+	err = DownloadWithProgress(url, tempZip, func(percent float64) {
+		if progressFunc != nil {
+			// Перші 80% - завантаження
+			progressFunc("Завантаження...", percent*0.8)
+		}
+	})
+	if err != nil {
+		return err
+	}
+
+	// 2. Розпакування
+	err = UnzipWithProgress(tempZip, binDir, func(percent float64) {
+		if progressFunc != nil {
+			// Останні 20% - розпакування (від 80% до 100%)
+			progressFunc("Розпакування...", 80+(percent*0.2))
+		}
+	})
+
+	return err
+}
+
+// DownloadWithProgress виконує HTTP Get запит та відстежує кількість отриманих байтів 
+// для розрахунку відсотка прогресу завантаження.
+func DownloadWithProgress(url, dest string, progressFunc func(float64)) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status: %s", resp.Status)
+	}
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	total := resp.ContentLength
+	counter := &WriteCounter{
+		Total:        total,
+		OnProgress:   progressFunc,
+	}
+
+	if _, err = io.Copy(out, io.TeeReader(resp.Body, counter)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// WriteCounter допоміжний тип для підрахунку байтів
+type WriteCounter struct {
+	Total      int64
+	Downloaded int64
+	OnProgress func(float64)
+}
+
+func (wc *WriteCounter) Write(p []byte) (int, error) {
+	n := len(p)
+	wc.Downloaded += int64(n)
+	if wc.Total > 0 && wc.OnProgress != nil {
+		percent := float64(wc.Downloaded) / float64(wc.Total) * 100
+		wc.OnProgress(percent)
+	}
+	return n, nil
 }

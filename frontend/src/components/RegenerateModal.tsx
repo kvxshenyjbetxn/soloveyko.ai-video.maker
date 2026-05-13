@@ -168,8 +168,13 @@ export const RegenerateModal: React.FC<RegenerateModalProps> = ({
                                 <select value={gooModel} onChange={e => setGooModel(e.target.value)}>
                                     <option value="whisk">Whisk</option>
                                     <option value="flow">Flow</option>
+                                    <option value="flow_gempix2">Flow Nano Pro</option>
+                                    <option value="flow_imagen4">Flow Imagen 4</option>
+                                    <option value="flow_narwhal">Flow Nano Banana 2</option>
                                     <option value="gemini">Gemini</option>
                                     <option value="grok">Grok</option>
+                                    <option value="flower">Flower / Veo 3.1</option>
+                                    <option value="openai">OpenAI / ChatGPT</option>
                                 </select>
                             </div>
                             <div className="reg-field">

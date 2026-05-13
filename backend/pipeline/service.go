@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"soloveyko/backend/api"
 	"soloveyko/backend/utils"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,7 +45,7 @@ type PipelineService struct {
 	OnStageStatus               func(id string, stage string, status string, message string)
 	OnTextResult                func(id string, resultText string)
 	OnRequestControl            func(id string, text string)
-	OnRequestImageControl       func(id string)
+	OnRequestImageControl       func(id string, files []string)
 	OnRequestMontageControl     func(id string, planData string)
 	OnTaskStatus                func(id string, status string, progress int)
 	OnImageGenerated            func(taskName string, templateName string, imageName string, path string, prompt string)
@@ -55,16 +56,16 @@ type PipelineService struct {
 	pendingControl sync.Map // Map taskID -> chan string
 	pendingSkip    sync.Map // Map taskID -> chan []string
 
-	elevenLabsSem      chan struct{}
-	elevenLabsUnlimSem chan struct{}
-	elevenLabsUASem    chan struct{}
-	subtitleSem        chan struct{}
-	subtitleSemSize    int
-	subtitleAmdSem     chan struct{}
-	subtitleAmdSemSize int
-	subtitleWhisperXSem chan struct{}
+	elevenLabsSem           chan struct{}
+	elevenLabsUnlimSem      chan struct{}
+	elevenLabsUASem         chan struct{}
+	subtitleSem             chan struct{}
+	subtitleSemSize         int
+	subtitleAmdSem          chan struct{}
+	subtitleAmdSemSize      int
+	subtitleWhisperXSem     chan struct{}
 	subtitleWhisperXSemSize int
-	subtitleSemMu      sync.Mutex
+	subtitleSemMu           sync.Mutex
 
 	montageSem     chan struct{}
 	montageSemSize int
@@ -75,16 +76,16 @@ type PipelineService struct {
 
 	montageSync struct {
 		sync.Mutex
-		cond           *sync.Cond
-		pendingTasks   map[string]bool // taskID -> confirmed
-		totalExpected  int
-		activeBatchID  string
+		cond          *sync.Cond
+		pendingTasks  map[string]bool // taskID -> confirmed
+		totalExpected int
+		activeBatchID string
 	}
 
 	subtitleBarrier struct {
 		sync.Mutex
-		cond           *sync.Cond
-		inFlightCount  int32
+		cond          *sync.Cond
+		inFlightCount int32
 	}
 }
 
@@ -105,31 +106,31 @@ func NewPipelineService(
 	assemblyAI *api.AssemblyAIService,
 ) *PipelineService {
 	s := &PipelineService{
-		settings:           settings,
-		openRouter:         openRouter,
-		elevenLabs:         elevenLabs,
-		elevenLabsUnlim:    elevenLabsUnlim,
-		elevenLabsUA:       elevenLabsUA,
-		voiceMaker:         voiceMaker,
-		pollinations:       pollinations,
-		googler:            googler,
-		elevenLabsImage:    elevenLabsImage,
-		localWhisper:       localWhisper,
-		amdWhisper:         amdWhisper,
-		edgeTTS:            edgeTTS,
-		assemblyAI:         assemblyAI,
-		elevenLabsSem:      make(chan struct{}, 5),
-		elevenLabsUnlimSem: make(chan struct{}, 5),
-		elevenLabsUASem:    make(chan struct{}, 5),
-		subtitleSemSize:    settings.GetSubtitleMaxConnections(),
-		subtitleSem:        make(chan struct{}, settings.GetSubtitleMaxConnections()),
-		subtitleAmdSemSize: settings.GetSubtitleAmdMaxConnections(),
-		subtitleAmdSem:     make(chan struct{}, settings.GetSubtitleAmdMaxConnections()),
+		settings:                settings,
+		openRouter:              openRouter,
+		elevenLabs:              elevenLabs,
+		elevenLabsUnlim:         elevenLabsUnlim,
+		elevenLabsUA:            elevenLabsUA,
+		voiceMaker:              voiceMaker,
+		pollinations:            pollinations,
+		googler:                 googler,
+		elevenLabsImage:         elevenLabsImage,
+		localWhisper:            localWhisper,
+		amdWhisper:              amdWhisper,
+		edgeTTS:                 edgeTTS,
+		assemblyAI:              assemblyAI,
+		elevenLabsSem:           make(chan struct{}, 5),
+		elevenLabsUnlimSem:      make(chan struct{}, 5),
+		elevenLabsUASem:         make(chan struct{}, 5),
+		subtitleSemSize:         settings.GetSubtitleMaxConnections(),
+		subtitleSem:             make(chan struct{}, settings.GetSubtitleMaxConnections()),
+		subtitleAmdSemSize:      settings.GetSubtitleAmdMaxConnections(),
+		subtitleAmdSem:          make(chan struct{}, settings.GetSubtitleAmdMaxConnections()),
 		subtitleWhisperXSemSize: settings.GetSubtitleWhisperXMaxConnections(),
-		subtitleWhisperXSem:    make(chan struct{}, settings.GetSubtitleWhisperXMaxConnections()),
-		montageSemSize:     settings.GetMontageMaxConnections(),
-		montageSem:         make(chan struct{}, settings.GetMontageMaxConnections()),
-		edgeTTSSem:         make(chan struct{}, 5),
+		subtitleWhisperXSem:     make(chan struct{}, settings.GetSubtitleWhisperXMaxConnections()),
+		montageSemSize:          settings.GetMontageMaxConnections(),
+		montageSem:              make(chan struct{}, settings.GetMontageMaxConnections()),
+		edgeTTSSem:              make(chan struct{}, 5),
 	}
 	s.montageSync.cond = sync.NewCond(&s.montageSync.Mutex)
 	s.montageSync.pendingTasks = make(map[string]bool)
@@ -206,7 +207,6 @@ func (s *PipelineService) WaitForMontageBatch(id string) {
 		s.montageSync.cond.Wait()
 	}
 }
-
 
 func (s *PipelineService) SetContext(ctx context.Context) {
 	s.ctx = ctx
@@ -313,7 +313,35 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 
 	var pSettings utils.PipelineSettings
 	s.log("INFO", "[Pipeline] Task started and pre-processing...", id, taskLabel)
+
+	// !!! КРИТИЧНО ПРІОРИТЕТ НАЛАШТУВАНЬ / CRITICAL SETTINGS PRIORITY !!!
 	pSettings = s.settings.GetPipelineSettings()
+
+	// ВІДТЕПЕР ПРИ ОБРАННІ ШАБЛОНУ (subName != ""), ВСІ НАЛАШТУВАННЯ ПАЙПЛАЙНУ МАЮТЬ БУТИ ПЕРЕЗАПИСАНІ
+	// НАЛАШТУВАННЯМИ З ШАБЛОНУ. ЦЕ ЗАПОБІГАЄ "ПРОТІКАННЮ" ПАРАМЕТРІВ З ПАНЕЛІ ПАЙПЛАЙНУ.
+	// !!! ATTENTION FUTURE AGENTS: DO NOT REMOVE THIS SyncFromMap CALL !!!
+	if subName != "" {
+		s.log("INFO", fmt.Sprintf("[Pipeline] [PRIORITY] Template '%s' detected (Full template sync). Flattened settings count: %d", subName, len(settings)), id, taskLabel)
+		// Логуємо наявність критичних для користувача полів (DEBUG)
+		if v, ok := settings["montageIntroVideoPaths"]; ok {
+			s.log("INFO", fmt.Sprintf("[Pipeline] [DEBUG] Montage Intro Paths found in template: %v", v), id, taskLabel)
+		}
+
+		pSettings.SyncFromMap(settings)
+		s.log("INFO", "[Pipeline] [PRIORITY] Sync completed. Template overrides applied successfully.", id, taskLabel)
+	} else {
+		// Якщо шаблон не обрано, використовуємо налаштування з панелі пайплайну з додаванням
+		// специфічних для завдання прапорців (наприклад, skippedStages).
+		pSettings.SyncFromMap(settings)
+		s.log("INFO", fmt.Sprintf("[Pipeline] Using pipeline panel settings. Flattened keys: %d", len(settings)), id, taskLabel)
+	}
+
+	// Захист від "протікання" глобальних налаштувань у задачі зі старих шаблонів.
+	// SyncFromMap (json.Unmarshal) не скидає поля відсутні у JSON шаблону, тому поля
+	// що з'явились нещодавно можуть успадковувати глобальне значення.
+	if v, ok := settings["imageVideoDistribution"]; !ok || v == "" {
+		pSettings.ImageVideoDistribution = "sequential"
+	}
 
 	if taskType != "translate" && taskType != "rewrite" && taskType != "voiceover" {
 		return "", fmt.Errorf("task type %s not implemented", taskType)
@@ -321,6 +349,19 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 
 	finalDir := s.ResolveFinalDir(taskName, taskType, subName, settings)
 	s.log("INFO", fmt.Sprintf("[Pipeline] Final directory resolved: %s", finalDir), id, taskLabel)
+
+	// DEBUG: Зберігаємо фінальні налаштування у папку задачі для аналізу
+	if err := os.MkdirAll(finalDir, 0755); err == nil {
+		// 1. Raw Map (те, що пройшло через flattenSettings)
+		if rawData, err := json.MarshalIndent(settings, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(finalDir, "debug_pipeline_input_map.json"), rawData, 0644)
+		}
+		// 2. Struct (те, що було реально застосовано до пайплайну)
+		if structData, err := json.MarshalIndent(pSettings, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(finalDir, "debug_pipeline_applied_settings.json"), structData, 0644)
+		}
+		s.log("INFO", "[Pipeline] [DEBUG] Saved settings dumps to final directory", id, taskLabel)
+	}
 	templateDir := subName
 	if templateDir == "" {
 		pipelineName, _ := settings[taskType+"PipelineName"].(string)
@@ -331,37 +372,6 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	}
 	var skippedStages []string
 	hasSkippedInfo := false
-
-	// Sync template-specific settings to our local pSettings copy
-	// We MUST be strict here: if a template is used (subName != ""), we prioritize its settings.
-	// If the template doesn't have these keys, we should probably default to disabled/empty
-	// for THIS task to avoid leakage from global settings.
-	if val, ok := settings["customStagesEnabled"].(bool); ok {
-		pSettings.CustomStagesEnabled = val
-	} else if subName != "" {
-		// If template is used but flag is missing, default to false for safety
-		pSettings.CustomStagesEnabled = false
-	}
-
-	if val, ok := settings["customStages"]; ok {
-		if slice, ok := val.([]interface{}); ok {
-			var stages []utils.CustomStage
-			for _, v := range slice {
-				if m, ok := v.(map[string]interface{}); ok {
-					var stage utils.CustomStage
-					jsonData, _ := json.Marshal(m)
-					json.Unmarshal(jsonData, &stage)
-					if stage.ID != "" {
-						stages = append(stages, stage)
-					}
-				}
-			}
-			pSettings.CustomStages = stages
-		}
-	} else if subName != "" {
-		// If template is used but stages are missing, clear them to avoid global inheritance
-		pSettings.CustomStages = []utils.CustomStage{}
-	}
 
 	if val, ok := settings["skippedStages"]; ok {
 		hasSkippedInfo = true
@@ -489,16 +499,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 
 		// 1.5 Control Stage (Only if not skipped)
-		tControlEnabled := pSettings.TranslateControlEnabled
-		if val, ok := settings["translateControlEnabled"].(bool); ok {
-			tControlEnabled = val
-		}
-
-		if val, ok := settings["imageSyncEnabled"].(bool); ok {
-			pSettings.ImageSyncEnabled = val
-		}
-
-		if !shouldSkipText && tControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
+		if !shouldSkipText && pSettings.TranslateControlEnabled && (taskType == "translate" || taskType == "rewrite") && orSuccess {
 			s.emitStageStatus(id, "text", "waiting")
 			s.log("INFO", "[Control] Waiting for user translation review...", id, taskLabel)
 
@@ -588,11 +589,22 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 	}
 
+	// Determine if image stage needs subtitle.srt (subtitle_duration mode).
+	// In that case we must serialize: run voice+subtitle first, then image.
+	imageVideoDistribution, _ := settings["imageVideoDistribution"].(string)
+	if imageVideoDistribution == "" {
+		imageVideoDistribution = pSettings.ImageVideoDistribution
+	}
+	needsSubtitleFirst := imageVideoDistribution == "subtitle_duration" && !shouldSkipSubtitle && !shouldSkipVoice
+
 	// 3 & 4. Voiceover and Image Generation Stages logic in parallel
 	var stagesWg sync.WaitGroup
 	var voiceErr error
 	var imageErr error
 	var subtitleErr error
+
+	// Channel used to signal that subtitle stage is done (for subtitle_duration mode).
+	subtitleDone := make(chan struct{})
 
 	stagesWg.Add(1)
 	go func() {
@@ -602,7 +614,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 			dur, _ := utils.GetAudioDuration(filepath.Join(finalDir, "voice.mp3"))
 			s.emitStageStatus(id, "voice", "completed", dur)
 		} else {
-			voiceErr = s.ProcessVoiceover(id, taskLabel, processedText, finalDir, settings, &pSettings)
+			voiceErr = s.ProcessVoiceover(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings)
 		}
 
 		if voiceErr != nil {
@@ -620,11 +632,26 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 				s.log("ERROR", fmt.Sprintf("[Pipeline] Subtitle stage failed: %v", subtitleErr), id, taskLabel)
 			}
 		}
+		// Signal that subtitle (and voice) are done, regardless of errors.
+		close(subtitleDone)
 	}()
 
 	stagesWg.Add(1)
 	go func() {
 		defer stagesWg.Done()
+		// In subtitle_duration mode we must wait for subtitle.srt before generating images.
+		if needsSubtitleFirst {
+			select {
+			case <-subtitleDone:
+			case <-s.ctx.Done():
+				return
+			}
+			if subtitleErr != nil || voiceErr != nil {
+				imageErr = fmt.Errorf("skipping image stage: voice/subtitle failed")
+				s.emitStageStatus(id, "image", "failed")
+				return
+			}
+		}
 		imageErr = s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings, taskName, templateDir)
 		if imageErr != nil {
 			s.log("ERROR", fmt.Sprintf("[Pipeline] Image stage failed: %v", imageErr), id, taskLabel)
@@ -632,12 +659,11 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 
 		// Image Control
-		iControlEnabled := pSettings.ImageControlEnabled
-		if val, ok := settings["imageControlEnabled"].(bool); ok {
-			iControlEnabled = val
+		iImageEnabled, ok := settings["imageEnabled"].(bool)
+		if !ok {
+			iImageEnabled = pSettings.ImageEnabled
 		}
-
-		if iControlEnabled && !shouldSkipImage {
+		if pSettings.ImageControlEnabled && !shouldSkipImage && iImageEnabled {
 			s.emitStageStatus(id, "image", "waiting")
 			s.log("INFO", "[Control] Waiting for user image/video review...", id, taskLabel)
 
@@ -645,12 +671,20 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 			s.pendingControl.Store(id+"_image", resChan)
 
 			if s.OnRequestImageControl != nil {
-				s.OnRequestImageControl(id)
+				limit := s.settings.GetRemotePreviewLimit()
+				previewFiles := s.collectImageControlPreviewPaths(finalDir, limit, id, taskLabel)
+				s.OnRequestImageControl(id, previewFiles)
 			}
 
 			// Block goroutine until result received or timeout/context cancel
 			select {
-			case <-resChan:
+			case action := <-resChan:
+				if action == "cancel" || action == "reject" || action == "regenerate" {
+					s.log("ERROR", "[Control] Media rejected or regeneration requested by user.", id, taskLabel)
+					imageErr = fmt.Errorf("media rejected in control phase")
+					s.emitStageStatus(id, "image", "failed")
+					return
+				}
 				s.log("SUCCESS", "[Control] Media approved.", id, taskLabel)
 				s.emitStageStatus(id, "image", "completed")
 			case <-s.ctx.Done():
@@ -720,7 +754,6 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskT
 	}
 
 	stages := pSettings.CustomStages
-
 	s.log("INFO", fmt.Sprintf("[Custom] Processing %d custom stages...", len(stages)), id, taskLabel)
 
 	// Get API Key for Custom Stages (using task-specific key)
@@ -744,7 +777,6 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskT
 		apiKey = keys[0].Key
 		keyName = keys[0].Name
 	}
-
 	if apiKey == "" {
 		s.log("WARN", "[Custom] API key not found, skipping custom stages", id, taskLabel)
 		return
@@ -763,14 +795,10 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskT
 		if !stage.Enabled {
 			continue
 		}
-
-		// Calculate safe name early for file existence check
 		safeName := utils.SanitizeFilename(stage.Name)
 		if safeName == "" {
 			safeName = "custom_stage_" + stage.ID
 		}
-
-		// Check if file already exists
 		savePath := filepath.Join(finalDir, safeName+".txt")
 		if _, err := os.Stat(savePath); err == nil {
 			s.log("INFO", fmt.Sprintf("[Custom] Stage %s already exists (%s), skipping generation.", stage.Name, safeName+".txt"), id, taskLabel)
@@ -783,20 +811,15 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskT
 		switch stage.DataSource {
 		case "taskName":
 			sourceContent = taskName
+		case "originalText":
+			sourceContent = originalText
 		default:
 			sourceContent = processedText
 		}
 
-		var fullPrompt string
-		if strings.Contains(stage.Prompt, "{{content}}") {
-			fullPrompt = strings.ReplaceAll(stage.Prompt, "{{content}}", sourceContent)
-		} else {
-			fullPrompt = stage.Prompt + "\n\n" + sourceContent
-		}
-
-		// Use per-stage settings if available
+		fullPrompt := strings.ReplaceAll(stage.Prompt, "{input}", sourceContent)
 		useModel := stage.Model
-		if useModel == "" {
+		if useModel == "" || useModel == "default" {
 			useModel = defaultModel
 		}
 		useTemp := stage.Temperature
@@ -804,6 +827,9 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskT
 			useTemp = defaultTemp
 		}
 		useMaxTokens := stage.MaxTokens
+		if useMaxTokens == 0 {
+			useMaxTokens = 2000
+		}
 
 		result, err := s.openRouter.Chat(id, taskLabel, "custom", keyName, apiKey, useModel, fullPrompt, useTemp, useMaxTokens)
 		if err != nil {
@@ -811,92 +837,105 @@ func (s *PipelineService) ProcessCustomStages(id string, taskLabel string, taskT
 			continue
 		}
 
-		// Save result to file
 		err = os.WriteFile(savePath, []byte(result), 0644)
 		if err != nil {
 			s.log("ERROR", fmt.Sprintf("[Custom] Failed to save result for %s: %v", stage.Name, err), id, taskLabel)
 		} else {
-			s.log("SUCCESS", fmt.Sprintf("[Custom] Stage %s completed, saved to %s", stage.Name, safeName+".txt"), id, taskLabel)
+			s.log("SUCCESS", fmt.Sprintf("[Custom] Stage %s completed, saved to %s", stage.Name, savePath), id, taskLabel)
 		}
 	}
 }
 
-func (s *PipelineService) SubmitImageControlResult(id string) {
-	if val, ok := s.pendingControl.Load(id + "_image"); ok {
-		ch := val.(chan string)
-		ch <- "done"
-	}
-}
-
-func (s *PipelineService) SubmitMontageControlResult(id string, result string) {
-	if val, ok := s.pendingControl.Load(id + "_montage"); ok {
-		ch := val.(chan string)
-		ch <- result
-	}
-}
-
+// flattenSettings розгортає вкладену структуру шаблону в плоску мапу,
+// враховуючи префікси для вкладених блоків (montage, voiceover тощо)
 func (s *PipelineService) flattenSettings(m map[string]interface{}) map[string]interface{} {
 	res := make(map[string]interface{})
 
-	// Спеціальний мапінг для блоків, де імена в JSON не збігаються з іменами в PipelineSettings
-	// або де є конфлікти імен (наприклад 'image')
-	if stages, ok := m["stages"].(map[string]interface{}); ok {
-		if val, ok := stages["image"].(bool); ok {
-			res["imageEnabled"] = val
-		}
-		if val, ok := stages["voiceover"].(bool); ok {
-			res["voiceoverEnabled"] = val
-		}
-		if val, ok := stages["subtitle"].(bool); ok {
-			res["subtitleEnabled"] = val
-		}
-		if val, ok := stages["translate"].(bool); ok {
-			res["translateEnabled"] = val
-		}
-		if val, ok := stages["montage"].(bool); ok {
-			res["montageEnabled"] = val
-		}
-		if val, ok := stages["rewrite"].(bool); ok {
-			res["rewriteEnabled"] = val
-		}
-	}
-
-	if control, ok := m["control"].(map[string]interface{}); ok {
-		if val, ok := control["image"].(bool); ok {
-			res["imageControlEnabled"] = val
-		}
-		if val, ok := control["translate"].(bool); ok {
-			res["translateControlEnabled"] = val
-		}
-	}
-
-	// Рекурсивна функція для розгортання всіх інших налаштувань
-	var flatten func(map[string]interface{})
-	flatten = func(current map[string]interface{}) {
+	var flatten func(map[string]interface{}, string)
+	flatten = func(current map[string]interface{}, prefix string) {
 		for k, v := range current {
-			// Пропускаємо блоки, які ми вже опрацювали спеціальним чином
-			if k == "stages" || k == "control" {
-				continue
+			// Визначаємо фінальний ключ з урахуванням префікса
+			fullKey := k
+			if prefix != "" && !strings.HasPrefix(strings.ToLower(k), strings.ToLower(prefix)) {
+				// Якщо префікс є (наприклад, "montage"), а ключ "enabled",
+				// робимо "montageEnabled" (перша літера ключа стає великою)
+				if len(k) > 0 {
+					fullKey = prefix + strings.ToUpper(k[:1]) + k[1:]
+				} else {
+					fullKey = prefix
+				}
 			}
 
+			// Спеціальна обробка блоків, які в struct PipelineSettings є плоскими з префіксом
 			if sub, ok := v.(map[string]interface{}); ok {
-				// Якщо це блок 'services', ми заходимо в нього глибше
-				// Якщо це будь-який інший блок (наприклад 'image', 'voiceover'),
-				// ми розгортаємо його вміст у корінь, але також продовжуємо рекурсію
-				flatten(sub)
+				lowerK := strings.ToLower(k)
+				switch lowerK {
+				case "montage", "voiceover", "image", "subtitle", "translate", "rewrite", "control", "stages":
+					// Для "stages" та "control" префікс не потрібен, бо вони мапляться вручну або мають власні назви
+					newPrefix := k
+					if lowerK == "stages" || lowerK == "control" {
+						newPrefix = ""
+					}
+
+					// Додаємо також мапінги для самих назв блоків (ImageEnabled тощо)
+					switch lowerK {
+					case "stages":
+						if val, ok := sub["image"].(bool); ok {
+							res["imageEnabled"] = val
+						}
+						if val, ok := sub["voiceover"].(bool); ok {
+							res["voiceoverEnabled"] = val
+						}
+						if val, ok := sub["subtitle"].(bool); ok {
+							res["subtitleEnabled"] = val
+						}
+						if val, ok := sub["translate"].(bool); ok {
+							res["translateEnabled"] = val
+						}
+						if val, ok := sub["montage"].(bool); ok {
+							res["montageEnabled"] = val
+						}
+						if val, ok := sub["rewrite"].(bool); ok {
+							res["rewriteEnabled"] = val
+						}
+					case "control":
+						if val, ok := sub["image"].(bool); ok {
+							res["imageControlEnabled"] = val
+						}
+						if val, ok := sub["translate"].(bool); ok {
+							res["translateControlEnabled"] = val
+						}
+						if val, ok := sub["montage"].(bool); ok {
+							res["montageControlEnabled"] = val
+						}
+					}
+
+					flatten(sub, newPrefix)
+				default:
+					// Звичайна вкладеність (без префікса блоку)
+					flatten(sub, prefix)
+				}
 			} else {
-				// Звичайне значення - копіюємо в результуючу мапу
-				// (Тут пізніші значення можуть перезаписувати ранні, якщо імена однакові)
-				res[k] = v
+				// Пряме значення
+				res[fullKey] = v
 			}
 		}
 	}
 
-	flatten(m)
+	flatten(m, "")
+
+	// DEBUG: Логуємо наявність важливих ключів після розплющення
+	criticalKeys := []string{"montageIntroVideoPaths", "montageOverlayTriggers", "montageOverlayEnabled", "montageOverlayTriggersEnabled"}
+	for _, ck := range criticalKeys {
+		if val, ok := res[ck]; ok {
+			s.log("INFO", fmt.Sprintf("[Pipeline] [FLATTEN] Found critical key '%s': %v", ck, val))
+		}
+	}
+
 	return res
 }
 
-// SubmitControlResult resumes a paused pipeline with updated text (legacy/simple confirm)
+// SubmitControlResult resumes a paused pipeline with updated text
 func (s *PipelineService) SubmitControlResult(id string, text string) {
 	s.SubmitControlAction(id, &ControlAction{
 		Action: "confirm",
@@ -912,15 +951,32 @@ func (s *PipelineService) SubmitControlAction(id string, action *ControlAction) 
 	}
 }
 
+// SubmitImageControlResult resumes a paused pipeline after image review
+func (s *PipelineService) SubmitImageControlResult(id string, action string) {
+	if val, ok := s.pendingControl.Load(id + "_image"); ok {
+		ch := val.(chan string)
+		if action == "" {
+			action = "confirm"
+		}
+		ch <- action
+	}
+}
+
+// SubmitMontageControlResult resumes a paused pipeline after montage review
+func (s *PipelineService) SubmitMontageControlResult(id string, planData string) {
+	if val, ok := s.pendingControl.Load(id + "_montage"); ok {
+		ch := val.(chan string)
+		ch <- planData
+	}
+}
+
 func (s *PipelineService) UpdateSubtitleSemaphore(newSize int, engine ...string) {
 	s.subtitleSemMu.Lock()
 	defer s.subtitleSemMu.Unlock()
-
 	eng := "standard"
 	if len(engine) > 0 {
 		eng = engine[0]
 	}
-
 	switch eng {
 	case "amd":
 		if newSize == s.subtitleAmdSemSize {
@@ -941,14 +997,11 @@ func (s *PipelineService) UpdateSubtitleSemaphore(newSize int, engine ...string)
 		s.subtitleSem = make(chan struct{}, newSize)
 		s.subtitleSemSize = newSize
 	}
-
-	s.log("INFO", fmt.Sprintf("[Pipeline] Subtitle semaphore (%s) updated to %d slots", eng, newSize))
 }
 
 func (s *PipelineService) getSubtitleSem(engine string) chan struct{} {
 	s.subtitleSemMu.Lock()
 	defer s.subtitleSemMu.Unlock()
-
 	switch engine {
 	case "amd":
 		return s.subtitleAmdSem
@@ -962,14 +1015,11 @@ func (s *PipelineService) getSubtitleSem(engine string) chan struct{} {
 func (s *PipelineService) UpdateMontageSemaphore(newSize int) {
 	s.montageSemMu.Lock()
 	defer s.montageSemMu.Unlock()
-
 	if newSize == s.montageSemSize {
 		return
 	}
-
 	s.montageSem = make(chan struct{}, newSize)
 	s.montageSemSize = newSize
-	s.log("INFO", fmt.Sprintf("[Pipeline] Montage semaphore updated to %d slots", newSize))
 }
 
 func (s *PipelineService) getMontageSem() chan struct{} {
@@ -990,12 +1040,7 @@ type ExistingFilesData struct {
 }
 
 func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskType string, settings map[string]interface{}, skipExtra bool) ExistingFilesData {
-	data := ExistingFilesData{
-		ID:          id,
-		FoundStages: []string{},
-	}
-
-	// 1. Check Text (lenient check for any result file)
+	data := ExistingFilesData{ID: id, FoundStages: []string{}}
 	textFiles := []string{"result.txt", "translation.txt", "rewrite.txt"}
 	var textPath string
 	for _, f := range textFiles {
@@ -1005,42 +1050,34 @@ func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskTyp
 			break
 		}
 	}
-
 	if textPath != "" {
 		data.FoundStages = append(data.FoundStages, "text")
 		content, _ := os.ReadFile(textPath)
 		data.TextChars = len([]rune(string(content)))
 	}
-
-	// 2. Check Voice
-	voicePath := filepath.Join(finalDir, "voice.mp3")
-	if info, err := os.Stat(voicePath); err == nil && !info.IsDir() {
-		data.FoundStages = append(data.FoundStages, "voice")
-		if !skipExtra {
-			dur, err := utils.GetAudioDuration(voicePath)
-			if err == nil {
-				data.VoiceDuration = dur
+	voiceFiles := []string{"voice.mp3", "voice.wav", "Voice.mp3", "Voice.wav"}
+	for _, f := range voiceFiles {
+		p := filepath.Join(finalDir, f)
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			data.FoundStages = append(data.FoundStages, "voice")
+			if !skipExtra {
+				dur, err := utils.GetAudioDuration(p)
+				if err == nil {
+					data.VoiceDuration = dur
+				}
 			}
+			break
 		}
 	}
 
-	// 3. Check Subtitles
-	subtitleSrt := filepath.Join(finalDir, "subtitle.srt")
-	subtitleAss := filepath.Join(finalDir, "subtitle.ass")
-	if _, errSrt := os.Stat(subtitleSrt); errSrt == nil {
-		data.FoundStages = append(data.FoundStages, "subtitle")
-	} else if _, errAss := os.Stat(subtitleAss); errAss == nil {
-		data.FoundStages = append(data.FoundStages, "subtitle")
+	subFiles := []string{"subtitle.srt", "subtitle.ass", "subtitles.srt", "subtitles.ass", "Subtitle.srt", "Subtitle.ass"}
+	for _, f := range subFiles {
+		p := filepath.Join(finalDir, f)
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			data.FoundStages = append(data.FoundStages, "subtitle")
+			break
+		}
 	}
-
-	// 4. Check Images (both in images/ subfolder and directly in finalDir as fallback)
-	promptsPath := filepath.Join(finalDir, "prompts.txt")
-	if info, err := os.Stat(promptsPath); err == nil && !info.IsDir() {
-		content, _ := os.ReadFile(promptsPath)
-		pStrs := strings.Split(string(content), "\n\n--------------------\n\n")
-		data.PromptCount = len(pStrs)
-	}
-
 	scanDir := func(dir string) {
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
 			files, _ := os.ReadDir(dir)
@@ -1058,52 +1095,13 @@ func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskTyp
 			}
 		}
 	}
-
 	scanDir(filepath.Join(finalDir, "images"))
 	if data.ImageCount == 0 && data.VideoCount == 0 {
 		scanDir(finalDir)
 	}
-
 	if data.ImageCount > 0 || data.VideoCount > 0 {
 		data.FoundStages = append(data.FoundStages, "image")
 	}
-
-	// 5. Check Custom Stages
-	if settings != nil {
-		if val, ok := settings["customStages"]; ok {
-			var stages []utils.CustomStage
-			if slice, ok := val.([]interface{}); ok {
-				for _, v := range slice {
-					if m, ok := v.(map[string]interface{}); ok {
-						var cs utils.CustomStage
-						jsonData, _ := json.Marshal(m)
-						json.Unmarshal(jsonData, &cs)
-						stages = append(stages, cs)
-					}
-				}
-			}
-
-			foundCustom := 0
-			for _, cs := range stages {
-				if !cs.Enabled {
-					continue
-				}
-				safeName := utils.SanitizeFilename(cs.Name)
-				if safeName == "" {
-					safeName = "custom_stage_" + cs.ID
-				}
-				p := filepath.Join(finalDir, safeName+".txt")
-				if info, err := os.Stat(p); err == nil && !info.IsDir() {
-					foundCustom++
-				}
-			}
-			if foundCustom > 0 {
-				data.CustomCount = foundCustom
-				data.FoundStages = append(data.FoundStages, "custom")
-			}
-		}
-	}
-
 	return data
 }
 
@@ -1115,28 +1113,37 @@ func (s *PipelineService) SubmitExistingFilesResult(id string, skipStages []stri
 }
 
 func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subName string, settings map[string]interface{}) string {
-	s.log("INFO", fmt.Sprintf("[Resolve] Resolving directory for %s, Type: %s, Sub: %s", taskName, taskType, subName))
 	pSettings := s.settings.GetPipelineSettings()
-	outPath, _ := settings[taskType+"OutputPath"].(string)
-	if outPath == "" {
-		if taskType == "rewrite" {
-			outPath = pSettings.RewriteOutputPath
-		} else {
-			outPath = pSettings.TranslateOutputPath
-		}
-	}
-	if outPath == "" {
-		outPath = pSettings.OutputPath
+
+	// Збираємо всі можливі базові шляхи
+	basePaths := []string{}
+
+	// 1. Шлях із налаштувань конкретного завдання
+	if out, ok := settings[taskType+"OutputPath"].(string); ok && out != "" {
+		basePaths = append(basePaths, out)
 	}
 
-	if outPath == "" {
-		home, _ := os.UserHomeDir()
-		if runtime.GOOS == "darwin" {
-			outPath = filepath.Join(home, "Movies")
-		} else {
-			outPath = filepath.Join(home, "Videos")
-		}
+	// 2. Специфічні шляхи типів із глобальних налаштувань
+	if taskType == "rewrite" && pSettings.RewriteOutputPath != "" {
+		basePaths = append(basePaths, pSettings.RewriteOutputPath)
+	} else if taskType != "rewrite" && pSettings.TranslateOutputPath != "" {
+		basePaths = append(basePaths, pSettings.TranslateOutputPath)
 	}
+
+	// 3. Загальний шлях виводу
+	if pSettings.OutputPath != "" {
+		basePaths = append(basePaths, pSettings.OutputPath)
+	}
+
+	// 4. Системний шлях "Відео"
+	home, _ := os.UserHomeDir()
+	sysVideos := ""
+	if runtime.GOOS == "darwin" {
+		sysVideos = filepath.Join(home, "Movies")
+	} else {
+		sysVideos = filepath.Join(home, "Videos")
+	}
+	basePaths = append(basePaths, sysVideos)
 
 	templateDir := subName
 	if templateDir == "" {
@@ -1150,25 +1157,111 @@ func (s *PipelineService) ResolveFinalDir(taskName string, taskType string, subN
 	safeTaskName := utils.SanitizeFilename(taskName)
 	safeTemplateDir := utils.SanitizeFilename(templateDir)
 
-	// Normalize outPath separators if we are on a non-Windows system
-	// but the path came from a Windows-style configuration.
-	if runtime.GOOS != "windows" && outPath != "" {
-		outPath = strings.ReplaceAll(outPath, "\\", "/")
+	// Варіанти папок для перевірки
+	candidates := []string{
+		safeTemplateDir + " - " + safeTaskName + " - " + safeTemplateDir, // [NEW] Паттерн користувача: Template - Task - Template
+		safeTemplateDir + " - " + safeTaskName,                           // Новий стандарт (плоский, санітизовані назви)
+		safeTaskName + " - " + safeTemplateDir,                           // Альтернативний плоский (Task - Template)
+		templateDir + " - " + taskName,                                   // Старі оригінальні назви (для зворотної сумісності)
+		taskName + " - " + templateDir,                                   // Альтернативний старий (для зворотної сумісності)
+		filepath.Join(safeTaskName, safeTemplateDir),                     // Старий вкладений (Task/Template, санітизований)
+		safeTaskName, // Просто назва (санітизована)
+		taskName,     // Просто назва (оригінал)
 	}
 
-	finalDir := filepath.Join(outPath, safeTaskName, safeTemplateDir)
+	// Використовуємо map для унікальних шляхів, щоб не перевіряти двічі
+	checkedPaths := make(map[string]bool)
 
-	// Backward compatibility check: if Default dir doesn't exist OR is empty, check parent
-	if templateDir == "Default" {
-		dataPrimary := s.CheckExistingFiles("tmp", finalDir, taskType, settings, true)
-		if len(dataPrimary.FoundStages) == 0 {
-			parentDir := filepath.Join(outPath, safeTaskName)
-			dataParent := s.CheckExistingFiles("tmp", parentDir, taskType, settings, true)
-			if len(dataParent.FoundStages) > 0 {
-				return parentDir
+	for _, basePath := range basePaths {
+		if basePath == "" || checkedPaths[basePath] {
+			continue
+		}
+		checkedPaths[basePath] = true
+
+		// Перевіряємо, чи існує сама база (якщо ні - пробуємо створити, крім системних)
+		if _, err := os.Stat(basePath); os.IsNotExist(err) && basePath != sysVideos {
+			_ = os.MkdirAll(basePath, 0755)
+		}
+
+		for i, candidate := range candidates {
+			fullPath := filepath.Join(basePath, candidate)
+			if runtime.GOOS != "windows" {
+				fullPath = strings.ReplaceAll(fullPath, "\\", "/")
+			}
+
+			if _, err := os.Stat(fullPath); err == nil {
+				s.log("INFO", fmt.Sprintf("[Resolve] Знайдено існуючу папку в %s (%d): %s", basePath, i+1, fullPath))
+				return fullPath
 			}
 		}
 	}
 
-	return finalDir
+	// Якщо нічого не знайдено, повертаємо шлях за замовчуванням у ПЕРШОМУ доступному базовому шляху
+	targetBase := basePaths[0]
+	// Якщо перший шлях недоступний (наприклад, диск не підключено), шукаємо перший існуючий
+	for _, b := range basePaths {
+		if _, err := os.Stat(b); err == nil {
+			targetBase = b
+			break
+		}
+	}
+
+	defaultPath := filepath.Join(targetBase, safeTemplateDir+" - "+safeTaskName)
+	if runtime.GOOS != "windows" {
+		defaultPath = strings.ReplaceAll(defaultPath, "\\", "/")
+	}
+	return defaultPath
+}
+
+// collectImageControlPreviewPaths збирає до limit абсолютних шляхів до медіа для прев'ю віддаленого контролю.
+// Згенеровані кадри лежать у finalDir/images; додатково перевіряємо корінь finalDir.
+func (s *PipelineService) collectImageControlPreviewPaths(finalDir string, limit int, id string, taskLabel string) []string {
+	if limit <= 0 {
+		return nil
+	}
+	extOK := map[string]bool{
+		".png": true, ".jpg": true, ".jpeg": true, ".webp": true,
+		".mp4": true, ".webm": true, ".gif": true,
+	}
+	var out []string
+	addFromDir := func(dir string) {
+		if len(out) >= limit {
+			return
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		var names []string
+		for _, f := range entries {
+			if f.IsDir() {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(f.Name()))
+			if !extOK[ext] {
+				continue
+			}
+			names = append(names, f.Name())
+		}
+		sort.Slice(names, func(i, j int) bool {
+			return utils.NaturalLess(names[i], names[j])
+		})
+		for _, n := range names {
+			if len(out) >= limit {
+				break
+			}
+			out = append(out, filepath.Join(dir, n))
+		}
+	}
+	imagesDir := filepath.Join(finalDir, "images")
+	if st, err := os.Stat(imagesDir); err == nil && st.IsDir() {
+		addFromDir(imagesDir)
+	}
+	if len(out) < limit {
+		addFromDir(finalDir)
+	}
+	if len(out) == 0 {
+		s.log("WARN", fmt.Sprintf("[Control] Не знайдено медіафайлів для прев'ю (очікувались у %s/images або в корені)", finalDir), id, taskLabel)
+	}
+	return out
 }

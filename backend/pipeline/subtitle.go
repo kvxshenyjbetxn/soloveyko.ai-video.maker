@@ -234,12 +234,14 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 			return fmt.Errorf("AssemblyAI service not initialized")
 		}
 
+		aKey, _ := settings["assemblyAIAPIKey"].(string)
+
 		if pSettings.SubtitleKaraokeEffect {
 			var srtRes string
-			srtRes, jsonRes, err = s.assemblyAI.TranscribeFull(s.ctx, voiceFilePath)
+			srtRes, jsonRes, err = s.assemblyAI.TranscribeFull(s.ctx, voiceFilePath, aKey)
 			result = srtRes
 		} else {
-			result, err = s.assemblyAI.Transcribe(s.ctx, voiceFilePath)
+			result, err = s.assemblyAI.Transcribe(s.ctx, voiceFilePath, aKey)
 		}
 
 		if err != nil {

@@ -58,6 +58,12 @@ func NewTemplateService() *TemplateService {
 	return s
 }
 
+// Dir is the directory where pipeline template JSON files are stored (one file per template).
+func (s *TemplateService) Dir() string {
+	return s.templatesDir
+}
+
+
 func (s *TemplateService) LoadTemplates() ([]PipelineTemplate, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -371,6 +371,7 @@ export const PipelineDashboard: React.FC<PipelineDashboardProps> = (props) => {
             case 'voiceover':
                 return (
                     <VoiceoverSection
+                        type={type}
                         settings={settings} handleChange={handleChange} setSettings={setSettings}
                         fetchVoiceTemplates={props.fetchVoiceTemplates} fetchVoiceMakerVoices={props.fetchVoiceMakerVoices} fetchEdgeTTSVoices={props.fetchEdgeTTSVoices}
                         voiceTemplates={props.voiceTemplates || []} 

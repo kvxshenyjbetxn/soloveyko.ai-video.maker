@@ -2,25 +2,6 @@
     "app": {
         "title": "Soloveyko.AI"
     },
-    "auth": {
-        "title": "Авторизация",
-        "key_placeholder": "Введите ключ доступа...",
-        "save_key": "Сохранить ключ",
-        "login": "Войти",
-        "profile": "Профиль",
-        "days_left": "Осталось дней: {{days}}",
-        "expired": "Подписка истекла",
-        "unlimited": "Безлимит",
-        "telegram_id": "Telegram ID: {{id}}",
-        "logout": "Выйти",
-        "checking": "Проверка...",
-        "subtitle": "Введите ключ доступа для продолжения",
-        "invalid_key": "Недействительный ключ. Попробуйте снова.",
-        "checking_error": "Ошибка при проверке ключа. Проверьте соединение с интернетом.",
-        "error_expired": "Срок действия подписки истек. Пожалуйста, продлите её.",
-        "error_hardware_mismatch": "Этот ключ уже привязан к другому устройству.",
-        "error_invalid": "Неверный ключ доступа."
-    },
     "tabs": {
         "text": "Текст",
         "queue": "Очередь",
@@ -91,6 +72,12 @@
         "status_waiting": "В очереди",
         "status_completed": "Готово",
         "status_failed": "Ошибка",
+        "status_dispatched": "Делегировано",
+        "run_locally": "Локально",
+        "no_remote_devices": "Нет онлайн устройств",
+        "run_on_device": "Выбрать устройство для выполнения",
+        "start_remote": "Запустить на устройстве",
+        "dispatching": "Делегирование...",
         "completion_title": "Обработка завершена",
         "completion_message": "Обработка очереди завершена!\nВыполнено задач: {count}\nОбщее время: {duration}\nЧистое время работы: {active_duration}\nВремя монтажа (всего): {total_montage}\nСреднее время монтажа: {avg_montage}",
         "completion_ok": "Понятно",
@@ -279,7 +266,12 @@
             "videoAlertThreshold": "Порог видео (в час)",
             "imageAlertThreshold": "Порог картинок (в час)",
             "videoThresholdPlaceholder": "Например: 10",
-            "imageThresholdPlaceholder": "Например: 1000"
+            "imageThresholdPlaceholder": "Например: 1000",
+            "fallbackTitle": "Приоритет резервных провайдеров",
+            "fallbackDesc": "Основной провайдер всегда берётся из настроек Пайплайна. Ниже — порядок резервных провайдеров при сбое основного. Используйте ▲▼ для изменения порядка.",
+            "fallbackImage": "Резервы для изображений",
+            "fallbackVideo": "Резервы для видео",
+            "fallbackLabel": "↳ "
         },
         "openrouterSettings": {
             "apikey": "API Ключ",
@@ -362,6 +354,8 @@
     },
     "other": {
         "statistic": "Статистика",
+        "remote_control": "Удалённое управление",
+        "remote_control_description": "Устройства аккаунта и статус «онлайн» (Realtime). Имена удобны для будущих функций удалённого управления.",
         "history": "История",
         "preview": "Предварительный просмотр"
     },
@@ -387,10 +381,24 @@
         "themeDark": "Тёмная",
         "themeAmoled": "Чёрная AMOLED",
         "accentColor": "Цвет акцента",
+        "uiStyle": "Стиль интерфейса",
+        "uiStyleRounded": "Скруглённый",
+        "uiStyleSharp": "Строгий",
         "googlerLimits": "Лимиты Googler",
         "googlerMaxImages": "Макс. соединений для фото",
         "googlerMaxVideos": "Макс. соединений для видео",
-        "elevenlabsimageMaxConnections": "Макс. соединений для ElevenLabs Image"
+        "elevenlabsimageMaxConnections": "Макс. соединений для ElevenLabs Image",
+        "devicesTitle": "Устройства",
+        "devicesDescription": "Устройства, с которых вы входили в аккаунт. Статус «онлайн» обновляется в реальном времени через Realtime Database.",
+        "devicesOnline": "Онлайн",
+        "devicesOffline": "Офлайн",
+        "devicesThisPc": "этот ПК",
+        "devicesRename": "Переименовать",
+        "devicesSave": "Сохранить",
+        "devicesCancel": "Отмена",
+        "devicesSignInHint": "Войдите в облачный аккаунт, чтобы увидеть список устройств.",
+        "devicesRealtimeOff": "URL Realtime Database не задан: индикатор онлайн может не работать, но список устройств в облаке сохраняется.",
+        "devicesRenamed": "Название устройства сохранено"
     },
     "systemMonitor": {
         "cpu": "Процессор",
@@ -540,6 +548,16 @@
             "title": "Настройки изображений",
             "sync_enabled": "Синхронизировать с субтитрами",
             "sync_desc": "Автоматически подстраивать длительность каждого кадра под время соответствующего фрагмента в субтитрах. Если выключено — длительность будет распределена равномерно.",
+            "video_sequence_mode": "Режим видеоряда",
+            "video_distribution_sequential": "Последовательный",
+            "video_distribution_sequential_desc": "Видео генерируются для первых N сегментов, остальные — картинки.",
+            "video_distribution_random": "Случайный",
+            "video_distribution_random_desc": "Видео равномерно распределяются по всему видеоряду. Например, при 5 видео из 20 сегментов — по одному видео в каждой четверти.",
+            "video_distribution_subtitle": "По длительности",
+            "video_distribution_subtitle_desc": "Автоматически определяет тип медиа по длительности сегмента субтитров: если сегмент длиннее порога — видео, короче — картинка.",
+            "video_subtitle_threshold": "Порог длительности (секунды):",
+            "video_start_count": "Видео в начале",
+            "video_start_count_desc": "Сколько видео гарантированно идут первыми для динамичного старта (0 = выключено)",
             "sync_mode": "Режим синхронизации",
             "sync_mode_simple": "Простой",
             "sync_mode_accurate": "Точный (в разработке)",
@@ -781,7 +799,7 @@
         "unit_s": "с",
         "stage": "Этап пайплайна",
         "select": "Выбрать..."
-    },
+        },
     "notifications": {
         "tab_title": "Уведомления",
         "description": "Настройки уведомлений в Telegram и системе",

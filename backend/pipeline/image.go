@@ -3,13 +3,126 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"regexp"
 	bapi "soloveyko/backend/api"
 	"soloveyko/backend/utils"
+	"strconv"
 	"strings"
 	"sync"
 )
+
+// buildVideoSet returns a set of validIdx positions that should be videos.
+// If random=true, positions are spread evenly across the range with randomness.
+// startCount forces the first N positions to always be videos (before the random spread).
+func buildVideoSet(validPrompts, videoCount, startCount int, random bool) map[int]bool {
+	set := make(map[int]bool)
+	if videoCount <= 0 || validPrompts <= 0 {
+		return set
+	}
+	if videoCount >= validPrompts {
+		for i := 0; i < validPrompts; i++ {
+			set[i] = true
+		}
+		return set
+	}
+	if random {
+		// First, fill forced start positions
+		forced := startCount
+		if forced > videoCount {
+			forced = videoCount
+		}
+		for i := 0; i < forced; i++ {
+			set[i] = true
+		}
+		// Distribute remaining videos evenly across the rest of the range
+		remaining := videoCount - forced
+		if remaining > 0 {
+			rangeStart := forced
+			rangeLen := validPrompts - rangeStart
+			for i := 0; i < remaining; i++ {
+				segStart := rangeStart + i*rangeLen/remaining
+				segEnd := rangeStart + (i+1)*rangeLen/remaining
+				if segEnd <= segStart {
+					segEnd = segStart + 1
+				}
+				pick := segStart + rand.Intn(segEnd-segStart)
+				set[pick] = true
+			}
+		}
+	} else {
+		for i := 0; i < videoCount; i++ {
+			set[i] = true
+		}
+	}
+	return set
+}
+
+// parseSRTDurations reads a SRT file and returns a slice of segment durations in seconds.
+func parseSRTDurations(srtPath string) []float64 {
+	data, err := os.ReadFile(srtPath)
+	if err != nil {
+		return nil
+	}
+	re := regexp.MustCompile(`(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})`)
+	matches := re.FindAllStringSubmatch(string(data), -1)
+	durations := make([]float64, 0, len(matches))
+	for _, m := range matches {
+		start := srtTimeSec(m[1])
+		end := srtTimeSec(m[2])
+		if end > start {
+			durations = append(durations, end-start)
+		}
+	}
+	return durations
+}
+
+// srtTimeSec converts SRT timestamp "HH:MM:SS,mmm" to seconds.
+func srtTimeSec(t string) float64 {
+	t = strings.ReplaceAll(t, ",", ".")
+	parts := strings.Split(t, ":")
+	if len(parts) != 3 {
+		return 0
+	}
+	h, _ := strconv.ParseFloat(parts[0], 64)
+	m, _ := strconv.ParseFloat(parts[1], 64)
+	sec, _ := strconv.ParseFloat(parts[2], 64)
+	return h*3600 + m*60 + sec
+}
+
+// buildVideoSetFromSubtitles assigns video/image per prompt slot based on SRT segment durations.
+// For each prompt slot i (0..validPrompts-1), it sums the durations of the proportionally mapped
+// SRT segments. If the average segment duration within the slot >= threshold seconds, the slot
+// becomes a video; otherwise it becomes an image. Using average (not sum) makes the threshold
+// meaningful regardless of how many SRT blocks map to each prompt slot.
+func buildVideoSetFromSubtitles(validPrompts int, srtDurations []float64, threshold float64) map[int]bool {
+	set := make(map[int]bool)
+	n := len(srtDurations)
+	if validPrompts <= 0 || n == 0 {
+		return set
+	}
+	for i := 0; i < validPrompts; i++ {
+		segStart := i * n / validPrompts
+		segEnd := (i + 1) * n / validPrompts
+		if segEnd <= segStart {
+			segEnd = segStart + 1
+		}
+		if segEnd > n {
+			segEnd = n
+		}
+		var total float64
+		for _, d := range srtDurations[segStart:segEnd] {
+			total += d
+		}
+		avg := total / float64(segEnd-segStart)
+		if avg >= threshold {
+			set[i] = true
+		}
+	}
+	return set
+}
 
 // splitIntoLines splits text by line breaks
 func splitIntoLines(text string) []string {
@@ -302,19 +415,33 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 	// Fetch OpenRouter API Key for prompt generation
 	orKeyID, _ := settings[taskType+"OpenRouterKeyID"].(string)
+	orApiKey, _ := settings[taskType+"OpenRouterAPIKey"].(string)
 	orKeys := s.settings.GetOpenRouterKeys()
-	var orApiKey, orKeyName string
-	for _, k := range orKeys {
-		if k.ID == orKeyID {
-			orApiKey = k.Key
-			orKeyName = k.Name
-			break
+	var orKeyName string
+
+	if orApiKey == "" {
+		for _, k := range orKeys {
+			if k.ID == orKeyID {
+				orApiKey = k.Key
+				orKeyName = k.Name
+				break
+			}
+		}
+		if orApiKey == "" && len(orKeys) > 0 {
+			orApiKey = orKeys[0].Key
+			orKeyName = orKeys[0].Name
+		}
+	} else {
+		// Try to find name if we have the key but it might be just "Remote"
+		orKeyName = "Remote"
+		for _, k := range orKeys {
+			if k.Key == orApiKey {
+				orKeyName = k.Name
+				break
+			}
 		}
 	}
-	if orApiKey == "" && len(orKeys) > 0 {
-		orApiKey = orKeys[0].Key
-		orKeyName = orKeys[0].Name
-	}
+
 	if orApiKey == "" {
 		s.log("ERROR", "[Pipeline] OpenRouter API Key missing! Required for interpreting prompts.", id, taskLabel)
 		return fmt.Errorf("OpenRouter API Key required")
@@ -598,16 +725,18 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			iKeyID = pSettings.ImagePollinationsKeyID
 		}
 
-		iApiKey := ""
-		iKeys := s.settings.GetPollinationsKeys()
-		for _, k := range iKeys {
-			if k.ID == iKeyID {
-				iApiKey = k.Key
-				break
+		iApiKey, _ := settings["imagePollinationsAPIKey"].(string)
+		if iApiKey == "" {
+			iKeys := s.settings.GetPollinationsKeys()
+			for _, k := range iKeys {
+				if k.ID == iKeyID {
+					iApiKey = k.Key
+					break
+				}
 			}
-		}
-		if iApiKey == "" && len(iKeys) > 0 {
-			iApiKey = iKeys[0].Key
+			if iApiKey == "" && len(iKeys) > 0 {
+				iApiKey = iKeys[0].Key
+			}
 		}
 
 		iModel, _ := settings["imageModel"].(string)
@@ -691,7 +820,10 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			return fmt.Errorf("failed to generate any images")
 		}
 	} else if iService == "googler" {
-		iApiKey := s.googler.GetAPIKey()
+		iApiKey, _ := settings["googlerAPIKey"].(string)
+		if iApiKey == "" {
+			iApiKey = s.googler.GetAPIKey()
+		}
 
 		iModel, _ := settings["imageGooglerModel"].(string)
 		if iModel == "" {
@@ -766,6 +898,34 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			iVideoUpscale = pSettings.ImageGooglerVideoUpscale
 		}
 
+		iVideoDistribution, _ := settings["imageVideoDistribution"].(string)
+		if iVideoDistribution == "" {
+			iVideoDistribution = pSettings.ImageVideoDistribution
+		}
+		if iVideoDistribution == "" {
+			iVideoDistribution = "sequential"
+		}
+
+		iVideoStartCount := 0
+		if val, ok := settings["imageVideoStartCount"]; ok {
+			switch v := val.(type) {
+			case float64:
+				iVideoStartCount = int(v)
+			case int:
+				iVideoStartCount = v
+			}
+		}
+		if iVideoStartCount <= 0 {
+			iVideoStartCount = pSettings.ImageVideoStartCount
+		}
+
+		iVideoSubtitleThreshold := 3.0
+		if val, ok := settings["imageVideoSubtitleThreshold"].(float64); ok && val > 0 {
+			iVideoSubtitleThreshold = val
+		} else if pSettings.ImageVideoSubtitleThreshold > 0 {
+			iVideoSubtitleThreshold = pSettings.ImageVideoSubtitleThreshold
+		}
+
 		var refImages []bapi.ReferenceImage
 		if iRemixEnabled && iRefImage != "" && iModel == "whisk" {
 			b64, err := utils.GetImageAsBase64(iRefImage)
@@ -787,11 +947,35 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			}
 		}
 
+		// Build the video/image assignment set
+		var videoSet map[int]bool
+		if iVideoEnabled && iVideoDistribution == "subtitle_duration" {
+			srtPath := filepath.Join(finalDir, "subtitle.srt")
+			srtDurations := parseSRTDurations(srtPath)
+			if len(srtDurations) > 0 {
+				videoSet = buildVideoSetFromSubtitles(validPrompts, srtDurations, iVideoSubtitleThreshold)
+				s.log("INFO", fmt.Sprintf("[Googler] subtitle_duration mode: threshold=%.1fs, SRT segments=%d", iVideoSubtitleThreshold, len(srtDurations)), id, taskLabel)
+			} else {
+				s.log("WARN", "[Googler] subtitle_duration mode: subtitle.srt not found or empty, falling back to sequential", id, taskLabel)
+				videoSet = buildVideoSet(validPrompts, iVideoCount, iVideoStartCount, false)
+			}
+		} else {
+			videoSet = buildVideoSet(validPrompts, iVideoCount, iVideoStartCount, iVideoEnabled && iVideoDistribution == "random")
+		}
+
 		totalVideos := 0
 		if iVideoEnabled {
-			totalVideos = iVideoCount
-			if totalVideos > validPrompts {
-				totalVideos = validPrompts
+			if iVideoDistribution == "subtitle_duration" {
+				for _, v := range videoSet {
+					if v {
+						totalVideos++
+					}
+				}
+			} else {
+				totalVideos = iVideoCount
+				if totalVideos > validPrompts {
+					totalVideos = validPrompts
+				}
 			}
 		}
 
@@ -827,7 +1011,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			go func(aIdx int, vIdx int, p string) {
 				defer imageWg.Done()
 
-				isVideo := iVideoEnabled && vIdx < iVideoCount
+				isVideo := iVideoEnabled && videoSet[vIdx]
 				imgName := fmt.Sprintf("%d.png", aIdx+1)
 				vidName := fmt.Sprintf("%d.mp4", aIdx+1)
 				imgPath := filepath.Join(imagesDir, imgName)
@@ -966,16 +1150,18 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			iKeyID = pSettings.ElevenLabsImageKeyID
 		}
 
-		iApiKey := ""
-		iKeys := s.settings.GetElevenLabsImageKeys()
-		for _, k := range iKeys {
-			if k.ID == iKeyID {
-				iApiKey = k.Key
-				break
+		iApiKey, _ := settings["elevenLabsImageAPIKey"].(string)
+		if iApiKey == "" {
+			iKeys := s.settings.GetElevenLabsImageKeys()
+			for _, k := range iKeys {
+				if k.ID == iKeyID {
+					iApiKey = k.Key
+					break
+				}
 			}
-		}
-		if iApiKey == "" && len(iKeys) > 0 {
-			iApiKey = iKeys[0].Key
+			if iApiKey == "" && len(iKeys) > 0 {
+				iApiKey = iKeys[0].Key
+			}
 		}
 
 		iRatio, _ := settings["elevenLabsImageAspectRatio"].(string)

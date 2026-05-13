@@ -9,6 +9,9 @@ import { ServiceProvider } from './contexts/ServiceContext';
 import { QueueProvider } from './contexts/QueueContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { TemplateProvider } from './contexts/TemplateContext';
+import { EditorDraftProvider } from './contexts/EditorDraftContext';
+import { GoogleMonitorProvider } from './contexts/GoogleMonitorContext';
+import { AuthProvider } from './contexts/AuthContext';
 
 const container = document.getElementById('root');
 
@@ -21,11 +24,17 @@ root.render(
                 <LoggerProvider>
                     <ServiceProvider>
                         <ToastProvider>
-                            <TemplateProvider>
-                                <QueueProvider>
-                                    <App />
-                                </QueueProvider>
-                            </TemplateProvider>
+                            <AuthProvider>
+                                <TemplateProvider>
+                                    <EditorDraftProvider>
+                                        <QueueProvider>
+                                            <GoogleMonitorProvider>
+                                                <App />
+                                            </GoogleMonitorProvider>
+                                        </QueueProvider>
+                                    </EditorDraftProvider>
+                                </TemplateProvider>
+                            </AuthProvider>
                         </ToastProvider>
                     </ServiceProvider>
                 </LoggerProvider>

@@ -115,6 +115,128 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                 <div className="settings-group">
 
                     <div className="settings-group-title" style={{ marginBottom: '16px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
+                        {t('pipeline.image.video_sequence_mode')}
+                    </div>
+
+                    <div className="settings-control" style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px' }}>
+                            <button
+                                title={t('pipeline.image.video_distribution_sequential_desc')}
+                                className={`method-toggle-btn ${(settings.imageVideoDistribution || 'sequential') === 'sequential' ? 'active' : ''}`}
+                                onClick={() => handleChange('imageVideoDistribution', 'sequential')}
+                                style={{
+                                    flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                    background: (settings.imageVideoDistribution || 'sequential') === 'sequential' ? 'var(--bg-primary)' : 'transparent',
+                                    color: (settings.imageVideoDistribution || 'sequential') === 'sequential' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    fontSize: '12px', fontWeight: (settings.imageVideoDistribution || 'sequential') === 'sequential' ? 500 : 400,
+                                    boxShadow: (settings.imageVideoDistribution || 'sequential') === 'sequential' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                                {t('pipeline.image.video_distribution_sequential')}
+                            </button>
+                            <button
+                                title={t('pipeline.image.video_distribution_random_desc')}
+                                className={`method-toggle-btn ${settings.imageVideoDistribution === 'random' ? 'active' : ''}`}
+                                onClick={() => handleChange('imageVideoDistribution', 'random')}
+                                style={{
+                                    flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                    background: settings.imageVideoDistribution === 'random' ? 'var(--bg-primary)' : 'transparent',
+                                    color: settings.imageVideoDistribution === 'random' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    fontSize: '12px', fontWeight: settings.imageVideoDistribution === 'random' ? 500 : 400,
+                                    boxShadow: settings.imageVideoDistribution === 'random' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+                                {t('pipeline.image.video_distribution_random')}
+                            </button>
+                            <button
+                                title={t('pipeline.image.video_distribution_subtitle_desc')}
+                                className={`method-toggle-btn ${settings.imageVideoDistribution === 'subtitle_duration' ? 'active' : ''}`}
+                                onClick={() => handleChange('imageVideoDistribution', 'subtitle_duration')}
+                                style={{
+                                    flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                    background: settings.imageVideoDistribution === 'subtitle_duration' ? 'var(--bg-primary)' : 'transparent',
+                                    color: settings.imageVideoDistribution === 'subtitle_duration' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                    fontSize: '12px', fontWeight: settings.imageVideoDistribution === 'subtitle_duration' ? 500 : 400,
+                                    boxShadow: settings.imageVideoDistribution === 'subtitle_duration' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                                {t('pipeline.image.video_distribution_subtitle')}
+                            </button>
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: '1.4' }}>
+                            {settings.imageVideoDistribution === 'random'
+                                ? t('pipeline.image.video_distribution_random_desc')
+                                : settings.imageVideoDistribution === 'subtitle_duration'
+                                ? t('pipeline.image.video_distribution_subtitle_desc')
+                                : t('pipeline.image.video_distribution_sequential_desc')}
+                        </div>
+                        {settings.imageVideoDistribution === 'subtitle_duration' && (
+                            <div style={{ marginTop: '12px' }}>
+                                <label className="settings-label" style={{ fontSize: '11px' }}>
+                                    {t('pipeline.image.video_subtitle_threshold')}
+                                </label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                                    <input
+                                        type="range"
+                                        className="settings-slider"
+                                        min="1"
+                                        max="15"
+                                        step="0.5"
+                                        value={settings.imageVideoSubtitleThreshold ?? 3}
+                                        style={{ '--range-progress': `${((settings.imageVideoSubtitleThreshold ?? 3) - 1) / 14 * 100}%`, flex: 1 } as React.CSSProperties}
+                                        onChange={(e) => handleChange('imageVideoSubtitleThreshold', parseFloat(e.target.value))}
+                                    />
+                                    <span style={{ fontSize: '12px', minWidth: '32px', textAlign: 'right', fontWeight: 500 }}>
+                                        {(settings.imageVideoSubtitleThreshold ?? 3).toFixed(1)}s
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                        {settings.imageVideoDistribution === 'random' && (
+                            <div style={{ marginTop: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                    <label className="settings-label" style={{ marginBottom: 0 }} title={t('pipeline.image.video_start_count_desc')}>
+                                        {t('pipeline.image.video_start_count')}
+                                    </label>
+                                    <label className="stage-switch small">
+                                        <input
+                                            type="checkbox"
+                                            checked={(settings.imageVideoStartCount ?? 0) > 0}
+                                            onChange={(e) => handleChange('imageVideoStartCount', e.target.checked ? 1 : 0)}
+                                        />
+                                        <span className="stage-slider"></span>
+                                    </label>
+                                </div>
+                                {(settings.imageVideoStartCount ?? 0) > 0 && (
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="99"
+                                        value={settings.imageVideoStartCount ?? 1}
+                                        onChange={(e) => handleChange('imageVideoStartCount', Math.max(1, parseInt(e.target.value) || 1))}
+                                        style={{
+                                            marginTop: '8px', width: '100%', padding: '6px 10px',
+                                            borderRadius: '6px', border: '1px solid var(--border-color)',
+                                            background: 'var(--bg-tertiary)', color: 'var(--text-primary)',
+                                            fontSize: '13px', boxSizing: 'border-box'
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="settings-group-title" style={{ marginBottom: '16px' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
                         {t('pipeline.image.sync_mode')}
                     </div>
@@ -133,82 +255,6 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                         </div>
 
 
-                        {settings.imageSyncEnabled && (
-                            <div style={{ marginTop: '12px' }}>
-                                <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px' }}>
-                                    <button
-                                        className={`method-toggle-btn ${(settings.imageSyncMode || 'simple') === 'simple' ? 'active' : ''}`}
-                                        onClick={() => handleChange('imageSyncMode', 'simple')}
-                                        style={{
-                                            flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
-                                            background: (settings.imageSyncMode || 'simple') === 'simple' ? 'var(--bg-primary)' : 'transparent',
-                                            color: (settings.imageSyncMode || 'simple') === 'simple' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                                            fontSize: '11px', fontWeight: (settings.imageSyncMode || 'simple') === 'simple' ? 500 : 400,
-                                            boxShadow: (settings.imageSyncMode || 'simple') === 'simple' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                                        {t('pipeline.image.sync_mode_simple')}
-                                    </button>
-                                    <button
-                                        className={`method-toggle-btn ${settings.imageSyncMode === 'accurate' ? 'active' : ''}`}
-                                        onClick={() => handleChange('imageSyncMode', 'accurate')}
-                                        style={{
-                                            flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
-                                            background: settings.imageSyncMode === 'accurate' ? 'var(--bg-primary)' : 'transparent',
-                                            color: settings.imageSyncMode === 'accurate' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                                            fontSize: '11px', fontWeight: settings.imageSyncMode === 'accurate' ? 500 : 400,
-                                            boxShadow: settings.imageSyncMode === 'accurate' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
-                                        {t('pipeline.image.sync_mode_accurate')}
-                                    </button>
-                                </div>
-
-                                {settings.imageSyncMode === 'accurate' && (
-                                    <>
-                                        {!(settings.subtitleService === 'whisperx' || settings.subtitleService === 'assemblyai') && (
-                                            <div style={{
-                                                marginTop: '10px',
-                                                padding: '10px',
-                                                backgroundColor: 'rgba(255, 170, 0, 0.05)',
-                                                border: '1px solid rgba(255, 170, 0, 0.2)',
-                                                borderRadius: '8px',
-                                                fontSize: '11px',
-                                                color: '#ffaa00',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                gap: '8px'
-                                            }}>
-                                                <div style={{ lineHeight: '1.4' }}>
-                                                    {t('pipeline.image.sync_accurate_warning')}
-                                                </div>
-                                                <button
-                                                    onClick={() => setCurrentPath?.('settings.performance')}
-                                                    className="premium-btn-sm"
-                                                    style={{
-                                                        width: '100%',
-                                                        height: '28px',
-                                                        fontSize: '10px',
-                                                        background: 'linear-gradient(135deg, #ffaa00 0%, #ff8800 100%)',
-                                                        color: '#fff',
-                                                        border: 'none',
-                                                        boxShadow: '0 2px 8px rgba(255, 136, 0, 0.2)'
-                                                    }}
-                                                >
-                                                    {t('pipeline.image.go_to_performance')}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        )}
                     </div>
 
                     <div className="settings-group-title" style={{ marginTop: '20px', marginBottom: '16px' }}>
@@ -743,8 +789,13 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                 >
                                     <option value="whisk">Whisk (v4)</option>
                                     <option value="flow">Flow (v4)</option>
+                                    <option value="flow_gempix2">Flow Nano Pro (v4)</option>
+                                    <option value="flow_imagen4">Flow Imagen 4 (v4)</option>
+                                    <option value="flow_narwhal">Flow Nano Banana 2 (v4)</option>
                                     <option value="grok">Grok (v4)</option>
                                     <option value="gemini">Gemini (v4)</option>
+                                    <option value="flower">Flower / Veo 3.1 (v4)</option>
+                                    <option value="openai">OpenAI / ChatGPT (v4)</option>
                                 </select>
                             </div>
 
@@ -920,6 +971,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             <option value="flow">Flow</option>
                                             <option value="grok">Grok</option>
                                             <option value="gemini">Gemini</option>
+                                            <option value="flower">Flower / Veo 3.1</option>
                                         </select>
                                     </div>
                                     <div className="settings-control">

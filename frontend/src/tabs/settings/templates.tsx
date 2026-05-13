@@ -4,14 +4,23 @@ import { useTemplates, PipelineTemplate } from '../../contexts/TemplateContext';
 import { useServices } from '../../contexts/ServiceContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 // @ts-ignore
-import { GetOpenRouterSavedModels, SelectDirectory, SelectVideo, SelectImage, GetPollinationsSavedModels, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices, GetPipelineSettings, GetOpenRouterKeys, GetElevenLabsBotKeys, GetElevenLabsUAKeys, GetElevenLabsUnlimKeys, GetVoiceMakerKeys, GetPollinationsKeys, GetElevenLabsImageKeys, GetEdgeTTSVoices } from '../../../wailsjs/go/main/App';
+import { GetOpenRouterSavedModels, SelectDirectory, SelectVideo, SelectImage, GetPollinationsSavedModels, GetElevenLabsBotVoiceTemplates, GetVoiceMakerVoices, GetPipelineSettings, GetOpenRouterKeys, GetElevenLabsBotKeys, GetElevenLabsUAKeys, GetElevenLabsUnlimKeys, GetVoiceMakerKeys, GetPollinationsKeys, GetElevenLabsImageKeys, GetEdgeTTSVoices, GetPipelineTemplatesDir } from '../../../wailsjs/go/main/App';
 import { MASS_EDITOR_BLOCKS, MassEditorSetting } from './MassEditorData';
 import voicemakerVoicesData from '../../assets/voicemaker_voices.json';
 import './templates.css';
 
 export const Templates = () => {
     const { t, locale } = useI18n();
-    const { templates, removeTemplate, updateTemplate, isLoading } = useTemplates();
+    const {
+        templates,
+        removeTemplate,
+        updateTemplate,
+        isLoading,
+        isTemplateCloudSyncing,
+        templateCloudSyncError,
+        lastTemplateCloudSyncAt,
+        syncTemplatesToCloudNow
+    } = useTemplates();
     const { openRouterKeys } = useServices();
     const [templateToDelete, setTemplateToDelete] = useState<PipelineTemplate | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -21,6 +30,7 @@ export const Templates = () => {
     const [voiceTemplates, setVoiceTemplates] = useState<{ uuid: string; name: string }[]>([]);
     const [voiceMakerVoices, setVoiceMakerVoices] = useState<any[]>([]);
     const [edgeTTSVoices, setEdgeTTSVoices] = useState<any[]>([]);
+    const [pipelineTemplatesDir, setPipelineTemplatesDir] = useState('');
 
     const normalizeVoices = (data: any[]) => {
         if (!data || data.length === 0) return [];
@@ -63,6 +73,12 @@ export const Templates = () => {
             document.documentElement.style.setProperty('--pipeline-sidebar-width', '0px');
         };
     }, [isBulkEditOpen]);
+
+    useEffect(() => {
+        void GetPipelineTemplatesDir()
+            .then((p) => setPipelineTemplatesDir(p || ''))
+            .catch(() => setPipelineTemplatesDir(''));
+    }, []);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -245,6 +261,42 @@ export const Templates = () => {
                                     </button>
                                 </div>
                             )}
+                        </div>
+                    </div>
+
+                    <div className="template-cloud-panel" role="status">
+                        <div className="template-cloud-local">
+                            <span className="template-cloud-label">Локальні шаблони (джерело)</span>
+                            <code className="template-local-path" title={pipelineTemplatesDir}>
+                                {pipelineTemplatesDir || '—'}
+                            </code>
+                        </div>
+                        <div className="template-cloud-row">
+                            <div className="template-cloud-main">
+                                {isTemplateCloudSyncing ? (
+                                    <span className="template-cloud-syncing">
+                                        <span className="template-cloud-spinner" aria-hidden />
+                                        Вивантаження в Firestore…
+                                    </span>
+                                ) : templateCloudSyncError ? (
+                                    <span className="template-cloud-error">{templateCloudSyncError}</span>
+                                ) : lastTemplateCloudSyncAt ? (
+                                    <span className="template-cloud-ok">
+                                        Останнє вивантаження:{' '}
+                                        {new Date(lastTemplateCloudSyncAt).toLocaleString(locale === 'en' ? 'en-US' : 'uk-UA')}
+                                    </span>
+                                ) : (
+                                    <span className="template-cloud-pending">Ще не вивантажено</span>
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                className="template-cloud-retry"
+                                onClick={() => void syncTemplatesToCloudNow()}
+                                disabled={isTemplateCloudSyncing}
+                            >
+                                Синхронізувати
+                            </button>
                         </div>
                     </div>
 

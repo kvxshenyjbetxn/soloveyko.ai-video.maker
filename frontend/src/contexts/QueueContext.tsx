@@ -1,20 +1,37 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
-import { ProcessTask, SubmitImageControlResult, SubmitExistingFilesResult, ClearGallery, SendControlAction, CancelQueue, ResetQueueCancellation } from '../../wailsjs/go/main/App';
+import { ProcessTask, SubmitImageControlResult, SubmitExistingFilesResult, ClearGallery, SendControlAction, CancelQueue, ResetQueueCancellation, AddRemoteGalleryImage } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
-import { useToast } from './ToastContext';
 import { useI18n } from './I18nContext';
+import {
+    dispatchJobToWorker,
+    listenToJobStatuses,
+    listenToJobStatus,
+    deleteRemoteJob,
+    submitTranslationControlResponse,
+    listenToTranslationControls,
+    submitImageControlResponse,
+    listenToImageControls,
+    type RemoteTaskPayload,
+    type RemoteJobStatus,
+} from '../lib/remoteQueue';
+import { getOrCreateDeviceId } from '../lib/deviceId';
+import { useAuth } from './AuthContext';
 
-export type TaskStatus = 'pending' | 'waiting' | 'running' | 'processing' | 'completed' | 'failed';
+export type TaskStatus = 'pending' | 'waiting' | 'running' | 'processing' | 'completed' | 'failed' | 'dispatched';
 
 export interface QueueTask {
     id: string; taskNumber?: number; name: string; folderName: string; subName: string;
     type: 'translate' | 'rewrite' | 'voiceover'; content: string; originalLength?: number; settings: any;
     status: TaskStatus; progress: number; resultLength?: number;
-    isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; isAwaitingMontageControl?: boolean; montagePlanData?: string; isAwaitingExistingFilesCheck?: boolean; controlContent?: string;
+    isAwaitingControl?: boolean; isAwaitingImageControl?: boolean; isAwaitingMontageControl?: boolean; montagePlanData?: string; isAwaitingExistingFilesCheck?: boolean; isAwaitingRemoteTranslationControl?: boolean; isAwaitingRemoteImageControl?: boolean; controlContent?: string; remotePreviewUrls?: string[];
     existingFilesData?: any;
     textStatus: TaskStatus; voiceStatus: TaskStatus; imageStatus: TaskStatus;
     subtitleStatus: TaskStatus; montageStatus: TaskStatus; montageMsg?: string;
     voiceDuration?: string; imagesMessage?: string; timestamp: number;
+    // remote delegation
+    remoteJobId?: string;
+    remoteWorkerDeviceId?: string;
+    remoteWorkerName?: string;
 }
 
 interface QueueDataContextType {
@@ -35,10 +52,12 @@ interface QueueDataContextType {
 
 interface QueueActionsContextType {
     addTasks: (type: any, content: string, tasksData: any[], name?: string, skippedStages?: string[]) => void;
-    addTask: (type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any) => void;
+    addTask: (type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any, taskId?: string, taskNumber?: number) => void;
+    dispatchToWorker: (workerDeviceId: string, workerName: string) => Promise<void>;
     removeTask: (id: string) => void; clearQueue: () => void; startQueue: () => Promise<void>;
     getNextTaskName: () => string;
     updateTaskStatus: (id: string, s: TaskStatus, p?: number, l?: number) => void;
+    updateControlDraft: (id: string, text: string) => void;
     resumeTask: (id: string, text: string) => Promise<void>;
     regenerateTask: (id: string, text: string, settings?: any) => Promise<void>;
     cancelTask: (id: string) => Promise<void>;
@@ -46,6 +65,8 @@ interface QueueActionsContextType {
     resumeImageControl: () => Promise<void>;
     resumeMontageControl: (id: string, resultData: string) => Promise<void>;
     resumeWithExistingFiles: (id: string, skipStages: string[]) => Promise<void>;
+    resumeRemoteTranslationControl: (taskId: string, text: string, action?: string) => Promise<void>;
+    resumeRemoteImageControl: (taskId: string, action: string) => Promise<void>;
     closeCompletionModal: () => void; closeImageControlNotification: () => void; closeMontageControlNotification: () => void;
     addRegeneratingPath: (path: string) => void;
     removeRegeneratingPath: (path: string) => void;
@@ -55,7 +76,8 @@ const QueueDataContext = createContext<QueueDataContextType | undefined>(undefin
 const QueueActionsContext = createContext<QueueActionsContextType | undefined>(undefined);
 
 export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { t } = useI18n(); const { showToast } = useToast();
+    const { t } = useI18n();
+    const { user } = useAuth();
     const [tasks, setTasks] = useState<QueueTask[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [completionModal, setCompletionModal] = useState({ 
@@ -70,11 +92,16 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const [isImageBatchReady, setIsImageBatchReady] = useState(false);
     const [montageControlNotification, setMontageControlNotification] = useState({ isOpen: false });
     const taskCounterRef = useRef(1);
+    const isProcessingRef = useRef(false);
     const activeBatchRef = useRef<string[]>([]);
     const hasShownImageBatchNotificationRef = useRef(false);
     const hasShownMontageBatchNotificationRef = useRef(false);
     const tasksRef = useRef<QueueTask[]>([]);
     const taskContentRef = useRef<Map<string, string>>(new Map());
+
+    // Remote job tracking (master side)
+    const remoteJobUnsubsRef = useRef<Array<() => void>>([]);
+    const currentDeviceId = getOrCreateDeviceId();
 
     // Tracking time
     const totalPausedTimeRef = useRef(0);
@@ -85,9 +112,20 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
+    const setProcessing = useCallback((next: boolean) => {
+        isProcessingRef.current = next;
+        setIsProcessing(next);
+    }, []);
+
     // Check if any task is awaiting control to track pause time
     useEffect(() => {
-        const anyAwaiting = tasks.some(t => t.isAwaitingControl || t.isAwaitingImageControl || t.isAwaitingMontageControl);
+        const anyAwaiting = tasks.some(t =>
+            t.isAwaitingControl ||
+            t.isAwaitingImageControl ||
+            t.isAwaitingMontageControl ||
+            t.isAwaitingRemoteTranslationControl ||
+            t.isAwaitingRemoteImageControl,
+        );
         
         if (anyAwaiting && pauseStartRef.current === null) {
             pauseStartRef.current = Date.now();
@@ -158,7 +196,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return `${t('queue.task_default_name')} ${taskCounterRef.current}`;
     }, [t]);
 
-    const addTask = useCallback((type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any) => {
+    const addTask = useCallback((type: any, content: string, settings: any, name?: string, subName?: string, skippedStages?: string[], existingData?: any, taskId?: string, taskNumber?: number) => {
         const nr = taskCounterRef.current++; const fName = name?.trim() || `${t('queue.task_default_name')} ${nr}`;
 
         let imgMsg = "";
@@ -170,15 +208,18 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             imgMsg = parts.join(' ');
         }
 
-        const effectiveSkip = (skippedStages && existingData && existingData.foundStages)
-            ? skippedStages.filter(s => existingData.foundStages.includes(s))
-            : skippedStages;
+        const effectiveSkip = skippedStages !== undefined
+            ? ((existingData && existingData.foundStages)
+                ? skippedStages.filter(s => existingData.foundStages.includes(s))
+                : skippedStages)
+            : settings.skippedStages;
 
-        const id = `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        const id = taskId || `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
         taskContentRef.current.set(id, content);
 
         const newTask: QueueTask = {
             id,
+            taskNumber: taskNumber !== undefined ? taskNumber : undefined,
             name: subName ? `${fName} - ${subName}` : fName, folderName: fName, subName: subName || "",
             type, content: "", originalLength: content.length, // Content moved to Ref
             status: 'pending', progress: 0,
@@ -199,7 +240,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             voiceDuration: existingData?.voiceDuration || "",
             imagesMessage: imgMsg
         };
-        setTasks(prev => [...prev, newTask]);
+        setTasks(prev => {
+            const next = [...prev, newTask];
+            tasksRef.current = next;
+            return next;
+        });
     }, [t]);
 
     const addTasks = useCallback((type: any, content: string, tasksData: any[], name?: string, skippedStages?: string[]) => {
@@ -211,9 +256,11 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             // For batch adding, skippedStages is the union of all found stages.
             // We MUST intersect it with this specific task's foundStages to avoid marking
             // non-existent files as "completed" for templates that don't have them.
-            const effectiveSkip = (skippedStages && existingData && existingData.foundStages)
-                ? skippedStages.filter(s => existingData.foundStages.includes(s))
-                : skippedStages;
+            const effectiveSkip = skippedStages !== undefined
+                ? ((existingData && existingData.foundStages)
+                    ? skippedStages.filter(s => existingData.foundStages.includes(s))
+                    : skippedStages)
+                : d.settings.skippedStages;
 
             let imgMsg = "";
             if (existingData?.imageCount > 0 || existingData?.videoCount > 0 || existingData?.promptCount > 0) {
@@ -250,19 +297,35 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 imagesMessage: imgMsg
             };
         });
-        setTasks(prev => [...prev, ...newItems]);
+        setTasks(prev => {
+            const next = [...prev, ...newItems];
+            tasksRef.current = next;
+            return next;
+        });
     }, [t]);
 
     const removeTask = useCallback((id: string) => {
-        setTasks(prev => prev.filter(t => t.id !== id));
+        setTasks(prev => {
+            const next = prev.filter(t => t.id !== id);
+            tasksRef.current = next;
+            return next;
+        });
         taskContentRef.current.delete(id);
     }, []);
     const clearQueue = useCallback(() => {
-        setTasks([]);
+        setTasks(() => {
+            tasksRef.current = [];
+            return [];
+        });
         taskContentRef.current.clear();
-        setIsProcessing(false);
+        setProcessing(false);
         setIsImageBatchReady(false);
         ClearGallery();
+    }, [setProcessing]);
+
+    const updateControlDraft = useCallback((id: string, text: string) => {
+        taskContentRef.current.set(id, text);
+        setTasks(prev => prev.map(t => t.id === id ? { ...t, controlContent: text } : t));
     }, []);
 
     const resumeTask = async (id: string, text: string) => {
@@ -285,16 +348,36 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const cancelQueue = async () => {
         await CancelQueue();
         setTasks(prev => prev.map(t => (t.status === 'running' || t.status === 'waiting') ? { ...t, status: 'failed' } : t));
-        setIsProcessing(false);
+        setProcessing(false);
     };
 
     const resumeImageControl = async () => {
         setImageControlNotification({ isOpen: false });
         setIsImageBatchReady(false);
-        const ids = tasks.filter(t => t.isAwaitingImageControl).map(t => t.id);
+        const snapshot = tasksRef.current;
+        const ids = snapshot
+            .filter(t => t.isAwaitingImageControl || t.isAwaitingRemoteImageControl)
+            .map(t => t.id);
         if (ids.length === 0) return;
-        setTasks(prev => prev.map(t => ids.includes(t.id) ? { ...t, isAwaitingImageControl: false, imageStatus: 'processing' } : t));
-        for (const id of ids) await SubmitImageControlResult(id);
+        setTasks(prev => prev.map(t =>
+            ids.includes(t.id)
+                ? { ...t, isAwaitingImageControl: false, isAwaitingRemoteImageControl: false, imageStatus: 'processing' as TaskStatus }
+                : t,
+        ));
+        for (const id of ids) {
+            const task = snapshot.find(t => t.id === id);
+            if (task?.remoteJobId && user) {
+                // It's a remote task, so we send the response to Firebase
+                try {
+                    await submitImageControlResponse(user, task.remoteJobId, id, 'confirm');
+                } catch (e) {
+                    console.error('Failed to submit remote image control response', e);
+                }
+            } else {
+                // Local task
+                await SubmitImageControlResult(id, 'confirm');
+            }
+        }
     };
 
     const resumeMontageControl = async (id: string, resultData: string) => {
@@ -306,6 +389,46 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             await window.go.main.App.SubmitMontageControlResult(id, resultData);
         }
     };
+
+    const resumeRemoteTranslationControl = useCallback(async (taskId: string, text: string, action = 'confirm') => {
+        const task = tasksRef.current.find(t => t.id === taskId);
+        if (!task || !task.remoteJobId || !user) return;
+
+        setTasks(prev => prev.map(t =>
+            t.id === taskId
+                ? { ...t, isAwaitingRemoteTranslationControl: false, textStatus: 'running' as TaskStatus }
+                : t
+        ));
+
+        try {
+            await submitTranslationControlResponse(
+                user,
+                task.remoteJobId,
+                taskId,
+                action as 'confirm' | 'regenerate' | 'cancel',
+                text,
+            );
+        } catch (err) {
+            console.error('[Queue] resumeRemoteTranslationControl failed:', err);
+        }
+    }, [user]);
+
+    const resumeRemoteImageControl = useCallback(async (taskId: string, action: string) => {
+        const task = tasksRef.current.find(t => t.id === taskId);
+        if (!task || !task.remoteJobId || !user) return;
+
+        setTasks(prev => prev.map(t =>
+            t.id === taskId
+                ? { ...t, isAwaitingRemoteImageControl: false, imageStatus: 'running' as TaskStatus }
+                : t
+        ));
+
+        try {
+            await submitImageControlResponse(user, task.remoteJobId, taskId, action);
+        } catch (err) {
+            console.error('[Queue] resumeRemoteImageControl failed:', err);
+        }
+    }, [user]);
 
     const resumeWithExistingFiles = async (id: string, skipStages: string[]) => {
         setTasks(prev => prev.map(t => {
@@ -321,144 +444,149 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     const startQueue = useCallback(async () => {
-        if (isProcessing) return;
-        const pending = tasks.filter(t => t.status === 'pending');
-        if (pending.length === 0) return;
-
-        // Check validation before starting
-        try {
-            // @ts-ignore
-            const savedKey = await window.go.main.App.GetSavedAuthKey();
-            const sessionKey = sessionStorage.getItem('current_auth_key');
-            const key = savedKey || sessionKey || "";
-
-            // @ts-ignore
-            const response = await window.go.main.App.ValidateKey(key);
-
-            if (!response || !response.valid) {
-                showToast(t('auth.error_expired'), 'error');
-                return;
-            }
-        } catch (e: any) {
-            console.error("Queue start auth check failed:", e);
-            const errMsg = e?.toString() || "";
-            const lowerMsg = errMsg.toLowerCase();
-
-            // If we are already in the app (starting queue), and there is an auth error, 
-            // it's almost 100% a subscription issue, even if the server says something generic.
-            if (lowerMsg.includes("expired") || lowerMsg.includes("subscription") || lowerMsg.includes("403")) {
-                showToast(t('auth.error_expired'), 'error');
-            } else if (lowerMsg.includes("hardware")) {
-                showToast(t('auth.error_hardware_mismatch'), 'error');
-            } else {
-                // If we are here, something is wrong, and since the user already logged in before,
-                // the most likely culprit is still the subscription/access.
-                showToast(t('auth.error_expired'), 'error');
-            }
+        // Read from refs: callers from setTimeout (e.g. remote worker) may hold a stale
+        // useCallback closure where `tasks` / `isProcessing` were from before addTask() ran.
+        if (isProcessingRef.current) {
+            console.warn('[Queue] startQueue пропущено: isProcessingRef уже true');
+            return;
+        }
+        const pending = tasksRef.current.filter((t) => t.status === 'pending');
+        if (pending.length === 0) {
+            console.warn(
+                '[Queue] startQueue пропущено: немає pending; задач у ref:',
+                tasksRef.current.length,
+                tasksRef.current.map((t) => `${t.id.slice(0, 12)}:${t.status}`).join(', ') || '(порожньо)',
+            );
             return;
         }
 
-        setIsProcessing(true); const startTime = Date.now();
+        setProcessing(true);
+        console.log('[Queue] startQueue: старт', pending.length, 'pending-задач');
+        const startTime = Date.now();
         totalPausedTimeRef.current = 0;
         pauseStartRef.current = null;
         totalMontageTimeRef.current = 0;
         completedMontageCountRef.current = 0;
         montageStartTimesRef.current.clear();
 
-        await ResetQueueCancellation();
-        const pendingIds = pending.map(t => t.id);
-        activeBatchRef.current = pendingIds;
-        hasShownImageBatchNotificationRef.current = false;
-        setIsImageBatchReady(false);
-        hasShownMontageBatchNotificationRef.current = false;
+        try {
+            await ResetQueueCancellation();
+            const pendingIds = pending.map(t => t.id);
+            activeBatchRef.current = pendingIds;
+            hasShownImageBatchNotificationRef.current = false;
+            setIsImageBatchReady(false);
+            hasShownMontageBatchNotificationRef.current = false;
 
-        // Prepare montage synchronization for this batch
-        const controlledTaskIds = pending
-            .filter(t => {
-                const s = t.settings as any;
-                // Settings can be nested or flat depending on where they come from
-                const mEnabled = s?.montageEnabled ?? s?.stages?.montage;
-                const mControl = s?.montageControlEnabled ?? s?.control?.montage;
-                return mEnabled && mControl;
-            })
-            .map(t => t.id);
+            // Prepare montage synchronization for this batch
+            const controlledTaskIds = pending
+                .filter(t => {
+                    const s = t.settings as any;
+                    // Settings can be nested or flat depending on where they come from
+                    const mEnabled = s?.montageEnabled ?? s?.stages?.montage;
+                    const mControl = s?.montageControlEnabled ?? s?.control?.montage;
+                    return mEnabled && mControl;
+                })
+                .map(t => t.id);
 
-        // @ts-ignore
-        if (window.go?.main?.App?.PrepareMontageBatch && controlledTaskIds.length > 0) {
             // @ts-ignore
-            await window.go.main.App.PrepareMontageBatch(controlledTaskIds);
-        }
-
-        setTasks(prev => prev.map(t => pendingIds.includes(t.id) ? {
-            ...t,
-            status: 'waiting',
-            textStatus: t.textStatus === 'pending' ? 'waiting' : t.textStatus,
-            voiceStatus: t.voiceStatus === 'pending' ? 'waiting' : t.voiceStatus,
-            imageStatus: t.imageStatus === 'pending' ? 'waiting' : t.imageStatus,
-            subtitleStatus: t.subtitleStatus === 'pending' ? 'waiting' : t.subtitleStatus,
-            montageStatus: t.montageStatus === 'pending' ? 'waiting' : t.montageStatus,
-            progress: 0
-        } : t));
-
-        // Use a small timeout to let the state update propagate before starting Go processes
-        // to avoid race conditions with immediate 'completed' events.
-        await new Promise(resolve => setTimeout(resolve, 50));
-
-        const run = async () => {
-            const promises = pending.map(async (task) => {
-                try {
-                    const content = taskContentRef.current.get(task.id) || "";
-                    const res = await ProcessTask(task.id, task.taskNumber || 0, task.type, content, task.settings, task.folderName, task.subName);
-                    updateTaskStatus(task.id, 'completed', 100, res.length);
-                } catch (err) {
-                    updateTaskStatus(task.id, 'failed', 0);
-                }
-            });
-            try { await Promise.all(promises); } finally {
-                setIsProcessing(false); activeBatchRef.current = [];
-                
-                // Finish current pause if active
-                let finalPausedTime = totalPausedTimeRef.current;
-                if (pauseStartRef.current !== null) {
-                    finalPausedTime += Date.now() - pauseStartRef.current;
-                }
-
-                const totalMs = Date.now() - startTime;
-                const activeMs = totalMs - finalPausedTime;
-                
-                const durStr = formatDuration(totalMs);
-                const activeDurStr = formatDuration(activeMs);
-                const totalMontageStr = formatDuration(totalMontageTimeRef.current);
-                const avgMontageMs = completedMontageCountRef.current > 0 ? totalMontageTimeRef.current / completedMontageCountRef.current : 0;
-                const avgMontageStr = formatDuration(avgMontageMs);
-
-                setTimeout(() => setCompletionModal({ 
-                    isOpen: true, 
-                    taskCount: pending.length, 
-                    duration: durStr,
-                    activeDuration: activeDurStr,
-                    total_montage: totalMontageStr,
-                    avg_montage: avgMontageStr
-                }), 800);
-
-                // Send Telegram Notification if enabled
-                const msg = `${t('notifications.queue_completed_title')}\n\n` +
-                    `${t('notifications.queue_completed_msg')}\n` +
-                    `${t('queue.tasks_completed')}: ${pending.length}\n` +
-                    `${t('queue.total_duration')}: ${durStr}\n` +
-                    `${t('queue.active_duration')}: ${activeDurStr}\n` +
-                    `${t('queue.total_montage')}: ${totalMontageStr}\n` +
-                    `${t('queue.avg_montage')}: ${avgMontageStr}`;
-                    
-                await sendNotification(msg);
+            if (window.go?.main?.App?.PrepareMontageBatch && controlledTaskIds.length > 0) {
+                // @ts-ignore
+                await window.go.main.App.PrepareMontageBatch(controlledTaskIds);
             }
-        };
-        run();
-    }, [tasks, isProcessing, updateTaskStatus, t]);
+
+            setTasks(prev => {
+                const next = prev.map((t): QueueTask => pendingIds.includes(t.id) ? {
+                    ...t,
+                    status: 'waiting',
+                    textStatus: t.textStatus === 'pending' ? 'waiting' : t.textStatus,
+                    voiceStatus: t.voiceStatus === 'pending' ? 'waiting' : t.voiceStatus,
+                    imageStatus: t.imageStatus === 'pending' ? 'waiting' : t.imageStatus,
+                    subtitleStatus: t.subtitleStatus === 'pending' ? 'waiting' : t.subtitleStatus,
+                    montageStatus: t.montageStatus === 'pending' ? 'waiting' : t.montageStatus,
+                    progress: 0
+                } : t);
+                tasksRef.current = next;
+                return next;
+            });
+
+            // Use a small timeout to let the state update propagate before starting Go processes
+            // to avoid race conditions with immediate 'completed' events.
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            const run = async () => {
+                const promises = pending.map(async (task) => {
+                    try {
+                        const content = taskContentRef.current.get(task.id) || "";
+                        const res = await ProcessTask(task.id, task.taskNumber || 0, task.type, content, task.settings, task.folderName, task.subName);
+                        updateTaskStatus(task.id, 'completed', 100, res.length);
+                    } catch (err) {
+                        updateTaskStatus(task.id, 'failed', 0);
+                    }
+                });
+                try { await Promise.all(promises); } finally {
+                    setProcessing(false); activeBatchRef.current = [];
+                    
+                    // Finish current pause if active
+                    let finalPausedTime = totalPausedTimeRef.current;
+                    if (pauseStartRef.current !== null) {
+                        finalPausedTime += Date.now() - pauseStartRef.current;
+                    }
+
+                    const totalMs = Date.now() - startTime;
+                    const activeMs = totalMs - finalPausedTime;
+                    
+                    const durStr = formatDuration(totalMs);
+                    const activeDurStr = formatDuration(activeMs);
+                    const totalMontageStr = formatDuration(totalMontageTimeRef.current);
+                    const avgMontageMs = completedMontageCountRef.current > 0 ? totalMontageTimeRef.current / completedMontageCountRef.current : 0;
+                    const avgMontageStr = formatDuration(avgMontageMs);
+
+                    setTimeout(() => setCompletionModal({ 
+                        isOpen: true, 
+                        taskCount: pending.length, 
+                        duration: durStr,
+                        activeDuration: activeDurStr,
+                        total_montage: totalMontageStr,
+                        avg_montage: avgMontageStr
+                    }), 800);
+
+                    // Send Telegram Notification if enabled
+                    const msg = `${t('notifications.queue_completed_title')}\n\n` +
+                        `${t('notifications.queue_completed_msg')}\n` +
+                        `${t('queue.tasks_completed')}: ${pending.length}\n` +
+                        `${t('queue.total_duration')}: ${durStr}\n` +
+                        `${t('queue.active_duration')}: ${activeDurStr}\n` +
+                        `${t('queue.total_montage')}: ${totalMontageStr}\n` +
+                        `${t('queue.avg_montage')}: ${avgMontageStr}`;
+                        
+                    await sendNotification(msg);
+                }
+            };
+            run();
+        } catch (err) {
+            console.error('[Queue] startQueue failed before run:', err);
+            setProcessing(false);
+            activeBatchRef.current = [];
+        }
+    }, [updateTaskStatus, t, sendNotification, setProcessing]);
 
     useEffect(() => {
         const uStatus = EventsOn("taskStatus", (id: string, s: string, p: number, l?: number) => {
-            setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s as TaskStatus, progress: p, resultLength: l ?? t.resultLength } : t));
+            setTasks(prev => {
+                const nextTasks = prev.map(t => t.id === id ? { ...t, status: s as TaskStatus, progress: p, resultLength: l ?? t.resultLength } : t);
+                
+                // Якщо всі завдання в активному пакеті завершені (успішно або з помилкою),
+                // вимикаємо режим обробки.
+                if (activeBatchRef.current.includes(id) && (s === 'completed' || s === 'failed')) {
+                    const hasActive = nextTasks.some(t => activeBatchRef.current.includes(t.id) && t.status !== 'completed' && t.status !== 'failed');
+                    if (!hasActive) {
+                        setProcessing(false);
+                        activeBatchRef.current = [];
+                    }
+                }
+                
+                return nextTasks;
+            });
         });
         const uStage = EventsOn("stageStatus", (id: string, stage: string, status: string, msg?: string) => {
             if (stage === 'montage') {
@@ -476,15 +604,37 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 }
             }
 
-            setTasks(prev => prev.map(t => {
-                if (t.id !== id) return t; const s = status as TaskStatus; const up: any = {};
-                if (stage === 'text') up.textStatus = s;
-                else if (stage === 'voice') { up.voiceStatus = s; if (msg) up.voiceDuration = msg; }
-                else if (stage === 'image') { up.imageStatus = s; if (msg) up.imagesMessage = msg; }
-                else if (stage === 'subtitle') up.subtitleStatus = s;
-                else if (stage === 'montage') { up.montageStatus = s; if (msg) up.montageMsg = msg; }
-                return { ...t, ...up };
-            }));
+            setTasks(prev => {
+                let clearedImageControl = false;
+                const next = prev.map(t => {
+                    if (t.id !== id) return t;
+                    const s = status as TaskStatus;
+                    const up: any = {};
+                    if (stage === 'text') up.textStatus = s;
+                    else if (stage === 'voice') { up.voiceStatus = s; if (msg) up.voiceDuration = msg; }
+                    else if (stage === 'image') {
+                        up.imageStatus = s;
+                        if (msg) up.imagesMessage = msg;
+                        // Після відповіді (локально / з майстра через Go) у черзі лишається isAwaitingImageControl —
+                        // скидаємо, коли пайплайн виходить з паузи (не waiting).
+                        if (t.isAwaitingImageControl && s !== 'waiting') {
+                            up.isAwaitingImageControl = false;
+                            clearedImageControl = true;
+                        }
+                    }
+                    else if (stage === 'subtitle') up.subtitleStatus = s;
+                    else if (stage === 'montage') { up.montageStatus = s; if (msg) up.montageMsg = msg; }
+                    return { ...t, ...up };
+                });
+                if (clearedImageControl && !next.some(t => t.isAwaitingImageControl)) {
+                    queueMicrotask(() => {
+                        setImageControlNotification({ isOpen: false });
+                        setIsImageBatchReady(false);
+                        hasShownImageBatchNotificationRef.current = false;
+                    });
+                }
+                return next;
+            });
         });
         const uReq = EventsOn("requestControl", (id: string, text: string) => {
             const task = tasksRef.current.find(t => t.id === id);
@@ -513,7 +663,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setTasks(prev => prev.map(t => t.id === id ? { ...t, resultLength: length } : t));
         });
         return () => { uStatus(); uStage(); uReq(); uImgReq(); uMontageReq(); uFilesReq(); uTextResult(); };
-    }, [t]);
+    }, [t, setProcessing]);
 
     useEffect(() => {
         if (!isProcessing || activeBatchRef.current.length === 0) return;
@@ -563,11 +713,150 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         tasks, isProcessing, completionModal, imageControlNotification, isImageBatchReady, montageControlNotification, regeneratingPaths
     };
 
+    const dispatchToWorker = useCallback(async (workerDeviceId: string, workerName: string) => {
+        if (!user) throw new Error('Not authenticated');
+        const pending = tasksRef.current.filter((t) => t.status === 'pending');
+        if (pending.length === 0) return;
+
+        const payloads: RemoteTaskPayload[] = pending.map((task, order) => ({
+            id: task.id,
+            type: task.type,
+            content: taskContentRef.current.get(task.id) || '',
+            folderName: task.folderName,
+            subName: task.subName,
+            settings: task.settings,
+            taskNumber: task.taskNumber ?? order,
+            order,
+        }));
+
+        const jobId = await dispatchJobToWorker(user, currentDeviceId, workerDeviceId, payloads);
+
+        // Mark local tasks as dispatched
+        const pendingIds = pending.map((t) => t.id);
+        setTasks((prev) =>
+            prev.map((t) =>
+                pendingIds.includes(t.id)
+                    ? {
+                          ...t,
+                          status: 'dispatched' as TaskStatus,
+                          textStatus: 'dispatched' as TaskStatus,
+                          voiceStatus: t.settings?.voiceoverEnabled ? ('dispatched' as TaskStatus) : t.voiceStatus,
+                          imageStatus: t.settings?.imageEnabled ? ('dispatched' as TaskStatus) : t.imageStatus,
+                          subtitleStatus: t.settings?.subtitleEnabled ? ('dispatched' as TaskStatus) : t.subtitleStatus,
+                          montageStatus: t.settings?.montageEnabled ? ('dispatched' as TaskStatus) : t.montageStatus,
+                          remoteJobId: jobId,
+                          remoteWorkerDeviceId: workerDeviceId,
+                          remoteWorkerName: workerName,
+                      }
+                    : t,
+            ),
+        );
+
+        // Clean up any previous remote subscriptions
+        remoteJobUnsubsRef.current.forEach((u) => u());
+        remoteJobUnsubsRef.current = [];
+
+        // Listen to per-task status updates from the worker
+        const unsubStatuses = listenToJobStatuses(user, jobId, (taskId, status) => {
+            setTasks((prev) =>
+                prev.map((t) => {
+                    if (t.id !== taskId) return t;
+                    const up: Partial<QueueTask> = {};
+                    if (status.overallStatus) up.status = status.overallStatus as TaskStatus;
+                    if (status.textStatus) up.textStatus = status.textStatus as TaskStatus;
+                    if (status.voiceStatus) {
+                        up.voiceStatus = status.voiceStatus as TaskStatus;
+                        if (status.voiceDuration) up.voiceDuration = status.voiceDuration;
+                    }
+                    if (status.imageStatus) {
+                        up.imageStatus = status.imageStatus as TaskStatus;
+                        if (status.imagesMessage) up.imagesMessage = status.imagesMessage;
+                    }
+                    if (status.subtitleStatus) up.subtitleStatus = status.subtitleStatus as TaskStatus;
+                    if (status.montageStatus) {
+                        up.montageStatus = status.montageStatus as TaskStatus;
+                        if (status.montageMsg) up.montageMsg = status.montageMsg;
+                    }
+                    if (status.resultLength !== undefined) up.resultLength = status.resultLength;
+                    return { ...t, ...up };
+                }),
+            );
+        });
+
+        // Listen to job-level completion
+        const unsubJob = listenToJobStatus(user, jobId, (jobStatus: RemoteJobStatus) => {
+            if (jobStatus === 'completed' || jobStatus === 'failed') {
+                remoteJobUnsubsRef.current.forEach((u) => u());
+                remoteJobUnsubsRef.current = [];
+                void deleteRemoteJob(user, jobId);
+                setTimeout(() => {
+                    setCompletionModal({
+                        isOpen: true,
+                        taskCount: pending.length,
+                        duration: '-',
+                        activeDuration: '-',
+                        total_montage: '-',
+                        avg_montage: '-',
+                    });
+                }, 800);
+            }
+        });
+
+        remoteJobUnsubsRef.current = [unsubStatuses, unsubJob];
+
+        // Listen for translation control requests sent by the worker
+        const unsubControls = listenToTranslationControls(user, jobId, (taskId, request) => {
+            if (request.status === 'pending') {
+                setTasks(prev => prev.map(t =>
+                    t.id === taskId
+                        ? { ...t, isAwaitingRemoteTranslationControl: true, controlContent: request.text }
+                        : t
+                ));
+            }
+        });
+        remoteJobUnsubsRef.current.push(unsubControls);
+
+        // Listen for image control requests sent by the worker (майстер: як локальна черга — модалка + галерея)
+        const unsubImageControls = listenToImageControls(user, jobId, (taskId, request) => {
+            if (request.status === 'pending') {
+                const previewUrls = request.previewUrls ?? [];
+                const task = tasksRef.current.find((t) => t.id === taskId);
+                if (task && previewUrls.length > 0) {
+                    const templateName = task.subName || '';
+                    previewUrls.forEach((url, i) => {
+                        if (!url) return;
+                        void AddRemoteGalleryImage(
+                            task.folderName,
+                            templateName,
+                            `remote-preview-${String(i + 1).padStart(2, '0')}`,
+                            url,
+                            '',
+                        ).catch((err) => console.error('[Queue] AddRemoteGalleryImage failed:', err));
+                    });
+                }
+                setImageControlNotification({ isOpen: true });
+                setIsImageBatchReady(true);
+                void sendNotification(
+                    `${t('notifications.review_images_title')}\n\n${t('pipeline.image_control_notification.message')}`,
+                );
+                setTasks((prev) =>
+                    prev.map((t) =>
+                        t.id === taskId
+                            ? { ...t, isAwaitingRemoteImageControl: true, remotePreviewUrls: previewUrls }
+                            : t,
+                    ),
+                );
+            }
+        });
+        remoteJobUnsubsRef.current.push(unsubImageControls);
+    }, [user, currentDeviceId, sendNotification, t]);
+
     const actionsValue = {
         addTasks, addTask, removeTask, clearQueue, startQueue, getNextTaskName,
-        updateTaskStatus, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles,
+        updateTaskStatus, updateControlDraft, resumeTask, regenerateTask, cancelTask, cancelQueue, resumeImageControl, resumeMontageControl, resumeWithExistingFiles, resumeRemoteTranslationControl, resumeRemoteImageControl,
         closeCompletionModal, closeImageControlNotification, closeMontageControlNotification,
-        addRegeneratingPath, removeRegeneratingPath
+        addRegeneratingPath, removeRegeneratingPath,
+        dispatchToWorker,
     };
 
     return (
@@ -597,3 +886,4 @@ export const useQueueData = () => {
     if (!context) throw new Error('useQueueData must be used within a QueueProvider');
     return context;
 };
+

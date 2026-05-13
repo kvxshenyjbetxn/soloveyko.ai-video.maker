@@ -2,25 +2,6 @@
     "app": {
         "title": "Soloveyko.AI"
     },
-    "auth": {
-        "title": "Authorization",
-        "key_placeholder": "Enter access key...",
-        "save_key": "Save key",
-        "login": "Login",
-        "profile": "Profile",
-        "days_left": "Days left: {{days}}",
-        "expired": "Subscription expired",
-        "unlimited": "Unlimited",
-        "telegram_id": "Telegram ID: {{id}}",
-        "logout": "Logout",
-        "checking": "Checking...",
-        "subtitle": "Enter your access key to continue",
-        "invalid_key": "Invalid key. Please try again.",
-        "checking_error": "Error checking access key. Please check your internet connection.",
-        "error_expired": "Your subscription has expired. Please renew it.",
-        "error_hardware_mismatch": "This key is bound to another device.",
-        "error_invalid": "Invalid access key."
-    },
     "tabs": {
         "text": "Text",
         "queue": "Queue",
@@ -280,7 +261,12 @@
             "videoAlertThreshold": "Video Threshold (per hour)",
             "imageAlertThreshold": "Image Threshold (per hour)",
             "videoThresholdPlaceholder": "e.g. 10",
-            "imageThresholdPlaceholder": "e.g. 1000"
+            "imageThresholdPlaceholder": "e.g. 1000",
+            "fallbackTitle": "Fallback Provider Priority",
+            "fallbackDesc": "The primary provider is always taken from the Pipeline settings. Below is the order of fallback providers if the primary one fails. Use ▲▼ to reorder.",
+            "fallbackImage": "Image Fallbacks",
+            "fallbackVideo": "Video Fallbacks",
+            "fallbackLabel": "↳ "
         },
         "openrouterSettings": {
             "apikey": "API Key",
@@ -364,6 +350,8 @@
     },
     "other": {
         "statistic": "Statistics",
+        "remote_control": "Remote control",
+        "remote_control_description": "Your account devices and online status (Realtime). Names help with future remote-control features.",
         "history": "History",
         "preview": "Preview"
     },
@@ -389,9 +377,23 @@
         "themeDark": "Dark",
         "themeAmoled": "Black AMOLED",
         "accentColor": "Accent Color",
+        "uiStyle": "Interface Style",
+        "uiStyleRounded": "Rounded",
+        "uiStyleSharp": "Sharp",
         "googlerLimits": "Googler Limits",
         "googlerMaxImages": "Max image connections",
-        "googlerMaxVideos": "Max video connections"
+        "googlerMaxVideos": "Max video connections",
+        "devicesTitle": "Devices",
+        "devicesDescription": "Devices that have signed in to your account. Online status updates in real time when Realtime Database is configured.",
+        "devicesOnline": "Online",
+        "devicesOffline": "Offline",
+        "devicesThisPc": "this PC",
+        "devicesRename": "Rename",
+        "devicesSave": "Save",
+        "devicesCancel": "Cancel",
+        "devicesSignInHint": "Sign in to your cloud account to see your devices.",
+        "devicesRealtimeOff": "Realtime Database URL is not set: the online indicator may not work, but the device list is still stored.",
+        "devicesRenamed": "Device name saved"
     },
     "systemMonitor": {
         "cpu": "CPU",
@@ -541,6 +543,16 @@
             "title": "Image Settings",
             "sync_enabled": "Sync with subtitles",
             "sync_desc": "Automatically adjust the duration of each frame to the time of the corresponding segment in the subtitles. If disabled, duration will be distributed evenly.",
+            "video_sequence_mode": "Video Sequence Mode",
+            "video_distribution_sequential": "Sequential",
+            "video_distribution_sequential_desc": "Videos are generated for the first N segments; the rest are images.",
+            "video_distribution_random": "Random",
+            "video_distribution_random_desc": "Videos are evenly spread across the entire sequence. For example, with 5 videos out of 20 segments — one video per quarter.",
+            "video_distribution_subtitle": "By Duration",
+            "video_distribution_subtitle_desc": "Automatically determines media type based on subtitle segment duration: segments longer than the threshold become videos, shorter ones stay as images.",
+            "video_subtitle_threshold": "Duration threshold (seconds):",
+            "video_start_count": "Videos at start",
+            "video_start_count_desc": "How many videos are guaranteed to appear first for a dynamic opening (0 = disabled)",
             "sync_mode": "Sync Mode",
             "sync_mode_simple": "Simple",
             "sync_mode_accurate": "Accurate (in development)",
@@ -780,7 +792,8 @@
         "unit_s": "s",
         "stage": "Pipeline Stage",
         "select": "Select..."
-    },
+        },
+
     "notifications": {
         "tab_title": "Notifications",
         "description": "Telegram and System Notification Settings",
@@ -881,6 +894,8 @@
         "created": "Tasks created: {{count}}",
         "parsing": "Parsing...",
         "nothing_found": "Nothing found",
+        "status_updated": "Table status updated",
+        "status_error": "Failed to update status",
         "error": "Error: {{error}}"
     }
 }

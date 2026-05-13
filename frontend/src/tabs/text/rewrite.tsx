@@ -1,16 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { PipelineSidebar } from '../../components/PipelineSidebar';
+import { useEditorDrafts } from '../../contexts/EditorDraftContext';
 // @ts-ignore
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
 export const Rewrite = ({ setCurrentPath }: { setCurrentPath?: (path: string) => void }) => {
     const { t } = useI18n();
-    const [text, setText] = useState("");
+    const { rewriteText: text, setRewriteText: setText } = useEditorDrafts();
     const [isDragging, setIsDragging] = useState(false);
     const [showPipelineSettings, setShowPipelineSettings] = useState(true);
     const dragCounter = useRef(0);
-    const textRef = useRef(""); // To access current text in event listener if needed, but setState is fine
 
     useEffect(() => {
         // @ts-ignore
@@ -127,3 +127,5 @@ export const Rewrite = ({ setCurrentPath }: { setCurrentPath?: (path: string) =>
         </div>
     );
 };
+
+

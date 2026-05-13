@@ -53,6 +53,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     const [pendingTaskName, setPendingTaskName] = useState<string>("");
     const [pendingContent, setPendingContent] = useState<string>("");
     const [historyOverride, setHistoryOverride] = useState<{ content: string, templateIds: string[], taskName: string } | null>(null);
+    const [pendingHistorySnapshot, setPendingHistorySnapshot] = useState<{ settings: any, subName: string } | null>(null);
     const { templates, saveTemplate, removeTemplate, selectedTemplateIds, setSelectedTemplateIds } = useTemplates();
     const [voiceTemplates, setVoiceTemplates] = useState<{ uuid: string; name: string }[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -69,23 +70,38 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
         // @ts-ignore
         const app = window.go.main.App as any;
 
-        // 1. Пріоритет: переданий ID -> settings зі стейту -> settings з пропсів (якщо є)
-        const id = keyID || settings?.voiceoverElevenLabsBotKeyID;
+        // Пріоритет вибору ключа залежно від завдання
+        let id = keyID;
+        if (!id && settings) {
+            if (type === 'translate') id = settings.translateElevenLabsBotKeyID;
+            else if (type === 'rewrite') id = settings.rewriteElevenLabsBotKeyID;
+            else id = settings.voiceoverElevenLabsBotKeyID;
+        }
 
         if (app && app.LogFromUI) {
-            app.LogFromUI("INFO", "[Frontend] Запит на отримання шаблонів ElevenLabs Bot...");
+            app.LogFromUI("INFO", `[Frontend] Запит на шаблони ElevenLabs Bot (ID: ${id || 'default'})`);
         }
 
         let keyObj = elevenLabsBotKeys.find((k: any) => k.id === id);
 
-        // Якщо за ID не знайшли або ID "default", беремо перший доступний ключ
-        if ((!keyObj || id === 'default') && elevenLabsBotKeys.length > 0) {
+        // Якщо id не знайдено, але id було передано або вже встановлено, не робимо fallback автоматично,
+        // щоб не заплутати користувача шаблонами від іншого ключа.
+        if (!keyObj && id && id !== 'default') {
+            if (app && app.LogFromUI) app.LogFromUI("WARNING", `[Frontend] Ключ з ID ${id} не знайдено в списку доступних.`);
+            setVoiceTemplates([]);
+            setLoadingTemplates(false);
+            return;
+        }
+
+        if (!keyObj && elevenLabsBotKeys.length > 0) {
             keyObj = elevenLabsBotKeys[0];
-            if (app && app.LogFromUI) app.LogFromUI("INFO", "[Frontend] Використовую ключ: " + keyObj.name);
+            if (app && app.LogFromUI) app.LogFromUI("INFO", "[Frontend] Автоматичний вибір першого доступного ключа: " + keyObj.name);
         }
 
         if (!keyObj) {
-            if (app && app.LogFromUI) app.LogFromUI("ERROR", "[Frontend] Помилка: Ключі ElevenLabs Bot не знайдені в системі!");
+            if (app && app.LogFromUI) app.LogFromUI("ERROR", "[Frontend] Помилка: Ключі ElevenLabs Bot не знайдені.");
+            setVoiceTemplates([]);
+            setLoadingTemplates(false);
             return;
         }
 
@@ -95,10 +111,9 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
             if (results && results.length > 0) {
                 setVoiceTemplates(results);
                 if (app && app.LogFromUI) {
-                    app.LogFromUI("SUCCESS", `[Frontend] Шаблони успішно завантажені (кількість: ${results.length})`);
+                    app.LogFromUI("SUCCESS", `[Frontend] Шаблони завантажені: ${results.length}`);
                 }
             } else {
-                if (app && app.LogFromUI) app.LogFromUI("WARN", "[Frontend] Сервер повернув порожній список шаблонів.");
                 setVoiceTemplates([]);
             }
         } catch (err: any) {
@@ -269,16 +284,23 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
     useEffect(() => {
         if (!settings) return;
 
+        // Визначаємо правильний ключ залежно від типу завдання
+        let currentKeyID = '';
+        if (type === 'translate') currentKeyID = settings.translateElevenLabsBotKeyID;
+        else if (type === 'rewrite') currentKeyID = settings.rewriteElevenLabsBotKeyID;
+        else currentKeyID = settings.voiceoverElevenLabsBotKeyID;
+
         // Fetch ElevenLabs Bot templates if service is active and key exists
-        if (settings.voiceoverService === 'elevenlabsbot' && settings.voiceoverElevenLabsBotKeyID && elevenLabsBotKeys.length > 0) {
-            fetchVoiceTemplates(settings.voiceoverElevenLabsBotKeyID);
+        if (settings.voiceoverService === 'elevenlabsbot' && currentKeyID && elevenLabsBotKeys.length > 0) {
+            fetchVoiceTemplates(currentKeyID);
         }
 
         // Fetch VoiceMaker voices if service is active and key exists
+        // (Для VoiceMaker наразі використовується один спільний ключ voiceoverVoiceMakerKeyID)
         if (settings.voiceoverService === 'voicemaker' && settings.voiceoverVoiceMakerKeyID && voiceMakerKeys.length > 0) {
             fetchVoiceMakerVoices(settings.voiceoverVoiceMakerKeyID);
         }
-    }, [settings?.voiceoverService, settings?.voiceoverElevenLabsBotKeyID, settings?.voiceoverVoiceMakerKeyID, elevenLabsBotKeys, voiceMakerKeys]);
+    }, [type, settings?.voiceoverService, settings?.voiceoverElevenLabsBotKeyID, settings?.translateElevenLabsBotKeyID, settings?.rewriteElevenLabsBotKeyID, settings?.voiceoverVoiceMakerKeyID, elevenLabsBotKeys, voiceMakerKeys]);
 
     useEffect(() => {
         const init = async () => {
@@ -303,9 +325,19 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                     if (!s.rewriteOpenRouterKeyID || s.rewriteOpenRouterKeyID === "") { s.rewriteOpenRouterKeyID = openRouterKeys[0].id; updated = true; }
                 }
 
-                if (elevenLabsBotKeys.length > 0 && (!s.voiceoverElevenLabsBotKeyID || s.voiceoverElevenLabsBotKeyID === "")) {
-                    s.voiceoverElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
-                    updated = true;
+                if (elevenLabsBotKeys.length > 0) {
+                    if (!s.voiceoverElevenLabsBotKeyID || s.voiceoverElevenLabsBotKeyID === "") {
+                        s.voiceoverElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
+                        updated = true;
+                    }
+                    if (!s.translateElevenLabsBotKeyID || s.translateElevenLabsBotKeyID === "") {
+                        s.translateElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
+                        updated = true;
+                    }
+                    if (!s.rewriteElevenLabsBotKeyID || s.rewriteElevenLabsBotKeyID === "") {
+                        s.rewriteElevenLabsBotKeyID = elevenLabsBotKeys[0].id;
+                        updated = true;
+                    }
                 }
 
                 if (voiceMakerKeys.length > 0 && (!s.voiceoverVoiceMakerKeyID || s.voiceoverVoiceMakerKeyID === "")) {
@@ -473,6 +505,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 if (s.imageGooglerVideoUpscale === undefined) { s.imageGooglerVideoUpscale = false; updated = true; }
                 if (s.imageGooglerVideoEnabled === undefined) { s.imageGooglerVideoEnabled = false; updated = true; }
                 if (s.imageSyncEnabled === undefined) { s.imageSyncEnabled = true; updated = true; }
+                if (!s.imageVideoDistribution) { s.imageVideoDistribution = 'sequential'; updated = true; }
+                if (s.imageVideoStartCount === undefined) { s.imageVideoStartCount = 0; updated = true; }
+                if (s.imageVideoSubtitleThreshold === undefined) { s.imageVideoSubtitleThreshold = 3; updated = true; }
                 if (s.imageGenerationMethod === undefined) { s.imageGenerationMethod = "sentences"; updated = true; }
                 if (s.imageGroupSentences === undefined) { s.imageGroupSentences = false; updated = true; }
                 if (s.imageShortVideoFillMode === undefined) { s.imageShortVideoFillMode = "boomerang"; updated = true; }
@@ -576,8 +611,8 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         const apiKeys = Object.keys(settings).filter(k => k.endsWith('KeyID'));
         apiKeys.forEach(k => {
             // Exclude irrelevant text pipeline keys
-            if (type === 'translate' && k === 'rewriteOpenRouterKeyID') return;
-            if (type === 'rewrite' && k === 'translateOpenRouterKeyID') return;
+            if (type === 'translate' && k.startsWith('rewrite')) return;
+            if (type === 'rewrite' && k.startsWith('translate')) return;
 
             if (settings[k] !== undefined) templateData.api[k] = settings[k];
         });
@@ -607,7 +642,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 
         // Voiceover Service Specific Groups
         const voServices: any = {
-            elevenlabsbot: ['voiceoverTemplate'],
+            elevenlabsbot: ['voiceoverTemplate', 'translateElevenLabsBotVoiceUUID', 'rewriteElevenLabsBotVoiceUUID', 'voiceoverElevenLabsBotKeyID', 'translateElevenLabsBotKeyID', 'rewriteElevenLabsBotKeyID'],
             elevenlabsunlim: ['elevenLabsUnlimVoiceID', 'elevenLabsUnlimStability', 'elevenLabsUnlimSimilarity', 'elevenLabsUnlimStyle', 'elevenLabsUnlimSpeakerBoost'],
             elevenlabsua: ['elevenLabsUAVoiceID', 'elevenLabsUAStability', 'elevenLabsUASimilarity', 'elevenLabsUAStyle', 'elevenLabsUASpeakerBoost', 'elevenLabsUAModel'],
             voicemaker: ['voiceMakerVoiceID', 'voiceMakerLanguageCode', 'voiceMakerCharLimit'],
@@ -622,7 +657,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         });
 
         // 3. Image Settings
-        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic', 'imageShortVideoFillMode'];
+        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic', 'imageShortVideoFillMode', 'imageVideoDistribution', 'imageVideoStartCount', 'imageVideoSubtitleThreshold'];
         imageBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.image[f] = settings[f]; });
 
         // Image Service Specific Groups
@@ -818,6 +853,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 setExistingFilesData(results); // Тепер це масив
                 setPendingTaskName(resolvedName);
                 setPendingContent(finalContent);
+                setPendingHistorySnapshot(null);
                 return;
             }
         } catch (err) {
@@ -855,6 +891,70 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             }
         }
     }, [type, content, settings, templates, selectedTemplateIds, addTask, addTasks, setSelectedTemplateIds]);
+
+    const addSnapshotTask = useCallback((taskName: string, taskContent: string, snapshotSettings: any, subName: string, skippedStages: string[], existingData?: any, settingsOverrides?: any) => {
+        const clonedSettings = JSON.parse(JSON.stringify(snapshotSettings || {}));
+        clonedSettings.taskType = clonedSettings.taskType || type;
+        const finalSettings = settingsOverrides ? { ...clonedSettings, ...settingsOverrides } : clonedSettings;
+        setSelectedTemplateIds([]);
+        addTask(type, taskContent, finalSettings, taskName, subName, skippedStages, existingData);
+    }, [addTask, setSelectedTemplateIds, type]);
+
+    const restoreHistoryEntry = useCallback(async (entry: any) => {
+        if (!settings) {
+            console.warn("[Sidebar] Settings not ready, cannot apply history entry");
+            return;
+        }
+
+        const snapshot = entry?.settingsSnapshot && typeof entry.settingsSnapshot === 'object'
+            ? JSON.parse(JSON.stringify(entry.settingsSnapshot))
+            : null;
+
+        if (snapshot) {
+            const restoredName = typeof entry.taskName === 'string' && entry.taskName.trim()
+                ? entry.taskName
+                : getNextTaskName();
+            const restoredContent = typeof entry.content === 'string' ? entry.content : '';
+            const restoredSubName = typeof entry.subName === 'string' ? entry.subName : '';
+            snapshot.taskType = snapshot.taskType || type;
+
+            setSelectedTemplateIds([]);
+
+            try {
+                const results = await CheckExistingTasks([{
+                    taskName: restoredName,
+                    taskType: type,
+                    subName: restoredSubName,
+                    settings: snapshot,
+                }]);
+
+                if (results && results.length > 0) {
+                    setPendingTaskName(restoredName);
+                    setPendingContent(restoredContent);
+                    setPendingHistorySnapshot({ settings: snapshot, subName: restoredSubName });
+                    setExistingFilesData(results);
+                    return;
+                }
+            } catch (err) {
+                console.error("CheckExistingTasks for history snapshot failed:", err);
+            }
+
+            addSnapshotTask(restoredName, restoredContent, snapshot, restoredSubName, []);
+            showToast(t('pipeline.task_added_success') || 'Task added to queue', 'success');
+            return;
+        }
+
+        const matchedIds: string[] = [];
+        if (entry.templates && entry.templates.length > 0) {
+            entry.templates.forEach((tplName: string) => {
+                const tpl = templates.find(t => t.name === tplName && t.type === type);
+                if (tpl) matchedIds.push(tpl.id);
+            });
+        }
+
+        setSelectedTemplateIds(matchedIds);
+        handleAddTask(entry.taskName, entry.content, matchedIds, true);
+    }, [settings, getNextTaskName, type, setSelectedTemplateIds, templates, handleAddTask, addSnapshotTask, showToast, t]);
 
     const applyTemplate = (tpl: any) => {
         if (!tpl || !tpl.settings) return;
@@ -923,6 +1023,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 imagePromptTemperature: cleanApplied.imagePromptTemperature ?? 0.7,
                 imagePromptMaxTokens: cleanApplied.imagePromptMaxTokens ?? 0,
                 imageShortVideoFillMode: cleanApplied.imageShortVideoFillMode ?? 'boomerang',
+                imageVideoDistribution: cleanApplied.imageVideoDistribution ?? 'sequential',
+                imageVideoStartCount: cleanApplied.imageVideoStartCount ?? 0,
+                imageVideoSubtitleThreshold: cleanApplied.imageVideoSubtitleThreshold ?? 3,
                 montageMetadataSimulation: cleanApplied.montageMetadataSimulation ?? 'None',
                 montageIntroVideoPaths: cleanApplied.montageIntroVideoPaths ?? [],
                 montageVideoWatermarkEnabled: cleanApplied.montageVideoWatermarkEnabled ?? false,
@@ -992,29 +1095,13 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         // @ts-ignore
         const unsub = EventsOn("applyHistoryEntry", (entry: any) => {
             if (entry.type === type) {
-                if (!settings) {
-                    console.warn("[Sidebar] Settings not ready, cannot apply history entry");
-                    return;
-                }
-                // Find template IDs by names
-                const matchedIds: string[] = [];
-                if (entry.templates && entry.templates.length > 0) {
-                    entry.templates.forEach((tplName: string) => {
-                        const tpl = templates.find(t => t.name === tplName && t.type === type);
-                        if (tpl) matchedIds.push(tpl.id);
-                    });
-                }
-
-                setSelectedTemplateIds(matchedIds);
-
-                // Skip the modal and call handleAddTask directly
-                handleAddTask(entry.taskName, entry.content, matchedIds, true);
+                restoreHistoryEntry(entry);
             }
         });
         return () => {
             if (unsub) unsub();
         };
-    }, [type, templates, settings, handleAddTask, setSelectedTemplateIds]);
+    }, [type, restoreHistoryEntry]);
 
     useEffect(() => {
         document.documentElement.style.setProperty('--sidebar-toggle-width', '36px');
@@ -1157,6 +1244,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
 
 
                         <VoiceoverSection
+                            type={type} 
                             settings={settings} 
                             handleChange={handleChange} 
                             setSettings={setSettings}
@@ -1260,7 +1348,13 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                         }
                         if (allFound.has('subtitle') && !skip.includes('subtitle')) regenOverrides.subtitleRegenerate = true;
 
-                        proceedAddTask(pendingTaskName, skip, existingFilesData, undefined, pendingContent, regenOverrides);
+                        if (pendingHistorySnapshot) {
+                            const existing = Array.isArray(existingFilesData) ? existingFilesData[0] : undefined;
+                            addSnapshotTask(pendingTaskName, pendingContent, pendingHistorySnapshot.settings, pendingHistorySnapshot.subName, skip, existing, regenOverrides);
+                            setPendingHistorySnapshot(null);
+                        } else {
+                            proceedAddTask(pendingTaskName, skip, existingFilesData, undefined, pendingContent, regenOverrides);
+                        }
                         setExistingFilesData(null);
                     }}
                     onCancel={() => {
@@ -1271,7 +1365,14 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                             subtitleRegenerate: true,
                             imageElevenLabsImageRegenerate: true
                         };
-                        proceedAddTask(pendingTaskName, [], existingFilesData, undefined, pendingContent, regenOverrides);
+
+                        if (pendingHistorySnapshot) {
+                            const existing = Array.isArray(existingFilesData) ? existingFilesData[0] : undefined;
+                            addSnapshotTask(pendingTaskName, pendingContent, pendingHistorySnapshot.settings, pendingHistorySnapshot.subName, [], existing, regenOverrides);
+                            setPendingHistorySnapshot(null);
+                        } else {
+                            proceedAddTask(pendingTaskName, [], existingFilesData, undefined, pendingContent, regenOverrides);
+                        }
                         setExistingFilesData(null);
                     }}
                 />

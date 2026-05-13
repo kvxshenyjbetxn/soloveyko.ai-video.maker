@@ -208,25 +208,25 @@ type ReferenceImage struct {
 	Image    string `json:"image"`
 }
 
+// buildFallbackList будує список провайдерів: primary + fallbacks (без дублікатів)
+func buildFallbackList(primary string, fallbacks []string) []string {
+	result := []string{primary}
+	for _, f := range fallbacks {
+		if f != primary {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
 // GenerateImage генерує картинку за допомогою Googler з автоматичними повторами
 func (s *GooglerService) GenerateImage(apiKey string, model string, prompt string, aspectRatio string, outputPath string) error {
 	imgSem, _ := s.ensureSemaphores()
-	imgSem <- struct{}{}
-	defer func() { <-imgSem }()
 
-	// Fallback list
-	allModels := []string{"whisk", "flow", "gemini"}
-	startIndex := -1
-	for i, m := range allModels {
-		if m == model {
-			startIndex = i
-			break
-		}
-	}
-	if startIndex == -1 {
-		allModels = append([]string{model}, allModels...)
-		startIndex = 0
-	}
+	// Build fallback list: primary model first, then user-configured fallbacks
+	fallbackOrder := s.settings.GetGooglerImageFallbackOrder()
+	allModels := buildFallbackList(model, fallbackOrder)
+	startIndex := 0
 
 	var lastErr error
 	for i := startIndex; i < len(allModels); i++ {
@@ -234,7 +234,7 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 
 		// Map aspect ratio for current model
 		apiRatio := aspectRatio
-		if currentModel == "grok" {
+		if currentModel == "grok" || currentModel == "flower" || currentModel == "openai" {
 			switch apiRatio {
 			case "IMAGE_ASPECT_RATIO_LANDSCAPE":
 				apiRatio = "16:9"
@@ -276,10 +276,14 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying %s (%d/3) in 5s...", currentModel, attempt))
 					}
 				}
+				// Release semaphore during sleep so other goroutines can proceed
 				time.Sleep(waitTime)
 			}
 
+			// Acquire semaphore only around the actual API call
+			imgSem <- struct{}{}
 			err := s.generateImageOnce(apiKey, currentModel, prompt, apiRatio, outputPath)
+			<-imgSem
 			if err == nil {
 				return nil
 			}
@@ -333,6 +337,28 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 		reqBody = FlowImageRequest{
 			Prompt:      prompt,
 			AspectRatio: apiRatio,
+			Model:       "GEM_PIX_2",
+		}
+	case "flow_gempix2":
+		url = fmt.Sprintf("%s/v4/flow/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = FlowImageRequest{
+			Prompt:      prompt,
+			AspectRatio: apiRatio,
+			Model:       "GEM_PIX_2",
+		}
+	case "flow_imagen4":
+		url = fmt.Sprintf("%s/v4/flow/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = FlowImageRequest{
+			Prompt:      prompt,
+			AspectRatio: apiRatio,
+			Model:       "IMAGEN_3_5",
+		}
+	case "flow_narwhal":
+		url = fmt.Sprintf("%s/v4/flow/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = FlowImageRequest{
+			Prompt:      prompt,
+			AspectRatio: apiRatio,
+			Model:       "NARWHAL",
 		}
 	case "whisk":
 		url = fmt.Sprintf("%s/v4/whisk/image/generate?api_key=%s", s.baseUrl, apiKey)
@@ -351,6 +377,20 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 		url = fmt.Sprintf("%s/v4/gemini/image/generate?api_key=%s", s.baseUrl, apiKey)
 		reqBody = map[string]interface{}{
 			"prompt": prompt,
+		}
+	case "flower":
+		// Flower (Nano Banana 2) — використовує короткий формат aspect_ratio
+		url = fmt.Sprintf("%s/v4/flower/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = map[string]interface{}{
+			"prompt":       prompt,
+			"aspect_ratio": apiRatio,
+		}
+	case "openai":
+		// OpenAI (ChatGPT web image flow) — використовує короткий формат aspect_ratio
+		url = fmt.Sprintf("%s/v4/openai/image/generate?api_key=%s", s.baseUrl, apiKey)
+		reqBody = map[string]interface{}{
+			"prompt":       prompt,
+			"aspect_ratio": apiRatio,
 		}
 	default:
 		return fmt.Errorf("unknown model: %s", model)
@@ -452,8 +492,6 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 // RemixImage генерує картинку на основі референсів (Style/Subject/Scene) з автоматичними повторами та фалбеком
 func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string) error {
 	imgSem, _ := s.ensureSemaphores()
-	imgSem <- struct{}{}
-	defer func() { <-imgSem }()
 	var lastErr error
 	for attempt := 1; ; attempt++ {
 		if attempt > 1 {
@@ -473,10 +511,14 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying remix (%d/3) in 5s...", attempt))
 				}
 			}
+			// Release semaphore during sleep so other goroutines can proceed
 			time.Sleep(waitTime)
 		}
 
+		// Acquire semaphore only around the actual API call
+		imgSem <- struct{}{}
 		err := s.remixImageOnce(apiKey, prompt, referenceImages, aspectRatio, strictMode, outputPath)
+		<-imgSem
 		if err == nil {
 			return nil
 		}
@@ -597,22 +639,11 @@ func (s *GooglerService) remixImageOnce(apiKey string, prompt string, referenceI
 // GenerateVideo генерує відео за допомогою Googler (text-to-video або image-to-video) з автоматичними повторами та фалбеком
 func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string) error {
 	_, vidSem := s.ensureSemaphores()
-	vidSem <- struct{}{}
-	defer func() { <-vidSem }()
 
-	// Fallback list
-	allModels := []string{"whisk", "flow", "gemini"}
-	startIndex := -1
-	for i, m := range allModels {
-		if m == model {
-			startIndex = i
-			break
-		}
-	}
-	if startIndex == -1 {
-		allModels = append([]string{model}, allModels...)
-		startIndex = 0
-	}
+	// Build fallback list: primary model first, then user-configured fallbacks
+	fallbackOrder := s.settings.GetGooglerVideoFallbackOrder()
+	allModels := buildFallbackList(model, fallbackOrder)
+	startIndex := 0
 
 	var lastErr error
 	for i := startIndex; i < len(allModels); i++ {
@@ -636,10 +667,14 @@ func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt strin
 						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying video (%s) [%d/3] in 5s...", currentModel, attempt))
 					}
 				}
+				// Release semaphore during sleep so other goroutines can proceed
 				time.Sleep(waitTime)
 			}
 
+			// Acquire semaphore only around the actual API call
+			vidSem <- struct{}{}
 			err := s.generateVideoOnce(apiKey, currentModel, prompt, imageBase64, aspectRatio, upscale, outputPath)
+			<-vidSem
 			if err == nil {
 				return nil
 			}
@@ -668,7 +703,7 @@ func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt s
 
 	// Map aspect ratio
 	apiRatio := aspectRatio
-	if model == "grok" {
+	if model == "grok" || model == "flower" {
 		switch apiRatio {
 		case "IMAGE_ASPECT_RATIO_LANDSCAPE":
 			apiRatio = "16:9"
@@ -719,6 +754,14 @@ func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt s
 				"prompt":           prompt,
 				"reference_images": []string{imageBase64},
 			}
+		case "flower":
+			// Flower (Veo 3.1) — image-to-video
+			url = fmt.Sprintf("%s/v4/flower/video/from-image?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":       prompt,
+				"image":        imageBase64,
+				"aspect_ratio": apiRatio,
+			}
 		default:
 			return fmt.Errorf("unknown video model: %s", model)
 		}
@@ -747,6 +790,13 @@ func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt s
 			url = fmt.Sprintf("%s/v4/gemini/video/generate?api_key=%s", s.baseUrl, apiKey)
 			reqBody = map[string]interface{}{
 				"prompt": prompt,
+			}
+		case "flower":
+			// Flower (Veo 3.1) — text-to-video
+			url = fmt.Sprintf("%s/v4/flower/video/from-text?api_key=%s", s.baseUrl, apiKey)
+			reqBody = map[string]interface{}{
+				"prompt":       prompt,
+				"aspect_ratio": apiRatio,
 			}
 		default:
 			return fmt.Errorf("unknown video model: %s", model)

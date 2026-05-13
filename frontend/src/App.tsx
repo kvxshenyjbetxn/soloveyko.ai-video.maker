@@ -5,9 +5,6 @@ import { useQueue } from './contexts/QueueContext';
 import { useLogger } from './contexts/LoggerContext';
 import logo from './assets/logo.png';
 import { ConfirmModal } from './components/ConfirmModal';
-import { AuthWindow } from './components/AuthWindow';
-import { Profile } from './components/Profile';
-import { api } from '../wailsjs/go/models';
 
 // Import all tab components
 import { Translate } from './tabs/text/translate';
@@ -32,6 +29,7 @@ import { Templates } from './tabs/settings/templates';
 import { Statistic } from './tabs/other/statistic';
 import { History } from './tabs/other/history';
 import { Preview } from './tabs/other/Preview';
+import { RemoteControl } from './tabs/other/remote_control';
 import { Logs } from './tabs/logs';
 import { GoogleIntegration } from './tabs/settings/api/google_integration';
 import NotificationsSettings from './tabs/settings/notifications';
@@ -39,7 +37,11 @@ import { GoogleMonitor } from './components/GoogleMonitor';
 import { UpdateModal } from './components/UpdateModal';
 import { InitialSetup } from './components/InitialSetup';
 import { WelcomeWindow } from './components/WelcomeWindow';
+import { AgentController } from './components/AgentController';
 import { utils as models } from '../wailsjs/go/models';
+import { useAuth } from './contexts/AuthContext';
+import { AuthModal } from './components/AuthModal';
+import { useRemoteWorkerListener } from './lib/useRemoteWorkerListener';
 
 // Simple Icons (SVG)
 const ScriptIcon = () => (
@@ -71,12 +73,7 @@ type TabPath = string;
 
 function App() {
     const { t } = useI18n();
-
-    // Auth State
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [authResponse, setAuthResponse] = useState<api.AuthResponse | null>(null);
-    const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-    const [authError, setAuthError] = useState<string | undefined>(undefined);
+    const { user, isLoading: isAuthLoading, logOut } = useAuth();
 
     // Update State
     const [updateManifest, setUpdateManifest] = useState<models.UpdateManifest | null>(null);
@@ -100,86 +97,46 @@ function App() {
     };
 
     useEffect(() => {
-        const checkAuth = async () => {
-            try {
-                // @ts-ignore
-                const key = await window.go.main.App.GetSavedAuthKey();
-                if (key) {
-                    // @ts-ignore
-                    const response = await window.go.main.App.ValidateKey(key);
-                    if (response && response.valid) {
-                        setIsAuthenticated(true);
-                        setAuthResponse(response);
-                        sessionStorage.setItem('current_auth_key', key);
-                        if (response.telegram_id) sessionStorage.setItem('telegram_id', response.telegram_id.toString());
-                        checkUpdates();
-
-                        // Check if it's the first run
-                        // @ts-ignore
-                        const firstRun = await window.go.main.App.IsFirstRun();
-                        if (firstRun) {
-                            setShowInitialSetup(true);
-                        } else {
-                            // Only check for welcome window if not first run
-                            // @ts-ignore
-                            const showWelcome = await window.go.main.App.GetShowWelcome();
-                            if (showWelcome) {
-                                setShowWelcomeWindow(true);
-                            }
-                        }
-                    }
-                }
-            } catch (e: any) {
-                console.error("Auth check failed:", e);
-                if (e && e.includes && e.includes("Subscription expired")) {
-                    setAuthError(e);
-                }
-            } finally {
-                setIsLoadingAuth(false);
-            }
-        };
-        checkAuth();
-    }, []);
-
-    const handleAuthentication = async (response: api.AuthResponse, key: string, save: boolean) => {
-        setIsAuthenticated(true);
-        setAuthResponse(response);
-        sessionStorage.setItem('current_auth_key', key);
-        if (response.telegram_id) sessionStorage.setItem('telegram_id', response.telegram_id.toString());
-        if (save) {
-            // @ts-ignore
-            await window.go.main.App.SaveAuthKey(key);
-        } else {
-            // @ts-ignore
-            await window.go.main.App.ClearAuthKey();
+        if (isAuthLoading || !user) {
+            return;
         }
-        checkUpdates();
 
-        // Check if it's the first run
-        // @ts-ignore
-        const firstRun = await window.go.main.App.IsFirstRun();
-        if (firstRun) {
-            setShowInitialSetup(true);
-        } else {
-            // Check if welcome should be shown
+        let isCancelled = false;
+
+        const initializeApp = async () => {
+            checkUpdates();
+            // @ts-ignore
+            const firstRun = await window.go.main.App.IsFirstRun();
+            if (isCancelled) return;
+
+            if (firstRun) {
+                setShowInitialSetup(true);
+                return;
+            }
+
             // @ts-ignore
             const showWelcome = await window.go.main.App.GetShowWelcome();
+            if (isCancelled) return;
+
             if (showWelcome) {
                 setShowWelcomeWindow(true);
             }
-        }
-    };
+        };
 
-    const handleLogout = async () => {
-        setIsAuthenticated(false);
-        setAuthResponse(null);
-        sessionStorage.removeItem('current_auth_key');
-        sessionStorage.removeItem('telegram_id');
-        // @ts-ignore
-        await window.go.main.App.ClearAuthKey();
-    };
+        void initializeApp();
 
-    const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification, montageControlNotification, closeMontageControlNotification } = useQueue();
+        return () => {
+            isCancelled = true;
+        };
+    }, [isAuthLoading, user]);
+
+    const { tasks, completionModal, closeCompletionModal, imageControlNotification, closeImageControlNotification, montageControlNotification, closeMontageControlNotification, addTask, startQueue, resumeTask, regenerateTask, cancelTask } = useQueue();
+
+    useRemoteWorkerListener(user, addTask, startQueue, (id, text, action) => {
+        if (action === 'confirm') void resumeTask(id, text);
+        else if (action === 'regenerate') void regenerateTask(id, text);
+        else if (action === 'cancel') void cancelTask(id);
+    });
     const pendingCount = tasks.filter(t => t.status === 'pending').length;
     const { addLog } = useLogger();
     const [currentPath, setCurrentPath] = useState<TabPath>('text.translate');
@@ -321,6 +278,7 @@ function App() {
 
             // Other tabs
             case 'other.statistic': return <Statistic />;
+            case 'other.remote_control': return <RemoteControl />;
             case 'other.history': return <History />;
             case 'other.templates': return <Templates />;
             case 'other.preview': return <Preview />;
@@ -509,19 +467,25 @@ function App() {
                         {t('other.statistic')}
                     </div>
                     <div
-                        className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'other.history' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-2 ${currentPath === 'other.remote_control' ? 'active' : ''}`}
+                        onClick={() => setCurrentPath('other.remote_control')}
+                    >
+                        {t('other.remote_control')}
+                    </div>
+                    <div
+                        className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'other.history' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('other.history')}
                     >
                         {t('other.history')}
                     </div>
                     <div
-                        className={`sidebar-item animate-sidebar-item stagger-3 ${currentPath === 'other.templates' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'other.templates' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('other.templates')}
                     >
                         {t('settings.templates')}
                     </div>
                     <div
-                        className={`sidebar-item animate-sidebar-item stagger-4 ${currentPath === 'other.preview' ? 'active' : ''}`}
+                        className={`sidebar-item animate-sidebar-item stagger-5 ${currentPath === 'other.preview' ? 'active' : ''}`}
                         onClick={() => setCurrentPath('other.preview')}
                     >
                         {t('other.preview')}
@@ -533,12 +497,12 @@ function App() {
         return null;
     };
 
-    if (isLoadingAuth) {
-        return <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>Loading...</div>;
+    if (isAuthLoading) {
+        return <div className="app-container app-auth-loading">Перевірка авторизації...</div>;
     }
 
-    if (!isAuthenticated) {
-        return <AuthWindow onAuthenticated={handleAuthentication} error={authError} />;
+    if (!user) {
+        return <AuthModal />;
     }
 
     return (
@@ -620,7 +584,18 @@ function App() {
                         </div>
                     </nav>
 
-                    <Profile authResponse={authResponse} onLogout={handleLogout} />
+                    <div className="auth-user-panel">
+                        <span className="auth-user-email">{user.email}</span>
+                        <button
+                            className="auth-logout-btn"
+                            onClick={() => {
+                                void logOut();
+                            }}
+                        >
+                            Вийти
+                        </button>
+                    </div>
+
                 </div>
             </header>
 
@@ -695,8 +670,10 @@ function App() {
                     onClose={() => setIsUpdateModalOpen(false)}
                 />
             )}
+            <AgentController currentPath={currentPath} setCurrentPath={setCurrentPath} />
         </div>
     )
 }
 
 export default App
+

@@ -52,14 +52,16 @@ func (s *GoogleParserService) initServices() error {
 
 	ctx := context.Background()
 	
-	homeDir, err := os.UserHomeDir()
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %v", err)
+		home, _ := os.UserHomeDir()
+		configDir = home
 	}
-	credPath := filepath.Join(homeDir, "credentials.json")
+	appConfigDir := filepath.Join(configDir, "Soloveyko")
+	credPath := filepath.Join(appConfigDir, "credentials.json")
 
 	if _, err := os.Stat(credPath); os.IsNotExist(err) {
-		return fmt.Errorf("credentials.json not found in %s", homeDir)
+		return fmt.Errorf("credentials.json not found in %s", appConfigDir)
 	}
 
 	if s.sheetsService == nil {
@@ -125,7 +127,7 @@ func (s *GoogleParserService) ExtractID(url string) (id string, kind string, sub
 	return id, kind, subId
 }
 
-func (s *GoogleParserService) getSheetName(spreadsheetId string, gid string) (string, error) {
+func (s *GoogleParserService) GetSheetName(spreadsheetId string, gid string) (string, error) {
 	if err := s.initServices(); err != nil {
 		return "", err
 	}
@@ -155,7 +157,7 @@ func (s *GoogleParserService) FetchSheet(url string) ([][]string, error) {
 		return s.fetchSheetUnofficial(id, gid)
 	}
 
-	sheetName, err := s.getSheetName(id, gid)
+	sheetName, err := s.GetSheetName(id, gid)
 	if err != nil {
 		return s.fetchSheetUnofficial(id, gid)
 	}
@@ -442,4 +444,24 @@ func (s *GoogleParserService) ParseWithFilter(sheetUrl string, filter string, ig
 	})
 
 	return results, nil
+}
+func (s *GoogleParserService) UpdateCell(spreadsheetId string, sheetName string, rowIndex int, colLetter string, value string) error {
+	if err := s.initServices(); err != nil {
+		return err
+	}
+
+	// Range follows the format "'Sheet Name'!A1"
+	// Row in Google Sheets is 1-indexed, so rowIndex + 1
+	updateRange := fmt.Sprintf("'%s'!%s%d", sheetName, colLetter, rowIndex+1)
+
+	rb := &sheets.ValueRange{
+		Values: [][]interface{}{{value}},
+	}
+
+	_, err := s.sheetsService.Spreadsheets.Values.Update(spreadsheetId, updateRange, rb).ValueInputOption("RAW").Do()
+	if err != nil {
+		return fmt.Errorf("failed to update cell: %v", err)
+	}
+
+	return nil
 }

@@ -380,7 +380,7 @@ input:checked+.stage-slider:before {
     display: flex;
     flex-direction: column;
     gap: 14px;
-    max-height: 2000px;
+    max-height: 6000px;
     /* Increased to avoid clipping large content */
     opacity: 1;
     transform: translateY(0);

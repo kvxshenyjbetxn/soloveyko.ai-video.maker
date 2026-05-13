@@ -8,6 +8,17 @@
     --transition-slow: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ===== UI Style: Sharp (Angular) ===== */
+body.style-sharp *,
+body.style-sharp *::before,
+body.style-sharp *::after {
+    border-radius: 0 !important;
+}
+
+body.style-sharp ::-webkit-scrollbar-thumb {
+    border-radius: 2px !important;
+}
+
 /* Dark Theme (Default) */
 .theme-dark {
     --bg-primary: #1a1a1a;
@@ -279,6 +290,38 @@ input[type="range"].custom-slider::-moz-range-thumb,
     opacity: 0.5;
     cursor: not-allowed;
     filter: grayscale(0.5);
+}
+
+.start-queue-btn.remote {
+    background: linear-gradient(135deg, #6c63ff, #4f46e5);
+    box-shadow: 0 4px 12px rgba(108, 99, 255, 0.35);
+}
+
+.start-queue-btn.remote:hover:not(:disabled) {
+    box-shadow: 0 6px 16px rgba(108, 99, 255, 0.55);
+}
+
+.worker-device-select {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+    max-width: 180px;
+    outline: none;
+}
+
+.worker-device-select:focus {
+    border-color: var(--accent-primary);
+}
+
+.worker-device-select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .mini-start-btn {

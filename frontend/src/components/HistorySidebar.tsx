@@ -11,6 +11,8 @@ interface HistoryEntry {
     type: string;
     templates: string[];
     content: string;
+    subName?: string;
+    settingsSnapshot?: Record<string, unknown>;
     timestamp: string;
 }
 

@@ -14,6 +14,8 @@ interface GoogleSheetConfig {
     globalTemplateIds: string[];
     displayColumns: string[];
     taskNameColumn: string;
+    statusColumn: string;
+    statusValue: string;
     ignoreRows: number;
 }
 
@@ -52,6 +54,8 @@ export const GoogleIntegration = () => {
                         globalTemplateIds: [],
                         displayColumns: ['A'],
                         taskNameColumn: 'B',
+                        statusColumn: '',
+                        statusValue: '',
                         ignoreRows: 0
                     };
                     setSheets([newSheet]);
@@ -97,6 +101,8 @@ export const GoogleIntegration = () => {
             globalTemplateIds: [],
             displayColumns: ['A'],
             taskNameColumn: 'B',
+            statusColumn: '',
+            statusValue: '',
             ignoreRows: 0
         };
         setSheets([...sheets, newSheet]);
@@ -306,6 +312,26 @@ export const GoogleIntegration = () => {
                                         className="premium-input"
                                         value={activeSheet.taskNameColumn}
                                         onChange={e => updateActiveSheet({ taskNameColumn: e.target.value.trim().toUpperCase() })}
+                                        style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', opacity: 0.5, fontSize: '12px' }}>Стовпець статусу (напр. G)</label>
+                                    <input
+                                        type="text"
+                                        className="premium-input"
+                                        value={activeSheet.statusColumn || ""}
+                                        onChange={e => updateActiveSheet({ statusColumn: e.target.value.trim().toUpperCase() })}
+                                        style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '8px', opacity: 0.5, fontSize: '12px' }}>Значення статусу (напр. Done)</label>
+                                    <input
+                                        type="text"
+                                        className="premium-input"
+                                        value={activeSheet.statusValue || ""}
+                                        onChange={e => updateActiveSheet({ statusValue: e.target.value })}
                                         style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
                                     />
                                 </div>

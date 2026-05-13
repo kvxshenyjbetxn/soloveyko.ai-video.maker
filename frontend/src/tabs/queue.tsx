@@ -8,6 +8,9 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { ExistingFilesModal } from '../components/ExistingFilesModal';
 import { MontageEditor } from '../components/MontageEditor';
 import { VirtualLogList } from '../components/VirtualLogList';
+import { useAuth } from '../contexts/AuthContext';
+import { useMyDevices } from '../lib/devicePresence';
+import { useToast } from '../contexts/ToastContext';
 // @ts-ignore
 import { GetOpenRouterSavedModels, GetPipelineSettings, OpenPath, ResolveTaskDir } from '../../wailsjs/go/main/App';
 
@@ -49,7 +52,12 @@ const FolderIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
 );
 
-const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: string, text: string) => void }) => {
+const ControlEditor = ({ task, onConfirm, onCancel, onRegenerate }: {
+    task: QueueTask,
+    onConfirm: (id: string, text: string) => void,
+    onCancel?: (id: string) => void,
+    onRegenerate?: (id: string, text: string, settings?: any) => void,
+}) => {
     const { regenerateTask, cancelTask } = useQueue();
     const [text, setText] = useState(task.controlContent || '');
     const [isFullScreen, setIsFullScreen] = useState(false);
@@ -72,6 +80,10 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
         };
         fetchModels();
     }, []);
+
+    useEffect(() => {
+        setText(task.controlContent || '');
+    }, [task.id, task.controlContent]);
 
     const { t } = useI18n();
 
@@ -161,7 +173,11 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
                                 }
                                 newSettings.temperature = temperature;
                                 newSettings.maxTokens = maxTokens;
-                                regenerateTask(task.id, text, newSettings);
+                                if (onRegenerate) {
+                                    onRegenerate(task.id, text, newSettings);
+                                } else {
+                                    regenerateTask(task.id, text, newSettings);
+                                }
                             }}
                         >
                             {t('queue.apply_and_regenerate')}
@@ -171,7 +187,7 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
 
                 <div className="control-actions">
                     <div style={{ flex: 1 }} />
-                    <button className="control-cancel-btn" onClick={() => cancelTask(task.id)} title={t('common.cancel')}>
+                    <button className="control-cancel-btn" onClick={() => onCancel ? onCancel(task.id) : cancelTask(task.id)} title={t('common.cancel')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
                         {isFullScreen && <span>{t('common.cancel')}</span>}
                     </button>
@@ -185,7 +201,7 @@ const ControlEditor = ({ task, onConfirm }: { task: QueueTask, onConfirm: (id: s
                     }} title={t('queue.edit_settings')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
                     </button>
-                    <button className="control-regen-btn" onClick={() => regenerateTask(task.id, text)} title={t('queue.regenerate')}>
+                    <button className="control-regen-btn" onClick={() => onRegenerate ? onRegenerate(task.id, text) : regenerateTask(task.id, text)} title={t('queue.regenerate')}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
                         {isFullScreen && <span>{t('queue.regenerate')}</span>}
                     </button>
@@ -222,7 +238,7 @@ const MagicWandIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.21 1.21 0 0 0 1.72 0L21.64 5.36a1.21 1.21 0 0 0 0-1.72Z"></path><path d="m14 7 3 3"></path><path d="M5 6v.01"></path><path d="M19 14v.01"></path><path d="M10 2v.01"></path><path d="M7 21v.01"></path><path d="M14 22v.01"></path></svg>
 );
 
-const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, onOpenMontageEditor, isProcessing, t, resumeTask, logs }: any) => {
+const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, onOpenMontageEditor, isProcessing, t, resumeTask, onConfirmRemote, onCancelRemote, onRegenerateRemote, logs }: any) => {
     const settings = task.settings || {};
     const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
     const isVoiceEnabled = settings.voiceoverEnabled === true;
@@ -242,16 +258,28 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
     return (
         <div className={`task-card-wrapper ${isExpanded ? 'expanded' : ''}`}>
             <div
-                className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${task.isAwaitingControl ? 'awaiting-control' : ''} ${task.isAwaitingMontageControl ? 'awaiting-montage-control' : ''}`}
-                onClick={() => !task.isAwaitingControl && onToggle(task.id)}
+                className={`task-card animate-sidebar-item ${isExpanded ? 'active' : ''} ${(task.isAwaitingControl || task.isAwaitingRemoteTranslationControl || task.isAwaitingRemoteImageControl) ? 'awaiting-control' : ''} ${task.isAwaitingMontageControl ? 'awaiting-montage-control' : ''}`}
+                onClick={() => !(task.isAwaitingControl || task.isAwaitingRemoteTranslationControl || task.isAwaitingRemoteImageControl) && onToggle(task.id)}
+                style={{ position: 'relative', overflow: 'hidden' }}
             >
                 {task.isAwaitingControl && (
                     <ControlEditor task={task} onConfirm={resumeTask} />
                 )}
+                {task.isAwaitingRemoteTranslationControl && (
+                    <ControlEditor
+                        task={task}
+                        onConfirm={(id: string, text: string) => onConfirmRemote(id, text)}
+                        onCancel={(id: string) => onCancelRemote(id)}
+                        onRegenerate={(id: string, text: string, settings?: any) => onRegenerateRemote(id, text, settings)}
+                    />
+                )}
+
                 <div className="task-card-header">
-                    <span className={`task-type-badge ${task.type}`}>
-                        {displayMainLabel}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className={`task-type-badge ${task.type}`}>
+                            {displayMainLabel}
+                        </span>
+                    </div>
                     <div className="task-card-header-actions">
                         {settings.montageControlEnabled && (
                             <button
@@ -305,6 +333,12 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                             {task.subName}
                         </div>
                     )}
+                    {task.remoteWorkerName && (
+                        <div className="task-remote-badge" title={task.remoteWorkerName}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+                            {task.remoteWorkerName}
+                        </div>
+                    )}
                 </div>
 
                 <div className="task-stages-list">
@@ -314,7 +348,8 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                             {task.textStatus === 'completed' ? (t('queue.chars', { count: task.resultLength || 0 }) || `${task.resultLength || 0} chars`) :
                                 task.textStatus === 'running' ? (t('queue.status_running') || 'Processing...') :
                                     task.textStatus === 'waiting' ? (t('queue.status_waiting') || 'В черзі') :
-                                        task.textStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                        task.textStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                            task.textStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                         </span>
                     </div>
 
@@ -325,7 +360,8 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                 {task.voiceStatus === 'completed' ? (task.voiceDuration || t('queue.voice_saved') || 'MP3 saved') :
                                     task.voiceStatus === 'running' ? (t('queue.status_running') || 'Synthesizing...') :
                                         task.voiceStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                            task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                            task.voiceStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                                task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                             </span>
                         </div>
                     )}
@@ -339,9 +375,10 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                 ) : task.imageStatus === 'running' ? (
                                     task.imagesMessage ? renderStatusLines(task.imagesMessage, false) : (t('queue.status_running') || 'Generating...')
                                 ) : task.imageStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                    task.imageStatus === 'failed' ? (
-                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
-                                    ) : t('queue.status_pending')}
+                                    task.imageStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                        task.imageStatus === 'failed' ? (
+                                            task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
+                                        ) : t('queue.status_pending')}
                             </div>
                         </div>
                     )}
@@ -353,7 +390,8 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                 {task.subtitleStatus === 'completed' ? (t('queue.subtitle_saved') || 'SRT збережено') :
                                     task.subtitleStatus === 'running' ? (t('queue.status_running') || 'Transcribing...') :
                                         task.subtitleStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                            task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                            task.subtitleStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                                task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
                             </span>
                         </div>
                     )}
@@ -366,9 +404,10 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                                     task.montageStatus === 'running' ? (
                                         task.montageMsg ? renderStatusLines(task.montageMsg, false) : t('queue.status_running')
                                     ) : task.montageStatus === 'waiting' ? t('queue.status_waiting') :
-                                        task.montageStatus === 'failed' ? (
-                                            task.montageMsg ? renderStatusLines(task.montageMsg, true) : t('queue.status_failed')
-                                        ) : t('queue.status_pending')}
+                                        task.montageStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                            task.montageStatus === 'failed' ? (
+                                                task.montageMsg ? renderStatusLines(task.montageMsg, true) : t('queue.status_failed')
+                                            ) : t('queue.status_pending')}
                             </div>
                         </div>
                     )}
@@ -439,11 +478,39 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
 
 export const Queue = ({ setCurrentPath }: QueueProps) => {
     const { t } = useI18n();
-    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl } = useQueue();
+    const { tasks, removeTask, clearQueue, startQueue, isProcessing, resumeTask, resumeWithExistingFiles, resumeMontageControl, resumeRemoteTranslationControl, dispatchToWorker } = useQueue();
+    const { user } = useAuth();
+    const { showToast } = useToast();
+    const devices = useMyDevices(user);
     const { logs } = useLogger();
     const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
     const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message?: string; onConfirm: () => void; }>({ isOpen: false, title: '', onConfirm: () => { } });
     const [activeMontageTask, setActiveMontageTask] = useState<QueueTask | null>(null);
+    const [selectedWorkerDeviceId, setSelectedWorkerDeviceId] = useState<string>('');
+    const [isDispatching, setIsDispatching] = useState(false);
+
+    const onlineRemoteDevices = useMemo(
+        () => devices.filter((d) => d.state === 'online' && !d.isCurrent),
+        [devices],
+    );
+
+    const handleStartQueue = async () => {
+        if (selectedWorkerDeviceId) {
+            const device = onlineRemoteDevices.find((d) => d.deviceId === selectedWorkerDeviceId);
+            if (!device) return;
+            setIsDispatching(true);
+            try {
+                await dispatchToWorker(device.deviceId, device.name);
+            } catch (err: any) {
+                console.error('[Queue] dispatchToWorker failed:', err);
+                showToast(err?.message || 'Помилка делегування задач', 'error');
+            } finally {
+                setIsDispatching(false);
+            }
+        } else {
+            startQueue();
+        }
+    };
 
     useEffect(() => {
         if (tasks.length === 0 && setCurrentPath) {
@@ -493,8 +560,6 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
     }, [resumeMontageControl]);
 
     const handleMontageCancel = useCallback((taskId: string) => {
-        // We could send a cancel signal or just close the editor and keep waiting.
-        // For now, let's just close the editor. If user wants to cancel the task, they can use the main cancel button.
         setActiveMontageTask(null);
     }, []);
 
@@ -502,13 +567,35 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         <div className="content-wrapper animate-fade">
             <div className="queue-header">
                 <div className="queue-title">ЧЕРГА ЗАВДАНЬ</div>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative' }}>
                     {tasks.length > 0 && (
-                        <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing}>{t('queue.clear_all') || 'Clear All'}</button>
+                        <select
+                            className="worker-device-select"
+                            value={selectedWorkerDeviceId}
+                            onChange={(e) => setSelectedWorkerDeviceId(e.target.value)}
+                            disabled={isProcessing || isDispatching || onlineRemoteDevices.length === 0}
+                            title={t('queue.run_on_device') || 'Обрати пристрій для виконання'}
+                        >
+                            <option value="">{onlineRemoteDevices.length === 0 ? (t('queue.no_remote_devices') || 'Немає онлайн пристроїв') : (t('queue.run_locally') || 'Локально')}</option>
+                            {onlineRemoteDevices.map((d) => (
+                                <option key={d.deviceId} value={d.deviceId}>{d.name}</option>
+                            ))}
+                        </select>
                     )}
                     {tasks.length > 0 && (
-                        <button className={`start-queue-btn ${isProcessing ? 'processing' : ''}`} onClick={startQueue} disabled={isProcessing}>
-                            {isProcessing ? (<><div className="spinner-small" /><span>{t('queue.processing')}</span></>) : (<><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg><span>{t('queue.start')}</span></>)}
+                        <button className="clear-queue-btn" onClick={handleClearQueue} disabled={isProcessing || isDispatching}>{t('queue.clear_all') || 'Clear All'}</button>
+                    )}
+                    {tasks.length > 0 && (
+                        <button
+                            className={`start-queue-btn ${isProcessing || isDispatching ? 'processing' : ''} ${selectedWorkerDeviceId ? 'remote' : ''}`}
+                            onClick={handleStartQueue}
+                            disabled={isProcessing || isDispatching}
+                        >
+                            {isProcessing || isDispatching
+                                ? (<><div className="spinner-small" /><span>{isDispatching ? (t('queue.dispatching') || 'Делегування...') : t('queue.processing')}</span></>)
+                                : selectedWorkerDeviceId
+                                    ? (<><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg><span>{t('queue.start_remote') || 'Запустити на пристрої'}</span></>)
+                                    : (<><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg><span>{t('queue.start')}</span></>)}
                         </button>
                     )}
                 </div>
@@ -534,6 +621,9 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
                                 isProcessing={isProcessing}
                                 t={t}
                                 resumeTask={resumeTask}
+                                onConfirmRemote={(id: string, text: string) => resumeRemoteTranslationControl(id, text, 'confirm')}
+                                onCancelRemote={(id: string) => resumeRemoteTranslationControl(id, '', 'cancel')}
+                                onRegenerateRemote={(id: string, text: string) => resumeRemoteTranslationControl(id, text, 'regenerate')}
                                 logs={logs}
                             />
                         ))}
@@ -560,3 +650,4 @@ export const Queue = ({ setCurrentPath }: QueueProps) => {
         </div>
     );
 };
+
