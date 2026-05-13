@@ -659,7 +659,11 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		}
 
 		// Image Control
-		if pSettings.ImageControlEnabled && !shouldSkipImage {
+		iImageEnabled, ok := settings["imageEnabled"].(bool)
+		if !ok {
+			iImageEnabled = pSettings.ImageEnabled
+		}
+		if pSettings.ImageControlEnabled && !shouldSkipImage && iImageEnabled {
 			s.emitStageStatus(id, "image", "waiting")
 			s.log("INFO", "[Control] Waiting for user image/video review...", id, taskLabel)
 
