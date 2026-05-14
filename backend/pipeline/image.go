@@ -1049,7 +1049,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				// Case A: Text-to-Video
 				if isVideo && iVideoMode == "text" {
 					s.log("INFO", fmt.Sprintf("[Googler] [%d] START Text-to-Video: %s...", aIdx, vidName), id, taskLabel)
-					err := s.googler.GenerateVideo(iApiKey, iVideoModel, p, "", iRatio, iVideoUpscale, vidPath)
+					err := s.googler.GenerateVideo(iApiKey, iVideoModel, p, "", iRatio, iVideoUpscale, vidPath, id, taskLabel)
 
 					imgMu.Lock()
 					if err != nil {
@@ -1071,9 +1071,9 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				s.log("INFO", fmt.Sprintf("[Googler] [%d] START Image generation: %s...", aIdx, imgName), id, taskLabel)
 				var err error
 				if len(refImages) > 0 {
-					err = s.googler.RemixImage(iApiKey, p, refImages, iRatio, iStrictMode, imgPath)
+					err = s.googler.RemixImage(iApiKey, p, refImages, iRatio, iStrictMode, imgPath, id, taskLabel)
 				} else {
-					err = s.googler.GenerateImage(iApiKey, iModel, p, iRatio, imgPath)
+					err = s.googler.GenerateImage(iApiKey, iModel, p, iRatio, imgPath, id, taskLabel)
 				}
 
 				if err != nil {
@@ -1104,7 +1104,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 						return
 					}
 
-					err = s.googler.GenerateVideo(iApiKey, iVideoModel, p, b64, iRatio, iVideoUpscale, vidPath)
+					err = s.googler.GenerateVideo(iApiKey, iVideoModel, p, b64, iRatio, iVideoUpscale, vidPath, id, taskLabel)
 
 					imgMu.Lock()
 					if err != nil {
@@ -1406,14 +1406,14 @@ func (s *PipelineService) regenerateGoogler(imgPath string, prompt string, setti
 		}
 
 		s.log("INFO", fmt.Sprintf("[Googler] Regenerating Video. Model: %s, Ratio: %s, FromImage: %v", iVideoModel, iRatio, sourceB64 != ""), "", "Regeneration")
-		return s.googler.GenerateVideo(iApiKey, iVideoModel, prompt, sourceB64, iRatio, iVideoUpscale, outPath)
+		return s.googler.GenerateVideo(iApiKey, iVideoModel, prompt, sourceB64, iRatio, iVideoUpscale, outPath, "", "Regeneration")
 	} else {
 		if len(refImages) > 0 {
 			s.log("INFO", fmt.Sprintf("[Googler] Regenerating Image (Remix). Model: %s, Ratio: %s", iModel, iRatio), "", "Regeneration")
-			return s.googler.RemixImage(iApiKey, prompt, refImages, iRatio, iStrictMode, outPath)
+			return s.googler.RemixImage(iApiKey, prompt, refImages, iRatio, iStrictMode, outPath, "", "Regeneration")
 		} else {
 			s.log("INFO", fmt.Sprintf("[Googler] Regenerating Image. Model: %s, Ratio: %s", iModel, iRatio), "", "Regeneration")
-			return s.googler.GenerateImage(iApiKey, iModel, prompt, iRatio, outPath)
+			return s.googler.GenerateImage(iApiKey, iModel, prompt, iRatio, outPath, "", "Regeneration")
 		}
 	}
 }

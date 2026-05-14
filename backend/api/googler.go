@@ -220,7 +220,7 @@ func buildFallbackList(primary string, fallbacks []string) []string {
 }
 
 // GenerateImage генерує картинку за допомогою Googler з автоматичними повторами
-func (s *GooglerService) GenerateImage(apiKey string, model string, prompt string, aspectRatio string, outputPath string) error {
+func (s *GooglerService) GenerateImage(apiKey string, model string, prompt string, aspectRatio string, outputPath string, logCtx ...string) error {
 	imgSem, _ := s.ensureSemaphores()
 
 	// Build fallback list: primary model first, then user-configured fallbacks
@@ -266,14 +266,14 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 				if isRateLimit {
 					waitTime = 5 * time.Minute
 					if s.OnLog != nil {
-						s.OnLog("WARN", fmt.Sprintf("[Googler] Image (%s) rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", currentModel, attempt))
+						s.OnLog("WARN", fmt.Sprintf("[Googler] Image (%s) rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", currentModel, attempt), logCtx...)
 					}
 				} else {
 					if attempt > 3 {
 						break // Exit retry loop for non-429 errors after 3 attempts
 					}
 					if s.OnLog != nil {
-						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying %s (%d/3) in 5s...", currentModel, attempt))
+						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying %s (%d/3) in 5s...", currentModel, attempt), logCtx...)
 					}
 				}
 				// Release semaphore during sleep so other goroutines can proceed
@@ -296,7 +296,7 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 
 		if i < len(allModels)-1 {
 			if s.OnLog != nil {
-				s.OnLog("WARN", fmt.Sprintf("[Googler] %s failed -> Falling back to %s", currentModel, allModels[i+1]))
+				s.OnLog("WARN", fmt.Sprintf("[Googler] %s failed -> Falling back to %s", currentModel, allModels[i+1]), logCtx...)
 			}
 			time.Sleep(2 * time.Second)
 		}
@@ -490,7 +490,7 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 }
 
 // RemixImage генерує картинку на основі референсів (Style/Subject/Scene) з автоматичними повторами та фалбеком
-func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string) error {
+func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string, logCtx ...string) error {
 	imgSem, _ := s.ensureSemaphores()
 	var lastErr error
 	for attempt := 1; ; attempt++ {
@@ -501,14 +501,14 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 			if isRateLimit {
 				waitTime = 5 * time.Minute
 				if s.OnLog != nil {
-					s.OnLog("WARN", fmt.Sprintf("[Googler] Remix rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", attempt))
+					s.OnLog("WARN", fmt.Sprintf("[Googler] Remix rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", attempt), logCtx...)
 				}
 			} else {
 				if attempt > 3 {
 					break // Exit retry loop for non-429 errors after 3 attempts
 				}
 				if s.OnLog != nil {
-					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying remix (%d/3) in 5s...", attempt))
+					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying remix (%d/3) in 5s...", attempt), logCtx...)
 				}
 			}
 			// Release semaphore during sleep so other goroutines can proceed
@@ -531,9 +531,9 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 
 	// Fallback to standard Image generation with next models
 	if s.OnLog != nil {
-		s.OnLog("WARN", "[Googler] Remix failed -> Falling back to standard Flow generation")
+		s.OnLog("WARN", "[Googler] Remix failed -> Falling back to standard Flow generation", logCtx...)
 	}
-	return s.GenerateImage(apiKey, "flow", prompt, aspectRatio, outputPath)
+	return s.GenerateImage(apiKey, "flow", prompt, aspectRatio, outputPath, logCtx...)
 }
 
 func (s *GooglerService) remixImageOnce(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string) error {
@@ -637,7 +637,7 @@ func (s *GooglerService) remixImageOnce(apiKey string, prompt string, referenceI
 }
 
 // GenerateVideo генерує відео за допомогою Googler (text-to-video або image-to-video) з автоматичними повторами та фалбеком
-func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string) error {
+func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string, logCtx ...string) error {
 	_, vidSem := s.ensureSemaphores()
 
 	// Build fallback list: primary model first, then user-configured fallbacks
@@ -657,14 +657,14 @@ func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt strin
 				if isRateLimit {
 					waitTime = 5 * time.Minute
 					if s.OnLog != nil {
-						s.OnLog("WARN", fmt.Sprintf("[Googler] Video (%s) rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", currentModel, attempt))
+						s.OnLog("WARN", fmt.Sprintf("[Googler] Video (%s) rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", currentModel, attempt), logCtx...)
 					}
 				} else {
 					if attempt > 3 {
 						break // Exit retry loop for non-429 errors after 3 attempts
 					}
 					if s.OnLog != nil {
-						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying video (%s) [%d/3] in 5s...", currentModel, attempt))
+						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying video (%s) [%d/3] in 5s...", currentModel, attempt), logCtx...)
 					}
 				}
 				// Release semaphore during sleep so other goroutines can proceed
@@ -687,7 +687,7 @@ func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt strin
 
 		if i < len(allModels)-1 {
 			if s.OnLog != nil {
-				s.OnLog("WARN", fmt.Sprintf("[Googler] Video %s failed -> Falling back to %s", currentModel, allModels[i+1]))
+				s.OnLog("WARN", fmt.Sprintf("[Googler] Video %s failed -> Falling back to %s", currentModel, allModels[i+1]), logCtx...)
 			}
 			time.Sleep(2 * time.Second)
 		}
