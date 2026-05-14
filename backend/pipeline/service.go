@@ -50,6 +50,7 @@ type PipelineService struct {
 	OnTaskStatus                func(id string, status string, progress int)
 	OnImageGenerated            func(taskName string, templateName string, imageName string, path string, prompt string)
 	OnImageDeleted              func(imgPath string)
+	OnImageReplaced             func(oldPath string, taskName string, templateName string, newName string, newPath string, prompt string)
 	OnRequestExistingFilesCheck func(data ExistingFilesData)
 	OnPipelineSuccess           func(id string, taskName string, taskType string, subName string, original string, processed string, settings map[string]interface{}, duration float64)
 

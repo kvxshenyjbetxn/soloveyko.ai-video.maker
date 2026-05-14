@@ -109,6 +109,7 @@
         "delete_bulk_confirm": "Delete selected images from disk?",
         "selected": "Selected",
         "regenerate": "Regenerate",
+        "animate": "Animate",
         "regenerate_modal": {
             "title": "Regenerate Media",
             "service": "Service",

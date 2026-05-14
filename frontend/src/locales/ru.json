@@ -115,6 +115,7 @@
         "delete_bulk_confirm": "Удалить выбранные изображения с диска?",
         "selected": "Выбрано",
         "regenerate": "Перегенерировать",
+        "animate": "Анимировать",
         "regenerate_modal": {
             "title": "Перегенерация медиа",
             "service": "Сервис",

@@ -498,6 +498,26 @@
     transform: scale(1.1);
 }
 
+.card-animate-btn {
+    background: rgba(16, 185, 129, 0.75);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+}
+
+.card-animate-btn:hover {
+    background: #10b981;
+    transform: scale(1.1);
+}
+
 .card-prompt-overlay {
     position: absolute;
     top: 5px;
@@ -755,6 +775,26 @@
 
 .modal-delete-btn:hover {
     background: #dc2626;
+    color: white;
+}
+
+.modal-animate-btn {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.5);
+    color: #10b981;
+    padding: 8px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.modal-animate-btn:hover {
+    background: #10b981;
     color: white;
 }
 

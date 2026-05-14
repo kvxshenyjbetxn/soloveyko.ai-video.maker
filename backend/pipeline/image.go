@@ -1303,13 +1303,7 @@ func (s *PipelineService) RegenerateImage(imgPath string, prompt string, service
 	imgBase := strings.TrimSuffix(filepath.Base(imgPath), currentExt)
 	newPath := filepath.Join(imagesDir, imgBase+targetExt)
 
-	// If path changed (e.g. png -> mp4), remove old one
-	if filepath.Clean(newPath) != filepath.Clean(imgPath) {
-		os.Remove(imgPath)
-		if s.OnImageDeleted != nil {
-			s.OnImageDeleted(imgPath)
-		}
-	}
+	pathChanged := filepath.Clean(newPath) != filepath.Clean(imgPath)
 
 	var err error
 	switch service {
@@ -1330,9 +1324,16 @@ func (s *PipelineService) RegenerateImage(imgPath string, prompt string, service
 
 	s.log("SUCCESS", fmt.Sprintf("[Regenerate] Completed: %s", filepath.Base(newPath)), "", "Regeneration")
 
-	// Trigger UI update
-	if s.OnImageGenerated != nil {
-		s.OnImageGenerated(taskName, subName, filepath.Base(newPath), newPath, prompt)
+	if pathChanged {
+		// Remove old file and replace gallery entry in-place to preserve position
+		os.Remove(imgPath)
+		if s.OnImageReplaced != nil {
+			s.OnImageReplaced(imgPath, taskName, subName, filepath.Base(newPath), newPath, prompt)
+		}
+	} else {
+		if s.OnImageGenerated != nil {
+			s.OnImageGenerated(taskName, subName, filepath.Base(newPath), newPath, prompt)
+		}
 	}
 
 	return newPath, nil

@@ -121,6 +121,7 @@
     "delete_bulk_confirm": "Видалити обрані зображення з диска?",
     "selected": "Обрано",
     "regenerate": "Перегенерувати",
+    "animate": "Анімувати",
     "regenerate_modal": {
       "title": "Перегенерація зображення",
       "service": "Сервіс",

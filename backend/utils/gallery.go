@@ -165,6 +165,49 @@ func (m *GalleryManager) RemoveImage(imgPath string) {
 		}
 	}
 }
+// ReplaceImage replaces an existing gallery entry in-place, preserving its position.
+func (m *GalleryManager) ReplaceImage(oldPath, newName, newPath, prompt string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	url := "local/" + filepath.ToSlash(newPath)
+	if strings.HasPrefix(newPath, "http://") || strings.HasPrefix(newPath, "https://") {
+		url = newPath
+	}
+
+	for taskName, tmpMap := range m.tasks {
+		for tmpName, imgs := range tmpMap {
+			for i, img := range imgs {
+				if img.Path == oldPath {
+					m.tasks[taskName][tmpName][i] = GalleryImage{
+						Name:   newName,
+						Path:   newPath,
+						URL:    url,
+						Prompt: prompt,
+					}
+					return
+				}
+			}
+		}
+	}
+}
+
+func (m *GalleryManager) GetImagePrompt(imgPath string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, tmpMap := range m.tasks {
+		for _, imgs := range tmpMap {
+			for _, img := range imgs {
+				if img.Path == imgPath {
+					return img.Prompt
+				}
+			}
+		}
+	}
+	return ""
+}
+
 func (m *GalleryManager) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

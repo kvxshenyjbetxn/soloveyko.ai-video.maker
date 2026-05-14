@@ -115,6 +115,13 @@ func NewApp() *App {
 		}
 	}
 
+	app.pipeline.OnImageReplaced = func(oldPath, taskName, templateName, newName, newPath, prompt string) {
+		app.galleryManager.ReplaceImage(oldPath, newName, newPath, prompt)
+		if app.ctx != nil {
+			wruntime.EventsEmit(app.ctx, "galleryUpdate")
+		}
+	}
+
 	app.pipeline.OnTextResult = func(id string, resultText string) {
 		if app.ctx != nil {
 			wruntime.EventsEmit(app.ctx, "textResult", id, len([]rune(resultText)))
@@ -1484,6 +1491,21 @@ func (a *App) GetGalleryImages() []utils.GalleryTask {
 // RegenerateGalleryImage regenerates a single image in the gallery
 func (a *App) RegenerateGalleryImage(imgPath string, prompt string, service string, settings map[string]interface{}) (string, error) {
 	return a.pipeline.RegenerateImage(imgPath, prompt, service, settings)
+}
+
+// AnimateGalleryImage animates an existing gallery image into a video using pipeline settings
+func (a *App) AnimateGalleryImage(imgPath string) (string, error) {
+	prompt := a.galleryManager.GetImagePrompt(imgPath)
+	ps := a.settings.GetPipelineSettings()
+
+	settings := map[string]interface{}{
+		"imageGooglerVideoEnabled": true,
+		"imageGooglerVideoModel":   ps.ImageGooglerVideoModel,
+		"imageGooglerVideoUpscale": ps.ImageGooglerVideoUpscale,
+		"imageGooglerAspectRatio":  ps.ImageGooglerAspectRatio,
+	}
+
+	return a.pipeline.RegenerateImage(imgPath, prompt, "googler", settings)
 }
 
 // AddRemoteGalleryImage adds a remote URL to the local gallery manually
