@@ -307,6 +307,48 @@ func findSegmentInStream(segment string, stream string, startFrom int) (int, int
 	return -1, -1, 0
 }
 
+// ComputeSegmentDurations returns the real audio span for each text segment by matching against subtitle.srt.
+// It uses the same text-matching algorithm as GetImageTimings. Returns nil if SRT cannot be read.
+// Returns 0 for segments that cannot be matched (not found or low confidence).
+func ComputeSegmentDurations(srtPath string, segments []string) []float64 {
+	data, err := os.ReadFile(srtPath)
+	if err != nil {
+		return nil
+	}
+	blocks := ParseSrt(string(data))
+	if len(blocks) == 0 {
+		return nil
+	}
+	stream, timeMap := buildTextStream(blocks)
+	streamNorm, streamMapping := normalizeTextWithMapping(stream)
+
+	durations := make([]float64, len(segments))
+	lastSearchStart := 0
+
+	for i, seg := range segments {
+		segNorm, _ := normalizeTextWithMapping(seg)
+		if segNorm == "" {
+			continue
+		}
+		startChar, endChar, confidence := findSegmentInStream(segNorm, streamNorm, lastSearchStart)
+		if startChar == -1 || confidence < 0.5 {
+			continue
+		}
+		if startChar >= len(streamMapping) || endChar-1 >= len(streamMapping) {
+			continue
+		}
+		origStart := streamMapping[startChar]
+		origEnd := streamMapping[endChar-1] + 1
+		startTime := charToTimeAt(origStart, timeMap)
+		endTime := charToTimeAt(origEnd, timeMap)
+		if endTime > startTime {
+			durations[i] = endTime - startTime
+		}
+		lastSearchStart = endChar
+	}
+	return durations
+}
+
 func GetImageTimings(finalDir string, audioDur float64, totalImages int, visualFiles []string, taskLabel string) ([]ImageTiming, error) {
 	segmentsPath := filepath.Join(finalDir, "segments.json")
 	srtPath := filepath.Join(finalDir, "subtitle.srt")

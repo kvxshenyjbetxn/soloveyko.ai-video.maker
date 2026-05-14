@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"regexp"
 	bapi "soloveyko/backend/api"
 	"soloveyko/backend/utils"
 	"strconv"
@@ -60,25 +59,6 @@ func buildVideoSet(validPrompts, videoCount, startCount int, random bool) map[in
 	return set
 }
 
-// parseSRTDurations reads a SRT file and returns a slice of segment durations in seconds.
-func parseSRTDurations(srtPath string) []float64 {
-	data, err := os.ReadFile(srtPath)
-	if err != nil {
-		return nil
-	}
-	re := regexp.MustCompile(`(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})`)
-	matches := re.FindAllStringSubmatch(string(data), -1)
-	durations := make([]float64, 0, len(matches))
-	for _, m := range matches {
-		start := srtTimeSec(m[1])
-		end := srtTimeSec(m[2])
-		if end > start {
-			durations = append(durations, end-start)
-		}
-	}
-	return durations
-}
-
 // srtTimeSec converts SRT timestamp "HH:MM:SS,mmm" to seconds.
 func srtTimeSec(t string) float64 {
 	t = strings.ReplaceAll(t, ",", ".")
@@ -90,60 +70,6 @@ func srtTimeSec(t string) float64 {
 	m, _ := strconv.ParseFloat(parts[1], 64)
 	sec, _ := strconv.ParseFloat(parts[2], 64)
 	return h*3600 + m*60 + sec
-}
-
-// computeSlotDurations returns the average SRT duration (seconds) for each prompt slot.
-func computeSlotDurations(validPrompts int, srtDurations []float64) []float64 {
-	durations := make([]float64, validPrompts)
-	n := len(srtDurations)
-	if validPrompts <= 0 || n == 0 {
-		return durations
-	}
-	for i := 0; i < validPrompts; i++ {
-		segStart := i * n / validPrompts
-		segEnd := (i+1)*n/validPrompts
-		if segEnd <= segStart {
-			segEnd = segStart + 1
-		}
-		if segEnd > n {
-			segEnd = n
-		}
-		var total float64
-		for _, d := range srtDurations[segStart:segEnd] {
-			total += d
-		}
-		durations[i] = total
-	}
-	return durations
-}
-
-// buildVideoSetFromSubtitles assigns video/image per prompt slot based on SRT segment durations.
-// For each prompt slot i (0..validPrompts-1), it sums the total spoken duration of proportionally
-// mapped SRT blocks. If total >= threshold seconds, the slot becomes a video; otherwise an image.
-func buildVideoSetFromSubtitles(validPrompts int, srtDurations []float64, threshold float64) map[int]bool {
-	set := make(map[int]bool)
-	n := len(srtDurations)
-	if validPrompts <= 0 || n == 0 {
-		return set
-	}
-	for i := 0; i < validPrompts; i++ {
-		segStart := i * n / validPrompts
-		segEnd := (i + 1) * n / validPrompts
-		if segEnd <= segStart {
-			segEnd = segStart + 1
-		}
-		if segEnd > n {
-			segEnd = n
-		}
-		var total float64
-		for _, d := range srtDurations[segStart:segEnd] {
-			total += d
-		}
-		if total >= threshold {
-			set[i] = true
-		}
-	}
-	return set
 }
 
 // splitIntoLines splits text by line breaks
@@ -974,10 +900,22 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		slotDurations := make([]float64, validPrompts)
 		if iVideoEnabled && iVideoDistribution == "subtitle_duration" {
 			srtPath := filepath.Join(finalDir, "subtitle.srt")
-			srtDurations := parseSRTDurations(srtPath)
-			if len(srtDurations) > 0 {
-				videoSet = buildVideoSetFromSubtitles(validPrompts, srtDurations, iVideoSubtitleThreshold)
-				slotDurations = computeSlotDurations(validPrompts, srtDurations)
+			chunkDurations := utils.ComputeSegmentDurations(srtPath, chunks)
+			if len(chunkDurations) > 0 {
+				videoSet = make(map[int]bool)
+				vIdx := 0
+				for absIdx, dur := range chunkDurations {
+					if absIdx >= len(prompts) || len(prompts[absIdx]) == 0 {
+						continue
+					}
+					if vIdx < validPrompts {
+						slotDurations[vIdx] = dur
+						if dur >= iVideoSubtitleThreshold {
+							videoSet[vIdx] = true
+						}
+						vIdx++
+					}
+				}
 				videosAssigned := 0
 				for _, v := range videoSet {
 					if v {
@@ -985,11 +923,11 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 					}
 				}
 				for i, d := range slotDurations {
-					s.log("INFO", fmt.Sprintf("[Googler] subtitle_duration slot %d: total=%.2fs → %s", i+1, d, map[bool]string{true: "VIDEO", false: "image"}[videoSet[i]]), id, taskLabel)
+					s.log("INFO", fmt.Sprintf("[Googler] subtitle_duration slot %d: span=%.2fs → %s", i+1, d, map[bool]string{true: "VIDEO", false: "image"}[videoSet[i]]), id, taskLabel)
 				}
-				s.log("INFO", fmt.Sprintf("[Googler] subtitle_duration: threshold=%.1fs, SRT blocks=%d, slots=%d, videos=%d", iVideoSubtitleThreshold, len(srtDurations), validPrompts, videosAssigned), id, taskLabel)
+				s.log("INFO", fmt.Sprintf("[Googler] subtitle_duration: threshold=%.1fs, chunks=%d, slots=%d, videos=%d", iVideoSubtitleThreshold, len(chunks), validPrompts, videosAssigned), id, taskLabel)
 			} else {
-				s.log("WARN", fmt.Sprintf("[Googler] subtitle_duration: subtitle.srt not found or empty (%s), falling back to sequential", filepath.Join(finalDir, "subtitle.srt")), id, taskLabel)
+				s.log("WARN", fmt.Sprintf("[Googler] subtitle_duration: subtitle.srt not found or empty (%s), falling back to sequential", srtPath), id, taskLabel)
 				videoSet = buildVideoSet(validPrompts, iVideoCount, iVideoStartCount, false)
 			}
 		} else {
