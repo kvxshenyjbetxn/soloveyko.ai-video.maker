@@ -146,7 +146,6 @@ export const MASS_EDITOR_BLOCKS: MassEditorBlock[] = [
             // Googler specific
             {
                 id: 'imageGooglerModel', labelKey: 'settings.image.googler.model', type: 'select', options: [
-                    { value: 'whisk', label: 'Whisk (v4)' },
                     { value: 'flow', label: 'Flow (v4)' },
                     { value: 'grok', label: 'Grok (v4)' },
                     { value: 'gemini', label: 'Gemini (v4)' },

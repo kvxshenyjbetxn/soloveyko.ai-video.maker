@@ -7,7 +7,6 @@ import { GetGooglerAPIKey, SaveGooglerAPIKey, SaveGooglerVideoAlertThreshold, Sa
 import '../../general.css';
 
 const PROVIDER_LABELS: Record<string, string> = {
-    whisk: 'Whisk',
     flow: 'Flow',
     flow_gempix2: 'Flow Nano Pro',
     flow_imagen4: 'Flow Imagen 4',
@@ -105,8 +104,8 @@ export const Googler = () => {
         setGooglerMaxVideos
     } = useServices();
 
-    const ALL_IMAGE_PROVIDERS = ['whisk', 'flow', 'flow_gempix2', 'flow_imagen4', 'flow_narwhal', 'gemini', 'grok', 'flower', 'openai'];
-    const ALL_VIDEO_PROVIDERS = ['flow', 'whisk', 'grok', 'gemini', 'flower'];
+    const ALL_IMAGE_PROVIDERS = ['flow', 'flow_gempix2', 'flow_imagen4', 'flow_narwhal', 'gemini', 'grok', 'flower', 'openai'];
+    const ALL_VIDEO_PROVIDERS = ['flow', 'grok', 'gemini', 'flower'];
     const DEFAULT_FALLBACK = ['flow', 'gemini'];
 
     const [apiKey, setApiKey] = useState('');

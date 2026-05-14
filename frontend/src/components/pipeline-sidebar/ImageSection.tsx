@@ -784,10 +784,9 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                 <label className="settings-label">{t('pipeline.image.model')}</label>
                                 <select
                                     className="settings-select"
-                                    value={settings.imageGooglerModel || 'whisk'}
+                                    value={settings.imageGooglerModel || 'flow'}
                                     onChange={(e) => handleChange('imageGooglerModel', e.target.value)}
                                 >
-                                    <option value="whisk">Whisk (v4)</option>
                                     <option value="flow">Flow (v4)</option>
                                     <option value="flow_gempix2">Flow Nano Pro (v4)</option>
                                     <option value="flow_imagen4">Flow Imagen 4 (v4)</option>
@@ -811,8 +810,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                 </select>
                             </div>
 
-                            {settings.imageGooglerModel === 'whisk' && (
-                                <>
+                            <>
                                     <div className="settings-control">
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                             <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.googler.remix_enabled')}</label>
@@ -941,8 +939,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                             </div>
                                         </>
                                     )}
-                                </>
-                            )}
+                            </>
 
                             <div className="settings-control" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -964,10 +961,10 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                         <label className="settings-label">{t('pipeline.image.googler.video_model') || 'Модель відео'}</label>
                                         <select
                                             className="settings-select"
-                                            value={settings.imageGooglerVideoModel || 'whisk'}
+                                            value={settings.imageGooglerVideoModel || 'flower'}
                                             onChange={(e) => handleChange('imageGooglerVideoModel', e.target.value)}
                                         >
-                                            <option value="whisk">Whisk</option>
+                                            <option value="flower">Flower / Veo 3.1</option>
                                             <option value="flow">Flow</option>
                                             <option value="grok">Grok</option>
                                             <option value="gemini">Gemini</option>

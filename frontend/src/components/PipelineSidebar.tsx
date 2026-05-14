@@ -500,8 +500,8 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 }
                 if (!s.imageService || s.imageService === "") { s.imageService = "pollinations"; updated = true; }
                 if (!s.imageModel || s.imageModel === "") { s.imageModel = "zimage"; updated = true; }
-                if (!s.imageGooglerModel || s.imageGooglerModel === "") { s.imageGooglerModel = "whisk"; updated = true; }
-                if (!s.imageGooglerVideoModel || s.imageGooglerVideoModel === "") { s.imageGooglerVideoModel = "whisk"; updated = true; }
+                if (!s.imageGooglerModel || s.imageGooglerModel === "" || s.imageGooglerModel === "whisk") { s.imageGooglerModel = "flow"; updated = true; }
+                if (!s.imageGooglerVideoModel || s.imageGooglerVideoModel === "" || s.imageGooglerVideoModel === "whisk") { s.imageGooglerVideoModel = "flower"; updated = true; }
                 if (s.imageGooglerVideoUpscale === undefined) { s.imageGooglerVideoUpscale = false; updated = true; }
                 if (s.imageGooglerVideoEnabled === undefined) { s.imageGooglerVideoEnabled = false; updated = true; }
                 if (s.imageSyncEnabled === undefined) { s.imageSyncEnabled = true; updated = true; }

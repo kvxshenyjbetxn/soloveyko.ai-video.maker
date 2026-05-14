@@ -36,7 +36,7 @@ export const RegenerateModal: React.FC<RegenerateModalProps> = ({
     const [polHeight, setPolHeight] = useState(1080);
 
     // Googler settings
-    const [gooModel, setGooModel] = useState('whisk');
+    const [gooModel, setGooModel] = useState('flow');
     const [gooRatio, setGooRatio] = useState('IMAGE_ASPECT_RATIO_LANDSCAPE');
     const [gooRefImage, setGooRefImage] = useState('');
     const [gooVideo, setGooVideo] = useState(false);
@@ -166,7 +166,6 @@ export const RegenerateModal: React.FC<RegenerateModalProps> = ({
                             <div className="reg-field">
                                 <label>{t('gallery.regenerate_modal.googler_model')}</label>
                                 <select value={gooModel} onChange={e => setGooModel(e.target.value)}>
-                                    <option value="whisk">Whisk</option>
                                     <option value="flow">Flow</option>
                                     <option value="flow_gempix2">Flow Nano Pro</option>
                                     <option value="flow_imagen4">Flow Imagen 4</option>
@@ -186,23 +185,21 @@ export const RegenerateModal: React.FC<RegenerateModalProps> = ({
                                 </select>
                             </div>
 
-                            {gooModel === 'whisk' && (
-                                <div className="reg-field">
-                                    <label>{t('gallery.regenerate_modal.reference_image')}</label>
-                                    <div className="ref-image-box">
-                                        {gooRefImage ? (
-                                            <div className="ref-preview">
-                                                <span>{gooRefImage.split(/[\\/]/).pop()}</span>
-                                                <button onClick={handleSelectRefImage}>{t('gallery.regenerate_modal.change_image')}</button>
-                                            </div>
-                                        ) : (
-                                            <button className="ref-select-btn" onClick={handleSelectRefImage}>
-                                                {t('gallery.regenerate_modal.select_image')}
-                                            </button>
-                                        )}
-                                    </div>
+                            <div className="reg-field">
+                                <label>{t('gallery.regenerate_modal.reference_image')}</label>
+                                <div className="ref-image-box">
+                                    {gooRefImage ? (
+                                        <div className="ref-preview">
+                                            <span>{gooRefImage.split(/[\\/]/).pop()}</span>
+                                            <button onClick={handleSelectRefImage}>{t('gallery.regenerate_modal.change_image')}</button>
+                                        </div>
+                                    ) : (
+                                        <button className="ref-select-btn" onClick={handleSelectRefImage}>
+                                            {t('gallery.regenerate_modal.select_image')}
+                                        </button>
+                                    )}
                                 </div>
-                            )}
+                            </div>
 
                             {!isMediaVideo && (
                                 <div className="reg-field-check">

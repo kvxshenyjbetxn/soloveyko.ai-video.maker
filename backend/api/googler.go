@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"soloveyko/backend/utils"
 	"strings"
 	"sync"
@@ -222,6 +223,7 @@ func buildFallbackList(primary string, fallbacks []string) []string {
 // GenerateImage генерує картинку за допомогою Googler з автоматичними повторами
 func (s *GooglerService) GenerateImage(apiKey string, model string, prompt string, aspectRatio string, outputPath string, logCtx ...string) error {
 	imgSem, _ := s.ensureSemaphores()
+	fname := filepath.Base(outputPath)
 
 	// Build fallback list: primary model first, then user-configured fallbacks
 	fallbackOrder := s.settings.GetGooglerImageFallbackOrder()
@@ -266,14 +268,14 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 				if isRateLimit {
 					waitTime = 5 * time.Minute
 					if s.OnLog != nil {
-						s.OnLog("WARN", fmt.Sprintf("[Googler] Image (%s) rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", currentModel, attempt), logCtx...)
+						s.OnLog("WARN", fmt.Sprintf("[Googler] [%s] Image (%s) rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", fname, currentModel, attempt), logCtx...)
 					}
 				} else {
 					if attempt > 3 {
 						break // Exit retry loop for non-429 errors after 3 attempts
 					}
 					if s.OnLog != nil {
-						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying %s (%d/3) in 5s...", currentModel, attempt), logCtx...)
+						s.OnLog("INFO", fmt.Sprintf("[Googler] [%s] Retrying %s (%d/3) in 5s...", fname, currentModel, attempt), logCtx...)
 					}
 				}
 				// Release semaphore during sleep so other goroutines can proceed
@@ -296,7 +298,7 @@ func (s *GooglerService) GenerateImage(apiKey string, model string, prompt strin
 
 		if i < len(allModels)-1 {
 			if s.OnLog != nil {
-				s.OnLog("WARN", fmt.Sprintf("[Googler] %s failed -> Falling back to %s", currentModel, allModels[i+1]), logCtx...)
+				s.OnLog("WARN", fmt.Sprintf("[Googler] [%s] %s failed -> Falling back to %s", fname, currentModel, allModels[i+1]), logCtx...)
 			}
 			time.Sleep(2 * time.Second)
 		}
@@ -359,12 +361,6 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 			Prompt:      prompt,
 			AspectRatio: apiRatio,
 			Model:       "NARWHAL",
-		}
-	case "whisk":
-		url = fmt.Sprintf("%s/v4/whisk/image/generate?api_key=%s", s.baseUrl, apiKey)
-		reqBody = GenericImageRequest{
-			Prompt:      prompt,
-			AspectRatio: apiRatio,
 		}
 	case "grok":
 		url = fmt.Sprintf("%s/v4/grok/image/generate?api_key=%s", s.baseUrl, apiKey)
@@ -492,6 +488,7 @@ func (s *GooglerService) generateImageOnce(apiKey string, model string, prompt s
 // RemixImage генерує картинку на основі референсів (Style/Subject/Scene) з автоматичними повторами та фалбеком
 func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImages []ReferenceImage, aspectRatio string, strictMode bool, outputPath string, logCtx ...string) error {
 	imgSem, _ := s.ensureSemaphores()
+	fname := filepath.Base(outputPath)
 	var lastErr error
 	for attempt := 1; ; attempt++ {
 		if attempt > 1 {
@@ -501,14 +498,14 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 			if isRateLimit {
 				waitTime = 5 * time.Minute
 				if s.OnLog != nil {
-					s.OnLog("WARN", fmt.Sprintf("[Googler] Remix rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", attempt), logCtx...)
+					s.OnLog("WARN", fmt.Sprintf("[Googler] [%s] Remix rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", fname, attempt), logCtx...)
 				}
 			} else {
 				if attempt > 3 {
 					break // Exit retry loop for non-429 errors after 3 attempts
 				}
 				if s.OnLog != nil {
-					s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying remix (%d/3) in 5s...", attempt), logCtx...)
+					s.OnLog("INFO", fmt.Sprintf("[Googler] [%s] Retrying remix (%d/3) in 5s...", fname, attempt), logCtx...)
 				}
 			}
 			// Release semaphore during sleep so other goroutines can proceed
@@ -531,7 +528,7 @@ func (s *GooglerService) RemixImage(apiKey string, prompt string, referenceImage
 
 	// Fallback to standard Image generation with next models
 	if s.OnLog != nil {
-		s.OnLog("WARN", "[Googler] Remix failed -> Falling back to standard Flow generation", logCtx...)
+		s.OnLog("WARN", fmt.Sprintf("[Googler] [%s] Remix failed -> Falling back to standard Flow generation", fname), logCtx...)
 	}
 	return s.GenerateImage(apiKey, "flow", prompt, aspectRatio, outputPath, logCtx...)
 }
@@ -639,6 +636,7 @@ func (s *GooglerService) remixImageOnce(apiKey string, prompt string, referenceI
 // GenerateVideo генерує відео за допомогою Googler (text-to-video або image-to-video) з автоматичними повторами та фалбеком
 func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt string, imageBase64 string, aspectRatio string, upscale bool, outputPath string, logCtx ...string) error {
 	_, vidSem := s.ensureSemaphores()
+	fname := filepath.Base(outputPath)
 
 	// Build fallback list: primary model first, then user-configured fallbacks
 	fallbackOrder := s.settings.GetGooglerVideoFallbackOrder()
@@ -651,24 +649,13 @@ func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt strin
 
 		for attempt := 1; ; attempt++ {
 			if attempt > 1 {
-				waitTime := 5 * time.Second
-				isRateLimit := lastErr != nil && (strings.Contains(lastErr.Error(), "(429)") || strings.Contains(strings.ToLower(lastErr.Error()), "rate limit"))
-
-				if isRateLimit {
-					waitTime = 5 * time.Minute
-					if s.OnLog != nil {
-						s.OnLog("WARN", fmt.Sprintf("[Googler] Video (%s) rate limit exceeded (429). Waiting 5 minutes before retry %d (infinite mode)...", currentModel, attempt), logCtx...)
-					}
-				} else {
-					if attempt > 3 {
-						break // Exit retry loop for non-429 errors after 3 attempts
-					}
-					if s.OnLog != nil {
-						s.OnLog("INFO", fmt.Sprintf("[Googler] Retrying video (%s) [%d/3] in 5s...", currentModel, attempt), logCtx...)
-					}
+				if attempt > 3 {
+					break
 				}
-				// Release semaphore during sleep so other goroutines can proceed
-				time.Sleep(waitTime)
+				if s.OnLog != nil {
+					s.OnLog("INFO", fmt.Sprintf("[Googler] [%s] Retrying video (%s) [%d/3] in 5s...", fname, currentModel, attempt), logCtx...)
+				}
+				time.Sleep(5 * time.Second)
 			}
 
 			// Acquire semaphore only around the actual API call
@@ -687,7 +674,7 @@ func (s *GooglerService) GenerateVideo(apiKey string, model string, prompt strin
 
 		if i < len(allModels)-1 {
 			if s.OnLog != nil {
-				s.OnLog("WARN", fmt.Sprintf("[Googler] Video %s failed -> Falling back to %s", currentModel, allModels[i+1]), logCtx...)
+				s.OnLog("WARN", fmt.Sprintf("[Googler] [%s] Video %s failed -> Falling back to %s", fname, currentModel, allModels[i+1]), logCtx...)
 			}
 			time.Sleep(2 * time.Second)
 		}
@@ -701,28 +688,15 @@ func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt s
 	var url string
 	var reqBody interface{}
 
-	// Map aspect ratio
+	// Map aspect ratio — all v4 models use short format: "16:9" / "9:16" / "1:1"
 	apiRatio := aspectRatio
-	if model == "grok" || model == "flower" {
-		switch apiRatio {
-		case "IMAGE_ASPECT_RATIO_LANDSCAPE":
-			apiRatio = "16:9"
-		case "IMAGE_ASPECT_RATIO_PORTRAIT":
-			apiRatio = "9:16"
-		case "IMAGE_ASPECT_RATIO_SQUARE":
-			apiRatio = "1:1"
-		}
-	} else {
-		if !strings.HasPrefix(apiRatio, "VIDEO_ASPECT_RATIO_") {
-			switch apiRatio {
-			case "16:9", "IMAGE_ASPECT_RATIO_LANDSCAPE":
-				apiRatio = "VIDEO_ASPECT_RATIO_LANDSCAPE"
-			case "9:16", "IMAGE_ASPECT_RATIO_PORTRAIT":
-				apiRatio = "VIDEO_ASPECT_RATIO_PORTRAIT"
-			default:
-				apiRatio = "VIDEO_ASPECT_RATIO_LANDSCAPE"
-			}
-		}
+	switch apiRatio {
+	case "IMAGE_ASPECT_RATIO_LANDSCAPE", "VIDEO_ASPECT_RATIO_LANDSCAPE":
+		apiRatio = "16:9"
+	case "IMAGE_ASPECT_RATIO_PORTRAIT", "VIDEO_ASPECT_RATIO_PORTRAIT":
+		apiRatio = "9:16"
+	case "IMAGE_ASPECT_RATIO_SQUARE":
+		apiRatio = "1:1"
 	}
 
 	if imageBase64 != "" {
@@ -734,12 +708,6 @@ func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt s
 				"prompt":           prompt,
 				"reference_images": []string{imageBase64},
 				"aspect_ratio":     apiRatio,
-			}
-		case "whisk":
-			url = fmt.Sprintf("%s/v4/whisk/video/from-image?api_key=%s", s.baseUrl, apiKey)
-			reqBody = map[string]interface{}{
-				"prompt":      prompt,
-				"input_image": imageBase64,
 			}
 		case "grok":
 			url = fmt.Sprintf("%s/v4/grok/video/from-image?api_key=%s", s.baseUrl, apiKey)
@@ -773,11 +741,6 @@ func (s *GooglerService) generateVideoOnce(apiKey string, model string, prompt s
 			reqBody = map[string]interface{}{
 				"prompt":       prompt,
 				"aspect_ratio": apiRatio,
-			}
-		case "whisk":
-			url = fmt.Sprintf("%s/v4/whisk/video/from-text?api_key=%s", s.baseUrl, apiKey)
-			reqBody = map[string]interface{}{
-				"prompt": prompt,
 			}
 		case "grok":
 			url = fmt.Sprintf("%s/v4/grok/video/from-text?api_key=%s", s.baseUrl, apiKey)
