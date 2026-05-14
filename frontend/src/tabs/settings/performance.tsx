@@ -138,9 +138,6 @@ export const Performance = () => {
         }
         setSubtitleService(s);
         savePipelineField('subtitleService', s);
-        if (s === 'assemblyai') {
-            handleSubtitleMaxChange(5);
-        }
     };
 
     const startWhisperXDownload = async () => {
