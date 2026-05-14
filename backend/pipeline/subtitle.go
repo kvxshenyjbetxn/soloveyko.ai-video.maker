@@ -33,10 +33,22 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 		sEnabled = pSettings.SubtitleEnabled
 	}
 
+	syncOnly := false
 	if !sEnabled {
-		s.log("INFO", "[Pipeline] Subtitle stage is disabled, skipping.", id, taskLabel)
-		return nil
+		var imageSyncEnabled bool
+		if val, ok := settings["imageSyncEnabled"].(bool); ok {
+			imageSyncEnabled = val
+		} else if pSettings != nil {
+			imageSyncEnabled = pSettings.ImageSyncEnabled
+		}
+		if !imageSyncEnabled {
+			s.log("INFO", "[Pipeline] Subtitle stage is disabled, skipping.", id, taskLabel)
+			return nil
+		}
+		syncOnly = true
+		s.log("INFO", "[Pipeline] Subtitle disabled but imageSyncEnabled=true — running in sync-only mode to generate subtitle.srt for image timing.", id, taskLabel)
 	}
+	_ = syncOnly
 
 	sService, _ := settings["subtitleService"].(string)
 	if sService == "" {

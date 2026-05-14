@@ -1157,8 +1157,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
+	subtitleEnabled := pSettings.SubtitleEnabled
+	if val, ok := settings["subtitleEnabled"].(bool); ok {
+		subtitleEnabled = val
+	}
 	assPath := filepath.Join(finalDir, assName)
-	if _, err := os.Stat(assPath); err == nil {
+	if _, err := os.Stat(assPath); err == nil && subtitleEnabled {
 		filterParts = append(filterParts, fmt.Sprintf("[%s]subtitles=%s[v_sub]", montageV, assName))
 		montageV = "v_sub"
 	}
