@@ -8,10 +8,11 @@ import (
 )
 
 type GalleryImage struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	URL    string `json:"url"` // Used by frontend via assetserver
-	Prompt string `json:"prompt"`
+	Name     string  `json:"name"`
+	Path     string  `json:"path"`
+	URL      string  `json:"url"` // Used by frontend via assetserver
+	Prompt   string  `json:"prompt"`
+	Duration float64 `json:"duration"`
 }
 
 type GalleryTemplate struct {
@@ -35,7 +36,7 @@ func NewGalleryManager() *GalleryManager {
 	}
 }
 
-func (m *GalleryManager) AddImage(taskName, templateName, imageName, imgPath, prompt string) {
+func (m *GalleryManager) AddImage(taskName, templateName, imageName, imgPath, prompt string, duration float64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -59,10 +60,11 @@ func (m *GalleryManager) AddImage(taskName, templateName, imageName, imgPath, pr
 	}
 
 	image := GalleryImage{
-		Name:   imageName,
-		Path:   imgPath, // For remote, path is the URL too
-		URL:    url,
-		Prompt: prompt,
+		Name:     imageName,
+		Path:     imgPath, // For remote, path is the URL too
+		URL:      url,
+		Prompt:   prompt,
+		Duration: duration,
 	}
 
 	m.tasks[taskName][templateName] = append(m.tasks[taskName][templateName], image)

@@ -101,8 +101,8 @@ func NewApp() *App {
 		}
 	}
 
-	app.pipeline.OnImageGenerated = func(taskName, templateName, imageName, imgPath, prompt string) {
-		app.galleryManager.AddImage(taskName, templateName, imageName, imgPath, prompt)
+	app.pipeline.OnImageGenerated = func(taskName, templateName, imageName, imgPath, prompt string, duration float64) {
+		app.galleryManager.AddImage(taskName, templateName, imageName, imgPath, prompt, duration)
 		if app.ctx != nil {
 			wruntime.EventsEmit(app.ctx, "galleryUpdate")
 		}
@@ -1515,7 +1515,7 @@ func (a *App) AnimateGalleryImage(imgPath string) (string, error) {
 
 // AddRemoteGalleryImage adds a remote URL to the local gallery manually
 func (a *App) AddRemoteGalleryImage(taskName, templateName, imageName, url, prompt string) {
-	a.galleryManager.AddImage(taskName, templateName, imageName, url, prompt)
+	a.galleryManager.AddImage(taskName, templateName, imageName, url, prompt, 0)
 	if a.ctx != nil {
 		wruntime.EventsEmit(a.ctx, "galleryUpdate")
 	}

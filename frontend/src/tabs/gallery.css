@@ -652,6 +652,17 @@
     color: var(--text-primary);
 }
 
+.media-duration {
+    display: inline-block;
+    margin-top: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent-color, #6366f1);
+    background: rgba(99, 102, 241, 0.12);
+    border-radius: 4px;
+    padding: 1px 5px;
+}
+
 .gallery-card.is-deleted {
     pointer-events: none;
     opacity: 0.7;

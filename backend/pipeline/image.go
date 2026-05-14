@@ -92,11 +92,34 @@ func srtTimeSec(t string) float64 {
 	return h*3600 + m*60 + sec
 }
 
+// computeSlotDurations returns the average SRT duration (seconds) for each prompt slot.
+func computeSlotDurations(validPrompts int, srtDurations []float64) []float64 {
+	durations := make([]float64, validPrompts)
+	n := len(srtDurations)
+	if validPrompts <= 0 || n == 0 {
+		return durations
+	}
+	for i := 0; i < validPrompts; i++ {
+		segStart := i * n / validPrompts
+		segEnd := (i+1)*n/validPrompts
+		if segEnd <= segStart {
+			segEnd = segStart + 1
+		}
+		if segEnd > n {
+			segEnd = n
+		}
+		var total float64
+		for _, d := range srtDurations[segStart:segEnd] {
+			total += d
+		}
+		durations[i] = total
+	}
+	return durations
+}
+
 // buildVideoSetFromSubtitles assigns video/image per prompt slot based on SRT segment durations.
-// For each prompt slot i (0..validPrompts-1), it sums the durations of the proportionally mapped
-// SRT segments. If the average segment duration within the slot >= threshold seconds, the slot
-// becomes a video; otherwise it becomes an image. Using average (not sum) makes the threshold
-// meaningful regardless of how many SRT blocks map to each prompt slot.
+// For each prompt slot i (0..validPrompts-1), it sums the total spoken duration of proportionally
+// mapped SRT blocks. If total >= threshold seconds, the slot becomes a video; otherwise an image.
 func buildVideoSetFromSubtitles(validPrompts int, srtDurations []float64, threshold float64) map[int]bool {
 	set := make(map[int]bool)
 	n := len(srtDurations)
@@ -116,8 +139,7 @@ func buildVideoSetFromSubtitles(validPrompts int, srtDurations []float64, thresh
 		for _, d := range srtDurations[segStart:segEnd] {
 			total += d
 		}
-		avg := total / float64(segEnd-segStart)
-		if avg >= threshold {
+		if total >= threshold {
 			set[i] = true
 		}
 	}
@@ -808,7 +830,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			} else {
 				successCount++
 				if s.OnImageGenerated != nil {
-					s.OnImageGenerated(taskName, subName, imgName, imgPath, prompt)
+					s.OnImageGenerated(taskName, subName, imgName, imgPath, prompt, 0)
 				}
 				s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d i:%d/%d v:0", validPrompts, successCount, validPrompts))
 				s.log("SUCCESS", fmt.Sprintf("[Pollinations] Success: Generated %s", imgName), id, taskLabel)
@@ -949,17 +971,29 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 
 		// Build the video/image assignment set
 		var videoSet map[int]bool
+		slotDurations := make([]float64, validPrompts)
 		if iVideoEnabled && iVideoDistribution == "subtitle_duration" {
 			srtPath := filepath.Join(finalDir, "subtitle.srt")
 			srtDurations := parseSRTDurations(srtPath)
 			if len(srtDurations) > 0 {
 				videoSet = buildVideoSetFromSubtitles(validPrompts, srtDurations, iVideoSubtitleThreshold)
-				s.log("INFO", fmt.Sprintf("[Googler] subtitle_duration mode: threshold=%.1fs, SRT segments=%d", iVideoSubtitleThreshold, len(srtDurations)), id, taskLabel)
+				slotDurations = computeSlotDurations(validPrompts, srtDurations)
+				videosAssigned := 0
+				for _, v := range videoSet {
+					if v {
+						videosAssigned++
+					}
+				}
+				for i, d := range slotDurations {
+					s.log("INFO", fmt.Sprintf("[Googler] subtitle_duration slot %d: total=%.2fs → %s", i+1, d, map[bool]string{true: "VIDEO", false: "image"}[videoSet[i]]), id, taskLabel)
+				}
+				s.log("INFO", fmt.Sprintf("[Googler] subtitle_duration: threshold=%.1fs, SRT blocks=%d, slots=%d, videos=%d", iVideoSubtitleThreshold, len(srtDurations), validPrompts, videosAssigned), id, taskLabel)
 			} else {
-				s.log("WARN", "[Googler] subtitle_duration mode: subtitle.srt not found or empty, falling back to sequential", id, taskLabel)
+				s.log("WARN", fmt.Sprintf("[Googler] subtitle_duration: subtitle.srt not found or empty (%s), falling back to sequential", filepath.Join(finalDir, "subtitle.srt")), id, taskLabel)
 				videoSet = buildVideoSet(validPrompts, iVideoCount, iVideoStartCount, false)
 			}
 		} else {
+			s.log("INFO", fmt.Sprintf("[Googler] iVideoEnabled=%v, iVideoDistribution=%q — subtitle_duration logic skipped", iVideoEnabled, iVideoDistribution), id, taskLabel)
 			videoSet = buildVideoSet(validPrompts, iVideoCount, iVideoStartCount, iVideoEnabled && iVideoDistribution == "random")
 		}
 
@@ -1008,7 +1042,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			validIdx++
 
 			imageWg.Add(1)
-			go func(aIdx int, vIdx int, p string) {
+			go func(aIdx int, vIdx int, p string, slotDur float64) {
 				defer imageWg.Done()
 
 				isVideo := iVideoEnabled && videoSet[vIdx]
@@ -1025,7 +1059,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 						successCount++
 						videosCount++
 						if s.OnImageGenerated != nil {
-							s.OnImageGenerated(taskName, subName, vidName, vidPath, p)
+							s.OnImageGenerated(taskName, subName, vidName, vidPath, p, slotDur)
 						}
 						s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d i:%d/%d v:%d/%d", validPrompts, imagesCount, totalImages, videosCount, totalVideos))
 						imgMu.Unlock()
@@ -1038,7 +1072,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 						successCount++
 						imagesCount++
 						if s.OnImageGenerated != nil {
-							s.OnImageGenerated(taskName, subName, imgName, imgPath, p)
+							s.OnImageGenerated(taskName, subName, imgName, imgPath, p, slotDur)
 						}
 						s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d i:%d/%d v:%d/%d", validPrompts, imagesCount, totalImages, videosCount, totalVideos))
 						imgMu.Unlock()
@@ -1058,7 +1092,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 						successCount++
 						videosCount++
 						if s.OnImageGenerated != nil {
-							s.OnImageGenerated(taskName, subName, vidName, vidPath, p)
+							s.OnImageGenerated(taskName, subName, vidName, vidPath, p, slotDur)
 						}
 						s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d i:%d/%d v:%d/%d", validPrompts, imagesCount, totalImages, videosCount, totalVideos))
 						s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Video generation: %s", aIdx, vidName), id, taskLabel)
@@ -1085,7 +1119,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				imgMu.Lock()
 				imagesCount++
 				if s.OnImageGenerated != nil {
-					s.OnImageGenerated(taskName, subName, imgName, imgPath, p)
+					s.OnImageGenerated(taskName, subName, imgName, imgPath, p, slotDur)
 				}
 				// If we DON'T plan to animate it, it's a final success now
 				if !(isVideo && iVideoMode == "image") {
@@ -1121,14 +1155,14 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 						_ = os.Remove(imgPath)
 
 						if s.OnImageGenerated != nil {
-							s.OnImageGenerated(taskName, subName, vidName, vidPath, p)
+							s.OnImageGenerated(taskName, subName, vidName, vidPath, p, slotDur)
 						}
 						s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d i:%d/%d v:%d/%d", validPrompts, imagesCount, totalImages, videosCount, totalVideos))
 						s.log("SUCCESS", fmt.Sprintf("[Googler] [%d] END Video animation: %s", aIdx, vidName), id, taskLabel)
 					}
 					imgMu.Unlock()
 				}
-			}(absoluteIdx, currentValidIdx, prompt)
+			}(absoluteIdx, currentValidIdx, prompt, slotDurations[currentValidIdx])
 		}
 		imageWg.Wait()
 
@@ -1206,7 +1240,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 					successCount++
 					imagesCount++ // Increment imagesCount as well for existing images
 					if s.OnImageGenerated != nil {
-						s.OnImageGenerated(taskName, subName, imgName, imgPath, p)
+						s.OnImageGenerated(taskName, subName, imgName, imgPath, p, 0)
 					}
 					s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d i:%d/%d v:0", validPrompts, imagesCount, validPrompts))
 					imgMu.Unlock()
@@ -1223,7 +1257,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 					successCount++
 					imagesCount++
 					if s.OnImageGenerated != nil {
-						s.OnImageGenerated(taskName, subName, imgName, imgPath, p)
+						s.OnImageGenerated(taskName, subName, imgName, imgPath, p, 0)
 					}
 					s.emitStageStatus(id, "image", "running", fmt.Sprintf("p:%d i:%d/%d v:0", validPrompts, imagesCount, validPrompts))
 					s.log("SUCCESS", fmt.Sprintf("[ElevenLabs Image] Success: Generated and saved %s", imgName), id, taskLabel)
@@ -1332,7 +1366,7 @@ func (s *PipelineService) RegenerateImage(imgPath string, prompt string, service
 		}
 	} else {
 		if s.OnImageGenerated != nil {
-			s.OnImageGenerated(taskName, subName, filepath.Base(newPath), newPath, prompt)
+			s.OnImageGenerated(taskName, subName, filepath.Base(newPath), newPath, prompt, 0)
 		}
 	}
 

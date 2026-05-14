@@ -48,7 +48,7 @@ type PipelineService struct {
 	OnRequestImageControl       func(id string, files []string)
 	OnRequestMontageControl     func(id string, planData string)
 	OnTaskStatus                func(id string, status string, progress int)
-	OnImageGenerated            func(taskName string, templateName string, imageName string, path string, prompt string)
+	OnImageGenerated            func(taskName string, templateName string, imageName string, path string, prompt string, duration float64)
 	OnImageDeleted              func(imgPath string)
 	OnImageReplaced             func(oldPath string, taskName string, templateName string, newName string, newPath string, prompt string)
 	OnRequestExistingFilesCheck func(data ExistingFilesData)
@@ -655,7 +655,11 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 	if imageVideoDistribution == "" {
 		imageVideoDistribution = pSettings.ImageVideoDistribution
 	}
-	needsSubtitleFirst := imageVideoDistribution == "subtitle_duration" && !shouldSkipSubtitle && !shouldSkipVoice
+	needsSubtitleFirst := imageVideoDistribution == "subtitle_duration" && !shouldSkipSubtitle
+	if imageVideoDistribution == "subtitle_duration" {
+		pSettings.ImageSyncEnabled = true
+		pSettings.ImageGooglerVideoEnabled = true
+	}
 
 	// 3 & 4. Voiceover and Image Generation Stages logic in parallel
 	var stagesWg sync.WaitGroup

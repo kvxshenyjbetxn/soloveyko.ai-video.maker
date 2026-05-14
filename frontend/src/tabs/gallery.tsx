@@ -170,7 +170,12 @@ const GalleryCard = React.memo(({ img, isSelected, isSelectionMode, onCardClick,
                     </div>
                 </div>
             </div>
-            <div className="media-info"><span className="media-name">{img.name}</span></div>
+            <div className="media-info">
+                <span className="media-name">{img.name}</span>
+                {img.duration > 0 && (
+                    <span className="media-duration">{img.duration.toFixed(1)}s</span>
+                )}
+            </div>
         </div>
     );
 });
