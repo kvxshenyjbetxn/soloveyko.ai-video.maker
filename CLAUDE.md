@@ -137,7 +137,6 @@ frontend/
 
 ### API-ключі та проксі
 - ElevenLabs Bot використовує кастомний проксі `voiceapi.csv666.ru` (не офіційний endpoint).
-- OpenRouter має семафор паралелізму — не надсилати запити без урахування ліміту.
 
 ### Firebase CLI
 - Завжди перевіряти активний проект: `firebase use soloveyko-video-maker`.
@@ -146,10 +145,6 @@ frontend/
 ### Платформо-специфічні процеси
 - Запуск зовнішніх процесів реалізований окремо: `proc_windows.go` та `proc_others.go` — не змішувати логіку.
 - Cmd-утиліти аналогічно: `utils/cmd_windows.go` / `utils/cmd_unix.go`.
-
-### Wails-байндінги
-- При зміні сигнатур Go-методів в `App` — регенерувати байндінги командою `wails generate module`.
-- Байндінги знаходяться у `frontend/wailsjs/go/` — не редагувати вручну.
 
 ---
 
