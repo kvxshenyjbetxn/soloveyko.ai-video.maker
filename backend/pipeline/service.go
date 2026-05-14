@@ -256,6 +256,65 @@ func (s *PipelineService) CancelProcessing() {
 	s.cancelled.Store(true)
 }
 
+// RestartStage re-runs a single failed stage without restarting the whole pipeline.
+func (s *PipelineService) RestartStage(id string, stage string, taskName string, taskType string, subName string, settings map[string]interface{}) error {
+	settings = s.flattenSettings(settings)
+	finalDir := s.ResolveFinalDir(taskName, taskType, subName, settings)
+	taskLabel := taskName
+
+	var pSettings utils.PipelineSettings
+	pSettings = s.settings.GetPipelineSettings()
+	pSettings.SyncFromMap(settings)
+
+	templateDir := subName
+	if templateDir == "" {
+		pipelineName, _ := settings[taskType+"PipelineName"].(string)
+		templateDir = pipelineName
+		if templateDir == "" {
+			templateDir = "Default"
+		}
+	}
+
+	go func() {
+		s.log("INFO", fmt.Sprintf("[Pipeline] Restarting stage '%s'", stage), id, taskLabel)
+		switch stage {
+		case "voice":
+			processedText, _ := s.LoadTextResult(finalDir, taskType)
+			if err := s.ProcessVoiceover(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings); err != nil {
+				s.log("ERROR", fmt.Sprintf("[Pipeline] Voiceover restart failed: %v", err), id, taskLabel)
+				return
+			}
+			// Subtitle depends on voice.mp3, so re-run it too (mirrors normal pipeline)
+			subtitleEnabled := pSettings.SubtitleEnabled
+			if val, ok := settings["subtitleEnabled"].(bool); ok {
+				subtitleEnabled = val
+			}
+			if subtitleEnabled {
+				if err := s.ProcessSubtitle(id, taskLabel, finalDir, settings, &pSettings); err != nil {
+					s.log("ERROR", fmt.Sprintf("[Pipeline] Subtitle restart failed: %v", err), id, taskLabel)
+				}
+			}
+		case "subtitle":
+			if err := s.ProcessSubtitle(id, taskLabel, finalDir, settings, &pSettings); err != nil {
+				s.log("ERROR", fmt.Sprintf("[Pipeline] Subtitle restart failed: %v", err), id, taskLabel)
+			}
+		case "image":
+			processedText, _ := s.LoadTextResult(finalDir, taskType)
+			if err := s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings, taskName, templateDir); err != nil {
+				s.log("ERROR", fmt.Sprintf("[Pipeline] Image restart failed: %v", err), id, taskLabel)
+			}
+		case "montage":
+			if err := s.ProcessMontage(id, taskLabel, finalDir, settings, &pSettings, taskName, subName); err != nil {
+				s.log("ERROR", fmt.Sprintf("[Pipeline] Montage restart failed: %v", err), id, taskLabel)
+				s.emitStageStatus(id, "montage", "failed")
+			}
+		default:
+			s.log("ERROR", fmt.Sprintf("[Pipeline] Unknown stage for restart: %s", stage), id, taskLabel)
+		}
+	}()
+	return nil
+}
+
 func (s *PipelineService) ResetCancellation() {
 	s.cancelled.Store(false)
 }

@@ -1382,6 +1382,11 @@ func (a *App) SendControlAction(id string, action string, text string, settings 
 	})
 }
 
+// RestartStage re-runs a single failed pipeline stage without restarting the whole task.
+func (a *App) RestartStage(id string, stage string, taskName string, taskType string, subName string, settings map[string]interface{}) error {
+	return a.pipeline.RestartStage(id, stage, taskName, taskType, subName, settings)
+}
+
 // CancelQueue cancels all currently running pipeline tasks
 func (a *App) CancelQueue() {
 	a.pipeline.CancelProcessing()

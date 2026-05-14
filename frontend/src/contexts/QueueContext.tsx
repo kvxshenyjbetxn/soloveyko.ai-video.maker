@@ -606,6 +606,7 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
             setTasks(prev => {
                 let clearedImageControl = false;
+                let completedViaRestart: QueueTask | null = null;
                 const next = prev.map(t => {
                     if (t.id !== id) return t;
                     const s = status as TaskStatus;
@@ -624,6 +625,24 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                     }
                     else if (stage === 'subtitle') up.subtitleStatus = s;
                     else if (stage === 'montage') { up.montageStatus = s; if (msg) up.montageMsg = msg; }
+
+                    // Перевіряємо чи всі активні стейджі завершились після перезапуску
+                    if (t.status === 'failed' && s === 'completed') {
+                        const updated = { ...t, ...up };
+                        const cfg = updated.settings || {};
+                        const allDone =
+                            updated.textStatus === 'completed' &&
+                            (cfg.voiceoverEnabled !== true || updated.voiceStatus === 'completed') &&
+                            (cfg.imageEnabled !== true || updated.imageStatus === 'completed') &&
+                            (cfg.subtitleEnabled !== true || updated.subtitleStatus === 'completed') &&
+                            (cfg.montageEnabled !== true || updated.montageStatus === 'completed');
+                        if (allDone) {
+                            up.status = 'completed';
+                            up.progress = 100;
+                            completedViaRestart = { ...updated, ...up };
+                        }
+                    }
+
                     return { ...t, ...up };
                 });
                 if (clearedImageControl && !next.some(t => t.isAwaitingImageControl)) {
@@ -631,6 +650,15 @@ export const QueueProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                         setImageControlNotification({ isOpen: false });
                         setIsImageBatchReady(false);
                         hasShownImageBatchNotificationRef.current = false;
+                    });
+                }
+                if (completedViaRestart) {
+                    const task = completedViaRestart as QueueTask;
+                    queueMicrotask(() => {
+                        const dur = formatDuration(Date.now() - task.timestamp);
+                        setCompletionModal({ isOpen: true, taskCount: 1, duration: dur, activeDuration: dur, total_montage: '-', avg_montage: '-' });
+                        const taskName = task.subName || task.name;
+                        sendNotification(`${t('notifications.queue_completed_title')}\n\n${t('notifications.task_name')}: ${taskName}\n${t('queue.total_duration')}: ${dur}`);
                     });
                 }
                 return next;

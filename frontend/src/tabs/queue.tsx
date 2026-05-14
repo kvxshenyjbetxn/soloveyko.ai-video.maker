@@ -12,7 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useMyDevices } from '../lib/devicePresence';
 import { useToast } from '../contexts/ToastContext';
 // @ts-ignore
-import { GetOpenRouterSavedModels, GetPipelineSettings, OpenPath, ResolveTaskDir } from '../../wailsjs/go/main/App';
+import { GetOpenRouterSavedModels, GetPipelineSettings, OpenPath, ResolveTaskDir, RestartStage } from '../../wailsjs/go/main/App';
 
 interface QueueProps {
     setCurrentPath?: (path: string) => void;
@@ -238,6 +238,10 @@ const MagicWandIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.21 1.21 0 0 0 1.72 0L21.64 5.36a1.21 1.21 0 0 0 0-1.72Z"></path><path d="m14 7 3 3"></path><path d="M5 6v.01"></path><path d="M19 14v.01"></path><path d="M10 2v.01"></path><path d="M7 21v.01"></path><path d="M14 22v.01"></path></svg>
 );
 
+const StageRestartIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+);
+
 const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolder, onOpenMontageEditor, isProcessing, t, resumeTask, onConfirmRemote, onCancelRemote, onRegenerateRemote, logs }: any) => {
     const settings = task.settings || {};
     const isMainStageEnabled = task.type === 'translate' ? settings.translateEnabled !== false : settings.rewriteEnabled !== false;
@@ -356,29 +360,43 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                     {isVoiceEnabled && (
                         <div className={`task-stage-item status-${task.voiceStatus}`} style={{ marginTop: '4px' }}>
                             <div className="stage-left"><VoiceIcon /><span>{cleanStageLabel(t('text.voiceover'))}</span></div>
-                            <span className="stage-status-text badge-status">
-                                {task.voiceStatus === 'completed' ? (task.voiceDuration || t('queue.voice_saved') || 'MP3 saved') :
-                                    task.voiceStatus === 'running' ? (t('queue.status_running') || 'Synthesizing...') :
-                                        task.voiceStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                            task.voiceStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
-                                                task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
-                            </span>
+                            <div className="stage-right">
+                                {task.voiceStatus === 'failed' && !task.remoteJobId && (
+                                    <button className="stage-restart-btn" onClick={(e) => { e.stopPropagation(); RestartStage(task.id, 'voice', task.name, task.type, task.subName, task.settings); }} title="Перезапустити">
+                                        <StageRestartIcon />
+                                    </button>
+                                )}
+                                <span className="stage-status-text badge-status">
+                                    {task.voiceStatus === 'completed' ? (task.voiceDuration || t('queue.voice_saved') || 'MP3 saved') :
+                                        task.voiceStatus === 'running' ? (t('queue.status_running') || 'Synthesizing...') :
+                                            task.voiceStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
+                                                task.voiceStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                                    task.voiceStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                </span>
+                            </div>
                         </div>
                     )}
 
                     {isImageEnabled && (
                         <div className={`task-stage-item status-${task.imageStatus}`} style={{ marginTop: '4px' }}>
                             <div className="stage-left"><ImageIcon /><span>{cleanStageLabel(t('pipeline.stage.image'))}</span></div>
-                            <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
-                                {task.imageStatus === 'completed' ? (
-                                    task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : (t('queue.status_completed') || 'Completed')
-                                ) : task.imageStatus === 'running' ? (
-                                    task.imagesMessage ? renderStatusLines(task.imagesMessage, false) : (t('queue.status_running') || 'Generating...')
-                                ) : task.imageStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                    task.imageStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
-                                        task.imageStatus === 'failed' ? (
-                                            task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
-                                        ) : t('queue.status_pending')}
+                            <div className="stage-right">
+                                {task.imageStatus === 'failed' && !task.remoteJobId && (
+                                    <button className="stage-restart-btn" onClick={(e) => { e.stopPropagation(); RestartStage(task.id, 'image', task.name, task.type, task.subName, task.settings); }} title="Перезапустити">
+                                        <StageRestartIcon />
+                                    </button>
+                                )}
+                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
+                                    {task.imageStatus === 'completed' ? (
+                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : (t('queue.status_completed') || 'Completed')
+                                    ) : task.imageStatus === 'running' ? (
+                                        task.imagesMessage ? renderStatusLines(task.imagesMessage, false) : (t('queue.status_running') || 'Generating...')
+                                    ) : task.imageStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
+                                        task.imageStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                            task.imageStatus === 'failed' ? (
+                                                task.imagesMessage ? renderStatusLines(task.imagesMessage, true) : t('queue.status_failed')
+                                            ) : t('queue.status_pending')}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -386,28 +404,42 @@ const TaskItem = React.memo(({ task, isExpanded, onToggle, onRemove, onOpenFolde
                     {isSubtitleEnabled && (
                         <div className={`task-stage-item status-${task.subtitleStatus}`} style={{ marginTop: '4px' }}>
                             <div className="stage-left"><SubtitleIcon /><span>{cleanStageLabel(t('pipeline.stage.subtitle'))}</span></div>
-                            <span className="stage-status-text badge-status">
-                                {task.subtitleStatus === 'completed' ? (t('queue.subtitle_saved') || 'SRT збережено') :
-                                    task.subtitleStatus === 'running' ? (t('queue.status_running') || 'Transcribing...') :
-                                        task.subtitleStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
-                                            task.subtitleStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
-                                                task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
-                            </span>
+                            <div className="stage-right">
+                                {task.subtitleStatus === 'failed' && !task.remoteJobId && (
+                                    <button className="stage-restart-btn" onClick={(e) => { e.stopPropagation(); RestartStage(task.id, 'subtitle', task.name, task.type, task.subName, task.settings); }} title="Перезапустити">
+                                        <StageRestartIcon />
+                                    </button>
+                                )}
+                                <span className="stage-status-text badge-status">
+                                    {task.subtitleStatus === 'completed' ? (t('queue.subtitle_saved') || 'SRT збережено') :
+                                        task.subtitleStatus === 'running' ? (t('queue.status_running') || 'Transcribing...') :
+                                            task.subtitleStatus === 'waiting' ? (t('queue.status_waiting') || 'Waiting') :
+                                                task.subtitleStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                                    task.subtitleStatus === 'failed' ? t('queue.status_failed') : t('queue.status_pending')}
+                                </span>
+                            </div>
                         </div>
                     )}
 
                     {isMontageEnabled && (
                         <div className={`task-stage-item status-${task.montageStatus}`} style={{ marginTop: '4px' }}>
                             <div className="stage-left"><MontageIcon /><span>{cleanStageLabel(t('pipeline.stage.montage'))}</span></div>
-                            <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
-                                {task.montageStatus === 'completed' ? (task.montageMsg || t('queue.status_completed')) :
-                                    task.montageStatus === 'running' ? (
-                                        task.montageMsg ? renderStatusLines(task.montageMsg, false) : t('queue.status_running')
-                                    ) : task.montageStatus === 'waiting' ? t('queue.status_waiting') :
-                                        task.montageStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
-                                            task.montageStatus === 'failed' ? (
-                                                task.montageMsg ? renderStatusLines(task.montageMsg, true) : t('queue.status_failed')
-                                            ) : t('queue.status_pending')}
+                            <div className="stage-right">
+                                {task.montageStatus === 'failed' && !task.remoteJobId && (
+                                    <button className="stage-restart-btn" onClick={(e) => { e.stopPropagation(); RestartStage(task.id, 'montage', task.name, task.type, task.subName, task.settings); }} title="Перезапустити">
+                                        <StageRestartIcon />
+                                    </button>
+                                )}
+                                <div className="stage-status-text badge-status" style={{ whiteSpace: 'pre-wrap', textAlign: 'right', fontSize: '10px' }}>
+                                    {task.montageStatus === 'completed' ? (task.montageMsg || t('queue.status_completed')) :
+                                        task.montageStatus === 'running' ? (
+                                            task.montageMsg ? renderStatusLines(task.montageMsg, false) : t('queue.status_running')
+                                        ) : task.montageStatus === 'waiting' ? t('queue.status_waiting') :
+                                            task.montageStatus === 'dispatched' ? (t('queue.status_dispatched') || 'Делеговано') :
+                                                task.montageStatus === 'failed' ? (
+                                                    task.montageMsg ? renderStatusLines(task.montageMsg, true) : t('queue.status_failed')
+                                                ) : t('queue.status_pending')}
+                                </div>
                             </div>
                         </div>
                     )}
