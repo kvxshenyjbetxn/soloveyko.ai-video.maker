@@ -378,21 +378,21 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
                 }
 
                 // Initial UI states
-                if (s.apiCollapsed === undefined) s.apiCollapsed = true;
-                if (s.pathCollapsed === undefined) s.pathCollapsed = true;
-                if (s.translateCollapsed === undefined) s.translateCollapsed = true;
-                if (s.rewriteCollapsed === undefined) s.rewriteCollapsed = true;
-                if (s.voiceoverCollapsed === undefined) s.voiceoverCollapsed = true;
-                if (s.subtitleCollapsed === undefined) s.subtitleCollapsed = true;
-                if (s.imageCollapsed === undefined) s.imageCollapsed = true;
-                if (s.montageCollapsed === undefined) s.montageCollapsed = true;
-                if (s.templatesCollapsed === undefined) s.templatesCollapsed = true;
-                if (s.controlCollapsed === undefined) s.controlCollapsed = true;
-                if (s.translateTemplatesCollapsed === undefined) s.translateTemplatesCollapsed = true;
-                if (s.rewriteTemplatesCollapsed === undefined) s.rewriteTemplatesCollapsed = true;
-                if (s.voiceoverTemplatesCollapsed === undefined) s.voiceoverTemplatesCollapsed = true;
-                if (s.imageTemplatesCollapsed === undefined) s.imageTemplatesCollapsed = true;
-                if (s.customStagesCollapsed === undefined) s.customStagesCollapsed = true;
+                if (s.apiCollapsed === undefined) s.apiCollapsed = false;
+                if (s.pathCollapsed === undefined) s.pathCollapsed = false;
+                if (s.translateCollapsed === undefined) s.translateCollapsed = false;
+                if (s.rewriteCollapsed === undefined) s.rewriteCollapsed = false;
+                if (s.voiceoverCollapsed === undefined) s.voiceoverCollapsed = false;
+                if (s.subtitleCollapsed === undefined) s.subtitleCollapsed = false;
+                if (s.imageCollapsed === undefined) s.imageCollapsed = false;
+                if (s.montageCollapsed === undefined) s.montageCollapsed = false;
+                if (s.templatesCollapsed === undefined) s.templatesCollapsed = false;
+                if (s.controlCollapsed === undefined) s.controlCollapsed = false;
+                if (s.translateTemplatesCollapsed === undefined) s.translateTemplatesCollapsed = false;
+                if (s.rewriteTemplatesCollapsed === undefined) s.rewriteTemplatesCollapsed = false;
+                if (s.voiceoverTemplatesCollapsed === undefined) s.voiceoverTemplatesCollapsed = false;
+                if (s.imageTemplatesCollapsed === undefined) s.imageTemplatesCollapsed = false;
+                if (s.customStagesCollapsed === undefined) s.customStagesCollapsed = false;
                 if (s.montageEnabled === undefined) { s.montageEnabled = true; updated = true; }
                 if (s.montageIntroVideoEnabled === undefined) { s.montageIntroVideoEnabled = false; updated = true; }
                 if (s.montageIntroVideoPath === undefined) { s.montageIntroVideoPath = ""; updated = true; }
@@ -412,7 +412,7 @@ export const PipelineSidebar: React.FC<PipelineSidebarProps> = ({ type, isOpen, 
 
                 if (s.customStages === undefined) { s.customStages = []; updated = true; }
                 if (s.customStagesEnabled === undefined) { s.customStagesEnabled = true; updated = true; }
-                if (s.customStagesCollapsed === undefined) { s.customStagesCollapsed = true; updated = true; }
+                if (s.customStagesCollapsed === undefined) { s.customStagesCollapsed = false; updated = true; }
 
                 if (s.translateTemperature === undefined) s.translateTemperature = 0.7;
                 if (!s.translatePrompt || s.translatePrompt === "") {

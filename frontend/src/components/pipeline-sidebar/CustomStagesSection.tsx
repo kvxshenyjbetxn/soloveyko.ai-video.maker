@@ -222,8 +222,8 @@ export const CustomStagesSection: React.FC<CustomStagesSectionProps> = React.mem
                         width: '28px',
                         height: '28px',
                         borderRadius: '8px',
-                        background: 'rgba(var(--accent-rgb), 0.1)',
-                        color: 'var(--accent-color)',
+                        background: settings.customStagesEnabled ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--bg-tertiary)',
+                        color: settings.customStagesEnabled ? 'var(--accent-color)' : 'var(--text-tertiary)',
                         transition: 'all 0.3s'
                     }}>
                         <LayersIcon />

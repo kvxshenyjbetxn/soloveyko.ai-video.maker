@@ -73,8 +73,8 @@ export const TextSection: React.FC<TextSectionProps> = ({
                         width: '28px',
                         height: '28px',
                         borderRadius: '8px',
-                        background: 'rgba(var(--accent-rgb), 0.1)',
-                        color: 'var(--accent-color)',
+                        background: isEnabled ? 'rgba(var(--accent-rgb), 0.1)' : 'var(--bg-tertiary)',
+                        color: isEnabled ? 'var(--accent-color)' : 'var(--text-tertiary)',
                         transition: 'all 0.3s'
                     }}>
                         <TextIcon />

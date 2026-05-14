@@ -168,9 +168,9 @@ function App() {
     }, []);
 
     const [expandedMenus, setExpandedMenus] = useState<{ [key: string]: boolean }>({
-        'api': false,
-        'voice': false,
-        'image': false
+        'api': true,
+        'voice': true,
+        'image': true
     });
 
     const toggleMenu = (menu: string) => {
