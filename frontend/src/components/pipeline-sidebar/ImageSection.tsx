@@ -692,6 +692,25 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                                 </div>
                             )}
 
+                            {(() => {
+                                const mode = settings.imageMode || 'normal';
+                                const memType = settings.imageMemoryType || 'primitive';
+                                let desc = '';
+                                if (mode === 'normal') {
+                                    desc = t('pipeline.image.mode_normal_desc') || '';
+                                } else if (mode === 'memory') {
+                                    if (memType === 'primitive') desc = t('pipeline.image.memory_type_primitive_desc') || '';
+                                    else if (memType === 'story') desc = t('pipeline.image.memory_type_story_desc') || '';
+                                    else if (memType === 'external') desc = t('pipeline.image.memory_type_external_desc') || '';
+                                }
+                                if (!desc) return null;
+                                return (
+                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.5', padding: '8px 10px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', marginBottom: '12px', border: '1px solid var(--border-color)' }}>
+                                        {desc}
+                                    </div>
+                                );
+                            })()}
+
                             {((settings.imageMode || 'normal') === 'normal' || ((settings.imageMode === 'memory') && ((settings.imageMemoryType || 'primitive') === 'primitive' || settings.imageMemoryType === 'external' || settings.imageMemoryType === 'story'))) && (
                                 <>
                                     {settings.imageMode === 'memory' && (settings.imageMemoryType || 'primitive') === 'primitive' && (
