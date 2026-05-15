@@ -32,6 +32,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
 }) => {
     const { t } = useI18n();
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+    const footageSrc = (settings.imageFootageSource as 'files' | 'folder') || 'files';
 
     const internalIsCollapsed = settings.imageCollapsed;
     const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
@@ -112,7 +113,235 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
             </div>
 
             <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
-                <div className="settings-group">
+
+                {/* Footage Mode */}
+                <div className="settings-group" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', marginBottom: '4px' }}>
+                    <div className="settings-group-title" style={{ marginBottom: '12px' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="m10 8 6 4-6 4V8z"/></svg>
+                        {t('pipeline.image.footage_mode')}
+                    </div>
+
+                    <div className="settings-control" style={{ marginBottom: settings.imageFootageEnabled ? '12px' : '0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.footage_enabled')}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.imageFootageEnabled || false}
+                                    onChange={(e) => handleChange('imageFootageEnabled', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {settings.imageFootageEnabled && (
+                        <>
+                            {/* Mode selector */}
+                            <div className="settings-control" style={{ marginBottom: '12px' }}>
+                                <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '4px', gap: '4px' }}>
+                                    {(['single', 'sequential', 'random'] as const).map((mode) => {
+                                        const active = (settings.imageFootageMode || 'sequential') === mode;
+                                        return (
+                                            <button
+                                                key={mode}
+                                                title={t(`pipeline.image.footage_mode_${mode}_desc`)}
+                                                onClick={() => handleChange('imageFootageMode', mode)}
+                                                style={{
+                                                    flex: 1, padding: '6px', borderRadius: '6px', border: 'none',
+                                                    background: active ? 'var(--bg-primary)' : 'transparent',
+                                                    color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                                                    fontSize: '11px', fontWeight: active ? 500 : 400,
+                                                    boxShadow: active ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                {mode === 'single' && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>}
+                                                {mode === 'sequential' && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>}
+                                                {mode === 'random' && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>}
+                                                {t(`pipeline.image.footage_mode_${mode}`)}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                                    {t(`pipeline.image.footage_mode_${settings.imageFootageMode || 'sequential'}_desc`)}
+                                </div>
+                            </div>
+
+                            {/* Source selector: Files / Folder */}
+                            <div className="settings-control">
+                                {/* Tab toggle */}
+                                <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '3px', gap: '3px', marginBottom: '10px' }}>
+                                    {(['files', 'folder'] as const).map((src) => {
+                                        const active = footageSrc === src;
+                                        return (
+                                            <button
+                                                key={src}
+                                                onClick={() => handleChange('imageFootageSource', src)}
+                                                style={{
+                                                    flex: 1, padding: '5px', borderRadius: '6px', border: 'none',
+                                                    background: active ? 'var(--bg-primary)' : 'transparent',
+                                                    color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center',
+                                                    justifyContent: 'center', gap: '4px', fontSize: '11px',
+                                                    fontWeight: active ? 500 : 400,
+                                                    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                    transition: 'all 0.15s'
+                                                }}
+                                            >
+                                                {src === 'files'
+                                                    ? <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="m10 8 6 4-6 4V8z"/></svg>
+                                                    : <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                                }
+                                                {t(`pipeline.image.footage_source_${src}`)}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {footageSrc === 'folder' ? (
+                                    /* FOLDER mode */
+                                    settings.imageFootageFolder ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <div style={{
+                                                display: 'flex', alignItems: 'center', gap: '8px',
+                                                padding: '8px 10px', borderRadius: '8px', background: 'var(--bg-tertiary)',
+                                                border: '1px solid var(--border-color)'
+                                            }}>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: 'var(--accent-color)' }}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                                <span style={{ flex: 1, fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                                                    {(settings.imageFootageFolder as string).split(/[\\/]/).pop()}
+                                                </span>
+                                                <button
+                                                    title={settings.imageFootageFolder as string}
+                                                    onClick={() => handleChange('imageFootageFolder', '')}
+                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 0, flexShrink: 0 }}
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                </button>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const folder = await (window as any).go.main.App.SelectVideoFolder();
+                                                        if (folder) handleChange('imageFootageFolder', folder);
+                                                    } catch (err) { console.error('SelectVideoFolder error:', err); }
+                                                }}
+                                                style={{
+                                                    width: '100%', padding: '6px', borderRadius: '6px',
+                                                    border: '1px dashed var(--border-color)', background: 'transparent',
+                                                    color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '11px',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                                }}
+                                            >
+                                                {t('pipeline.image.footage_folder_change')}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const folder = await (window as any).go.main.App.SelectVideoFolder();
+                                                    if (folder) handleChange('imageFootageFolder', folder);
+                                                } catch (err) { console.error('SelectVideoFolder error:', err); }
+                                            }}
+                                            style={{
+                                                width: '100%', padding: '20px 12px', borderRadius: '8px',
+                                                border: '1.5px dashed var(--accent-color)',
+                                                background: 'rgba(var(--accent-rgb), 0.06)',
+                                                color: 'var(--accent-color)', cursor: 'pointer',
+                                                display: 'flex', flexDirection: 'column',
+                                                alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                                fontSize: '12px', fontWeight: 500, transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                            {t('pipeline.image.footage_folder_select')}
+                                        </button>
+                                    )
+                                ) : (
+                                    /* FILES mode */
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        {(!settings.imageFootagePaths || (settings.imageFootagePaths as string[]).length === 0) ? (
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const paths = await (window as any).go.main.App.SelectVideoFiles();
+                                                        if (paths && paths.length > 0) handleChange('imageFootagePaths', paths);
+                                                    } catch (err) { console.error('SelectVideoFiles error:', err); }
+                                                }}
+                                                style={{
+                                                    width: '100%', padding: '20px 12px', borderRadius: '8px',
+                                                    border: '1.5px dashed var(--accent-color)',
+                                                    background: 'rgba(var(--accent-rgb), 0.06)',
+                                                    color: 'var(--accent-color)', cursor: 'pointer',
+                                                    display: 'flex', flexDirection: 'column',
+                                                    alignItems: 'center', justifyContent: 'center', gap: '6px',
+                                                    fontSize: '12px', fontWeight: 500, transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="m10 8 6 4-6 4V8z"/></svg>
+                                                + {t('pipeline.image.footage_add')}
+                                            </button>
+                                        ) : (
+                                            <>
+                                                {(settings.imageFootagePaths as string[]).map((path, i) => (
+                                                    <div key={i} style={{
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                        padding: '6px 8px', borderRadius: '6px', background: 'var(--bg-tertiary)',
+                                                        fontSize: '11px', gap: '8px'
+                                                    }}>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: 'var(--text-secondary)' }}><rect x="2" y="2" width="20" height="20" rx="2"/><path d="m10 8 6 4-6 4V8z"/></svg>
+                                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                                            {path.split(/[\\/]/).pop()}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => {
+                                                                const newPaths = [...(settings.imageFootagePaths as string[])];
+                                                                newPaths.splice(i, 1);
+                                                                handleChange('imageFootagePaths', newPaths);
+                                                            }}
+                                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: '0', lineHeight: 1, flexShrink: 0 }}
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            const paths = await (window as any).go.main.App.SelectVideoFiles();
+                                                            if (paths && paths.length > 0) {
+                                                                const existing: string[] = settings.imageFootagePaths || [];
+                                                                const merged = [...existing, ...paths.filter((p: string) => !existing.includes(p))];
+                                                                handleChange('imageFootagePaths', merged);
+                                                            }
+                                                        } catch (err) { console.error('SelectVideoFiles error:', err); }
+                                                    }}
+                                                    style={{
+                                                        marginTop: '4px', width: '100%', padding: '6px',
+                                                        borderRadius: '6px', border: '1px dashed var(--border-color)',
+                                                        background: 'transparent', color: 'var(--text-secondary)',
+                                                        cursor: 'pointer', fontSize: '11px', display: 'flex',
+                                                        alignItems: 'center', justifyContent: 'center', gap: '4px'
+                                                    }}
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                                    {t('pipeline.image.footage_add')}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* AI generation settings — hidden in footage mode */}
+                {!settings.imageFootageEnabled && <div className="settings-group">
 
                     <div className="settings-group-title" style={{ marginBottom: '16px' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
@@ -597,9 +826,9 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                         )}
                     </div>
 
-                </div>
+                </div>}
 
-                <div className="settings-group">
+                {!settings.imageFootageEnabled && <div className="settings-group">
                     <div className="settings-group-title">
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z" /><path d="M12 12 2.1 12a10.05 10.05 0 0 1 9.9-10v10z" /><path d="m9 16.5 3-3" /></svg>
                         {t('pipeline.group.ai')}
@@ -660,9 +889,9 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             {renderValueOrInput('imagePromptMaxTokens', settings.imagePromptMaxTokens ?? 0, false)}
                         </div>
                     </div>
-                </div>
+                </div>}
 
-                <div className="settings-group">
+                {!settings.imageFootageEnabled && <div className="settings-group">
                     <div className="settings-group-title">
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
                         {t('pipeline.group.provider')}
@@ -1038,7 +1267,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             </div>
                         </>
                     )}
-                </div>
+                </div>}
             </div>
         </div >
     );

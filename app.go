@@ -1580,6 +1580,23 @@ func (a *App) SelectVideo() (string, error) {
 	})
 }
 
+// SelectVideoFiles opens a file dialog to select multiple video files
+func (a *App) SelectVideoFiles() ([]string, error) {
+	return wruntime.OpenMultipleFilesDialog(a.ctx, wruntime.OpenDialogOptions{
+		Title: "Select Footage Files",
+		Filters: []wruntime.FileFilter{
+			{DisplayName: "Video Files", Pattern: "*.mp4;*.mov;*.avi;*.mkv;*.webm"},
+		},
+	})
+}
+
+// SelectVideoFolder opens a directory dialog to select a footage folder
+func (a *App) SelectVideoFolder() (string, error) {
+	return wruntime.OpenDirectoryDialog(a.ctx, wruntime.OpenDialogOptions{
+		Title: "Select Footage Folder",
+	})
+}
+
 // AddToHistory adds a new entry to the task history
 func (a *App) AddToHistory(name string, taskType string, templates []string, content string) error {
 	return a.addHistoryEntry(name, taskType, templates, content, "", nil)

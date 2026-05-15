@@ -27,6 +27,7 @@ type ControlAction struct {
 type PipelineService struct {
 	ctx             context.Context
 	settings        *utils.SettingsService
+	footagePool     *utils.FootagePool
 	openRouter      *api.OpenRouterService
 	elevenLabs      *api.ElevenLabsBotService
 	elevenLabsUnlim *api.ElevenLabsUnlimService
@@ -108,6 +109,7 @@ func NewPipelineService(
 ) *PipelineService {
 	s := &PipelineService{
 		settings:                settings,
+		footagePool:             utils.NewFootagePool(settings.GetConfigDir()),
 		openRouter:              openRouter,
 		elevenLabs:              elevenLabs,
 		elevenLabsUnlim:         elevenLabsUnlim,

@@ -285,6 +285,11 @@ export const TemplateProvider: React.FC<{ children: ReactNode }> = ({ children }
         }
         result.montageVideoWatermarkPaths = result.montageVideoWatermarkPaths ?? [];
 
+        if (obj.imageFootagePaths && Array.isArray(obj.imageFootagePaths)) {
+            result.imageFootagePaths = obj.imageFootagePaths;
+        }
+        result.imageFootagePaths = result.imageFootagePaths ?? [];
+
         return result;
     }, []);
 

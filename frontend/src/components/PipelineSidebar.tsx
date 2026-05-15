@@ -657,7 +657,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         });
 
         // 3. Image Settings
-        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic', 'imageShortVideoFillMode', 'imageVideoDistribution', 'imageVideoStartCount', 'imageVideoSubtitleThreshold'];
+        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic', 'imageShortVideoFillMode', 'imageVideoDistribution', 'imageVideoStartCount', 'imageVideoSubtitleThreshold', 'imageFootageEnabled', 'imageFootageMode', 'imageFootageFolder', 'imageFootageSource'];
         imageBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.image[f] = settings[f]; });
 
         // Image Service Specific Groups
@@ -693,6 +693,9 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         // 7. Montage Triggers
         templateData.montageOverlayTriggers = settings.montageOverlayTriggers || [];
         templateData.montageOverlayTriggersEnabled = settings.montageOverlayTriggersEnabled || false;
+
+        // 8. Footage paths (array — saved at top level like other path arrays)
+        templateData.imageFootagePaths = settings.imageFootagePaths || [];
 
         // 5. Montage Settings
         const montageFields = [
@@ -796,6 +799,11 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             result.montageVideoWatermarkPaths = obj.montage.montageVideoWatermarkPaths;
         }
         result.montageVideoWatermarkPaths = result.montageVideoWatermarkPaths ?? [];
+
+        if (obj.imageFootagePaths && Array.isArray(obj.imageFootagePaths)) {
+            result.imageFootagePaths = obj.imageFootagePaths;
+        }
+        result.imageFootagePaths = result.imageFootagePaths ?? [];
 
         return result;
     };
@@ -1033,6 +1041,12 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 montageVideoWatermarkPosition: cleanApplied.montageVideoWatermarkPosition ?? 'bottom-right',
                 montageVideoWatermarkSize: cleanApplied.montageVideoWatermarkSize ?? 15,
                 montageVideoWatermarkRounding: cleanApplied.montageVideoWatermarkRounding ?? 10,
+                // Footage mode — reset to defaults if missing in template
+                imageFootageEnabled: cleanApplied.imageFootageEnabled ?? false,
+                imageFootagePaths: cleanApplied.imageFootagePaths ?? [],
+                imageFootageMode: cleanApplied.imageFootageMode ?? 'sequential',
+                imageFootageFolder: cleanApplied.imageFootageFolder ?? '',
+                imageFootageSource: cleanApplied.imageFootageSource ?? 'files',
             };
         });
     };

@@ -635,7 +635,22 @@
       "tag_content": "поточний текст (завжди)",
       "tag_characters": "опис персонажів",
       "tag_memory": "контекст пам'яті",
-      "tag_story": "переказ всієї історії"
+      "tag_story": "переказ всієї історії",
+      "footage_mode": "Режим готових футажів",
+      "footage_enabled": "Використовувати готові футажі",
+      "footage_mode_single": "Один файл",
+      "footage_mode_sequential": "По черзі",
+      "footage_mode_random": "Рандом",
+      "footage_mode_single_desc": "Один файл використовується для всього відеоряду",
+      "footage_mode_sequential_desc": "Футажі чергуються по черзі",
+      "footage_mode_random_desc": "Футажі обираються в довільному порядку",
+      "footage_files": "Файли футажів",
+      "footage_add": "Додати відео",
+      "footage_empty": "Жодного футажу не додано",
+      "footage_source_files": "Файли",
+      "footage_source_folder": "Папка",
+      "footage_folder_select": "Обрати папку з футажами",
+      "footage_folder_change": "Змінити папку"
     },
     "group": {
       "ai": "Параметри ШІ",

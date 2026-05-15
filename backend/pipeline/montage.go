@@ -474,6 +474,28 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	procPriority := pSettings.MontageProcessPriority
 	cpuCores := pSettings.MontageCPUCores
 
+	// [FOOTAGE MODE] — each footage file plays at its natural duration; no transitions.
+	isFootageMode := pSettings.ImageFootageEnabled
+	if val, ok := settings["imageFootageEnabled"].(bool); ok {
+		isFootageMode = val
+	}
+	if isFootageMode {
+		transDur = 0
+		isFadeFast = true // use simple concat path (no xfade); also makes padAmount=0 below
+		for i, vFile := range visualFiles {
+			dur, err := s.getDuration(ffprobePath, filepath.Join(finalDir, vFile))
+			if err == nil && dur > 0 {
+				effectiveDurs[i] = dur
+			}
+		}
+		totalFootage := 0.0
+		for _, d := range effectiveDurs {
+			totalFootage += d
+		}
+		s.log("INFO", fmt.Sprintf("[Montage] Footage mode: %d clips, total footage=%.2fs, audio=%.2fs",
+			numFiles, totalFootage, audioDur), id, taskLabel)
+	}
+
 	// [CONTROL] -------------------------------------------------------------
 	// Wait for user confirmation if Montage Control is enabled
 	mControlEnabled := pSettings.MontageControlEnabled

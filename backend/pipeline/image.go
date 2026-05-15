@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -313,6 +314,162 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		// Get actual counts of what was restored to show the user
 		data := s.CheckExistingFiles(id, finalDir, taskType, settings, false)
 		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("p:%d i:%d v:%d", data.PromptCount, data.ImageCount, data.VideoCount))
+		return nil
+	}
+
+	// [FOOTAGE MODE]
+	iFootageEnabled, ok := settings["imageFootageEnabled"].(bool)
+	if !ok {
+		iFootageEnabled = pSettings.ImageFootageEnabled
+	}
+	if iFootageEnabled {
+		var footagePaths []string
+		if val, ok := settings["imageFootagePaths"]; ok {
+			switch v := val.(type) {
+			case []string:
+				footagePaths = v
+			case []interface{}:
+				for _, p := range v {
+					if s2, ok := p.(string); ok && s2 != "" {
+						footagePaths = append(footagePaths, s2)
+					}
+				}
+			}
+		}
+		if len(footagePaths) == 0 {
+			footagePaths = pSettings.ImageFootagePaths
+		}
+
+		// If folder source is active, scan the footage folder for video files.
+		footageSource, _ := settings["imageFootageSource"].(string)
+		if footageSource == "" {
+			footageSource = pSettings.ImageFootageSource
+		}
+		footageFolder, _ := settings["imageFootageFolder"].(string)
+		if footageFolder == "" {
+			footageFolder = pSettings.ImageFootageFolder
+		}
+		if footageSource == "folder" && footageFolder != "" {
+			var folderPaths []string
+			videoExts := map[string]bool{".mp4": true, ".mov": true, ".avi": true, ".mkv": true, ".webm": true}
+			entries, err := os.ReadDir(footageFolder)
+			if err != nil {
+				s.log("ERROR", fmt.Sprintf("[Footage] Cannot read folder %s: %v", footageFolder, err), id, taskLabel)
+			} else {
+				for _, e := range entries {
+					if !e.IsDir() && videoExts[strings.ToLower(filepath.Ext(e.Name()))] {
+						folderPaths = append(folderPaths, filepath.Join(footageFolder, e.Name()))
+					}
+				}
+			}
+			if len(folderPaths) > 0 {
+				footagePaths = folderPaths
+				s.log("INFO", fmt.Sprintf("[Footage] Folder mode: found %d video(s) in %s", len(folderPaths), footageFolder), id, taskLabel)
+			} else {
+				s.log("WARN", fmt.Sprintf("[Footage] Folder %s has no video files, falling back to manual list", footageFolder), id, taskLabel)
+			}
+		}
+
+		if len(footagePaths) == 0 {
+			s.log("ERROR", "[Pipeline] Footage mode enabled but no footage files provided!", id, taskLabel)
+			return fmt.Errorf("footage mode: no footage files selected")
+		}
+
+		footageMode, _ := settings["imageFootageMode"].(string)
+		if footageMode == "" {
+			footageMode = pSettings.ImageFootageMode
+		}
+		if footageMode == "" {
+			footageMode = "sequential"
+		}
+
+		// Probe audio duration so we can claim enough footage to cover the whole audio.
+		// This avoids the same footage being repeated if it's shorter than the audio.
+		var audioDur float64
+		ffprobePath, probeErr := utils.EnsureEngine("ffprobe")
+		if probeErr == nil {
+			audioDur, _ = s.getDuration(ffprobePath, filepath.Join(finalDir, "voice.mp3"))
+		}
+		getDur := func(path string) float64 {
+			if probeErr != nil {
+				return 0
+			}
+			d, err := s.getDuration(ffprobePath, path)
+			if err != nil {
+				return 0
+			}
+			return d
+		}
+
+		// Build ordered list with global round-robin for sequential/single to avoid reuse across tasks and restarts.
+		// For all modes: claim enough files to cover audio duration so the montage never has to loop the same footage.
+		var ordered []string
+		switch footageMode {
+		case "single":
+			if audioDur > 0 {
+				ordered = s.footagePool.ClaimForDuration(footagePaths, audioDur, getDur)
+			} else {
+				ordered = s.footagePool.ClaimNext(footagePaths, 1)
+			}
+		case "random":
+			// Shuffle the pool first, then fill to duration.
+			shuffled := make([]string, len(footagePaths))
+			copy(shuffled, footagePaths)
+			rand.Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
+			if audioDur > 0 {
+				totalDur := 0.0
+				for _, p := range shuffled {
+					if totalDur >= audioDur {
+						break
+					}
+					ordered = append(ordered, p)
+					totalDur += getDur(p)
+				}
+				// If still not enough (total footage < audio), cycle through shuffled
+				for totalDur < audioDur && len(shuffled) > 0 {
+					for _, p := range shuffled {
+						if totalDur >= audioDur {
+							break
+						}
+						ordered = append(ordered, p)
+						totalDur += getDur(p)
+					}
+				}
+			} else {
+				ordered = shuffled
+			}
+		default: // sequential
+			if audioDur > 0 {
+				ordered = s.footagePool.ClaimForDuration(footagePaths, audioDur, getDur)
+			} else {
+				ordered = s.footagePool.ClaimNext(footagePaths, len(footagePaths))
+			}
+		}
+
+		if err := os.MkdirAll(imagesDir, 0755); err != nil {
+			return fmt.Errorf("footage mode: failed to create images dir: %v", err)
+		}
+
+		s.emitStageStatus(id, "image", "running", fmt.Sprintf("footage:0/%d", len(ordered)))
+		for i, src := range ordered {
+			dst := filepath.Join(imagesDir, fmt.Sprintf("%d.mp4", i+1))
+			if _, err := os.Stat(dst); err == nil && !shouldRegeneratePrompts {
+				s.log("INFO", fmt.Sprintf("[Footage] %d.mp4 already exists, skipping.", i+1), id, taskLabel)
+				continue
+			}
+			// Hard link first (instant, no disk duplication); fall back to copy
+			if err := os.Link(src, dst); err != nil {
+				if err2 := copyFileData(src, dst); err2 != nil {
+					s.log("ERROR", fmt.Sprintf("[Footage] Failed to prepare %d.mp4 from %s: %v", i+1, filepath.Base(src), err2), id, taskLabel)
+					return fmt.Errorf("footage mode: failed to prepare file %d: %v", i+1, err2)
+				}
+			}
+			s.log("INFO", fmt.Sprintf("[Footage] Prepared %d.mp4 from %s", i+1, filepath.Base(src)), id, taskLabel)
+			s.emitStageStatus(id, "image", "running", fmt.Sprintf("footage:%d/%d", i+1, len(ordered)))
+		}
+
+		s.log("SUCCESS", fmt.Sprintf("[Pipeline] Footage mode complete: %d file(s) prepared", len(ordered)), id, taskLabel)
+		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("footage:%d", len(ordered)))
 		return nil
 	}
 
@@ -1399,4 +1556,21 @@ func (s *PipelineService) regenerateElevenLabs(prompt string, settings map[strin
 
 	s.log("INFO", fmt.Sprintf("[ElevenLabs] Regenerating Image. Ratio: %s", iRatio), "", "Regeneration")
 	return s.elevenLabsImage.GenerateImage(iApiKey, prompt, iRatio, outPath)
+}
+
+func copyFileData(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	return err
 }

@@ -199,7 +199,12 @@ type PipelineSettings struct {
 	ImageShortVideoFillMode        string  `json:"imageShortVideoFillMode,omitempty"`     // boomerang, mirror
 	ImageVideoDistribution         string  `json:"imageVideoDistribution,omitempty"`      // sequential, random, subtitle_duration
 	ImageVideoStartCount           int     `json:"imageVideoStartCount,omitempty"`        // videos forced at start in random mode
-	ImageVideoSubtitleThreshold    float64 `json:"imageVideoSubtitleThreshold,omitempty"` // seconds threshold for subtitle_duration mode
+	ImageVideoSubtitleThreshold    float64  `json:"imageVideoSubtitleThreshold,omitempty"` // seconds threshold for subtitle_duration mode
+	ImageFootageEnabled            bool     `json:"imageFootageEnabled"`
+	ImageFootagePaths              []string `json:"imageFootagePaths,omitempty"`
+	ImageFootageMode               string   `json:"imageFootageMode,omitempty"` // single, random, sequential
+	ImageFootageFolder             string   `json:"imageFootageFolder,omitempty"`
+	ImageFootageSource             string   `json:"imageFootageSource,omitempty"` // files, folder
 
 	// Keep outputPath for migration if needed
 
