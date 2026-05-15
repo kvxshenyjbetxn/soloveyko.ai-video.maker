@@ -657,7 +657,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
         });
 
         // 3. Image Settings
-        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic', 'imageShortVideoFillMode', 'imageVideoDistribution', 'imageVideoStartCount', 'imageVideoSubtitleThreshold', 'imageFootageEnabled', 'imageFootageMode', 'imageFootageFolder', 'imageFootageSource'];
+        const imageBaseFields = ['imageService', 'imageMode', 'imageMemoryType', 'imageMemoryChars', 'imageGenerationMethod', 'imageGroupSentences', 'imageSentenceLimit', 'imageInitialSentenceCount', 'imagePromptModel', 'imagePromptTemperature', 'imagePromptMaxTokens', 'imageDetermineCharacters', 'imageDetermineCharactersMode', 'imageDetermineCharactersPrompt', 'imageDetermineCharactersStatic', 'imageShortVideoFillMode', 'imageVideoDistribution', 'imageVideoStartCount', 'imageVideoSubtitleThreshold', 'imageFootageEnabled', 'imageFootageMode', 'imageFootageFolder', 'imageFootageSource', 'imageFootageAlsoGenerate'];
         imageBaseFields.forEach(f => { if (settings[f] !== undefined) templateData.image[f] = settings[f]; });
 
         // Image Service Specific Groups
@@ -1047,6 +1047,7 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 imageFootageMode: cleanApplied.imageFootageMode ?? 'sequential',
                 imageFootageFolder: cleanApplied.imageFootageFolder ?? '',
                 imageFootageSource: cleanApplied.imageFootageSource ?? 'files',
+                imageFootageAlsoGenerate: cleanApplied.imageFootageAlsoGenerate ?? false,
             };
         });
     };

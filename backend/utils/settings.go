@@ -205,6 +205,7 @@ type PipelineSettings struct {
 	ImageFootageMode               string   `json:"imageFootageMode,omitempty"` // single, random, sequential
 	ImageFootageFolder             string   `json:"imageFootageFolder,omitempty"`
 	ImageFootageSource             string   `json:"imageFootageSource,omitempty"` // files, folder
+	ImageFootageAlsoGenerate       bool     `json:"imageFootageAlsoGenerate"`
 
 	// Keep outputPath for migration if needed
 

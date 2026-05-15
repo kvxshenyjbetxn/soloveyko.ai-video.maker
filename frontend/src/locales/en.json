@@ -636,7 +636,8 @@
       "footage_source_files": "Files",
       "footage_source_folder": "Folder",
       "footage_folder_select": "Select footage folder",
-      "footage_folder_change": "Change folder"
+      "footage_folder_change": "Change folder",
+      "footage_also_generate": "Also generate images/videos"
     },
     "group": {
       "ai": "AI Parameters",

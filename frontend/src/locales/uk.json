@@ -650,7 +650,8 @@
       "footage_source_files": "Файли",
       "footage_source_folder": "Папка",
       "footage_folder_select": "Обрати папку з футажами",
-      "footage_folder_change": "Змінити папку"
+      "footage_folder_change": "Змінити папку",
+      "footage_also_generate": "Також генерувати зображення/відео"
     },
     "group": {
       "ai": "Параметри ШІ",

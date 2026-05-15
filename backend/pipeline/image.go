@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	bapi "soloveyko/backend/api"
 	"soloveyko/backend/utils"
@@ -322,6 +323,10 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 	if !ok {
 		iFootageEnabled = pSettings.ImageFootageEnabled
 	}
+	iFootageAlsoGenerate, _ := settings["imageFootageAlsoGenerate"].(bool)
+	if !iFootageAlsoGenerate {
+		iFootageAlsoGenerate = pSettings.ImageFootageAlsoGenerate
+	}
 	if iFootageEnabled {
 		var footagePaths []string
 		if val, ok := settings["imageFootagePaths"]; ok {
@@ -387,6 +392,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		// This avoids the same footage being repeated if it's shorter than the audio.
 		var audioDur float64
 		ffprobePath, probeErr := utils.EnsureEngine("ffprobe")
+		ffmpegPath, ffmpegErr := utils.EnsureEngine("ffmpeg")
 		if probeErr == nil {
 			audioDur, _ = s.getDuration(ffprobePath, filepath.Join(finalDir, "voice.mp3"))
 		}
@@ -457,11 +463,25 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 				s.log("INFO", fmt.Sprintf("[Footage] %d.mp4 already exists, skipping.", i+1), id, taskLabel)
 				continue
 			}
-			// Hard link first (instant, no disk duplication); fall back to copy
-			if err := os.Link(src, dst); err != nil {
-				if err2 := copyFileData(src, dst); err2 != nil {
-					s.log("ERROR", fmt.Sprintf("[Footage] Failed to prepare %d.mp4 from %s: %v", i+1, filepath.Base(src), err2), id, taskLabel)
-					return fmt.Errorf("footage mode: failed to prepare file %d: %v", i+1, err2)
+			// Remux via FFmpeg with faststart to ensure moov atom is at the beginning.
+			// This fixes files where moov is at the end (OBS, cameras, screen recorders).
+			remuxOk := false
+			if ffmpegErr == nil {
+				cmd := exec.Command(ffmpegPath, "-y", "-i", src, "-c", "copy",
+					"-movflags", "+faststart", "-avoid_negative_ts", "make_zero", dst)
+				if err := cmd.Run(); err == nil {
+					remuxOk = true
+				} else {
+					s.log("WARN", fmt.Sprintf("[Footage] FFmpeg remux failed for %s: %v, falling back to copy", filepath.Base(src), err), id, taskLabel)
+					_ = os.Remove(dst)
+				}
+			}
+			if !remuxOk {
+				if err := os.Link(src, dst); err != nil {
+					if err2 := copyFileData(src, dst); err2 != nil {
+						s.log("ERROR", fmt.Sprintf("[Footage] Failed to prepare %d.mp4 from %s: %v", i+1, filepath.Base(src), err2), id, taskLabel)
+						return fmt.Errorf("footage mode: failed to prepare file %d: %v", i+1, err2)
+					}
 				}
 			}
 			s.log("INFO", fmt.Sprintf("[Footage] Prepared %d.mp4 from %s", i+1, filepath.Base(src)), id, taskLabel)
@@ -469,8 +489,11 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 
 		s.log("SUCCESS", fmt.Sprintf("[Pipeline] Footage mode complete: %d file(s) prepared", len(ordered)), id, taskLabel)
-		s.emitStageStatus(id, "image", "completed", fmt.Sprintf("footage:%d", len(ordered)))
-		return nil
+		if !iFootageAlsoGenerate {
+			s.emitStageStatus(id, "image", "completed", fmt.Sprintf("footage:%d", len(ordered)))
+			return nil
+		}
+		s.log("INFO", "[Pipeline] Also-generate enabled: continuing with AI image generation → images_generated/", id, taskLabel)
 	}
 
 	// [FULL STAGE SKIP]
@@ -482,7 +505,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		isFromModal = true
 	}
 
-	if (!isFromModal) && hasExistingImages && !shouldRegeneratePrompts {
+	if (!isFromModal) && hasExistingImages && !shouldRegeneratePrompts && !iFootageAlsoGenerate {
 		allFound := true
 		countImg := 0
 		countVid := 0
@@ -818,8 +841,12 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		}
 	}
 
-	// Create images dir
-	imagesDir = filepath.Join(finalDir, "images")
+	// Create images dir (use images_generated/ when footage also-generate is active)
+	if iFootageAlsoGenerate {
+		imagesDir = filepath.Join(finalDir, "images_generated")
+	} else {
+		imagesDir = filepath.Join(finalDir, "images")
+	}
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
 		return fmt.Errorf("failed to create images dir: %v", err)
 	}

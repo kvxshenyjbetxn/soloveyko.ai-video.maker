@@ -338,10 +338,26 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                             </div>
                         </>
                     )}
+
+                    {settings.imageFootageEnabled && (
+                        <div className="settings-control" style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.image.footage_also_generate')}</label>
+                                <label className="stage-switch small">
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.imageFootageAlsoGenerate || false}
+                                        onChange={(e) => handleChange('imageFootageAlsoGenerate', e.target.checked)}
+                                    />
+                                    <span className="stage-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* AI generation settings — hidden in footage mode */}
-                {!settings.imageFootageEnabled && <div className="settings-group">
+                {/* AI generation settings — hidden in footage mode unless imageFootageAlsoGenerate */}
+                {(!settings.imageFootageEnabled || settings.imageFootageAlsoGenerate) && <div className="settings-group">
 
                     <div className="settings-group-title" style={{ marginBottom: '16px' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>
@@ -828,7 +844,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
 
                 </div>}
 
-                {!settings.imageFootageEnabled && <div className="settings-group">
+                {(!settings.imageFootageEnabled || settings.imageFootageAlsoGenerate) && <div className="settings-group">
                     <div className="settings-group-title">
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z" /><path d="M12 12 2.1 12a10.05 10.05 0 0 1 9.9-10v10z" /><path d="m9 16.5 3-3" /></svg>
                         {t('pipeline.group.ai')}
@@ -891,7 +907,7 @@ export const ImageSection: React.FC<ImageSectionProps> = ({
                     </div>
                 </div>}
 
-                {!settings.imageFootageEnabled && <div className="settings-group">
+                {(!settings.imageFootageEnabled || settings.imageFootageAlsoGenerate) && <div className="settings-group">
                     <div className="settings-group-title">
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
                         {t('pipeline.group.provider')}

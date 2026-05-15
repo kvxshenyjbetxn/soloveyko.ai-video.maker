@@ -641,7 +641,8 @@
       "footage_source_files": "Файлы",
       "footage_source_folder": "Папка",
       "footage_folder_select": "Выбрать папку с футажами",
-      "footage_folder_change": "Изменить папку"
+      "footage_folder_change": "Изменить папку",
+      "footage_also_generate": "Также генерировать изображения/видео"
     },
     "group": {
       "ai": "Параметры ИИ",
