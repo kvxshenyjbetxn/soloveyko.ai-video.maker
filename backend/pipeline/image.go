@@ -327,6 +327,9 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 	if !iFootageAlsoGenerate {
 		iFootageAlsoGenerate = pSettings.ImageFootageAlsoGenerate
 	}
+	if !iFootageEnabled {
+		iFootageAlsoGenerate = false
+	}
 	if iFootageEnabled {
 		var footagePaths []string
 		if val, ok := settings["imageFootagePaths"]; ok {
