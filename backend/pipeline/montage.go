@@ -494,6 +494,34 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 		s.log("INFO", fmt.Sprintf("[Montage] Footage mode: %d clips, total footage=%.2fs, audio=%.2fs",
 			numFiles, totalFootage, audioDur), id, taskLabel)
+
+		// Trim clips so their total doesn't exceed audioDur.
+		// A single 20-min footage + 3-min audio should show/render only 3 minutes.
+		if totalFootage > audioDur {
+			remaining := audioDur
+			for i := range effectiveDurs {
+				if remaining <= 0 {
+					effectiveDurs[i] = 0
+				} else if effectiveDurs[i] > remaining {
+					effectiveDurs[i] = remaining
+					remaining = 0
+				} else {
+					remaining -= effectiveDurs[i]
+				}
+			}
+			var newVF []string
+			var newED []float64
+			for i, d := range effectiveDurs {
+				if d > 0 {
+					newVF = append(newVF, visualFiles[i])
+					newED = append(newED, d)
+				}
+			}
+			visualFiles = newVF
+			effectiveDurs = newED
+			numFiles = len(visualFiles)
+			s.log("INFO", fmt.Sprintf("[Montage] Footage mode: capped to audio duration, %d clips used", numFiles), id, taskLabel)
+		}
 	}
 
 	// [CONTROL] -------------------------------------------------------------
