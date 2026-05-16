@@ -939,7 +939,7 @@
     border-radius: 8px;
     box-sizing: border-box;
     transition: all 0.2s ease;
-    overflow: hidden;
+    overflow: visible;
     display: flex;
     flex-direction: column;
 }
@@ -1023,6 +1023,7 @@
     padding: 4px;
     position: relative;
     pointer-events: auto;
+    overflow: hidden;
 }
 
 .montage-clip-thumbnail-placeholder { font-size: 1.5rem; opacity: 0.6; margin-bottom: 4px; }
@@ -1093,6 +1094,7 @@
     opacity: 0;
     transition: opacity 0.2s;
     z-index: 50;
+    overflow: visible;
 }
 
 .montage-clip-block:hover .montage-clip-actions { opacity: 1; }
@@ -1113,6 +1115,7 @@
 
 .clip-action-btn:hover { background: #000; transform: scale(1.1); }
 .clip-action-btn.delete:hover { background: #ff4d4d; }
+.clip-action-btn.animate:hover { background: #2a6bcc; }
 
 .montage-clip-resizer {
     position: absolute;

@@ -855,6 +855,36 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
         }
     };
 
+    const handleAnimateClip = useCallback(async (idx: number) => {
+        const targetClip = clips[idx];
+        if (targetClip.isVideo) return;
+        setRegeneratingIndices(prev => new Set(prev).add(idx));
+        try {
+            // @ts-ignore
+            const newPath = await window.go.main.App.AnimateGalleryImage(targetClip.path);
+            if (newPath) {
+                let actualDur = 0;
+                const v = document.createElement('video');
+                v.src = `local/${newPath.replace(/\\/g, '/')}`;
+                await new Promise(r => {
+                    v.onloadedmetadata = () => { actualDur = v.duration; r(null); };
+                    v.onerror = () => r(null);
+                    setTimeout(() => r(null), 2000);
+                });
+                setClips(prev => {
+                    const next = [...prev];
+                    next[idx] = { ...next[idx], path: newPath, isVideo: true, actualDuration: actualDur };
+                    return next;
+                });
+                setClipBusters(prev => ({ ...prev, [newPath]: Date.now() }));
+            }
+        } catch (err) {
+            console.error("Animation failed:", err);
+        } finally {
+            setRegeneratingIndices(prev => { const next = new Set(prev); next.delete(idx); return next; });
+        }
+    }, [clips]);
+
     const handleOpenRegenerate = useCallback((idx: number) => {
         setRegIdx(idx);
         setIsRegModalOpen(true);
@@ -1295,6 +1325,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                     <div className="montage-clip-actions">
                         <button className="clip-action-btn delete" onMouseDown={(e) => { e.stopPropagation(); handleDeleteClip(idx); }}>🗑️</button>
                         <button className="clip-action-btn regenerate" onMouseDown={(e) => { e.stopPropagation(); handleOpenRegenerate(idx); }}>🔄</button>
+                        {!clip.isVideo && (
+                            <button className="clip-action-btn animate" onMouseDown={(e) => { e.stopPropagation(); handleAnimateClip(idx); }} title="Animate">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                            </button>
+                        )}
                     </div>
                 </div>
                 {idx < clips.length - 1 && (
@@ -1302,7 +1337,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                 )}
             </div>
         ));
-    }, [clipLayouts, activeClipInfo?.idx, clips, regeneratingIndices, handleDeleteClip, handleOpenRegenerate]);
+    }, [clipLayouts, activeClipInfo?.idx, clips, regeneratingIndices, handleDeleteClip, handleOpenRegenerate, handleAnimateClip]);
 
     const triggerElements = useMemo(() => {
         return triggers.map((tr, i) => {
@@ -1689,6 +1724,11 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                         <div className="montage-clip-actions">
                                                             <button className="clip-action-btn delete" onMouseDown={(e) => { e.stopPropagation(); handleDeleteClip(idx); }}>🗑️</button>
                                                             <button className="clip-action-btn regenerate" onMouseDown={(e) => { e.stopPropagation(); handleOpenRegenerate(idx); }}>🔄</button>
+                                                            {!clip.isVideo && (
+                                                                <button className="clip-action-btn animate" onMouseDown={(e) => { e.stopPropagation(); handleAnimateClip(idx); }} title="Animate">
+                                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                                                </button>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     {idx < clips.length - 1 && (
