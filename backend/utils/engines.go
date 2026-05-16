@@ -245,8 +245,19 @@ func DownloadAndInstallWhisperX(progressFunc func(string, float64)) error {
 			progressFunc("Розпакування...", 80+(percent*0.2))
 		}
 	})
+	if err != nil {
+		return err
+	}
 
-	return err
+	// 3. Ставимо права на виконання для Mac/Linux
+	if runtime.GOOS != "windows" {
+		exePath := GetWhisperXExePath()
+		if exePath != "" {
+			os.Chmod(exePath, 0755)
+		}
+	}
+
+	return nil
 }
 
 // DownloadWithProgress виконує HTTP Get запит та відстежує кількість отриманих байтів 
