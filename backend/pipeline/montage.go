@@ -531,6 +531,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		mControlEnabled = val
 	}
 
+	iExportXML := pSettings.MontageExportXML
+	if val, ok := settings["montageExportXML"].(bool); ok {
+		iExportXML = val
+	}
+
 	if mControlEnabled {
 		s.emitStageStatus(id, "montage", "waiting")
 		s.log("INFO", "[Control] Waiting for user montage review...", id, taskLabel)
@@ -810,10 +815,10 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 							})
 							// Also add to pool so assets panel shows them
 							plan.PoolFiles = append(plan.PoolFiles, MontageClip{
-								Path:    fPath,
+								Path:     fPath,
 								Duration: dur,
 								IsVideo:  isVid,
-								Source:  "generated",
+								Source:   "generated",
 							})
 						}
 					}
@@ -1097,6 +1102,177 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 	}
 
+	// [XML EXPORT] — generate XMEML file instead of rendering with FFmpeg
+	if iExportXML {
+		// DaVinci Resolve does not support PNG files via XML import — only JPG and video.
+		// pngToJpg copies a .png file as .jpg (same bytes; works because generated images
+		// are actually JPEG data saved with a .png extension). Returns original path for non-PNG.
+		pngToJpg := func(p string) string {
+			if strings.ToLower(filepath.Ext(p)) != ".png" {
+				return p
+			}
+			jpgPath := p[:len(p)-4] + ".jpg"
+			if _, err := os.Stat(jpgPath); err == nil {
+				return jpgPath
+			}
+			if err := os.Rename(p, jpgPath); err != nil {
+				return p
+			}
+			return jpgPath
+		}
+
+		var xClips []xmlClip
+		for i, f := range visualFiles {
+			dur := 0.0
+			if i < len(effectiveDurs) {
+				dur = effectiveDurs[i]
+			}
+			absF := f
+			if !filepath.IsAbs(f) {
+				absF = filepath.Join(finalDir, f)
+			}
+			absF = pngToJpg(absF)
+			ext := strings.ToLower(filepath.Ext(absF))
+			xClips = append(xClips, xmlClip{Path: absF, Duration: dur, IsVideo: videoExts[ext]})
+		}
+		var xWatermarks []xmlWatermark
+		for _, wm := range pSettings.MontageWatermarks {
+			if wm.Path == "" {
+				continue
+			}
+			st, dur := 0.0, 5.0
+			if wm.StartTime != nil {
+				st = *wm.StartTime
+			}
+			if wm.Duration != nil {
+				dur = *wm.Duration
+			}
+			xWatermarks = append(xWatermarks, xmlWatermark{
+				Path: pngToJpg(wm.Path), StartTime: st, Duration: dur,
+				X: wm.X, Y: wm.Y, W: wm.W, H: wm.H,
+				Opacity: wm.Opacity, TrackID: wm.TrackID, IsVideo: wm.IsVideo,
+			})
+		}
+		// Fallback: scan images_generated/ if no auto-gen watermarks came from control.
+		// Needed when mControlEnabled=false and imageFootageAlsoGenerate is active.
+		hasAutoGen := false
+		for _, wm := range xWatermarks {
+			if wm.TrackID == "auto-gen-overlay" {
+				hasAutoGen = true
+				break
+			}
+		}
+		if !hasAutoGen {
+			genDir := filepath.Join(finalDir, "images_generated")
+			if entries, err := os.ReadDir(genDir); err == nil {
+				var genFiles []string
+				for _, e := range entries {
+					if e.IsDir() {
+						continue
+					}
+					ext := strings.ToLower(filepath.Ext(e.Name()))
+					if videoExts[ext] || imageExts[ext] {
+						genFiles = append(genFiles, filepath.Join(genDir, e.Name()))
+					}
+				}
+				sort.Slice(genFiles, func(i, j int) bool {
+					numFromName := func(p string) int {
+						base := filepath.Base(p)
+						ext := filepath.Ext(base)
+						n, _ := strconv.Atoi(base[:len(base)-len(ext)])
+						return n
+					}
+					ni, nj := numFromName(genFiles[i]), numFromName(genFiles[j])
+					if ni != nj {
+						return ni < nj
+					}
+					return filepath.Base(genFiles[i]) < filepath.Base(genFiles[j])
+				})
+				if len(genFiles) > 0 {
+					timings, timErr := utils.GetImageTimings(finalDir, audioDur, len(genFiles), genFiles, taskLabel)
+					if timErr != nil || len(timings) == 0 {
+						perClip := audioDur / float64(len(genFiles))
+						timings = make([]utils.ImageTiming, len(genFiles))
+						for i := range timings {
+							timings[i] = utils.ImageTiming{Index: i, Start: float64(i) * perClip, End: float64(i+1) * perClip, Duration: perClip}
+						}
+					}
+					for i, fPath := range genFiles {
+						if i >= len(timings) {
+							break
+						}
+						t := timings[i]
+						dur := t.End - t.Start
+						if dur <= 0 {
+							dur = t.Duration
+						}
+						fPath = pngToJpg(fPath)
+						ext := strings.ToLower(filepath.Ext(fPath))
+						xWatermarks = append(xWatermarks, xmlWatermark{
+							Path: fPath, StartTime: t.Start, Duration: dur,
+							X: 0, Y: 0, W: baseW, H: baseH,
+							Opacity: 1.0, TrackID: "auto-gen-overlay", IsVideo: videoExts[ext],
+						})
+					}
+				}
+			}
+		}
+		var xTriggers []xmlTrigger
+		if pSettings.MontageOverlayTriggersEnabled {
+			for _, tr := range pSettings.MontageOverlayTriggers {
+				if tr.Path == "" {
+					continue
+				}
+				st, dur := 0.0, 5.0
+				if tr.StartTime != nil {
+					st = *tr.StartTime
+				}
+				if tr.Duration != nil {
+					dur = *tr.Duration
+				}
+				xTriggers = append(xTriggers, xmlTrigger{
+					Path: tr.Path, StartTime: st, Duration: dur,
+					X: tr.X, Y: tr.Y, W: tr.W, H: tr.H,
+				})
+			}
+		}
+		introDur := 0.0
+		introPath := ""
+		if pSettings.MontageIntroVideoEnabled && pSettings.MontageIntroVideoPath != "" {
+			if _, statErr := os.Stat(pSettings.MontageIntroVideoPath); statErr == nil {
+				introPath = pSettings.MontageIntroVideoPath
+				introDur, _ = s.getDuration(ffprobePath, introPath)
+			}
+		}
+		// Put main footage track on top when auto-gen overlays are present,
+		// so footage is visible above the generated images background.
+		hasAutoGenOverlay := false
+		for _, wm := range xWatermarks {
+			if wm.TrackID == "auto-gen-overlay" {
+				hasAutoGenOverlay = true
+				break
+			}
+		}
+		xPlan := xmlExportPlan{
+			AudioPath:      audioPath,
+			AudioDuration:  audioDur,
+			BaseW:          baseW,
+			BaseH:          baseH,
+			Clips:          xClips,
+			Watermarks:     xWatermarks,
+			Triggers:       xTriggers,
+			IntroPath:      introPath,
+			IntroDuration:  introDur,
+			MainTrackOnTop: hasAutoGenOverlay,
+		}
+		xmlPath := filepath.Join(finalDir, "project_timeline.xml")
+		if err := GenerateFCPXML(xPlan, fps, xmlPath); err != nil {
+			return fmt.Errorf("xml export: %w", err)
+		}
+		s.log("SUCCESS", "[Pipeline] XML exported: project_timeline.xml", id, taskLabel)
+		return nil
+	}
+
 	introEnabled := pSettings.MontageIntroVideoEnabled &&
 		pSettings.MontageIntroVideoPath != "" &&
 		func() bool { _, e := os.Stat(pSettings.MontageIntroVideoPath); return e == nil }()
@@ -1106,12 +1282,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	// Pre-pass: collect background watermarks (trackID == "auto-gen-overlay") and reserve input slots.
 	// These are rendered BELOW the footage so footage stays in the foreground.
 	type bgWmEntry struct {
-		path                  string
-		startTime, duration   float64
-		x, y, w, h            int
-		opacity               float64
-		isVideo               bool
-		idx                   int
+		path                string
+		startTime, duration float64
+		x, y, w, h          int
+		opacity             float64
+		isVideo             bool
+		idx                 int
 	}
 	var bgWmEntries []bgWmEntry
 	bgBaseIdx := -1
