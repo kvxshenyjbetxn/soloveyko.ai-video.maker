@@ -118,6 +118,18 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
             </div>
 
             <div className={`stage-settings-content ${isCollapsed ? 'collapsed' : ''}`}>
+                <div className="settings-control" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '8px' }}>
+                    <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.montage.export_xml') || 'Генерувати XML замість монтажу'}</label>
+                    <label className="stage-switch small">
+                        <input
+                            type="checkbox"
+                            checked={!!settings.montageExportXML}
+                            onChange={(e) => handleChange('montageExportXML', e.target.checked)}
+                        />
+                        <span className="stage-slider"></span>
+                    </label>
+                </div>
+
                 <div className="settings-group">
                     <div className="settings-group-title" style={{ marginBottom: '16px' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/></svg>

@@ -2225,7 +2225,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                         const introData = introVideo ? introVideo.path : "none";
                         const etData = JSON.stringify(extraTracks);
                         onConfirm(task.id, `confirm_v2:${clipData};segments:${ss};triggers:${trData};watermarks:${wmData};intro:${introData};extraTracks:${etData}`);
-                    }}>{t('common.save')}</button>
+                    }}>{(task.settings as any)?.montageExportXML ? (t('pipeline.montage.export_xml_confirm') || 'Генерувати XML') : t('common.save')}</button>
                 </div>
             </div>
             <RegenerateModal 

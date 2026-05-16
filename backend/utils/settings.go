@@ -251,6 +251,7 @@ type PipelineSettings struct {
 	MontageMetadataSimulation     string             `json:"montageMetadataSimulation,omitempty"` // "none", "DaVinci Resolve Studio"
 	MontageOrientation            string             `json:"montageOrientation,omitempty"`        // "landscape", "vertical"
 	MontageIntroFadeDuration      float64            `json:"montageIntroFadeDuration"`
+	MontageExportXML              bool               `json:"montageExportXML"`
 
 	CustomStages          []CustomStage `json:"customStages,omitempty"`
 	CustomStagesEnabled   bool          `json:"customStagesEnabled"`

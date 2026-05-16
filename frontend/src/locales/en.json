@@ -484,6 +484,8 @@
     },
     "montage": {
       "title": "4. Montage",
+      "export_xml": "Generate XML instead of rendering",
+      "export_xml_confirm": "Generate XML",
       "group_overlays": "Overlays and Watermarks",
       "group_quality": "Quality and Performance",
       "sway": "Sway (Rocking)",

@@ -498,6 +498,8 @@
     },
     "montage": {
       "title": "4. Монтаж",
+      "export_xml": "Генерувати XML замість монтажу",
+      "export_xml_confirm": "Генерувати XML",
       "group_overlays": "Оверлеї та Водяні знаки",
       "group_quality": "Якість та продуктивність",
       "sway": "Покачування (Rocking)",
