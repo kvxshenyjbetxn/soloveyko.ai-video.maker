@@ -1,4 +1,4 @@
 package utils
 
-const AppVersion = "0.44.1"
+const AppVersion = "0.44.2"
 const AppName = "Soloveyko.AI"
