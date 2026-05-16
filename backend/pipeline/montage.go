@@ -540,6 +540,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			Duration       float64 `json:"duration"`
 			IsVideo        bool    `json:"isVideo"`
 			ActualDuration float64 `json:"actualDuration"`
+			Source         string  `json:"source,omitempty"` // "footage" | "generated"
 		}
 
 		type MontageTrigger struct {
@@ -575,6 +576,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			TransDuration float64              `json:"transDuration"`
 			IsFadeFast    bool                 `json:"isFadeFast"`
 			Clips         []MontageClip        `json:"clips"`
+			PoolFiles     []MontageClip        `json:"poolFiles,omitempty"`
 			AudioSegments []MontageSegment     `json:"audioSegments"`
 			Triggers      []MontageTrigger     `json:"triggers"`
 			Watermarks    []MontageWatermark   `json:"watermarks"`
@@ -693,6 +695,68 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				Duration:       effectiveDurs[i],
 				IsVideo:        isVid,
 				ActualDuration: actualDur,
+			}
+		}
+
+		// In footage mode, expose media files in the pool so user can drag them to triggers/overlays.
+		// Footage clips → source:"footage"; AI-generated files → source:"generated".
+		if isFootageMode {
+			for i, vf := range visualFiles {
+				fullPath := filepath.Join(finalDir, vf)
+				ext := strings.ToLower(filepath.Ext(vf))
+				isVid := videoExts[ext]
+				dur := effectiveDurs[i]
+				actualDur := 0.0
+				if isVid {
+					if d, err2 := s.getDuration(ffprobePath, fullPath); err2 == nil && d > 0 {
+						actualDur = d
+					} else {
+						actualDur = dur
+					}
+				}
+				plan.PoolFiles = append(plan.PoolFiles, MontageClip{
+					Path:           fullPath,
+					Duration:       dur,
+					IsVideo:        isVid,
+					ActualDuration: actualDur,
+					Source:         "footage",
+				})
+			}
+
+			iFootageAlsoGenerate := pSettings.ImageFootageAlsoGenerate
+			if val, ok := settings["imageFootageAlsoGenerate"].(bool); ok {
+				iFootageAlsoGenerate = val
+			}
+			if iFootageAlsoGenerate {
+				genDir := filepath.Join(finalDir, "images_generated")
+				if entries, err := os.ReadDir(genDir); err == nil {
+					for _, e := range entries {
+						if e.IsDir() {
+							continue
+						}
+						ext := strings.ToLower(filepath.Ext(e.Name()))
+						if !videoExts[ext] && !imageExts[ext] {
+							continue
+						}
+						fullPath := filepath.Join(genDir, e.Name())
+						isVid := videoExts[ext]
+						actualDur := 0.0
+						dur := 5.0
+						if isVid {
+							if d, err2 := s.getDuration(ffprobePath, fullPath); err2 == nil && d > 0 {
+								dur = d
+								actualDur = d
+							}
+						}
+						plan.PoolFiles = append(plan.PoolFiles, MontageClip{
+							Path:           fullPath,
+							Duration:       dur,
+							IsVideo:        isVid,
+							ActualDuration: actualDur,
+							Source:         "generated",
+						})
+					}
+				}
 			}
 		}
 
@@ -1033,7 +1097,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 				}
 				effDur := math.Min(actualDur, requiredDur)
 				filterParts = append(filterParts, fmt.Sprintf(
-					"%strim=duration=%.6f,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,tpad=stop_mode=clone:stop=-1,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
+					"%strim=duration=%.6f,setpts=PTS-STARTPTS,scale=%d:%d,scale=1.07*iw:-1,crop=%d:%d:0:0,format=yuv420p,setsar=1,fps=%d,settb=AVTB,tpad=stop_mode=clone:stop=-1,trim=duration=%.6f,setpts=PTS-STARTPTS[%s]",
 					vIn, effDur, baseW, baseH, baseW, baseH, fps, paddedDur, vOut,
 				))
 			}

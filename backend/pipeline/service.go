@@ -1162,6 +1162,7 @@ func (s *PipelineService) CheckExistingFiles(id string, finalDir string, taskTyp
 		}
 	}
 	scanDir(filepath.Join(finalDir, "images"))
+	scanDir(filepath.Join(finalDir, "images_generated"))
 	if data.ImageCount == 0 && data.VideoCount == 0 {
 		scanDir(finalDir)
 	}

@@ -562,6 +562,29 @@
     z-index: 3;
 }
 
+.pool-source-badge {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    z-index: 3;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.pool-source-footage {
+    background: rgba(255, 160, 50, 0.85);
+    color: #fff;
+}
+
+.pool-source-generated {
+    background: rgba(80, 160, 255, 0.85);
+    color: #fff;
+}
+
 .timeline-pool-section {
     margin-bottom: 4px;
 }
@@ -1928,3 +1951,30 @@
 .clip-fs-nav.left { left: 24px; }
 .clip-fs-nav.right { right: 24px; }
 .clip-fs-nav:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-50%) scale(1.05); }
+
+.pool-drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 99999;
+    background: rgba(20, 20, 40, 0.93);
+    border: 1px solid var(--accent-primary);
+    border-radius: 6px;
+    padding: 5px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    max-width: 200px;
+}
+.ghost-name {
+    font-size: 11px;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ghost-dur {
+    font-size: 10px;
+    color: var(--accent-primary);
+    font-weight: 600;
+}
