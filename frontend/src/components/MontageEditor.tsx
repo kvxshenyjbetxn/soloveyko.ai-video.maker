@@ -277,6 +277,8 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
     const dragCounter = useRef(0);
     const [dropPreview, setDropPreview] = useState<number | null>(null);
     const [hoveredMediaIdx, setHoveredMediaIdx] = useState<number | null>(null);
+    const [hoveredTimelinePoolIdx, setHoveredTimelinePoolIdx] = useState<number | null>(null);
+    const [fullscreenClipIdx, setFullscreenClipIdx] = useState<number | null>(null);
     const [editingTriggerIdx, setEditingTriggerIdx] = useState<number | null>(null);
     const [tempTriggerPhrase, setTempTriggerPhrase] = useState<string>("");
     const [previewAspect, setPreviewAspect] = useState<number>(1);
@@ -321,7 +323,10 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             try {
                 const parsed = JSON.parse(task.montagePlanData);
                 setPlan(parsed);
-                setClips(parsed.clips.map((c: MontageClip) => ({ ...c })));
+                setClips(parsed.clips.map((c: MontageClip) => ({
+                    ...c,
+                    isVideo: c.isVideo || c.path.toLowerCase().endsWith('.mp4')
+                })));
                 if (parsed.audioSegments && parsed.audioSegments.length > 0) {
                     setAudioSegments(parsed.audioSegments);
                 } else {
@@ -415,6 +420,17 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
             }
         }
     }, [task.montagePlanData]);
+
+    useEffect(() => {
+        if (fullscreenClipIdx === null) return;
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') { setFullscreenClipIdx(null); }
+            else if (e.key === 'ArrowRight') { setFullscreenClipIdx(prev => prev !== null ? Math.min(prev + 1, clips.length - 1) : null); }
+            else if (e.key === 'ArrowLeft') { setFullscreenClipIdx(prev => prev !== null ? Math.max(prev - 1, 0) : null); }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [fullscreenClipIdx, clips.length]);
 
     const getUrl = useCallback((p: string) => {
         let url = `local/${p.replace(/\\/g, '/')}`;
@@ -1509,16 +1525,70 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                 )}
                                 {activeInfoTab === 'library' ? (
                                     <>
+                                        <div className="timeline-pool-section">
+                                            <div className="media-library-header-compact"><h3 className="media-library-title">Timeline</h3></div>
+                                            <div className="media-pool-grid">
+                                                {clips.map((clip, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className={`pool-item timeline-pool-item`}
+                                                        onMouseEnter={() => setHoveredTimelinePoolIdx(i)}
+                                                        onMouseLeave={() => setHoveredTimelinePoolIdx(null)}
+                                                        onClick={() => setFullscreenClipIdx(i)}
+                                                        title={clip.path.split(/[\\/]/).pop()}
+                                                    >
+                                                        {regeneratingIndices.has(i) && (
+                                                            <div className="clip-loading-spinner"><div className="spinner-tiny" /></div>
+                                                        )}
+                                                        <div className="pool-thumb-wrapper">
+                                                            {clip.isVideo ? (
+                                                                <video
+                                                                    key={`tl-${clip.path}`}
+                                                                    src={getUrl(clip.path)}
+                                                                    className="pool-thumb-img"
+                                                                    muted
+                                                                    loop
+                                                                    playsInline
+                                                                    preload="metadata"
+                                                                    onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = 0.1; }}
+                                                                    onMouseEnter={(e) => (e.currentTarget as HTMLVideoElement).play().catch(() => {})}
+                                                                    onMouseLeave={(e) => { (e.currentTarget as HTMLVideoElement).pause(); (e.currentTarget as HTMLVideoElement).currentTime = 0.1; }}
+                                                                />
+                                                            ) : (
+                                                                <img src={getUrl(clip.path)} alt="thumb" className="pool-thumb-img" />
+                                                            )}
+                                                            <div className="pool-type-badge">
+                                                                {clip.isVideo
+                                                                    ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                                                                    : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                        <div className="pool-dur">{clip.duration.toFixed(1)}s</div>
+                                                        <div className="pool-item-actions-row">
+                                                            <button className="pool-action-btn" onClick={(e) => { e.stopPropagation(); handleDeleteClip(i); }} title="Delete">🗑️</button>
+                                                            <button className="pool-action-btn" onClick={(e) => { e.stopPropagation(); handleOpenRegenerate(i); }} title="Regenerate">🔄</button>
+                                                            {!clip.isVideo && (
+                                                                <button className="pool-action-btn animate" onClick={(e) => { e.stopPropagation(); handleAnimateClip(i); }} title="Animate">
+                                                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="pool-section-divider" />
                                         <div className="media-library-header-compact"><h3 className="media-library-title">Assets</h3></div>
                                         {mediaPool.length > 0 ? (
                                             <div className="media-pool-grid">
                                                 {mediaPool.map((m, i) => (
-                                                    <div 
-                                                        key={i} 
-                                                        className="pool-item" 
-                                                        draggable 
-                                                        onDragStart={() => handleInternalDragStart(m)} 
-                                                        onDragEnd={() => { setIsDraggingFromPool(null); setDraggingHoverTrack(null); }} 
+                                                    <div
+                                                        key={i}
+                                                        className="pool-item"
+                                                        draggable
+                                                        onDragStart={() => handleInternalDragStart(m)}
+                                                        onDragEnd={() => { setIsDraggingFromPool(null); setDraggingHoverTrack(null); }}
                                                         onMouseEnter={() => setHoveredMediaIdx(i)}
                                                         onMouseLeave={() => setHoveredMediaIdx(null)}
                                                         title={m.path.split(/[\\/]/).pop()}
@@ -1526,14 +1596,14 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                         <button className="pool-item-delete" onClick={(e) => { e.stopPropagation(); handleRemoveFromPool(i); }} title="Remove">✕</button>
                                                         <div className="pool-thumb-wrapper">
                                                             {m.isVideo ? (
-                                                                <video 
+                                                                <video
                                                                     key={`${m.path}-${hoveredMediaIdx === i}`}
-                                                                    src={getUrl(m.path)} 
-                                                                    className={`pool-thumb-img ${hoveredMediaIdx === i ? 'video-preview' : ''}`} 
-                                                                    autoPlay={hoveredMediaIdx === i} 
-                                                                    muted 
-                                                                    loop={hoveredMediaIdx === i} 
-                                                                    playsInline 
+                                                                    src={getUrl(m.path)}
+                                                                    className={`pool-thumb-img ${hoveredMediaIdx === i ? 'video-preview' : ''}`}
+                                                                    autoPlay={hoveredMediaIdx === i}
+                                                                    muted
+                                                                    loop={hoveredMediaIdx === i}
+                                                                    playsInline
                                                                     preload="metadata"
                                                                 />
                                                             ) : (
@@ -2004,6 +2074,47 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                         <div className="montage-modal-footer">
                             <button className="montage-btn secondary" onClick={() => setEditingTriggerIdx(null)}>Cancel</button>
                             <button className="montage-btn primary" onClick={handleSaveTriggerPhrase}>Apply Changes</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {fullscreenClipIdx !== null && clips[fullscreenClipIdx] && (
+                <div className="clip-fullscreen-overlay" onClick={() => setFullscreenClipIdx(null)}>
+                    {fullscreenClipIdx > 0 && (
+                        <button className="clip-fs-nav left" onClick={(e) => { e.stopPropagation(); setFullscreenClipIdx(fullscreenClipIdx - 1); }}>‹</button>
+                    )}
+                    {fullscreenClipIdx < clips.length - 1 && (
+                        <button className="clip-fs-nav right" onClick={(e) => { e.stopPropagation(); setFullscreenClipIdx(fullscreenClipIdx + 1); }}>›</button>
+                    )}
+                    <div className="clip-fullscreen-media" onClick={(e) => e.stopPropagation()}>
+                        {clips[fullscreenClipIdx].isVideo ? (
+                            <video
+                                src={getUrl(clips[fullscreenClipIdx].path)}
+                                className="clip-fullscreen-element"
+                                controls
+                                autoPlay
+                                muted
+                                playsInline
+                            />
+                        ) : (
+                            <img
+                                src={getUrl(clips[fullscreenClipIdx].path)}
+                                alt="fullscreen"
+                                className="clip-fullscreen-element"
+                            />
+                        )}
+                        <div className="clip-fullscreen-topbar">
+                            <div className="clip-fullscreen-actions">
+                                <button className="clip-fs-btn delete" onClick={() => { handleDeleteClip(fullscreenClipIdx); setFullscreenClipIdx(null); }} title="Delete">🗑️</button>
+                                <button className="clip-fs-btn regen" onClick={() => { handleOpenRegenerate(fullscreenClipIdx); setFullscreenClipIdx(null); }} title="Regenerate">🔄</button>
+                                {!clips[fullscreenClipIdx].isVideo && (
+                                    <button className="clip-fs-btn animate" onClick={() => { handleAnimateClip(fullscreenClipIdx); setFullscreenClipIdx(null); }} title="Animate">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                    </button>
+                                )}
+                            </div>
+                            <div className="clip-fullscreen-dur">{clips[fullscreenClipIdx].duration.toFixed(1)}s</div>
+                            <button className="clip-fs-btn close" onClick={() => setFullscreenClipIdx(null)} title="Close">✕</button>
                         </div>
                     </div>
                 </div>

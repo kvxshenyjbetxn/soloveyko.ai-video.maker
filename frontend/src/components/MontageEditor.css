@@ -562,6 +562,83 @@
     z-index: 3;
 }
 
+.timeline-pool-section {
+    margin-bottom: 4px;
+}
+
+.pool-section-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 12px 0;
+    opacity: 0.5;
+}
+
+.timeline-pool-item {
+    cursor: default;
+}
+
+.pool-type-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.85);
+    z-index: 5;
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+}
+
+.pool-item-actions-row {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.pool-item:hover .pool-item-actions-row {
+    opacity: 1;
+}
+
+.pool-action-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    transition: all 0.15s;
+    padding: 0;
+    backdrop-filter: blur(4px);
+}
+
+.pool-action-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.1);
+}
+
+.pool-action-btn.animate:hover {
+    background: #2a6bcc;
+}
+
 .pool-empty-state {
     display: flex;
     flex-direction: column;
@@ -1741,3 +1818,113 @@
     font-size: 12px;
     color: var(--text-secondary);
 }
+
+/* Clip Fullscreen Overlay */
+.clip-fullscreen-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.92);
+    backdrop-filter: blur(16px);
+    z-index: 30000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn var(--transition-slow);
+}
+
+.clip-fullscreen-media {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.clip-fullscreen-element {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8);
+    display: block;
+}
+
+.clip-fullscreen-topbar {
+    position: absolute;
+    top: -48px;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px;
+}
+
+.clip-fullscreen-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.clip-fullscreen-dur {
+    margin-left: auto;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.clip-fs-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: rgba(30, 30, 30, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    transition: all 0.2s;
+    backdrop-filter: blur(8px);
+}
+
+.clip-fs-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.1);
+}
+
+.clip-fs-btn.delete:hover { background: #ff4d4d; border-color: #ff4d4d; }
+.clip-fs-btn.animate:hover { background: #2a6bcc; border-color: #2a6bcc; }
+.clip-fs-btn.close { margin-left: 4px; }
+.clip-fs-btn.close:hover { background: rgba(255,255,255,0.2); }
+
+.clip-fs-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 80px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: white;
+    font-size: 36px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    backdrop-filter: blur(8px);
+    z-index: 10;
+}
+
+.clip-fs-nav.left { left: 24px; }
+.clip-fs-nav.right { right: 24px; }
+.clip-fs-nav:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-50%) scale(1.05); }
