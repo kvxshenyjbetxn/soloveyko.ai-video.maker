@@ -46,9 +46,9 @@ func main() {
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
 		},
-		// This enables standard HTML5 Drag & Drop to work and provide file paths via enriched File objects
 		DragAndDrop: &options.DragAndDrop{
-			EnableFileDrop: true,
+			EnableFileDrop:      true,
+			DisableWebViewDrop:  true,
 		},
 	})
 
