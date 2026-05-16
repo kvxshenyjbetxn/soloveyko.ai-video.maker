@@ -1525,6 +1525,46 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                 )}
                                 {activeInfoTab === 'library' ? (
                                     <>
+                                        <div className="media-library-header-compact"><h3 className="media-library-title">Assets</h3></div>
+                                        {mediaPool.length > 0 ? (
+                                            <div className="media-pool-grid">
+                                                {mediaPool.map((m, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="pool-item"
+                                                        draggable
+                                                        onDragStart={() => handleInternalDragStart(m)}
+                                                        onDragEnd={() => { setIsDraggingFromPool(null); setDraggingHoverTrack(null); }}
+                                                        onMouseEnter={() => setHoveredMediaIdx(i)}
+                                                        onMouseLeave={() => setHoveredMediaIdx(null)}
+                                                        title={m.path.split(/[\\/]/).pop()}
+                                                    >
+                                                        <button className="pool-item-delete" onClick={(e) => { e.stopPropagation(); handleRemoveFromPool(i); }} title="Remove">✕</button>
+                                                        <div className="pool-thumb-wrapper">
+                                                            {m.isVideo ? (
+                                                                <video
+                                                                    key={`${m.path}-${hoveredMediaIdx === i}`}
+                                                                    src={getUrl(m.path)}
+                                                                    className={`pool-thumb-img ${hoveredMediaIdx === i ? 'video-preview' : ''}`}
+                                                                    autoPlay={hoveredMediaIdx === i}
+                                                                    muted
+                                                                    loop={hoveredMediaIdx === i}
+                                                                    playsInline
+                                                                    preload="metadata"
+                                                                />
+                                                            ) : (
+                                                                <img src={getUrl(m.path)} alt="thumb" className="pool-thumb-img" />
+                                                            )}
+                                                            {m.isVideo && hoveredMediaIdx !== i && <div className="pool-video-overlay">🎬</div>}
+                                                        </div>
+                                                        <div className="pool-dur">{m.duration.toFixed(1)}s</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="pool-empty-state"><div className="empty-icon">📁</div><p>Empty</p><button className="add-files-btn-center" onClick={handleAddMedia}>Add Files</button></div>
+                                        )}
+                                        <div className="pool-section-divider" />
                                         <div className="timeline-pool-section">
                                             <div className="media-library-header-compact"><h3 className="media-library-title">Timeline</h3></div>
                                             <div className="media-pool-grid">
@@ -1532,6 +1572,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                     <div
                                                         key={i}
                                                         className={`pool-item timeline-pool-item`}
+                                                        draggable
+                                                        onDragStart={() => handleInternalDragStart(clip)}
+                                                        onDragEnd={() => { setIsDraggingFromPool(null); setDraggingHoverTrack(null); }}
                                                         onMouseEnter={() => setHoveredTimelinePoolIdx(i)}
                                                         onMouseLeave={() => setHoveredTimelinePoolIdx(null)}
                                                         onClick={() => setFullscreenClipIdx(i)}
@@ -1578,46 +1621,6 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="pool-section-divider" />
-                                        <div className="media-library-header-compact"><h3 className="media-library-title">Assets</h3></div>
-                                        {mediaPool.length > 0 ? (
-                                            <div className="media-pool-grid">
-                                                {mediaPool.map((m, i) => (
-                                                    <div
-                                                        key={i}
-                                                        className="pool-item"
-                                                        draggable
-                                                        onDragStart={() => handleInternalDragStart(m)}
-                                                        onDragEnd={() => { setIsDraggingFromPool(null); setDraggingHoverTrack(null); }}
-                                                        onMouseEnter={() => setHoveredMediaIdx(i)}
-                                                        onMouseLeave={() => setHoveredMediaIdx(null)}
-                                                        title={m.path.split(/[\\/]/).pop()}
-                                                    >
-                                                        <button className="pool-item-delete" onClick={(e) => { e.stopPropagation(); handleRemoveFromPool(i); }} title="Remove">✕</button>
-                                                        <div className="pool-thumb-wrapper">
-                                                            {m.isVideo ? (
-                                                                <video
-                                                                    key={`${m.path}-${hoveredMediaIdx === i}`}
-                                                                    src={getUrl(m.path)}
-                                                                    className={`pool-thumb-img ${hoveredMediaIdx === i ? 'video-preview' : ''}`}
-                                                                    autoPlay={hoveredMediaIdx === i}
-                                                                    muted
-                                                                    loop={hoveredMediaIdx === i}
-                                                                    playsInline
-                                                                    preload="metadata"
-                                                                />
-                                                            ) : (
-                                                                <img src={getUrl(m.path)} alt="thumb" className="pool-thumb-img" />
-                                                            )}
-                                                            {m.isVideo && hoveredMediaIdx !== i && <div className="pool-video-overlay">🎬</div>}
-                                                        </div>
-                                                        <div className="pool-dur">{m.duration.toFixed(1)}s</div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="pool-empty-state"><div className="empty-icon">📁</div><p>Empty</p><button className="add-files-btn-center" onClick={handleAddMedia}>Add Files</button></div>
-                                        )}
                                     </>
                                 ) : (
                                     <div className="project-stats-tab animate-fade-in">

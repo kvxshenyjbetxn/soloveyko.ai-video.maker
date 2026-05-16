@@ -574,7 +574,7 @@
 }
 
 .timeline-pool-item {
-    cursor: default;
+    cursor: grab;
 }
 
 .pool-type-badge {
