@@ -1585,10 +1585,10 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                         }}
                                     >
                                         {activeClipInfo.clip.isVideo ? (
-                                            <video 
-                                                ref={previewVideoRef} 
-                                                src={getUrl(activeClipInfo.clip.path)} 
-                                                playsInline 
+                                            <video
+                                                ref={previewVideoRef}
+                                                src={getUrl(activeClipInfo.clip.path)}
+                                                playsInline
                                                 style={{ background: '#000' }}
                                                 onLoadedMetadata={(e) => {
                                                     const v = e.currentTarget;
@@ -1596,9 +1596,9 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                                 }}
                                             />
                                         ) : (
-                                            <img 
-                                                src={getUrl(activeClipInfo.clip.path)} 
-                                                alt="Preview" 
+                                            <img
+                                                src={getUrl(activeClipInfo.clip.path)}
+                                                alt="Preview"
                                                 onLoad={(e) => {
                                                     const img = e.currentTarget;
                                                     if (img.naturalWidth && img.naturalHeight) setPreviewAspect(img.naturalWidth / img.naturalHeight);
@@ -1607,7 +1607,7 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                         )}
                                         <div className="preview-timestamp">{currentTime.toFixed(2)}s</div>
                                         {plan.audioPath && <audio ref={previewAudioRef} src={getUrl(plan.audioPath)} style={{ display: 'none' }} />}
-                                        
+
                                         {currentSubtitle && (
                                             <div className="preview-subtitle-overlay animate-fade">
                                                 {currentSubtitle.text}
@@ -1639,8 +1639,8 @@ export const MontageEditor: React.FC<MontageEditorProps> = ({ task, onConfirm, o
                                             </div>
                                         ))}
 
-                                        {activeWatermarksAtTime.map((w: MontageWatermark) => (
-                                            <WatermarkPreviewItem 
+                                        {activeWatermarksAtTime.filter((w: MontageWatermark) => w.trackId !== 'auto-gen-overlay').map((w: MontageWatermark) => (
+                                            <WatermarkPreviewItem
                                                 key={w.id}
                                                 w={w}
                                                 plan={plan!}

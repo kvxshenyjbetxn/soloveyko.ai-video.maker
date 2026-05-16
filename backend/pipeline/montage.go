@@ -727,9 +727,17 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			if val, ok := settings["imageFootageAlsoGenerate"].(bool); ok {
 				iFootageAlsoGenerate = val
 			}
+			// Fallback: якщо images_generated/ існує та непорожня — завжди активуємо
+			// (потрібно для відновлення завдань коли settings вже не містить прапорця)
+			genDir := filepath.Join(finalDir, "images_generated")
+			if !iFootageAlsoGenerate {
+				if entries, _ := os.ReadDir(genDir); len(entries) > 0 {
+					iFootageAlsoGenerate = true
+				}
+			}
 			if iFootageAlsoGenerate {
-				genDir := filepath.Join(finalDir, "images_generated")
 				if entries, err := os.ReadDir(genDir); err == nil {
+					var genFiles []string
 					for _, e := range entries {
 						if e.IsDir() {
 							continue
@@ -738,23 +746,76 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						if !videoExts[ext] && !imageExts[ext] {
 							continue
 						}
-						fullPath := filepath.Join(genDir, e.Name())
-						isVid := videoExts[ext]
-						actualDur := 0.0
-						dur := 5.0
-						if isVid {
-							if d, err2 := s.getDuration(ffprobePath, fullPath); err2 == nil && d > 0 {
-								dur = d
-								actualDur = d
+						genFiles = append(genFiles, filepath.Join(genDir, e.Name()))
+					}
+					sort.Slice(genFiles, func(i, j int) bool {
+						numFromName := func(p string) int {
+							base := filepath.Base(p)
+							ext := filepath.Ext(base)
+							stem := base[:len(base)-len(ext)]
+							n, err := strconv.Atoi(stem)
+							if err != nil {
+								return 0
+							}
+							return n
+						}
+						ni, nj := numFromName(genFiles[i]), numFromName(genFiles[j])
+						if ni != nj {
+							return ni < nj
+						}
+						return filepath.Base(genFiles[i]) < filepath.Base(genFiles[j])
+					})
+
+					if len(genFiles) > 0 {
+						timings, timErr := utils.GetImageTimings(finalDir, audioDur, len(genFiles), genFiles, taskLabel)
+						if timErr != nil || len(timings) == 0 {
+							clipDur := audioDur / float64(len(genFiles))
+							timings = make([]utils.ImageTiming, len(genFiles))
+							for i := range timings {
+								timings[i] = utils.ImageTiming{Index: i, Start: float64(i) * clipDur, End: float64(i+1) * clipDur, Duration: clipDur}
 							}
 						}
-						plan.PoolFiles = append(plan.PoolFiles, MontageClip{
-							Path:           fullPath,
-							Duration:       dur,
-							IsVideo:        isVid,
-							ActualDuration: actualDur,
-							Source:         "generated",
-						})
+
+						genTrackID := "auto-gen-overlay"
+						plan.ExtraTracks = append([]utils.OverlayTrack{{
+							ID:    genTrackID,
+							Name:  "Згенеровані",
+							Type:  "video",
+							Color: "#a855f7",
+						}}, plan.ExtraTracks...)
+
+						for i, fPath := range genFiles {
+							if i >= len(timings) {
+								break
+							}
+							t := timings[i]
+							dur := t.End - t.Start
+							if dur <= 0 {
+								dur = t.Duration
+							}
+							ext := strings.ToLower(filepath.Ext(fPath))
+							isVid := videoExts[ext]
+							plan.Watermarks = append(plan.Watermarks, MontageWatermark{
+								ID:        fmt.Sprintf("gen-%d", i),
+								Path:      fPath,
+								StartTime: t.Start,
+								Duration:  dur,
+								X:         0,
+								Y:         0,
+								W:         plan.BaseW,
+								H:         plan.BaseH,
+								Opacity:   1.0,
+								TrackID:   genTrackID,
+								IsVideo:   isVid,
+							})
+							// Also add to pool so assets panel shows them
+							plan.PoolFiles = append(plan.PoolFiles, MontageClip{
+								Path:    fPath,
+								Duration: dur,
+								IsVideo:  isVid,
+								Source:  "generated",
+							})
+						}
 					}
 				}
 			}
@@ -999,7 +1060,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		loop       bool
 		path       string
 		streamLoop bool
-		framerate  int // Explicit -framerate for looped images (0 = not set)
+		framerate  int  // Explicit -framerate for looped images (0 = not set)
+		lavfi      bool // Use -f lavfi (for color source inputs)
 	}
 	var inputSpecs []inputSpec
 	var filterParts []string
@@ -1040,6 +1102,52 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		func() bool { _, e := os.Stat(pSettings.MontageIntroVideoPath); return e == nil }()
 	watermarkIdx := -1
 	visualOffset := 0
+
+	// Pre-pass: collect background watermarks (trackID == "auto-gen-overlay") and reserve input slots.
+	// These are rendered BELOW the footage so footage stays in the foreground.
+	type bgWmEntry struct {
+		path                  string
+		startTime, duration   float64
+		x, y, w, h            int
+		opacity               float64
+		isVideo               bool
+		idx                   int
+	}
+	var bgWmEntries []bgWmEntry
+	bgBaseIdx := -1
+
+	for _, wm := range pSettings.MontageWatermarks {
+		if wm.TrackID != "auto-gen-overlay" || wm.Path == "" {
+			continue
+		}
+		if _, statErr := os.Stat(wm.Path); statErr != nil {
+			continue
+		}
+		startT := 0.0
+		if wm.StartTime != nil {
+			startT = *wm.StartTime
+		}
+		durT := 5.0
+		if wm.Duration != nil {
+			durT = *wm.Duration
+		}
+		bgWmEntries = append(bgWmEntries, bgWmEntry{
+			path: wm.Path, startTime: startT, duration: durT,
+			x: wm.X, y: wm.Y, w: wm.W, h: wm.H, opacity: wm.Opacity, isVideo: wm.IsVideo,
+		})
+	}
+	if len(bgWmEntries) > 0 {
+		bgBaseIdx = len(inputSpecs)
+		inputSpecs = append(inputSpecs, inputSpec{
+			lavfi: true,
+			path:  fmt.Sprintf("color=c=black:s=%dx%d:r=%d:d=%.3f", baseW, baseH, fps, audioDur+1),
+		})
+		for i := range bgWmEntries {
+			bgWmEntries[i].idx = len(inputSpecs)
+			inputSpecs = append(inputSpecs, inputSpec{loop: !bgWmEntries[i].isVideo, path: getRel(bgWmEntries[i].path)})
+		}
+		visualOffset = len(inputSpecs)
+	}
 
 	padAmount := 0.0
 	if !isFadeFast {
@@ -1217,8 +1325,62 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	// This prevents subtitles from freezing if the combined video naturally ends early due to rounding deficits.
 	filterParts = append(filterParts, fmt.Sprintf("[%s]tpad=stop_mode=clone:stop=-1[v_padded_montage]", lastV))
 
+	// Build generated-images background layer; footage is then overlaid on top so it stays in the foreground.
+	footageLayerV := "v_padded_montage"
+	if bgBaseIdx >= 0 && len(bgWmEntries) > 0 {
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[%d:v]trim=duration=%.6f,setpts=PTS-STARTPTS[bg_black]", bgBaseIdx, audioDur,
+		))
+		currentBg := "bg_black"
+		for i, entry := range bgWmEntries {
+			targetW := (entry.w / 2) * 2
+			if targetW <= 0 {
+				targetW = baseW
+			}
+			targetH := (entry.h / 2) * 2
+			if targetH <= 0 {
+				targetH = baseH
+			}
+			opacity := entry.opacity
+			if opacity <= 0 {
+				opacity = 1.0
+			}
+			readyLabel := fmt.Sprintf("bg_wm_ready_%d", i)
+			if entry.isVideo {
+				filterParts = append(filterParts, fmt.Sprintf(
+					"[%d:v]format=yuva420p,scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,colorchannelmixer=aa=%.3f,setpts=PTS-STARTPTS+%.3f/TB[%s]",
+					entry.idx, targetW, targetH, targetW, targetH, opacity, entry.startTime, readyLabel,
+				))
+			} else {
+				filterParts = append(filterParts, fmt.Sprintf(
+					"[%d:v]format=yuva420p,scale=%d:%d,colorchannelmixer=aa=%.3f,setpts=PTS-STARTPTS+%.3f/TB[%s]",
+					entry.idx, targetW, targetH, opacity, entry.startTime, readyLabel,
+				))
+			}
+			outLabel := fmt.Sprintf("bg_out_%d", i)
+			enableExpr := fmt.Sprintf("between(t,%.3f,%.3f)", entry.startTime, entry.startTime+entry.duration)
+			if entry.isVideo {
+				filterParts = append(filterParts, fmt.Sprintf(
+					"[%s][%s]overlay=x=%d:y=%d:eof_action=pass:enable='%s'[%s]",
+					currentBg, readyLabel, entry.x, entry.y, enableExpr, outLabel,
+				))
+			} else {
+				filterParts = append(filterParts, fmt.Sprintf(
+					"[%s][%s]overlay=x=%d:y=%d:enable='%s'[%s]",
+					currentBg, readyLabel, entry.x, entry.y, enableExpr, outLabel,
+				))
+			}
+			currentBg = outLabel
+		}
+		// Footage (v_padded_montage) goes ON TOP of the generated background → footage is foreground
+		filterParts = append(filterParts, fmt.Sprintf(
+			"[%s][v_padded_montage]overlay=x=0:y=0:eof_action=pass[v_footage_over_bg]", currentBg,
+		))
+		footageLayerV = "v_footage_over_bg"
+	}
+
 	// Subtitles
-	montageV := "v_padded_montage"
+	montageV := footageLayerV
 	assName := "subtitle.ass"
 	if len(audioSegments) > 0 {
 		// Priority 1: Try to trim JSON (to preserve Karaoke)
@@ -1427,6 +1589,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	var activeCustomWatermarks []watermarkInfo
 	if len(pSettings.MontageWatermarks) > 0 {
 		for _, wm := range pSettings.MontageWatermarks {
+			if wm.TrackID == "auto-gen-overlay" {
+				continue // already rendered as background layer
+			}
 			if wm.Path == "" {
 				continue
 			}
@@ -1730,6 +1895,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 		if spec.streamLoop {
 			cmdArgs = append(cmdArgs, "-stream_loop", "-1")
+		}
+		if spec.lavfi {
+			cmdArgs = append(cmdArgs, "-f", "lavfi")
 		}
 		cmdArgs = append(cmdArgs, "-i", spec.path)
 	}
