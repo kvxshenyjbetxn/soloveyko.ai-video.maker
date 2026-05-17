@@ -252,6 +252,8 @@ type PipelineSettings struct {
 	MontageOrientation            string             `json:"montageOrientation,omitempty"`        // "landscape", "vertical"
 	MontageIntroFadeDuration      float64            `json:"montageIntroFadeDuration"`
 	MontageExportXML              bool               `json:"montageExportXML"`
+	MontageXMLImageScale          float64            `json:"montageXMLImageScale"`
+	MontageXMLScaleTarget         string             `json:"montageXMLScaleTarget"` // "v1", "overlay", "all"
 
 	CustomStages          []CustomStage `json:"customStages,omitempty"`
 	CustomStagesEnabled   bool          `json:"customStagesEnabled"`

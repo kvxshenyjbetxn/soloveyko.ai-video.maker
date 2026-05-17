@@ -301,6 +301,12 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	if val, ok := settings["montageUpscaleFactor"].(float64); ok {
 		pSettings.MontageUpscaleFactor = val
 	}
+	if val, ok := settings["montageXMLImageScale"].(float64); ok {
+		pSettings.MontageXMLImageScale = val
+	}
+	if val, ok := settings["montageXMLScaleTarget"].(string); ok {
+		pSettings.MontageXMLScaleTarget = val
+	}
 	if val, ok := settings["montageVideoCodec"].(string); ok {
 		pSettings.MontageVideoCodec = val
 	}
@@ -1208,6 +1214,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			ext := strings.ToLower(filepath.Ext(absF))
 			xClips = append(xClips, xmlClip{Path: absF, Duration: dur, IsVideo: videoExts[ext]})
 		}
+		applyToOverlay := (pSettings.MontageXMLScaleTarget == "overlay" || pSettings.MontageXMLScaleTarget == "all") &&
+			pSettings.MontageXMLImageScale > 0 && pSettings.MontageXMLImageScale != 100
 		var xWatermarks []xmlWatermark
 		for _, wm := range pSettings.MontageWatermarks {
 			if wm.Path == "" {
@@ -1220,10 +1228,15 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			if wm.Duration != nil {
 				dur = *wm.Duration
 			}
+			scaleOverride := 0.0
+			if applyToOverlay && wm.TrackID == "auto-gen-overlay" {
+				scaleOverride = pSettings.MontageXMLImageScale
+			}
 			xWatermarks = append(xWatermarks, xmlWatermark{
 				Path: pngToJpg(wm.Path), StartTime: st, Duration: dur,
 				X: wm.X, Y: wm.Y, W: wm.W, H: wm.H,
 				Opacity: wm.Opacity, TrackID: wm.TrackID, IsVideo: wm.IsVideo,
+				ScaleOverride: scaleOverride,
 			})
 		}
 		// Fallback: scan images_generated/ if no auto-gen watermarks came from control.
@@ -1288,10 +1301,15 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 						}
 						fPath = pngToJpg(fPath)
 						ext := strings.ToLower(filepath.Ext(fPath))
+						scaleOverride := 0.0
+						if applyToOverlay {
+							scaleOverride = pSettings.MontageXMLImageScale
+						}
 						xWatermarks = append(xWatermarks, xmlWatermark{
 							Path: fPath, StartTime: t.Start, Duration: dur,
 							X: 0, Y: 0, W: baseW, H: baseH,
 							Opacity: 1.0, TrackID: "auto-gen-overlay", IsVideo: videoExts[ext],
+							ScaleOverride: scaleOverride,
 						})
 					}
 				}
@@ -1344,6 +1362,8 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			IntroPath:      introPath,
 			IntroDuration:  introDur,
 			MainTrackOnTop: hasAutoGenOverlay,
+			ImageScale:     pSettings.MontageXMLImageScale,
+			ScaleTarget:    pSettings.MontageXMLScaleTarget,
 		}
 		xmlPath := filepath.Join(finalDir, "project_timeline.xml")
 		if err := GenerateFCPXML(xPlan, fps, xmlPath); err != nil {

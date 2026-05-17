@@ -130,6 +130,38 @@ export const MontageSection: React.FC<MontageSectionProps> = ({
                     </label>
                 </div>
 
+                {settings.montageExportXML && (
+                    <>
+                        <div className="settings-control">
+                            <label className="settings-label">{t('pipeline.montage.xml_image_scale') || 'Масштаб кліпів у XML (%)'}</label>
+                            <input
+                                type="number"
+                                className="settings-input"
+                                min={10}
+                                max={500}
+                                step={1}
+                                value={settings.montageXMLImageScale ?? 100}
+                                onChange={(e) => handleChange('montageXMLImageScale', parseFloat(e.target.value) || 100)}
+                            />
+                            <div style={{ fontSize: '11px', opacity: 0.6, marginTop: '4px' }}>
+                                {t('pipeline.montage.xml_image_scale_hint') || '100 = оригінальний розмір, 115 = збільшити на 15% (кадрування), 80 = зменшити'}
+                            </div>
+                        </div>
+                        <div className="settings-control">
+                            <label className="settings-label">{t('pipeline.montage.xml_scale_target') || 'Застосувати до доріжки'}</label>
+                            <select
+                                className="settings-select"
+                                value={settings.montageXMLScaleTarget ?? 'v1'}
+                                onChange={(e) => handleChange('montageXMLScaleTarget', e.target.value)}
+                            >
+                                <option value="v1">{t('pipeline.montage.xml_scale_v1') || 'Основний трек (V1)'}</option>
+                                <option value="overlay">{t('pipeline.montage.xml_scale_overlay') || 'Накладки (auto-gen overlay)'}</option>
+                                <option value="all">{t('pipeline.montage.xml_scale_all') || 'Всі відеотреки'}</option>
+                            </select>
+                        </div>
+                    </>
+                )}
+
                 <div className="settings-group">
                     <div className="settings-group-title" style={{ marginBottom: '16px' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/></svg>

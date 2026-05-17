@@ -97,18 +97,27 @@ type xmemlMotion struct {
 }
 
 type xmemlParam struct {
-	ParamID string `xml:"parameterid"`
-	Value   string `xml:"value"`
+	Name     string `xml:"name,omitempty"`
+	ParamID  string `xml:"parameterid"`
+	Value    string `xml:"value"`
+	ValueMin string `xml:"valuemin,omitempty"`
+	ValueMax string `xml:"valuemax,omitempty"`
 }
 
 type xmemlFilter struct {
-	Effect xmemlEffect `xml:"effect"`
+	Enabled string      `xml:"enabled,omitempty"`
+	Start   *int        `xml:"start,omitempty"`
+	End     *int        `xml:"end,omitempty"`
+	Effect  xmemlEffect `xml:"effect"`
 }
 
 type xmemlEffect struct {
-	Name     string       `xml:"name"`
-	EffectID string       `xml:"effectid"`
-	Params   []xmemlParam `xml:"parameter"`
+	Name           string       `xml:"name,omitempty"`
+	EffectID       string       `xml:"effectid"`
+	EffectType     string       `xml:"effecttype,omitempty"`
+	MediaType      string       `xml:"mediatype,omitempty"`
+	EffectCategory string       `xml:"effectcategory,omitempty"`
+	Params         []xmemlParam `xml:"parameter"`
 }
 
 // Data types used by GenerateFCPXML.
@@ -122,7 +131,9 @@ type xmlExportPlan struct {
 	Triggers       []xmlTrigger
 	IntroPath      string
 	IntroDuration  float64
-	MainTrackOnTop bool // if true, main clips track is added last (highest track number)
+	MainTrackOnTop bool    // if true, main clips track is added last (highest track number)
+	ImageScale     float64 // масштаб V1-кліпів у %; 0 або 100 = без змін
+	ScaleTarget    string  // "v1", "overlay", "all"
 }
 
 type xmlClip struct {
@@ -132,14 +143,15 @@ type xmlClip struct {
 }
 
 type xmlWatermark struct {
-	Path      string
-	StartTime float64
-	Duration  float64
-	X, Y      int
-	W, H      int
-	Opacity   float64
-	TrackID   string
-	IsVideo   bool
+	Path          string
+	StartTime     float64
+	Duration      float64
+	X, Y          int
+	W, H          int
+	Opacity       float64
+	TrackID       string
+	IsVideo       bool
+	ScaleOverride float64 // якщо > 0 і != 100, замінює позиційний масштаб
 }
 
 type xmlTrigger struct {
@@ -236,10 +248,17 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 		return item
 	}
 
+	applyToV1 := (plan.ScaleTarget == "v1" || plan.ScaleTarget == "all") &&
+		plan.ImageScale > 0 && plan.ImageScale != 100
+
 	if plan.IntroPath != "" && plan.IntroDuration > 0 {
 		dur := toF(plan.IntroDuration)
-		v1Clips = append(v1Clips, newClip("clip-intro", filepath.Base(plan.IntroPath), dur, cursor,
-			getFile(plan.IntroPath, dur, false, true), false))
+		clip := newClip("clip-intro", filepath.Base(plan.IntroPath), dur, cursor,
+			getFile(plan.IntroPath, dur, false, true), false)
+		if applyToV1 {
+			clip.Filters = append(clip.Filters, buildBasicMotionFilter(plan.ImageScale))
+		}
+		v1Clips = append(v1Clips, clip)
 		cursor += dur
 	}
 
@@ -248,8 +267,12 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 			continue
 		}
 		dur := toF(c.Duration)
-		v1Clips = append(v1Clips, newClip(fmt.Sprintf("clip-%d", i), filepath.Base(c.Path), dur, cursor,
-			getFile(c.Path, dur, false, c.IsVideo), false))
+		clip := newClip(fmt.Sprintf("clip-%d", i), filepath.Base(c.Path), dur, cursor,
+			getFile(c.Path, dur, false, c.IsVideo), false)
+		if applyToV1 {
+			clip.Filters = append(clip.Filters, buildBasicMotionFilter(plan.ImageScale))
+		}
+		v1Clips = append(v1Clips, clip)
 		cursor += dur
 	}
 
@@ -275,11 +298,14 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 		if wm.W > 0 && wm.H > 0 && plan.BaseW > 0 && plan.BaseH > 0 {
 			item.Motion = buildXMLMotion(wm.X, wm.Y, wm.W, wm.H, plan.BaseW, plan.BaseH)
 		}
+		if wm.ScaleOverride > 0 && wm.ScaleOverride != 100 {
+			item.Filters = append(item.Filters, buildBasicMotionFilter(wm.ScaleOverride))
+		}
 		if wm.Opacity > 0 && wm.Opacity < 1.0 {
-			item.Filters = []xmemlFilter{{Effect: xmemlEffect{
+			item.Filters = append(item.Filters, xmemlFilter{Effect: xmemlEffect{
 				Name: "Opacity", EffectID: "opacity",
 				Params: []xmemlParam{{ParamID: "opacity", Value: fmt.Sprintf("%.0f", wm.Opacity*100)}},
-			}}}
+			}})
 		}
 		trackItems[wm.TrackID] = append(trackItems[wm.TrackID], item)
 	}
@@ -349,6 +375,27 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 	}
 	content := xml.Header + "<!DOCTYPE xmeml>\n" + string(out)
 	return os.WriteFile(outputPath, []byte(content), 0644)
+}
+
+// buildBasicMotionFilter returns a DaVinci-compatible Basic Motion filter with the given scale.
+// DaVinci reads scale from <filter><effect id="basic">, not from the <motion> tag.
+func buildBasicMotionFilter(scale float64) xmemlFilter {
+	start, end := 0, 3600001
+	return xmemlFilter{
+		Enabled: "TRUE",
+		Start:   &start,
+		End:     &end,
+		Effect: xmemlEffect{
+			Name:           "Basic Motion",
+			EffectID:       "basic",
+			EffectType:     "motion",
+			MediaType:      "video",
+			EffectCategory: "motion",
+			Params: []xmemlParam{
+				{Name: "Scale", ParamID: "scale", Value: fmt.Sprintf("%.0f", scale), ValueMin: "0", ValueMax: "10000"},
+			},
+		},
+	}
 }
 
 // buildXMLMotion converts pixel coordinates (top-left origin) to FCP7 motion parameters.

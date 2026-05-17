@@ -704,7 +704,8 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
             'montageEncodingPreset', 'montageBitrate', 'montageIntroVideoEnabled', 'montageIntroVideoPath', 'montageIntroVideoPaths',
             'montageWatermarkEnabled', 'montageWatermarkPath', 'montageWatermarkPosition', 'montageWatermarkOpacity', 'montageWatermarkSize', 'montageWatermarkOnIntro',
             'montageVideoWatermarkEnabled', 'montageVideoWatermarkPaths', 'montageVideoWatermarkPosition', 'montageVideoWatermarkSize', 'montageVideoWatermarkRounding',
-            'montageOverlayEnabled', 'montageOverlayPath', 'montageOverlayOnIntro', 'montageMetadataSimulation', 'montageExportXML'
+            'montageOverlayEnabled', 'montageOverlayPath', 'montageOverlayOnIntro', 'montageMetadataSimulation', 'montageExportXML',
+            'montageXMLImageScale', 'montageXMLScaleTarget'
         ];
         montageFields.forEach(f => { if (settings[f] !== undefined) templateData.montage[f] = settings[f]; });
 
@@ -1049,6 +1050,8 @@ Cinematic photograph, (Shot type), (Subject's physical appearance ONLY), (perfor
                 imageFootageSource: cleanApplied.imageFootageSource ?? 'files',
                 imageFootageAlsoGenerate: cleanApplied.imageFootageAlsoGenerate ?? false,
                 montageExportXML: cleanApplied.montageExportXML ?? false,
+                montageXMLImageScale: cleanApplied.montageXMLImageScale ?? 100,
+                montageXMLScaleTarget: cleanApplied.montageXMLScaleTarget ?? 'v1',
             };
         });
     };
