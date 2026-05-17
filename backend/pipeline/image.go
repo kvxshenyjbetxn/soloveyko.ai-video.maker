@@ -383,6 +383,24 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 			return fmt.Errorf("footage mode: no footage files selected")
 		}
 
+		// Filter out empty/unreadable source files before probing or claiming.
+		// A 0-byte file causes getDur=0, which triggers the "can't probe" fallback in
+		// ClaimForDuration and pulls in all remaining paths regardless of audio duration.
+		{
+			var valid []string
+			for _, p := range footagePaths {
+				if fi, err := os.Stat(p); err == nil && fi.Size() > 0 {
+					valid = append(valid, p)
+				} else {
+					s.log("WARN", fmt.Sprintf("[Footage] Skipping invalid/empty source file: %s", filepath.Base(p)), id, taskLabel)
+				}
+			}
+			if len(valid) == 0 {
+				return fmt.Errorf("footage mode: all source files are empty or missing")
+			}
+			footagePaths = valid
+		}
+
 		footageMode, _ := settings["imageFootageMode"].(string)
 		if footageMode == "" {
 			footageMode = pSettings.ImageFootageMode
@@ -462,7 +480,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		s.emitStageStatus(id, "image", "running", fmt.Sprintf("footage:0/%d", len(ordered)))
 		for i, src := range ordered {
 			dst := filepath.Join(imagesDir, fmt.Sprintf("%d.mp4", i+1))
-			if _, err := os.Stat(dst); err == nil && !shouldRegeneratePrompts {
+			if fi, err := os.Stat(dst); err == nil && fi.Size() > 0 && !shouldRegeneratePrompts {
 				s.log("INFO", fmt.Sprintf("[Footage] %d.mp4 already exists, skipping.", i+1), id, taskLabel)
 				continue
 			}
