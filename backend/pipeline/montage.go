@@ -490,6 +490,9 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			dur, err := s.getDuration(ffprobePath, filepath.Join(finalDir, vFile))
 			if err == nil && dur > 0 {
 				effectiveDurs[i] = dur
+			} else {
+				// File is unreadable/empty — mark as 0 so it gets filtered out below.
+				effectiveDurs[i] = 0
 			}
 		}
 		totalFootage := 0.0
@@ -525,6 +528,28 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			effectiveDurs = newED
 			numFiles = len(visualFiles)
 			s.log("INFO", fmt.Sprintf("[Montage] Footage mode: capped to audio duration, %d clips used", numFiles), id, taskLabel)
+		}
+
+		// Always filter out 0-duration entries (invalid/empty footage files).
+		// Required even when totalFootage <= audioDur — empty files can't be rendered by FFmpeg.
+		{
+			var newVF []string
+			var newED []float64
+			for i, d := range effectiveDurs {
+				if d > 0 {
+					newVF = append(newVF, visualFiles[i])
+					newED = append(newED, d)
+				}
+			}
+			if len(newVF) < numFiles {
+				s.log("WARN", fmt.Sprintf("[Montage] Footage mode: skipped %d empty/unreadable clip(s)", numFiles-len(newVF)), id, taskLabel)
+				visualFiles = newVF
+				effectiveDurs = newED
+				numFiles = len(visualFiles)
+			}
+		}
+		if numFiles == 0 {
+			return fmt.Errorf("footage mode: all clips are empty or unreadable")
 		}
 	}
 
