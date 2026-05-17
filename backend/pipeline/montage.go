@@ -241,7 +241,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 	numFiles := len(visualFiles)
 	s.log("INFO", fmt.Sprintf("[Montage] Total visual files to process: %d", numFiles), id, taskLabel)
-	if numFiles == 0 {
+	exportXMLEarly := pSettings.MontageExportXML
+	if val, ok := settings["montageExportXML"].(bool); ok {
+		exportXMLEarly = val
+	}
+	if numFiles == 0 && !exportXMLEarly {
 		return fmt.Errorf("no visual files found for montage")
 	}
 
@@ -1104,6 +1108,50 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	// [XML EXPORT] — generate XMEML file instead of rendering with FFmpeg
 	if iExportXML {
+		// For XML there are no FFmpeg transitions: xfade/sync-timing offsets in
+		// effectiveDurs don't apply. Use uniform distribution so clips tile audioDur
+		// exactly and SYNC FIX's remaining is guaranteed < numFiles (no gap in DaVinci).
+		if numFiles > 0 {
+			clipDur := audioDur / float64(numFiles)
+			for i := range effectiveDurs {
+				effectiveDurs[i] = clipDur
+			}
+			if numFiles > 1 {
+				totalFrames := int(math.Round(audioDur * float64(fps)))
+				idealFrames := make([]float64, numFiles)
+				baseFrames := make([]int, numFiles)
+				baseSum := 0
+				for i := 0; i < numFiles; i++ {
+					idealFrames[i] = effectiveDurs[i] * float64(fps)
+					baseFrames[i] = int(math.Floor(idealFrames[i]))
+					if baseFrames[i] < 1 {
+						baseFrames[i] = 1
+					}
+					baseSum += baseFrames[i]
+				}
+				remaining := totalFrames - baseSum
+				if remaining > 0 {
+					type indexRemainder struct {
+						idx       int
+						remainder float64
+					}
+					remainders := make([]indexRemainder, numFiles)
+					for i := 0; i < numFiles; i++ {
+						remainders[i] = indexRemainder{i, idealFrames[i] - float64(baseFrames[i])}
+					}
+					sort.Slice(remainders, func(a, b int) bool {
+						return remainders[a].remainder > remainders[b].remainder
+					})
+					for j := 0; j < remaining && j < numFiles; j++ {
+						baseFrames[remainders[j].idx]++
+					}
+				}
+				for i := 0; i < numFiles; i++ {
+					effectiveDurs[i] = float64(baseFrames[i]) / float64(fps)
+				}
+			}
+		}
+
 		// DaVinci Resolve does not support PNG files via XML import — only JPG and video.
 		// pngToJpg copies a .png file as .jpg (same bytes; works because generated images
 		// are actually JPEG data saved with a .png extension). Returns original path for non-PNG.
@@ -1202,7 +1250,14 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 							break
 						}
 						t := timings[i]
-						dur := t.End - t.Start
+						// Use start-to-start duration so adjacent clips tile without gaps.
+						// t.End-t.Start only covers the speech segment, leaving silence as gaps.
+						var dur float64
+						if i < len(timings)-1 {
+							dur = timings[i+1].Start - t.Start
+						} else {
+							dur = audioDur - t.Start
+						}
 						if dur <= 0 {
 							dur = t.Duration
 						}

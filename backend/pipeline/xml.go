@@ -54,12 +54,15 @@ type xmemlAudioMedia struct {
 }
 
 type xmemlTrack struct {
-	Clips []xmemlClipItem `xml:"clipitem"`
+	Enabled string          `xml:"enabled"`
+	Locked  string          `xml:"locked"`
+	Clips   []xmemlClipItem `xml:"clipitem"`
 }
 
 type xmemlClipItem struct {
 	ID       string        `xml:"id,attr"`
 	Name     string        `xml:"name"`
+	Enabled  string        `xml:"enabled"`
 	Rate     *xmemlRate    `xml:"rate,omitempty"`
 	Duration int           `xml:"duration"`
 	Start    int           `xml:"start"`
@@ -217,14 +220,26 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 	var v1Clips []xmemlClipItem
 	cursor := 0
 
+	newTrack := func(clips []xmemlClipItem) xmemlTrack {
+		return xmemlTrack{Enabled: "TRUE", Locked: "FALSE", Clips: clips}
+	}
+	newClip := func(id, name string, dur, start int, file *xmemlFile, isAudio bool) xmemlClipItem {
+		item := xmemlClipItem{
+			ID: id, Name: name, Enabled: "TRUE",
+			Duration: dur, Start: start, End: start + dur, In: 0, Out: dur,
+			File: file,
+		}
+		if !isAudio {
+			r := rate
+			item.Rate = &r
+		}
+		return item
+	}
+
 	if plan.IntroPath != "" && plan.IntroDuration > 0 {
 		dur := toF(plan.IntroDuration)
-		r := rate
-		v1Clips = append(v1Clips, xmemlClipItem{
-			ID: "clip-intro", Name: filepath.Base(plan.IntroPath),
-			Rate: &r, Duration: dur, Start: cursor, End: cursor + dur, In: 0, Out: dur,
-			File: getFile(plan.IntroPath, dur, false, true),
-		})
+		v1Clips = append(v1Clips, newClip("clip-intro", filepath.Base(plan.IntroPath), dur, cursor,
+			getFile(plan.IntroPath, dur, false, true), false))
 		cursor += dur
 	}
 
@@ -233,18 +248,14 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 			continue
 		}
 		dur := toF(c.Duration)
-		r := rate
-		v1Clips = append(v1Clips, xmemlClipItem{
-			ID: fmt.Sprintf("clip-%d", i), Name: filepath.Base(c.Path),
-			Rate: &r, Duration: dur, Start: cursor, End: cursor + dur, In: 0, Out: dur,
-			File: getFile(c.Path, dur, false, c.IsVideo),
-		})
+		v1Clips = append(v1Clips, newClip(fmt.Sprintf("clip-%d", i), filepath.Base(c.Path), dur, cursor,
+			getFile(c.Path, dur, false, c.IsVideo), false))
 		cursor += dur
 	}
 
 	var videoTracks []xmemlTrack
 	if !plan.MainTrackOnTop {
-		videoTracks = append(videoTracks, xmemlTrack{Clips: v1Clips})
+		videoTracks = append(videoTracks, newTrack(v1Clips))
 	}
 
 	// V2..Vn (or V1..Vn-1 if MainTrackOnTop): watermarks, one track per unique TrackID.
@@ -259,12 +270,8 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 		}
 		st := toF(wm.StartTime)
 		dur := toF(wm.Duration)
-		r := rate
-		item := xmemlClipItem{
-			ID: fmt.Sprintf("wm-%d", i), Name: filepath.Base(wm.Path),
-			Rate: &r, Duration: dur, Start: st, End: st + dur, In: 0, Out: dur,
-			File: getFile(wm.Path, dur, false, wm.IsVideo),
-		}
+		item := newClip(fmt.Sprintf("wm-%d", i), filepath.Base(wm.Path), dur, st,
+			getFile(wm.Path, dur, false, wm.IsVideo), false)
 		if wm.W > 0 && wm.H > 0 && plan.BaseW > 0 && plan.BaseH > 0 {
 			item.Motion = buildXMLMotion(wm.X, wm.Y, wm.W, wm.H, plan.BaseW, plan.BaseH)
 		}
@@ -277,10 +284,10 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 		trackItems[wm.TrackID] = append(trackItems[wm.TrackID], item)
 	}
 	for _, tid := range trackOrder {
-		videoTracks = append(videoTracks, xmemlTrack{Clips: trackItems[tid]})
+		videoTracks = append(videoTracks, newTrack(trackItems[tid]))
 	}
 	if plan.MainTrackOnTop {
-		videoTracks = append(videoTracks, xmemlTrack{Clips: v1Clips})
+		videoTracks = append(videoTracks, newTrack(v1Clips))
 	}
 
 	// V(n+1): triggers.
@@ -291,19 +298,15 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 		}
 		st := toF(tr.StartTime)
 		dur := toF(tr.Duration)
-		r := rate
-		item := xmemlClipItem{
-			ID: fmt.Sprintf("trig-%d", i), Name: filepath.Base(tr.Path),
-			Rate: &r, Duration: dur, Start: st, End: st + dur, In: 0, Out: dur,
-			File: getFile(tr.Path, dur, false, tr.IsVideo),
-		}
+		item := newClip(fmt.Sprintf("trig-%d", i), filepath.Base(tr.Path), dur, st,
+			getFile(tr.Path, dur, false, tr.IsVideo), false)
 		if tr.W > 0 && tr.H > 0 && plan.BaseW > 0 && plan.BaseH > 0 {
 			item.Motion = buildXMLMotion(tr.X, tr.Y, tr.W, tr.H, plan.BaseW, plan.BaseH)
 		}
 		trigClips = append(trigClips, item)
 	}
 	if len(trigClips) > 0 {
-		videoTracks = append(videoTracks, xmemlTrack{Clips: trigClips})
+		videoTracks = append(videoTracks, newTrack(trigClips))
 	}
 
 	// A1: audio.
@@ -317,12 +320,11 @@ func GenerateFCPXML(plan xmlExportPlan, fps int, outputPath string) error {
 		if audioDurF == 0 {
 			audioDurF = totalDur
 		}
+		audioClip := newClip("audio-main", filepath.Base(plan.AudioPath), audioDurF, 0,
+			getFile(plan.AudioPath, audioDurF, true, false), true)
 		ar := rate
-		audioTracks = []xmemlTrack{{Clips: []xmemlClipItem{{
-			ID: "audio-main", Name: filepath.Base(plan.AudioPath),
-			Rate: &ar, Duration: audioDurF, Start: 0, End: audioDurF, In: 0, Out: audioDurF,
-			File: getFile(plan.AudioPath, audioDurF, true, false),
-		}}}}
+		audioClip.Rate = &ar
+		audioTracks = []xmemlTrack{newTrack([]xmemlClipItem{audioClip})}
 	}
 
 	doc := xmemlDoc{
