@@ -439,6 +439,7 @@
         "similarity": "Similarity",
         "style": "Style Exaggeration",
         "speaker_boost": "Speaker Boost",
+        "convert_to_wav": "Convert to WAV",
         "rate": "Rate",
         "pitch": "Pitch",
         "volume": "Volume"

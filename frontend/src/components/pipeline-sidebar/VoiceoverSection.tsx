@@ -513,6 +513,19 @@ export const VoiceoverSection: React.FC<VoiceoverSectionProps> = ({
                             </div>
                         </>
                     )}
+                    <div className="settings-control">
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <label className="settings-label" style={{ marginBottom: 0 }}>{t('pipeline.voiceover.settings.convert_to_wav') || 'Конвертувати в WAV'}</label>
+                            <label className="stage-switch small">
+                                <input
+                                    type="checkbox"
+                                    checked={!!settings.voiceoverConvertToWav}
+                                    onChange={(e) => handleChange('voiceoverConvertToWav', e.target.checked)}
+                                />
+                                <span className="stage-slider"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -105,9 +105,9 @@ func (s *PipelineService) ProcessSubtitle(id string, taskLabel string, finalDir 
 	pSettings.SubtitlePlayResX = pResX
 	pSettings.SubtitlePlayResY = pResY
 
-	voiceFilePath := filepath.Join(finalDir, "voice.mp3")
+	voiceFilePath := findVoiceFile(finalDir)
 	if _, err := os.Stat(voiceFilePath); os.IsNotExist(err) {
-		s.log("WARN", "[Pipeline] No voice.mp3 found for subtitle generation.", id, taskLabel)
+		s.log("WARN", "[Pipeline] No voice file found for subtitle generation.", id, taskLabel)
 		return nil
 	}
 

@@ -12,6 +12,17 @@ import (
 	"time"
 )
 
+// findVoiceFile returns the path to the existing voice audio file (wav preferred over mp3).
+func findVoiceFile(dir string) string {
+	for _, name := range []string{"voice.wav", "voice.mp3"} {
+		p := filepath.Join(dir, name)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return filepath.Join(dir, "voice.mp3")
+}
+
 // ProcessVoiceover handles voice synthesis using ElevenLabs
 func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, taskType string, processedText string, finalDir string, settings map[string]interface{}, pSettings *utils.PipelineSettings) error {
 	// Пріоритет налаштувань забезпечення через pSettings (вже синхронізовано в service.go)
@@ -22,10 +33,10 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, taskType
 	}
 
 	regenerate, _ := settings["voiceoverRegenerate"].(bool)
-	voiceFilePath := filepath.Join(finalDir, "voice.mp3")
-	if _, err := os.Stat(voiceFilePath); err == nil && !regenerate {
-		s.log("INFO", "[Pipeline] voice.mp3 already exists, skipping synthesis (Restore Mode).", id, taskLabel)
-		duration, _ := utils.GetAudioDuration(voiceFilePath)
+	existingVoicePath := findVoiceFile(finalDir)
+	if _, err := os.Stat(existingVoicePath); err == nil && !regenerate {
+		s.log("INFO", fmt.Sprintf("[Pipeline] %s already exists, skipping synthesis (Restore Mode).", filepath.Base(existingVoicePath)), id, taskLabel)
+		duration, _ := utils.GetAudioDuration(existingVoicePath)
 		s.emitStageStatus(id, "voice", "completed", duration)
 		return nil
 	}
@@ -556,6 +567,31 @@ func (s *PipelineService) ProcessVoiceover(id string, taskLabel string, taskType
 		s.log("ERROR", "[Pipeline] Voiceover service is not selected!", id, taskLabel)
 	}
 
+	if pSettings.VoiceoverConvertToWav {
+		mp3Path := filepath.Join(finalDir, "voice.mp3")
+		if _, err := os.Stat(mp3Path); err == nil {
+			wavPath := filepath.Join(finalDir, "voice.wav")
+			if convErr := s.convertAudioToWav(mp3Path, wavPath, id, taskLabel); convErr != nil {
+				s.log("WARN", fmt.Sprintf("[Pipeline] WAV conversion failed: %v", convErr), id, taskLabel)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *PipelineService) convertAudioToWav(srcPath, dstPath, id, taskLabel string) error {
+	ffmpegPath, err := utils.EnsureEngine("ffmpeg")
+	if err != nil {
+		return fmt.Errorf("ffmpeg not found: %v", err)
+	}
+	cmd := exec.Command(ffmpegPath, "-y", "-hide_banner", "-loglevel", "error", "-i", srcPath, dstPath)
+	utils.PrepareHiddenCmd(cmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ffmpeg failed: %v\n%s", err, string(out))
+	}
+	os.Remove(srcPath)
+	s.log("INFO", fmt.Sprintf("[Pipeline] Audio converted to WAV: %s", filepath.Base(dstPath)), id, taskLabel)
 	return nil
 }
 

@@ -102,7 +102,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	// 2. Identify inputs
-	audioPath := filepath.Join(finalDir, "voice.mp3")
+	audioPath := findVoiceFile(finalDir)
 	if _, err := os.Stat(audioPath); err != nil {
 		return fmt.Errorf("audio file not found: %s", audioPath)
 	}
@@ -139,7 +139,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	imageCount := len(availableFiles)
 
 	// 3. Get Audio Duration
-	audioDur, err := s.getDuration(ffprobePath, filepath.Join(finalDir, "voice.mp3"))
+	audioDur, err := s.getDuration(ffprobePath, audioPath)
 	if err != nil {
 		return fmt.Errorf("failed to get audio duration: %v", err)
 	}
@@ -2177,7 +2177,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		}
 		cmdArgs = append(cmdArgs, "-i", spec.path)
 	}
-	cmdArgs = append(cmdArgs, "-i", "voice.mp3")
+	cmdArgs = append(cmdArgs, "-i", filepath.Base(audioPath))
 
 	// Map
 	cmdArgs = append(cmdArgs,

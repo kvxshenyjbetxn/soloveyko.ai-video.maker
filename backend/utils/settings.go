@@ -89,6 +89,7 @@ type PipelineSettings struct {
 	VoiceoverElevenLabsBotKeyID     string  `json:"voiceoverElevenLabsBotKeyID,omitempty"`
 	VoiceoverCollapsed              bool    `json:"voiceoverCollapsed"`
 	VoiceoverEnabled                bool    `json:"voiceoverEnabled"`
+	VoiceoverConvertToWav           bool    `json:"voiceoverConvertToWav"`
 	VoiceoverPipelineName           string  `json:"voiceoverPipelineName,omitempty"`
 	VoiceoverTemplatesCollapsed     bool    `json:"voiceoverTemplatesCollapsed"`
 	VoiceoverService                string  `json:"voiceoverService,omitempty"`

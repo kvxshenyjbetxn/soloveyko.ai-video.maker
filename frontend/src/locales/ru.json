@@ -444,6 +444,7 @@
         "similarity": "Сходство",
         "style": "Экспрессия",
         "speaker_boost": "Усиление дикции",
+        "convert_to_wav": "Конвертировать в WAV",
         "rate": "Скорость",
         "pitch": "Высота",
         "volume": "Громкость"

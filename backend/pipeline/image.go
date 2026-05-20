@@ -415,7 +415,7 @@ func (s *PipelineService) ProcessImage(id string, taskLabel string, taskType str
 		ffprobePath, probeErr := utils.EnsureEngine("ffprobe")
 		ffmpegPath, ffmpegErr := utils.EnsureEngine("ffmpeg")
 		if probeErr == nil {
-			audioDur, _ = s.getDuration(ffprobePath, filepath.Join(finalDir, "voice.mp3"))
+			audioDur, _ = s.getDuration(ffprobePath, findVoiceFile(finalDir))
 		}
 		getDur := func(path string) float64 {
 			if probeErr != nil {

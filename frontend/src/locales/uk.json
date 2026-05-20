@@ -453,6 +453,7 @@
         "similarity": "Схожість",
         "style": "Експресія",
         "speaker_boost": "Підсилення дикції",
+        "convert_to_wav": "Конвертувати в WAV",
         "rate": "Швидкість",
         "pitch": "Висота",
         "volume": "Гучність"
