@@ -279,6 +279,7 @@ func (s *PipelineService) RestartStage(id string, stage string, taskName string,
 
 	go func() {
 		s.log("INFO", fmt.Sprintf("[Pipeline] Restarting stage '%s'", stage), id, taskLabel)
+		success := false
 		switch stage {
 		case "voice":
 			processedText, _ := s.LoadTextResult(finalDir, taskType)
@@ -294,24 +295,148 @@ func (s *PipelineService) RestartStage(id string, stage string, taskName string,
 			if subtitleEnabled {
 				if err := s.ProcessSubtitle(id, taskLabel, finalDir, settings, &pSettings); err != nil {
 					s.log("ERROR", fmt.Sprintf("[Pipeline] Subtitle restart failed: %v", err), id, taskLabel)
+					return
 				}
 			}
+			success = true
 		case "subtitle":
 			if err := s.ProcessSubtitle(id, taskLabel, finalDir, settings, &pSettings); err != nil {
 				s.log("ERROR", fmt.Sprintf("[Pipeline] Subtitle restart failed: %v", err), id, taskLabel)
+				return
 			}
+			success = true
 		case "image":
 			processedText, _ := s.LoadTextResult(finalDir, taskType)
 			if err := s.ProcessImage(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings, taskName, templateDir); err != nil {
 				s.log("ERROR", fmt.Sprintf("[Pipeline] Image restart failed: %v", err), id, taskLabel)
+				return
 			}
+			success = true
 		case "montage":
 			if err := s.ProcessMontage(id, taskLabel, finalDir, settings, &pSettings, taskName, subName); err != nil {
 				s.log("ERROR", fmt.Sprintf("[Pipeline] Montage restart failed: %v", err), id, taskLabel)
 				s.emitStageStatus(id, "montage", "failed")
+				return
 			}
+			success = true
 		default:
 			s.log("ERROR", fmt.Sprintf("[Pipeline] Unknown stage for restart: %s", stage), id, taskLabel)
+			return
+		}
+
+		if success {
+			montageEnabled := pSettings.MontageEnabled
+			if val, ok := settings["montageEnabled"].(bool); ok {
+				montageEnabled = val
+			}
+
+			if montageEnabled {
+				if stage == "montage" {
+					s.log("SUCCESS", "[Pipeline] Montage completed successfully after restart.", id, taskLabel)
+					processedText, _ := s.LoadTextResult(finalDir, taskType)
+					if s.OnPipelineSuccess != nil {
+						s.OnPipelineSuccess(id, taskName, taskType, subName, "", processedText, settings, 0)
+					}
+					if s.OnTaskStatus != nil {
+						s.OnTaskStatus(id, "completed", 100)
+					}
+				} else {
+					// Check if all prerequisites are completed
+					existing := s.CheckExistingFiles(id, finalDir, taskType, settings, true)
+					
+					voiceoverEnabled := pSettings.VoiceoverEnabled
+					if val, ok := settings["voiceoverEnabled"].(bool); ok {
+						voiceoverEnabled = val
+					}
+					subtitleEnabled := pSettings.SubtitleEnabled
+					if val, ok := settings["subtitleEnabled"].(bool); ok {
+						subtitleEnabled = val
+					}
+					imageEnabled := pSettings.ImageEnabled
+					if val, ok := settings["imageEnabled"].(bool); ok {
+						imageEnabled = val
+					}
+
+					voiceReady := !voiceoverEnabled
+					subtitleReady := !subtitleEnabled
+					imageReady := !imageEnabled
+
+					for _, fs := range existing.FoundStages {
+						if fs == "voice" {
+							voiceReady = true
+						}
+						if fs == "subtitle" {
+							subtitleReady = true
+						}
+						if fs == "image" {
+							imageReady = true
+						}
+					}
+
+					if voiceReady && subtitleReady && imageReady {
+						s.log("INFO", "[Pipeline] Prerequisite stages completed after restart. Automatically starting montage...", id, taskLabel)
+						startTime := time.Now()
+						if err := s.ProcessMontage(id, taskLabel, finalDir, settings, &pSettings, taskName, subName); err != nil {
+							s.log("ERROR", fmt.Sprintf("[Pipeline] Montage auto-restart failed: %v", err), id, taskLabel)
+							s.emitStageStatus(id, "montage", "failed")
+							if s.OnTaskStatus != nil {
+								s.OnTaskStatus(id, "failed", 0)
+							}
+							return
+						}
+						
+						processedText, _ := s.LoadTextResult(finalDir, taskType)
+						if s.OnPipelineSuccess != nil {
+							duration := time.Since(startTime).Seconds()
+							s.OnPipelineSuccess(id, taskName, taskType, subName, "", processedText, settings, duration)
+						}
+						if s.OnTaskStatus != nil {
+							s.OnTaskStatus(id, "completed", 100)
+						}
+					} else {
+						s.log("INFO", "[Pipeline] Stage completed successfully, but other prerequisite stages are still pending.", id, taskLabel)
+					}
+				}
+			} else {
+				// Montage is not enabled. If all enabled prerequisites are done, we are complete.
+				existing := s.CheckExistingFiles(id, finalDir, taskType, settings, true)
+				
+				voiceoverEnabled := pSettings.VoiceoverEnabled
+				if val, ok := settings["voiceoverEnabled"].(bool); ok {
+					voiceoverEnabled = val
+				}
+				subtitleEnabled := pSettings.SubtitleEnabled
+				if val, ok := settings["subtitleEnabled"].(bool); ok {
+					subtitleEnabled = val
+				}
+				imageEnabled := pSettings.ImageEnabled
+				if val, ok := settings["imageEnabled"].(bool); ok {
+					imageEnabled = val
+				}
+
+				voiceReady := !voiceoverEnabled
+				subtitleReady := !subtitleEnabled
+				imageReady := !imageEnabled
+
+				for _, fs := range existing.FoundStages {
+					if fs == "voice" {
+						voiceReady = true
+					}
+					if fs == "subtitle" {
+						subtitleReady = true
+					}
+					if fs == "image" {
+						imageReady = true
+					}
+				}
+
+				if voiceReady && subtitleReady && imageReady {
+					s.log("INFO", "[Pipeline] All enabled stages completed after restart. Completing task.", id, taskLabel)
+					if s.OnTaskStatus != nil {
+						s.OnTaskStatus(id, "completed", 100)
+					}
+				}
+			}
 		}
 	}()
 	return nil
@@ -677,7 +802,7 @@ func (s *PipelineService) runPipeline(id string, taskLabel string, taskType stri
 		defer stagesWg.Done()
 		if shouldSkipVoice {
 			s.log("INFO", "[Pipeline] Skipping voiceover stage, using existing file.", id, taskLabel)
-			dur, _ := utils.GetAudioDuration(filepath.Join(finalDir, "voice.mp3"))
+			dur, _ := utils.GetAudioDuration(findVoiceFile(finalDir))
 			s.emitStageStatus(id, "voice", "completed", dur)
 		} else {
 			voiceErr = s.ProcessVoiceover(id, taskLabel, taskType, processedText, finalDir, settings, &pSettings)
