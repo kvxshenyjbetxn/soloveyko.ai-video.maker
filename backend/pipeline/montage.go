@@ -353,9 +353,11 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	// вже оновив pSettings найактуальнішими даними з урахуванням пріоритету шаблонів.
 	// БУДЬ-ЯКА РУЧНА СИНХРОНІЗАЦІЯ ТУТ ПРИЗВЕДЕ ДО "ПРОТІКАННЯ" НАЛАШТУВАНЬ З ПАНЕЛІ.
 
+	isNone := pSettings.MontageTransitionEffect == "none"
+
 	// Derived variables from finalized pSettings
 	transDur := pSettings.MontageTransitionDuration
-	if numFiles <= 1 {
+	if numFiles <= 1 || isNone {
 		transDur = 0
 	}
 
@@ -400,7 +402,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		timings, err := utils.GetImageTimings(finalDir, audioDur, numFiles, visualFiles, taskLabel)
 		if err != nil {
 			clipDur := audioDur / float64(numFiles)
-			if !isFadeFast {
+			if !isFadeFast && !isNone {
 				clipDur = (audioDur + float64(numFiles-1)*transDur) / float64(numFiles)
 			}
 			for i := range effectiveDurs {
@@ -409,7 +411,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 		} else {
 			for i, t := range timings {
 				if i < numFiles {
-					if isFadeFast {
+					if isFadeFast || isNone {
 						if i < len(timings)-1 {
 							effectiveDurs[i] = timings[i+1].Start - t.Start
 						} else {
@@ -423,7 +425,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 			}
 		}
 	} else {
-		if isFadeFast {
+		if isFadeFast || isNone {
 			clipDur := audioDur / float64(numFiles)
 			for i := range effectiveDurs {
 				effectiveDurs[i] = clipDur
@@ -438,7 +440,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	// [SYNC FIX] Snap clip durations to exact frame boundaries for concat mode.
-	if isFadeFast && numFiles > 1 {
+	if (isFadeFast || isNone) && numFiles > 1 {
 		totalFrames := int(math.Round(audioDur * float64(fps)))
 		idealFrames := make([]float64, numFiles)
 		baseFrames := make([]int, numFiles)
@@ -1426,7 +1428,7 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 	}
 
 	padAmount := 0.0
-	if !isFadeFast {
+	if !isFadeFast && !isNone {
 		padAmount = 1.0 // Pad each clip to prevent xfade frame underrun
 	}
 
@@ -1540,7 +1542,19 @@ func (s *PipelineService) ProcessMontage(id string, taskLabel string, finalDir s
 
 	// Transitions — per-clip effectiveDurs for correct offsets
 	lastV := ""
-	if isFadeFast {
+	if isNone {
+		s.log("INFO", "[Montage] Using No Transition (hard cuts + concat)", id, taskLabel)
+		var concatParts []string
+		for i := 0; i < numFiles; i++ {
+			vIn := fmt.Sprintf("v%d_final", i)
+			concatParts = append(concatParts, fmt.Sprintf("[%s]", vIn))
+			lastV = vIn
+		}
+		if numFiles > 1 {
+			filterParts = append(filterParts, fmt.Sprintf("%sconcat=n=%d:v=1:a=0[v_montage_raw]", strings.Join(concatParts, ""), numFiles))
+			lastV = "v_montage_raw"
+		}
+	} else if isFadeFast {
 		s.log("INFO", "[Montage] Using Fast Fade (fade in/out + concat) transition", id, taskLabel)
 		var concatParts []string
 		for i := 0; i < numFiles; i++ {

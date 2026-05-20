@@ -235,6 +235,7 @@
       "overlay_path": "Шлях до оверлею",
       "transitions": "Тривалість переходу",
       "transition_effect": "Ефект переходу",
+      "transition_none": "Без переходу",
       "encoding_preset": "Пресет кодування",
       "bitrate": "Бітрейт"
     },
@@ -514,6 +515,7 @@
       "transition_fast": "швидко",
       "transition_slow": "повільно / накладання",
       "transition_effect": "Тип переходу",
+      "transition_none": "без переходу",
       "zoom": "Інтенсивність зуму (Zoom)",
       "resolution": "Роздільна здатність",
       "fps": "Кадрів в секунду (FPS)",

@@ -229,6 +229,7 @@
       "overlay_path": "Путь к оверлею",
       "transitions": "Длительность перехода",
       "transition_effect": "Эффект перехода",
+      "transition_none": "Без перехода",
       "encoding_preset": "Пресет кодирования",
       "bitrate": "Битрейт"
     },
@@ -505,6 +506,7 @@
       "transition_fast": "быстро",
       "transition_slow": "медленно / наложение",
       "transition_effect": "Тип перехода",
+      "transition_none": "без перехода",
       "zoom": "Интенсивность зума (Zoom)",
       "resolution": "Разрешение видео",
       "fps": "Кадров в секунду (FPS)",

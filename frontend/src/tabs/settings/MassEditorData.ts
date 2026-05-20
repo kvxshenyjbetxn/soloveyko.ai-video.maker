@@ -222,14 +222,17 @@ export const MASS_EDITOR_BLOCKS: MassEditorBlock[] = [
             { id: 'montageTransitionDuration', labelKey: 'settings.montage.transitions', type: 'slider', min: 0.1, max: 2, step: 0.05, path: 'montage.montageTransitionDuration' },
             {
                 id: 'montageTransitionEffect', labelKey: 'settings.montage.transition_effect', type: 'select', options: [
-                    "fade_fast", "fade", "wipeleft", "wiperight", "wipeup", "wipedown",
+                    "none", "fade_fast", "fade", "wipeleft", "wiperight", "wipeup", "wipedown",
                     "slideleft", "slideright", "slideup", "slidedown", "circlecrop",
                     "rectcrop", "distance", "fadeblack", "fadewhite", "radial",
                     "smoothleft", "smoothright", "smoothup", "smoothdown",
                     "circleopen", "circleclose", "vertopen", "vertclose",
                     "horzopen", "horzclose", "dissolve", "pixelize", "diagtl",
                     "diagtr", "diagbl", "diagbr"
-                ].map(effect => ({ value: effect, label: effect })), path: 'montage.montageTransitionEffect'
+                ].map(effect => ({
+                    value: effect,
+                    label: effect === "none" ? 'settings.montage.transition_none' : effect
+                })), path: 'montage.montageTransitionEffect'
             },
             {
                 id: 'montageEncodingPreset', labelKey: 'settings.montage.encoding_preset', type: 'select', options: [

@@ -223,6 +223,7 @@
       "overlay_path": "Overlay Path",
       "transitions": "Transitions Duration",
       "transition_effect": "Transition Effect",
+      "transition_none": "No transition",
       "encoding_preset": "Encoding Preset",
       "bitrate": "Bitrate"
     },
@@ -500,6 +501,7 @@
       "transition_fast": "fast",
       "transition_slow": "slow / overlay",
       "transition_effect": "Transition Effect",
+      "transition_none": "no transition",
       "zoom": "Zoom Intensity",
       "resolution": "Output Resolution",
       "fps": "Frames Per Second (FPS)",
