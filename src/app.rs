@@ -31,6 +31,10 @@ pub struct VideoMakerApp {
     language: Language,
     /// Копія останніх збережених налаштувань на диску для відстеження змін у реальному часі.
     last_saved_settings: AppSettings,
+    /// Ключ API для OpenRouter.
+    openrouter_key: String,
+    /// Тимчасовий статус перевірки OpenRouter API ключа.
+    openrouter_status: Option<String>,
 }
 
 impl Default for VideoMakerApp {
@@ -44,6 +48,8 @@ impl Default for VideoMakerApp {
             pipeline_width: 450.0,
             active_settings_tab: gui::settings::SettingsSubTab::General,
             language: Language::Uk,
+            openrouter_key: String::new(),
+            openrouter_status: None,
             last_saved_settings: default_settings,
         }
     }
@@ -79,6 +85,8 @@ impl VideoMakerApp {
             _ => Language::Uk,
         };
 
+        let openrouter_key = saved.openrouter_key.clone();
+
         Self {
             active_tab: Tab::Main,
             text_input: String::new(),
@@ -87,6 +95,8 @@ impl VideoMakerApp {
             pipeline_width,
             active_settings_tab: gui::settings::SettingsSubTab::General,
             language,
+            openrouter_key,
+            openrouter_status: None,
             last_saved_settings: saved,
         }
     }
@@ -117,7 +127,12 @@ impl eframe::App for VideoMakerApp {
                 .width_range(350.0..=750.0)       // Збільшений діапазон зміни ширини
                 .resizable(true)
                 .show(ctx, |ui| {
-                    gui::pipeline::draw_pipeline_panel(ui, self.language);
+                    gui::pipeline::draw_pipeline_panel(
+                        ui,
+                        self.language,
+                        &mut self.openrouter_key,
+                        &mut self.openrouter_status,
+                    );
                 });
 
             // Зчитуємо фактичну ширину панелі після її рендерингу/перетягування користувачем
@@ -184,12 +199,14 @@ impl eframe::App for VideoMakerApp {
                 || current_color_arr != self.last_saved_settings.accent_color 
                 || current_language_str != self.last_saved_settings.language
                 || (self.pipeline_width - self.last_saved_settings.pipeline_width).abs() > 1.0
+                || self.openrouter_key != self.last_saved_settings.openrouter_key
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
                     accent_color: current_color_arr,
                     pipeline_width: self.pipeline_width,
                     language: current_language_str,
+                    openrouter_key: self.openrouter_key.clone(),
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску

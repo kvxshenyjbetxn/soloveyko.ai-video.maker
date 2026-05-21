@@ -16,6 +16,8 @@ pub struct AppSettings {
     pub pipeline_width: f32,
     /// Поточна вибрана мова інтерфейсу ("Uk", "En")
     pub language: String,
+    /// Ключ API для OpenRouter
+    pub openrouter_key: String,
 }
 
 impl Default for AppSettings {
@@ -25,6 +27,7 @@ impl Default for AppSettings {
             accent_color: [0, 122, 255, 255], // Стандартний синій колір
             pipeline_width: 450.0,            // Дефолтна ширина
             language: "Uk".to_string(),       // Стандартна мова — Українська
+            openrouter_key: String::new(),
         }
     }
 }

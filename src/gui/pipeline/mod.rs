@@ -18,14 +18,19 @@ use crate::localization::{Language, translate};
 /// 5. Озвучка
 /// 6. Відеоряд
 /// 7. Монтаж
-pub fn draw_pipeline_panel(ui: &mut egui::Ui, language: Language) {
+pub fn draw_pipeline_panel(
+    ui: &mut egui::Ui,
+    language: Language,
+    openrouter_key: &mut String,
+    openrouter_status: &mut Option<String>,
+) {
     ui.vertical(|ui| {
         ui.add_space(8.0);
         ui.heading(translate(language, "pipeline_settings"));
         ui.separator();
         
         ui.add_space(12.0);
-
+ 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
@@ -45,7 +50,7 @@ pub fn draw_pipeline_panel(ui: &mut egui::Ui, language: Language) {
                 
                 // 3. АПІ
                 ui.collapsing(translate(language, "api"), |ui| {
-                    api::draw_api_section(ui);
+                    api::draw_api_section(ui, language, openrouter_key, openrouter_status);
                 });
                 
                 ui.add_space(8.0);
