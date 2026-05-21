@@ -12,14 +12,10 @@ pub enum SettingsSubTab {
     General,
     
     // Провайдери Озвучки
-    VoiceoverElevenLabs,
-    VoiceoverOpenAi,
-    VoiceoverPlayHt,
+    VoiceoverVoiceBot,
     
     // Провайдери Відеоряду
-    VideoLeonardo,
-    VideoDallE,
-    VideoMidjourney,
+    VideoGoogler,
     
     /// Підвкладка API: OpenRouter
     ApiOpenRouter,
@@ -53,12 +49,8 @@ pub fn draw_settings(
             voiceover_label,
             video_label,
             openrouter_label,
-            "ElevenLabs",
-            "OpenAI TTS",
-            "Play.ht",
-            "Leonardo.ai",
-            "DALL-E 3",
-            "Midjourney",
+            "Voice Bot",
+            "Googler",
         ];
         let mut max_word_width = 0.0;
         
@@ -101,11 +93,7 @@ pub fn draw_settings(
                             .show(ui, |ui| {
                                 ui.vertical(|ui| {
                                     ui.add_space(2.0);
-                                    ui.selectable_value(active_subtab, SettingsSubTab::VoiceoverElevenLabs, "ElevenLabs");
-                                    ui.add_space(2.0);
-                                    ui.selectable_value(active_subtab, SettingsSubTab::VoiceoverOpenAi, "OpenAI TTS");
-                                    ui.add_space(2.0);
-                                    ui.selectable_value(active_subtab, SettingsSubTab::VoiceoverPlayHt, "Play.ht");
+                                    ui.selectable_value(active_subtab, SettingsSubTab::VoiceoverVoiceBot, "Voice Bot");
                                 });
                             });
                         
@@ -117,11 +105,7 @@ pub fn draw_settings(
                             .show(ui, |ui| {
                                 ui.vertical(|ui| {
                                     ui.add_space(2.0);
-                                    ui.selectable_value(active_subtab, SettingsSubTab::VideoLeonardo, "Leonardo.ai");
-                                    ui.add_space(2.0);
-                                    ui.selectable_value(active_subtab, SettingsSubTab::VideoDallE, "DALL-E 3");
-                                    ui.add_space(2.0);
-                                    ui.selectable_value(active_subtab, SettingsSubTab::VideoMidjourney, "Midjourney");
+                                    ui.selectable_value(active_subtab, SettingsSubTab::VideoGoogler, "Googler");
                                 });
                             });
                         
@@ -146,30 +130,14 @@ pub fn draw_settings(
                 }
                 
                 // Вкладки Озвучки
-                SettingsSubTab::VoiceoverElevenLabs => {
-                    ui.heading(format!("{}: ElevenLabs", voiceover_label));
-                    ui.separator();
-                }
-                SettingsSubTab::VoiceoverOpenAi => {
-                    ui.heading(format!("{}: OpenAI TTS", voiceover_label));
-                    ui.separator();
-                }
-                SettingsSubTab::VoiceoverPlayHt => {
-                    ui.heading(format!("{}: Play.ht", voiceover_label));
+                SettingsSubTab::VoiceoverVoiceBot => {
+                    ui.heading(format!("{}: Voice Bot", voiceover_label));
                     ui.separator();
                 }
                 
                 // Вкладки Відеоряду
-                SettingsSubTab::VideoLeonardo => {
-                    ui.heading(format!("{}: Leonardo.ai", video_label));
-                    ui.separator();
-                }
-                SettingsSubTab::VideoDallE => {
-                    ui.heading(format!("{}: DALL-E 3", video_label));
-                    ui.separator();
-                }
-                SettingsSubTab::VideoMidjourney => {
-                    ui.heading(format!("{}: Midjourney", video_label));
+                SettingsSubTab::VideoGoogler => {
+                    ui.heading(format!("{}: Googler", video_label));
                     ui.separator();
                 }
                 
