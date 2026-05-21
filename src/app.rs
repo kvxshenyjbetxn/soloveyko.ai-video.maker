@@ -185,14 +185,14 @@ impl VideoMakerApp {
 
         // Завантажуємо баланси у фоні при старті, якщо ключі вже збережені
         if !openrouter_key.is_empty() && openrouter_key.starts_with("sk-or-") {
-            crate::gui::pipeline::api::fetch_openrouter_balance(
+            crate::api::openrouter::fetch_balance(
                 openrouter_key.clone(),
                 std::sync::Arc::clone(&openrouter_balance),
                 cc.egui_ctx.clone(),
             );
         }
         if !voicebot_key.is_empty() {
-            crate::gui::pipeline::api::fetch_voicebot_balance(
+            crate::api::voicebot::fetch_balance(
                 voicebot_key.clone(),
                 std::sync::Arc::clone(&voicebot_balance),
                 cc.egui_ctx.clone(),

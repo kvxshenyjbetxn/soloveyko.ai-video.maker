@@ -1,76 +1,7 @@
 use eframe::egui;
 use crate::localization::{Language, translate};
+use crate::api;
 use std::sync::{Arc, Mutex};
-
-#[derive(serde::Deserialize)]
-struct BalanceResponse {
-    balance_text: String,
-}
-
-#[derive(serde::Deserialize)]
-struct OpenRouterCreditsData {
-    total_credits: f64,
-    total_usage: f64,
-}
-
-#[derive(serde::Deserialize)]
-struct OpenRouterCreditsResponse {
-    data: OpenRouterCreditsData,
-}
-
-/// Фоново завантажує баланс VoiceBot і записує результат в `result`.
-pub fn fetch_voicebot_balance(key: String, result: Arc<Mutex<Option<String>>>, ctx: egui::Context) {
-    std::thread::spawn(move || {
-        let agent = ureq::AgentBuilder::new()
-            .timeout_connect(std::time::Duration::from_secs(10))
-            .timeout(std::time::Duration::from_secs(15))
-            .build();
-
-        let text = match agent
-            .get("https://voiceapi.csv666.ru/balance")
-            .set("X-API-Key", &key)
-            .set("Accept", "application/json")
-            .call()
-        {
-            Ok(resp) => match resp.into_json::<BalanceResponse>() {
-                Ok(data) => data.balance_text,
-                Err(_) => return,
-            },
-            Err(_) => return,
-        };
-
-        *result.lock().unwrap() = Some(text);
-        ctx.request_repaint();
-    });
-}
-
-/// Фоново завантажує баланс OpenRouter і записує результат в `result`.
-pub fn fetch_openrouter_balance(key: String, result: Arc<Mutex<Option<String>>>, ctx: egui::Context) {
-    std::thread::spawn(move || {
-        let agent = ureq::AgentBuilder::new()
-            .timeout_connect(std::time::Duration::from_secs(10))
-            .timeout(std::time::Duration::from_secs(15))
-            .build();
-
-        let text = match agent
-            .get("https://openrouter.ai/api/v1/credits")
-            .set("Authorization", &format!("Bearer {}", key))
-            .call()
-        {
-            Ok(resp) => match resp.into_json::<OpenRouterCreditsResponse>() {
-                Ok(data) => {
-                    let remaining = (data.data.total_credits - data.data.total_usage).max(0.0);
-                    format!("${:.2}", remaining)
-                }
-                Err(_) => return,
-            },
-            Err(_) => return,
-        };
-
-        *result.lock().unwrap() = Some(text);
-        ctx.request_repaint();
-    });
-}
 
 /// Малює секцію "АПІ" на панелі пайплайну з підтримкою OpenRouter та Voice Bot.
 pub fn draw_api_section(
@@ -126,7 +57,7 @@ pub fn draw_api_section(
                     *openrouter_status = Some(translate(language, "api_status_empty").to_string());
                 } else if trimmed.starts_with("sk-or-") && trimmed.len() >= 15 {
                     *openrouter_status = Some(translate(language, "api_status_success").to_string());
-                    fetch_openrouter_balance(
+                    api::openrouter::fetch_balance(
                         trimmed.to_string(),
                         Arc::clone(openrouter_balance),
                         ui.ctx().clone(),
@@ -205,7 +136,7 @@ pub fn draw_api_section(
                             .set("Accept", "application/json")
                             .call()
                         {
-                            Ok(response) => match response.into_json::<BalanceResponse>() {
+                            Ok(response) => match response.into_json::<api::voicebot::BalanceResponse>() {
                                 Ok(data) => (
                                     format!("✔ Баланс: {}", data.balance_text),
                                     Some(data.balance_text),
