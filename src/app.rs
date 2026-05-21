@@ -35,6 +35,12 @@ pub struct VideoMakerApp {
     openrouter_key: String,
     /// Тимчасовий статус перевірки OpenRouter API ключа.
     openrouter_status: Option<String>,
+    /// Введення імені шаблону
+    template_name_input: String,
+    /// Доступні шаблони на диску
+    saved_templates: Vec<String>,
+    /// Статус роботи з шаблонами
+    template_status: Option<String>,
 }
 
 impl Default for VideoMakerApp {
@@ -50,6 +56,9 @@ impl Default for VideoMakerApp {
             language: Language::Uk,
             openrouter_key: String::new(),
             openrouter_status: None,
+            template_name_input: String::new(),
+            saved_templates: crate::gui::settings::storage::load_saved_templates(),
+            template_status: None,
             last_saved_settings: default_settings,
         }
     }
@@ -87,6 +96,8 @@ impl VideoMakerApp {
 
         let openrouter_key = saved.openrouter_key.clone();
 
+        let saved_templates = crate::gui::settings::storage::load_saved_templates();
+
         Self {
             active_tab: Tab::Main,
             text_input: String::new(),
@@ -97,6 +108,9 @@ impl VideoMakerApp {
             language,
             openrouter_key,
             openrouter_status: None,
+            template_name_input: String::new(),
+            saved_templates,
+            template_status: None,
             last_saved_settings: saved,
         }
     }
@@ -132,6 +146,9 @@ impl eframe::App for VideoMakerApp {
                         self.language,
                         &mut self.openrouter_key,
                         &mut self.openrouter_status,
+                        &mut self.template_name_input,
+                        &mut self.saved_templates,
+                        &mut self.template_status,
                     );
                 });
 

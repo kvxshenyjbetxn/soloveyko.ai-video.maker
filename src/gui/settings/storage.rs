@@ -102,3 +102,75 @@ pub fn open_settings_folder() {
         }
     }
 }
+
+/// Структура, яка описує шаблон налаштувань пайплайну.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
+pub struct PipelineTemplate {
+    /// Збережений API ключ для OpenRouter
+    pub openrouter_key: String,
+}
+
+/// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
+pub fn get_templates_dir() -> Option<PathBuf> {
+    get_settings_dir().map(|mut path| {
+        path.push("templates");
+        path
+    })
+}
+
+/// Зберігає поточні налаштування пайплайну як шаблон у файл <name>.json.
+pub fn save_template(name: &str, openrouter_key: &str) -> Result<(), std::io::Error> {
+    if let Some(dir) = get_templates_dir() {
+        // Гарантуємо існування папки шаблонів
+        fs::create_dir_all(&dir)?;
+        
+        let mut path = dir;
+        path.push(format!("{}.json", name));
+        
+        let template = PipelineTemplate {
+            openrouter_key: openrouter_key.to_string(),
+        };
+        
+        let json = serde_json::to_string_pretty(&template)?;
+        fs::write(path, json)?;
+    }
+    Ok(())
+}
+
+/// Завантажує налаштування пайплайну з шаблону за його назвою.
+pub fn load_template(name: &str) -> Option<PipelineTemplate> {
+    if let Some(dir) = get_templates_dir() {
+        let mut path = dir;
+        path.push(format!("{}.json", name));
+        
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(path) {
+                if let Ok(template) = serde_json::from_str::<PipelineTemplate>(&content) {
+                    return Some(template);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Сканує папку шаблонів та повертає список імен доступних шаблонів.
+pub fn load_saved_templates() -> Vec<String> {
+    let mut templates = Vec::new();
+    if let Some(dir) = get_templates_dir() {
+        if dir.exists() {
+            if let Ok(entries) = fs::read_dir(dir) {
+                for entry in entries.filter_map(Result::ok) {
+                    let path = entry.path();
+                    if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
+                        if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                            templates.push(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    templates.sort();
+    templates
+}

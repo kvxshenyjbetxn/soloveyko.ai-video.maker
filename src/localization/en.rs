@@ -60,6 +60,13 @@ pub fn translate_en(key: &str) -> &'static str {
         "api_resolution" => "Resolution",
         "api_creativity" => "Creativity (Temperature)",
         "api_max_tokens" => "Max Tokens",
+        "template_name_hint" => "Template name...",
+        "template_save_btn" => "Save",
+        "template_status_empty" => "⚠ Template name cannot be empty",
+        "template_status_saved" => "Template saved successfully",
+        "templates_empty" => "No saved templates",
+        "template_loaded" => "Template loaded",
+        "template_deleted" => "Template deleted",
         _ => "",
     }
 }

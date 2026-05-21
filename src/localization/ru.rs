@@ -60,6 +60,13 @@ pub fn translate_ru(key: &str) -> &'static str {
         "api_resolution" => "Разрешение",
         "api_creativity" => "Креативность (Temperature)",
         "api_max_tokens" => "Максимум токенов",
+        "template_name_hint" => "Название шаблона...",
+        "template_save_btn" => "Сохранить",
+        "template_status_empty" => "⚠ Название шаблона не может быть пустым",
+        "template_status_saved" => "Шаблон успешно сохранен",
+        "templates_empty" => "Нет сохраненных шаблонов",
+        "template_loaded" => "Шаблон загружен",
+        "template_deleted" => "Шаблон удален",
         _ => "",
     }
 }

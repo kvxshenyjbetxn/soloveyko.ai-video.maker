@@ -60,6 +60,13 @@ pub fn translate_uk(key: &str) -> &'static str {
         "api_resolution" => "Роздільна здатність",
         "api_creativity" => "Креативність (Temperature)",
         "api_max_tokens" => "Максимум токенів",
+        "template_name_hint" => "Назва шаблону...",
+        "template_save_btn" => "Зберегти",
+        "template_status_empty" => "⚠ Назва шаблону не може бути порожньою",
+        "template_status_saved" => "Шаблон успішно збережено",
+        "templates_empty" => "Немає збережених шаблонів",
+        "template_loaded" => "Завантажено шаблон",
+        "template_deleted" => "Шаблон видалено",
         _ => "",
     }
 }

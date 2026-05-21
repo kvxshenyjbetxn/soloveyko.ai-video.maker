@@ -1,6 +1,77 @@
 use eframe::egui;
+use crate::localization::{Language, translate};
 
-/// Малює секцію "Шаблони" на панелі пайплайну (поки що пуста).
-pub fn draw_templates_section(_ui: &mut egui::Ui) {
-    // Секція наразі порожня згідно з вимогами
+/// Малює секцію "Шаблони" на панелі пайплайну з можливістю завантаження та видалення.
+pub fn draw_templates_section(
+    ui: &mut egui::Ui,
+    language: Language,
+    saved_templates: &mut Vec<String>,
+    openrouter_key: &mut String,
+    openrouter_status: &mut Option<String>,
+    template_status: &mut Option<String>,
+) {
+    ui.vertical(|ui| {
+        ui.add_space(2.0);
+        
+        if saved_templates.is_empty() {
+            ui.label(
+                egui::RichText::new(translate(language, "templates_empty"))
+                    .weak()
+                    .size(12.0)
+            );
+        } else {
+            // Клонуємо список для безпечного ітерування, оскільки всередині циклу
+            // ми можемо модифікувати оригінальний vector при натисканні на видалення.
+            for template_name in saved_templates.clone() {
+                ui.horizontal(|ui| {
+                    // Кнопка завантаження шаблону (займає майже всю ширину крім кнопки видалення)
+                    let btn_width = (ui.available_width() - 30.0).max(50.0);
+                    
+                    let btn = ui.add_sized(
+                        [btn_width, 20.0],
+                        egui::Button::new(format!("📄 {}", template_name))
+                    );
+                    
+                    if btn.clicked() {
+                        if let Some(template) = crate::gui::settings::storage::load_template(&template_name) {
+                            *openrouter_key = template.openrouter_key;
+                            *openrouter_status = None;
+                            *template_status = Some(format!(
+                                "{}: {} ✔", 
+                                translate(language, "template_loaded"), 
+                                template_name
+                            ));
+                        }
+                    }
+                    
+                    // Невелика кнопка видалення шаблону червоного кольору
+                    let del_btn = ui.add_sized(
+                        [22.0, 20.0],
+                        egui::Button::new(
+                            egui::RichText::new("🗑")
+                                .color(egui::Color32::from_rgb(231, 76, 60))
+                        )
+                    );
+                    
+                    if del_btn.clicked() {
+                        if let Some(mut dir) = crate::gui::settings::storage::get_templates_dir() {
+                            dir.push(format!("{}.json", template_name));
+                            if dir.exists() {
+                                let _ = std::fs::remove_file(dir);
+                                *template_status = Some(format!(
+                                    "{} 🗑", 
+                                    translate(language, "template_deleted")
+                                ));
+                                // Оновлюємо список шаблонів після видалення
+                                *saved_templates = crate::gui::settings::storage::load_saved_templates();
+                            }
+                        }
+                    }
+                });
+                ui.add_space(4.0);
+            }
+        }
+        
+        ui.add_space(2.0);
+    });
 }
