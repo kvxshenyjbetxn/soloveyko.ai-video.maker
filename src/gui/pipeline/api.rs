@@ -3,7 +3,7 @@ use crate::localization::{Language, translate};
 use crate::api;
 use std::sync::{Arc, Mutex};
 
-/// Малює секцію "АПІ" на панелі пайплайну з підтримкою OpenRouter та Voice Bot.
+/// Малює секцію "АПІ" на панелі пайплайну з підтримкою OpenRouter, Voice Bot та Googler.
 pub fn draw_api_section(
     ui: &mut egui::Ui,
     language: Language,
@@ -14,11 +14,22 @@ pub fn draw_api_section(
     voicebot_status: &mut Option<String>,
     voicebot_test_result: &Arc<Mutex<Option<String>>>,
     voicebot_balance: &Arc<Mutex<Option<String>>>,
+    googler_key: &mut String,
+    googler_status: &mut Option<String>,
+    googler_test_result: &Arc<Mutex<Option<String>>>,
+    googler_balance: &Arc<Mutex<Option<String>>>,
 ) {
     // Опитуємо результат фонового тесту Voice Bot і переносимо у voicebot_status
     if let Ok(mut guard) = voicebot_test_result.try_lock() {
         if let Some(result) = guard.take() {
             *voicebot_status = Some(result);
+        }
+    }
+
+    // Опитуємо результат фонового тесту Googler і переносимо у googler_status
+    if let Ok(mut guard) = googler_test_result.try_lock() {
+        if let Some(result) = guard.take() {
+            *googler_status = Some(result);
         }
     }
 
@@ -164,6 +175,69 @@ pub fn draw_api_section(
         });
 
         if let Some(status) = voicebot_status {
+            ui.add_space(4.0);
+            let is_success = status.starts_with('✔');
+            let is_checking = status.starts_with('⏳');
+            let text_color = if is_success || is_checking {
+                egui::Color32::from_rgb(46, 204, 113)
+            } else {
+                egui::Color32::from_rgb(231, 76, 60)
+            };
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(status.as_str()).color(text_color).size(12.0)
+                ).wrap()
+            );
+        }
+
+        ui.add_space(10.0);
+        ui.separator();
+        ui.add_space(6.0);
+
+        // --- Googler ---
+        ui.label(egui::RichText::new("Googler").strong());
+        ui.add_space(4.0);
+
+        let available_width = ui.available_width();
+
+        ui.horizontal(|ui| {
+            let gr_response = ui.add(
+                egui::TextEdit::singleline(googler_key)
+                    .password(true)
+                    .hint_text(translate(language, "googler_key_hint"))
+                    .desired_width((available_width - 90.0).max(100.0))
+            );
+
+            if gr_response.changed() {
+                *googler_status = None;
+                if let Ok(mut bal) = googler_balance.try_lock() {
+                    *bal = None;
+                }
+            }
+
+            let test_btn = ui.add_sized(
+                [70.0, 20.0],
+                egui::Button::new(translate(language, "api_check_btn"))
+            );
+
+            if test_btn.clicked() {
+                let trimmed = googler_key.trim().to_string();
+                if trimmed.is_empty() {
+                    *googler_status = Some(translate(language, "api_status_empty").to_string());
+                } else {
+                    *googler_status = Some(translate(language, "googler_status_checking").to_string());
+
+                    api::googler::check_key(
+                        trimmed,
+                        Arc::clone(googler_test_result),
+                        Arc::clone(googler_balance),
+                        ui.ctx().clone(),
+                    );
+                }
+            }
+        });
+
+        if let Some(status) = googler_status {
             ui.add_space(4.0);
             let is_success = status.starts_with('✔');
             let is_checking = status.starts_with('⏳');

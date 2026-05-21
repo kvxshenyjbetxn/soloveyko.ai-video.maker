@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn default_true() -> bool { true }
+fn default_video_service() -> String { "Googler".to_string() }
+fn default_image_provider() -> String { "flow_IMAGEN_3_5".to_string() }
 
 /// Структура для серіалізації налаштувань у формат JSON.
 ///
@@ -22,6 +24,8 @@ pub struct AppSettings {
     pub openrouter_key: String,
     /// Ключ API для Voice Bot
     pub voicebot_key: String,
+    /// Ключ API для Googler
+    pub googler_key: String,
     /// Поточний вибраний сервіс озвучки ("Voice Bot")
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки
@@ -47,17 +51,24 @@ pub struct AppSettings {
     pub translation_prompt: String,
     /// ID обраної моделі OpenRouter для перекладу
     pub translation_model: String,
+    /// Обраний сервіс для генерації відеоряду ("Googler")
+    #[serde(default = "default_video_service")]
+    pub video_service: String,
+    /// Обраний провайдер зображень для Googler ("flow", "flower", "grok", "openai")
+    #[serde(default = "default_image_provider")]
+    pub googler_image_provider: String,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             theme: "Dark".to_string(),
-            accent_color: [0, 122, 255, 255], // Стандартний синій колір
-            pipeline_width: 450.0,            // Дефолтна ширина
-            language: "Uk".to_string(),       // Стандартна мова — Українська
+            accent_color: [0, 122, 255, 255],
+            pipeline_width: 450.0,
+            language: "Uk".to_string(),
             openrouter_key: String::new(),
             voicebot_key: String::new(),
+            googler_key: String::new(),
             voiceover_provider: "Voice Bot".to_string(),
             voiceover_template_uuid: String::new(),
             last_template: String::new(),
@@ -68,6 +79,8 @@ impl Default for AppSettings {
             pipeline_editing_enabled: true,
             translation_prompt: String::new(),
             translation_model: String::new(),
+            video_service: "Googler".to_string(),
+            googler_image_provider: "flow_IMAGEN_3_5".to_string(),
         }
     }
 }
@@ -172,6 +185,12 @@ pub struct PipelineTemplate {
     pub translation_prompt: String,
     /// ID обраної моделі OpenRouter для перекладу
     pub translation_model: String,
+    /// Обраний сервіс для генерації відеоряду
+    #[serde(default = "default_video_service")]
+    pub video_service: String,
+    /// Обраний провайдер зображень для Googler
+    #[serde(default = "default_image_provider")]
+    pub googler_image_provider: String,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -195,9 +214,10 @@ pub fn save_template(
     pipeline_editing_enabled: bool,
     translation_prompt: &str,
     translation_model: &str,
+    video_service: &str,
+    googler_image_provider: &str,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
-        // Гарантуємо існування папки шаблонів
         fs::create_dir_all(&dir)?;
 
         let mut path = dir;
@@ -214,6 +234,8 @@ pub fn save_template(
             pipeline_editing_enabled,
             translation_prompt: translation_prompt.to_string(),
             translation_model: translation_model.to_string(),
+            video_service: video_service.to_string(),
+            googler_image_provider: googler_image_provider.to_string(),
         };
 
         let json = serde_json::to_string_pretty(&template)?;

@@ -82,6 +82,10 @@ pub fn translate_en(key: &str) -> &'static str {
         "translation_models_loading" => "Loading models...",
         "translation_models_retry" => "🔄 Retry",
         "translation_model_search" => "🔍 Search model...",
+        "googler_key_hint" => "Enter Googler API key...",
+        "googler_status_checking" => "⏳ Checking...",
+        "video_service_label" => "Video Service",
+        "googler_image_provider_label" => "Image Provider",
         _ => "",
     }
 }

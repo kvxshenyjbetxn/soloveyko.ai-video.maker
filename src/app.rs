@@ -45,6 +45,14 @@ pub struct VideoMakerApp {
     pub voicebot_key: String,
     /// Статус перевірки Voice Bot API ключа.
     pub voicebot_status: Option<String>,
+    /// Ключ API для Googler.
+    pub googler_key: String,
+    /// Статус перевірки Googler API ключа.
+    pub googler_status: Option<String>,
+    /// Результат фонового тесту API ключа Googler.
+    pub googler_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Баланс Googler для відображення у топбарі.
+    pub googler_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Обраний провайдер озвучки.
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки.
@@ -79,6 +87,10 @@ pub struct VideoMakerApp {
     pub openrouter_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Баланс VoiceBot для відображення у топбарі.
     pub voicebot_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Обраний сервіс для генерації відеоряду.
+    pub video_service: String,
+    /// Обраний провайдер зображень для Googler.
+    pub googler_image_provider: String,
 }
 
 impl Default for VideoMakerApp {
@@ -99,6 +111,10 @@ impl Default for VideoMakerApp {
             template_status: None,
             voicebot_key: String::new(),
             voicebot_status: None,
+            googler_key: String::new(),
+            googler_status: None,
+            googler_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            googler_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voiceover_provider: "Voice Bot".to_string(),
             voiceover_template_uuid: String::new(),
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -116,6 +132,8 @@ impl Default for VideoMakerApp {
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             openrouter_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voicebot_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            video_service: "Googler".to_string(),
+            googler_image_provider: "flow_IMAGEN_3_5".to_string(),
             last_saved_settings: default_settings,
         }
     }
@@ -168,6 +186,7 @@ impl VideoMakerApp {
 
         let openrouter_key = saved.openrouter_key.clone();
         let voicebot_key = saved.voicebot_key.clone();
+        let googler_key = saved.googler_key.clone();
         let voiceover_provider = saved.voiceover_provider.clone();
         let voiceover_template_uuid = saved.voiceover_template_uuid.clone();
         let pipeline_translation_enabled = saved.pipeline_translation_enabled;
@@ -177,11 +196,14 @@ impl VideoMakerApp {
         let pipeline_editing_enabled = saved.pipeline_editing_enabled;
         let translation_prompt = saved.translation_prompt.clone();
         let translation_model = saved.translation_model.clone();
+        let video_service = saved.video_service.clone();
+        let googler_image_provider = saved.googler_image_provider.clone();
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
         let openrouter_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
         let voicebot_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let googler_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
 
         // Завантажуємо баланси у фоні при старті, якщо ключі вже збережені
         if !openrouter_key.is_empty() && openrouter_key.starts_with("sk-or-") {
@@ -195,6 +217,13 @@ impl VideoMakerApp {
             crate::api::voicebot::fetch_balance(
                 voicebot_key.clone(),
                 std::sync::Arc::clone(&voicebot_balance),
+                cc.egui_ctx.clone(),
+            );
+        }
+        if !googler_key.is_empty() {
+            crate::api::googler::fetch_balance(
+                googler_key.clone(),
+                std::sync::Arc::clone(&googler_balance),
                 cc.egui_ctx.clone(),
             );
         }
@@ -214,6 +243,10 @@ impl VideoMakerApp {
             template_status: None,
             voicebot_key,
             voicebot_status: None,
+            googler_key,
+            googler_status: None,
+            googler_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            googler_balance,
             voiceover_provider,
             voiceover_template_uuid,
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -231,6 +264,8 @@ impl VideoMakerApp {
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             openrouter_balance,
             voicebot_balance,
+            video_service,
+            googler_image_provider,
             last_saved_settings: saved,
         }
     }
@@ -263,6 +298,11 @@ impl eframe::App for VideoMakerApp {
                             draw_balance_chip(ui, "VoiceBot", display);
                         }
                     }
+                    if let Ok(guard) = self.googler_balance.try_lock() {
+                        if let Some(text) = guard.as_ref() {
+                            draw_balance_chip(ui, "Googler", text);
+                        }
+                    }
                 });
             });
         });
@@ -284,6 +324,10 @@ impl eframe::App for VideoMakerApp {
                         &mut self.voicebot_status,
                         &self.voicebot_test_result,
                         &self.voicebot_balance,
+                        &mut self.googler_key,
+                        &mut self.googler_status,
+                        &self.googler_test_result,
+                        &self.googler_balance,
                         &mut self.voiceover_provider,
                         &mut self.voiceover_template_uuid,
                         &self.voicebot_templates,
@@ -301,6 +345,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.translation_model_search,
                         &self.openrouter_models,
                         &self.openrouter_models_loading,
+                        &mut self.video_service,
+                        &mut self.googler_image_provider,
                     );
                 });
 
@@ -380,6 +426,9 @@ impl eframe::App for VideoMakerApp {
                 || self.pipeline_editing_enabled != self.last_saved_settings.pipeline_editing_enabled
                 || self.translation_prompt != self.last_saved_settings.translation_prompt
                 || self.translation_model != self.last_saved_settings.translation_model
+                || self.googler_key != self.last_saved_settings.googler_key
+                || self.video_service != self.last_saved_settings.video_service
+                || self.googler_image_provider != self.last_saved_settings.googler_image_provider
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -388,6 +437,7 @@ impl eframe::App for VideoMakerApp {
                     language: current_language_str,
                     openrouter_key: self.openrouter_key.clone(),
                     voicebot_key: self.voicebot_key.clone(),
+                    googler_key: self.googler_key.clone(),
                     voiceover_provider: self.voiceover_provider.clone(),
                     voiceover_template_uuid: self.voiceover_template_uuid.clone(),
                     last_template: self.template_name_input.clone(),
@@ -398,6 +448,8 @@ impl eframe::App for VideoMakerApp {
                     pipeline_editing_enabled: self.pipeline_editing_enabled,
                     translation_prompt: self.translation_prompt.clone(),
                     translation_model: self.translation_model.clone(),
+                    video_service: self.video_service.clone(),
+                    googler_image_provider: self.googler_image_provider.clone(),
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску

@@ -70,6 +70,10 @@ pub fn draw_pipeline_panel(
     voicebot_status: &mut Option<String>,
     voicebot_test_result: &Arc<Mutex<Option<String>>>,
     voicebot_balance: &Arc<Mutex<Option<String>>>,
+    googler_key: &mut String,
+    googler_status: &mut Option<String>,
+    googler_test_result: &Arc<Mutex<Option<String>>>,
+    googler_balance: &Arc<Mutex<Option<String>>>,
     voiceover_provider: &mut String,
     voiceover_template_uuid: &mut String,
     voicebot_templates: &Arc<Mutex<Option<Result<Vec<voiceover::VoiceBotTemplate>, String>>>>,
@@ -87,6 +91,8 @@ pub fn draw_pipeline_panel(
     translation_model_search: &mut String,
     openrouter_models: &Arc<Mutex<Option<Result<Vec<translation::OpenRouterModel>, String>>>>,
     openrouter_models_loading: &Arc<Mutex<bool>>,
+    video_service: &mut String,
+    googler_image_provider: &mut String,
 ) {
     ui.vertical(|ui| {
         ui.add_space(8.0);
@@ -129,6 +135,8 @@ pub fn draw_pipeline_panel(
                         *pipeline_editing_enabled,
                         translation_prompt,
                         translation_model,
+                        video_service,
+                        googler_image_provider,
                     ) {
                         Ok(_) => {
                             *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -193,6 +201,8 @@ pub fn draw_pipeline_panel(
                             pipeline_editing_enabled,
                             translation_prompt,
                             translation_model,
+                            video_service,
+                            googler_image_provider,
                         );
                     });
                 }
@@ -243,6 +253,10 @@ pub fn draw_pipeline_panel(
                             voicebot_status,
                             voicebot_test_result,
                             voicebot_balance,
+                            googler_key,
+                            googler_status,
+                            googler_test_result,
+                            googler_balance,
                         );
                     });
                 }
@@ -328,7 +342,12 @@ pub fn draw_pipeline_panel(
                     if header.inner.clicked() { state.toggle(ui); }
                     state.store(ui.ctx());
                     state.show_body_indented(&header.response, ui, |ui| {
-                        video::draw_video_section(ui);
+                        video::draw_video_section(
+                            ui,
+                            language,
+                            video_service,
+                            googler_image_provider,
+                        );
                     });
                 }
 
