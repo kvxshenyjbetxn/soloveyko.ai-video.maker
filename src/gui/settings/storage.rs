@@ -4,7 +4,7 @@ use std::process::Command;
 
 /// Структура для серіалізації налаштувань у формат JSON.
 /// 
-/// Зберігає тему оформлення як рядок, колір акценту як масив [r, g, b, a] та ширину бічної панелі.
+/// Зберігає тему оформлення як рядок, колір акценту як масив [r, g, b, a], ширину бічної панелі та мову інтерфейсу.
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 #[serde(default)]
 pub struct AppSettings {
@@ -14,6 +14,8 @@ pub struct AppSettings {
     pub accent_color: [u8; 4],
     /// Ширина бічної панелі пайплайну
     pub pipeline_width: f32,
+    /// Поточна вибрана мова інтерфейсу ("Uk", "En")
+    pub language: String,
 }
 
 impl Default for AppSettings {
@@ -22,6 +24,7 @@ impl Default for AppSettings {
             theme: "Dark".to_string(),
             accent_color: [0, 122, 255, 255], // Стандартний синій колір
             pipeline_width: 450.0,            // Дефолтна ширина
+            language: "Uk".to_string(),       // Стандартна мова — Українська
         }
     }
 }

@@ -1,6 +1,7 @@
 mod app;
 mod gui;
 mod theme;
+mod localization;
 
 use app::VideoMakerApp;
 use eframe::egui;

@@ -2,6 +2,7 @@ use crate::gui;
 use crate::gui::settings::storage::{AppSettings, load_settings, save_settings};
 use eframe::egui;
 use crate::theme::AppTheme;
+use crate::localization::{Language, translate};
 
 /// Перерахування для представлення доступних вкладок програми.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +27,8 @@ pub struct VideoMakerApp {
     pipeline_width: f32,
     /// Поточна обрана підвкладка налаштувань.
     active_settings_tab: gui::settings::SettingsSubTab,
+    /// Поточна вибрана мова інтерфейсу програми.
+    language: Language,
     /// Копія останніх збережених налаштувань на диску для відстеження змін у реальному часі.
     last_saved_settings: AppSettings,
 }
@@ -39,6 +42,7 @@ impl Default for VideoMakerApp {
             accent_color: egui::Color32::from_rgb(0, 122, 255), // Синій колір за замовчуванням
             pipeline_width: 450.0,
             active_settings_tab: gui::settings::SettingsSubTab::General,
+            language: Language::Uk,
             last_saved_settings: AppSettings::default(),
         }
     }
@@ -67,6 +71,13 @@ impl VideoMakerApp {
 
         let pipeline_width = saved.pipeline_width;
 
+        // Конвертуємо назву мови (String) у тип Language
+        let language = match saved.language.as_str() {
+            "En" => Language::En,
+            "Ru" => Language::Ru,
+            _ => Language::Uk,
+        };
+
         Self {
             active_tab: Tab::Main,
             text_input: String::new(),
@@ -74,6 +85,7 @@ impl VideoMakerApp {
             accent_color,
             pipeline_width,
             active_settings_tab: gui::settings::SettingsSubTab::General,
+            language,
             last_saved_settings: saved,
         }
     }
@@ -88,12 +100,12 @@ impl eframe::App for VideoMakerApp {
         // Верхня панель для навігації між вкладками
         egui::TopBottomPanel::top("navigation_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label("Soloveyko.ai Video Maker");
+                ui.label(translate(self.language, "app_title"));
                 ui.separator();
                 
                 // Рядок вибору вкладок з сучасним виглядом
-                ui.selectable_value(&mut self.active_tab, Tab::Main, "Основна");
-                ui.selectable_value(&mut self.active_tab, Tab::Settings, "Налаштування");
+                ui.selectable_value(&mut self.active_tab, Tab::Main, translate(self.language, "tab_main"));
+                ui.selectable_value(&mut self.active_tab, Tab::Settings, translate(self.language, "tab_settings"));
             });
         });
 
@@ -104,7 +116,7 @@ impl eframe::App for VideoMakerApp {
                 .width_range(350.0..=750.0)       // Збільшений діапазон зміни ширини
                 .resizable(true)
                 .show(ctx, |ui| {
-                    gui::pipeline::draw_pipeline_panel(ui);
+                    gui::pipeline::draw_pipeline_panel(ui, self.language);
                 });
 
             // Зчитуємо фактичну ширину панелі після її рендерингу/перетягування користувачем
@@ -134,7 +146,7 @@ impl eframe::App for VideoMakerApp {
             .show(ctx, |ui| {
                 match self.active_tab {
                     Tab::Main => {
-                        gui::editor::draw_editor(ui, &mut self.text_input);
+                        gui::editor::draw_editor(ui, &mut self.text_input, self.language);
                     }
                     Tab::Settings => {
                         gui::settings::draw_settings(
@@ -142,6 +154,7 @@ impl eframe::App for VideoMakerApp {
                             &mut self.theme,
                             &mut self.accent_color,
                             &mut self.active_settings_tab,
+                            &mut self.language,
                         );
                     }
                 }
@@ -159,16 +172,23 @@ impl eframe::App for VideoMakerApp {
                 AppTheme::Amoled => "Amoled".to_string(),
             };
             let current_color_arr = self.accent_color.to_array();
+            let current_language_str = match self.language {
+                Language::En => "En".to_string(),
+                Language::Ru => "Ru".to_string(),
+                _ => "Uk".to_string(),
+            };
 
             // Перевіряємо зміни значень (з дельтою для ширини панелі)
             if current_theme_str != self.last_saved_settings.theme 
                 || current_color_arr != self.last_saved_settings.accent_color 
+                || current_language_str != self.last_saved_settings.language
                 || (self.pipeline_width - self.last_saved_settings.pipeline_width).abs() > 1.0
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
                     accent_color: current_color_arr,
                     pipeline_width: self.pipeline_width,
+                    language: current_language_str,
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску

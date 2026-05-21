@@ -7,6 +7,7 @@ pub mod video;
 pub mod voiceover;
 
 use eframe::egui;
+use crate::localization::{Language, translate};
 
 /// Відображає бічну панель пайплайну із порожніми згорнутими секціями.
 /// Секції відсортовані у логічному порядку процесу створення відео:
@@ -17,10 +18,10 @@ use eframe::egui;
 /// 5. Озвучка
 /// 6. Відеоряд
 /// 7. Монтаж
-pub fn draw_pipeline_panel(ui: &mut egui::Ui) {
+pub fn draw_pipeline_panel(ui: &mut egui::Ui, language: Language) {
     ui.vertical(|ui| {
         ui.add_space(8.0);
-        ui.heading("Налаштування пайплайну");
+        ui.heading(translate(language, "pipeline_settings"));
         ui.separator();
         
         ui.add_space(12.0);
@@ -29,49 +30,49 @@ pub fn draw_pipeline_panel(ui: &mut egui::Ui) {
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 // 1. Шаблони
-                ui.collapsing("Шаблони", |ui| {
+                ui.collapsing(translate(language, "templates"), |ui| {
                     templates::draw_templates_section(ui);
                 });
                 
                 ui.add_space(8.0);
                 
                 // 2. Шлях збереження
-                ui.collapsing("Шлях збереження", |ui| {
+                ui.collapsing(translate(language, "storage"), |ui| {
                     storage::draw_storage_section(ui);
                 });
                 
                 ui.add_space(8.0);
                 
                 // 3. АПІ
-                ui.collapsing("АПІ", |ui| {
+                ui.collapsing(translate(language, "api"), |ui| {
                     api::draw_api_section(ui);
                 });
                 
                 ui.add_space(8.0);
                 
                 // 4. Переклад
-                ui.collapsing("Переклад", |ui| {
+                ui.collapsing(translate(language, "translation"), |ui| {
                     translation::draw_translation_section(ui);
                 });
                 
                 ui.add_space(8.0);
                 
                 // 5. Озвучка
-                ui.collapsing("Озвучка", |ui| {
+                ui.collapsing(translate(language, "voiceover"), |ui| {
                     voiceover::draw_voiceover_section(ui);
                 });
                 
                 ui.add_space(8.0);
                 
                 // 6. Відеоряд
-                ui.collapsing("Відеоряд", |ui| {
+                ui.collapsing(translate(language, "video"), |ui| {
                     video::draw_video_section(ui);
                 });
                 
                 ui.add_space(8.0);
                 
                 // 7. Монтаж
-                ui.collapsing("Монтаж", |ui| {
+                ui.collapsing(translate(language, "editing"), |ui| {
                     editing::draw_editing_section(ui);
                 });
             });
