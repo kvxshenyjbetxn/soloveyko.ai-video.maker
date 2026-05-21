@@ -65,9 +65,11 @@ pub fn draw_pipeline_panel(
     language: Language,
     openrouter_key: &mut String,
     openrouter_status: &mut Option<String>,
+    openrouter_balance: &Arc<Mutex<Option<String>>>,
     voicebot_key: &mut String,
     voicebot_status: &mut Option<String>,
     voicebot_test_result: &Arc<Mutex<Option<String>>>,
+    voicebot_balance: &Arc<Mutex<Option<String>>>,
     voiceover_provider: &mut String,
     voiceover_template_uuid: &mut String,
     voicebot_templates: &Arc<Mutex<Option<Result<Vec<voiceover::VoiceBotTemplate>, String>>>>,
@@ -236,9 +238,11 @@ pub fn draw_pipeline_panel(
                             language,
                             openrouter_key,
                             openrouter_status,
+                            openrouter_balance,
                             voicebot_key,
                             voicebot_status,
                             voicebot_test_result,
+                            voicebot_balance,
                         );
                     });
                 }

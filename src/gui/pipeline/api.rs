@@ -7,15 +7,82 @@ struct BalanceResponse {
     balance_text: String,
 }
 
+#[derive(serde::Deserialize)]
+struct OpenRouterCreditsData {
+    total_credits: f64,
+    total_usage: f64,
+}
+
+#[derive(serde::Deserialize)]
+struct OpenRouterCreditsResponse {
+    data: OpenRouterCreditsData,
+}
+
+/// Фоново завантажує баланс VoiceBot і записує результат в `result`.
+pub fn fetch_voicebot_balance(key: String, result: Arc<Mutex<Option<String>>>, ctx: egui::Context) {
+    std::thread::spawn(move || {
+        let agent = ureq::AgentBuilder::new()
+            .timeout_connect(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(15))
+            .build();
+
+        let text = match agent
+            .get("https://voiceapi.csv666.ru/balance")
+            .set("X-API-Key", &key)
+            .set("Accept", "application/json")
+            .call()
+        {
+            Ok(resp) => match resp.into_json::<BalanceResponse>() {
+                Ok(data) => data.balance_text,
+                Err(_) => return,
+            },
+            Err(_) => return,
+        };
+
+        *result.lock().unwrap() = Some(text);
+        ctx.request_repaint();
+    });
+}
+
+/// Фоново завантажує баланс OpenRouter і записує результат в `result`.
+pub fn fetch_openrouter_balance(key: String, result: Arc<Mutex<Option<String>>>, ctx: egui::Context) {
+    std::thread::spawn(move || {
+        let agent = ureq::AgentBuilder::new()
+            .timeout_connect(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(15))
+            .build();
+
+        let text = match agent
+            .get("https://openrouter.ai/api/v1/credits")
+            .set("Authorization", &format!("Bearer {}", key))
+            .call()
+        {
+            Ok(resp) => match resp.into_json::<OpenRouterCreditsResponse>() {
+                Ok(data) => {
+                    let remaining = (data.data.total_credits - data.data.total_usage).max(0.0);
+                    format!("${:.2}", remaining)
+                }
+                Err(_) => return,
+            },
+            Err(_) => return,
+        };
+
+        *result.lock().unwrap() = Some(text);
+        ctx.request_repaint();
+    });
+}
+
 /// Малює секцію "АПІ" на панелі пайплайну з підтримкою OpenRouter та Voice Bot.
 pub fn draw_api_section(
     ui: &mut egui::Ui,
     language: Language,
     openrouter_key: &mut String,
     openrouter_status: &mut Option<String>,
+    openrouter_balance: &Arc<Mutex<Option<String>>>,
     voicebot_key: &mut String,
     voicebot_status: &mut Option<String>,
     voicebot_test_result: &Arc<Mutex<Option<String>>>,
+    voicebot_balance: &Arc<Mutex<Option<String>>>,
 ) {
     // Опитуємо результат фонового тесту Voice Bot і переносимо у voicebot_status
     if let Ok(mut guard) = voicebot_test_result.try_lock() {
@@ -43,6 +110,9 @@ pub fn draw_api_section(
 
             if response.changed() {
                 *openrouter_status = None;
+                if let Ok(mut bal) = openrouter_balance.try_lock() {
+                    *bal = None;
+                }
             }
 
             let check_btn = ui.add_sized(
@@ -56,6 +126,11 @@ pub fn draw_api_section(
                     *openrouter_status = Some(translate(language, "api_status_empty").to_string());
                 } else if trimmed.starts_with("sk-or-") && trimmed.len() >= 15 {
                     *openrouter_status = Some(translate(language, "api_status_success").to_string());
+                    fetch_openrouter_balance(
+                        trimmed.to_string(),
+                        Arc::clone(openrouter_balance),
+                        ui.ctx().clone(),
+                    );
                 } else {
                     *openrouter_status = Some(translate(language, "api_status_invalid").to_string());
                 }
@@ -97,6 +172,9 @@ pub fn draw_api_section(
 
             if vb_response.changed() {
                 *voicebot_status = None;
+                if let Ok(mut bal) = voicebot_balance.try_lock() {
+                    *bal = None;
+                }
             }
 
             let test_btn = ui.add_sized(
@@ -112,6 +190,7 @@ pub fn draw_api_section(
                     *voicebot_status = Some(translate(language, "voicebot_status_checking").to_string());
 
                     let result_arc = Arc::clone(voicebot_test_result);
+                    let balance_arc = Arc::clone(voicebot_balance);
                     let ctx = ui.ctx().clone();
 
                     std::thread::spawn(move || {
@@ -120,27 +199,33 @@ pub fn draw_api_section(
                             .timeout(std::time::Duration::from_secs(15))
                             .build();
 
-                        let status_text = match agent
+                        let (status_text, balance_opt) = match agent
                             .get("https://voiceapi.csv666.ru/balance")
                             .set("X-API-Key", &trimmed)
                             .set("Accept", "application/json")
                             .call()
                         {
                             Ok(response) => match response.into_json::<BalanceResponse>() {
-                                Ok(data) => format!("✔ Баланс: {}", data.balance_text),
-                                Err(_) => "✔ Ключ валідний".to_string(),
+                                Ok(data) => (
+                                    format!("✔ Баланс: {}", data.balance_text),
+                                    Some(data.balance_text),
+                                ),
+                                Err(_) => ("✔ Ключ валідний".to_string(), None),
                             },
-                            Err(ureq::Error::Status(401, _)) => "❌ Невірний ключ".to_string(),
+                            Err(ureq::Error::Status(401, _)) => ("❌ Невірний ключ".to_string(), None),
                             Err(ureq::Error::Status(code, _)) if code >= 500 => {
-                                format!("⚠ Сервер тимчасово недоступний ({})", code)
+                                (format!("⚠ Сервер тимчасово недоступний ({})", code), None)
                             }
                             Err(ureq::Error::Status(code, _)) => {
-                                format!("❌ Помилка ({})", code)
+                                (format!("❌ Помилка ({})", code), None)
                             }
-                            Err(_) => "❌ Помилка мережі. Перевірте з'єднання.".to_string(),
+                            Err(_) => ("❌ Помилка мережі. Перевірте з'єднання.".to_string(), None),
                         };
 
                         *result_arc.lock().unwrap() = Some(status_text);
+                        if let Some(bal) = balance_opt {
+                            *balance_arc.lock().unwrap() = Some(bal);
+                        }
                         ctx.request_repaint();
                     });
                 }

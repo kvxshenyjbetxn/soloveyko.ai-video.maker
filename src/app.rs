@@ -75,6 +75,10 @@ pub struct VideoMakerApp {
     pub openrouter_models: std::sync::Arc<std::sync::Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>>,
     /// Прапорець завантаження моделей OpenRouter.
     pub openrouter_models_loading: std::sync::Arc<std::sync::Mutex<bool>>,
+    /// Баланс OpenRouter для відображення у топбарі.
+    pub openrouter_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Баланс VoiceBot для відображення у топбарі.
+    pub voicebot_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl Default for VideoMakerApp {
@@ -110,14 +114,31 @@ impl Default for VideoMakerApp {
             translation_model_search: String::new(),
             openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            openrouter_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            voicebot_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             last_saved_settings: default_settings,
         }
     }
 }
 
+/// Малює компактний чіп з балансом у топбарі.
+fn draw_balance_chip(ui: &mut egui::Ui, prefix: &str, value: &str) {
+    egui::Frame::none()
+        .fill(ui.visuals().faint_bg_color)
+        .rounding(egui::Rounding::same(4.0))
+        .inner_margin(egui::Margin::symmetric(6.0, 2.0))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new(format!("{}: {}", prefix, value))
+                    .small()
+                    .monospace()
+            );
+        });
+}
+
 impl VideoMakerApp {
     /// Створює новий екземпляр додатку, завантажуючи збережені налаштування з диска.
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // Завантажуємо збережені налаштування користувача з файлу settings.json
         let saved = load_settings();
         
@@ -159,6 +180,25 @@ impl VideoMakerApp {
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
+        let openrouter_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let voicebot_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
+
+        // Завантажуємо баланси у фоні при старті, якщо ключі вже збережені
+        if !openrouter_key.is_empty() && openrouter_key.starts_with("sk-or-") {
+            crate::gui::pipeline::api::fetch_openrouter_balance(
+                openrouter_key.clone(),
+                std::sync::Arc::clone(&openrouter_balance),
+                cc.egui_ctx.clone(),
+            );
+        }
+        if !voicebot_key.is_empty() {
+            crate::gui::pipeline::api::fetch_voicebot_balance(
+                voicebot_key.clone(),
+                std::sync::Arc::clone(&voicebot_balance),
+                cc.egui_ctx.clone(),
+            );
+        }
+
         Self {
             active_tab: Tab::Main,
             text_input: String::new(),
@@ -189,6 +229,8 @@ impl VideoMakerApp {
             translation_model_search: String::new(),
             openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            openrouter_balance,
+            voicebot_balance,
             last_saved_settings: saved,
         }
     }
@@ -205,10 +247,23 @@ impl eframe::App for VideoMakerApp {
             ui.horizontal(|ui| {
                 ui.label(translate(self.language, "app_title"));
                 ui.separator();
-                
-                // Рядок вибору вкладок з сучасним виглядом
                 ui.selectable_value(&mut self.active_tab, Tab::Main, translate(self.language, "tab_main"));
                 ui.selectable_value(&mut self.active_tab, Tab::Settings, translate(self.language, "tab_settings"));
+
+                // Баланс-чіпи з правого боку (RTL: перший доданий — крайній правий)
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if let Ok(guard) = self.openrouter_balance.try_lock() {
+                        if let Some(text) = guard.as_ref() {
+                            draw_balance_chip(ui, "OpenRouter", text);
+                        }
+                    }
+                    if let Ok(guard) = self.voicebot_balance.try_lock() {
+                        if let Some(text) = guard.as_ref() {
+                            let display = text.split('(').next().unwrap_or(text).trim();
+                            draw_balance_chip(ui, "VoiceBot", display);
+                        }
+                    }
+                });
             });
         });
 
@@ -224,9 +279,11 @@ impl eframe::App for VideoMakerApp {
                         self.language,
                         &mut self.openrouter_key,
                         &mut self.openrouter_status,
+                        &self.openrouter_balance,
                         &mut self.voicebot_key,
                         &mut self.voicebot_status,
                         &self.voicebot_test_result,
+                        &self.voicebot_balance,
                         &mut self.voiceover_provider,
                         &mut self.voiceover_template_uuid,
                         &self.voicebot_templates,
