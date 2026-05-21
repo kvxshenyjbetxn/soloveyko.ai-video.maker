@@ -11,6 +11,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "translation" => "Перевод",
         "voiceover" => "Озвучка",
         "video" => "Видеоряд",
+        "subtitles" => "Субтитры",
         "editing" => "Монтаж",
         "editor_hint" => "Введите или вставьте сюда текст вашего будущего видеосценария...",
         "settings_general" => "Основные",

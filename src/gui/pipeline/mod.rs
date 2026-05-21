@@ -1,6 +1,7 @@
 pub mod api;
 pub mod editing;
 pub mod storage;
+pub mod subtitles;
 pub mod templates;
 pub mod translation;
 pub mod video;
@@ -77,6 +78,7 @@ pub fn draw_pipeline_panel(
     pipeline_translation_enabled: &mut bool,
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
+    pipeline_subtitles_enabled: &mut bool,
     pipeline_editing_enabled: &mut bool,
     translation_prompt: &mut String,
     translation_model: &mut String,
@@ -121,6 +123,7 @@ pub fn draw_pipeline_panel(
                         *pipeline_translation_enabled,
                         *pipeline_voiceover_enabled,
                         *pipeline_video_enabled,
+                        *pipeline_subtitles_enabled,
                         *pipeline_editing_enabled,
                         translation_prompt,
                         translation_model,
@@ -184,6 +187,7 @@ pub fn draw_pipeline_panel(
                             pipeline_translation_enabled,
                             pipeline_voiceover_enabled,
                             pipeline_video_enabled,
+                            pipeline_subtitles_enabled,
                             pipeline_editing_enabled,
                             translation_prompt,
                             translation_model,
@@ -326,7 +330,30 @@ pub fn draw_pipeline_panel(
 
                 ui.add_space(8.0);
 
-                // 7. Монтаж (з перемикачем)
+                // 7. Субтитри (з перемикачем)
+                {
+                    let id = ui.make_persistent_id("subtitles_section");
+                    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                        ui.ctx(), id, false,
+                    );
+                    let header = ui.horizontal(|ui| {
+                        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                        let label = ui.add(egui::Label::new(translate(language, "subtitles")).sense(egui::Sense::click()));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            toggle_switch(ui, pipeline_subtitles_enabled);
+                        });
+                        label
+                    });
+                    if header.inner.clicked() { state.toggle(ui); }
+                    state.store(ui.ctx());
+                    state.show_body_indented(&header.response, ui, |ui| {
+                        subtitles::draw_subtitles_section(ui);
+                    });
+                }
+
+                ui.add_space(8.0);
+
+                // 8. Монтаж (з перемикачем)
                 {
                     let id = ui.make_persistent_id("editing_section");
                     let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(

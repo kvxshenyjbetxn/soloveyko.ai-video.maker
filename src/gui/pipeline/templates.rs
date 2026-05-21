@@ -15,6 +15,7 @@ pub fn draw_templates_section(
     pipeline_translation_enabled: &mut bool,
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
+    pipeline_subtitles_enabled: &mut bool,
     pipeline_editing_enabled: &mut bool,
     translation_prompt: &mut String,
     translation_model: &mut String,
@@ -50,6 +51,7 @@ pub fn draw_templates_section(
                             *pipeline_translation_enabled = template.pipeline_translation_enabled;
                             *pipeline_voiceover_enabled = template.pipeline_voiceover_enabled;
                             *pipeline_video_enabled = template.pipeline_video_enabled;
+                            *pipeline_subtitles_enabled = template.pipeline_subtitles_enabled;
                             *pipeline_editing_enabled = template.pipeline_editing_enabled;
                             *translation_prompt = template.translation_prompt;
                             *translation_model = template.translation_model;

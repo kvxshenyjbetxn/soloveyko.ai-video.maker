@@ -11,6 +11,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "translation" => "Переклад",
         "voiceover" => "Озвучка",
         "video" => "Відеоряд",
+        "subtitles" => "Субтитри",
         "editing" => "Монтаж",
         "editor_hint" => "Введіть або вставте сюди текст вашого майбутнього відео сценарію...",
         "settings_general" => "Основні",

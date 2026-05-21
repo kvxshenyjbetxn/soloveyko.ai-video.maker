@@ -37,6 +37,9 @@ pub struct AppSettings {
     /// Чи увімкнено етап "Відеоряд" у пайплайні
     #[serde(default = "default_true")]
     pub pipeline_video_enabled: bool,
+    /// Чи увімкнено етап "Субтитри" у пайплайні
+    #[serde(default = "default_true")]
+    pub pipeline_subtitles_enabled: bool,
     /// Чи увімкнено етап "Монтаж" у пайплайні
     #[serde(default = "default_true")]
     pub pipeline_editing_enabled: bool,
@@ -61,6 +64,7 @@ impl Default for AppSettings {
             pipeline_translation_enabled: true,
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
+            pipeline_subtitles_enabled: true,
             pipeline_editing_enabled: true,
             translation_prompt: String::new(),
             translation_model: String::new(),
@@ -158,6 +162,9 @@ pub struct PipelineTemplate {
     /// Чи увімкнено етап "Відеоряд"
     #[serde(default = "default_true")]
     pub pipeline_video_enabled: bool,
+    /// Чи увімкнено етап "Субтитри"
+    #[serde(default = "default_true")]
+    pub pipeline_subtitles_enabled: bool,
     /// Чи увімкнено етап "Монтаж"
     #[serde(default = "default_true")]
     pub pipeline_editing_enabled: bool,
@@ -184,6 +191,7 @@ pub fn save_template(
     pipeline_translation_enabled: bool,
     pipeline_voiceover_enabled: bool,
     pipeline_video_enabled: bool,
+    pipeline_subtitles_enabled: bool,
     pipeline_editing_enabled: bool,
     translation_prompt: &str,
     translation_model: &str,
@@ -202,6 +210,7 @@ pub fn save_template(
             pipeline_translation_enabled,
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
+            pipeline_subtitles_enabled,
             pipeline_editing_enabled,
             translation_prompt: translation_prompt.to_string(),
             translation_model: translation_model.to_string(),

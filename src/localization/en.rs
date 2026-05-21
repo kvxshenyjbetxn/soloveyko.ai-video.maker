@@ -11,6 +11,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "translation" => "Translation",
         "voiceover" => "Voiceover",
         "video" => "Video Sequence",
+        "subtitles" => "Subtitles",
         "editing" => "Editing",
         "editor_hint" => "Enter or paste the text of your future video script here...",
         "settings_general" => "General",

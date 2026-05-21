@@ -61,6 +61,8 @@ pub struct VideoMakerApp {
     pub pipeline_voiceover_enabled: bool,
     /// Чи увімкнено етап "Відеоряд" у пайплайні.
     pub pipeline_video_enabled: bool,
+    /// Чи увімкнено етап "Субтитри" у пайплайні.
+    pub pipeline_subtitles_enabled: bool,
     /// Чи увімкнено етап "Монтаж" у пайплайні.
     pub pipeline_editing_enabled: bool,
     /// Промт для моделі перекладу.
@@ -101,6 +103,7 @@ impl Default for VideoMakerApp {
             pipeline_translation_enabled: true,
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
+            pipeline_subtitles_enabled: true,
             pipeline_editing_enabled: true,
             translation_prompt: String::new(),
             translation_model: String::new(),
@@ -149,6 +152,7 @@ impl VideoMakerApp {
         let pipeline_translation_enabled = saved.pipeline_translation_enabled;
         let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
         let pipeline_video_enabled = saved.pipeline_video_enabled;
+        let pipeline_subtitles_enabled = saved.pipeline_subtitles_enabled;
         let pipeline_editing_enabled = saved.pipeline_editing_enabled;
         let translation_prompt = saved.translation_prompt.clone();
         let translation_model = saved.translation_model.clone();
@@ -178,6 +182,7 @@ impl VideoMakerApp {
             pipeline_translation_enabled,
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
+            pipeline_subtitles_enabled,
             pipeline_editing_enabled,
             translation_prompt,
             translation_model,
@@ -232,6 +237,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.pipeline_translation_enabled,
                         &mut self.pipeline_voiceover_enabled,
                         &mut self.pipeline_video_enabled,
+                        &mut self.pipeline_subtitles_enabled,
                         &mut self.pipeline_editing_enabled,
                         &mut self.translation_prompt,
                         &mut self.translation_model,
@@ -313,6 +319,7 @@ impl eframe::App for VideoMakerApp {
                 || self.pipeline_translation_enabled != self.last_saved_settings.pipeline_translation_enabled
                 || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
                 || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
+                || self.pipeline_subtitles_enabled != self.last_saved_settings.pipeline_subtitles_enabled
                 || self.pipeline_editing_enabled != self.last_saved_settings.pipeline_editing_enabled
                 || self.translation_prompt != self.last_saved_settings.translation_prompt
                 || self.translation_model != self.last_saved_settings.translation_model
@@ -330,6 +337,7 @@ impl eframe::App for VideoMakerApp {
                     pipeline_translation_enabled: self.pipeline_translation_enabled,
                     pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
                     pipeline_video_enabled: self.pipeline_video_enabled,
+                    pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,
                     pipeline_editing_enabled: self.pipeline_editing_enabled,
                     translation_prompt: self.translation_prompt.clone(),
                     translation_model: self.translation_model.clone(),
