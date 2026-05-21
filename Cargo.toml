@@ -8,3 +8,11 @@ eframe = "0.29.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dirs = "5.0"
+
+[package.metadata.bundle]
+name = "Soloveyko Video Maker"
+identifier = "ai.soloveyko.videomaker"
+version = "0.1.0"
+copyright = "Copyright © 2026 Soloveyko.ai. All rights reserved."
+short_description = "Soloveyko.ai Video Maker Application"
+long_description = "An amazing cross-platform desktop video maker using Rust and egui."
