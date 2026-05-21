@@ -35,6 +35,7 @@ pub struct VideoMakerApp {
 
 impl Default for VideoMakerApp {
     fn default() -> Self {
+        let default_settings = AppSettings::default();
         Self {
             active_tab: Tab::Main,
             text_input: String::new(),
@@ -43,7 +44,7 @@ impl Default for VideoMakerApp {
             pipeline_width: 450.0,
             active_settings_tab: gui::settings::SettingsSubTab::General,
             language: Language::Uk,
-            last_saved_settings: AppSettings::default(),
+            last_saved_settings: default_settings,
         }
     }
 }
