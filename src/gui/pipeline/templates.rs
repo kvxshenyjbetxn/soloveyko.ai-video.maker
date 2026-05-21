@@ -16,6 +16,8 @@ pub fn draw_templates_section(
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
     pipeline_editing_enabled: &mut bool,
+    translation_prompt: &mut String,
+    translation_model: &mut String,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -49,6 +51,8 @@ pub fn draw_templates_section(
                             *pipeline_voiceover_enabled = template.pipeline_voiceover_enabled;
                             *pipeline_video_enabled = template.pipeline_video_enabled;
                             *pipeline_editing_enabled = template.pipeline_editing_enabled;
+                            *translation_prompt = template.translation_prompt;
+                            *translation_model = template.translation_model;
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

@@ -74,6 +74,13 @@ pub fn translate_en(key: &str) -> &'static str {
         "voiceover_templates_loading" => "Loading templates...",
         "voiceover_templates_retry" => "🔄 Retry",
         "voiceover_template_hint" => "Select voice template...",
+        "translation_prompt_label" => "Translation Prompt",
+        "translation_prompt_hint" => "Enter instructions for the translation model...",
+        "translation_model_label" => "Translation Model",
+        "translation_model_hint" => "Select model...",
+        "translation_models_loading" => "Loading models...",
+        "translation_models_retry" => "🔄 Retry",
+        "translation_model_search" => "🔍 Search model...",
         _ => "",
     }
 }

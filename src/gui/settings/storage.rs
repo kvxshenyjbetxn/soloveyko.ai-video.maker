@@ -40,6 +40,10 @@ pub struct AppSettings {
     /// Чи увімкнено етап "Монтаж" у пайплайні
     #[serde(default = "default_true")]
     pub pipeline_editing_enabled: bool,
+    /// Промт для моделі перекладу
+    pub translation_prompt: String,
+    /// ID обраної моделі OpenRouter для перекладу
+    pub translation_model: String,
 }
 
 impl Default for AppSettings {
@@ -58,6 +62,8 @@ impl Default for AppSettings {
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_editing_enabled: true,
+            translation_prompt: String::new(),
+            translation_model: String::new(),
         }
     }
 }
@@ -135,6 +141,7 @@ pub fn open_settings_folder() {
 
 /// Структура, яка описує шаблон налаштувань пайплайну.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct PipelineTemplate {
     /// Збережений API ключ для OpenRouter
     pub openrouter_key: String,
@@ -154,6 +161,10 @@ pub struct PipelineTemplate {
     /// Чи увімкнено етап "Монтаж"
     #[serde(default = "default_true")]
     pub pipeline_editing_enabled: bool,
+    /// Промт для моделі перекладу
+    pub translation_prompt: String,
+    /// ID обраної моделі OpenRouter для перекладу
+    pub translation_model: String,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -174,6 +185,8 @@ pub fn save_template(
     pipeline_voiceover_enabled: bool,
     pipeline_video_enabled: bool,
     pipeline_editing_enabled: bool,
+    translation_prompt: &str,
+    translation_model: &str,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         // Гарантуємо існування папки шаблонів
@@ -190,6 +203,8 @@ pub fn save_template(
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_editing_enabled,
+            translation_prompt: translation_prompt.to_string(),
+            translation_model: translation_model.to_string(),
         };
 
         let json = serde_json::to_string_pretty(&template)?;

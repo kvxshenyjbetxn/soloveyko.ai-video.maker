@@ -78,6 +78,11 @@ pub fn draw_pipeline_panel(
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
     pipeline_editing_enabled: &mut bool,
+    translation_prompt: &mut String,
+    translation_model: &mut String,
+    translation_model_search: &mut String,
+    openrouter_models: &Arc<Mutex<Option<Result<Vec<translation::OpenRouterModel>, String>>>>,
+    openrouter_models_loading: &Arc<Mutex<bool>>,
 ) {
     ui.vertical(|ui| {
         ui.add_space(8.0);
@@ -117,6 +122,8 @@ pub fn draw_pipeline_panel(
                         *pipeline_voiceover_enabled,
                         *pipeline_video_enabled,
                         *pipeline_editing_enabled,
+                        translation_prompt,
+                        translation_model,
                     ) {
                         Ok(_) => {
                             *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -178,6 +185,8 @@ pub fn draw_pipeline_panel(
                             pipeline_voiceover_enabled,
                             pipeline_video_enabled,
                             pipeline_editing_enabled,
+                            translation_prompt,
+                            translation_model,
                         );
                     });
                 }
@@ -249,7 +258,15 @@ pub fn draw_pipeline_panel(
                     if header.inner.clicked() { state.toggle(ui); }
                     state.store(ui.ctx());
                     state.show_body_indented(&header.response, ui, |ui| {
-                        translation::draw_translation_section(ui);
+                        translation::draw_translation_section(
+                            ui,
+                            language,
+                            translation_prompt,
+                            translation_model,
+                            translation_model_search,
+                            openrouter_models,
+                            openrouter_models_loading,
+                        );
                     });
                 }
 

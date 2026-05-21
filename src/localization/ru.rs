@@ -74,6 +74,13 @@ pub fn translate_ru(key: &str) -> &'static str {
         "voiceover_templates_loading" => "Загрузка шаблонов...",
         "voiceover_templates_retry" => "🔄 Попробовать снова",
         "voiceover_template_hint" => "Выберите шаблон голоса...",
+        "translation_prompt_label" => "Промт для перевода",
+        "translation_prompt_hint" => "Введите инструкцию для модели перевода...",
+        "translation_model_label" => "Модель для перевода",
+        "translation_model_hint" => "Выберите модель...",
+        "translation_models_loading" => "Загрузка моделей...",
+        "translation_models_retry" => "🔄 Попробовать снова",
+        "translation_model_search" => "🔍 Поиск модели...",
         _ => "",
     }
 }

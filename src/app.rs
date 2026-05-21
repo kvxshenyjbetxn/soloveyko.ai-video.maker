@@ -63,6 +63,16 @@ pub struct VideoMakerApp {
     pub pipeline_video_enabled: bool,
     /// Чи увімкнено етап "Монтаж" у пайплайні.
     pub pipeline_editing_enabled: bool,
+    /// Промт для моделі перекладу.
+    pub translation_prompt: String,
+    /// ID обраної моделі OpenRouter для перекладу.
+    pub translation_model: String,
+    /// Рядок пошуку у дропдауні вибору моделі (ephemeral UI state).
+    pub translation_model_search: String,
+    /// Список моделей OpenRouter, завантажених у фоні.
+    pub openrouter_models: std::sync::Arc<std::sync::Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>>,
+    /// Прапорець завантаження моделей OpenRouter.
+    pub openrouter_models_loading: std::sync::Arc<std::sync::Mutex<bool>>,
 }
 
 impl Default for VideoMakerApp {
@@ -92,6 +102,11 @@ impl Default for VideoMakerApp {
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_editing_enabled: true,
+            translation_prompt: String::new(),
+            translation_model: String::new(),
+            translation_model_search: String::new(),
+            openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             last_saved_settings: default_settings,
         }
     }
@@ -135,6 +150,8 @@ impl VideoMakerApp {
         let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
         let pipeline_video_enabled = saved.pipeline_video_enabled;
         let pipeline_editing_enabled = saved.pipeline_editing_enabled;
+        let translation_prompt = saved.translation_prompt.clone();
+        let translation_model = saved.translation_model.clone();
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
@@ -162,6 +179,11 @@ impl VideoMakerApp {
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_editing_enabled,
+            translation_prompt,
+            translation_model,
+            translation_model_search: String::new(),
+            openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             last_saved_settings: saved,
         }
     }
@@ -211,6 +233,11 @@ impl eframe::App for VideoMakerApp {
                         &mut self.pipeline_voiceover_enabled,
                         &mut self.pipeline_video_enabled,
                         &mut self.pipeline_editing_enabled,
+                        &mut self.translation_prompt,
+                        &mut self.translation_model,
+                        &mut self.translation_model_search,
+                        &self.openrouter_models,
+                        &self.openrouter_models_loading,
                     );
                 });
 
@@ -287,6 +314,8 @@ impl eframe::App for VideoMakerApp {
                 || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
                 || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
                 || self.pipeline_editing_enabled != self.last_saved_settings.pipeline_editing_enabled
+                || self.translation_prompt != self.last_saved_settings.translation_prompt
+                || self.translation_model != self.last_saved_settings.translation_model
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -302,6 +331,8 @@ impl eframe::App for VideoMakerApp {
                     pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
                     pipeline_video_enabled: self.pipeline_video_enabled,
                     pipeline_editing_enabled: self.pipeline_editing_enabled,
+                    translation_prompt: self.translation_prompt.clone(),
+                    translation_model: self.translation_model.clone(),
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску

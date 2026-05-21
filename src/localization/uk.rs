@@ -74,6 +74,13 @@ pub fn translate_uk(key: &str) -> &'static str {
         "voiceover_templates_loading" => "Завантаження шаблонів...",
         "voiceover_templates_retry" => "🔄 Спробувати знову",
         "voiceover_template_hint" => "Оберіть шаблон голосу...",
+        "translation_prompt_label" => "Промт для перекладу",
+        "translation_prompt_hint" => "Введіть інструкцію для моделі перекладу...",
+        "translation_model_label" => "Модель для перекладу",
+        "translation_model_hint" => "Оберіть модель...",
+        "translation_models_loading" => "Завантаження моделей...",
+        "translation_models_retry" => "🔄 Спробувати знову",
+        "translation_model_search" => "🔍 Пошук моделі...",
         _ => "",
     }
 }
