@@ -11,6 +11,7 @@ pub fn draw_templates_section(
     voiceover_provider: &mut String,
     voiceover_template_uuid: &mut String,
     template_status: &mut Option<String>,
+    template_name_input: &mut String,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -39,6 +40,7 @@ pub fn draw_templates_section(
                             *openrouter_status = None;
                             *voiceover_provider = template.voiceover_provider;
                             *voiceover_template_uuid = template.voiceover_template_uuid;
+                            *template_name_input = template_name.clone();
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

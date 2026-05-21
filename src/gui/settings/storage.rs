@@ -24,6 +24,8 @@ pub struct AppSettings {
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки
     pub voiceover_template_uuid: String,
+    /// Назва останнього завантаженого шаблону пайплайну
+    pub last_template: String,
 }
 
 impl Default for AppSettings {
@@ -37,6 +39,7 @@ impl Default for AppSettings {
             voicebot_key: String::new(),
             voiceover_provider: "Voice Bot".to_string(),
             voiceover_template_uuid: String::new(),
+            last_template: String::new(),
         }
     }
 }

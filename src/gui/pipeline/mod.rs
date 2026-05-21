@@ -113,6 +113,7 @@ pub fn draw_pipeline_panel(
                         voiceover_provider,
                         voiceover_template_uuid,
                         template_status,
+                        template_name_input,
                     );
                 });
 

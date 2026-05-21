@@ -132,7 +132,7 @@ impl VideoMakerApp {
             language,
             openrouter_key,
             openrouter_status: None,
-            template_name_input: String::new(),
+            template_name_input: saved.last_template.clone(),
             saved_templates,
             template_status: None,
             voicebot_key,
@@ -250,14 +250,15 @@ impl eframe::App for VideoMakerApp {
             };
 
             // Перевіряємо зміни значень (з дельтою для ширини панелі)
-            if current_theme_str != self.last_saved_settings.theme 
-                || current_color_arr != self.last_saved_settings.accent_color 
+            if current_theme_str != self.last_saved_settings.theme
+                || current_color_arr != self.last_saved_settings.accent_color
                 || current_language_str != self.last_saved_settings.language
                 || (self.pipeline_width - self.last_saved_settings.pipeline_width).abs() > 1.0
                 || self.openrouter_key != self.last_saved_settings.openrouter_key
                 || self.voicebot_key != self.last_saved_settings.voicebot_key
                 || self.voiceover_provider != self.last_saved_settings.voiceover_provider
                 || self.voiceover_template_uuid != self.last_saved_settings.voiceover_template_uuid
+                || self.template_name_input != self.last_saved_settings.last_template
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -268,6 +269,7 @@ impl eframe::App for VideoMakerApp {
                     voicebot_key: self.voicebot_key.clone(),
                     voiceover_provider: self.voiceover_provider.clone(),
                     voiceover_template_uuid: self.voiceover_template_uuid.clone(),
+                    last_template: self.template_name_input.clone(),
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску
