@@ -1,12 +1,11 @@
 mod app;
+mod gui;
+mod theme;
 
 use app::VideoMakerApp;
 use eframe::egui;
 
 fn main() -> eframe::Result {
-    // Ініціалізуємо логування (корисно для відлагодження у великих додатках)
-    // У майбутньому сюди можна підключити env_logger або tracing.
-
     // Конфігуруємо параметри вікна нашого додатку
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
