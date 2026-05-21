@@ -12,3 +12,80 @@
 - программа мае бути адаптована під Windows та MacOS, завжди перевіряй цю крос платформеність.
 - при додаванні нових текстів або елементів інтерфейсу, то не забувай перекладати їх на всі мови інтерфейсу - /soloveyko.ai-video.maker/src/localization
 - при видалення якихось елементів не забудь видалити ключа перекладу з коду.
+- при додаванні нових елементів в панель пайплайну не забувай додавати ці налаштування в збереження в шаблон, ось інструкція (Ось чітка схема, куди саме їх дописувати:                                   
+                                                                              
+  ### 1. Додавання полів у структуру шаблону ( src/gui/settings/storage.rs )  
+                                                                              
+  Спочатку потрібно додати нові поля у саму структуру  PipelineTemplate , яка 
+  записується в JSON.                                                         
+                                                                              
+    // src/gui/settings/storage.rs                                            
+                                                                              
+    #[derive(serde::Serialize, serde::Deserialize, Clone, Default)]           
+    pub struct PipelineTemplate {                                             
+        pub openrouter_key: String,                                           
+                                                                              
+        // СЮДИ додаєш будь-які нові налаштування пайплайну:                  
+        // pub voice_id: String,       // Наприклад, обраний голос            
+        // pub video_resolution: String, // Наприклад, роздільна здатність    
+    }                                                                         
+                                                                              
+  ### 2. Оновлення функції збереження ( src/gui/settings/storage.rs )         
+                                                                              
+  Далі оновлюємо функцію  save_template , щоб вона приймала ці нові значення  
+  та записувала їх у JSON:                                                    
+                                                                              
+    // src/gui/settings/storage.rs                                            
+  
+    pub fn save_template(
+        name: &str, 
+        openrouter_key: &str,
+        // voice_id: &str, // додаємо новий аргумент
+    ) -> Result<(), std::io::Error> {
+        ...
+        let template = PipelineTemplate {
+            openrouter_key: openrouter_key.to_string(),
+            // voice_id: voice_id.to_string(), // записуємо у структуру       
+        };
+        ...
+    }
+  
+  ### 3. Передача значень при збереженні ( src/gui/pipeline/mod.rs )          
+  
+  У верху панелі пайплайну, де обробляється клік по кнопці Зберегти, передаємо
+  поточні значення інтерфейсу у функцію збереження:
+  
+    // src/gui/pipeline/mod.rs
+  
+    if save_btn.clicked() {
+        let name = template_name_input.trim();
+        ...
+        // Передаємо поточні змінні стану програми (наприклад, openrouter_key,
+  voice_id тощо)
+        match crate::gui::settings::storage::save_template(name,
+  openrouter_key /*, voice_id */) {
+            Ok(_) => { ... }
+        }
+    }
+  
+  ### 4. Застосування налаштувань при завантаженні ( 
+  src/gui/pipeline/templates.rs )
+  
+  Коли користувач клікає по збереженому шаблону у списку, ми дістаємо значення
+  з файлу та оновлюємо поточний стан програми:
+  
+    // src/gui/pipeline/templates.rs
+  
+    if btn.clicked() {
+        if let Some(template) =
+  crate::gui::settings::storage::load_template(&template_name) {
+            // Оновлюємо поточні змінні програми новими значеннями з шаблону  
+            *openrouter_key = template.openrouter_key;
+            // *voice_id = template.voice_id; // застосовуємо нове значення   
+        }
+    }
+  
+  Таким чином, для будь-якого нового налаштування пайплайну достатньо         
+  розширити
+  структуру  PipelineTemplate , прокинути нове поле через функцію збереження  
+  та застосувати його при завантаженні.)

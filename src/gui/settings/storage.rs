@@ -18,6 +18,12 @@ pub struct AppSettings {
     pub language: String,
     /// Ключ API для OpenRouter
     pub openrouter_key: String,
+    /// Ключ API для Voice Bot
+    pub voicebot_key: String,
+    /// Поточний вибраний сервіс озвучки ("Voice Bot")
+    pub voiceover_provider: String,
+    /// UUID обраного шаблону озвучки
+    pub voiceover_template_uuid: String,
 }
 
 impl Default for AppSettings {
@@ -28,6 +34,9 @@ impl Default for AppSettings {
             pipeline_width: 450.0,            // Дефолтна ширина
             language: "Uk".to_string(),       // Стандартна мова — Українська
             openrouter_key: String::new(),
+            voicebot_key: String::new(),
+            voiceover_provider: "Voice Bot".to_string(),
+            voiceover_template_uuid: String::new(),
         }
     }
 }
@@ -108,6 +117,10 @@ pub fn open_settings_folder() {
 pub struct PipelineTemplate {
     /// Збережений API ключ для OpenRouter
     pub openrouter_key: String,
+    /// Обраний провайдер озвучки
+    pub voiceover_provider: String,
+    /// UUID обраного шаблону озвучки
+    pub voiceover_template_uuid: String,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -119,7 +132,12 @@ pub fn get_templates_dir() -> Option<PathBuf> {
 }
 
 /// Зберігає поточні налаштування пайплайну як шаблон у файл <name>.json.
-pub fn save_template(name: &str, openrouter_key: &str) -> Result<(), std::io::Error> {
+pub fn save_template(
+    name: &str,
+    openrouter_key: &str,
+    voiceover_provider: &str,
+    voiceover_template_uuid: &str,
+) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         // Гарантуємо існування папки шаблонів
         fs::create_dir_all(&dir)?;
@@ -129,6 +147,8 @@ pub fn save_template(name: &str, openrouter_key: &str) -> Result<(), std::io::Er
         
         let template = PipelineTemplate {
             openrouter_key: openrouter_key.to_string(),
+            voiceover_provider: voiceover_provider.to_string(),
+            voiceover_template_uuid: voiceover_template_uuid.to_string(),
         };
         
         let json = serde_json::to_string_pretty(&template)?;

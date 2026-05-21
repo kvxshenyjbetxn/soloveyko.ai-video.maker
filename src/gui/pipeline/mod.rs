@@ -8,6 +8,7 @@ pub mod voiceover;
 
 use eframe::egui;
 use crate::localization::{Language, translate};
+use std::sync::{Arc, Mutex};
 
 /// Відображає бічну панель пайплайну із порожніми згорнутими секціями.
 /// Секції відсортовані у логічному порядку процесу створення відео:
@@ -23,6 +24,13 @@ pub fn draw_pipeline_panel(
     language: Language,
     openrouter_key: &mut String,
     openrouter_status: &mut Option<String>,
+    voicebot_key: &mut String,
+    voicebot_status: &mut Option<String>,
+    voicebot_test_result: &Arc<Mutex<Option<String>>>,
+    voiceover_provider: &mut String,
+    voiceover_template_uuid: &mut String,
+    voicebot_templates: &Arc<Mutex<Option<Result<Vec<voiceover::VoiceBotTemplate>, String>>>>,
+    voicebot_loading: &Arc<Mutex<bool>>,
     template_name_input: &mut String,
     saved_templates: &mut Vec<String>,
     template_status: &mut Option<String>,
@@ -31,7 +39,7 @@ pub fn draw_pipeline_panel(
         ui.add_space(8.0);
         ui.heading(translate(language, "pipeline_settings"));
         ui.separator();
-        
+
         ui.add_space(8.0);
 
         // Форма створення нового шаблону (вгорі панелі пайплайну)
@@ -40,7 +48,7 @@ pub fn draw_pipeline_panel(
             let text_edit = egui::TextEdit::singleline(template_name_input)
                 .hint_text(translate(language, "template_name_hint"))
                 .desired_width((available_width - 95.0).max(100.0));
-            
+
             let name_resp = ui.add(text_edit);
             if name_resp.changed() {
                 *template_status = None;
@@ -56,7 +64,12 @@ pub fn draw_pipeline_panel(
                 if name.is_empty() {
                     *template_status = Some(translate(language, "template_status_empty").to_string());
                 } else {
-                    match crate::gui::settings::storage::save_template(name, openrouter_key) {
+                    match crate::gui::settings::storage::save_template(
+                        name,
+                        openrouter_key,
+                        voiceover_provider,
+                        voiceover_template_uuid,
+                    ) {
                         Ok(_) => {
                             *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
                             template_name_input.clear();
@@ -75,9 +88,9 @@ pub fn draw_pipeline_panel(
             ui.add_space(2.0);
             let is_success = status.contains('✔') || status.contains('🗑') || status.contains("Завантажено") || status.contains("Loaded") || status.contains("Загружен");
             let color = if is_success {
-                egui::Color32::from_rgb(46, 204, 113) // Зелений
+                egui::Color32::from_rgb(46, 204, 113)
             } else {
-                egui::Color32::from_rgb(231, 76, 60) // Червоний
+                egui::Color32::from_rgb(231, 76, 60)
             };
             ui.add(egui::Label::new(egui::RichText::new(status.as_str()).color(color).size(11.0)).wrap());
         }
@@ -85,7 +98,7 @@ pub fn draw_pipeline_panel(
         ui.add_space(10.0);
         ui.separator();
         ui.add_space(8.0);
- 
+
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
@@ -97,47 +110,65 @@ pub fn draw_pipeline_panel(
                         saved_templates,
                         openrouter_key,
                         openrouter_status,
+                        voiceover_provider,
+                        voiceover_template_uuid,
                         template_status,
                     );
                 });
-                
+
                 ui.add_space(8.0);
-                
+
                 // 2. Шлях збереження
                 ui.collapsing(translate(language, "storage"), |ui| {
                     storage::draw_storage_section(ui);
                 });
-                
+
                 ui.add_space(8.0);
-                
+
                 // 3. АПІ
                 ui.collapsing(translate(language, "api"), |ui| {
-                    api::draw_api_section(ui, language, openrouter_key, openrouter_status);
+                    api::draw_api_section(
+                        ui,
+                        language,
+                        openrouter_key,
+                        openrouter_status,
+                        voicebot_key,
+                        voicebot_status,
+                        voicebot_test_result,
+                    );
                 });
-                
+
                 ui.add_space(8.0);
-                
+
                 // 4. Переклад
                 ui.collapsing(translate(language, "translation"), |ui| {
                     translation::draw_translation_section(ui);
                 });
-                
+
                 ui.add_space(8.0);
-                
+
                 // 5. Озвучка
                 ui.collapsing(translate(language, "voiceover"), |ui| {
-                    voiceover::draw_voiceover_section(ui);
+                    voiceover::draw_voiceover_section(
+                        ui,
+                        language,
+                        voicebot_key,
+                        voiceover_provider,
+                        voiceover_template_uuid,
+                        voicebot_templates,
+                        voicebot_loading,
+                    );
                 });
-                
+
                 ui.add_space(8.0);
-                
+
                 // 6. Відеоряд
                 ui.collapsing(translate(language, "video"), |ui| {
                     video::draw_video_section(ui);
                 });
-                
+
                 ui.add_space(8.0);
-                
+
                 // 7. Монтаж
                 ui.collapsing(translate(language, "editing"), |ui| {
                     editing::draw_editing_section(ui);

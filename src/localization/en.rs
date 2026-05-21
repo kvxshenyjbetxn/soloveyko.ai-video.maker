@@ -67,6 +67,13 @@ pub fn translate_en(key: &str) -> &'static str {
         "templates_empty" => "No saved templates",
         "template_loaded" => "Template loaded",
         "template_deleted" => "Template deleted",
+        "voicebot_key_hint" => "Enter X-API-Key...",
+        "voicebot_status_checking" => "⏳ Checking...",
+        "voicebot_key_required" => "⚠ Enter Voice Bot key in the API section",
+        "voiceover_provider_label" => "Voiceover Provider",
+        "voiceover_templates_loading" => "Loading templates...",
+        "voiceover_templates_retry" => "🔄 Retry",
+        "voiceover_template_hint" => "Select voice template...",
         _ => "",
     }
 }

@@ -67,6 +67,13 @@ pub fn translate_uk(key: &str) -> &'static str {
         "templates_empty" => "Немає збережених шаблонів",
         "template_loaded" => "Завантажено шаблон",
         "template_deleted" => "Шаблон видалено",
+        "voicebot_key_hint" => "Введіть X-API-Key...",
+        "voicebot_status_checking" => "⏳ Перевірка...",
+        "voicebot_key_required" => "⚠ Введіть ключ Voice Bot в секції АПІ",
+        "voiceover_provider_label" => "Провайдер озвучки",
+        "voiceover_templates_loading" => "Завантаження шаблонів...",
+        "voiceover_templates_retry" => "🔄 Спробувати знову",
+        "voiceover_template_hint" => "Оберіть шаблон голосу...",
         _ => "",
     }
 }

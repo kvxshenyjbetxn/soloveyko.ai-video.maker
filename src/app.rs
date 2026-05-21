@@ -28,19 +28,33 @@ pub struct VideoMakerApp {
     /// Поточна обрана підвкладка налаштувань.
     active_settings_tab: gui::settings::SettingsSubTab,
     /// Поточна вибрана мова інтерфейсу програми.
-    language: Language,
+    pub language: Language,
     /// Копія останніх збережених налаштувань на диску для відстеження змін у реальному часі.
-    last_saved_settings: AppSettings,
+    pub last_saved_settings: AppSettings,
     /// Ключ API для OpenRouter.
-    openrouter_key: String,
+    pub openrouter_key: String,
     /// Тимчасовий статус перевірки OpenRouter API ключа.
-    openrouter_status: Option<String>,
+    pub openrouter_status: Option<String>,
     /// Введення імені шаблону
-    template_name_input: String,
+    pub template_name_input: String,
     /// Доступні шаблони на диску
-    saved_templates: Vec<String>,
+    pub saved_templates: Vec<String>,
     /// Статус роботи з шаблонами
-    template_status: Option<String>,
+    pub template_status: Option<String>,
+    /// Ключ API для Voice Bot.
+    pub voicebot_key: String,
+    /// Статус перевірки Voice Bot API ключа.
+    pub voicebot_status: Option<String>,
+    /// Обраний провайдер озвучки.
+    pub voiceover_provider: String,
+    /// UUID обраного шаблону озвучки.
+    pub voiceover_template_uuid: String,
+    /// Завантажені шаблони Voice Bot.
+    pub voicebot_templates: std::sync::Arc<std::sync::Mutex<Option<Result<Vec<crate::gui::pipeline::voiceover::VoiceBotTemplate>, String>>>>,
+    /// Прапорець завантаження шаблонів Voice Bot.
+    pub voicebot_loading: std::sync::Arc<std::sync::Mutex<bool>>,
+    /// Результат фонового тесту API ключа Voice Bot.
+    pub voicebot_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl Default for VideoMakerApp {
@@ -59,6 +73,13 @@ impl Default for VideoMakerApp {
             template_name_input: String::new(),
             saved_templates: crate::gui::settings::storage::load_saved_templates(),
             template_status: None,
+            voicebot_key: String::new(),
+            voicebot_status: None,
+            voiceover_provider: "Voice Bot".to_string(),
+            voiceover_template_uuid: String::new(),
+            voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            voicebot_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             last_saved_settings: default_settings,
         }
     }
@@ -95,6 +116,9 @@ impl VideoMakerApp {
         };
 
         let openrouter_key = saved.openrouter_key.clone();
+        let voicebot_key = saved.voicebot_key.clone();
+        let voiceover_provider = saved.voiceover_provider.clone();
+        let voiceover_template_uuid = saved.voiceover_template_uuid.clone();
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
@@ -111,6 +135,13 @@ impl VideoMakerApp {
             template_name_input: String::new(),
             saved_templates,
             template_status: None,
+            voicebot_key,
+            voicebot_status: None,
+            voiceover_provider,
+            voiceover_template_uuid,
+            voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            voicebot_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             last_saved_settings: saved,
         }
     }
@@ -146,6 +177,13 @@ impl eframe::App for VideoMakerApp {
                         self.language,
                         &mut self.openrouter_key,
                         &mut self.openrouter_status,
+                        &mut self.voicebot_key,
+                        &mut self.voicebot_status,
+                        &self.voicebot_test_result,
+                        &mut self.voiceover_provider,
+                        &mut self.voiceover_template_uuid,
+                        &self.voicebot_templates,
+                        &self.voicebot_loading,
                         &mut self.template_name_input,
                         &mut self.saved_templates,
                         &mut self.template_status,
@@ -217,6 +255,9 @@ impl eframe::App for VideoMakerApp {
                 || current_language_str != self.last_saved_settings.language
                 || (self.pipeline_width - self.last_saved_settings.pipeline_width).abs() > 1.0
                 || self.openrouter_key != self.last_saved_settings.openrouter_key
+                || self.voicebot_key != self.last_saved_settings.voicebot_key
+                || self.voiceover_provider != self.last_saved_settings.voiceover_provider
+                || self.voiceover_template_uuid != self.last_saved_settings.voiceover_template_uuid
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -224,6 +265,9 @@ impl eframe::App for VideoMakerApp {
                     pipeline_width: self.pipeline_width,
                     language: current_language_str,
                     openrouter_key: self.openrouter_key.clone(),
+                    voicebot_key: self.voicebot_key.clone(),
+                    voiceover_provider: self.voiceover_provider.clone(),
+                    voiceover_template_uuid: self.voiceover_template_uuid.clone(),
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску

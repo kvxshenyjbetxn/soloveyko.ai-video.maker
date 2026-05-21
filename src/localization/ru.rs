@@ -67,6 +67,13 @@ pub fn translate_ru(key: &str) -> &'static str {
         "templates_empty" => "Нет сохраненных шаблонов",
         "template_loaded" => "Шаблон загружен",
         "template_deleted" => "Шаблон удален",
+        "voicebot_key_hint" => "Введите X-API-Key...",
+        "voicebot_status_checking" => "⏳ Проверка...",
+        "voicebot_key_required" => "⚠ Введите ключ Voice Bot в разделе API",
+        "voiceover_provider_label" => "Провайдер озвучки",
+        "voiceover_templates_loading" => "Загрузка шаблонов...",
+        "voiceover_templates_retry" => "🔄 Попробовать снова",
+        "voiceover_template_hint" => "Выберите шаблон голоса...",
         _ => "",
     }
 }
