@@ -37,4 +37,7 @@ pub fn apply_theme(ctx: &egui::Context, theme: AppTheme, accent_color: egui::Col
     
     // Застосовуємо оновлені параметри візуалів
     ctx.set_visuals(visuals);
+
+    // Забороняємо виділення тексту в інтерфейсі (прибирає курсор I-beam)
+    ctx.style_mut(|s| s.interaction.selectable_labels = false);
 }

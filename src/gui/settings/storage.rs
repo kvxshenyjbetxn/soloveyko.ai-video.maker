@@ -2,8 +2,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+fn default_true() -> bool { true }
+
 /// Структура для серіалізації налаштувань у формат JSON.
-/// 
+///
 /// Зберігає тему оформлення як рядок, колір акценту як масив [r, g, b, a], ширину бічної панелі та мову інтерфейсу.
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 #[serde(default)]
@@ -26,6 +28,18 @@ pub struct AppSettings {
     pub voiceover_template_uuid: String,
     /// Назва останнього завантаженого шаблону пайплайну
     pub last_template: String,
+    /// Чи увімкнено етап "Переклад" у пайплайні
+    #[serde(default = "default_true")]
+    pub pipeline_translation_enabled: bool,
+    /// Чи увімкнено етап "Озвучка" у пайплайні
+    #[serde(default = "default_true")]
+    pub pipeline_voiceover_enabled: bool,
+    /// Чи увімкнено етап "Відеоряд" у пайплайні
+    #[serde(default = "default_true")]
+    pub pipeline_video_enabled: bool,
+    /// Чи увімкнено етап "Монтаж" у пайплайні
+    #[serde(default = "default_true")]
+    pub pipeline_editing_enabled: bool,
 }
 
 impl Default for AppSettings {
@@ -40,6 +54,10 @@ impl Default for AppSettings {
             voiceover_provider: "Voice Bot".to_string(),
             voiceover_template_uuid: String::new(),
             last_template: String::new(),
+            pipeline_translation_enabled: true,
+            pipeline_voiceover_enabled: true,
+            pipeline_video_enabled: true,
+            pipeline_editing_enabled: true,
         }
     }
 }
@@ -124,6 +142,18 @@ pub struct PipelineTemplate {
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки
     pub voiceover_template_uuid: String,
+    /// Чи увімкнено етап "Переклад"
+    #[serde(default = "default_true")]
+    pub pipeline_translation_enabled: bool,
+    /// Чи увімкнено етап "Озвучка"
+    #[serde(default = "default_true")]
+    pub pipeline_voiceover_enabled: bool,
+    /// Чи увімкнено етап "Відеоряд"
+    #[serde(default = "default_true")]
+    pub pipeline_video_enabled: bool,
+    /// Чи увімкнено етап "Монтаж"
+    #[serde(default = "default_true")]
+    pub pipeline_editing_enabled: bool,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -140,20 +170,28 @@ pub fn save_template(
     openrouter_key: &str,
     voiceover_provider: &str,
     voiceover_template_uuid: &str,
+    pipeline_translation_enabled: bool,
+    pipeline_voiceover_enabled: bool,
+    pipeline_video_enabled: bool,
+    pipeline_editing_enabled: bool,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         // Гарантуємо існування папки шаблонів
         fs::create_dir_all(&dir)?;
-        
+
         let mut path = dir;
         path.push(format!("{}.json", name));
-        
+
         let template = PipelineTemplate {
             openrouter_key: openrouter_key.to_string(),
             voiceover_provider: voiceover_provider.to_string(),
             voiceover_template_uuid: voiceover_template_uuid.to_string(),
+            pipeline_translation_enabled,
+            pipeline_voiceover_enabled,
+            pipeline_video_enabled,
+            pipeline_editing_enabled,
         };
-        
+
         let json = serde_json::to_string_pretty(&template)?;
         fs::write(path, json)?;
     }

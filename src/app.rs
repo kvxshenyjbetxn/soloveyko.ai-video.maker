@@ -55,6 +55,14 @@ pub struct VideoMakerApp {
     pub voicebot_loading: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Результат фонового тесту API ключа Voice Bot.
     pub voicebot_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// Чи увімкнено етап "Переклад" у пайплайні.
+    pub pipeline_translation_enabled: bool,
+    /// Чи увімкнено етап "Озвучка" у пайплайні.
+    pub pipeline_voiceover_enabled: bool,
+    /// Чи увімкнено етап "Відеоряд" у пайплайні.
+    pub pipeline_video_enabled: bool,
+    /// Чи увімкнено етап "Монтаж" у пайплайні.
+    pub pipeline_editing_enabled: bool,
 }
 
 impl Default for VideoMakerApp {
@@ -80,6 +88,10 @@ impl Default for VideoMakerApp {
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voicebot_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pipeline_translation_enabled: true,
+            pipeline_voiceover_enabled: true,
+            pipeline_video_enabled: true,
+            pipeline_editing_enabled: true,
             last_saved_settings: default_settings,
         }
     }
@@ -119,6 +131,10 @@ impl VideoMakerApp {
         let voicebot_key = saved.voicebot_key.clone();
         let voiceover_provider = saved.voiceover_provider.clone();
         let voiceover_template_uuid = saved.voiceover_template_uuid.clone();
+        let pipeline_translation_enabled = saved.pipeline_translation_enabled;
+        let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
+        let pipeline_video_enabled = saved.pipeline_video_enabled;
+        let pipeline_editing_enabled = saved.pipeline_editing_enabled;
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
@@ -142,6 +158,10 @@ impl VideoMakerApp {
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voicebot_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            pipeline_translation_enabled,
+            pipeline_voiceover_enabled,
+            pipeline_video_enabled,
+            pipeline_editing_enabled,
             last_saved_settings: saved,
         }
     }
@@ -169,7 +189,7 @@ impl eframe::App for VideoMakerApp {
         if self.active_tab == Tab::Main {
             let panel_res = egui::SidePanel::right("pipeline_panel")
                 .default_width(self.pipeline_width)  // Встановлюємо збережену ширину панелі
-                .width_range(350.0..=750.0)       // Збільшений діапазон зміни ширини
+                .width_range(100.0..=750.0)
                 .resizable(true)
                 .show(ctx, |ui| {
                     gui::pipeline::draw_pipeline_panel(
@@ -187,6 +207,10 @@ impl eframe::App for VideoMakerApp {
                         &mut self.template_name_input,
                         &mut self.saved_templates,
                         &mut self.template_status,
+                        &mut self.pipeline_translation_enabled,
+                        &mut self.pipeline_voiceover_enabled,
+                        &mut self.pipeline_video_enabled,
+                        &mut self.pipeline_editing_enabled,
                     );
                 });
 
@@ -259,6 +283,10 @@ impl eframe::App for VideoMakerApp {
                 || self.voiceover_provider != self.last_saved_settings.voiceover_provider
                 || self.voiceover_template_uuid != self.last_saved_settings.voiceover_template_uuid
                 || self.template_name_input != self.last_saved_settings.last_template
+                || self.pipeline_translation_enabled != self.last_saved_settings.pipeline_translation_enabled
+                || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
+                || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
+                || self.pipeline_editing_enabled != self.last_saved_settings.pipeline_editing_enabled
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -270,6 +298,10 @@ impl eframe::App for VideoMakerApp {
                     voiceover_provider: self.voiceover_provider.clone(),
                     voiceover_template_uuid: self.voiceover_template_uuid.clone(),
                     last_template: self.template_name_input.clone(),
+                    pipeline_translation_enabled: self.pipeline_translation_enabled,
+                    pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
+                    pipeline_video_enabled: self.pipeline_video_enabled,
+                    pipeline_editing_enabled: self.pipeline_editing_enabled,
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску
