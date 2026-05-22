@@ -84,6 +84,48 @@ fn parse_param(s: &str) -> i32 {
     cleaned.parse::<i32>().unwrap_or(0)
 }
 
+/// Очищає довгу назву голосу Microsoft Edge TTS для відображення в інтерфейсі.
+/// Перетворює "Microsoft Dmitry Online (Natural) - Russian (Russia)" на "Dmitry (Russian, ru-RU)"
+fn clean_friendly_name(friendly_name: &str, locale: &str) -> String {
+    // Прибираємо "Microsoft " на початку
+    let clean_pref = friendly_name.strip_prefix("Microsoft ").unwrap_or(friendly_name);
+    
+    // Розділяємо за допомогою " - "
+    let parts: Vec<&str> = clean_pref.split(" - ").collect();
+    
+    let voice_name = if !parts.is_empty() {
+        let first_part = parts[0];
+        // Прибираємо " Online..." або " Neural..." якщо вони є
+        if let Some(idx) = first_part.find(" Online") {
+            first_part[..idx].trim().to_string()
+        } else if let Some(idx) = first_part.find(" Neural") {
+            first_part[..idx].trim().to_string()
+        } else {
+            first_part.trim().to_string()
+        }
+    } else {
+        clean_pref.trim().to_string()
+    };
+
+    let language_name = if parts.len() > 1 {
+        let second_part = parts[1];
+        // Прибираємо дужки з країною, наприклад "Russian (Russia)" -> "Russian"
+        if let Some(idx) = second_part.find(" (") {
+            second_part[..idx].trim().to_string()
+        } else {
+            second_part.trim().to_string()
+        }
+    } else {
+        "".to_string()
+    };
+
+    if language_name.is_empty() {
+        format!("{} ({})", voice_name, locale)
+    } else {
+        format!("{} ({}, {})", voice_name, language_name, locale)
+    }
+}
+
 /// Фоново завантажує список голосів Edge TTS за допомогою бібліотеки msedge-tts
 pub fn fetch_voices(
     result: Arc<Mutex<Option<Result<Vec<EdgeTTSVoice>, String>>>>,
@@ -96,12 +138,17 @@ pub fn fetch_voices(
             Ok(voices) => {
                 let edge_voices = voices
                     .into_iter()
-                    .map(|v| EdgeTTSVoice {
-                        name: v.name.clone(),
-                        short_name: v.short_name.clone().unwrap_or_else(|| v.name.clone()),
-                        gender: v.gender.clone().unwrap_or_else(|| "Unknown".to_string()),
-                        locale: v.locale.clone().unwrap_or_else(|| "en-US".to_string()),
-                        friendly_name: v.friendly_name.clone().unwrap_or_else(|| v.name.clone()),
+                    .map(|v| {
+                        let locale = v.locale.clone().unwrap_or_else(|| "en-US".to_string());
+                        let raw_friendly = v.friendly_name.clone().unwrap_or_else(|| v.name.clone());
+                        let friendly_name = clean_friendly_name(&raw_friendly, &locale);
+                        EdgeTTSVoice {
+                            name: v.name.clone(),
+                            short_name: v.short_name.clone().unwrap_or_else(|| v.name.clone()),
+                            gender: v.gender.clone().unwrap_or_else(|| "Unknown".to_string()),
+                            locale,
+                            friendly_name,
+                        }
                     })
                     .collect();
                 Ok(edge_voices)
@@ -170,7 +217,7 @@ mod tests {
         // Видаляємо старий файл, якщо є
         let _ = std::fs::remove_file(output_path);
 
-        let res = synthesize(text, voice, "+0%", "+0Hz", "+0%", output_path);
+        let res = synthesize(text, voice, "0", "0", "0", output_path);
         assert!(res.is_ok(), "Синтез завершився з помилкою: {:?}", res);
 
         let metadata = std::fs::metadata(output_path);

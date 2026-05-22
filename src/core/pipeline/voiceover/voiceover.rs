@@ -172,9 +172,9 @@ fn run_edge_tts_voiceover(
                 }
 
                 // Екрануємо/налаштовуємо параметри перед синтезом
-                let rate_param = if rate_clone.is_empty() { "+0%" } else { &rate_clone };
-                let pitch_param = if pitch_clone.is_empty() { "+0Hz" } else { &pitch_clone };
-                let volume_param = if volume_clone.is_empty() { "+0%" } else { &volume_clone };
+                let rate_param = if rate_clone.is_empty() { "0" } else { &rate_clone };
+                let pitch_param = if pitch_clone.is_empty() { "0" } else { &pitch_clone };
+                let volume_param = if volume_clone.is_empty() { "0" } else { &volume_clone };
 
                 match crate::api::edgetts::synthesize(
                     &chunk,

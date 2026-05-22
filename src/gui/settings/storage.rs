@@ -14,10 +14,24 @@ fn default_show_welcome() -> bool { true }
 fn default_model_claude() -> String { "sonnet".to_string() }
 fn default_model_gemini() -> String { "gemini-2.5-flash".to_string() }
 fn default_edge_tts_voice() -> String { "uk-UA-PolinaNeural".to_string() }
-fn default_edge_tts_rate() -> String { "+0%".to_string() }
-fn default_edge_tts_pitch() -> String { "+0Hz".to_string() }
-fn default_edge_tts_volume() -> String { "+0%".to_string() }
+fn default_edge_tts_rate() -> String { "0".to_string() }
+fn default_edge_tts_pitch() -> String { "0".to_string() }
+fn default_edge_tts_volume() -> String { "0".to_string() }
 fn default_edge_tts_max_threads() -> usize { 5 }
+
+/// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
+fn clean_numeric_param(s: &str) -> String {
+    let cleaned: String = s.chars()
+        .filter(|c| c.is_ascii_digit() || *c == '-' || *c == '+')
+        .collect();
+    if cleaned.is_empty() {
+        return "0".to_string();
+    }
+    if cleaned == "+0" || cleaned == "-0" || cleaned == "0" {
+        return "0".to_string();
+    }
+    cleaned
+}
 
 /// Структура для серіалізації налаштувань у формат JSON.
 ///
@@ -149,9 +163,9 @@ impl Default for AppSettings {
             gemini_max_threads: 5,
             show_welcome: true,
             edge_tts_voice: "uk-UA-PolinaNeural".to_string(),
-            edge_tts_rate: "+0%".to_string(),
-            edge_tts_pitch: "+0Hz".to_string(),
-            edge_tts_volume: "+0%".to_string(),
+            edge_tts_rate: "0".to_string(),
+            edge_tts_pitch: "0".to_string(),
+            edge_tts_volume: "0".to_string(),
             edge_tts_max_threads: 5,
         }
     }
@@ -180,7 +194,10 @@ pub fn load_settings() -> AppSettings {
     if let Some(path) = get_settings_path() {
         if path.exists() {
             if let Ok(content) = fs::read_to_string(path) {
-                if let Ok(settings) = serde_json::from_str::<AppSettings>(&content) {
+                if let Ok(mut settings) = serde_json::from_str::<AppSettings>(&content) {
+                    settings.edge_tts_rate = clean_numeric_param(&settings.edge_tts_rate);
+                    settings.edge_tts_pitch = clean_numeric_param(&settings.edge_tts_pitch);
+                    settings.edge_tts_volume = clean_numeric_param(&settings.edge_tts_volume);
                     return settings;
                 }
             }
@@ -370,7 +387,10 @@ pub fn load_template(name: &str) -> Option<PipelineTemplate> {
         
         if path.exists() {
             if let Ok(content) = fs::read_to_string(path) {
-                if let Ok(template) = serde_json::from_str::<PipelineTemplate>(&content) {
+                if let Ok(mut template) = serde_json::from_str::<PipelineTemplate>(&content) {
+                    template.edge_tts_rate = clean_numeric_param(&template.edge_tts_rate);
+                    template.edge_tts_pitch = clean_numeric_param(&template.edge_tts_pitch);
+                    template.edge_tts_volume = clean_numeric_param(&template.edge_tts_volume);
                     return Some(template);
                 }
             }

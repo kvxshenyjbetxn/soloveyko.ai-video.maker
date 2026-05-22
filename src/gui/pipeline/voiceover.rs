@@ -179,7 +179,7 @@ pub fn draw_voiceover_section(
                         let current_voice_friendly = voices
                             .iter()
                             .find(|v| v.short_name == *edge_tts_voice)
-                            .map(|v| format!("{} ({})", v.friendly_name, v.locale))
+                            .map(|v| v.friendly_name.clone())
                             .unwrap_or_else(|| edge_tts_voice.clone());
 
                         egui::ComboBox::from_id_salt("edge_tts_voice_combo")
@@ -187,11 +187,10 @@ pub fn draw_voiceover_section(
                             .width(ui.available_width() - 10.0)
                             .show_ui(ui, |ui| {
                                 for voice_item in &filtered_voices {
-                                    let label = format!("{} ({})", voice_item.friendly_name, voice_item.locale);
                                     ui.selectable_value(
                                         edge_tts_voice,
                                         voice_item.short_name.clone(),
-                                        label,
+                                        voice_item.friendly_name.clone(),
                                     );
                                 }
                             });
@@ -210,26 +209,17 @@ pub fn draw_voiceover_section(
                             .show(ui, |ui| {
                                 // Темп
                                 ui.label(translate(language, "edge_tts_rate_label"));
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::TextEdit::singleline(edge_tts_rate).desired_width(70.0));
-                                    ui.label(egui::RichText::new("(напр. +0%, -10%, +20%)").weak().size(10.0));
-                                });
+                                ui.add(egui::TextEdit::singleline(edge_tts_rate).desired_width(70.0));
                                 ui.end_row();
 
                                 // Тональність
                                 ui.label(translate(language, "edge_tts_pitch_label"));
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::TextEdit::singleline(edge_tts_pitch).desired_width(70.0));
-                                    ui.label(egui::RichText::new("(напр. +0Hz, -5Hz, +10Hz)").weak().size(10.0));
-                                });
+                                ui.add(egui::TextEdit::singleline(edge_tts_pitch).desired_width(70.0));
                                 ui.end_row();
 
                                 // Гучність
                                 ui.label(translate(language, "edge_tts_volume_label"));
-                                ui.horizontal(|ui| {
-                                    ui.add(egui::TextEdit::singleline(edge_tts_volume).desired_width(70.0));
-                                    ui.label(egui::RichText::new("(напр. +0%, -10%, +10%)").weak().size(10.0));
-                                });
+                                ui.add(egui::TextEdit::singleline(edge_tts_volume).desired_width(70.0));
                                 ui.end_row();
                             });
                     }
