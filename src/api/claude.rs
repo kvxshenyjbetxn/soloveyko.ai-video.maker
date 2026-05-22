@@ -6,8 +6,17 @@ use std::process::Command;
 pub fn call_claude_code(
     model: &str,
     user_content: &str,
+    job_info: Option<(u64, String)>,
 ) -> Result<String, String> {
-    crate::logger::log(&format!("Запуск Claude CLI для перекладу. Модель: {}", model));
+    let log = |msg: &str| {
+        if let Some((id, ref name)) = job_info {
+            crate::logger::log_job(id, name, msg);
+        } else {
+            crate::logger::log(msg);
+        }
+    };
+
+    log(&format!("Запуск Claude CLI для перекладу. Модель: {}", model));
 
     #[cfg(target_os = "windows")]
     let mut cmd = Command::new("cmd");
@@ -28,17 +37,17 @@ pub fn call_claude_code(
         "claude --model {} -p \"[текст промпту та сценарію]\"",
         model
     );
-    crate::logger::log(&format!("Виконується: {}", debug_command));
+    log(&format!("Виконується: {}", debug_command));
 
     let output = cmd.output().map_err(|e| {
         let err_msg = format!("Не вдалося запустити claude cli: {}. Перевірте, чи встановлено claude CLI та чи додано його в PATH.", e);
-        crate::logger::log(&err_msg);
+        log(&err_msg);
         err_msg
     })?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        crate::logger::log("Claude CLI успішно виконав переклад.");
+        log("Claude CLI успішно виконав переклад.");
         Ok(stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -49,7 +58,7 @@ pub fn call_claude_code(
             stderr,
             stdout
         );
-        crate::logger::log(&err_msg);
+        log(&err_msg);
         Err(format!("Claude CLI помилка: {}", stderr))
     }
 }

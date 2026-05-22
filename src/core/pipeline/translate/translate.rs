@@ -34,8 +34,17 @@ pub fn call_openrouter(
     model: &str,
     user_content: String,
     temperature: f32,
+    job_info: Option<(u64, String)>,
 ) -> Result<String, String> {
-    crate::logger::log(&format!("Запуск OpenRouter перекладу. Модель: {}, Температура: {}", model, temperature));
+    let log = |msg: &str| {
+        if let Some((id, ref name)) = job_info {
+            crate::logger::log_job(id, name, msg);
+        } else {
+            crate::logger::log(msg);
+        }
+    };
+
+    log(&format!("Запуск OpenRouter перекладу. Модель: {}, Температура: {}", model, temperature));
 
     let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
 
@@ -59,12 +68,12 @@ pub fn call_openrouter(
         .set("Content-Type", "application/json")
         .send_json(ureq::serde_json::to_value(&request).map_err(|e| {
             let err_msg = format!("Помилка серіалізації: {}", e);
-            crate::logger::log(&err_msg);
+            log(&err_msg);
             err_msg
         })?)
         .map_err(|e| {
             let err_msg = format!("Помилка мережі: {}", e);
-            crate::logger::log(&err_msg);
+            log(&err_msg);
             err_msg
         })?;
 
@@ -72,11 +81,11 @@ pub fn call_openrouter(
         .into_json::<ChatResponse>()
         .map_err(|e| {
             let err_msg = format!("Помилка парсингу відповіді: {}", e);
-            crate::logger::log(&err_msg);
+            log(&err_msg);
             err_msg
         })?;
 
-    crate::logger::log("OpenRouter успішно виконав переклад.");
+    log("OpenRouter успішно виконав переклад.");
 
     Ok(data.choices.into_iter()
         .next()

@@ -121,6 +121,8 @@ pub fn translate_ru(key: &str) -> &'static str {
         "job_name_auto" => "Задание",
         "job_name_confirm_btn" => "Добавить",
         "job_name_cancel_btn" => "Отмена",
+        "job_logs_title" => "Логи задачи",
+        "job_logs_empty" => "Логи для этой задачи отсутствуют.",
         _ => "",
     }
 }

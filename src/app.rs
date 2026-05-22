@@ -105,6 +105,8 @@ pub struct VideoMakerApp {
     pub job_counter: u64,
     /// Повідомлення про помилку валідації перед додаванням в чергу.
     pub queue_error: Option<String>,
+    /// Обрана задача для перегляду її логів
+    pub selected_job_logs: Option<(u64, String)>,
     /// Чи відкрите вікно введення назви задачі.
     pub job_name_dialog_open: bool,
     /// Поточний текст у полі введення назви задачі.
@@ -160,6 +162,7 @@ impl Default for VideoMakerApp {
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,
+            selected_job_logs: None,
             job_name_dialog_open: false,
             job_name_input: String::new(),
             openrouter_max_threads: 5,
@@ -319,6 +322,7 @@ impl VideoMakerApp {
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,
+            selected_job_logs: None,
             job_name_dialog_open: false,
             job_name_input: String::new(),
             openrouter_max_threads,
@@ -646,45 +650,62 @@ fn draw_balance_window(
 }
 
 /// Малює нижню панель черги задач пайплайну.
-fn draw_queue_panel(ui: &mut egui::Ui, language: crate::localization::Language, jobs: &mut Vec<crate::queue::PipelineJob>) {
+fn draw_queue_panel(
+    ui: &mut egui::Ui,
+    language: crate::localization::Language,
+    jobs: &mut Vec<crate::queue::PipelineJob>,
+    selected_job_logs: &mut Option<(u64, String)>,
+) {
     ui.add_space(4.0);
+    
+    // Верхній рядок керування
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong());
+        ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong().size(13.0));
+        ui.label(egui::RichText::new(format!("({})", jobs.len())).weak().size(11.0));
 
         let has_pending = jobs.iter().any(|j| {
             *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
         });
 
-        if ui.add_enabled(
-            has_pending,
-            egui::Button::new(egui::RichText::new(translate(language, "queue_run_btn")).strong()),
-        ).clicked() {
-            let ctx = ui.ctx().clone();
-            for job in jobs.iter() {
-                if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
-                    continue;
-                }
-                if job.settings.translation_enabled {
-                    crate::core::pipeline::translate::run_translation(
-                        job.settings.translation_service.clone(),
-                        job.settings.openrouter_key.clone(),
-                        job.settings.translation_model.clone(),
-                        job.settings.translation_prompt.clone(),
-                        job.settings.text.clone(),
-                        job.settings.translation_temperature,
-                        job.settings.save_path.clone(),
-                        std::sync::Arc::clone(&job.status),
-                        ctx.clone(),
-                    );
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.add_enabled(
+                has_pending,
+                egui::Button::new(egui::RichText::new(translate(language, "queue_run_btn")).strong()),
+            ).clicked() {
+                let ctx = ui.ctx().clone();
+                for job in jobs.iter() {
+                    if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
+                        continue;
+                    }
+                    if job.settings.translation_enabled {
+                        crate::core::pipeline::translate::run_translation(
+                            job.id,
+                            job.name.clone(),
+                            job.settings.translation_service.clone(),
+                            job.settings.openrouter_key.clone(),
+                            job.settings.translation_model.clone(),
+                            job.settings.translation_prompt.clone(),
+                            job.settings.text.clone(),
+                            job.settings.translation_temperature,
+                            job.settings.save_path.clone(),
+                            std::sync::Arc::clone(&job.status),
+                            ctx.clone(),
+                        );
+                    }
                 }
             }
-        }
+        });
+    });
 
-        ui.separator();
+    ui.add_space(2.0);
+    ui.separator();
+    ui.add_space(2.0);
 
-        egui::ScrollArea::horizontal()
-            .auto_shrink([false, true])
-            .show(ui, |ui| {
+    // Список задач з горизонтальною прокруткою
+    egui::ScrollArea::horizontal()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
                 for job in jobs.iter() {
                     let status = job.status.lock().unwrap().clone();
                     let (icon, status_text, color) = match &status {
@@ -706,29 +727,84 @@ fn draw_queue_panel(ui: &mut egui::Ui, language: crate::localization::Language, 
                         ),
                     };
 
-                    ui.group(|ui| {
-                        ui.set_max_width(200.0);
+                    let avail_h = ui.available_height();
+
+                    let response = ui.group(|ui| {
+                        ui.set_width(180.0);
+                        ui.set_min_height((avail_h - 6.0).max(40.0));
+
                         ui.vertical(|ui| {
+                            if avail_h > 120.0 {
+                                ui.add_space(4.0);
+                            }
+
+                            // Назва завдання
                             ui.label(egui::RichText::new(
                                 format!("#{} {}", job.id + 1, &job.name)
-                            ).size(11.0));
+                            ).strong().size(if avail_h > 100.0 { 12.0 } else { 11.0 }));
+
+                            if avail_h > 80.0 {
+                                ui.add_space(2.0);
+                            }
+
                             let steps: Vec<&str> = [
                                 job.settings.translation_enabled.then_some("T"),
                             ].into_iter().flatten().collect();
                             let steps_str = if steps.is_empty() { String::new() } else { format!("[{}] ", steps.join("+")) };
+
+                            // Статус
                             ui.label(
-                                egui::RichText::new(format!("{}{} {}", steps_str, icon, status_text))
+                                egui::RichText::new(format!("{}{}", steps_str, status_text))
                                     .color(color)
-                                    .size(10.0),
+                                    .size(if avail_h > 100.0 { 11.0 } else { 10.0 }),
                             );
+
+                            // Іконка або додаткова інформація
+                            if avail_h > 110.0 {
+                                ui.add_space(6.0);
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(icon).size(22.0));
+
+                                    if let crate::queue::JobStatus::Failed(err) = &status {
+                                        ui.label(egui::RichText::new("⚠️").color(egui::Color32::from_rgb(231, 76, 60)))
+                                            .on_hover_text(err);
+                                    }
+                                });
+                            } else {
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(icon).size(12.0));
+                                    if let crate::queue::JobStatus::Failed(err) = &status {
+                                        ui.label(egui::RichText::new("⚠️").color(egui::Color32::from_rgb(231, 76, 60)))
+                                            .on_hover_text(err);
+                                    }
+                                });
+                            }
+
+                            if avail_h > 120.0 {
+                                ui.add_space(4.0);
+                            }
                         });
                     });
 
-                    ui.add_space(2.0);
+                    // Робимо групу клікабельною для показу логів задачі
+                    let interact = ui.interact(
+                        response.response.rect,
+                        ui.make_persistent_id(format!("job_click_{}", job.id)),
+                        egui::Sense::click()
+                    );
+                    
+                    if interact.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+
+                    if interact.clicked() {
+                        *selected_job_logs = Some((job.id, job.name.clone()));
+                    }
+
+                    ui.add_space(4.0);
                 }
             });
-    });
-    ui.add_space(4.0);
+        });
 }
 
 impl eframe::App for VideoMakerApp {
@@ -796,17 +872,6 @@ impl eframe::App for VideoMakerApp {
             &self.googler_balance,
         );
 
-        // Нижня панель черги задач (тільки якщо є задачі)
-        if !self.jobs.is_empty() {
-            egui::TopBottomPanel::bottom("queue_panel")
-                .min_height(60.0)
-                .max_height(100.0)
-                .resizable(false)
-                .show(ctx, |ui| {
-                    draw_queue_panel(ui, self.language, &mut self.jobs);
-                });
-        }
-
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
         if self.active_tab == Tab::Main {
             // default_width передається лише як початкове значення при першому запуску.
@@ -862,6 +927,18 @@ impl eframe::App for VideoMakerApp {
                 });
         }
 
+        // Нижня панель черги задач (тільки якщо є задачі)
+        if !self.jobs.is_empty() {
+            egui::TopBottomPanel::bottom("queue_panel")
+                .min_height(75.0)
+                .default_height(90.0)
+                .max_height(350.0)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    draw_queue_panel(ui, self.language, &mut self.jobs, &mut self.selected_job_logs);
+                });
+        }
+
         // Конфігуруємо фрейм для центральної панелі.
         // Для редактора (Main) прибираємо відступи (margin), щоб поле було на всю висоту та ширину.
         // Для вкладки налаштувань (Settings) залишаємо стандартні відступи.
@@ -895,6 +972,40 @@ impl eframe::App for VideoMakerApp {
                     }
                 }
             });
+
+        // Спливаюче вікно з логами обраної задачі
+        if let Some((job_id, job_name)) = self.selected_job_logs.clone() {
+            let mut is_open = true;
+            egui::Window::new(format!("{} #{}: {}", translate(self.language, "job_logs_title"), job_id + 1, job_name))
+                .open(&mut is_open)
+                .resizable(true)
+                .default_size([550.0, 350.0])
+                .show(ctx, |ui| {
+                    let job_logs = crate::logger::get_job_logs(job_id);
+                    if job_logs.is_empty() {
+                        ui.vertical_centered(|ui| {
+                            ui.add_space(40.0);
+                            ui.colored_label(ui.visuals().weak_text_color(), translate(self.language, "job_logs_empty"));
+                            ui.add_space(40.0);
+                        });
+                    } else {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.vertical(|ui| {
+                                    for log_line in job_logs {
+                                        ui.horizontal(|ui| {
+                                            ui.label(egui::RichText::new(log_line).monospace().size(11.0));
+                                        });
+                                    }
+                                });
+                            });
+                    }
+                });
+            if !is_open {
+                self.selected_job_logs = None;
+            }
+        }
 
         // АВТОЗБЕРЕЖЕННЯ:
         // Перевіряємо, чи користувач наразі не перетягує панель (миша відпущена).
