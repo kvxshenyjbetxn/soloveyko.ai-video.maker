@@ -78,6 +78,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "translation_models_retry" => "🔄 Retry",
         "translation_model_search" => "🔍 Search model...",
         "translation_temperature_label" => "Temperature",
+        "settings_openrouter_threads" => "Max OpenRouter threads",
         "googler_key_hint" => "Enter Googler API key...",
         "googler_status_checking" => "⏳ Checking...",
         "video_service_label" => "Video Service",

@@ -97,6 +97,8 @@ pub fn draw_translation_section(
                     let ctx = ui.ctx().clone();
 
                     std::thread::spawn(move || {
+                        let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
+
                         let agent = ureq::AgentBuilder::new()
                             .timeout_connect(std::time::Duration::from_secs(10))
                             .timeout(std::time::Duration::from_secs(15))

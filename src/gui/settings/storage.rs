@@ -6,6 +6,7 @@ fn default_true() -> bool { true }
 fn default_video_service() -> String { "Googler".to_string() }
 fn default_image_provider() -> String { "flow_IMAGEN_3_5".to_string() }
 fn default_temperature() -> f32 { 0.7 }
+fn default_openrouter_max_threads() -> usize { 5 }
 
 /// Структура для серіалізації налаштувань у формат JSON.
 ///
@@ -63,6 +64,9 @@ pub struct AppSettings {
     pub translation_temperature: f32,
     /// Шлях до папки збереження результатів пайплайну
     pub save_path: String,
+    /// Максимальна кількість потоків для OpenRouter
+    #[serde(default = "default_openrouter_max_threads")]
+    pub openrouter_max_threads: usize,
 }
 
 impl Default for AppSettings {
@@ -89,6 +93,7 @@ impl Default for AppSettings {
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
             translation_temperature: 0.7,
             save_path: String::new(),
+            openrouter_max_threads: 5,
         }
     }
 }

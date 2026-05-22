@@ -78,6 +78,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "translation_models_retry" => "🔄 Попробовать снова",
         "translation_model_search" => "🔍 Поиск модели...",
         "translation_temperature_label" => "Температура",
+        "settings_openrouter_threads" => "Макс. потоков OpenRouter",
         "googler_key_hint" => "Введите API ключ Googler...",
         "googler_status_checking" => "⏳ Проверка...",
         "video_service_label" => "Сервис видеоряда",

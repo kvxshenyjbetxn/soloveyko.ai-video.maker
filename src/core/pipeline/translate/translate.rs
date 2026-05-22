@@ -35,6 +35,8 @@ pub fn call_openrouter(
     user_content: String,
     temperature: f32,
 ) -> Result<String, String> {
+    let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
+
     let request = ChatRequest {
         model: model.to_string(),
         messages: vec![ChatMessage {

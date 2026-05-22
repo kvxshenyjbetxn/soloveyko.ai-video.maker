@@ -105,6 +105,8 @@ pub struct VideoMakerApp {
     pub job_name_dialog_open: bool,
     /// Поточний текст у полі введення назви задачі.
     pub job_name_input: String,
+    /// Максимальна кількість потоків для OpenRouter.
+    pub openrouter_max_threads: usize,
 }
 
 impl Default for VideoMakerApp {
@@ -155,6 +157,7 @@ impl Default for VideoMakerApp {
             queue_error: None,
             job_name_dialog_open: false,
             job_name_input: String::new(),
+            openrouter_max_threads: 5,
             last_saved_settings: default_settings,
         }
     }
@@ -232,6 +235,10 @@ impl VideoMakerApp {
         let googler_image_provider = saved.googler_image_provider.clone();
         let translation_temperature = saved.translation_temperature;
         let save_path = saved.save_path.clone();
+        let openrouter_max_threads = saved.openrouter_max_threads;
+
+        // Налаштовуємо глобальний лімітер одночасних запитів OpenRouter
+        crate::api::openrouter::OpenRouterLimiter::get().set_max_threads(openrouter_max_threads);
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
@@ -307,6 +314,7 @@ impl VideoMakerApp {
             queue_error: None,
             job_name_dialog_open: false,
             job_name_input: String::new(),
+            openrouter_max_threads,
             last_saved_settings: saved,
         }
     }
@@ -319,6 +327,7 @@ fn draw_balance_window(
     language: crate::localization::Language,
     openrouter_key: &str,
     openrouter_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    openrouter_max_threads: &mut usize,
     voicebot_key: &str,
     voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     googler_key: &str,
@@ -363,6 +372,16 @@ fn draw_balance_window(
                         }
                     }
                 }
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_openrouter_threads"));
+                    let mut val = *openrouter_max_threads;
+                    let slider = ui.add(egui::Slider::new(&mut val, 1..=25));
+                    if slider.changed() {
+                        *openrouter_max_threads = val;
+                        crate::api::openrouter::OpenRouterLimiter::get().set_max_threads(val);
+                    }
+                });
             });
 
             ui.add_space(4.0);
@@ -625,6 +644,7 @@ impl eframe::App for VideoMakerApp {
             self.language,
             &self.openrouter_key,
             &self.openrouter_balance,
+            &mut self.openrouter_max_threads,
             &self.voicebot_key,
             &self.voicebot_balance,
             &self.googler_key,
@@ -766,6 +786,7 @@ impl eframe::App for VideoMakerApp {
                 || self.googler_image_provider != self.last_saved_settings.googler_image_provider
                 || (self.translation_temperature - self.last_saved_settings.translation_temperature).abs() > 0.001
                 || self.save_path != self.last_saved_settings.save_path
+                || self.openrouter_max_threads != self.last_saved_settings.openrouter_max_threads
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -789,6 +810,7 @@ impl eframe::App for VideoMakerApp {
                     googler_image_provider: self.googler_image_provider.clone(),
                     translation_temperature: self.translation_temperature,
                     save_path: self.save_path.clone(),
+                    openrouter_max_threads: self.openrouter_max_threads,
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску
