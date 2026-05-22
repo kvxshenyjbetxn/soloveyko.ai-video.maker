@@ -123,6 +123,8 @@ pub struct VideoMakerApp {
     pub welcome_dont_show: bool,
     /// Стани перевірки CLI-інструментів для вікна привітання.
     pub tool_checks: crate::gui::welcome::ToolChecks,
+    /// Сервіс, для якого очікується фонова перевірка CLI інструментів.
+    pub pending_tool_check: Option<String>,
 }
 
 impl Default for VideoMakerApp {
@@ -181,6 +183,7 @@ impl Default for VideoMakerApp {
             welcome_open: false,
             welcome_dont_show: false,
             tool_checks: crate::gui::welcome::ToolChecks::new(),
+            pending_tool_check: None,
             last_saved_settings: default_settings,
         }
     }
@@ -359,6 +362,7 @@ impl VideoMakerApp {
             welcome_open: show_welcome,
             welcome_dont_show: false,
             tool_checks,
+            pending_tool_check: None,
             last_saved_settings: saved,
         }
     }
@@ -902,6 +906,51 @@ fn draw_queue_panel(
 impl eframe::App for VideoMakerApp {
     /// Викликається кожного разу, коли інтерфейс потребує оновлення та перемальовування.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Перевірка статусів CLI для фонової перевірки
+        if let Some(ref service) = self.pending_tool_check {
+            let npm = self.tool_checks.npm.lock().unwrap().clone();
+            let gemini = self.tool_checks.gemini.lock().unwrap().clone();
+            let claude = self.tool_checks.claude.lock().unwrap().clone();
+
+            let mut check_done = false;
+            let mut needs_install = false;
+
+            if service == "Gemini CLI" {
+                match (&npm, &gemini) {
+                    (crate::gui::welcome::ToolStatus::Checking, _) | (_, crate::gui::welcome::ToolStatus::Checking) => {
+                        // Перевірка ще триває
+                    }
+                    (crate::gui::welcome::ToolStatus::NotInstalled, _) | (_, crate::gui::welcome::ToolStatus::NotInstalled) => {
+                        needs_install = true;
+                        check_done = true;
+                    }
+                    _ => {
+                        check_done = true;
+                    }
+                }
+            } else if service == "Claude Code" {
+                match &claude {
+                    crate::gui::welcome::ToolStatus::Checking => {
+                        // Перевірка ще триває
+                    }
+                    crate::gui::welcome::ToolStatus::NotInstalled => {
+                        needs_install = true;
+                        check_done = true;
+                    }
+                    _ => {
+                        check_done = true;
+                    }
+                }
+            }
+
+            if check_done {
+                if needs_install {
+                    self.welcome_open = true;
+                }
+                self.pending_tool_check = None;
+            }
+        }
+
         // Динамічно застосовуємо обрану тему оформлення та акцентний колір до поточного контексту
         crate::theme::apply_theme(ctx, self.theme, self.accent_color);
 
@@ -986,6 +1035,8 @@ impl eframe::App for VideoMakerApp {
 
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
         if self.active_tab == Tab::Main {
+            let prev_translation_service = self.translation_service.clone();
+
             // default_width передається лише як початкове значення при першому запуску.
             // egui::Memory зберігає ширину між кадрами сам — нічого читати назад не потрібно.
             egui::SidePanel::right("pipeline_panel")
@@ -1037,6 +1088,15 @@ impl eframe::App for VideoMakerApp {
                         &mut self.job_name_input,
                     );
                 });
+
+            if self.translation_service != prev_translation_service {
+                if self.translation_service == "Gemini CLI" || self.translation_service == "Claude Code" {
+                    self.tool_checks.start(ctx.clone());
+                    self.pending_tool_check = Some(self.translation_service.clone());
+                } else {
+                    self.pending_tool_check = None;
+                }
+            }
         }
 
         // Нижня панель черги задач (тільки якщо є задачі)
