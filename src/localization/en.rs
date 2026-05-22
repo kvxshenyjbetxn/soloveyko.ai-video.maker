@@ -87,6 +87,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "logs_copy" => "📋 Copy",
         "logs_empty" => "Log is empty. Run a translation job to see execution logs.",
         "settings_openrouter_threads" => "Max OpenRouter threads",
+        "settings_claude_threads" => "Max Claude Code threads",
         "googler_key_hint" => "Enter Googler API key...",
         "googler_status_checking" => "⏳ Checking...",
         "video_service_label" => "Video Service",

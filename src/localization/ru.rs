@@ -87,6 +87,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "logs_copy" => "📋 Копировать",
         "logs_empty" => "Лог пуст. Запустите задачу перевода, чтобы увидеть логи выполнения.",
         "settings_openrouter_threads" => "Макс. потоков OpenRouter",
+        "settings_claude_threads" => "Макс. потоков Claude Code",
         "googler_key_hint" => "Введите API ключ Googler...",
         "googler_status_checking" => "⏳ Проверка...",
         "video_service_label" => "Сервис видеоряда",

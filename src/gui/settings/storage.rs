@@ -7,6 +7,7 @@ fn default_video_service() -> String { "Googler".to_string() }
 fn default_image_provider() -> String { "flow_IMAGEN_3_5".to_string() }
 fn default_temperature() -> f32 { 0.7 }
 fn default_openrouter_max_threads() -> usize { 5 }
+fn default_claude_max_threads() -> usize { 5 }
 fn default_translation_service() -> String { "OpenRouter".to_string() }
 
 /// Структура для серіалізації налаштувань у формат JSON.
@@ -71,6 +72,9 @@ pub struct AppSettings {
     /// Максимальна кількість потоків для OpenRouter
     #[serde(default = "default_openrouter_max_threads")]
     pub openrouter_max_threads: usize,
+    /// Максимальна кількість потоків для Claude Code
+    #[serde(default = "default_claude_max_threads")]
+    pub claude_max_threads: usize,
 }
 
 impl Default for AppSettings {
@@ -99,6 +103,7 @@ impl Default for AppSettings {
             translation_service: "OpenRouter".to_string(),
             save_path: String::new(),
             openrouter_max_threads: 5,
+            claude_max_threads: 5,
         }
     }
 }

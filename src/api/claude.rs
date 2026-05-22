@@ -1,4 +1,65 @@
 use std::process::Command;
+use std::sync::{Condvar, Mutex, OnceLock};
+
+/// Лімітер одночасних запитів до Claude Code (семафор)
+pub struct ClaudeLimiter {
+    active: Mutex<usize>,
+    condvar: Condvar,
+    max_threads: Mutex<usize>,
+}
+
+impl ClaudeLimiter {
+    /// Повертає глобальний екземпляр лімітера
+    pub fn get() -> &'static Self {
+        static LIMITER: OnceLock<ClaudeLimiter> = OnceLock::new();
+        LIMITER.get_or_init(|| ClaudeLimiter {
+            active: Mutex::new(0),
+            condvar: Condvar::new(),
+            max_threads: Mutex::new(5),
+        })
+    }
+
+    /// Встановлює максимальну кількість одночасних запитів
+    pub fn set_max_threads(&self, max: usize) {
+        let mut max_threads = self.max_threads.lock().unwrap();
+        *max_threads = max;
+        self.condvar.notify_all();
+    }
+
+    /// Отримує дозвіл на виконання запиту (блокує потік, якщо досягнуто ліміту)
+    pub fn acquire(&self) -> ClaudePermit<'_> {
+        let mut active = self.active.lock().unwrap();
+        loop {
+            let max = *self.max_threads.lock().unwrap();
+            if *active < max {
+                break;
+            }
+            active = self.condvar.wait(active).unwrap();
+        }
+        *active += 1;
+        ClaudePermit { limiter: self }
+    }
+
+    /// Звільняє один потік та сповіщає інші очікуючі
+    fn release(&self) {
+        let mut active = self.active.lock().unwrap();
+        if *active > 0 {
+            *active -= 1;
+        }
+        self.condvar.notify_one();
+    }
+}
+
+/// Дозвіл на виконання запиту, який автоматично звільняється при виході з області видимості
+pub struct ClaudePermit<'a> {
+    limiter: &'a ClaudeLimiter,
+}
+
+impl<'a> Drop for ClaudePermit<'a> {
+    fn drop(&mut self) {
+        self.limiter.release();
+    }
+}
 
 /// Викликає Claude CLI для виконання перекладу сценарію або іншого тексту та повертає результат.
 ///
@@ -8,6 +69,7 @@ pub fn call_claude_code(
     user_content: &str,
     job_info: Option<(u64, String)>,
 ) -> Result<String, String> {
+    let _permit = ClaudeLimiter::get().acquire();
     let log = |msg: &str| {
         if let Some((id, ref name)) = job_info {
             crate::logger::log_job(id, name, msg);
