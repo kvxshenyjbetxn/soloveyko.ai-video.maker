@@ -147,6 +147,10 @@ pub struct VideoMakerApp {
     pub edge_tts_loading_voices: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Показувати всі мови для Edge TTS.
     pub edge_tts_show_all_languages: bool,
+    /// Максимальна кількість потоків зображень Googler.
+    pub googler_image_max_threads: usize,
+    /// Максимальна кількість потоків відео Googler.
+    pub googler_video_max_threads: usize,
 }
 
 impl Default for VideoMakerApp {
@@ -217,6 +221,8 @@ impl Default for VideoMakerApp {
             edge_tts_voices: std::sync::Arc::new(std::sync::Mutex::new(None)),
             edge_tts_loading_voices: std::sync::Arc::new(std::sync::Mutex::new(false)),
             edge_tts_show_all_languages: false,
+            googler_image_max_threads: default_settings.googler_image_max_threads,
+            googler_video_max_threads: default_settings.googler_video_max_threads,
             last_saved_settings: default_settings,
         }
     }
@@ -432,6 +438,8 @@ impl VideoMakerApp {
             edge_tts_voices: std::sync::Arc::new(std::sync::Mutex::new(None)),
             edge_tts_loading_voices: std::sync::Arc::new(std::sync::Mutex::new(false)),
             edge_tts_show_all_languages: false,
+            googler_image_max_threads: saved.googler_image_max_threads,
+            googler_video_max_threads: saved.googler_video_max_threads,
             last_saved_settings: saved,
         }
     }
@@ -587,6 +595,8 @@ fn draw_balance_window(
     googler_key: &str,
     googler_balance: &std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
     edge_tts_max_threads: &mut usize,
+    googler_image_max_threads: &mut usize,
+    googler_video_max_threads: &mut usize,
 ) {
     use crate::localization::translate;
     use std::sync::Arc;
@@ -772,18 +782,60 @@ fn draw_balance_window(
                                     ui.label(format!("{} / {}", bal.video_used, bal.video_limit));
                                     ui.end_row();
                                     ui.label(translate(language, "balance_img_threads"));
-                                    ui.label(format!("{} / {}", bal.img_threads_active, bal.img_threads_allowed));
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!("{} /", bal.img_threads_active));
+                                        let mut val = *googler_image_max_threads;
+                                        let slider = ui.add(egui::Slider::new(&mut val, 5..=25));
+                                        if slider.changed() {
+                                            *googler_image_max_threads = val;
+                                        }
+                                    });
                                     ui.end_row();
                                     ui.label(translate(language, "balance_video_threads"));
-                                    ui.label(format!("{} / {}", bal.video_threads_active, bal.video_threads_allowed));
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!("{} /", bal.video_threads_active));
+                                        let mut val = *googler_video_max_threads;
+                                        let slider = ui.add(egui::Slider::new(&mut val, 5..=25));
+                                        if slider.changed() {
+                                            *googler_video_max_threads = val;
+                                        }
+                                    });
                                     ui.end_row();
                                 });
                         }
-                        None if googler_key.is_empty() => {
-                            ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
-                        }
                         None => {
-                            ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
+                            if googler_key.is_empty() {
+                                ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
+                            } else {
+                                ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
+                            }
+                            
+                            ui.add_space(8.0);
+                            egui::Grid::new("googler_threads_offline_grid")
+                                .num_columns(2)
+                                .spacing([16.0, 4.0])
+                                .show(ui, |ui| {
+                                    ui.label(translate(language, "balance_img_threads"));
+                                    ui.horizontal(|ui| {
+                                        ui.label("0 /");
+                                        let mut val = *googler_image_max_threads;
+                                        let slider = ui.add(egui::Slider::new(&mut val, 5..=25));
+                                        if slider.changed() {
+                                            *googler_image_max_threads = val;
+                                        }
+                                    });
+                                    ui.end_row();
+                                    ui.label(translate(language, "balance_video_threads"));
+                                    ui.horizontal(|ui| {
+                                        ui.label("0 /");
+                                        let mut val = *googler_video_max_threads;
+                                        let slider = ui.add(egui::Slider::new(&mut val, 5..=25));
+                                        if slider.changed() {
+                                            *googler_video_max_threads = val;
+                                        }
+                                    });
+                                    ui.end_row();
+                                });
                         }
                     }
                 }
@@ -1097,8 +1149,8 @@ impl eframe::App for VideoMakerApp {
                                 "img: {}/{} vid: {}/{} th: {}/{} {}/{}",
                                 bal.img_used, bal.img_limit,
                                 bal.video_used, bal.video_limit,
-                                bal.img_threads_active, bal.img_threads_allowed,
-                                bal.video_threads_active, bal.video_threads_allowed,
+                                bal.img_threads_active, self.googler_image_max_threads,
+                                bal.video_threads_active, self.googler_video_max_threads,
                             );
                             if draw_balance_chip(ui, "Googler", &text).clicked() {
                                 self.balance_window_open = true;
@@ -1124,6 +1176,8 @@ impl eframe::App for VideoMakerApp {
             &self.googler_key,
             &self.googler_balance,
             &mut self.edge_tts_max_threads,
+            &mut self.googler_image_max_threads,
+            &mut self.googler_video_max_threads,
         );
 
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
@@ -1186,6 +1240,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.translation_temperature,
                         &mut self.translation_service,
                         &mut self.save_path,
+                        &mut self.googler_image_max_threads,
+                        &mut self.googler_video_max_threads,
                         &self.text_input,
                         &mut self.jobs,
                         &mut self.job_counter,
@@ -1335,6 +1391,8 @@ impl eframe::App for VideoMakerApp {
                 || self.edge_tts_pitch != self.last_saved_settings.edge_tts_pitch
                 || self.edge_tts_volume != self.last_saved_settings.edge_tts_volume
                 || self.edge_tts_max_threads != self.last_saved_settings.edge_tts_max_threads
+                || self.googler_image_max_threads != self.last_saved_settings.googler_image_max_threads
+                || self.googler_video_max_threads != self.last_saved_settings.googler_video_max_threads
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -1370,6 +1428,8 @@ impl eframe::App for VideoMakerApp {
                     edge_tts_pitch: self.edge_tts_pitch.clone(),
                     edge_tts_volume: self.edge_tts_volume.clone(),
                     edge_tts_max_threads: self.edge_tts_max_threads,
+                    googler_image_max_threads: self.googler_image_max_threads,
+                    googler_video_max_threads: self.googler_video_max_threads,
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
                 

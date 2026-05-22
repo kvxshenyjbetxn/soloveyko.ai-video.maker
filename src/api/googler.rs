@@ -5,6 +5,7 @@ const BASE_URL: &str = "https://googler.fast-gen.ai/api";
 
 /// Баланс та ліміти акаунту Googler.
 #[derive(Clone, Default)]
+#[allow(dead_code)]
 pub struct GooglerBalance {
     pub img_used: i64,
     pub img_limit: i64,

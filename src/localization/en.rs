@@ -91,6 +91,8 @@ pub fn translate_en(key: &str) -> &'static str {
         "settings_openrouter_threads" => "Max OpenRouter threads",
         "settings_claude_threads" => "Max Claude Code threads",
         "settings_gemini_threads" => "Max Gemini CLI threads",
+        "settings_googler_image_threads" => "Max Googler image threads",
+        "settings_googler_video_threads" => "Max Googler video threads",
         "googler_key_hint" => "Enter Googler API key...",
         "googler_status_checking" => "⏳ Checking...",
         "video_service_label" => "Video Service",

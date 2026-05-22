@@ -105,6 +105,8 @@ pub fn draw_pipeline_panel(
     translation_temperature: &mut f32,
     translation_service: &mut String,
     save_path: &mut String,
+    googler_image_max_threads: &mut usize,
+    googler_video_max_threads: &mut usize,
     text_input: &str,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
@@ -183,6 +185,8 @@ pub fn draw_pipeline_panel(
                                 edge_tts_rate,
                                 edge_tts_pitch,
                                 edge_tts_volume,
+                                *googler_image_max_threads,
+                                *googler_video_max_threads,
                             ) {
                                 Ok(_) => {
                                     *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -264,6 +268,8 @@ pub fn draw_pipeline_panel(
                                     edge_tts_rate,
                                     edge_tts_pitch,
                                     edge_tts_volume,
+                                    googler_image_max_threads,
+                                    googler_video_max_threads,
                                 );
                             });
                         }

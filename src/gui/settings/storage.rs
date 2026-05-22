@@ -18,6 +18,7 @@ fn default_edge_tts_rate() -> String { "0".to_string() }
 fn default_edge_tts_pitch() -> String { "0".to_string() }
 fn default_edge_tts_volume() -> String { "0".to_string() }
 fn default_edge_tts_max_threads() -> usize { 5 }
+fn default_googler_threads() -> usize { 5 }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -128,6 +129,12 @@ pub struct AppSettings {
     /// Максимальна кількість потоків для Edge TTS
     #[serde(default = "default_edge_tts_max_threads")]
     pub edge_tts_max_threads: usize,
+    /// Максимальна кількість потоків зображень Googler
+    #[serde(default = "default_googler_threads")]
+    pub googler_image_max_threads: usize,
+    /// Максимальна кількість потоків відео Googler
+    #[serde(default = "default_googler_threads")]
+    pub googler_video_max_threads: usize,
 }
 
 impl Default for AppSettings {
@@ -167,6 +174,8 @@ impl Default for AppSettings {
             edge_tts_pitch: "0".to_string(),
             edge_tts_volume: "0".to_string(),
             edge_tts_max_threads: 5,
+            googler_image_max_threads: 5,
+            googler_video_max_threads: 5,
         }
     }
 }
@@ -307,6 +316,12 @@ pub struct PipelineTemplate {
     /// Гучність для Edge TTS (наприклад, "+0%")
     #[serde(default = "default_edge_tts_volume")]
     pub edge_tts_volume: String,
+    /// Максимальна кількість потоків зображень Googler
+    #[serde(default = "default_googler_threads")]
+    pub googler_image_max_threads: usize,
+    /// Максимальна кількість потоків відео Googler
+    #[serde(default = "default_googler_threads")]
+    pub googler_video_max_threads: usize,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -342,6 +357,8 @@ pub fn save_template(
     edge_tts_rate: &str,
     edge_tts_pitch: &str,
     edge_tts_volume: &str,
+    googler_image_max_threads: usize,
+    googler_video_max_threads: usize,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -371,6 +388,8 @@ pub fn save_template(
             edge_tts_rate: edge_tts_rate.to_string(),
             edge_tts_pitch: edge_tts_pitch.to_string(),
             edge_tts_volume: edge_tts_volume.to_string(),
+            googler_image_max_threads,
+            googler_video_max_threads,
         };
 
         let json = serde_json::to_string_pretty(&template)?;

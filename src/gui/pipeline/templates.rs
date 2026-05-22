@@ -30,6 +30,8 @@ pub fn draw_templates_section(
     edge_tts_rate: &mut String,
     edge_tts_pitch: &mut String,
     edge_tts_volume: &mut String,
+    googler_image_max_threads: &mut usize,
+    googler_video_max_threads: &mut usize,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -89,6 +91,8 @@ pub fn draw_templates_section(
                             *edge_tts_rate = template.edge_tts_rate;
                             *edge_tts_pitch = template.edge_tts_pitch;
                             *edge_tts_volume = template.edge_tts_volume;
+                            *googler_image_max_threads = template.googler_image_max_threads;
+                            *googler_video_max_threads = template.googler_video_max_threads;
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

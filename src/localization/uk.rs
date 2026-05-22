@@ -91,6 +91,8 @@ pub fn translate_uk(key: &str) -> &'static str {
         "settings_openrouter_threads" => "Макс. потоків OpenRouter",
         "settings_claude_threads" => "Макс. потоків Claude Code",
         "settings_gemini_threads" => "Макс. потоків Gemini CLI",
+        "settings_googler_image_threads" => "Макс. потоків зображень Googler",
+        "settings_googler_video_threads" => "Макс. потоків відео Googler",
         "googler_key_hint" => "Введіть API ключ Googler...",
         "googler_status_checking" => "⏳ Перевірка...",
         "video_service_label" => "Сервіс відеоряду",
