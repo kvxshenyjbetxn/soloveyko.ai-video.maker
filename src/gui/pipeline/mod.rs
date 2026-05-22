@@ -77,6 +77,13 @@ pub fn draw_pipeline_panel(
     voiceover_template_uuid: &mut String,
     voicebot_templates: &Arc<Mutex<Option<Result<Vec<voiceover::VoiceBotTemplate>, String>>>>,
     voicebot_loading: &Arc<Mutex<bool>>,
+    edge_tts_voice: &mut String,
+    edge_tts_rate: &mut String,
+    edge_tts_pitch: &mut String,
+    edge_tts_volume: &mut String,
+    edge_tts_voices: &Arc<Mutex<Option<Result<Vec<crate::api::edgetts::EdgeTTSVoice>, String>>>>,
+    edge_tts_loading_voices: &Arc<Mutex<bool>>,
+    edge_tts_show_all_languages: &mut bool,
     template_name_input: &mut String,
     saved_templates: &mut Vec<String>,
     template_status: &mut Option<String>,
@@ -155,6 +162,10 @@ pub fn draw_pipeline_panel(
                         googler_image_provider,
                         *translation_temperature,
                         translation_service,
+                        edge_tts_voice,
+                        edge_tts_rate,
+                        edge_tts_pitch,
+                        edge_tts_volume,
                     ) {
                         Ok(_) => {
                             *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -230,6 +241,10 @@ pub fn draw_pipeline_panel(
                             googler_image_provider,
                             translation_temperature,
                             translation_service,
+                            edge_tts_voice,
+                            edge_tts_rate,
+                            edge_tts_pitch,
+                            edge_tts_volume,
                         );
                     });
                 }
@@ -351,6 +366,13 @@ pub fn draw_pipeline_panel(
                             voiceover_template_uuid,
                             voicebot_templates,
                             voicebot_loading,
+                            edge_tts_voice,
+                            edge_tts_rate,
+                            edge_tts_pitch,
+                            edge_tts_volume,
+                            edge_tts_voices,
+                            edge_tts_loading_voices,
+                            edge_tts_show_all_languages,
                         );
                     });
                 }
@@ -545,6 +567,11 @@ pub fn draw_pipeline_panel(
                                     *pipeline_voiceover_enabled,
                                     voicebot_key,
                                     voiceover_template_uuid,
+                                    voiceover_provider,
+                                    edge_tts_voice,
+                                    edge_tts_rate,
+                                    edge_tts_pitch,
+                                    edge_tts_volume,
                                 );
                             }
                         });
@@ -573,6 +600,11 @@ fn validate_and_enqueue(
     voiceover_enabled: bool,
     voicebot_key: &str,
     voiceover_template_uuid: &str,
+    voiceover_provider: &str,
+    edge_tts_voice: &str,
+    edge_tts_rate: &str,
+    edge_tts_pitch: &str,
+    edge_tts_volume: &str,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
     let base = save_path.trim_end_matches('/').trim_end_matches('\\');
@@ -595,6 +627,11 @@ fn validate_and_enqueue(
         voiceover_enabled,
         voicebot_key: voicebot_key.to_string(),
         voiceover_template_uuid: voiceover_template_uuid.to_string(),
+        voiceover_provider: voiceover_provider.to_string(),
+        edge_tts_voice: edge_tts_voice.to_string(),
+        edge_tts_rate: edge_tts_rate.to_string(),
+        edge_tts_pitch: edge_tts_pitch.to_string(),
+        edge_tts_volume: edge_tts_volume.to_string(),
     };
 
     let id = *job_counter;

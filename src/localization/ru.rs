@@ -140,6 +140,14 @@ pub fn translate_ru(key: &str) -> &'static str {
         "welcome_checking" => "проверка...",
         "welcome_not_installed" => "не установлено",
         "welcome_install_label" => "Для установки:",
+        "balance_edge_tts_status" => "Бесплатно (Без лимитов)",
+        "settings_edge_tts_threads" => "Параллельные потоки Edge TTS:",
+        "edge_tts_voices_loading" => "Загрузка голосов Edge TTS...",
+        "edge_tts_voice_label" => "Голос озвучки:",
+        "edge_tts_show_all" => "Показать все языки",
+        "edge_tts_rate_label" => "Темп (Rate):",
+        "edge_tts_pitch_label" => "Тональность (Pitch):",
+        "edge_tts_volume_label" => "Громкость (Volume):",
         _ => "",
     }
 }

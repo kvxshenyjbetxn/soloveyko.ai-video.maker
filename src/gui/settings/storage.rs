@@ -13,6 +13,11 @@ fn default_translation_service() -> String { "OpenRouter".to_string() }
 fn default_show_welcome() -> bool { true }
 fn default_model_claude() -> String { "sonnet".to_string() }
 fn default_model_gemini() -> String { "gemini-2.5-flash".to_string() }
+fn default_edge_tts_voice() -> String { "uk-UA-PolinaNeural".to_string() }
+fn default_edge_tts_rate() -> String { "+0%".to_string() }
+fn default_edge_tts_pitch() -> String { "+0Hz".to_string() }
+fn default_edge_tts_volume() -> String { "+0%".to_string() }
+fn default_edge_tts_max_threads() -> usize { 5 }
 
 /// Структура для серіалізації налаштувань у формат JSON.
 ///
@@ -94,6 +99,21 @@ pub struct AppSettings {
     /// Чи показувати вікно привітання при наступному запуску
     #[serde(default = "default_show_welcome")]
     pub show_welcome: bool,
+    /// Обраний голос для Edge TTS
+    #[serde(default = "default_edge_tts_voice")]
+    pub edge_tts_voice: String,
+    /// Темп для Edge TTS (наприклад, "+0%")
+    #[serde(default = "default_edge_tts_rate")]
+    pub edge_tts_rate: String,
+    /// Тональність для Edge TTS (наприклад, "+0Hz")
+    #[serde(default = "default_edge_tts_pitch")]
+    pub edge_tts_pitch: String,
+    /// Гучність для Edge TTS (наприклад, "+0%")
+    #[serde(default = "default_edge_tts_volume")]
+    pub edge_tts_volume: String,
+    /// Максимальна кількість потоків для Edge TTS
+    #[serde(default = "default_edge_tts_max_threads")]
+    pub edge_tts_max_threads: usize,
 }
 
 impl Default for AppSettings {
@@ -128,6 +148,11 @@ impl Default for AppSettings {
             claude_max_threads: 5,
             gemini_max_threads: 5,
             show_welcome: true,
+            edge_tts_voice: "uk-UA-PolinaNeural".to_string(),
+            edge_tts_rate: "+0%".to_string(),
+            edge_tts_pitch: "+0Hz".to_string(),
+            edge_tts_volume: "+0%".to_string(),
+            edge_tts_max_threads: 5,
         }
     }
 }
@@ -253,6 +278,18 @@ pub struct PipelineTemplate {
     /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code")
     #[serde(default = "default_translation_service")]
     pub translation_service: String,
+    /// Обраний голос для Edge TTS
+    #[serde(default = "default_edge_tts_voice")]
+    pub edge_tts_voice: String,
+    /// Темп для Edge TTS (наприклад, "+0%")
+    #[serde(default = "default_edge_tts_rate")]
+    pub edge_tts_rate: String,
+    /// Тональність для Edge TTS (наприклад, "+0Hz")
+    #[serde(default = "default_edge_tts_pitch")]
+    pub edge_tts_pitch: String,
+    /// Гучність для Edge TTS (наприклад, "+0%")
+    #[serde(default = "default_edge_tts_volume")]
+    pub edge_tts_volume: String,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -284,6 +321,10 @@ pub fn save_template(
     googler_image_provider: &str,
     translation_temperature: f32,
     translation_service: &str,
+    edge_tts_voice: &str,
+    edge_tts_rate: &str,
+    edge_tts_pitch: &str,
+    edge_tts_volume: &str,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -309,6 +350,10 @@ pub fn save_template(
             googler_image_provider: googler_image_provider.to_string(),
             translation_temperature,
             translation_service: translation_service.to_string(),
+            edge_tts_voice: edge_tts_voice.to_string(),
+            edge_tts_rate: edge_tts_rate.to_string(),
+            edge_tts_pitch: edge_tts_pitch.to_string(),
+            edge_tts_volume: edge_tts_volume.to_string(),
         };
 
         let json = serde_json::to_string_pretty(&template)?;

@@ -140,6 +140,14 @@ pub fn translate_uk(key: &str) -> &'static str {
         "welcome_checking" => "перевірка...",
         "welcome_not_installed" => "не встановлено",
         "welcome_install_label" => "Для встановлення:",
+        "balance_edge_tts_status" => "Безкоштовно (Без лімітів)",
+        "settings_edge_tts_threads" => "Паралельні потоки Edge TTS:",
+        "edge_tts_voices_loading" => "Завантаження голосів Edge TTS...",
+        "edge_tts_voice_label" => "Голос озвучки:",
+        "edge_tts_show_all" => "Показати всі мови",
+        "edge_tts_rate_label" => "Темп (Rate):",
+        "edge_tts_pitch_label" => "Тональність (Pitch):",
+        "edge_tts_volume_label" => "Гучність (Volume):",
         _ => "",
     }
 }

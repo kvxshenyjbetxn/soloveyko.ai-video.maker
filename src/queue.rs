@@ -36,6 +36,11 @@ pub struct JobSettings {
     pub voiceover_enabled: bool,
     pub voicebot_key: String,
     pub voiceover_template_uuid: String,
+    pub voiceover_provider: String,
+    pub edge_tts_voice: String,
+    pub edge_tts_rate: String,
+    pub edge_tts_pitch: String,
+    pub edge_tts_volume: String,
 }
 
 /// Одна задача в черзі пайплайну.

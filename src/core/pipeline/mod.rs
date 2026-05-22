@@ -72,10 +72,8 @@ pub fn run_pipeline(
             match voiceover::run_voiceover_sync(
                 job_id,
                 &job_name,
-                &settings.voicebot_key,
-                &settings.voiceover_template_uuid,
+                &settings,
                 &voice_text,
-                &settings.save_path,
             ) {
                 Ok(_) => {
                     crate::logger::log_job(job_id, &job_name, "Озвучку завершено.");

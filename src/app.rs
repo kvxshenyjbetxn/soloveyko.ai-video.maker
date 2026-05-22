@@ -131,6 +131,22 @@ pub struct VideoMakerApp {
     pub tool_checks: crate::gui::welcome::ToolChecks,
     /// Сервіс, для якого очікується фонова перевірка CLI інструментів.
     pub pending_tool_check: Option<String>,
+    /// Обраний голос для Edge TTS.
+    pub edge_tts_voice: String,
+    /// Темп для Edge TTS.
+    pub edge_tts_rate: String,
+    /// Тональність для Edge TTS.
+    pub edge_tts_pitch: String,
+    /// Гучність для Edge TTS.
+    pub edge_tts_volume: String,
+    /// Максимальна кількість потоків для Edge TTS.
+    pub edge_tts_max_threads: usize,
+    /// Завантажені голоси Edge TTS.
+    pub edge_tts_voices: std::sync::Arc<std::sync::Mutex<Option<Result<Vec<crate::api::edgetts::EdgeTTSVoice>, String>>>>,
+    /// Прапорець завантаження голосів Edge TTS.
+    pub edge_tts_loading_voices: std::sync::Arc<std::sync::Mutex<bool>>,
+    /// Показувати всі мови для Edge TTS.
+    pub edge_tts_show_all_languages: bool,
 }
 
 impl Default for VideoMakerApp {
@@ -193,6 +209,14 @@ impl Default for VideoMakerApp {
             welcome_dont_show: false,
             tool_checks: crate::gui::welcome::ToolChecks::new(),
             pending_tool_check: None,
+            edge_tts_voice: default_settings.edge_tts_voice.clone(),
+            edge_tts_rate: default_settings.edge_tts_rate.clone(),
+            edge_tts_pitch: default_settings.edge_tts_pitch.clone(),
+            edge_tts_volume: default_settings.edge_tts_volume.clone(),
+            edge_tts_max_threads: default_settings.edge_tts_max_threads,
+            edge_tts_voices: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            edge_tts_loading_voices: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            edge_tts_show_all_languages: false,
             last_saved_settings: default_settings,
         }
     }
@@ -305,6 +329,8 @@ impl VideoMakerApp {
         crate::api::claude::ClaudeLimiter::get().set_max_threads(claude_max_threads);
         // Налаштовуємо глобальний лімітер одночасних запитів Gemini CLI
         crate::api::gemini::GeminiLimiter::get().set_max_threads(gemini_max_threads);
+        // Налаштовуємо глобальний лімітер одночасних запитів Edge TTS
+        crate::api::edgetts::EdgeTTSLimiter::get().set_max_threads(saved.edge_tts_max_threads);
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
@@ -398,6 +424,14 @@ impl VideoMakerApp {
             welcome_dont_show: false,
             tool_checks,
             pending_tool_check: None,
+            edge_tts_voice: saved.edge_tts_voice.clone(),
+            edge_tts_rate: saved.edge_tts_rate.clone(),
+            edge_tts_pitch: saved.edge_tts_pitch.clone(),
+            edge_tts_volume: saved.edge_tts_volume.clone(),
+            edge_tts_max_threads: saved.edge_tts_max_threads,
+            edge_tts_voices: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            edge_tts_loading_voices: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            edge_tts_show_all_languages: false,
             last_saved_settings: saved,
         }
     }
@@ -552,6 +586,7 @@ fn draw_balance_window(
     voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     googler_key: &str,
     googler_balance: &std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
+    edge_tts_max_threads: &mut usize,
 ) {
     use crate::localization::translate;
     use std::sync::Arc;
@@ -678,6 +713,28 @@ fn draw_balance_window(
                         }
                     }
                 }
+            });
+
+            ui.add_space(4.0);
+
+            // --- Edge TTS ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Edge TTS").strong());
+                });
+                ui.separator();
+                ui.label(egui::RichText::new(translate(language, "balance_edge_tts_status")).weak());
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_edge_tts_threads"));
+                    let mut val = *edge_tts_max_threads;
+                    let slider = ui.add(egui::Slider::new(&mut val, 1..=25));
+                    if slider.changed() {
+                        *edge_tts_max_threads = val;
+                        crate::api::edgetts::EdgeTTSLimiter::get().set_max_threads(val);
+                    }
+                });
             });
 
             ui.add_space(4.0);
@@ -1066,6 +1123,7 @@ impl eframe::App for VideoMakerApp {
             &self.voicebot_balance,
             &self.googler_key,
             &self.googler_balance,
+            &mut self.edge_tts_max_threads,
         );
 
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
@@ -1097,6 +1155,13 @@ impl eframe::App for VideoMakerApp {
                         &mut self.voiceover_template_uuid,
                         &self.voicebot_templates,
                         &self.voicebot_loading,
+                        &mut self.edge_tts_voice,
+                        &mut self.edge_tts_rate,
+                        &mut self.edge_tts_pitch,
+                        &mut self.edge_tts_volume,
+                        &self.edge_tts_voices,
+                        &self.edge_tts_loading_voices,
+                        &mut self.edge_tts_show_all_languages,
                         &mut self.template_name_input,
                         &mut self.saved_templates,
                         &mut self.template_status,
@@ -1257,12 +1322,16 @@ impl eframe::App for VideoMakerApp {
                 || self.googler_key != self.last_saved_settings.googler_key
                 || self.video_service != self.last_saved_settings.video_service
                 || self.googler_image_provider != self.last_saved_settings.googler_image_provider
-                || (self.translation_temperature - self.last_saved_settings.translation_temperature).abs() > 0.001
                 || self.translation_service != self.last_saved_settings.translation_service
                 || self.save_path != self.last_saved_settings.save_path
                 || self.openrouter_max_threads != self.last_saved_settings.openrouter_max_threads
                 || self.claude_max_threads != self.last_saved_settings.claude_max_threads
                 || self.gemini_max_threads != self.last_saved_settings.gemini_max_threads
+                || self.edge_tts_voice != self.last_saved_settings.edge_tts_voice
+                || self.edge_tts_rate != self.last_saved_settings.edge_tts_rate
+                || self.edge_tts_pitch != self.last_saved_settings.edge_tts_pitch
+                || self.edge_tts_volume != self.last_saved_settings.edge_tts_volume
+                || self.edge_tts_max_threads != self.last_saved_settings.edge_tts_max_threads
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -1293,6 +1362,11 @@ impl eframe::App for VideoMakerApp {
                     openrouter_max_threads: self.openrouter_max_threads,
                     claude_max_threads: self.claude_max_threads,
                     gemini_max_threads: self.gemini_max_threads,
+                    edge_tts_voice: self.edge_tts_voice.clone(),
+                    edge_tts_rate: self.edge_tts_rate.clone(),
+                    edge_tts_pitch: self.edge_tts_pitch.clone(),
+                    edge_tts_volume: self.edge_tts_volume.clone(),
+                    edge_tts_max_threads: self.edge_tts_max_threads,
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
                 

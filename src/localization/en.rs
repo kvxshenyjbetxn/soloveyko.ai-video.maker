@@ -140,6 +140,14 @@ pub fn translate_en(key: &str) -> &'static str {
         "welcome_checking" => "checking...",
         "welcome_not_installed" => "not installed",
         "welcome_install_label" => "To install:",
+        "balance_edge_tts_status" => "Free (No limits)",
+        "settings_edge_tts_threads" => "Edge TTS Parallel Threads:",
+        "edge_tts_voices_loading" => "Loading Edge TTS voices...",
+        "edge_tts_voice_label" => "Voiceover Voice:",
+        "edge_tts_show_all" => "Show all languages",
+        "edge_tts_rate_label" => "Rate:",
+        "edge_tts_pitch_label" => "Pitch:",
+        "edge_tts_volume_label" => "Volume:",
         _ => "",
     }
 }

@@ -9,6 +9,7 @@ pub struct VoiceBotTemplate {
 }
 
 /// Малює секцію "Озвучка" на панелі пайплайну.
+#[allow(clippy::too_many_arguments)]
 pub fn draw_voiceover_section(
     ui: &mut egui::Ui,
     language: Language,
@@ -17,6 +18,13 @@ pub fn draw_voiceover_section(
     voiceover_template_uuid: &mut String,
     voicebot_templates: &Arc<Mutex<Option<Result<Vec<VoiceBotTemplate>, String>>>>,
     voicebot_loading: &Arc<Mutex<bool>>,
+    edge_tts_voice: &mut String,
+    edge_tts_rate: &mut String,
+    edge_tts_pitch: &mut String,
+    edge_tts_volume: &mut String,
+    edge_tts_voices: &Arc<Mutex<Option<Result<Vec<crate::api::edgetts::EdgeTTSVoice>, String>>>>,
+    edge_tts_loading_voices: &Arc<Mutex<bool>>,
+    edge_tts_show_all_languages: &mut bool,
 ) {
     ui.vertical(|ui| {
         ui.add_space(4.0);
@@ -28,6 +36,7 @@ pub fn draw_voiceover_section(
             .selected_text(voiceover_provider.as_str())
             .show_ui(ui, |ui| {
                 ui.selectable_value(voiceover_provider, "Voice Bot".to_string(), "Voice Bot");
+                ui.selectable_value(voiceover_provider, "Edge TTS".to_string(), "Edge TTS");
             });
 
         ui.add_space(8.0);
@@ -118,6 +127,121 @@ pub fn draw_voiceover_section(
                         ui.add_space(4.0);
                         if ui.button(translate(language, "voiceover_templates_retry")).clicked() {
                             *voicebot_templates.lock().unwrap() = None;
+                        }
+                    }
+                }
+            }
+        }
+
+        if voiceover_provider.as_str() == "Edge TTS" {
+            let is_loading = *edge_tts_loading_voices.lock().unwrap();
+            let voices_snapshot = edge_tts_voices.lock().unwrap().clone();
+
+            if is_loading {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(
+                        egui::RichText::new(translate(language, "edge_tts_voices_loading"))
+                            .weak()
+                            .size(12.0)
+                    );
+                });
+            } else {
+                match voices_snapshot {
+                    None => {
+                        // Починаємо фонове завантаження голосів
+                        *edge_tts_loading_voices.lock().unwrap() = true;
+                        crate::api::edgetts::fetch_voices(
+                            Arc::clone(edge_tts_voices),
+                            Arc::clone(edge_tts_loading_voices),
+                            ui.ctx().clone(),
+                        );
+                    }
+                    Some(Ok(voices)) => {
+                        // 1. Фільтрація голосів
+                        let filtered_voices: Vec<&crate::api::edgetts::EdgeTTSVoice> = voices
+                            .iter()
+                            .filter(|v| {
+                                if *edge_tts_show_all_languages {
+                                    true
+                                } else {
+                                    // Показуємо uk-UA, en-US, en-GB, ru-RU
+                                    let loc = v.locale.to_lowercase();
+                                    loc == "uk-ua" || loc == "en-us" || loc == "en-gb" || loc == "ru-ru"
+                                }
+                            })
+                            .collect();
+
+                        // 2. ComboBox вибору голосу
+                        ui.label(egui::RichText::new(translate(language, "edge_tts_voice_label")).size(12.0));
+                        ui.add_space(2.0);
+
+                        let current_voice_friendly = voices
+                            .iter()
+                            .find(|v| v.short_name == *edge_tts_voice)
+                            .map(|v| format!("{} ({})", v.friendly_name, v.locale))
+                            .unwrap_or_else(|| edge_tts_voice.clone());
+
+                        egui::ComboBox::from_id_salt("edge_tts_voice_combo")
+                            .selected_text(current_voice_friendly)
+                            .width(ui.available_width() - 10.0)
+                            .show_ui(ui, |ui| {
+                                for voice_item in &filtered_voices {
+                                    let label = format!("{} ({})", voice_item.friendly_name, voice_item.locale);
+                                    ui.selectable_value(
+                                        edge_tts_voice,
+                                        voice_item.short_name.clone(),
+                                        label,
+                                    );
+                                }
+                            });
+
+                        ui.add_space(4.0);
+
+                        // Прапорець "Показати всі мови"
+                        ui.checkbox(edge_tts_show_all_languages, translate(language, "edge_tts_show_all"));
+
+                        ui.add_space(8.0);
+
+                        // 3. Параметри темпу, тональності та гучності
+                        egui::Grid::new("edge_tts_params_grid")
+                            .num_columns(2)
+                            .spacing([8.0, 8.0])
+                            .show(ui, |ui| {
+                                // Темп
+                                ui.label(translate(language, "edge_tts_rate_label"));
+                                ui.horizontal(|ui| {
+                                    ui.add(egui::TextEdit::singleline(edge_tts_rate).desired_width(70.0));
+                                    ui.label(egui::RichText::new("(напр. +0%, -10%, +20%)").weak().size(10.0));
+                                });
+                                ui.end_row();
+
+                                // Тональність
+                                ui.label(translate(language, "edge_tts_pitch_label"));
+                                ui.horizontal(|ui| {
+                                    ui.add(egui::TextEdit::singleline(edge_tts_pitch).desired_width(70.0));
+                                    ui.label(egui::RichText::new("(напр. +0Hz, -5Hz, +10Hz)").weak().size(10.0));
+                                });
+                                ui.end_row();
+
+                                // Гучність
+                                ui.label(translate(language, "edge_tts_volume_label"));
+                                ui.horizontal(|ui| {
+                                    ui.add(egui::TextEdit::singleline(edge_tts_volume).desired_width(70.0));
+                                    ui.label(egui::RichText::new("(напр. +0%, -10%, +10%)").weak().size(10.0));
+                                });
+                                ui.end_row();
+                            });
+                    }
+                    Some(Err(error)) => {
+                        ui.add(egui::Label::new(
+                            egui::RichText::new(format!("❌ {}", error))
+                                .color(egui::Color32::from_rgb(231, 76, 60))
+                                .size(12.0)
+                        ).wrap());
+                        ui.add_space(4.0);
+                        if ui.button(translate(language, "voiceover_templates_retry")).clicked() {
+                            *edge_tts_voices.lock().unwrap() = None;
                         }
                     }
                 }

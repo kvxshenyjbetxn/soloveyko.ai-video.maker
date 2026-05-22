@@ -10,6 +10,12 @@ serde_json = "1.0"
 dirs = "5.0"
 ureq = { version = "2.12.1", features = ["json"] }
 rfd = "0.14"
+tungstenite = { version = "0.21.0", features = ["rustls-tls-native-roots"] }
+sha2 = "0.10"
+chrono = "0.4"
+msedge-tts = "0.4.0"
+rustls = { version = "0.23", features = ["ring"] }
+
 
 [package.metadata.bundle]
 name = "Soloveyko Video Maker"
