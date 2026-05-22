@@ -100,7 +100,14 @@ pub struct AppSettings {
     /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code")
     #[serde(default = "default_translation_service")]
     pub translation_service: String,
-    /// Шлях до папки збереження результатів пайплайну
+    /// Шлях збереження для macOS
+    #[serde(default)]
+    pub save_path_macos: String,
+    /// Шлях збереження для Windows
+    #[serde(default)]
+    pub save_path_windows: String,
+    /// Застаріле поле — читається лише для міграції зі старих конфігів, не записується
+    #[serde(default, skip_serializing)]
     pub save_path: String,
     /// Максимальна кількість потоків для OpenRouter
     #[serde(default = "default_openrouter_max_threads")]
@@ -164,6 +171,8 @@ impl Default for AppSettings {
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
             translation_temperature: 0.7,
             translation_service: "OpenRouter".to_string(),
+            save_path_macos: String::new(),
+            save_path_windows: String::new(),
             save_path: String::new(),
             openrouter_max_threads: 5,
             claude_max_threads: 5,
@@ -207,6 +216,17 @@ pub fn load_settings() -> AppSettings {
                     settings.edge_tts_rate = clean_numeric_param(&settings.edge_tts_rate);
                     settings.edge_tts_pitch = clean_numeric_param(&settings.edge_tts_pitch);
                     settings.edge_tts_volume = clean_numeric_param(&settings.edge_tts_volume);
+                    // Міграція з єдиного save_path у платформо-специфічні поля
+                    if settings.save_path_macos.is_empty()
+                        && settings.save_path_windows.is_empty()
+                        && !settings.save_path.is_empty()
+                    {
+                        if cfg!(target_os = "macos") {
+                            settings.save_path_macos = settings.save_path.clone();
+                        } else {
+                            settings.save_path_windows = settings.save_path.clone();
+                        }
+                    }
                     return settings;
                 }
             }

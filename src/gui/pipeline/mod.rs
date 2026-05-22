@@ -104,7 +104,8 @@ pub fn draw_pipeline_panel(
     googler_image_provider: &mut String,
     translation_temperature: &mut f32,
     translation_service: &mut String,
-    save_path: &mut String,
+    save_path_macos: &mut String,
+    save_path_windows: &mut String,
     googler_image_max_threads: &mut usize,
     googler_video_max_threads: &mut usize,
     text_input: &str,
@@ -290,7 +291,7 @@ pub fn draw_pipeline_panel(
                             if header.inner.clicked() { state.toggle(ui); }
                             state.store(ui.ctx());
                             state.show_body_indented(&header.response, ui, |ui| {
-                                storage::draw_storage_section(ui, language, save_path);
+                                storage::draw_storage_section(ui, language, save_path_macos, save_path_windows);
                             });
                         }
 
@@ -506,7 +507,7 @@ pub fn draw_pipeline_panel(
                     // Спочатку валідуємо — лише якщо все ок, відкриваємо діалог назви
                     let error = if text_input.trim().is_empty() {
                         Some(translate(language, "queue_error_no_text").to_string())
-                    } else if save_path.trim().is_empty() {
+                    } else if effective_save_path(save_path_macos, save_path_windows).trim().is_empty() {
                         Some(translate(language, "queue_error_no_save_path").to_string())
                     } else if *pipeline_translation_enabled && translation_model.is_empty() {
                         Some(translate(language, "queue_error_no_model").to_string())
@@ -585,7 +586,7 @@ pub fn draw_pipeline_panel(
                                 validate_and_enqueue(
                                     language,
                                     text_input,
-                                    save_path,
+                                    effective_save_path(save_path_macos, save_path_windows),
                                     &name,
                                     *pipeline_translation_enabled,
                                     translation_prompt,
@@ -610,6 +611,11 @@ pub fn draw_pipeline_panel(
                     });
                 });
         }
+}
+
+/// Повертає активний шлях збереження залежно від поточної ОС.
+fn effective_save_path<'a>(save_path_macos: &'a str, save_path_windows: &'a str) -> &'a str {
+    if cfg!(target_os = "macos") { save_path_macos } else { save_path_windows }
 }
 
 /// Створює папку задачі та додає її в чергу зі статусом Pending.

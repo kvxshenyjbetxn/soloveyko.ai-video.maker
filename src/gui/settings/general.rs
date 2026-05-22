@@ -3,12 +3,15 @@ use crate::localization::{Language, translate};
 use eframe::egui;
 
 /// Малює секцію загальних налаштувань програми, вибір теми, мови та акцентного кольору.
+/// Повертає true, якщо змінилось налаштування show_welcome.
 pub fn draw_general_settings(
     ui: &mut egui::Ui,
     current_theme: &mut AppTheme,
     accent_color: &mut egui::Color32,
     language: &mut Language,
-) {
+    show_welcome: &mut bool,
+) -> bool {
+    let mut welcome_changed = false;
     ui.vertical(|ui| {
         ui.add_space(8.0);
         
@@ -109,5 +112,18 @@ pub fn draw_general_settings(
         if ui.button(translate(*language, "settings_open_folder")).clicked() {
             super::storage::open_settings_folder();
         }
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(12.0);
+
+        ui.strong(translate(*language, "welcome_title"));
+        ui.add_space(8.0);
+
+        if ui.checkbox(show_welcome, translate(*language, "settings_show_welcome")).changed() {
+            welcome_changed = true;
+        }
     });
+
+    welcome_changed
 }

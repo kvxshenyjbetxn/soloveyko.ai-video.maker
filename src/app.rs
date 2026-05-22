@@ -103,8 +103,10 @@ pub struct VideoMakerApp {
     pub translation_service: String,
     /// Чи відкрите вікно детальних балансів.
     pub balance_window_open: bool,
-    /// Шлях до папки збереження результатів пайплайну.
-    pub save_path: String,
+    /// Шлях збереження для macOS.
+    pub save_path_macos: String,
+    /// Шлях збереження для Windows.
+    pub save_path_windows: String,
     /// Черга задач пайплайну.
     pub jobs: Vec<crate::queue::PipelineJob>,
     /// Лічильник ID задач.
@@ -199,7 +201,8 @@ impl Default for VideoMakerApp {
             translation_temperature: 0.7,
             translation_service: "OpenRouter".to_string(),
             balance_window_open: false,
-            save_path: String::new(),
+            save_path_macos: String::new(),
+            save_path_windows: String::new(),
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,
@@ -323,7 +326,8 @@ impl VideoMakerApp {
         let video_service = saved.video_service.clone();
         let googler_image_provider = saved.googler_image_provider.clone();
         let translation_temperature = saved.translation_temperature;
-        let save_path = saved.save_path.clone();
+        let save_path_macos = saved.save_path_macos.clone();
+        let save_path_windows = saved.save_path_windows.clone();
         let openrouter_max_threads = saved.openrouter_max_threads;
         let claude_max_threads = saved.claude_max_threads;
         let gemini_max_threads = saved.gemini_max_threads;
@@ -416,7 +420,8 @@ impl VideoMakerApp {
             translation_temperature,
             translation_service,
             balance_window_open: false,
-            save_path,
+            save_path_macos,
+            save_path_windows,
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,
@@ -1239,7 +1244,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.googler_image_provider,
                         &mut self.translation_temperature,
                         &mut self.translation_service,
-                        &mut self.save_path,
+                        &mut self.save_path_macos,
+                        &mut self.save_path_windows,
                         &mut self.googler_image_max_threads,
                         &mut self.googler_video_max_threads,
                         &self.text_input,
@@ -1294,12 +1300,17 @@ impl eframe::App for VideoMakerApp {
                         gui::editor::draw_editor(ui, &mut self.text_input, self.language);
                     }
                     Tab::Settings => {
-                        gui::settings::draw_settings(
+                        let welcome_changed = gui::settings::draw_settings(
                             ui,
                             &mut self.theme,
                             &mut self.accent_color,
                             &mut self.language,
+                            &mut self.last_saved_settings.show_welcome,
                         );
+                        if welcome_changed {
+                            let new_settings = self.last_saved_settings.clone();
+                            crate::gui::settings::storage::save_settings(&new_settings);
+                        }
                     }
                     Tab::Logs => {
                         self.draw_logs_tab(ui);
@@ -1382,7 +1393,8 @@ impl eframe::App for VideoMakerApp {
                 || self.video_service != self.last_saved_settings.video_service
                 || self.googler_image_provider != self.last_saved_settings.googler_image_provider
                 || self.translation_service != self.last_saved_settings.translation_service
-                || self.save_path != self.last_saved_settings.save_path
+                || self.save_path_macos != self.last_saved_settings.save_path_macos
+                || self.save_path_windows != self.last_saved_settings.save_path_windows
                 || self.openrouter_max_threads != self.last_saved_settings.openrouter_max_threads
                 || self.claude_max_threads != self.last_saved_settings.claude_max_threads
                 || self.gemini_max_threads != self.last_saved_settings.gemini_max_threads
@@ -1419,7 +1431,9 @@ impl eframe::App for VideoMakerApp {
                     googler_image_provider: self.googler_image_provider.clone(),
                     translation_temperature: self.translation_temperature,
                     translation_service: self.translation_service.clone(),
-                    save_path: self.save_path.clone(),
+                    save_path_macos: self.save_path_macos.clone(),
+                    save_path_windows: self.save_path_windows.clone(),
+                    save_path: String::new(),
                     openrouter_max_threads: self.openrouter_max_threads,
                     claude_max_threads: self.claude_max_threads,
                     gemini_max_threads: self.gemini_max_threads,
