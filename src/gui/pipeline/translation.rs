@@ -37,6 +37,8 @@ pub fn draw_translation_section(
             .selected_text(
                 if translation_service == "Claude Code" {
                     translate(language, "translation_service_claude_code")
+                } else if translation_service == "Gemini CLI" {
+                    translate(language, "translation_service_gemini_cli")
                 } else {
                     translate(language, "translation_service_openrouter")
                 }
@@ -48,12 +50,26 @@ pub fn draw_translation_section(
                 if ui.selectable_value(translation_service, "Claude Code".to_string(), translate(language, "translation_service_claude_code")).clicked() {
                     service_changed = true;
                 }
+                if ui.selectable_value(translation_service, "Gemini CLI".to_string(), translate(language, "translation_service_gemini_cli")).clicked() {
+                    service_changed = true;
+                }
             });
 
         if service_changed && translation_service == "Claude Code" {
             // Перевіряємо, чи модель валідна для Claude Code
             if translation_model != "sonnet" && translation_model != "opus" && translation_model != "haiku" {
                 *translation_model = "sonnet".to_string();
+            }
+        }
+        if service_changed && translation_service == "Gemini CLI" {
+            // Перевіряємо, чи модель валідна для Gemini CLI
+            if translation_model != "gemini-2.5-flash"
+                && translation_model != "gemini-2.5-pro"
+                && translation_model != "gemini-3-flash-preview"
+                && translation_model != "gemini-3.1-pro-preview"
+                && translation_model != "gemini-2.5-flash-lite"
+            {
+                *translation_model = "gemini-2.5-flash".to_string();
             }
         }
 
@@ -153,6 +169,20 @@ pub fn draw_translation_section(
                     ui.selectable_value(translation_model, "opus".to_string(), "opus");
                     ui.selectable_value(translation_model, "haiku".to_string(), "haiku");
                 });
+        } else if translation_service == "Gemini CLI" {
+            // Вибір моделі Google для Gemini CLI
+            ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+            ui.add_space(4.0);
+
+            egui::ComboBox::from_id_salt("gemini_cli_model")
+                .selected_text(if translation_model.is_empty() { "gemini-2.5-flash" } else { translation_model.as_str() })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(translation_model, "gemini-2.5-flash".to_string(), "gemini-2.5-flash");
+                    ui.selectable_value(translation_model, "gemini-2.5-pro".to_string(), "gemini-2.5-pro");
+                    ui.selectable_value(translation_model, "gemini-3-flash-preview".to_string(), "gemini-3-flash-preview");
+                    ui.selectable_value(translation_model, "gemini-3.1-pro-preview".to_string(), "gemini-3.1-pro-preview");
+                    ui.selectable_value(translation_model, "gemini-2.5-flash-lite".to_string(), "gemini-2.5-flash-lite");
+                });
         } else {
             // Вибір моделі OpenRouter
             ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
@@ -241,7 +271,7 @@ pub fn draw_translation_section(
             }
         }
 
-        if translation_service != "Claude Code" {
+        if translation_service != "Claude Code" && translation_service != "Gemini CLI" {
             ui.add_space(8.0);
 
             // Повзунок температури моделі

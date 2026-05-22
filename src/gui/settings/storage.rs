@@ -8,6 +8,7 @@ fn default_image_provider() -> String { "flow_IMAGEN_3_5".to_string() }
 fn default_temperature() -> f32 { 0.7 }
 fn default_openrouter_max_threads() -> usize { 5 }
 fn default_claude_max_threads() -> usize { 5 }
+fn default_gemini_max_threads() -> usize { 5 }
 fn default_translation_service() -> String { "OpenRouter".to_string() }
 
 /// Структура для серіалізації налаштувань у формат JSON.
@@ -75,6 +76,9 @@ pub struct AppSettings {
     /// Максимальна кількість потоків для Claude Code
     #[serde(default = "default_claude_max_threads")]
     pub claude_max_threads: usize,
+    /// Максимальна кількість потоків для Gemini CLI
+    #[serde(default = "default_gemini_max_threads")]
+    pub gemini_max_threads: usize,
 }
 
 impl Default for AppSettings {
@@ -104,6 +108,7 @@ impl Default for AppSettings {
             save_path: String::new(),
             openrouter_max_threads: 5,
             claude_max_threads: 5,
+            gemini_max_threads: 5,
         }
     }
 }

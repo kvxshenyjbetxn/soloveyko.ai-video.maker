@@ -115,6 +115,8 @@ pub struct VideoMakerApp {
     pub openrouter_max_threads: usize,
     /// Максимальна кількість потоків для Claude Code.
     pub claude_max_threads: usize,
+    /// Максимальна кількість потоків для Gemini CLI.
+    pub gemini_max_threads: usize,
 }
 
 impl Default for VideoMakerApp {
@@ -169,6 +171,7 @@ impl Default for VideoMakerApp {
             job_name_input: String::new(),
             openrouter_max_threads: 5,
             claude_max_threads: 5,
+            gemini_max_threads: 5,
             last_saved_settings: default_settings,
         }
     }
@@ -249,11 +252,14 @@ impl VideoMakerApp {
         let save_path = saved.save_path.clone();
         let openrouter_max_threads = saved.openrouter_max_threads;
         let claude_max_threads = saved.claude_max_threads;
+        let gemini_max_threads = saved.gemini_max_threads;
 
         // Налаштовуємо глобальний лімітер одночасних запитів OpenRouter
         crate::api::openrouter::OpenRouterLimiter::get().set_max_threads(openrouter_max_threads);
         // Налаштовуємо глобальний лімітер одночасних запитів Claude Code
         crate::api::claude::ClaudeLimiter::get().set_max_threads(claude_max_threads);
+        // Налаштовуємо глобальний лімітер одночасних запитів Gemini CLI
+        crate::api::gemini::GeminiLimiter::get().set_max_threads(gemini_max_threads);
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
@@ -333,6 +339,7 @@ impl VideoMakerApp {
             job_name_input: String::new(),
             openrouter_max_threads,
             claude_max_threads,
+            gemini_max_threads,
             last_saved_settings: saved,
         }
     }
@@ -482,6 +489,7 @@ fn draw_balance_window(
     openrouter_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     openrouter_max_threads: &mut usize,
     claude_max_threads: &mut usize,
+    gemini_max_threads: &mut usize,
     voicebot_key: &str,
     voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     googler_key: &str,
@@ -555,6 +563,27 @@ fn draw_balance_window(
                     if slider.changed() {
                         *claude_max_threads = val;
                         crate::api::claude::ClaudeLimiter::get().set_max_threads(val);
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
+
+            // --- Gemini CLI ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Gemini CLI").strong());
+                });
+                ui.separator();
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_gemini_threads"));
+                    let mut val = *gemini_max_threads;
+                    let slider = ui.add(egui::Slider::new(&mut val, 1..=25));
+                    if slider.changed() {
+                        *gemini_max_threads = val;
+                        crate::api::gemini::GeminiLimiter::get().set_max_threads(val);
                     }
                 });
             });
@@ -895,6 +924,7 @@ impl eframe::App for VideoMakerApp {
             &self.openrouter_balance,
             &mut self.openrouter_max_threads,
             &mut self.claude_max_threads,
+            &mut self.gemini_max_threads,
             &self.voicebot_key,
             &self.voicebot_balance,
             &self.googler_key,
@@ -1078,6 +1108,7 @@ impl eframe::App for VideoMakerApp {
                 || self.save_path != self.last_saved_settings.save_path
                 || self.openrouter_max_threads != self.last_saved_settings.openrouter_max_threads
                 || self.claude_max_threads != self.last_saved_settings.claude_max_threads
+                || self.gemini_max_threads != self.last_saved_settings.gemini_max_threads
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -1104,6 +1135,7 @@ impl eframe::App for VideoMakerApp {
                     save_path: self.save_path.clone(),
                     openrouter_max_threads: self.openrouter_max_threads,
                     claude_max_threads: self.claude_max_threads,
+                    gemini_max_threads: self.gemini_max_threads,
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску

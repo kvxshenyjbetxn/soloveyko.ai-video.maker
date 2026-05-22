@@ -38,6 +38,8 @@ pub fn run_translation(
 
         let result = if service == "Claude Code" {
             crate::api::claude::call_claude_code(&model, &user_content, job_info)
+        } else if service == "Gemini CLI" {
+            crate::api::gemini::call_gemini_cli(&model, &user_content, job_info)
         } else {
             translate::call_openrouter(&key, &model, user_content, temperature, job_info)
         };
