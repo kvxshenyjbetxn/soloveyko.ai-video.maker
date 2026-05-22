@@ -1,0 +1,5506 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "media_gen_api",
+    "description": "Media Generation API.\n\n## File Upload Support\n\nFor operations requiring input images, you can provide images in two formats:\n\n1. **Data URI** (inline base64): `\"data:image/png;base64,iVBORw0KGgo...\"`\n2. **File reference** (uploaded file): `\"file:abc123def456...\"`\n\n### Storage Server\n\nUpload files to `https://storage.fast-gen.ai` to get `file:` references.\nDocs: `https://storage.fast-gen.ai/docs`.\n\n### Storage Server Endpoints\n\n- `POST /upload` - Upload a file, returns file hash\n- `GET /file/{file_hash}` - Retrieve file as data URI\n- `GET /file/{file_hash}/raw` - Stream file bytes\n- `HEAD /exists/{file_hash}` - Check if file exists\n- `DELETE /file/{file_hash}` - Delete a file\n- `GET /stats` - Get storage usage statistics\n\n### Storage Limits\n\n- **Max file size**: 10 MB per file\n- **Storage quota**: 200 MB per API key\n- **File TTL**: 1 hour since last use\n- **Generated result TTL**: 30 minutes by default\n",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Root",
+        "description": "Root endpoint",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint. Use ?deep=true for dependency checks.",
+        "operationId": "health_check_api_health_get",
+        "parameters": [
+          {
+            "name": "deep",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Deep"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/flow/image/generate": {
+      "post": {
+        "tags": [
+          "v4-flow-image"
+        ],
+        "summary": "Generate Image",
+        "description": "Generate an image using Google Flow API.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flow_image_generate`: 4 credits; billing `operation`; media `image`; provider `flow`.",
+        "operationId": "flow_image_generate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlowGenerateImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "flow_image_generate"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "flow_image_generate",
+            "x-provider": "flow",
+            "x-media-type": "image",
+            "x-credit-cost": 4,
+            "x-cost": {
+              "operation_type": "flow_image_generate",
+              "billing_unit": "operation",
+              "credit_cost": 4,
+              "rate_limit_count": 4,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 4,
+            "x-concurrency-bucket": "image",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "image",
+            "x-supports-references": true,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 10,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": null,
+            "x-provider-options": {}
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "flow_image_generate",
+            "billing_unit": "operation",
+            "credit_cost": 4,
+            "rate_limit_count": 4,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 4,
+          "rate_limit_count": 4,
+          "cost_source": null,
+          "display": "4 credits",
+          "operations": [
+            {
+              "operation_type": "flow_image_generate",
+              "billing_unit": "operation",
+              "credit_cost": 4,
+              "rate_limit_count": 4,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 4,
+        "x-billing-unit": "operation",
+        "x-provider": "flow",
+        "x-media-type": "image",
+        "x-concurrency-bucket": "image",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/flow/video/from-ingredients": {
+      "post": {
+        "tags": [
+          "v4-flow-video"
+        ],
+        "summary": "Generate Video From Ingredients",
+        "description": "Generate a video from 1-3 reference images using Google Flow API (VEO).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flow_video_from_ingredients`: 1 credit; billing `operation`; media `video`; provider `flow`.",
+        "operationId": "flow_video_from_ingredients",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateVideoFromIngredientsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "flow_video_from_ingredients"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "flow_video_from_ingredients",
+            "x-provider": "flow",
+            "x-media-type": "video",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "flow_video_from_ingredients",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "video",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "video",
+            "x-supports-references": true,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 3,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": 900,
+            "x-provider-options": {}
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "flow_video_from_ingredients",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "flow_video_from_ingredients",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "flow",
+        "x-media-type": "video",
+        "x-concurrency-bucket": "video",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/flow/video/from-keyframes": {
+      "post": {
+        "tags": [
+          "v4-flow-video"
+        ],
+        "summary": "Generate Video From Keyframes",
+        "description": "Generate a video with start/end keyframes using Google Flow API (VEO).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flow_video_from_keyframes`: 1 credit; billing `operation`; media `video`; provider `flow`.",
+        "operationId": "flow_video_from_keyframes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateVideoFromKeyframesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "flow_video_from_keyframes"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "flow_video_from_keyframes",
+            "x-provider": "flow",
+            "x-media-type": "video",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "flow_video_from_keyframes",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "video",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "video",
+            "x-supports-references": true,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 2,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": 900,
+            "x-provider-options": {}
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "flow_video_from_keyframes",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "flow_video_from_keyframes",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "flow",
+        "x-media-type": "video",
+        "x-concurrency-bucket": "video",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/flow/video/from-text": {
+      "post": {
+        "tags": [
+          "v4-flow-video"
+        ],
+        "summary": "Generate Video From Text",
+        "description": "Generate a video from a text prompt using Google Flow API (VEO).\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flow_video_from_text`: 1 credit; billing `operation`; media `video`; provider `flow`.",
+        "operationId": "flow_video_from_text",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlowGenerateVideoFromTextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "flow_video_from_text"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "flow_video_from_text",
+            "x-provider": "flow",
+            "x-media-type": "video",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "flow_video_from_text",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "video",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "video",
+            "x-supports-references": false,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 0,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": 900,
+            "x-provider-options": {}
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "flow_video_from_text",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "flow_video_from_text",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "flow",
+        "x-media-type": "video",
+        "x-concurrency-bucket": "video",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/flower/image/generate": {
+      "post": {
+        "tags": [
+          "v4-flower-image"
+        ],
+        "summary": "Generate Image",
+        "description": "Generate an image using Nano Banana 2 via Flower.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flower_image_generate`: 1 credit; billing `operation`; media `image`; provider `flower`.\n- `flower_image_edit`: 1 credit; billing `operation`; media `image`; provider `flower`.",
+        "operationId": "flower_image_generate_or_edit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlowerGenerateImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "flower_image_generate",
+          "flower_image_edit"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "flower_image_generate",
+            "x-provider": "flower",
+            "x-media-type": "image",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "flower_image_generate",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "image",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "image",
+            "x-supports-references": false,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 0,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": null,
+            "x-provider-options": {
+              "upstream_credit_type": "image"
+            }
+          },
+          {
+            "x-operation-type": "flower_image_edit",
+            "x-provider": "flower",
+            "x-media-type": "image",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "flower_image_edit",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "image",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "image",
+            "x-supports-references": true,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 1,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": null,
+            "x-provider-options": {
+              "upstream_credit_type": "image"
+            }
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "flower_image_generate",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          },
+          {
+            "operation_type": "flower_image_edit",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit per operation",
+          "operations": [
+            {
+              "operation_type": "flower_image_generate",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            {
+              "operation_type": "flower_image_edit",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "flower",
+        "x-media-type": "image",
+        "x-concurrency-bucket": "image",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/flower/video/from-image": {
+      "post": {
+        "tags": [
+          "v4-flower-video"
+        ],
+        "summary": "Generate Video From Image",
+        "description": "Generate a video from an image using Veo 3.1 via Flower.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flower_video_from_image`: 1 credit; billing `operation`; media `video`; provider `flower`.",
+        "operationId": "flower_video_from_image",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlowerVideoFromImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "flower_video_from_image"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "flower_video_from_image",
+            "x-provider": "flower",
+            "x-media-type": "video",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "flower_video_from_image",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "video",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "video",
+            "x-supports-references": true,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 1,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": 900,
+            "x-provider-options": {
+              "upstream_credit_type": "video"
+            }
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "flower_video_from_image",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "flower_video_from_image",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "flower",
+        "x-media-type": "video",
+        "x-concurrency-bucket": "video",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/flower/video/from-text": {
+      "post": {
+        "tags": [
+          "v4-flower-video"
+        ],
+        "summary": "Generate Video From Text",
+        "description": "Generate a video from a text prompt using Veo 3.1 via Flower.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `flower_video_from_text`: 1 credit; billing `operation`; media `video`; provider `flower`.",
+        "operationId": "flower_video_from_text",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FlowerGenerateVideoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "flower_video_from_text"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "flower_video_from_text",
+            "x-provider": "flower",
+            "x-media-type": "video",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "flower_video_from_text",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "video",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "video",
+            "x-supports-references": false,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 0,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": 900,
+            "x-provider-options": {
+              "upstream_credit_type": "video"
+            }
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "flower_video_from_text",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "flower_video_from_text",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "flower",
+        "x-media-type": "video",
+        "x-concurrency-bucket": "video",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/grok/image/edit": {
+      "post": {
+        "tags": [
+          "v4-grok-image"
+        ],
+        "summary": "Edit Image",
+        "description": "Edit an image using Grok. Returns 2 edited variations.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_image_edit`: 1 credit; billing `operation`; media `image`; provider `grok`.",
+        "operationId": "grok_image_edit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "grok_image_edit"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "grok_image_edit",
+            "x-provider": "grok",
+            "x-media-type": "image",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "grok_image_edit",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "image",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "image",
+            "x-supports-references": true,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 6,
+            "x-max-output-items": 2,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": null,
+            "x-provider-options": {}
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "grok_image_edit",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "grok_image_edit",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "grok",
+        "x-media-type": "image",
+        "x-concurrency-bucket": "image",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/grok/image/generate": {
+      "post": {
+        "tags": [
+          "v4-grok-image"
+        ],
+        "summary": "Generate Images",
+        "description": "Generate 4 images from a text prompt using Grok.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_image_generate`: 1 credit; billing `operation`; media `image`; provider `grok`.",
+        "operationId": "grok_image_generate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateImagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "grok_image_generate"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "grok_image_generate",
+            "x-provider": "grok",
+            "x-media-type": "image",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "grok_image_generate",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "image",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "image",
+            "x-supports-references": false,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 0,
+            "x-max-output-items": 6,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": null,
+            "x-provider-options": {}
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "grok_image_generate",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "grok_image_generate",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "grok",
+        "x-media-type": "image",
+        "x-concurrency-bucket": "image",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/grok/video/from-image": {
+      "post": {
+        "tags": [
+          "v4-grok-video"
+        ],
+        "summary": "Generate Video From Image",
+        "description": "Generate a video from an image using Grok.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_video_from_image`: 1 credit; billing `operation`; media `video`; provider `grok`.",
+        "operationId": "grok_video_from_image",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VideoFromImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "grok_video_from_image"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "grok_video_from_image",
+            "x-provider": "grok",
+            "x-media-type": "video",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "grok_video_from_image",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "video",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "video",
+            "x-supports-references": true,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 7,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": 900,
+            "x-provider-options": {
+              "default_resolution": "480p",
+              "available_resolutions": [
+                "480p",
+                "720p"
+              ]
+            }
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "grok_video_from_image",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "grok_video_from_image",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "grok",
+        "x-media-type": "video",
+        "x-concurrency-bucket": "video",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/grok/video/from-text": {
+      "post": {
+        "tags": [
+          "v4-grok-video"
+        ],
+        "summary": "Generate Video From Text",
+        "description": "Generate a video from a text prompt using Grok.\n\nReturns an operation_id immediately. Poll /api/v4/operations/{operation_id} for the result.\n\n**Operation metadata:**\n- `grok_video_from_text`: 1 credit; billing `operation`; media `video`; provider `grok`.",
+        "operationId": "grok_video_from_text",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateVideoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "grok_video_from_text"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "grok_video_from_text",
+            "x-provider": "grok",
+            "x-media-type": "video",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "grok_video_from_text",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "video",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "video",
+            "x-supports-references": false,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 0,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": 900,
+            "x-provider-options": {
+              "default_resolution": "480p",
+              "available_resolutions": [
+                "480p",
+                "720p"
+              ]
+            }
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "grok_video_from_text",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "grok_video_from_text",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "grok",
+        "x-media-type": "video",
+        "x-concurrency-bucket": "video",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/openai/image/generate": {
+      "post": {
+        "tags": [
+          "v4-openai-image"
+        ],
+        "summary": "Generate Image",
+        "description": "Generate an image using the OpenAI ChatGPT web image flow.\n\n**Operation metadata:**\n- `openai_image_generate`: 1 credit; billing `operation`; media `image`; provider `openai`.",
+        "operationId": "openai_image_generate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenAIImageGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "openai_image_generate"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "openai_image_generate",
+            "x-provider": "openai",
+            "x-media-type": "image",
+            "x-credit-cost": 1,
+            "x-cost": {
+              "operation_type": "openai_image_generate",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            },
+            "x-billing-unit": "operation",
+            "x-rate-limit-count": 1,
+            "x-concurrency-bucket": "image",
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "image",
+            "x-supports-references": true,
+            "x-supports-data-uri": true,
+            "x-max-input-images": 10,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": null,
+            "x-provider-options": {}
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "openai_image_generate",
+            "billing_unit": "operation",
+            "credit_cost": 1,
+            "rate_limit_count": 1,
+            "cost_source": null
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "operation",
+          "credit_cost": 1,
+          "rate_limit_count": 1,
+          "cost_source": null,
+          "display": "1 credit",
+          "operations": [
+            {
+              "operation_type": "openai_image_generate",
+              "billing_unit": "operation",
+              "credit_cost": 1,
+              "rate_limit_count": 1,
+              "cost_source": null
+            }
+          ]
+        },
+        "x-credit-cost": 1,
+        "x-billing-unit": "operation",
+        "x-provider": "openai",
+        "x-media-type": "image",
+        "x-concurrency-bucket": "image",
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v4/operations/cancel": {
+      "post": {
+        "tags": [
+          "v4-operations"
+        ],
+        "summary": "Bulk Cancel Operations",
+        "description": "Cancel one or more operations in bulk.\n\nThis endpoint allows cancelling multiple operations in a single request.\nEach operation is processed independently - if one fails, others will still be processed.\n\n**Refund Policy (per operation):**\n- If the operation is still \"pending\" (generation hasn't started), the rate limit\n  charge is refunded and the operation is cancelled.\n- If the operation is already \"processing\" (generation in progress), the operation\n  is marked for cancellation but NO refund is issued since resources have already\n  been consumed.\n- If the operation is already completed (\"success\" or \"error\"), no action is taken.\n\n**Important Notes:**\n- Cancellation is best-effort. The background task checks the cancelled flag\n  periodically, but if it's in the middle of a provider API call, it may still\n  complete before seeing the cancellation.\n- For video operations that take several minutes, cancellation during \"processing\"\n  will stop polling for results but the provider may still complete the generation.\n- Operations not found or not owned by the API key will be reported in results\n  with cancelled=False.\n\nReturns:\n    - results: List of cancellation results for each operation\n    - total_requested: Number of operations in the request\n    - total_cancelled: Number of operations successfully cancelled\n    - total_refunded: Number of operations that received a refund",
+        "operationId": "cancel_operations",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkCancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkCancelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/operations/cancel-all": {
+      "get": {
+        "tags": [
+          "v4-operations"
+        ],
+        "summary": "Cancel All Operations",
+        "description": "Cancel all active operations for the current API key.\n\nThis endpoint is useful when you've started operations but lost track of their IDs.\nIt finds all pending and processing operations for your API key and cancels them.\n\n**Refund Policy (per operation):**\n- If the operation is still \"pending\" (generation hasn't started), the rate limit\n  charge is refunded and the operation is cancelled.\n- If the operation is already \"processing\" (generation in progress), the operation\n  is marked for cancellation but NO refund is issued since resources have already\n  been consumed.\n\n**Important Notes:**\n- Only affects operations in \"pending\" or \"processing\" state.\n- Completed operations (\"success\" or \"error\") are not affected.\n- Cancellation is best-effort. Background tasks check the cancelled flag\n  periodically, but may complete before seeing the cancellation.\n\nReturns:\n    - results: List of cancellation results for each active operation found\n    - total_found: Number of active operations found for this API key\n    - total_cancelled: Number of operations successfully cancelled\n    - total_refunded: Number of operations that received a refund",
+        "operationId": "cancel_all_operations",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelAllResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/operations/{operation_id}": {
+      "get": {
+        "tags": [
+          "v4-operations"
+        ],
+        "summary": "Get Operation Status",
+        "description": "Get the status of any async operation (image or video).\n\nThis is the unified status endpoint for all V4 operations.\nPoll this endpoint to check if your operation has completed.\n\nReturns:\n    - status: \"pending\" (queued), \"processing\" (in progress), \"success\", or \"error\"\n    - result: The generated content when status is \"success\"\n    - error: Error message when status is \"error\"",
+        "operationId": "get_operation_status",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Operation Id"
+            }
+          },
+          {
+            "name": "result_format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "data_uri",
+                "ref"
+              ],
+              "type": "string",
+              "description": "Return success results as resolved data URIs or file: references.",
+              "default": "data_uri",
+              "title": "Result Format"
+            },
+            "description": "Return success results as resolved data URIs or file: references."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v4/prompt/generate": {
+      "post": {
+        "tags": [
+          "v4-prompt"
+        ],
+        "summary": "Generate a prompt using server-side LLM",
+        "description": "Generate text using the server's OpenAI API key.\n\nToken usage (input + output) is tracked per API key and counted against the hourly token limit.\nThe model and parameters are configured server-side.\n\n**Rate Limiting:**\n- Total tokens consumed (prompt + completion) count against `prompt_tokens_per_hour_limit`\n- Pre-check rejects requests if the token budget is already exhausted\n- Actual token count is recorded after each successful generation\n\n**Operation metadata:**\n- `prompt_generation`: token-based; billing `token`; media `text`; provider `openai`.",
+        "operationId": "prompt_generation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneratePromptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratePromptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-operation-types": [
+          "prompt_generation"
+        ],
+        "x-operation-catalog": [
+          {
+            "x-operation-type": "prompt_generation",
+            "x-provider": "openai",
+            "x-media-type": "text",
+            "x-credit-cost": null,
+            "x-cost": {
+              "operation_type": "prompt_generation",
+              "billing_unit": "token",
+              "credit_cost": null,
+              "rate_limit_count": 0,
+              "cost_source": "usage.total_tokens"
+            },
+            "x-billing-unit": "token",
+            "x-rate-limit-count": 0,
+            "x-concurrency-bucket": null,
+            "x-enabled": true,
+            "x-docs-enabled": true,
+            "x-execution-enabled": true,
+            "x-public": true,
+            "x-deprecated": false,
+            "x-experimental": false,
+            "x-internal": false,
+            "x-result-type": "text",
+            "x-supports-references": false,
+            "x-supports-data-uri": false,
+            "x-max-input-images": 0,
+            "x-max-output-items": 1,
+            "x-timeout-seconds": null,
+            "x-operation-ttl-seconds": null,
+            "x-provider-options": {
+              "cost_source": "usage.total_tokens"
+            }
+          }
+        ],
+        "x-operation-costs": [
+          {
+            "operation_type": "prompt_generation",
+            "billing_unit": "token",
+            "credit_cost": null,
+            "rate_limit_count": 0,
+            "cost_source": "usage.total_tokens"
+          }
+        ],
+        "x-cost": {
+          "billing_unit": "token",
+          "credit_cost": null,
+          "rate_limit_count": 0,
+          "cost_source": "usage.total_tokens",
+          "display": "token-based",
+          "operations": [
+            {
+              "operation_type": "prompt_generation",
+              "billing_unit": "token",
+              "credit_cost": null,
+              "rate_limit_count": 0,
+              "cost_source": "usage.total_tokens"
+            }
+          ]
+        },
+        "x-credit-cost": null,
+        "x-billing-unit": "token",
+        "x-provider": "openai",
+        "x-media-type": "text",
+        "x-concurrency-bucket": null,
+        "x-enabled": true,
+        "x-docs-enabled": true,
+        "x-execution-enabled": true,
+        "x-public": true,
+        "x-internal": false,
+        "x-experimental": false,
+        "x-deprecated": false
+      }
+    },
+    "/api/v5/capabilities": {
+      "get": {
+        "tags": [
+          "v5-docs"
+        ],
+        "summary": "Get Capabilities",
+        "description": "List canonical V5 generation capabilities with exact billing, inputs, options, and provider model mapping.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_list_capabilities",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by provider id.",
+              "title": "Provider"
+            },
+            "description": "Filter by provider id."
+          },
+          {
+            "name": "media_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "image",
+                    "video",
+                    "text"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by media type.",
+              "title": "Media Type"
+            },
+            "description": "Filter by media type."
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by v5 model id.",
+              "title": "Model"
+            },
+            "description": "Filter by v5 model id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OperationInfo"
+                  },
+                  "title": "Response V5 List Capabilities"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/capabilities/{operation_id}": {
+      "get": {
+        "tags": [
+          "v5-docs"
+        ],
+        "summary": "Get Capability",
+        "description": "Get one canonical V5 generation capability's billing, input contract, options, and provider mapping.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_get_capability",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Operation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/generations": {
+      "post": {
+        "tags": [
+          "v5-generations"
+        ],
+        "summary": "Create Generation",
+        "description": "Create an image or video generation. Prefer operation for an exact, billable contract; model remains a shorthand.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_create_generation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationAcceptedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/generations/{generation_id}": {
+      "get": {
+        "tags": [
+          "v5-generations"
+        ],
+        "summary": "Get Generation",
+        "description": "Get a generation status. Successful media responses return file refs plus download URLs.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_get_generation",
+        "parameters": [
+          {
+            "name": "generation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Generation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      },
+      "delete": {
+        "tags": [
+          "v5-generations"
+        ],
+        "summary": "Cancel Generation",
+        "description": "Cancel a queued or running generation.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_cancel_generation",
+        "parameters": [
+          {
+            "name": "generation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Generation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationCancelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/models": {
+      "get": {
+        "tags": [
+          "v5-docs"
+        ],
+        "summary": "Get Models",
+        "description": "List self-documenting V5 model capability records.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_list_models",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by provider id.",
+              "title": "Provider"
+            },
+            "description": "Filter by provider id."
+          },
+          {
+            "name": "media_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "image",
+                    "video",
+                    "text"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by media type.",
+              "title": "Media Type"
+            },
+            "description": "Filter by media type."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ModelInfo"
+                  },
+                  "title": "Response V5 List Models"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/models/{model_id}": {
+      "get": {
+        "tags": [
+          "v5-docs"
+        ],
+        "summary": "Get Model",
+        "description": "Get one model's request options, input semantics, output shape, and quirks.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_get_model",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelInfo"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/operations/cancel": {
+      "post": {
+        "tags": [
+          "v5-operations"
+        ],
+        "summary": "Bulk Cancel Operations",
+        "description": "Cancel one or more V5 async operations.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_cancel_operations",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkCancelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkCancelResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/operations/cancel-all": {
+      "get": {
+        "tags": [
+          "v5-operations"
+        ],
+        "summary": "Cancel All Operations",
+        "description": "Cancel all active V5 async operations for the authenticated API key.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_cancel_all_operations",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelAllResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/operations/{operation_id}": {
+      "get": {
+        "tags": [
+          "v5-operations"
+        ],
+        "summary": "Get Operation Status",
+        "description": "Get a V5 async operation status.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_get_operation",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Operation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/prompts/generate": {
+      "post": {
+        "tags": [
+          "v5-prompts"
+        ],
+        "summary": "Generate Prompt",
+        "description": "Generate text using the server-side LLM.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_prompt_generation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneratePromptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratePromptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/providers": {
+      "get": {
+        "tags": [
+          "v5-docs"
+        ],
+        "summary": "Get Providers",
+        "description": "List V5 providers and their supported models.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_list_providers",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderInfo"
+                  },
+                  "type": "array",
+                  "title": "Response V5 List Providers"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    },
+    "/api/v5/usage": {
+      "get": {
+        "tags": [
+          "v5-account"
+        ],
+        "summary": "Get Usage",
+        "description": "Get current usage statistics for the authenticated API key.\n\n**Experimental:** V5 is still being finalized and may change before it is marked stable.",
+        "operationId": "v5_get_usage",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-experimental": true
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccountLimits": {
+        "properties": {
+          "img_gen_per_hour_limit": {
+            "type": "integer",
+            "title": "Img Gen Per Hour Limit",
+            "default": 0
+          },
+          "video_gen_per_hour_limit": {
+            "type": "integer",
+            "title": "Video Gen Per Hour Limit",
+            "default": 0
+          },
+          "img_generation_threads_allowed": {
+            "type": "integer",
+            "title": "Img Generation Threads Allowed",
+            "default": 0
+          },
+          "video_generation_threads_allowed": {
+            "type": "integer",
+            "title": "Video Generation Threads Allowed",
+            "default": 0
+          },
+          "prompt_tokens_per_hour_limit": {
+            "type": "integer",
+            "title": "Prompt Tokens Per Hour Limit",
+            "default": 0
+          },
+          "flow_ultra_hour_limit": {
+            "type": "integer",
+            "title": "Flow Ultra Hour Limit",
+            "default": 0
+          },
+          "flow_ultra_threads_allowed": {
+            "type": "integer",
+            "title": "Flow Ultra Threads Allowed",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "AccountLimits",
+        "description": "Account rate limits."
+      },
+      "ActiveThreads": {
+        "properties": {
+          "image_threads": {
+            "type": "integer",
+            "title": "Image Threads",
+            "default": 0
+          },
+          "video_threads": {
+            "type": "integer",
+            "title": "Video Threads",
+            "default": 0
+          },
+          "flow_ultra_threads": {
+            "type": "integer",
+            "title": "Flow Ultra Threads",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ActiveThreads",
+        "description": "Current active thread counts."
+      },
+      "BillingInfo": {
+        "properties": {
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "credits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credits"
+          },
+          "rate_limit_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Count"
+          },
+          "display": {
+            "type": "string",
+            "title": "Display"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/BillingVariantInfo"
+            },
+            "type": "array",
+            "title": "Variants"
+          }
+        },
+        "type": "object",
+        "required": [
+          "unit",
+          "display"
+        ],
+        "title": "BillingInfo"
+      },
+      "BillingVariantInfo": {
+        "properties": {
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "description": "Underlying billable operation type."
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "credits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credits"
+          },
+          "rate_limit_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Limit Count"
+          },
+          "concurrency_bucket": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrency Bucket"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_type",
+          "unit"
+        ],
+        "title": "BillingVariantInfo"
+      },
+      "BulkCancelRequest": {
+        "properties": {
+          "operation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Operation Ids",
+            "description": "List of operation IDs to cancel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_ids"
+        ],
+        "title": "BulkCancelRequest",
+        "description": "Request body for bulk operation cancellation.\n\nAllows cancelling multiple operations in a single request."
+      },
+      "BulkCancelResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/OperationCancelResult"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Cancellation result for each requested operation"
+          },
+          "total_requested": {
+            "type": "integer",
+            "title": "Total Requested",
+            "description": "Total number of operations requested to cancel"
+          },
+          "total_cancelled": {
+            "type": "integer",
+            "title": "Total Cancelled",
+            "description": "Number of operations successfully cancelled"
+          },
+          "total_refunded": {
+            "type": "integer",
+            "title": "Total Refunded",
+            "description": "Number of operations that received a refund"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results",
+          "total_requested",
+          "total_cancelled",
+          "total_refunded"
+        ],
+        "title": "BulkCancelResponse",
+        "description": "Response for bulk operation cancellation request.\n\nReturned by POST /api/v4/operations/cancel endpoint.\nContains the result for each operation that was requested to be cancelled."
+      },
+      "CancelAllResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/OperationCancelResult"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Cancellation result for each active operation found"
+          },
+          "total_found": {
+            "type": "integer",
+            "title": "Total Found",
+            "description": "Total number of active operations found for this API key"
+          },
+          "total_cancelled": {
+            "type": "integer",
+            "title": "Total Cancelled",
+            "description": "Number of operations successfully cancelled"
+          },
+          "total_refunded": {
+            "type": "integer",
+            "title": "Total Refunded",
+            "description": "Number of operations that received a refund"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results",
+          "total_found",
+          "total_cancelled",
+          "total_refunded"
+        ],
+        "title": "CancelAllResponse",
+        "description": "Response for cancel-all operations request.\n\nReturned by GET /api/v4/operations/cancel-all endpoint.\nContains the result for each active operation that was cancelled."
+      },
+      "CurrentUsage": {
+        "properties": {
+          "hourly_usage": {
+            "$ref": "#/components/schemas/HourlyUsage",
+            "default": {}
+          },
+          "active_threads": {
+            "$ref": "#/components/schemas/ActiveThreads",
+            "default": {
+              "image_threads": 0,
+              "video_threads": 0,
+              "flow_ultra_threads": 0
+            }
+          }
+        },
+        "type": "object",
+        "title": "CurrentUsage",
+        "description": "Current usage statistics."
+      },
+      "EditImageRequest": {
+        "anyOf": [
+          {
+            "properties": {
+              "image": {
+                "$ref": "#/components/schemas/ImageInput"
+              }
+            },
+            "required": [
+              "image"
+            ]
+          },
+          {
+            "properties": {
+              "images": {
+                "items": {
+                  "$ref": "#/components/schemas/ImageInput"
+                },
+                "type": "array",
+                "minItems": 1
+              }
+            },
+            "required": [
+              "images"
+            ]
+          }
+        ],
+        "properties": {
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Single image as data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Supported formats: JPEG, PNG, WebP. Maximum size: 5MB."
+          },
+          "images": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ImageInput"
+                },
+                "type": "array",
+                "maxItems": 5,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images",
+            "description": "List of images as data URIs or file references. Maximum 5 images. At least one of 'image' or 'images' must be provided."
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the edit/transformation (e.g., 'make it HDR', 'cartoon style', 'add sunset lighting')"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "EditImageRequest"
+      },
+      "ExtractPromptRequest": {
+        "properties": {
+          "input_image": {
+            "$ref": "#/components/schemas/ImageInput",
+            "description": "Image to extract a text description from"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_image"
+        ],
+        "title": "ExtractPromptRequest"
+      },
+      "ExtractPromptResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "result",
+          "task_id"
+        ],
+        "title": "ExtractPromptResponse",
+        "description": "Response for successful prompt extraction."
+      },
+      "FlowGenerateImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Image aspect ratio in n:n format.",
+            "default": "16:9"
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "GEM_PIX_2",
+              "IMAGEN_3_5",
+              "NARWHAL"
+            ],
+            "title": "Model",
+            "description": "Model to use: GEM_PIX_2 (Nano Pro), IMAGEN_3_5 (Imagen 4), or NARWHAL (Nano Banana 2)",
+            "default": "GEM_PIX_2"
+          },
+          "reference_images": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ImageInput"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Images",
+            "description": "Optional reference images (up to 10) for style/content guidance"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "FlowGenerateImageRequest"
+      },
+      "FlowGenerateVideoFromTextRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio in n:n format.",
+            "default": "16:9"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "FlowGenerateVideoFromTextRequest"
+      },
+      "FlowerGenerateImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Image aspect ratio. 16:9 (1344x768), 9:16 (768x1344), or 1:1 (1024x1024). Ignored when reference_image is provided.",
+            "default": "16:9"
+          },
+          "reference_image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional reference image for img2img editing. When provided, the prompt acts as an edit instruction. Data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Max 5MB."
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "FlowerGenerateImageRequest"
+      },
+      "FlowerGenerateVideoRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio. 16:9 (1280x720) or 9:16 (720x1280).",
+            "default": "16:9"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "FlowerGenerateVideoRequest"
+      },
+      "FlowerVideoFromImageRequest": {
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/ImageInput",
+            "description": "Image as data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Max 5MB."
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the desired motion/animation"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio. 16:9 (1280x720) or 9:16 (720x1280).",
+            "default": "16:9"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image",
+          "prompt"
+        ],
+        "title": "FlowerVideoFromImageRequest"
+      },
+      "GenerateImagesRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the images to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "9:16",
+              "16:9"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Image aspect ratio: 1:1, 2:3, 3:2, 9:16, or 16:9",
+            "default": "3:2"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "quality",
+              "speed"
+            ],
+            "title": "Quality",
+            "description": "Image quality mode. 'quality' generates 4 higher-quality images (slower). 'speed' generates 6 images faster (default).",
+            "default": "speed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerateImagesRequest"
+      },
+      "GeneratePromptRequest": {
+        "properties": {
+          "user_prompt": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "User Prompt",
+            "description": "The full prompt to send to the LLM (e.g., base prompt template with user text already substituted)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_prompt"
+        ],
+        "title": "GeneratePromptRequest",
+        "description": "Request to generate a prompt via server-side LLM."
+      },
+      "GeneratePromptResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id",
+            "description": "Unique operation ID for tracking and error reporting"
+          },
+          "generated_text": {
+            "type": "string",
+            "title": "Generated Text",
+            "description": "The LLM-generated text"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/PromptTokenUsage",
+            "description": "Token usage breakdown"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "generated_text",
+          "usage"
+        ],
+        "title": "GeneratePromptResponse",
+        "description": "Response from server-side prompt generation."
+      },
+      "GenerateVideoFromImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt to guide the video generation"
+          },
+          "input_image": {
+            "$ref": "#/components/schemas/ImageInput",
+            "description": "Starting image for the video"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "input_image"
+        ],
+        "title": "GenerateVideoFromImageRequest"
+      },
+      "GenerateVideoFromIngredientsRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "reference_images": {
+            "items": {
+              "$ref": "#/components/schemas/ImageInput"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Reference Images",
+            "description": "Reference images (1-3) to guide video generation"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio in n:n format.",
+            "default": "16:9"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "reference_images"
+        ],
+        "title": "GenerateVideoFromIngredientsRequest"
+      },
+      "GenerateVideoFromKeyframesRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "start_image": {
+            "$ref": "#/components/schemas/ImageInput",
+            "description": "Starting keyframe image (required)"
+          },
+          "end_image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional ending keyframe image"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio in n:n format.",
+            "default": "16:9"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "start_image"
+        ],
+        "title": "GenerateVideoFromKeyframesRequest"
+      },
+      "GenerateVideoRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "9:16",
+              "16:9"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio: 1:1, 2:3, 3:2, 9:16, or 16:9",
+            "default": "16:9"
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "480p",
+              "720p"
+            ],
+            "title": "Resolution",
+            "description": "Video generation resolution: 480p or 720p.",
+            "default": "480p"
+          },
+          "upscale": {
+            "type": "boolean",
+            "title": "Upscale",
+            "description": "Deprecated. Prefer resolution='720p'. If true and resolution is omitted, 720p is requested directly.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerateVideoRequest"
+      },
+      "GenerationAcceptedResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Generation id. Use it with GET /api/v5/generations/{id}."
+          },
+          "object": {
+            "type": "string",
+            "const": "generation",
+            "title": "Object",
+            "default": "generation"
+          },
+          "status": {
+            "type": "string",
+            "const": "queued",
+            "title": "Status",
+            "default": "queued"
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation",
+            "description": "Canonical V5 operation id."
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "flow",
+              "flower",
+              "grok",
+              "openai"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ],
+            "title": "Media Type"
+          },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "description": "Underlying billable operation type."
+          },
+          "billing": {
+            "$ref": "#/components/schemas/BillingInfo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "operation",
+          "provider",
+          "model",
+          "media_type",
+          "operation_type",
+          "billing"
+        ],
+        "title": "GenerationAcceptedResponse"
+      },
+      "GenerationCancelResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "object": {
+            "type": "string",
+            "const": "generation.cancel",
+            "title": "Object",
+            "default": "generation.cancel"
+          },
+          "cancelled": {
+            "type": "boolean",
+            "title": "Cancelled"
+          },
+          "refunded": {
+            "type": "boolean",
+            "title": "Refunded"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "cancelled",
+          "refunded"
+        ],
+        "title": "GenerationCancelResponse"
+      },
+      "GenerationCreateRequest": {
+        "properties": {
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation",
+            "description": "Canonical V5 operation id. See GET /api/v5/capabilities for billing, inputs, and provider behavior."
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "Compatibility shorthand. If operation is omitted, the server infers the operation from model plus inputs/options."
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt for the generation."
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/V5ImageInput"
+            },
+            "type": "array",
+            "title": "Inputs",
+            "description": "Input images as data URIs or 32-character storage file ids. Meaning is inferred from the selected model and input count."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "pattern": "^[1-9]\\d*:[1-9]\\d*$",
+            "title": "Aspect Ratio",
+            "description": "Requested output aspect ratio in n:n form.",
+            "default": "16:9"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed, when supported by the selected model."
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality",
+            "description": "Quality/speed mode when supported. Example: speed or quality."
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution",
+            "description": "Requested video resolution when supported. Example: 480p or 720p."
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10,
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count",
+            "description": "Requested output count, when supported."
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 60,
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Requested duration, when supported by the selected model."
+          },
+          "ultra": {
+            "type": "boolean",
+            "title": "Ultra",
+            "description": "Flow video only. Use Ultra-tier Flow accounts and limits.",
+            "default": false
+          },
+          "keyframes": {
+            "type": "boolean",
+            "title": "Keyframes",
+            "description": "Flow video only. Interpret inputs[0] as start frame and inputs[1] as optional end frame.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GenerationCreateRequest"
+      },
+      "GenerationResultItem": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video",
+              "text"
+            ],
+            "title": "Type"
+          },
+          "download_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Path",
+            "description": "Storage download path for file-backed media. Resolve it against the active storage origin for the current site or mirror."
+          },
+          "data": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data",
+            "description": "Inline data URI only when a provider returned inline data instead of storage-backed media."
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text",
+            "description": "Text result, for text-producing operations."
+          },
+          "mime_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime Type"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "type"
+        ],
+        "title": "GenerationResultItem"
+      },
+      "GenerationStatusResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "object": {
+            "type": "string",
+            "const": "generation",
+            "title": "Object",
+            "default": "generation"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "media_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "image",
+                  "video",
+                  "text"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Type"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation",
+            "description": "Canonical V5 operation id, when available."
+          },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/GenerationResultItem"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/GenerationUsage"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "operation_type"
+        ],
+        "title": "GenerationStatusResponse"
+      },
+      "GenerationUsage": {
+        "properties": {
+          "credits": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credits"
+          },
+          "refunded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refunded"
+          }
+        },
+        "type": "object",
+        "title": "GenerationUsage"
+      },
+      "GoogleFxExtractPromptRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "input_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Input Image",
+            "description": "Image to analyze (data URI or file reference)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input_image"
+        ],
+        "title": "GoogleFxExtractPromptRequest",
+        "description": "Extract a text description from an image using Google FX."
+      },
+      "GoogleFxGenerateImageFlowRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "IMAGE_ASPECT_RATIO_PORTRAIT",
+              "IMAGE_ASPECT_RATIO_PORTRAIT_THREE_FOUR",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output image aspect ratio (portrait or landscape only). Accepts: '16:9', '9:16', 'landscape', 'portrait', or full Google format",
+            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "GEM_PIX_2",
+              "IMAGEN_3_5"
+            ],
+            "title": "Model",
+            "description": "Model to use: GEM_PIX_2 (nano banana pro) or IMAGEN_3_5 (imagen 4)",
+            "default": "GEM_PIX_2"
+          },
+          "reference_images": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^data:[^;]+;base64,"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^file:[a-f0-9]{32}$"
+                    }
+                  ],
+                  "description": "Image as data URI or file reference. Maximum size: 5MB"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Images",
+            "description": "Optional reference images (1-10 depending on model). Data URIs or file references."
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GoogleFxGenerateImageFlowRequest",
+        "description": "Generate an image from a text prompt using Google FX Flow API (GEM_PIX_2 or Imagen 4)."
+      },
+      "GoogleFxGenerateImageRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "IMAGE_ASPECT_RATIO_PORTRAIT",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE",
+              "IMAGE_ASPECT_RATIO_SQUARE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output image aspect ratio. Accepts: '16:9', '9:16', '1:1', 'landscape', 'portrait', 'square', or full Google format",
+            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GoogleFxGenerateImageRequest",
+        "description": "Generate an image from a text prompt using Google FX (Imagen 4)."
+      },
+      "GoogleFxGenerateVideoFromImageLegacyRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description guiding the video generation"
+          },
+          "input_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Input Image",
+            "description": "Starting image (data URI or file reference). Max 5MB"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "input_image"
+        ],
+        "title": "GoogleFxGenerateVideoFromImageLegacyRequest",
+        "description": "Generate a video from a single input image using Google FX (legacy)."
+      },
+      "GoogleFxGenerateVideoFromIngredientsRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description guiding the video generation"
+          },
+          "reference_images": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^data:[^;]+;base64,"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^file:[a-f0-9]{32}$"
+                }
+              ],
+              "description": "Image as data URI or file reference. Maximum size: 5MB"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Reference Images",
+            "description": "1-3 reference images (data URIs or file references). Max 5MB each"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "VIDEO_ASPECT_RATIO_PORTRAIT",
+              "VIDEO_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output video aspect ratio. Accepts: '16:9', '9:16', 'landscape', 'portrait', or full Google format",
+            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "reference_images"
+        ],
+        "title": "GoogleFxGenerateVideoFromIngredientsRequest",
+        "description": "Generate a video from 1-3 reference images using Google FX."
+      },
+      "GoogleFxGenerateVideoFromPromptLegacyRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the video to generate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GoogleFxGenerateVideoFromPromptLegacyRequest",
+        "description": "Generate a video from a text prompt using Google FX (legacy alternative method)."
+      },
+      "GoogleFxGenerateVideoFromPromptRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the video to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "VIDEO_ASPECT_RATIO_PORTRAIT",
+              "VIDEO_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output video aspect ratio. Accepts: '16:9', '9:16', 'landscape', 'portrait', or full Google format",
+            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "GoogleFxGenerateVideoFromPromptRequest",
+        "description": "Generate a video from a text prompt using Google FX (VEO)."
+      },
+      "GoogleFxGenerateVideoStartEndRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description guiding the video generation"
+          },
+          "start_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Start Image",
+            "description": "Starting keyframe image (data URI or file reference). Max 5MB"
+          },
+          "end_image": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^data:[^;]+;base64,"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^file:[a-f0-9]{32}$"
+                  }
+                ],
+                "description": "Image as data URI or file reference. Maximum size: 5MB"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Image",
+            "description": "Optional ending keyframe image. Max 5MB"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "VIDEO_ASPECT_RATIO_PORTRAIT",
+              "VIDEO_ASPECT_RATIO_LANDSCAPE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output video aspect ratio. Accepts: '16:9', '9:16', 'landscape', 'portrait', or full Google format",
+            "default": "VIDEO_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "start_image"
+        ],
+        "title": "GoogleFxGenerateVideoStartEndRequest",
+        "description": "Generate a video with start and optional end keyframes using Google FX."
+      },
+      "GoogleFxRemixImageRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description guiding the remix"
+          },
+          "reference_images": {
+            "items": {
+              "$ref": "#/components/schemas/src__api__v3__models__image__RemixReference"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Reference Images",
+            "description": "1-3 reference images with categories"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "IMAGE_ASPECT_RATIO_PORTRAIT",
+              "IMAGE_ASPECT_RATIO_LANDSCAPE",
+              "IMAGE_ASPECT_RATIO_SQUARE"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Output image aspect ratio. Accepts: '16:9', '9:16', '1:1', 'landscape', 'portrait', 'square', or full Google format",
+            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed for reproducible generation"
+          },
+          "strict_mode": {
+            "type": "boolean",
+            "title": "Strict Mode",
+            "description": "Use strict mode (R2I model) or relaxed mode (IMAGEN_3_5 model)",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "reference_images"
+        ],
+        "title": "GoogleFxRemixImageRequest",
+        "description": "Remix images by combining subjects, scenes, and styles from reference images."
+      },
+      "GoogleFxTransformImageRequest": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider",
+            "default": "google_fx"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text description of the transformation to apply"
+          },
+          "input_image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Input Image",
+            "description": "Image to transform (data URI or file reference)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "input_image"
+        ],
+        "title": "GoogleFxTransformImageRequest",
+        "description": "Transform an existing image based on a text prompt using Google FX."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HourlyUsage": {
+        "properties": {
+          "image_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HourlyUsageStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HourlyUsageStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HourlyUsageStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "flow_ultra_generation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HourlyUsageStats"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "HourlyUsage",
+        "description": "Hourly usage breakdown by operation type."
+      },
+      "HourlyUsageStats": {
+        "properties": {
+          "current_usage": {
+            "type": "integer",
+            "title": "Current Usage"
+          },
+          "window_start": {
+            "type": "number",
+            "title": "Window Start"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_usage",
+          "window_start"
+        ],
+        "title": "HourlyUsageStats",
+        "description": "Usage statistics for a single endpoint within the current hourly window."
+      },
+      "ImageInput": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^data:[^;]+;base64,"
+          },
+          {
+            "type": "string",
+            "pattern": "^file:[a-f0-9]{32}$"
+          }
+        ],
+        "description": "Image as data URI or file reference. Maximum size: 5MB"
+      },
+      "ImageResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider"
+          },
+          "result": {
+            "type": "string",
+            "pattern": "^data:[^;]+;base64,",
+            "title": "Result"
+          },
+          "task_id": {
+            "type": "string",
+            "title": "Task Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "result",
+          "task_id"
+        ],
+        "title": "ImageResponse",
+        "description": "Response for successful image generation/transformation."
+      },
+      "ModelInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "flow",
+              "flower",
+              "grok",
+              "openai"
+            ],
+            "title": "Provider"
+          },
+          "provider_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Model",
+            "description": "Underlying provider model code used by the adapter, when applicable."
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video",
+              "text"
+            ],
+            "title": "Media Type"
+          },
+          "routes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Routes"
+          },
+          "default": {
+            "type": "boolean",
+            "title": "Default",
+            "default": false
+          },
+          "deprecated": {
+            "type": "boolean",
+            "title": "Deprecated",
+            "default": false
+          },
+          "experimental": {
+            "type": "boolean",
+            "title": "Experimental",
+            "default": false
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/ModelInputInfo"
+          },
+          "outputs": {
+            "$ref": "#/components/schemas/ModelOutputInfo"
+          },
+          "billing": {
+            "$ref": "#/components/schemas/BillingInfo"
+          },
+          "operations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Operations"
+          },
+          "options": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelOptionInfo"
+            },
+            "type": "object",
+            "title": "Options"
+          },
+          "quirks": {
+            "items": {
+              "$ref": "#/components/schemas/ModelQuirkInfo"
+            },
+            "type": "array",
+            "title": "Quirks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "display_name",
+          "media_type",
+          "routes",
+          "inputs",
+          "outputs",
+          "billing",
+          "operations",
+          "options"
+        ],
+        "title": "ModelInfo"
+      },
+      "ModelInputInfo": {
+        "properties": {
+          "min": {
+            "type": "integer",
+            "title": "Min",
+            "default": 0
+          },
+          "max": {
+            "type": "integer",
+            "title": "Max"
+          },
+          "semantics": {
+            "type": "string",
+            "title": "Semantics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "max",
+          "semantics"
+        ],
+        "title": "ModelInputInfo"
+      },
+      "ModelOptionInfo": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "enum": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enum"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "description"
+        ],
+        "title": "ModelOptionInfo"
+      },
+      "ModelOutputInfo": {
+        "properties": {
+          "types": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "image",
+                "video",
+                "text"
+              ]
+            },
+            "type": "array",
+            "title": "Types"
+          },
+          "max_items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Items"
+          },
+          "default_format": {
+            "type": "string",
+            "const": "ref",
+            "title": "Default Format",
+            "default": "ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "types"
+        ],
+        "title": "ModelOutputInfo"
+      },
+      "ModelQuirkInfo": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "migration"
+            ],
+            "title": "Severity"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "title": "ModelQuirkInfo"
+      },
+      "OpenAIImageGenerateRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "pattern": "^[1-9]\\d*:[1-9]\\d*$",
+            "title": "Aspect Ratio",
+            "description": "Requested image aspect ratio in n:n format.",
+            "default": "16:9"
+          },
+          "reference_images": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ImageInput"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Images",
+            "description": "Optional reference images as data URIs or file references to guide generation."
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "OpenAIImageGenerateRequest"
+      },
+      "OperationCancelResult": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id",
+            "description": "The operation ID that was targeted for cancellation"
+          },
+          "cancelled": {
+            "type": "boolean",
+            "title": "Cancelled",
+            "description": "True if operation was successfully cancelled, False if already completed"
+          },
+          "refunded": {
+            "type": "boolean",
+            "title": "Refunded",
+            "description": "True if rate limit usage was refunded (only when cancelled before generation started)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "cancelled",
+          "refunded"
+        ],
+        "title": "OperationCancelResult",
+        "description": "Result for a single operation cancellation within a bulk request.\n\nRefund Policy:\n    - If cancelled while \"pending\": refunded=True (generation hadn't started)\n    - If cancelled while \"processing\": refunded=False (resources already consumed)\n    - If already completed: cancelled=False, refunded=False"
+      },
+      "OperationInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "description": "Underlying billable operation type."
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "flow",
+              "flower",
+              "grok",
+              "openai"
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "provider_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Model",
+            "description": "Underlying provider model code used by the adapter, when applicable."
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video",
+              "text"
+            ],
+            "title": "Media Type"
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/ModelInputInfo"
+          },
+          "outputs": {
+            "$ref": "#/components/schemas/ModelOutputInfo"
+          },
+          "billing": {
+            "$ref": "#/components/schemas/BillingInfo"
+          },
+          "options": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelOptionInfo"
+            },
+            "type": "object",
+            "title": "Options"
+          },
+          "quirks": {
+            "items": {
+              "$ref": "#/components/schemas/ModelQuirkInfo"
+            },
+            "type": "array",
+            "title": "Quirks"
+          },
+          "deprecated": {
+            "type": "boolean",
+            "title": "Deprecated",
+            "default": false
+          },
+          "experimental": {
+            "type": "boolean",
+            "title": "Experimental",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "operation_type",
+          "provider",
+          "model",
+          "display_name",
+          "description",
+          "media_type",
+          "inputs",
+          "outputs",
+          "billing",
+          "options"
+        ],
+        "title": "OperationInfo"
+      },
+      "OperationResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true,
+            "title": "Success",
+            "description": "Always true when the operation was accepted"
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id",
+            "description": "Unique identifier for this operation"
+          },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "description": "Type of operation (e.g., 'flow_image_generate', 'whisk_image_transform')"
+          },
+          "status": {
+            "type": "string",
+            "const": "pending",
+            "title": "Status",
+            "description": "Initial async operation status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "success",
+          "operation_id",
+          "operation_type",
+          "status"
+        ],
+        "title": "OperationResponse",
+        "description": "Response when any operation is initiated (async).\n\nAll V4 operations are async and return this response immediately.\nPoll /api/v4/operations/{operation_id} to get the result."
+      },
+      "OperationStatusResponse": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "description": "Type of operation"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "success",
+              "error"
+            ],
+            "title": "Status"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider",
+            "description": "Provider that owns the operation, when known"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "Model used for the operation, when known"
+          },
+          "media_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "image",
+                  "video",
+                  "text"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Type",
+            "description": "Media type for the operation"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At",
+            "description": "Time the operation was created"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "Time the operation status was last updated"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At",
+            "description": "Approximate time the operation status will expire if it is not refreshed"
+          },
+          "cost_charged": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Charged",
+            "description": "Rate-limit units charged for this operation, when applicable"
+          },
+          "usage_refunded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage Refunded",
+            "description": "Whether charged usage was refunded"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "List of results when status is 'success'. By default media results are resolved data URIs; pass result_format=ref to receive file: references for streamable storage-server downloads. Extract-prompt returns 1 plain text string."
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error message when status is 'error'"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations",
+            "description": "Translated error messages when status is 'error'"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "operation_type",
+          "status"
+        ],
+        "title": "OperationStatusResponse",
+        "description": "Response for operation status check.\n\nUsed by the unified /api/v4/operations/{operation_id} endpoint."
+      },
+      "PromptTokenUsage": {
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens",
+            "description": "Number of input tokens consumed"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens",
+            "description": "Number of output tokens generated"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "title": "Total Tokens",
+            "description": "Total tokens consumed (prompt + completion). This counts against the hourly limit."
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens"
+        ],
+        "title": "PromptTokenUsage",
+        "description": "Token usage breakdown from the LLM response."
+      },
+      "ProviderInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "media_types": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "image",
+                "video",
+                "text"
+              ]
+            },
+            "type": "array",
+            "title": "Media Types"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "description",
+          "media_types",
+          "models"
+        ],
+        "title": "ProviderInfo"
+      },
+      "RemixImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the desired output"
+          },
+          "reference_images": {
+            "items": {
+              "$ref": "#/components/schemas/src__api__v4__whisk__models__image__RemixReference"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Reference Images",
+            "description": "Reference images with categories (1-3 images). Max 1 style and 1 scene reference allowed."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Image aspect ratio in n:n format.",
+            "default": "16:9"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          },
+          "strict_mode": {
+            "type": "boolean",
+            "title": "Strict Mode",
+            "description": "Enable strict mode for closer reference adherence",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "reference_images"
+        ],
+        "title": "RemixImageRequest"
+      },
+      "TransformImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the transformation"
+          },
+          "input_image": {
+            "$ref": "#/components/schemas/ImageInput",
+            "description": "Image to transform"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "input_image"
+        ],
+        "title": "TransformImageRequest"
+      },
+      "UsageResponse": {
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "title": "Api Key"
+          },
+          "account_limits": {
+            "$ref": "#/components/schemas/AccountLimits"
+          },
+          "current_usage": {
+            "$ref": "#/components/schemas/CurrentUsage"
+          },
+          "usage_window": {
+            "type": "string",
+            "title": "Usage Window",
+            "default": "per_hour"
+          },
+          "activation_date": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activation Date"
+          },
+          "expiration_date": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiration Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_key",
+          "account_limits",
+          "current_usage"
+        ],
+        "title": "UsageResponse",
+        "description": "Response for usage statistics endpoint."
+      },
+      "V5ImageInput": {
+        "anyOf": [
+          {
+            "type": "string",
+            "pattern": "^data:[^;]+;base64,"
+          },
+          {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          }
+        ],
+        "description": "Image as a data URI or a 32-character storage file id. Maximum size: 5MB."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VideoFromImageRequest": {
+        "anyOf": [
+          {
+            "properties": {
+              "image": {
+                "$ref": "#/components/schemas/ImageInput"
+              }
+            },
+            "required": [
+              "image"
+            ]
+          },
+          {
+            "properties": {
+              "images": {
+                "items": {
+                  "$ref": "#/components/schemas/ImageInput"
+                },
+                "type": "array",
+                "minItems": 1
+              }
+            },
+            "required": [
+              "images"
+            ]
+          }
+        ],
+        "properties": {
+          "image": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Single image as data URI (data:image/jpeg;base64,...) or file reference (file:xxx). Supported formats: JPEG, PNG, WebP. Maximum size: 5MB."
+          },
+          "images": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ImageInput"
+                },
+                "type": "array",
+                "maxItems": 7,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Images",
+            "description": "List of images as data URIs or file references. Maximum 7 images. At least one of 'image' or 'images' must be provided."
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt",
+            "description": "Optional text prompt to guide the video generation. If provided, uses custom mode; otherwise uses normal mode."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "9:16",
+              "16:9"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Video aspect ratio: 1:1, 2:3, 3:2, 9:16, or 16:9",
+            "default": "16:9"
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "480p",
+              "720p"
+            ],
+            "title": "Resolution",
+            "description": "Video generation resolution: 480p or 720p.",
+            "default": "480p"
+          },
+          "upscale": {
+            "type": "boolean",
+            "title": "Upscale",
+            "description": "Deprecated. Prefer resolution='720p'. If true and resolution is omitted, 720p is requested directly.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "VideoFromImageRequest"
+      },
+      "VideoResponse": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "provider": {
+            "type": "string",
+            "const": "google_fx",
+            "title": "Provider"
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "status": {
+            "type": "string",
+            "const": "pending",
+            "title": "Status",
+            "default": "pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "operation_id"
+        ],
+        "title": "VideoResponse",
+        "description": "Response when video generation is initiated (async)."
+      },
+      "VideoStatusResponse": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "processing",
+              "success",
+              "error"
+            ],
+            "title": "Status"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "translations": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "status"
+        ],
+        "title": "VideoStatusResponse",
+        "description": "Response for video generation status check."
+      },
+      "WhiskGenerateImageRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the image to generate"
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "title": "Aspect Ratio",
+            "description": "Image aspect ratio in n:n format.",
+            "default": "16:9"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2147483647,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Random seed for reproducibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "WhiskGenerateImageRequest"
+      },
+      "WhiskGenerateVideoFromTextRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "Text prompt describing the video to generate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "WhiskGenerateVideoFromTextRequest"
+      },
+      "src__api__v3__models__image__RemixReference": {
+        "properties": {
+          "image": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^data:[^;]+;base64,"
+              },
+              {
+                "type": "string",
+                "pattern": "^file:[a-f0-9]{32}$"
+              }
+            ],
+            "title": "Image",
+            "description": "Reference image (data URI or file reference)"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "MEDIA_CATEGORY_SUBJECT",
+              "MEDIA_CATEGORY_SCENE",
+              "MEDIA_CATEGORY_STYLE"
+            ],
+            "title": "Category",
+            "description": "How this image should be used: MEDIA_CATEGORY_SUBJECT, MEDIA_CATEGORY_SCENE, or MEDIA_CATEGORY_STYLE"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image",
+          "category"
+        ],
+        "title": "RemixReference",
+        "description": "A reference image with its category for the remix operation."
+      },
+      "src__api__v4__whisk__models__image__RemixReference": {
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/ImageInput",
+            "description": "Reference image"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "MEDIA_CATEGORY_SUBJECT",
+              "MEDIA_CATEGORY_SCENE",
+              "MEDIA_CATEGORY_STYLE"
+            ],
+            "title": "Category",
+            "description": "Category: MEDIA_CATEGORY_SUBJECT, MEDIA_CATEGORY_SCENE, or MEDIA_CATEGORY_STYLE"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image",
+          "category"
+        ],
+        "title": "RemixReference"
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "API key passed in the X-API-Key header"
+      },
+      "ApiKeyQuery": {
+        "type": "apiKey",
+        "in": "query",
+        "name": "api_key",
+        "description": "API key passed as a query parameter"
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKeyHeader": []
+    },
+    {
+      "ApiKeyQuery": []
+    }
+  ],
+  "tags": []
+}
