@@ -36,8 +36,8 @@ pub fn draw_templates_section(
             // Клонуємо список для безпечного ітерування, оскільки всередині циклу
             // ми можемо модифікувати оригінальний vector при натисканні на видалення.
             for template_name in saved_templates.clone() {
+                let btn_width = (ui.available_width() - 30.0).max(50.0);
                 ui.horizontal(|ui| {
-                    let btn_width = (ui.available_width() - 30.0).max(50.0);
 
                     let btn = ui.add_sized(
                         [btn_width, 20.0],

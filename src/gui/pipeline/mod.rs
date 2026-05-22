@@ -22,11 +22,9 @@ fn toggle_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     }
 
     if ui.is_rect_visible(rect) {
-        // Плавна анімація переходу між станами
         let how_on = ui.ctx().animate_bool_responsive(response.id, *on);
 
         let bg_color = if *on {
-            // Колір акценту з теми застосунку
             ui.visuals().selection.bg_fill
         } else {
             ui.visuals().widgets.inactive.bg_fill
@@ -35,7 +33,6 @@ fn toggle_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
         let rounding = egui::Rounding::same(rect.height() / 2.0);
         ui.painter().rect_filled(rect, rounding, bg_color);
 
-        // Thumb (коло перемикача)
         let thumb_r = rect.height() / 2.0 - 2.0;
         let thumb_x = egui::lerp(
             (rect.left() + thumb_r + 2.0)..=(rect.right() - thumb_r - 2.0),
@@ -51,7 +48,7 @@ fn toggle_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     response
 }
 
-/// Відображає бічну панель пайплайну із порожніми згорнутими секціями.
+/// Відображає бічну панель пайплайну із секціями.
 /// Секції відсортовані у логічному порядку процесу створення відео:
 /// 1. Шаблони
 /// 2. Шлях збереження
@@ -59,7 +56,9 @@ fn toggle_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
 /// 4. Переклад
 /// 5. Озвучка
 /// 6. Відеоряд
-/// 7. Монтаж
+/// 7. Субтитри
+/// 8. Монтаж
+#[allow(clippy::too_many_arguments)]
 pub fn draw_pipeline_panel(
     ui: &mut egui::Ui,
     language: Language,
@@ -94,7 +93,14 @@ pub fn draw_pipeline_panel(
     video_service: &mut String,
     googler_image_provider: &mut String,
     translation_temperature: &mut f32,
+    save_path: &mut String,
+    text_input: &str,
+    jobs: &mut Vec<crate::queue::PipelineJob>,
+    job_counter: &mut u64,
+    queue_error: &mut Option<String>,
 ) {
+    // Забороняємо будь-якому елементу розширювати панель за поточну ширину
+    ui.set_max_width(ui.available_width());
     ui.vertical(|ui| {
         ui.add_space(8.0);
         ui.heading(translate(language, "pipeline_settings"));
@@ -103,8 +109,8 @@ pub fn draw_pipeline_panel(
         ui.add_space(8.0);
 
         // Форма створення нового шаблону (вгорі панелі пайплайну)
+        let available_width = ui.available_width();
         ui.horizontal(|ui| {
-            let available_width = ui.available_width();
             let text_edit = egui::TextEdit::singleline(template_name_input)
                 .hint_text(translate(language, "template_name_hint"))
                 .desired_width((available_width - 95.0).max(100.0));
@@ -153,7 +159,6 @@ pub fn draw_pipeline_panel(
             }
         });
 
-        // Статус збереження/завантаження шаблону
         if let Some(status) = template_status {
             ui.add_space(2.0);
             let is_success = status.contains('✔') || status.contains('🗑') || status.contains("Завантажено") || status.contains("Loaded") || status.contains("Загружен");
@@ -165,7 +170,46 @@ pub fn draw_pipeline_panel(
             ui.add(egui::Label::new(egui::RichText::new(status.as_str()).color(color).size(11.0)).wrap());
         }
 
-        ui.add_space(10.0);
+        ui.add_space(4.0);
+
+        // Помилка валідації (якщо є)
+        if let Some(err) = queue_error.as_ref() {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(err.as_str())
+                        .color(egui::Color32::from_rgb(231, 76, 60))
+                        .size(11.0),
+                )
+                .wrap(),
+            );
+            ui.add_space(2.0);
+        }
+
+        // Кнопка "Додати в чергу" — перед ScrollArea, завжди видима
+        if ui.add_sized(
+            [ui.available_width(), 28.0],
+            egui::Button::new(
+                egui::RichText::new(translate(language, "queue_add_btn")).strong(),
+            ),
+        ).clicked() {
+            let ctx = ui.ctx().clone();
+            validate_and_enqueue(
+                language,
+                text_input,
+                save_path,
+                *pipeline_translation_enabled,
+                translation_prompt,
+                translation_model,
+                *translation_temperature,
+                openrouter_key,
+                jobs,
+                job_counter,
+                queue_error,
+                ctx,
+            );
+        }
+
+        ui.add_space(4.0);
         ui.separator();
         ui.add_space(8.0);
 
@@ -216,7 +260,7 @@ pub fn draw_pipeline_panel(
                 {
                     let id = ui.make_persistent_id("storage_section");
                     let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(), id, false,
+                        ui.ctx(), id, true,
                     );
                     let header = ui.horizontal(|ui| {
                         state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
@@ -226,7 +270,7 @@ pub fn draw_pipeline_panel(
                     if header.inner.clicked() { state.toggle(ui); }
                     state.store(ui.ctx());
                     state.show_body_indented(&header.response, ui, |ui| {
-                        storage::draw_storage_section(ui);
+                        storage::draw_storage_section(ui, language, save_path);
                     });
                 }
 
@@ -400,6 +444,71 @@ pub fn draw_pipeline_panel(
                         editing::draw_editing_section(ui);
                     });
                 }
-            });
+            }); // ScrollArea
     });
+}
+
+/// Перевіряє налаштування та додає задачу в чергу, запускаючи фонове виконання.
+fn validate_and_enqueue(
+    language: Language,
+    text_input: &str,
+    save_path: &str,
+    translation_enabled: bool,
+    translation_prompt: &str,
+    translation_model: &str,
+    translation_temperature: f32,
+    openrouter_key: &str,
+    jobs: &mut Vec<crate::queue::PipelineJob>,
+    job_counter: &mut u64,
+    queue_error: &mut Option<String>,
+    ctx: egui::Context,
+) {
+    if text_input.trim().is_empty() {
+        *queue_error = Some(translate(language, "queue_error_no_text").to_string());
+        return;
+    }
+    if save_path.trim().is_empty() {
+        *queue_error = Some(translate(language, "queue_error_no_save_path").to_string());
+        return;
+    }
+    if translation_enabled && translation_model.is_empty() {
+        *queue_error = Some(translate(language, "queue_error_no_model").to_string());
+        return;
+    }
+    if translation_enabled && openrouter_key.is_empty() {
+        *queue_error = Some(translate(language, "queue_error_no_key").to_string());
+        return;
+    }
+
+    *queue_error = None;
+
+    let settings = crate::queue::JobSettings {
+        text: text_input.to_string(),
+        save_path: save_path.to_string(),
+        translation_enabled,
+        translation_prompt: translation_prompt.to_string(),
+        translation_model: translation_model.to_string(),
+        translation_temperature,
+        openrouter_key: openrouter_key.to_string(),
+    };
+
+    let id = *job_counter;
+    *job_counter += 1;
+    let job = crate::queue::PipelineJob::new(id, settings.clone());
+
+    // Запускаємо переклад у фоні одразу при додаванні в чергу
+    if settings.translation_enabled {
+        crate::core::pipeline::translate::run_translation(
+            settings.openrouter_key.clone(),
+            settings.translation_model.clone(),
+            settings.translation_prompt.clone(),
+            settings.text.clone(),
+            settings.translation_temperature,
+            settings.save_path.clone(),
+            Arc::clone(&job.status),
+            ctx,
+        );
+    }
+
+    jobs.push(job);
 }

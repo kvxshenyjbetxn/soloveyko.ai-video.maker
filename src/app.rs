@@ -93,6 +93,14 @@ pub struct VideoMakerApp {
     pub translation_temperature: f32,
     /// Чи відкрите вікно детальних балансів.
     pub balance_window_open: bool,
+    /// Шлях до папки збереження результатів пайплайну.
+    pub save_path: String,
+    /// Черга задач пайплайну.
+    pub jobs: Vec<crate::queue::PipelineJob>,
+    /// Лічильник ID задач.
+    pub job_counter: u64,
+    /// Повідомлення про помилку валідації перед додаванням в чергу.
+    pub queue_error: Option<String>,
 }
 
 impl Default for VideoMakerApp {
@@ -137,6 +145,10 @@ impl Default for VideoMakerApp {
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
             translation_temperature: 0.7,
             balance_window_open: false,
+            save_path: String::new(),
+            jobs: Vec::new(),
+            job_counter: 0,
+            queue_error: None,
             last_saved_settings: default_settings,
         }
     }
@@ -213,6 +225,7 @@ impl VideoMakerApp {
         let video_service = saved.video_service.clone();
         let googler_image_provider = saved.googler_image_provider.clone();
         let translation_temperature = saved.translation_temperature;
+        let save_path = saved.save_path.clone();
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
@@ -282,6 +295,10 @@ impl VideoMakerApp {
             googler_image_provider,
             translation_temperature,
             balance_window_open: false,
+            save_path,
+            jobs: Vec::new(),
+            job_counter: 0,
+            queue_error: None,
             last_saved_settings: saved,
         }
     }
@@ -458,6 +475,63 @@ fn draw_balance_window(
         });
 }
 
+/// Малює нижню панель черги задач пайплайну.
+fn draw_queue_panel(ui: &mut egui::Ui, language: crate::localization::Language, jobs: &[crate::queue::PipelineJob]) {
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong());
+        ui.separator();
+
+        egui::ScrollArea::horizontal()
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                for job in jobs.iter() {
+                    let status = job.status.lock().unwrap().clone();
+                    let (icon, status_text, color) = match &status {
+                        crate::queue::JobStatus::Pending => (
+                            "⏳", translate(language, "queue_status_pending"),
+                            ui.visuals().weak_text_color(),
+                        ),
+                        crate::queue::JobStatus::Running => (
+                            "⚙", translate(language, "queue_status_running"),
+                            egui::Color32::from_rgb(255, 200, 0),
+                        ),
+                        crate::queue::JobStatus::Done => (
+                            "✔", translate(language, "queue_status_done"),
+                            egui::Color32::from_rgb(46, 204, 113),
+                        ),
+                        crate::queue::JobStatus::Failed(_) => (
+                            "✘", translate(language, "queue_status_failed"),
+                            egui::Color32::from_rgb(231, 76, 60),
+                        ),
+                    };
+
+                    ui.group(|ui| {
+                        ui.set_max_width(200.0);
+                        ui.vertical(|ui| {
+                            ui.label(egui::RichText::new(
+                                format!("#{} {}", job.id + 1, &job.title)
+                            ).size(11.0));
+                            // Показуємо активні етапи задачі
+                            let steps: Vec<&str> = [
+                                job.settings.translation_enabled.then_some("T"),
+                            ].into_iter().flatten().collect();
+                            let steps_str = if steps.is_empty() { String::new() } else { format!("[{}] ", steps.join("+")) };
+                            ui.label(
+                                egui::RichText::new(format!("{}{} {}", steps_str, icon, status_text))
+                                    .color(color)
+                                    .size(10.0),
+                            );
+                        });
+                    });
+
+                    ui.add_space(2.0);
+                }
+            });
+    });
+    ui.add_space(4.0);
+}
+
 impl eframe::App for VideoMakerApp {
     /// Викликається кожного разу, коли інтерфейс потребує оновлення та перемальовування.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -521,10 +595,23 @@ impl eframe::App for VideoMakerApp {
             &self.googler_balance,
         );
 
+        // Нижня панель черги задач (тільки якщо є задачі)
+        if !self.jobs.is_empty() {
+            egui::TopBottomPanel::bottom("queue_panel")
+                .min_height(60.0)
+                .max_height(100.0)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    draw_queue_panel(ui, self.language, &self.jobs);
+                });
+        }
+
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
         if self.active_tab == Tab::Main {
-            let panel_res = egui::SidePanel::right("pipeline_panel")
-                .default_width(self.pipeline_width)  // Встановлюємо збережену ширину панелі
+            // default_width передається лише як початкове значення при першому запуску.
+            // egui::Memory зберігає ширину між кадрами сам — нічого читати назад не потрібно.
+            egui::SidePanel::right("pipeline_panel")
+                .default_width(self.pipeline_width)
                 .width_range(100.0..=750.0)
                 .resizable(true)
                 .show(ctx, |ui| {
@@ -562,16 +649,13 @@ impl eframe::App for VideoMakerApp {
                         &mut self.video_service,
                         &mut self.googler_image_provider,
                         &mut self.translation_temperature,
+                        &mut self.save_path,
+                        &self.text_input,
+                        &mut self.jobs,
+                        &mut self.job_counter,
+                        &mut self.queue_error,
                     );
                 });
-
-            // Зчитуємо фактичну ширину панелі після її рендерингу/перетягування користувачем
-            let actual_width = panel_res.response.rect.width();
-            
-            // Якщо ширина змінилася більше ніж на 1 піксель, оновлюємо стан у пам'яті
-            if (actual_width - self.pipeline_width).abs() > 1.0 {
-                self.pipeline_width = actual_width;
-            }
         }
 
         // Конфігуруємо фрейм для центральної панелі.
@@ -627,7 +711,6 @@ impl eframe::App for VideoMakerApp {
             if current_theme_str != self.last_saved_settings.theme
                 || current_color_arr != self.last_saved_settings.accent_color
                 || current_language_str != self.last_saved_settings.language
-                || (self.pipeline_width - self.last_saved_settings.pipeline_width).abs() > 1.0
                 || self.openrouter_key != self.last_saved_settings.openrouter_key
                 || self.voicebot_key != self.last_saved_settings.voicebot_key
                 || self.voiceover_provider != self.last_saved_settings.voiceover_provider
@@ -644,6 +727,7 @@ impl eframe::App for VideoMakerApp {
                 || self.video_service != self.last_saved_settings.video_service
                 || self.googler_image_provider != self.last_saved_settings.googler_image_provider
                 || (self.translation_temperature - self.last_saved_settings.translation_temperature).abs() > 0.001
+                || self.save_path != self.last_saved_settings.save_path
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -666,6 +750,7 @@ impl eframe::App for VideoMakerApp {
                     video_service: self.video_service.clone(),
                     googler_image_provider: self.googler_image_provider.clone(),
                     translation_temperature: self.translation_temperature,
+                    save_path: self.save_path.clone(),
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску

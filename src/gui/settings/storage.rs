@@ -61,6 +61,8 @@ pub struct AppSettings {
     /// Температура моделі для перекладу (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub translation_temperature: f32,
+    /// Шлях до папки збереження результатів пайплайну
+    pub save_path: String,
 }
 
 impl Default for AppSettings {
@@ -86,6 +88,7 @@ impl Default for AppSettings {
             video_service: "Googler".to_string(),
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
             translation_temperature: 0.7,
+            save_path: String::new(),
         }
     }
 }

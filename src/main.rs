@@ -2,7 +2,9 @@
 
 mod api;
 mod app;
+mod core;
 mod gui;
+mod queue;
 mod theme;
 mod localization;
 
