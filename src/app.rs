@@ -77,6 +77,12 @@ pub struct VideoMakerApp {
     pub translation_prompt: String,
     /// ID обраної моделі OpenRouter для перекладу.
     pub translation_model: String,
+    /// ID обраної моделі OpenRouter.
+    pub translation_model_openrouter: String,
+    /// ID обраної моделі Claude.
+    pub translation_model_claude: String,
+    /// ID обраної моделі Gemini.
+    pub translation_model_gemini: String,
     /// Рядок пошуку у дропдауні вибору моделі (ephemeral UI state).
     pub translation_model_search: String,
     /// Список моделей OpenRouter, завантажених у фоні.
@@ -160,6 +166,9 @@ impl Default for VideoMakerApp {
             pipeline_editing_enabled: true,
             translation_prompt: String::new(),
             translation_model: String::new(),
+            translation_model_openrouter: String::new(),
+            translation_model_claude: "sonnet".to_string(),
+            translation_model_gemini: "gemini-2.5-flash".to_string(),
             translation_model_search: String::new(),
             openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
@@ -257,10 +266,33 @@ impl VideoMakerApp {
         let pipeline_editing_enabled = saved.pipeline_editing_enabled;
         let translation_prompt = saved.translation_prompt.clone();
         let translation_model = saved.translation_model.clone();
+        let translation_service = saved.translation_service.clone();
+        let mut translation_model_openrouter = saved.translation_model_openrouter.clone();
+        let mut translation_model_claude = saved.translation_model_claude.clone();
+        let mut translation_model_gemini = saved.translation_model_gemini.clone();
+
+        // Зворотна сумісність: якщо завантажені окремі слоти порожні, але є загальне поле translation_model
+        if translation_model_openrouter.is_empty() && translation_service == "OpenRouter" {
+            translation_model_openrouter = translation_model.clone();
+        }
+        if translation_model_claude.is_empty() {
+            translation_model_claude = if translation_service == "Claude Code" {
+                translation_model.clone()
+            } else {
+                "sonnet".to_string()
+            };
+        }
+        if translation_model_gemini.is_empty() {
+            translation_model_gemini = if translation_service == "Gemini CLI" {
+                translation_model.clone()
+            } else {
+                "gemini-2.5-flash".to_string()
+            };
+        }
+
         let video_service = saved.video_service.clone();
         let googler_image_provider = saved.googler_image_provider.clone();
         let translation_temperature = saved.translation_temperature;
-        let translation_service = saved.translation_service.clone();
         let save_path = saved.save_path.clone();
         let openrouter_max_threads = saved.openrouter_max_threads;
         let claude_max_threads = saved.claude_max_threads;
@@ -339,6 +371,9 @@ impl VideoMakerApp {
             pipeline_editing_enabled,
             translation_prompt,
             translation_model,
+            translation_model_openrouter,
+            translation_model_claude,
+            translation_model_gemini,
             translation_model_search: String::new(),
             openrouter_models: std::sync::Arc::new(std::sync::Mutex::new(None)),
             openrouter_models_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
@@ -1072,6 +1107,9 @@ impl eframe::App for VideoMakerApp {
                         &mut self.pipeline_editing_enabled,
                         &mut self.translation_prompt,
                         &mut self.translation_model,
+                        &mut self.translation_model_openrouter,
+                        &mut self.translation_model_claude,
+                        &mut self.translation_model_gemini,
                         &mut self.translation_model_search,
                         &self.openrouter_models,
                         &self.openrouter_models_loading,
@@ -1213,6 +1251,9 @@ impl eframe::App for VideoMakerApp {
                 || self.pipeline_editing_enabled != self.last_saved_settings.pipeline_editing_enabled
                 || self.translation_prompt != self.last_saved_settings.translation_prompt
                 || self.translation_model != self.last_saved_settings.translation_model
+                || self.translation_model_openrouter != self.last_saved_settings.translation_model_openrouter
+                || self.translation_model_claude != self.last_saved_settings.translation_model_claude
+                || self.translation_model_gemini != self.last_saved_settings.translation_model_gemini
                 || self.googler_key != self.last_saved_settings.googler_key
                 || self.video_service != self.last_saved_settings.video_service
                 || self.googler_image_provider != self.last_saved_settings.googler_image_provider
@@ -1241,6 +1282,9 @@ impl eframe::App for VideoMakerApp {
                     pipeline_editing_enabled: self.pipeline_editing_enabled,
                     translation_prompt: self.translation_prompt.clone(),
                     translation_model: self.translation_model.clone(),
+                    translation_model_openrouter: self.translation_model_openrouter.clone(),
+                    translation_model_claude: self.translation_model_claude.clone(),
+                    translation_model_gemini: self.translation_model_gemini.clone(),
                     video_service: self.video_service.clone(),
                     googler_image_provider: self.googler_image_provider.clone(),
                     translation_temperature: self.translation_temperature,

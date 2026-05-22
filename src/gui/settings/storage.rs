@@ -11,6 +11,8 @@ fn default_claude_max_threads() -> usize { 5 }
 fn default_gemini_max_threads() -> usize { 5 }
 fn default_translation_service() -> String { "OpenRouter".to_string() }
 fn default_show_welcome() -> bool { true }
+fn default_model_claude() -> String { "sonnet".to_string() }
+fn default_model_gemini() -> String { "gemini-2.5-flash".to_string() }
 
 /// Структура для серіалізації налаштувань у формат JSON.
 ///
@@ -55,8 +57,17 @@ pub struct AppSettings {
     pub pipeline_editing_enabled: bool,
     /// Промт для моделі перекладу
     pub translation_prompt: String,
-    /// ID обраної моделі OpenRouter для перекладу
+    /// ID обраної активної моделі для перекладу (загальне поле)
     pub translation_model: String,
+    /// Обрана модель OpenRouter
+    #[serde(default)]
+    pub translation_model_openrouter: String,
+    /// Обрана модель Claude
+    #[serde(default = "default_model_claude")]
+    pub translation_model_claude: String,
+    /// Обрана модель Gemini
+    #[serde(default = "default_model_gemini")]
+    pub translation_model_gemini: String,
     /// Обраний сервіс для генерації відеоряду ("Googler")
     #[serde(default = "default_video_service")]
     pub video_service: String,
@@ -105,6 +116,9 @@ impl Default for AppSettings {
             pipeline_editing_enabled: true,
             translation_prompt: String::new(),
             translation_model: String::new(),
+            translation_model_openrouter: String::new(),
+            translation_model_claude: "sonnet".to_string(),
+            translation_model_gemini: "gemini-2.5-flash".to_string(),
             video_service: "Googler".to_string(),
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
             translation_temperature: 0.7,
@@ -218,6 +232,15 @@ pub struct PipelineTemplate {
     pub translation_prompt: String,
     /// ID обраної моделі OpenRouter для перекладу
     pub translation_model: String,
+    /// Обрана модель OpenRouter
+    #[serde(default)]
+    pub translation_model_openrouter: String,
+    /// Обрана модель Claude
+    #[serde(default = "default_model_claude")]
+    pub translation_model_claude: String,
+    /// Обрана модель Gemini
+    #[serde(default = "default_model_gemini")]
+    pub translation_model_gemini: String,
     /// Обраний сервіс для генерації відеоряду
     #[serde(default = "default_video_service")]
     pub video_service: String,
@@ -241,6 +264,7 @@ pub fn get_templates_dir() -> Option<PathBuf> {
 }
 
 /// Зберігає поточні налаштування пайплайну як шаблон у файл <name>.json.
+#[allow(clippy::too_many_arguments)]
 pub fn save_template(
     name: &str,
     openrouter_key: &str,
@@ -253,6 +277,9 @@ pub fn save_template(
     pipeline_editing_enabled: bool,
     translation_prompt: &str,
     translation_model: &str,
+    translation_model_openrouter: &str,
+    translation_model_claude: &str,
+    translation_model_gemini: &str,
     video_service: &str,
     googler_image_provider: &str,
     translation_temperature: f32,
@@ -275,6 +302,9 @@ pub fn save_template(
             pipeline_editing_enabled,
             translation_prompt: translation_prompt.to_string(),
             translation_model: translation_model.to_string(),
+            translation_model_openrouter: translation_model_openrouter.to_string(),
+            translation_model_claude: translation_model_claude.to_string(),
+            translation_model_gemini: translation_model_gemini.to_string(),
             video_service: video_service.to_string(),
             googler_image_provider: googler_image_provider.to_string(),
             translation_temperature,

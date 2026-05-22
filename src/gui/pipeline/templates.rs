@@ -19,6 +19,9 @@ pub fn draw_templates_section(
     pipeline_editing_enabled: &mut bool,
     translation_prompt: &mut String,
     translation_model: &mut String,
+    translation_model_openrouter: &mut String,
+    translation_model_claude: &mut String,
+    translation_model_gemini: &mut String,
     video_service: &mut String,
     googler_image_provider: &mut String,
     translation_temperature: &mut f32,
@@ -58,7 +61,22 @@ pub fn draw_templates_section(
                             *pipeline_subtitles_enabled = template.pipeline_subtitles_enabled;
                             *pipeline_editing_enabled = template.pipeline_editing_enabled;
                             *translation_prompt = template.translation_prompt;
-                            *translation_model = template.translation_model;
+                            *translation_model = template.translation_model.clone();
+                            
+                            *translation_model_openrouter = template.translation_model_openrouter;
+                            *translation_model_claude = if template.translation_model_claude.is_empty() { "sonnet".to_string() } else { template.translation_model_claude };
+                            *translation_model_gemini = if template.translation_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { template.translation_model_gemini };
+
+                            if template.translation_service == "OpenRouter" && translation_model_openrouter.is_empty() {
+                                *translation_model_openrouter = template.translation_model.clone();
+                            }
+                            if template.translation_service == "Claude Code" && translation_model_claude.is_empty() {
+                                *translation_model_claude = template.translation_model.clone();
+                            }
+                            if template.translation_service == "Gemini CLI" && translation_model_gemini.is_empty() {
+                                *translation_model_gemini = template.translation_model.clone();
+                            }
+
                             *video_service = template.video_service;
                             *googler_image_provider = template.googler_image_provider;
                             *translation_temperature = template.translation_temperature;

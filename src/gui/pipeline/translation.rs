@@ -24,9 +24,15 @@ pub fn draw_translation_section(
     openrouter_models_loading: &Arc<Mutex<bool>>,
     translation_temperature: &mut f32,
     translation_service: &mut String,
+    translation_model_openrouter: &mut String,
+    translation_model_claude: &mut String,
+    translation_model_gemini: &mut String,
 ) {
     ui.vertical(|ui| {
         ui.add_space(4.0);
+
+        // Зберігаємо початковий сервіс для виявлення перемикання
+        let previous_service = translation_service.clone();
 
         // Вибір сервісу перекладу
         ui.label(egui::RichText::new(translate(language, "translation_service_label")).strong());
@@ -54,6 +60,35 @@ pub fn draw_translation_section(
                     service_changed = true;
                 }
             });
+
+        if translation_service != &previous_service {
+            // Зберігаємо поточну модель у слот попереднього сервісу
+            if previous_service == "OpenRouter" {
+                *translation_model_openrouter = translation_model.clone();
+            } else if previous_service == "Claude Code" {
+                *translation_model_claude = translation_model.clone();
+            } else if previous_service == "Gemini CLI" {
+                *translation_model_gemini = translation_model.clone();
+            }
+
+            // Завантажуємо збережену модель для нового сервісу
+            if translation_service == "OpenRouter" {
+                *translation_model = translation_model_openrouter.clone();
+            } else if translation_service == "Claude Code" {
+                *translation_model = if translation_model_claude.is_empty() {
+                    "sonnet".to_string()
+                } else {
+                    translation_model_claude.clone()
+                };
+            } else if translation_service == "Gemini CLI" {
+                *translation_model = if translation_model_gemini.is_empty() {
+                    "gemini-2.5-flash".to_string()
+                } else {
+                    translation_model_gemini.clone()
+                };
+            }
+            service_changed = true;
+        }
 
         if service_changed && translation_service == "Claude Code" {
             // Перевіряємо, чи модель валідна для Claude Code
@@ -154,6 +189,13 @@ pub fn draw_translation_section(
             }
             te_resp.request_focus();
         }
+
+        ui.add_space(2.0);
+        ui.label(
+            egui::RichText::new(translate(language, "translation_placeholder_hint"))
+                .weak()
+                .size(11.0)
+        );
 
         ui.add_space(8.0);
 
@@ -288,6 +330,15 @@ pub fn draw_translation_section(
                         .show_value(false),
                 );
             });
+        }
+
+        // Синхронізуємо активну модель з відповідним слотом
+        if translation_service == "OpenRouter" {
+            *translation_model_openrouter = translation_model.clone();
+        } else if translation_service == "Claude Code" {
+            *translation_model_claude = translation_model.clone();
+        } else if translation_service == "Gemini CLI" {
+            *translation_model_gemini = translation_model.clone();
         }
 
         ui.add_space(6.0);
