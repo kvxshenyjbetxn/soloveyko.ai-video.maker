@@ -145,9 +145,9 @@ pub fn translate_ru(key: &str) -> &'static str {
         "edge_tts_voices_loading" => "Загрузка голосов Edge TTS...",
         "edge_tts_voice_label" => "Голос озвучки:",
         "edge_tts_show_all" => "Показать все языки",
-        "edge_tts_rate_label" => "Темп (Rate):",
-        "edge_tts_pitch_label" => "Тональность (Pitch):",
-        "edge_tts_volume_label" => "Громкость (Volume):",
+        "edge_tts_rate_label" => "Темп:",
+        "edge_tts_pitch_label" => "Тональность:",
+        "edge_tts_volume_label" => "Громкость:",
         _ => "",
     }
 }

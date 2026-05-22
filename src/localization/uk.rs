@@ -145,9 +145,9 @@ pub fn translate_uk(key: &str) -> &'static str {
         "edge_tts_voices_loading" => "Завантаження голосів Edge TTS...",
         "edge_tts_voice_label" => "Голос озвучки:",
         "edge_tts_show_all" => "Показати всі мови",
-        "edge_tts_rate_label" => "Темп (Rate):",
-        "edge_tts_pitch_label" => "Тональність (Pitch):",
-        "edge_tts_volume_label" => "Гучність (Volume):",
+        "edge_tts_rate_label" => "Темп:",
+        "edge_tts_pitch_label" => "Тональність:",
+        "edge_tts_volume_label" => "Гучність:",
         _ => "",
     }
 }

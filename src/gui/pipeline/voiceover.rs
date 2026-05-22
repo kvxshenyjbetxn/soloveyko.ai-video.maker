@@ -203,25 +203,52 @@ pub fn draw_voiceover_section(
                         ui.add_space(8.0);
 
                         // 3. Параметри темпу, тональності та гучності
+                        let mut rate_val: i32 = edge_tts_rate.parse::<i32>().unwrap_or(0);
+                        let mut pitch_val: i32 = edge_tts_pitch.parse::<i32>().unwrap_or(0);
+                        let mut volume_val: i32 = edge_tts_volume.parse::<i32>().unwrap_or(0);
+
+                        let mut changed = false;
+
                         egui::Grid::new("edge_tts_params_grid")
                             .num_columns(2)
                             .spacing([8.0, 8.0])
                             .show(ui, |ui| {
                                 // Темп
                                 ui.label(translate(language, "edge_tts_rate_label"));
-                                ui.add(egui::TextEdit::singleline(edge_tts_rate).desired_width(70.0));
+                                ui.scope(|ui| {
+                                    ui.style_mut().spacing.slider_width = 120.0;
+                                    if ui.add(egui::Slider::new(&mut rate_val, -100..=100).suffix("%")).changed() {
+                                        changed = true;
+                                    }
+                                });
                                 ui.end_row();
 
                                 // Тональність
                                 ui.label(translate(language, "edge_tts_pitch_label"));
-                                ui.add(egui::TextEdit::singleline(edge_tts_pitch).desired_width(70.0));
+                                ui.scope(|ui| {
+                                    ui.style_mut().spacing.slider_width = 120.0;
+                                    if ui.add(egui::Slider::new(&mut pitch_val, -100..=100).suffix("Hz")).changed() {
+                                        changed = true;
+                                    }
+                                });
                                 ui.end_row();
 
                                 // Гучність
                                 ui.label(translate(language, "edge_tts_volume_label"));
-                                ui.add(egui::TextEdit::singleline(edge_tts_volume).desired_width(70.0));
+                                ui.scope(|ui| {
+                                    ui.style_mut().spacing.slider_width = 120.0;
+                                    if ui.add(egui::Slider::new(&mut volume_val, -100..=100).suffix("%")).changed() {
+                                        changed = true;
+                                    }
+                                });
                                 ui.end_row();
                             });
+
+                        if changed {
+                            *edge_tts_rate = rate_val.to_string();
+                            *edge_tts_pitch = pitch_val.to_string();
+                            *edge_tts_volume = volume_val.to_string();
+                        }
                     }
                     Some(Err(error)) => {
                         ui.add(egui::Label::new(
