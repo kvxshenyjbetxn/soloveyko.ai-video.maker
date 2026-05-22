@@ -25,8 +25,6 @@ pub struct VideoMakerApp {
     accent_color: egui::Color32,
     /// Поточна збережена ширина бічної панелі пайплайну.
     pipeline_width: f32,
-    /// Поточна обрана підвкладка налаштувань.
-    active_settings_tab: gui::settings::SettingsSubTab,
     /// Поточна вибрана мова інтерфейсу програми.
     pub language: Language,
     /// Копія останніх збережених налаштувань на диску для відстеження змін у реальному часі.
@@ -104,7 +102,6 @@ impl Default for VideoMakerApp {
             theme: AppTheme::Dark, // Сучасна темна тема за замовчуванням
             accent_color: egui::Color32::from_rgb(0, 122, 255), // Синій колір за замовчуванням
             pipeline_width: 450.0,
-            active_settings_tab: gui::settings::SettingsSubTab::General,
             language: Language::Uk,
             openrouter_key: String::new(),
             openrouter_status: None,
@@ -248,7 +245,6 @@ impl VideoMakerApp {
             theme,
             accent_color,
             pipeline_width,
-            active_settings_tab: gui::settings::SettingsSubTab::General,
             language,
             openrouter_key,
             openrouter_status: None,
@@ -597,7 +593,6 @@ impl eframe::App for VideoMakerApp {
                             ui,
                             &mut self.theme,
                             &mut self.accent_color,
-                            &mut self.active_settings_tab,
                             &mut self.language,
                         );
                     }
