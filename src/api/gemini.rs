@@ -88,20 +88,21 @@ pub fn call_gemini_cli(
     #[cfg(not(target_os = "windows"))]
     let mut cmd = Command::new("gemini");
 
-    // Запускаємо: gemini --model <model> --prompt "<prompt>" --yolo --skip-trust
+    // Запускаємо: gemini --model <model> --output-format json --prompt "<prompt>" --yolo --skip-trust
+    // JSON-формат гарантує чисту відповідь без технічного сміття у полі "response"
     cmd.arg("--model")
         .arg(model)
+        .arg("--output-format")
+        .arg("json")
         .arg("--prompt")
         .arg(user_content)
         .arg("--yolo")
         .arg("--skip-trust");
 
-    // Записуємо інформацію про команду у лог
-    let debug_command = format!(
-        "gemini --model {} --prompt \"[текст промпту та сценарію]\" --yolo --skip-trust",
+    log(&format!(
+        "Виконується: gemini --model {} --output-format json --prompt \"[промпт]\" --yolo --skip-trust",
         model
-    );
-    log(&format!("Виконується: {}", debug_command));
+    ));
 
     let output = cmd.output().map_err(|e| {
         let err_msg = format!("Не вдалося запустити gemini cli: {}. Перевірте, чи встановлено gemini CLI та чи додано його в PATH.", e);
@@ -110,10 +111,11 @@ pub fn call_gemini_cli(
     })?;
 
     if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let cleaned = sanitize_gemini_output(&stdout);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let response = parse_gemini_json_response(&stdout)
+            .ok_or_else(|| "Gemini CLI: не вдалося розпарсити JSON-відповідь".to_string())?;
         log("Gemini CLI успішно виконав переклад.");
-        Ok(cleaned)
+        Ok(response)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -128,46 +130,10 @@ pub fn call_gemini_cli(
     }
 }
 
-/// Очищає вивід Gemini CLI від службових ANSI escape-кодів та системних повідомлень
-fn sanitize_gemini_output(input: &str) -> String {
-    let mut result = String::new();
-    let mut in_escape = false;
-    let mut chars = input.chars().peekable();
-    
-    // 1. Видалення ANSI escape-кодів без зовнішніх бібліотек
-    while let Some(c) = chars.next() {
-        if c == '\x1b' {
-            in_escape = true;
-            if let Some(&'[') = chars.peek() {
-                chars.next();
-            }
-            continue;
-        }
-        if in_escape {
-            let code = c as u32;
-            if (64..=126).contains(&code) {
-                in_escape = false;
-            }
-            continue;
-        }
-        result.push(c);
-    }
-
-    // 2. Фільтрація службових рядків ініціалізації CLI
-    result.lines()
-        .filter(|line| {
-            let l = line.trim();
-            !l.starts_with("🤖") &&
-            !l.starts_with("Using ") &&
-            !l.starts_with("Approved ") &&
-            !l.starts_with("Trusting ") &&
-            !l.starts_with("Authorized ") &&
-            !l.starts_with("Active ") &&
-            !l.starts_with("Working ") &&
-            !l.starts_with("Session ")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim()
-        .to_string()
+/// Витягує відповідь моделі з JSON-виводу Gemini CLI.
+/// Структура відповіді: `{"session_id": "...", "response": "текст відповіді", "stats": {...}}`
+fn parse_gemini_json_response(output: &str) -> Option<String> {
+    let json: serde_json::Value = serde_json::from_str(output.trim()).ok()?;
+    let text = json.get("response")?.as_str()?;
+    Some(text.trim().to_string())
 }
