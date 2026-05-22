@@ -20,6 +20,9 @@ pub struct JobSettings {
     pub translation_temperature: f32,
     pub translation_service: String,
     pub openrouter_key: String,
+    pub voiceover_enabled: bool,
+    pub voicebot_key: String,
+    pub voiceover_template_uuid: String,
 }
 
 /// Одна задача в черзі пайплайну.

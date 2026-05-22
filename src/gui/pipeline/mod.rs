@@ -449,6 +449,8 @@ pub fn draw_pipeline_panel(
                 Some(translate(language, "queue_error_no_model").to_string())
             } else if *pipeline_translation_enabled && openrouter_key.is_empty() {
                 Some(translate(language, "queue_error_no_key").to_string())
+            } else if *pipeline_voiceover_enabled && voicebot_key.is_empty() {
+                Some(translate(language, "queue_error_no_voicebot_key").to_string())
             } else {
                 None
             };
@@ -528,6 +530,9 @@ pub fn draw_pipeline_panel(
                                     job_counter,
                                     queue_error,
                                     translation_service,
+                                    *pipeline_voiceover_enabled,
+                                    voicebot_key,
+                                    voiceover_template_uuid,
                                 );
                             }
                         });
@@ -538,6 +543,7 @@ pub fn draw_pipeline_panel(
 }
 
 /// Створює папку задачі та додає її в чергу зі статусом Pending.
+#[allow(clippy::too_many_arguments)]
 fn validate_and_enqueue(
     language: Language,
     text_input: &str,
@@ -552,6 +558,9 @@ fn validate_and_enqueue(
     job_counter: &mut u64,
     queue_error: &mut Option<String>,
     translation_service: &str,
+    voiceover_enabled: bool,
+    voicebot_key: &str,
+    voiceover_template_uuid: &str,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
     let base = save_path.trim_end_matches('/').trim_end_matches('\\');
@@ -571,6 +580,9 @@ fn validate_and_enqueue(
         translation_temperature,
         translation_service: translation_service.to_string(),
         openrouter_key: openrouter_key.to_string(),
+        voiceover_enabled,
+        voicebot_key: voicebot_key.to_string(),
+        voiceover_template_uuid: voiceover_template_uuid.to_string(),
     };
 
     let id = *job_counter;

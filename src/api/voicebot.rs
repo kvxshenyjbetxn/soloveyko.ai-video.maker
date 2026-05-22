@@ -6,6 +6,16 @@ pub struct BalanceResponse {
     pub balance_text: String,
 }
 
+#[derive(serde::Deserialize)]
+struct TaskCreateResponse {
+    task_id: u64,
+}
+
+#[derive(serde::Deserialize)]
+struct TaskStatusResponse {
+    status: String,
+}
+
 /// Фоново завантажує баланс VoiceBot і записує результат в `result`.
 pub fn fetch_balance(key: String, result: Arc<Mutex<Option<String>>>, ctx: egui::Context) {
     std::thread::spawn(move || {
@@ -30,4 +40,85 @@ pub fn fetch_balance(key: String, result: Arc<Mutex<Option<String>>>, ctx: egui:
         *result.lock().unwrap() = Some(text);
         ctx.request_repaint();
     });
+}
+
+/// Створює нову TTS-задачу на сервері та повертає її ID.
+pub fn create_tts_task(key: &str, text: &str, template_uuid: Option<&str>) -> Result<u64, String> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .build();
+
+    let body = if let Some(uuid) = template_uuid {
+        ureq::serde_json::json!({ "text": text, "template_uuid": uuid })
+    } else {
+        ureq::serde_json::json!({ "text": text })
+    };
+
+    let resp = agent
+        .post("https://voiceapi.csv666.ru/tasks")
+        .set("X-API-Key", key)
+        .set("Content-Type", "application/json")
+        .send_json(body)
+        .map_err(|e| match e {
+            ureq::Error::Status(401, _) => "Невірний ключ VoiceBot (X-API-Key)".to_string(),
+            ureq::Error::Status(402, _) => "Недостатньо коштів на балансі VoiceBot".to_string(),
+            ureq::Error::Status(429, _) => "Перевищено ліміт активних TTS задач".to_string(),
+            other => format!("Помилка запиту: {}", other),
+        })?;
+
+    resp.into_json::<TaskCreateResponse>()
+        .map(|r| r.task_id)
+        .map_err(|e| format!("Помилка парсингу відповіді: {}", e))
+}
+
+/// Повертає поточний статус TTS-задачі.
+pub fn get_task_status(key: &str, task_id: u64) -> Result<String, String> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(15))
+        .build();
+
+    let resp = agent
+        .get(&format!("https://voiceapi.csv666.ru/tasks/{}/status", task_id))
+        .set("X-API-Key", key)
+        .set("Accept", "application/json")
+        .call()
+        .map_err(|e| format!("Помилка отримання статусу: {}", e))?;
+
+    resp.into_json::<TaskStatusResponse>()
+        .map(|r| r.status)
+        .map_err(|e| format!("Помилка парсингу статусу: {}", e))
+}
+
+/// Завантажує результат TTS-задачі та зберігає у вказану папку як voice.mp3 або voice.zip.
+/// Повертає назву збереженого файлу.
+pub fn download_task_result(key: &str, task_id: u64, save_dir: &str) -> Result<String, String> {
+    use std::io::Read;
+
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(120))
+        .build();
+
+    let resp = agent
+        .get(&format!("https://voiceapi.csv666.ru/tasks/{}/result", task_id))
+        .set("X-API-Key", key)
+        .call()
+        .map_err(|e| format!("Помилка завантаження результату: {}", e))?;
+
+    let content_type = resp.content_type().to_string();
+    let ext = if content_type.contains("zip") { "zip" } else { "mp3" };
+    let filename = format!("voice.{}", ext);
+
+    let mut bytes = Vec::new();
+    resp.into_reader()
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("Помилка читання даних: {}", e))?;
+
+    let path = std::path::Path::new(save_dir).join(&filename);
+    std::fs::write(&path, &bytes)
+        .map_err(|e| format!("Помилка збереження файлу: {}", e))?;
+
+    Ok(filename)
 }

@@ -734,21 +734,13 @@ fn draw_queue_panel(
                     if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
                         continue;
                     }
-                    if job.settings.translation_enabled {
-                        crate::core::pipeline::translate::run_translation(
-                            job.id,
-                            job.name.clone(),
-                            job.settings.translation_service.clone(),
-                            job.settings.openrouter_key.clone(),
-                            job.settings.translation_model.clone(),
-                            job.settings.translation_prompt.clone(),
-                            job.settings.text.clone(),
-                            job.settings.translation_temperature,
-                            job.settings.save_path.clone(),
-                            std::sync::Arc::clone(&job.status),
-                            ctx.clone(),
-                        );
-                    }
+                    crate::core::pipeline::run_pipeline(
+                        job.id,
+                        job.name.clone(),
+                        job.settings.clone(),
+                        std::sync::Arc::clone(&job.status),
+                        ctx.clone(),
+                    );
                 }
             }
         });
@@ -765,21 +757,21 @@ fn draw_queue_panel(
             ui.horizontal(|ui| {
                 for job in jobs.iter() {
                     let status = job.status.lock().unwrap().clone();
-                    let (icon, status_text, color) = match &status {
+                    let (status_text, color) = match &status {
                         crate::queue::JobStatus::Pending => (
-                            "⏳", translate(language, "queue_status_pending"),
+                            translate(language, "queue_status_pending"),
                             ui.visuals().weak_text_color(),
                         ),
                         crate::queue::JobStatus::Running => (
-                            "⚙", translate(language, "queue_status_running"),
+                            translate(language, "queue_status_running"),
                             egui::Color32::from_rgb(255, 200, 0),
                         ),
                         crate::queue::JobStatus::Done => (
-                            "✔", translate(language, "queue_status_done"),
+                            translate(language, "queue_status_done"),
                             egui::Color32::from_rgb(46, 204, 113),
                         ),
                         crate::queue::JobStatus::Failed(_) => (
-                            "✘", translate(language, "queue_status_failed"),
+                            translate(language, "queue_status_failed"),
                             egui::Color32::from_rgb(231, 76, 60),
                         ),
                     };
@@ -804,37 +796,43 @@ fn draw_queue_panel(
                                 ui.add_space(2.0);
                             }
 
-                            let steps: Vec<&str> = [
-                                job.settings.translation_enabled.then_some("T"),
-                            ].into_iter().flatten().collect();
-                            let steps_str = if steps.is_empty() { String::new() } else { format!("[{}] ", steps.join("+")) };
+                            // Активні етапи — кожен з нового рядка
+                            if job.settings.translation_enabled {
+                                ui.label(
+                                    egui::RichText::new(translate(language, "translation"))
+                                        .weak()
+                                        .size(10.0),
+                                );
+                            }
+                            if job.settings.voiceover_enabled {
+                                let src = if job.settings.translation_enabled {
+                                    translate(language, "voiceover_text_source_translated")
+                                } else {
+                                    translate(language, "voiceover_text_source_original")
+                                };
+                                ui.label(
+                                    egui::RichText::new(
+                                        format!("{} ({})", translate(language, "voiceover"), src)
+                                    )
+                                    .weak()
+                                    .size(10.0),
+                                );
+                            }
 
                             // Статус
                             ui.label(
-                                egui::RichText::new(format!("{}{}", steps_str, status_text))
+                                egui::RichText::new(status_text)
                                     .color(color)
                                     .size(if avail_h > 100.0 { 11.0 } else { 10.0 }),
                             );
 
-                            // Іконка або додаткова інформація
-                            if avail_h > 110.0 {
-                                ui.add_space(6.0);
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new(icon).size(22.0));
-
-                                    if let crate::queue::JobStatus::Failed(err) = &status {
-                                        ui.label(egui::RichText::new("⚠️").color(egui::Color32::from_rgb(231, 76, 60)))
-                                            .on_hover_text(err);
-                                    }
-                                });
-                            } else {
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new(icon).size(12.0));
-                                    if let crate::queue::JobStatus::Failed(err) = &status {
-                                        ui.label(egui::RichText::new("⚠️").color(egui::Color32::from_rgb(231, 76, 60)))
-                                            .on_hover_text(err);
-                                    }
-                                });
+                            // Показуємо помилку (hover підказка)
+                            if let crate::queue::JobStatus::Failed(err) = &status {
+                                ui.label(
+                                    egui::RichText::new("⚠ помилка")
+                                        .color(egui::Color32::from_rgb(231, 76, 60))
+                                        .size(10.0),
+                                ).on_hover_text(err);
                             }
 
                             if avail_h > 120.0 {
