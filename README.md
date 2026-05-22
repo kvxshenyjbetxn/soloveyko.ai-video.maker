@@ -45,8 +45,9 @@ src/
 │           ├── mod.rs           — реекспорт run_voiceover_sync
 │           └── voiceover.rs     — run_voiceover_sync: TTS через VoiceBot API (polling кожні 5 сек, скачування файлу)
 ├── gui/
-│   ├── mod.rs                   — реекспорт pipeline та settings
+│   ├── mod.rs                   — реекспорт pipeline, settings та welcome
 │   ├── editor.rs                — central panel з текстовим редактором сценарію
+│   ├── welcome.rs               — вікно привітання (перевірка CLI-інструментів при першому запуску)
 │   ├── pipeline/
 │   │   ├── mod.rs               — draw_pipeline_panel: головна функція панелі + toggle_switch + validate_and_enqueue
 │   │   ├── api.rs               — секція АПІ-ключів (OpenRouter, VoiceBot, Googler)
@@ -128,13 +129,23 @@ src/
 
 **Джерело тексту:** якщо переклад увімкнено — озвучується перекладений текст. Якщо переклад вимкнено — оригінальний текст (`settings.text`). Картка задачі показує це окремим рядком: "Переклад" (кольоровий за статусом) або "Оригінал" (завжди зелений, бо текст уже є).
 
+### Вікно привітання (`src/gui/welcome.rs`)
+
+З'являється при першому запуску (або якщо `show_welcome: true` у `settings.json`). Перевіряє наявність трьох CLI-інструментів асинхронно у фонових потоках, одразу при ініціалізації `VideoMakerApp::new()`.
+
+- **`ToolStatus`** — три стани: `Checking` / `Installed(String)` / `NotInstalled`. Зберігається в `Arc<Mutex<ToolStatus>>`.
+- **`ToolChecks::start()`** spawns три окремих `std::thread::spawn`. Кожен запускає відповідну команду (`npm --version`, `gemini --version`, `claude --version`) та оновлює статус після завершення через `ctx.request_repaint()`.
+- **На Windows** перевірки запускаються через `cmd /C <name> --version` (аналогічно до `api/gemini.rs` та `api/claude.rs`).
+- **Команди встановлення** показуються тільки якщо інструмент `NotInstalled`, залежать від OS: Mac — `brew install node` / `sudo npm install -g @google/gemini-cli`, Windows — `winget install OpenJS.NodeJS` / `npm install -g @google/gemini-cli`. Claude Code однаковий на всіх системах.
+- **"Не показувати":** галочка `dont_show` + кнопка "Зрозуміло". `draw_welcome_dialog` повертає `true` лише коли кнопку натиснуто. Якщо `closed && dont_show` — `app.rs` миттєво зберігає `show_welcome: false` через явний виклик `save_settings` (не через автозбереження), щоб не гратися з `last_saved_settings`.
+
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
 Два JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
 - `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну тощо).
 - `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами.
 
-`AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються.
+`AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються. Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
 
 ### API-сервіси (`src/api/`)
 
@@ -234,6 +245,8 @@ src/
   - `--yolo` (або `--approval-mode yolo`) — критичний прапорець для неінтерактивного виконання, який автоматично погоджує всі пропоновані дії та інструменти.
   - `--skip-trust` — прапорець автоматичної довіри воркспейсу, необхідний для роботи в неінтерактивному фоновому режимі.
   З міркувань сумісності, на Windows виклик здійснюється через `cmd.exe` з аргументами `/C gemini`, тоді як на macOS та Linux команда запускається безпосередньо. При виборі сервісу Gemini CLI повзунок температури та налаштування OpenRouter приховуються.
+
+- **`show_welcome` в автозбереженні:** поле збережено як `self.last_saved_settings.show_welcome` (без прив'язки до live-стану). Зміна `show_welcome: false` відбувається виключно через явний `save_settings` у блоці welcome-логіки в `update()`, не через загальний автозберігаючий блок внизу. Це уникає race condition: якщо б `show_welcome` потрапив у загальне порівняння, воно б ніколи не спрацьовувало (live-значення = `last_saved_settings.show_welcome` завжди рівні).
 
 - **Маскування сценаріїв у логах:** З міркувань конфіденційності та чистих логів без засмічення інтерфейсу величезними текстами, реальний промпт сценарію у виклику команди замінюється в логах статичною заглушкою `"[текст промпту та сценарію]"`. На реальний запуск процесу це не впливає — туди передається оригінальний повний текст.
 

@@ -10,6 +10,7 @@ fn default_openrouter_max_threads() -> usize { 5 }
 fn default_claude_max_threads() -> usize { 5 }
 fn default_gemini_max_threads() -> usize { 5 }
 fn default_translation_service() -> String { "OpenRouter".to_string() }
+fn default_show_welcome() -> bool { true }
 
 /// Структура для серіалізації налаштувань у формат JSON.
 ///
@@ -79,6 +80,9 @@ pub struct AppSettings {
     /// Максимальна кількість потоків для Gemini CLI
     #[serde(default = "default_gemini_max_threads")]
     pub gemini_max_threads: usize,
+    /// Чи показувати вікно привітання при наступному запуску
+    #[serde(default = "default_show_welcome")]
+    pub show_welcome: bool,
 }
 
 impl Default for AppSettings {
@@ -109,6 +113,7 @@ impl Default for AppSettings {
             openrouter_max_threads: 5,
             claude_max_threads: 5,
             gemini_max_threads: 5,
+            show_welcome: true,
         }
     }
 }

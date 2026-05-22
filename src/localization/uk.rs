@@ -128,6 +128,17 @@ pub fn translate_uk(key: &str) -> &'static str {
         "job_name_cancel_btn" => "Скасувати",
         "job_logs_title" => "Логи завдання",
         "job_logs_empty" => "Логи для цього завдання відсутні.",
+        "welcome_title" => "Ласкаво просимо!",
+        "welcome_desc" => "Перевіримо, чи встановлені необхідні інструменти командного рядка.",
+        "welcome_npm_desc" => "Менеджер пакетів Node.js — необхідний для встановлення Gemini CLI",
+        "welcome_gemini_desc" => "Google Gemini CLI — для роботи з підпискою Gemini та генерації промтів",
+        "welcome_claude_desc" => "Claude Code CLI — для роботи з підпискою Claude та текстових завдань",
+        "welcome_note" => "Ці інструменти потрібні лише якщо ви хочете використовувати підписки Gemini або Claude Code для перекладу, генерації промтів та інших AI-завдань. Якщо ви плануєте використовувати тільки OpenRouter — встановлювати їх не потрібно.",
+        "welcome_dont_show" => "Не показувати при наступному запуску",
+        "welcome_close_btn" => "Зрозуміло",
+        "welcome_checking" => "перевірка...",
+        "welcome_not_installed" => "не встановлено",
+        "welcome_install_label" => "Для встановлення:",
         _ => "",
     }
 }

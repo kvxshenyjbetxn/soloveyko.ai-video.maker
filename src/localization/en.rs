@@ -128,6 +128,17 @@ pub fn translate_en(key: &str) -> &'static str {
         "job_name_cancel_btn" => "Cancel",
         "job_logs_title" => "Job Logs",
         "job_logs_empty" => "No logs found for this job.",
+        "welcome_title" => "Welcome!",
+        "welcome_desc" => "Let's check whether the required CLI tools are installed.",
+        "welcome_npm_desc" => "Node.js package manager — required to install Gemini CLI",
+        "welcome_gemini_desc" => "Google Gemini CLI — use your Gemini subscription for prompt generation",
+        "welcome_claude_desc" => "Claude Code CLI — use your Claude subscription for text tasks",
+        "welcome_note" => "These tools are only needed if you want to use Gemini or Claude Code subscriptions for translation, prompt generation and other AI tasks. If you plan to use OpenRouter only — you can skip installation.",
+        "welcome_dont_show" => "Don't show on next launch",
+        "welcome_close_btn" => "Got it",
+        "welcome_checking" => "checking...",
+        "welcome_not_installed" => "not installed",
+        "welcome_install_label" => "To install:",
         _ => "",
     }
 }

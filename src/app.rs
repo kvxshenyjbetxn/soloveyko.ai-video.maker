@@ -117,6 +117,12 @@ pub struct VideoMakerApp {
     pub claude_max_threads: usize,
     /// Максимальна кількість потоків для Gemini CLI.
     pub gemini_max_threads: usize,
+    /// Чи відкрите вікно привітання.
+    pub welcome_open: bool,
+    /// Галочка "не показувати при наступному запуску" у вікні привітання.
+    pub welcome_dont_show: bool,
+    /// Стани перевірки CLI-інструментів для вікна привітання.
+    pub tool_checks: crate::gui::welcome::ToolChecks,
 }
 
 impl Default for VideoMakerApp {
@@ -172,6 +178,9 @@ impl Default for VideoMakerApp {
             openrouter_max_threads: 5,
             claude_max_threads: 5,
             gemini_max_threads: 5,
+            welcome_open: false,
+            welcome_dont_show: false,
+            tool_checks: crate::gui::welcome::ToolChecks::new(),
             last_saved_settings: default_settings,
         }
     }
@@ -253,6 +262,7 @@ impl VideoMakerApp {
         let openrouter_max_threads = saved.openrouter_max_threads;
         let claude_max_threads = saved.claude_max_threads;
         let gemini_max_threads = saved.gemini_max_threads;
+        let show_welcome = saved.show_welcome;
 
         // Налаштовуємо глобальний лімітер одночасних запитів OpenRouter
         crate::api::openrouter::OpenRouterLimiter::get().set_max_threads(openrouter_max_threads);
@@ -262,6 +272,12 @@ impl VideoMakerApp {
         crate::api::gemini::GeminiLimiter::get().set_max_threads(gemini_max_threads);
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
+
+        // Ініціалізуємо вікно привітання та одразу запускаємо фонові перевірки CLI
+        let tool_checks = crate::gui::welcome::ToolChecks::new();
+        if show_welcome {
+            tool_checks.start(cc.egui_ctx.clone());
+        }
 
         let openrouter_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
         let voicebot_balance = std::sync::Arc::new(std::sync::Mutex::new(None));
@@ -340,6 +356,9 @@ impl VideoMakerApp {
             openrouter_max_threads,
             claude_max_threads,
             gemini_max_threads,
+            welcome_open: show_welcome,
+            welcome_dont_show: false,
+            tool_checks,
             last_saved_settings: saved,
         }
     }
@@ -886,6 +905,24 @@ impl eframe::App for VideoMakerApp {
         // Динамічно застосовуємо обрану тему оформлення та акцентний колір до поточного контексту
         crate::theme::apply_theme(ctx, self.theme, self.accent_color);
 
+        // Вікно привітання — відображається при першому запуску
+        if self.welcome_open {
+            let closed = crate::gui::welcome::draw_welcome_dialog(
+                ctx,
+                &mut self.welcome_open,
+                &mut self.welcome_dont_show,
+                &self.tool_checks,
+                self.language,
+            );
+            // Якщо щойно натиснуто "Закрити" і стоїть галочка — зберігаємо show_welcome=false
+            if closed && self.welcome_dont_show {
+                let mut new_settings = self.last_saved_settings.clone();
+                new_settings.show_welcome = false;
+                crate::gui::settings::storage::save_settings(&new_settings);
+                self.last_saved_settings = new_settings;
+            }
+        }
+
         // Верхня панель для навігації між вкладками
         egui::TopBottomPanel::top("navigation_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -1152,6 +1189,7 @@ impl eframe::App for VideoMakerApp {
                     openrouter_max_threads: self.openrouter_max_threads,
                     claude_max_threads: self.claude_max_threads,
                     gemini_max_threads: self.gemini_max_threads,
+                    show_welcome: self.last_saved_settings.show_welcome,
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску
