@@ -5,6 +5,7 @@ use std::process::Command;
 fn default_true() -> bool { true }
 fn default_video_service() -> String { "Googler".to_string() }
 fn default_image_provider() -> String { "flow_IMAGEN_3_5".to_string() }
+fn default_temperature() -> f32 { 0.7 }
 
 /// Структура для серіалізації налаштувань у формат JSON.
 ///
@@ -57,6 +58,9 @@ pub struct AppSettings {
     /// Обраний провайдер зображень для Googler ("flow", "flower", "grok", "openai")
     #[serde(default = "default_image_provider")]
     pub googler_image_provider: String,
+    /// Температура моделі для перекладу (0.0 — 2.0)
+    #[serde(default = "default_temperature")]
+    pub translation_temperature: f32,
 }
 
 impl Default for AppSettings {
@@ -81,6 +85,7 @@ impl Default for AppSettings {
             translation_model: String::new(),
             video_service: "Googler".to_string(),
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
+            translation_temperature: 0.7,
         }
     }
 }
@@ -191,6 +196,9 @@ pub struct PipelineTemplate {
     /// Обраний провайдер зображень для Googler
     #[serde(default = "default_image_provider")]
     pub googler_image_provider: String,
+    /// Температура моделі для перекладу (0.0 — 2.0)
+    #[serde(default = "default_temperature")]
+    pub translation_temperature: f32,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -216,6 +224,7 @@ pub fn save_template(
     translation_model: &str,
     video_service: &str,
     googler_image_provider: &str,
+    translation_temperature: f32,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -236,6 +245,7 @@ pub fn save_template(
             translation_model: translation_model.to_string(),
             video_service: video_service.to_string(),
             googler_image_provider: googler_image_provider.to_string(),
+            translation_temperature,
         };
 
         let json = serde_json::to_string_pretty(&template)?;

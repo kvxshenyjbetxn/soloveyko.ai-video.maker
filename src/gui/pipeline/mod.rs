@@ -93,6 +93,7 @@ pub fn draw_pipeline_panel(
     openrouter_models_loading: &Arc<Mutex<bool>>,
     video_service: &mut String,
     googler_image_provider: &mut String,
+    translation_temperature: &mut f32,
 ) {
     ui.vertical(|ui| {
         ui.add_space(8.0);
@@ -137,6 +138,7 @@ pub fn draw_pipeline_panel(
                         translation_model,
                         video_service,
                         googler_image_provider,
+                        *translation_temperature,
                     ) {
                         Ok(_) => {
                             *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -203,6 +205,7 @@ pub fn draw_pipeline_panel(
                             translation_model,
                             video_service,
                             googler_image_provider,
+                            translation_temperature,
                         );
                     });
                 }
@@ -288,6 +291,7 @@ pub fn draw_pipeline_panel(
                             translation_model_search,
                             openrouter_models,
                             openrouter_models_loading,
+                            translation_temperature,
                         );
                     });
                 }

@@ -77,6 +77,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "translation_models_loading" => "Завантаження моделей...",
         "translation_models_retry" => "🔄 Спробувати знову",
         "translation_model_search" => "🔍 Пошук моделі...",
+        "translation_temperature_label" => "Температура",
         "googler_key_hint" => "Введіть API ключ Googler...",
         "googler_status_checking" => "⏳ Перевірка...",
         "video_service_label" => "Сервіс відеоряду",

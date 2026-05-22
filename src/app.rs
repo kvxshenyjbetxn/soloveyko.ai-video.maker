@@ -89,6 +89,8 @@ pub struct VideoMakerApp {
     pub video_service: String,
     /// Обраний провайдер зображень для Googler.
     pub googler_image_provider: String,
+    /// Температура моделі для перекладу (0.0 — 2.0).
+    pub translation_temperature: f32,
     /// Чи відкрите вікно детальних балансів.
     pub balance_window_open: bool,
 }
@@ -133,6 +135,7 @@ impl Default for VideoMakerApp {
             voicebot_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_service: "Googler".to_string(),
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
+            translation_temperature: 0.7,
             balance_window_open: false,
             last_saved_settings: default_settings,
         }
@@ -209,6 +212,7 @@ impl VideoMakerApp {
         let translation_model = saved.translation_model.clone();
         let video_service = saved.video_service.clone();
         let googler_image_provider = saved.googler_image_provider.clone();
+        let translation_temperature = saved.translation_temperature;
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
@@ -276,6 +280,7 @@ impl VideoMakerApp {
             voicebot_balance,
             video_service,
             googler_image_provider,
+            translation_temperature,
             balance_window_open: false,
             last_saved_settings: saved,
         }
@@ -556,6 +561,7 @@ impl eframe::App for VideoMakerApp {
                         &self.openrouter_models_loading,
                         &mut self.video_service,
                         &mut self.googler_image_provider,
+                        &mut self.translation_temperature,
                     );
                 });
 
@@ -637,6 +643,7 @@ impl eframe::App for VideoMakerApp {
                 || self.googler_key != self.last_saved_settings.googler_key
                 || self.video_service != self.last_saved_settings.video_service
                 || self.googler_image_provider != self.last_saved_settings.googler_image_provider
+                || (self.translation_temperature - self.last_saved_settings.translation_temperature).abs() > 0.001
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -658,6 +665,7 @@ impl eframe::App for VideoMakerApp {
                     translation_model: self.translation_model.clone(),
                     video_service: self.video_service.clone(),
                     googler_image_provider: self.googler_image_provider.clone(),
+                    translation_temperature: self.translation_temperature,
                 };
                 
                 // Зберігаємо оновлені налаштування у файл JSON на диску

@@ -22,6 +22,7 @@ pub fn draw_translation_section(
     translation_model_search: &mut String,
     openrouter_models: &Arc<Mutex<Option<Result<Vec<OpenRouterModel>, String>>>>,
     openrouter_models_loading: &Arc<Mutex<bool>>,
+    translation_temperature: &mut f32,
 ) {
     ui.vertical(|ui| {
         ui.add_space(4.0);
@@ -156,6 +157,23 @@ pub fn draw_translation_section(
                 }
             }
         }
+
+        ui.add_space(8.0);
+
+        // Повзунок температури моделі
+        ui.label(egui::RichText::new(
+            format!("{}: {:.2}", translate(language, "translation_temperature_label"), *translation_temperature)
+        ).strong());
+        ui.add_space(4.0);
+        let slider_width = ui.available_width();
+        ui.scope(|ui| {
+            ui.style_mut().spacing.slider_width = slider_width;
+            ui.add(
+                egui::Slider::new(translation_temperature, 0.0..=2.0)
+                    .step_by(0.01)
+                    .show_value(false),
+            );
+        });
 
         ui.add_space(6.0);
     });
