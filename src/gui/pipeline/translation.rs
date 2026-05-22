@@ -33,7 +33,7 @@ pub fn draw_translation_section(
         ui.add_space(4.0);
 
         let mut service_changed = false;
-        egui::ComboBox::from_id_source("translation_service_combo")
+        egui::ComboBox::from_id_salt("translation_service_combo")
             .selected_text(
                 if translation_service == "Claude Code" {
                     translate(language, "translation_service_claude_code")
@@ -146,7 +146,7 @@ pub fn draw_translation_section(
             ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
             ui.add_space(4.0);
 
-            egui::ComboBox::from_id_source("claude_code_model")
+            egui::ComboBox::from_id_salt("claude_code_model")
                 .selected_text(if translation_model.is_empty() { "sonnet" } else { translation_model.as_str() })
                 .show_ui(ui, |ui| {
                     ui.selectable_value(translation_model, "sonnet".to_string(), "sonnet");
