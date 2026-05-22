@@ -17,7 +17,7 @@ pub fn draw_api_section(
     googler_key: &mut String,
     googler_status: &mut Option<String>,
     googler_test_result: &Arc<Mutex<Option<String>>>,
-    googler_balance: &Arc<Mutex<Option<String>>>,
+    googler_balance: &Arc<Mutex<Option<crate::api::googler::GooglerBalance>>>,
 ) {
     // Опитуємо результат фонового тесту Voice Bot і переносимо у voicebot_status
     if let Ok(mut guard) = voicebot_test_result.try_lock() {

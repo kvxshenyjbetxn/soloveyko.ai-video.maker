@@ -52,7 +52,7 @@ pub struct VideoMakerApp {
     /// Результат фонового тесту API ключа Googler.
     pub googler_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Баланс Googler для відображення у топбарі.
-    pub googler_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    pub googler_balance: std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
     /// Обраний провайдер озвучки.
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки.
@@ -294,13 +294,21 @@ impl eframe::App for VideoMakerApp {
                     }
                     if let Ok(guard) = self.voicebot_balance.try_lock() {
                         if let Some(text) = guard.as_ref() {
-                            let display = text.split('(').next().unwrap_or(text).trim();
+                            // Показуємо лише числову частину, без слова "символів"
+                            let display = text.split_whitespace().next().unwrap_or(text.as_str());
                             draw_balance_chip(ui, "VoiceBot", display);
                         }
                     }
                     if let Ok(guard) = self.googler_balance.try_lock() {
-                        if let Some(text) = guard.as_ref() {
-                            draw_balance_chip(ui, "Googler", text);
+                        if let Some(bal) = guard.as_ref() {
+                            let text = format!(
+                                "img: {}/{} vid: {}/{} th: {}/{} {}/{}",
+                                bal.img_used, bal.img_limit,
+                                bal.video_used, bal.video_limit,
+                                bal.img_threads_active, bal.img_threads_allowed,
+                                bal.video_threads_active, bal.video_threads_allowed,
+                            );
+                            draw_balance_chip(ui, "Googler", &text);
                         }
                     }
                 });

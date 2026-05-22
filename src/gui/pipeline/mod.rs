@@ -73,7 +73,7 @@ pub fn draw_pipeline_panel(
     googler_key: &mut String,
     googler_status: &mut Option<String>,
     googler_test_result: &Arc<Mutex<Option<String>>>,
-    googler_balance: &Arc<Mutex<Option<String>>>,
+    googler_balance: &Arc<Mutex<Option<crate::api::googler::GooglerBalance>>>,
     voiceover_provider: &mut String,
     voiceover_template_uuid: &mut String,
     voicebot_templates: &Arc<Mutex<Option<Result<Vec<voiceover::VoiceBotTemplate>, String>>>>,
