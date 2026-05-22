@@ -11,6 +11,8 @@ pub fn run_pipeline(
     job_name: String,
     settings: crate::queue::JobSettings,
     status: Arc<Mutex<crate::queue::JobStatus>>,
+    translation_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    voiceover_stage: Arc<Mutex<crate::queue::StageStatus>>,
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
@@ -24,6 +26,8 @@ pub fn run_pipeline(
         // Етап 1: Переклад
         if settings.translation_enabled {
             crate::logger::log_job(job_id, &job_name, "Запуск етапу перекладу...");
+            *translation_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+            ctx.request_repaint();
 
             match translate::translate_text(
                 &settings.translation_service,
@@ -41,10 +45,12 @@ pub fn run_pipeline(
                     }
                     crate::logger::log_job(job_id, &job_name, "Переклад збережено: text.txt");
                     voice_text = translated;
+                    *translation_stage.lock().unwrap() = crate::queue::StageStatus::Done;
                     ctx.request_repaint();
                 }
                 Err(e) => {
                     crate::logger::log_job(job_id, &job_name, &format!("Помилка перекладу: {}", e));
+                    *translation_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
                     return;
@@ -60,6 +66,8 @@ pub fn run_pipeline(
                 &job_name,
                 &format!("Запуск озвучки (джерело тексту: {})...", src_label),
             );
+            *voiceover_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+            ctx.request_repaint();
 
             match voiceover::run_voiceover_sync(
                 job_id,
@@ -71,10 +79,12 @@ pub fn run_pipeline(
             ) {
                 Ok(_) => {
                     crate::logger::log_job(job_id, &job_name, "Озвучку завершено.");
+                    *voiceover_stage.lock().unwrap() = crate::queue::StageStatus::Done;
                     ctx.request_repaint();
                 }
                 Err(e) => {
                     crate::logger::log_job(job_id, &job_name, &format!("Помилка озвучки: {}", e));
+                    *voiceover_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
                     return;

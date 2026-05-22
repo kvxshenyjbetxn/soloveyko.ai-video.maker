@@ -9,6 +9,19 @@ pub enum JobStatus {
     Failed(String),
 }
 
+/// Статус окремого етапу пайплайну для відображення в карточці задачі.
+#[derive(Clone, PartialEq)]
+pub enum StageStatus {
+    /// Очікує — сірий
+    Pending,
+    /// Виконується — жовтий
+    Running,
+    /// Завершено успішно — зелений
+    Done,
+    /// Помилка — червоний
+    Failed,
+}
+
 /// Знімок налаштувань пайплайну на момент додавання задачі в чергу.
 #[derive(Clone)]
 pub struct JobSettings {
@@ -31,6 +44,10 @@ pub struct PipelineJob {
     /// Назва задачі, яку ввів користувач
     pub name: String,
     pub status: Arc<Mutex<JobStatus>>,
+    /// Статус етапу перекладу (Переклад або Оригінал)
+    pub translation_stage: Arc<Mutex<StageStatus>>,
+    /// Статус етапу озвучки
+    pub voiceover_stage: Arc<Mutex<StageStatus>>,
     /// Знімок налаштувань — зберігається для можливого перезапуску задачі
     pub settings: JobSettings,
 }
@@ -41,6 +58,8 @@ impl PipelineJob {
             id,
             name,
             status: Arc::new(Mutex::new(JobStatus::Pending)),
+            translation_stage: Arc::new(Mutex::new(StageStatus::Pending)),
+            voiceover_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             settings,
         }
     }

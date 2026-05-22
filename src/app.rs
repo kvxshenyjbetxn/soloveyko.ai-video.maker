@@ -706,6 +706,16 @@ fn draw_balance_window(
         });
 }
 
+/// Повертає колір для відображення статусу конкретного етапу пайплайну.
+fn stage_color(stage: &crate::queue::StageStatus, ui: &egui::Ui) -> egui::Color32 {
+    match stage {
+        crate::queue::StageStatus::Pending => ui.visuals().weak_text_color(),
+        crate::queue::StageStatus::Running => egui::Color32::from_rgb(255, 200, 0),
+        crate::queue::StageStatus::Done    => egui::Color32::from_rgb(46, 204, 113),
+        crate::queue::StageStatus::Failed  => egui::Color32::from_rgb(231, 76, 60),
+    }
+}
+
 /// Малює нижню панель черги задач пайплайну.
 fn draw_queue_panel(
     ui: &mut egui::Ui,
@@ -739,6 +749,8 @@ fn draw_queue_panel(
                         job.name.clone(),
                         job.settings.clone(),
                         std::sync::Arc::clone(&job.status),
+                        std::sync::Arc::clone(&job.translation_stage),
+                        std::sync::Arc::clone(&job.voiceover_stage),
                         ctx.clone(),
                     );
                 }
@@ -757,7 +769,10 @@ fn draw_queue_panel(
             ui.horizontal(|ui| {
                 for job in jobs.iter() {
                     let status = job.status.lock().unwrap().clone();
-                    let (status_text, color) = match &status {
+                    let translation_stage = job.translation_stage.lock().unwrap().clone();
+                    let voiceover_stage = job.voiceover_stage.lock().unwrap().clone();
+
+                    let (status_text, status_color) = match &status {
                         crate::queue::JobStatus::Pending => (
                             translate(language, "queue_status_pending"),
                             ui.visuals().weak_text_color(),
@@ -796,33 +811,36 @@ fn draw_queue_panel(
                                 ui.add_space(2.0);
                             }
 
-                            // Активні етапи — кожен з нового рядка
+                            // Активні етапи — кожен з нового рядка з кольором за статусом
                             if job.settings.translation_enabled {
+                                // Етап перекладу: "Переклад" з кольором за stage статусом
                                 ui.label(
                                     egui::RichText::new(translate(language, "translation"))
-                                        .weak()
+                                        .color(stage_color(&translation_stage, ui))
+                                        .size(10.0),
+                                );
+                            } else if job.settings.voiceover_enabled {
+                                // Переклад вимкнено, але озвучка увімкнена → показуємо "Оригінал" (завжди зелений)
+                                ui.label(
+                                    egui::RichText::new(translate(language, "voiceover_text_source_original"))
+                                        .color(egui::Color32::from_rgb(46, 204, 113))
                                         .size(10.0),
                                 );
                             }
+
                             if job.settings.voiceover_enabled {
-                                let src = if job.settings.translation_enabled {
-                                    translate(language, "voiceover_text_source_translated")
-                                } else {
-                                    translate(language, "voiceover_text_source_original")
-                                };
+                                // Етап озвучки: "Озвучка" з кольором за stage статусом
                                 ui.label(
-                                    egui::RichText::new(
-                                        format!("{} ({})", translate(language, "voiceover"), src)
-                                    )
-                                    .weak()
-                                    .size(10.0),
+                                    egui::RichText::new(translate(language, "voiceover"))
+                                        .color(stage_color(&voiceover_stage, ui))
+                                        .size(10.0),
                                 );
                             }
 
-                            // Статус
+                            // Загальний статус задачі
                             ui.label(
                                 egui::RichText::new(status_text)
-                                    .color(color)
+                                    .color(status_color)
                                     .size(if avail_h > 100.0 { 11.0 } else { 10.0 }),
                             );
 
