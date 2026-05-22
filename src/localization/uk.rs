@@ -148,6 +148,9 @@ pub fn translate_uk(key: &str) -> &'static str {
         "edge_tts_rate_label" => "Темп:",
         "edge_tts_pitch_label" => "Тональність:",
         "edge_tts_volume_label" => "Гучність:",
+        "stats_chars" => "Символи:",
+        "stats_words" => "Слова:",
+        "stats_paragraphs" => "Абзаци:",
         _ => "",
     }
 }

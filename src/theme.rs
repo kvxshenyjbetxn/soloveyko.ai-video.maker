@@ -19,7 +19,11 @@ pub enum AppTheme {
 pub fn apply_theme(ctx: &egui::Context, theme: AppTheme, accent_color: egui::Color32) {
     let mut visuals = match theme {
         AppTheme::Light => egui::Visuals::light(),
-        AppTheme::Dark => egui::Visuals::dark(),
+        AppTheme::Dark => {
+            let mut v = egui::Visuals::dark();
+            v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(100));
+            v
+        }
         AppTheme::Amoled => {
             let mut v = egui::Visuals::dark();
             
@@ -27,6 +31,7 @@ pub fn apply_theme(ctx: &egui::Context, theme: AppTheme, accent_color: egui::Col
             v.panel_fill = egui::Color32::from_rgb(0, 0, 0);
             v.window_fill = egui::Color32::from_rgb(0, 0, 0);
             v.extreme_bg_color = egui::Color32::from_rgb(6, 6, 6);
+            v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(100));
             v
         }
     };

@@ -148,6 +148,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "edge_tts_rate_label" => "Rate:",
         "edge_tts_pitch_label" => "Pitch:",
         "edge_tts_volume_label" => "Volume:",
+        "stats_chars" => "Characters:",
+        "stats_words" => "Words:",
+        "stats_paragraphs" => "Paragraphs:",
         _ => "",
     }
 }

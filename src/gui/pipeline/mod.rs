@@ -114,388 +114,414 @@ pub fn draw_pipeline_panel(
 ) {
     // Забороняємо будь-якому елементу розширювати панель за поточну ширину
     ui.set_max_width(ui.available_width());
-    ui.vertical(|ui| {
-        ui.add_space(8.0);
-        ui.heading(translate(language, "pipeline_settings"));
-        ui.separator();
 
-        ui.add_space(8.0);
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        // Обчислюємо ширину тексту для точного центрування
+        let title_text = translate(language, "pipeline_settings");
+        let text_width = ui.fonts(|f| {
+            let galley = f.layout_no_wrap(
+                title_text.to_string(),
+                egui::FontId::new(16.0, egui::FontFamily::Proportional),
+                ui.visuals().widgets.noninteractive.text_color()
+            );
+            galley.size().x
+        });
+        let pad_left = ((ui.available_width() - text_width) / 2.0).max(0.0);
+        ui.add_space(pad_left);
+        ui.label(egui::RichText::new(title_text).strong().size(16.0));
+    });
+    ui.add_space(4.0);
+    ui.separator();
+    ui.add_space(8.0);
 
         // Форма створення нового шаблону (вгорі панелі пайплайну)
-        let available_width = ui.available_width();
-        ui.horizontal(|ui| {
-            let text_edit = egui::TextEdit::singleline(template_name_input)
-                .hint_text(translate(language, "template_name_hint"))
-                .desired_width((available_width - 95.0).max(100.0));
+        egui::Frame::none()
+            .inner_margin(egui::Margin::symmetric(8.0, 0.0))
+            .show(ui, |ui| {
+                let available_width = ui.available_width();
+                ui.horizontal(|ui| {
+                    let text_edit = egui::TextEdit::singleline(template_name_input)
+                        .hint_text(translate(language, "template_name_hint"))
+                        .desired_width((available_width - 95.0).max(100.0));
 
-            let name_resp = ui.add(text_edit);
-            if name_resp.changed() {
-                *template_status = None;
-            }
+                    let name_resp = ui.add(text_edit);
+                    if name_resp.changed() {
+                        *template_status = None;
+                    }
 
-            let save_btn = ui.add_sized(
-                [75.0, 20.0],
-                egui::Button::new(translate(language, "template_save_btn"))
-            );
+                    let save_btn = ui.add_sized(
+                        [75.0, 20.0],
+                        egui::Button::new(translate(language, "template_save_btn"))
+                    );
 
-            if save_btn.clicked() {
-                let name = template_name_input.trim();
-                if name.is_empty() {
-                    *template_status = Some(translate(language, "template_status_empty").to_string());
-                } else {
-                    match crate::gui::settings::storage::save_template(
-                        name,
-                        openrouter_key,
-                        voiceover_provider,
-                        voiceover_template_uuid,
-                        *pipeline_translation_enabled,
-                        *pipeline_voiceover_enabled,
-                        *pipeline_video_enabled,
-                        *pipeline_subtitles_enabled,
-                        *pipeline_editing_enabled,
-                        translation_prompt,
-                        translation_model,
-                        translation_model_openrouter,
-                        translation_model_claude,
-                        translation_model_gemini,
-                        video_service,
-                        googler_image_provider,
-                        *translation_temperature,
-                        translation_service,
-                        edge_tts_voice,
-                        edge_tts_rate,
-                        edge_tts_pitch,
-                        edge_tts_volume,
-                    ) {
-                        Ok(_) => {
-                            *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
-                            template_name_input.clear();
-                            *saved_templates = crate::gui::settings::storage::load_saved_templates();
-                        }
-                        Err(err) => {
-                            *template_status = Some(format!("❌ Error: {}", err));
+                    if save_btn.clicked() {
+                        let name = template_name_input.trim();
+                        if name.is_empty() {
+                            *template_status = Some(translate(language, "template_status_empty").to_string());
+                        } else {
+                            match crate::gui::settings::storage::save_template(
+                                name,
+                                openrouter_key,
+                                voiceover_provider,
+                                voiceover_template_uuid,
+                                *pipeline_translation_enabled,
+                                *pipeline_voiceover_enabled,
+                                *pipeline_video_enabled,
+                                *pipeline_subtitles_enabled,
+                                *pipeline_editing_enabled,
+                                translation_prompt,
+                                translation_model,
+                                translation_model_openrouter,
+                                translation_model_claude,
+                                translation_model_gemini,
+                                video_service,
+                                googler_image_provider,
+                                *translation_temperature,
+                                translation_service,
+                                edge_tts_voice,
+                                edge_tts_rate,
+                                edge_tts_pitch,
+                                edge_tts_volume,
+                            ) {
+                                Ok(_) => {
+                                    *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
+                                    template_name_input.clear();
+                                    *saved_templates = crate::gui::settings::storage::load_saved_templates();
+                                }
+                                Err(err) => {
+                                    *template_status = Some(format!("❌ Error: {}", err));
+                                }
+                            }
                         }
                     }
-                }
-            }
-        });
+                });
 
-        if let Some(status) = template_status {
-            ui.add_space(2.0);
-            let is_success = status.contains('✔') || status.contains('🗑') || status.contains("Завантажено") || status.contains("Loaded") || status.contains("Загружен");
-            let color = if is_success {
-                egui::Color32::from_rgb(46, 204, 113)
-            } else {
-                egui::Color32::from_rgb(231, 76, 60)
-            };
-            ui.add(egui::Label::new(egui::RichText::new(status.as_str()).color(color).size(11.0)).wrap());
-        }
+                if let Some(status) = template_status {
+                    ui.add_space(2.0);
+                    let is_success = status.contains('✔') || status.contains('🗑') || status.contains("Завантажено") || status.contains("Loaded") || status.contains("Загружен");
+                    let color = if is_success {
+                        egui::Color32::from_rgb(46, 204, 113)
+                    } else {
+                        egui::Color32::from_rgb(231, 76, 60)
+                    };
+                    ui.add(egui::Label::new(egui::RichText::new(status.as_str()).color(color).size(11.0)).wrap());
+                }
+            });
 
         ui.add_space(4.0);
-        ui.separator();
-        ui.add_space(8.0);
 
         // Залишаємо місце внизу для кнопки "Додати в чергу" та можливої помилки
-        let bottom_reserve = 8.0 + 28.0 + 8.0;
+        let bottom_reserve = 8.0 + 28.0 + 8.0 + 8.0;
         let scroll_height = (ui.available_height() - bottom_reserve).max(80.0);
 
         egui::ScrollArea::vertical()
             .max_height(scroll_height)
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                // 1. Шаблони
-                {
-                    let id = ui.make_persistent_id("templates_section");
-                    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(), id, false,
-                    );
-                    let header = ui.horizontal(|ui| {
-                        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
-                        let label = ui.add(egui::Label::new(translate(language, "templates")).sense(egui::Sense::click()));
-                        label
-                    });
-                    if header.inner.clicked() { state.toggle(ui); }
-                    state.store(ui.ctx());
-                    state.show_body_indented(&header.response, ui, |ui| {
-                        templates::draw_templates_section(
-                            ui,
-                            language,
-                            saved_templates,
-                            openrouter_key,
-                            openrouter_status,
-                            voiceover_provider,
-                            voiceover_template_uuid,
-                            template_status,
-                            template_name_input,
-                            pipeline_translation_enabled,
-                            pipeline_voiceover_enabled,
-                            pipeline_video_enabled,
-                            pipeline_subtitles_enabled,
-                            pipeline_editing_enabled,
-                            translation_prompt,
-                            translation_model,
-                            translation_model_openrouter,
-                            translation_model_claude,
-                            translation_model_gemini,
-                            video_service,
-                            googler_image_provider,
-                            translation_temperature,
-                            translation_service,
-                            edge_tts_voice,
-                            edge_tts_rate,
-                            edge_tts_pitch,
-                            edge_tts_volume,
-                        );
-                    });
-                }
+                egui::Frame::none()
+                    .inner_margin(egui::Margin::symmetric(8.0, 0.0))
+                    .show(ui, |ui| {
+                        // 1. Шаблони
+                        {
+                            let id = ui.make_persistent_id("templates_section");
+                            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                ui.ctx(), id, false,
+                            );
+                            let header = ui.horizontal(|ui| {
+                                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                                let label = ui.add(egui::Label::new(translate(language, "templates")).sense(egui::Sense::click()));
+                                label
+                            });
+                            if header.inner.clicked() { state.toggle(ui); }
+                            state.store(ui.ctx());
+                            state.show_body_indented(&header.response, ui, |ui| {
+                                templates::draw_templates_section(
+                                    ui,
+                                    language,
+                                    saved_templates,
+                                    openrouter_key,
+                                    openrouter_status,
+                                    voiceover_provider,
+                                    voiceover_template_uuid,
+                                    template_status,
+                                    template_name_input,
+                                    pipeline_translation_enabled,
+                                    pipeline_voiceover_enabled,
+                                    pipeline_video_enabled,
+                                    pipeline_subtitles_enabled,
+                                    pipeline_editing_enabled,
+                                    translation_prompt,
+                                    translation_model,
+                                    translation_model_openrouter,
+                                    translation_model_claude,
+                                    translation_model_gemini,
+                                    video_service,
+                                    googler_image_provider,
+                                    translation_temperature,
+                                    translation_service,
+                                    edge_tts_voice,
+                                    edge_tts_rate,
+                                    edge_tts_pitch,
+                                    edge_tts_volume,
+                                );
+                            });
+                        }
 
-                ui.add_space(8.0);
+                        ui.add_space(8.0);
 
-                // 2. Шлях збереження
-                {
-                    let id = ui.make_persistent_id("storage_section");
-                    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(), id, true,
-                    );
-                    let header = ui.horizontal(|ui| {
-                        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
-                        let label = ui.add(egui::Label::new(translate(language, "storage")).sense(egui::Sense::click()));
-                        label
-                    });
-                    if header.inner.clicked() { state.toggle(ui); }
-                    state.store(ui.ctx());
-                    state.show_body_indented(&header.response, ui, |ui| {
-                        storage::draw_storage_section(ui, language, save_path);
-                    });
-                }
+                        // 2. Шлях збереження
+                        {
+                            let id = ui.make_persistent_id("storage_section");
+                            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                ui.ctx(), id, false,
+                            );
+                            let header = ui.horizontal(|ui| {
+                                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                                let label = ui.add(egui::Label::new(translate(language, "storage")).sense(egui::Sense::click()));
+                                label
+                            });
+                            if header.inner.clicked() { state.toggle(ui); }
+                            state.store(ui.ctx());
+                            state.show_body_indented(&header.response, ui, |ui| {
+                                storage::draw_storage_section(ui, language, save_path);
+                            });
+                        }
 
-                ui.add_space(8.0);
+                        ui.add_space(8.0);
 
-                // 3. АПІ
-                {
-                    let id = ui.make_persistent_id("api_section");
-                    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(), id, false,
-                    );
-                    let header = ui.horizontal(|ui| {
-                        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
-                        let label = ui.add(egui::Label::new(translate(language, "api")).sense(egui::Sense::click()));
-                        label
-                    });
-                    if header.inner.clicked() { state.toggle(ui); }
-                    state.store(ui.ctx());
-                    state.show_body_indented(&header.response, ui, |ui| {
-                        api::draw_api_section(
-                            ui,
-                            language,
-                            openrouter_key,
-                            openrouter_status,
-                            openrouter_balance,
-                            voicebot_key,
-                            voicebot_status,
-                            voicebot_test_result,
-                            voicebot_balance,
-                            googler_key,
-                            googler_status,
-                            googler_test_result,
-                            googler_balance,
-                        );
-                    });
-                }
+                        // 3. АПІ
+                        {
+                            let id = ui.make_persistent_id("api_section");
+                            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                ui.ctx(), id, false,
+                            );
+                            let header = ui.horizontal(|ui| {
+                                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                                let label = ui.add(egui::Label::new(translate(language, "api")).sense(egui::Sense::click()));
+                                label
+                            });
+                            if header.inner.clicked() { state.toggle(ui); }
+                            state.store(ui.ctx());
+                            state.show_body_indented(&header.response, ui, |ui| {
+                                api::draw_api_section(
+                                    ui,
+                                    language,
+                                    openrouter_key,
+                                    openrouter_status,
+                                    openrouter_balance,
+                                    voicebot_key,
+                                    voicebot_status,
+                                    voicebot_test_result,
+                                    voicebot_balance,
+                                    googler_key,
+                                    googler_status,
+                                    googler_test_result,
+                                    googler_balance,
+                                );
+                            });
+                        }
 
-                ui.add_space(8.0);
+                        ui.add_space(8.0);
 
-                // 4. Переклад (з перемикачем)
-                {
-                    let id = ui.make_persistent_id("translation_section");
-                    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(), id, false,
-                    );
-                    let header = ui.horizontal(|ui| {
-                        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
-                        let label = ui.add(egui::Label::new(translate(language, "translation")).sense(egui::Sense::click()));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            toggle_switch(ui, pipeline_translation_enabled);
-                        });
-                        label
-                    });
-                    if header.inner.clicked() { state.toggle(ui); }
-                    state.store(ui.ctx());
-                    state.show_body_indented(&header.response, ui, |ui| {
-                        translation::draw_translation_section(
-                            ui,
-                            language,
-                            translation_prompt,
-                            translation_model,
-                            translation_model_search,
-                            openrouter_models,
-                            openrouter_models_loading,
-                            translation_temperature,
-                            translation_service,
-                            translation_model_openrouter,
-                            translation_model_claude,
-                            translation_model_gemini,
-                        );
-                    });
-                }
+                        // 4. Переклад (з перемикачем)
+                        {
+                            let id = ui.make_persistent_id("translation_section");
+                            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                ui.ctx(), id, false,
+                            );
+                            let header = ui.horizontal(|ui| {
+                                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                                let label = ui.add(egui::Label::new(translate(language, "translation")).sense(egui::Sense::click()));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    toggle_switch(ui, pipeline_translation_enabled);
+                                });
+                                label
+                            });
+                            if header.inner.clicked() { state.toggle(ui); }
+                            state.store(ui.ctx());
+                            state.show_body_indented(&header.response, ui, |ui| {
+                                translation::draw_translation_section(
+                                    ui,
+                                    language,
+                                    translation_prompt,
+                                    translation_model,
+                                    translation_model_search,
+                                    openrouter_models,
+                                    openrouter_models_loading,
+                                    translation_temperature,
+                                    translation_service,
+                                    translation_model_openrouter,
+                                    translation_model_claude,
+                                    translation_model_gemini,
+                                );
+                            });
+                        }
 
-                ui.add_space(8.0);
+                        ui.add_space(8.0);
 
-                // 5. Озвучка (з перемикачем)
-                {
-                    let id = ui.make_persistent_id("voiceover_section");
-                    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(), id, false,
-                    );
-                    let header = ui.horizontal(|ui| {
-                        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
-                        let label = ui.add(egui::Label::new(translate(language, "voiceover")).sense(egui::Sense::click()));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            toggle_switch(ui, pipeline_voiceover_enabled);
-                        });
-                        label
-                    });
-                    if header.inner.clicked() { state.toggle(ui); }
-                    state.store(ui.ctx());
-                    state.show_body_indented(&header.response, ui, |ui| {
-                        voiceover::draw_voiceover_section(
-                            ui,
-                            language,
-                            voicebot_key,
-                            voiceover_provider,
-                            voiceover_template_uuid,
-                            voicebot_templates,
-                            voicebot_loading,
-                            edge_tts_voice,
-                            edge_tts_rate,
-                            edge_tts_pitch,
-                            edge_tts_volume,
-                            edge_tts_voices,
-                            edge_tts_loading_voices,
-                            edge_tts_show_all_languages,
-                        );
-                    });
-                }
+                        // 5. Озвучка (з перемикачем)
+                        {
+                            let id = ui.make_persistent_id("voiceover_section");
+                            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                ui.ctx(), id, false,
+                            );
+                            let header = ui.horizontal(|ui| {
+                                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                                let label = ui.add(egui::Label::new(translate(language, "voiceover")).sense(egui::Sense::click()));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    toggle_switch(ui, pipeline_voiceover_enabled);
+                                });
+                                label
+                            });
+                            if header.inner.clicked() { state.toggle(ui); }
+                            state.store(ui.ctx());
+                            state.show_body_indented(&header.response, ui, |ui| {
+                                voiceover::draw_voiceover_section(
+                                    ui,
+                                    language,
+                                    voicebot_key,
+                                    voiceover_provider,
+                                    voiceover_template_uuid,
+                                    voicebot_templates,
+                                    voicebot_loading,
+                                    edge_tts_voice,
+                                    edge_tts_rate,
+                                    edge_tts_pitch,
+                                    edge_tts_volume,
+                                    edge_tts_voices,
+                                    edge_tts_loading_voices,
+                                    edge_tts_show_all_languages,
+                                );
+                            });
+                        }
 
-                ui.add_space(8.0);
+                        ui.add_space(8.0);
 
-                // 6. Відеоряд (з перемикачем)
-                {
-                    let id = ui.make_persistent_id("video_section");
-                    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(), id, false,
-                    );
-                    let header = ui.horizontal(|ui| {
-                        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
-                        let label = ui.add(egui::Label::new(translate(language, "video")).sense(egui::Sense::click()));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            toggle_switch(ui, pipeline_video_enabled);
-                        });
-                        label
-                    });
-                    if header.inner.clicked() { state.toggle(ui); }
-                    state.store(ui.ctx());
-                    state.show_body_indented(&header.response, ui, |ui| {
-                        video::draw_video_section(
-                            ui,
-                            language,
-                            video_service,
-                            googler_image_provider,
-                        );
-                    });
-                }
+                        // 6. Відеоряд (з перемикачем)
+                        {
+                            let id = ui.make_persistent_id("video_section");
+                            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                ui.ctx(), id, false,
+                            );
+                            let header = ui.horizontal(|ui| {
+                                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                                let label = ui.add(egui::Label::new(translate(language, "video")).sense(egui::Sense::click()));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    toggle_switch(ui, pipeline_video_enabled);
+                                });
+                                label
+                            });
+                            if header.inner.clicked() { state.toggle(ui); }
+                            state.store(ui.ctx());
+                            state.show_body_indented(&header.response, ui, |ui| {
+                                video::draw_video_section(
+                                    ui,
+                                    language,
+                                    video_service,
+                                    googler_image_provider,
+                                );
+                            });
+                        }
 
-                ui.add_space(8.0);
+                        ui.add_space(8.0);
 
-                // 7. Субтитри (з перемикачем)
-                {
-                    let id = ui.make_persistent_id("subtitles_section");
-                    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(), id, false,
-                    );
-                    let header = ui.horizontal(|ui| {
-                        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
-                        let label = ui.add(egui::Label::new(translate(language, "subtitles")).sense(egui::Sense::click()));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            toggle_switch(ui, pipeline_subtitles_enabled);
-                        });
-                        label
-                    });
-                    if header.inner.clicked() { state.toggle(ui); }
-                    state.store(ui.ctx());
-                    state.show_body_indented(&header.response, ui, |ui| {
-                        subtitles::draw_subtitles_section(ui);
-                    });
-                }
+                        // 7. Субтитри (з перемикачем)
+                        {
+                            let id = ui.make_persistent_id("subtitles_section");
+                            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                ui.ctx(), id, false,
+                            );
+                            let header = ui.horizontal(|ui| {
+                                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                                let label = ui.add(egui::Label::new(translate(language, "subtitles")).sense(egui::Sense::click()));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    toggle_switch(ui, pipeline_subtitles_enabled);
+                                });
+                                label
+                            });
+                            if header.inner.clicked() { state.toggle(ui); }
+                            state.store(ui.ctx());
+                            state.show_body_indented(&header.response, ui, |ui| {
+                                subtitles::draw_subtitles_section(ui);
+                            });
+                        }
 
-                ui.add_space(8.0);
+                        ui.add_space(8.0);
 
-                // 8. Монтаж (з перемикачем)
-                {
-                    let id = ui.make_persistent_id("editing_section");
-                    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
-                        ui.ctx(), id, false,
-                    );
-                    let header = ui.horizontal(|ui| {
-                        state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
-                        let label = ui.add(egui::Label::new(translate(language, "editing")).sense(egui::Sense::click()));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            toggle_switch(ui, pipeline_editing_enabled);
-                        });
-                        label
+                        // 8. Монтаж (з перемикачем)
+                        {
+                            let id = ui.make_persistent_id("editing_section");
+                            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                ui.ctx(), id, false,
+                            );
+                            let header = ui.horizontal(|ui| {
+                                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                                let label = ui.add(egui::Label::new(translate(language, "editing")).sense(egui::Sense::click()));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    toggle_switch(ui, pipeline_editing_enabled);
+                                });
+                                label
+                            });
+                            if header.inner.clicked() { state.toggle(ui); }
+                            state.store(ui.ctx());
+                            state.show_body_indented(&header.response, ui, |ui| {
+                                editing::draw_editing_section(ui);
+                            });
+                        }
                     });
-                    if header.inner.clicked() { state.toggle(ui); }
-                    state.store(ui.ctx());
-                    state.show_body_indented(&header.response, ui, |ui| {
-                        editing::draw_editing_section(ui);
-                    });
-                }
-            }); // ScrollArea
+            });
 
         ui.add_space(4.0);
 
-        // Помилка валідації (якщо є)
-        if let Some(err) = queue_error.as_ref() {
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(err.as_str())
-                        .color(egui::Color32::from_rgb(231, 76, 60))
-                        .size(11.0),
-                )
-                .wrap(),
-            );
-            ui.add_space(2.0);
-        }
+        egui::Frame::none()
+            .inner_margin(egui::Margin::symmetric(8.0, 0.0))
+            .show(ui, |ui| {
+                // Помилка валідації (якщо є)
+                if let Some(err) = queue_error.as_ref() {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(err.as_str())
+                                .color(egui::Color32::from_rgb(231, 76, 60))
+                                .size(11.0),
+                        )
+                        .wrap(),
+                    );
+                    ui.add_space(2.0);
+                }
 
-        // Кнопка "Додати в чергу" — в самому низу панелі, завжди видима
-        if ui.add_sized(
-            [ui.available_width(), 28.0],
-            egui::Button::new(
-                egui::RichText::new(translate(language, "queue_add_btn")).strong(),
-            ),
-        ).clicked() {
-            // Спочатку валідуємо — лише якщо все ок, відкриваємо діалог назви
-            let error = if text_input.trim().is_empty() {
-                Some(translate(language, "queue_error_no_text").to_string())
-            } else if save_path.trim().is_empty() {
-                Some(translate(language, "queue_error_no_save_path").to_string())
-            } else if *pipeline_translation_enabled && translation_model.is_empty() {
-                Some(translate(language, "queue_error_no_model").to_string())
-            } else if *pipeline_translation_enabled && openrouter_key.is_empty() {
-                Some(translate(language, "queue_error_no_key").to_string())
-            } else if *pipeline_voiceover_enabled && voicebot_key.is_empty() {
-                Some(translate(language, "queue_error_no_voicebot_key").to_string())
-            } else {
-                None
-            };
+                // Кнопка "Додати в чергу" — в самому низу панелі, завжди видима
+                if ui.add_sized(
+                    [ui.available_width(), 28.0],
+                    egui::Button::new(
+                        egui::RichText::new(translate(language, "queue_add_btn")).strong(),
+                    ),
+                ).clicked() {
+                    // Спочатку валідуємо — лише якщо все ок, відкриваємо діалог назви
+                    let error = if text_input.trim().is_empty() {
+                        Some(translate(language, "queue_error_no_text").to_string())
+                    } else if save_path.trim().is_empty() {
+                        Some(translate(language, "queue_error_no_save_path").to_string())
+                    } else if *pipeline_translation_enabled && translation_model.is_empty() {
+                        Some(translate(language, "queue_error_no_model").to_string())
+                    } else if *pipeline_translation_enabled && openrouter_key.is_empty() {
+                        Some(translate(language, "queue_error_no_key").to_string())
+                    } else if *pipeline_voiceover_enabled && voicebot_key.is_empty() {
+                        Some(translate(language, "queue_error_no_voicebot_key").to_string())
+                    } else {
+                        None
+                    };
 
-            if let Some(err) = error {
-                *queue_error = Some(err);
-            } else {
-                *queue_error = None;
-                *job_name_dialog_open = true;
-            }
-        }
+                    if let Some(err) = error {
+                        *queue_error = Some(err);
+                    } else {
+                        *queue_error = None;
+                        *job_name_dialog_open = true;
+                    }
+                }
+            });
+
+        ui.add_space(8.0);
 
         // Вікно введення назви задачі
         if *job_name_dialog_open {
@@ -578,7 +604,6 @@ pub fn draw_pipeline_panel(
                     });
                 });
         }
-    });
 }
 
 /// Створює папку задачі та додає її в чергу зі статусом Pending.

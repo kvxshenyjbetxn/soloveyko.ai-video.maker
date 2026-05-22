@@ -1132,7 +1132,10 @@ impl eframe::App for VideoMakerApp {
 
             // default_width передається лише як початкове значення при першому запуску.
             // egui::Memory зберігає ширину між кадрами сам — нічого читати назад не потрібно.
+            let side_frame = egui::Frame::side_top_panel(ctx.style().as_ref())
+                .inner_margin(egui::Margin::same(0.0));
             egui::SidePanel::right("pipeline_panel")
+                .frame(side_frame)
                 .default_width(self.pipeline_width)
                 .width_range(100.0..=750.0)
                 .resizable(true)

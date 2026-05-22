@@ -148,6 +148,9 @@ pub fn translate_ru(key: &str) -> &'static str {
         "edge_tts_rate_label" => "Темп:",
         "edge_tts_pitch_label" => "Тональность:",
         "edge_tts_volume_label" => "Громкость:",
+        "stats_chars" => "Символы:",
+        "stats_words" => "Слова:",
+        "stats_paragraphs" => "Абзацы:",
         _ => "",
     }
 }
