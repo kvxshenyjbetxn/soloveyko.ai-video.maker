@@ -1,7 +1,7 @@
 /// Повертає переклад для української мови.
 pub fn translate_uk(key: &str) -> &'static str {
     match key {
-        "app_title" => "Soloveyko.ai Video Maker",
+        "app_title" => "Soloveyko.AI-Video.Maker",
         "tab_main" => "Основна",
         "tab_settings" => "Налаштування",
         "pipeline_settings" => "Налаштування пайплайну",

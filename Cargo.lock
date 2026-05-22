@@ -3518,7 +3518,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soloveyko-video-maker"
+name = "soloveyko-ai-video-maker"
 version = "0.1.0"
 dependencies = [
  "chrono",
