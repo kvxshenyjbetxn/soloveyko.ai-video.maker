@@ -86,6 +86,15 @@ pub fn translate_ru(key: &str) -> &'static str {
         "googler_status_checking" => "⏳ Проверка...",
         "video_service_label" => "Сервис видеоряда",
         "googler_image_provider_label" => "Провайдер изображений",
+        "balance_window_title" => "Балансы",
+        "balance_refresh" => "Обновить",
+        "balance_refresh_all" => "Обновить все",
+        "balance_not_loaded" => "Не загружено",
+        "balance_no_key" => "Ключ не настроен",
+        "balance_img_per_hour" => "Изображений / час",
+        "balance_video_per_hour" => "Видео / час",
+        "balance_img_threads" => "Потоки изображений",
+        "balance_video_threads" => "Потоки видео",
         _ => "",
     }
 }

@@ -86,6 +86,15 @@ pub fn translate_en(key: &str) -> &'static str {
         "googler_status_checking" => "⏳ Checking...",
         "video_service_label" => "Video Service",
         "googler_image_provider_label" => "Image Provider",
+        "balance_window_title" => "Balances",
+        "balance_refresh" => "Refresh",
+        "balance_refresh_all" => "Refresh all",
+        "balance_not_loaded" => "Not loaded",
+        "balance_no_key" => "Key not configured",
+        "balance_img_per_hour" => "Images / hr",
+        "balance_video_per_hour" => "Video / hr",
+        "balance_img_threads" => "Image threads",
+        "balance_video_threads" => "Video threads",
         _ => "",
     }
 }

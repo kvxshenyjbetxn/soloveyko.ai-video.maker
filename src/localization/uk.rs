@@ -86,6 +86,15 @@ pub fn translate_uk(key: &str) -> &'static str {
         "googler_status_checking" => "⏳ Перевірка...",
         "video_service_label" => "Сервіс відеоряду",
         "googler_image_provider_label" => "Провайдер зображень",
+        "balance_window_title" => "Баланси",
+        "balance_refresh" => "Оновити",
+        "balance_refresh_all" => "Оновити всі",
+        "balance_not_loaded" => "Не завантажено",
+        "balance_no_key" => "Ключ не налаштовано",
+        "balance_img_per_hour" => "Зображень / год",
+        "balance_video_per_hour" => "Відео / год",
+        "balance_img_threads" => "Потоки зображень",
+        "balance_video_threads" => "Потоки відео",
         _ => "",
     }
 }

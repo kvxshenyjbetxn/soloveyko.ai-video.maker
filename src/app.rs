@@ -91,6 +91,8 @@ pub struct VideoMakerApp {
     pub video_service: String,
     /// Обраний провайдер зображень для Googler.
     pub googler_image_provider: String,
+    /// Чи відкрите вікно детальних балансів.
+    pub balance_window_open: bool,
 }
 
 impl Default for VideoMakerApp {
@@ -134,24 +136,36 @@ impl Default for VideoMakerApp {
             voicebot_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_service: "Googler".to_string(),
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
+            balance_window_open: false,
             last_saved_settings: default_settings,
         }
     }
 }
 
-/// Малює компактний чіп з балансом у топбарі.
-fn draw_balance_chip(ui: &mut egui::Ui, prefix: &str, value: &str) {
-    egui::Frame::none()
-        .fill(ui.visuals().faint_bg_color)
-        .rounding(egui::Rounding::same(4.0))
-        .inner_margin(egui::Margin::symmetric(6.0, 2.0))
-        .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new(format!("{}: {}", prefix, value))
-                    .small()
-                    .monospace()
-            );
-        });
+/// Малює компактний чіп з балансом. При наведенні підсвічується і змінює курсор.
+fn draw_balance_chip(ui: &mut egui::Ui, prefix: &str, value: &str) -> egui::Response {
+    let text = format!("{}: {}", prefix, value);
+    let font_size = ui.text_style_height(&egui::TextStyle::Small);
+    let font_id = egui::FontId::new(font_size, egui::FontFamily::Monospace);
+    let text_color = ui.visuals().text_color();
+
+    let galley = ui.fonts(|f| f.layout_no_wrap(text, font_id, text_color));
+
+    let padding = egui::vec2(6.0, 2.0);
+    let desired_size = galley.rect.size() + padding * 2.0;
+    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+
+    if ui.is_rect_visible(rect) {
+        let fill = if response.hovered() {
+            ui.visuals().widgets.hovered.weak_bg_fill
+        } else {
+            ui.visuals().faint_bg_color
+        };
+        ui.painter().rect_filled(rect, egui::Rounding::same(4.0), fill);
+        ui.painter().galley(rect.min + padding, galley, text_color);
+    }
+
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 impl VideoMakerApp {
@@ -266,9 +280,181 @@ impl VideoMakerApp {
             voicebot_balance,
             video_service,
             googler_image_provider,
+            balance_window_open: false,
             last_saved_settings: saved,
         }
     }
+}
+
+/// Малює плаваюче вікно з детальними балансами всіх сервісів.
+fn draw_balance_window(
+    ctx: &egui::Context,
+    open: &mut bool,
+    language: crate::localization::Language,
+    openrouter_key: &str,
+    openrouter_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    voicebot_key: &str,
+    voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    googler_key: &str,
+    googler_balance: &std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
+) {
+    use crate::localization::translate;
+    use std::sync::Arc;
+
+    egui::Window::new(translate(language, "balance_window_title"))
+        .open(open)
+        .resizable(false)
+        .collapsible(false)
+        .default_width(300.0)
+        .show(ctx, |ui| {
+            // --- OpenRouter ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("OpenRouter").strong());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add_enabled(
+                            !openrouter_key.is_empty(),
+                            egui::Button::new(translate(language, "balance_refresh")).small(),
+                        ).clicked() {
+                            crate::api::openrouter::fetch_balance(
+                                openrouter_key.to_string(),
+                                Arc::clone(openrouter_balance),
+                                ui.ctx().clone(),
+                            );
+                        }
+                    });
+                });
+                ui.separator();
+                if let Ok(guard) = openrouter_balance.try_lock() {
+                    match guard.as_ref() {
+                        Some(text) => { ui.label(text.as_str()); }
+                        None if openrouter_key.is_empty() => {
+                            ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
+                        }
+                        None => {
+                            ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
+                        }
+                    }
+                }
+            });
+
+            ui.add_space(4.0);
+
+            // --- VoiceBot ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("VoiceBot").strong());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add_enabled(
+                            !voicebot_key.is_empty(),
+                            egui::Button::new(translate(language, "balance_refresh")).small(),
+                        ).clicked() {
+                            crate::api::voicebot::fetch_balance(
+                                voicebot_key.to_string(),
+                                Arc::clone(voicebot_balance),
+                                ui.ctx().clone(),
+                            );
+                        }
+                    });
+                });
+                ui.separator();
+                if let Ok(guard) = voicebot_balance.try_lock() {
+                    match guard.as_ref() {
+                        Some(text) => { ui.label(text.as_str()); }
+                        None if voicebot_key.is_empty() => {
+                            ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
+                        }
+                        None => {
+                            ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
+                        }
+                    }
+                }
+            });
+
+            ui.add_space(4.0);
+
+            // --- Googler ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Googler").strong());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.add_enabled(
+                            !googler_key.is_empty(),
+                            egui::Button::new(translate(language, "balance_refresh")).small(),
+                        ).clicked() {
+                            crate::api::googler::fetch_balance(
+                                googler_key.to_string(),
+                                Arc::clone(googler_balance),
+                                ui.ctx().clone(),
+                            );
+                        }
+                    });
+                });
+                ui.separator();
+                if let Ok(guard) = googler_balance.try_lock() {
+                    match guard.as_ref() {
+                        Some(bal) => {
+                            egui::Grid::new("googler_balance_grid")
+                                .num_columns(2)
+                                .spacing([16.0, 4.0])
+                                .show(ui, |ui| {
+                                    ui.label(translate(language, "balance_img_per_hour"));
+                                    ui.label(format!("{} / {}", bal.img_used, bal.img_limit));
+                                    ui.end_row();
+                                    ui.label(translate(language, "balance_video_per_hour"));
+                                    ui.label(format!("{} / {}", bal.video_used, bal.video_limit));
+                                    ui.end_row();
+                                    ui.label(translate(language, "balance_img_threads"));
+                                    ui.label(format!("{} / {}", bal.img_threads_active, bal.img_threads_allowed));
+                                    ui.end_row();
+                                    ui.label(translate(language, "balance_video_threads"));
+                                    ui.label(format!("{} / {}", bal.video_threads_active, bal.video_threads_allowed));
+                                    ui.end_row();
+                                });
+                        }
+                        None if googler_key.is_empty() => {
+                            ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
+                        }
+                        None => {
+                            ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
+                        }
+                    }
+                }
+            });
+
+            ui.add_space(6.0);
+
+            // Кнопка "Оновити всі"
+            ui.vertical_centered(|ui| {
+                if ui.button(translate(language, "balance_refresh_all")).clicked() {
+                    let ctx2 = ui.ctx().clone();
+                    if !openrouter_key.is_empty() {
+                        crate::api::openrouter::fetch_balance(
+                            openrouter_key.to_string(),
+                            Arc::clone(openrouter_balance),
+                            ctx2.clone(),
+                        );
+                    }
+                    if !voicebot_key.is_empty() {
+                        crate::api::voicebot::fetch_balance(
+                            voicebot_key.to_string(),
+                            Arc::clone(voicebot_balance),
+                            ctx2.clone(),
+                        );
+                    }
+                    if !googler_key.is_empty() {
+                        crate::api::googler::fetch_balance(
+                            googler_key.to_string(),
+                            Arc::clone(googler_balance),
+                            ctx2,
+                        );
+                    }
+                }
+            });
+        });
 }
 
 impl eframe::App for VideoMakerApp {
@@ -289,14 +475,18 @@ impl eframe::App for VideoMakerApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if let Ok(guard) = self.openrouter_balance.try_lock() {
                         if let Some(text) = guard.as_ref() {
-                            draw_balance_chip(ui, "OpenRouter", text);
+                            if draw_balance_chip(ui, "OpenRouter", text).clicked() {
+                                self.balance_window_open = true;
+                            }
                         }
                     }
                     if let Ok(guard) = self.voicebot_balance.try_lock() {
                         if let Some(text) = guard.as_ref() {
                             // Показуємо лише числову частину, без слова "символів"
                             let display = text.split_whitespace().next().unwrap_or(text.as_str());
-                            draw_balance_chip(ui, "VoiceBot", display);
+                            if draw_balance_chip(ui, "VoiceBot", display).clicked() {
+                                self.balance_window_open = true;
+                            }
                         }
                     }
                     if let Ok(guard) = self.googler_balance.try_lock() {
@@ -308,12 +498,27 @@ impl eframe::App for VideoMakerApp {
                                 bal.img_threads_active, bal.img_threads_allowed,
                                 bal.video_threads_active, bal.video_threads_allowed,
                             );
-                            draw_balance_chip(ui, "Googler", &text);
+                            if draw_balance_chip(ui, "Googler", &text).clicked() {
+                                self.balance_window_open = true;
+                            }
                         }
                     }
                 });
             });
         });
+
+        // Плаваюче вікно з детальними балансами
+        draw_balance_window(
+            ctx,
+            &mut self.balance_window_open,
+            self.language,
+            &self.openrouter_key,
+            &self.openrouter_balance,
+            &self.voicebot_key,
+            &self.voicebot_balance,
+            &self.googler_key,
+            &self.googler_balance,
+        );
 
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
         if self.active_tab == Tab::Main {
