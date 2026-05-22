@@ -7,6 +7,7 @@ mod gui;
 mod queue;
 mod theme;
 mod localization;
+mod logger;
 
 use app::VideoMakerApp;
 use eframe::egui;

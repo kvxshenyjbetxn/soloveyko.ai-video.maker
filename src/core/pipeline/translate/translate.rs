@@ -35,6 +35,8 @@ pub fn call_openrouter(
     user_content: String,
     temperature: f32,
 ) -> Result<String, String> {
+    crate::logger::log(&format!("Запуск OpenRouter перекладу. Модель: {}, Температура: {}", model, temperature));
+
     let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
 
     let request = ChatRequest {
@@ -55,12 +57,26 @@ pub fn call_openrouter(
         .post("https://openrouter.ai/api/v1/chat/completions")
         .set("Authorization", &format!("Bearer {}", key))
         .set("Content-Type", "application/json")
-        .send_json(ureq::serde_json::to_value(&request).map_err(|e| e.to_string())?)
-        .map_err(|e| format!("Помилка мережі: {}", e))?;
+        .send_json(ureq::serde_json::to_value(&request).map_err(|e| {
+            let err_msg = format!("Помилка серіалізації: {}", e);
+            crate::logger::log(&err_msg);
+            err_msg
+        })?)
+        .map_err(|e| {
+            let err_msg = format!("Помилка мережі: {}", e);
+            crate::logger::log(&err_msg);
+            err_msg
+        })?;
 
     let data = res
         .into_json::<ChatResponse>()
-        .map_err(|e| format!("Помилка парсингу відповіді: {}", e))?;
+        .map_err(|e| {
+            let err_msg = format!("Помилка парсингу відповіді: {}", e);
+            crate::logger::log(&err_msg);
+            err_msg
+        })?;
+
+    crate::logger::log("OpenRouter успішно виконав переклад.");
 
     Ok(data.choices.into_iter()
         .next()

@@ -18,6 +18,7 @@ pub struct JobSettings {
     pub translation_prompt: String,
     pub translation_model: String,
     pub translation_temperature: f32,
+    pub translation_service: String,
     pub openrouter_key: String,
 }
 

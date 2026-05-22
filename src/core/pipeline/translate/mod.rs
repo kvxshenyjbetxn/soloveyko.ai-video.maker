@@ -6,6 +6,7 @@ use eframe::egui;
 /// Виконує етап перекладу у фоновому потоці.
 /// Підставляє `{{text}}` у промт, викликає OpenRouter, зберігає результат у `text.txt`.
 pub fn run_translation(
+    service: String,
     key: String,
     model: String,
     prompt: String,
@@ -29,7 +30,13 @@ pub fn run_translation(
             text
         };
 
-        match translate::call_openrouter(&key, &model, user_content, temperature) {
+        let result = if service == "Claude Code" {
+            crate::api::claude::call_claude_code(&model, &user_content)
+        } else {
+            translate::call_openrouter(&key, &model, user_content, temperature)
+        };
+
+        match result {
             Ok(translated) => {
                 let dir = std::path::Path::new(&save_path);
                 if std::fs::create_dir_all(dir).is_ok() {

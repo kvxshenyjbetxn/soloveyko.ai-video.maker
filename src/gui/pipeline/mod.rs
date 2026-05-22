@@ -93,6 +93,7 @@ pub fn draw_pipeline_panel(
     video_service: &mut String,
     googler_image_provider: &mut String,
     translation_temperature: &mut f32,
+    translation_service: &mut String,
     save_path: &mut String,
     text_input: &str,
     jobs: &mut Vec<crate::queue::PipelineJob>,
@@ -147,6 +148,7 @@ pub fn draw_pipeline_panel(
                         video_service,
                         googler_image_provider,
                         *translation_temperature,
+                        translation_service,
                     ) {
                         Ok(_) => {
                             *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -218,6 +220,7 @@ pub fn draw_pipeline_panel(
                             video_service,
                             googler_image_provider,
                             translation_temperature,
+                            translation_service,
                         );
                     });
                 }
@@ -304,6 +307,7 @@ pub fn draw_pipeline_panel(
                             openrouter_models,
                             openrouter_models_loading,
                             translation_temperature,
+                            translation_service,
                         );
                     });
                 }
@@ -523,6 +527,7 @@ pub fn draw_pipeline_panel(
                                     jobs,
                                     job_counter,
                                     queue_error,
+                                    translation_service,
                                 );
                             }
                         });
@@ -546,6 +551,7 @@ fn validate_and_enqueue(
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
     queue_error: &mut Option<String>,
+    translation_service: &str,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
     let base = save_path.trim_end_matches('/').trim_end_matches('\\');
@@ -563,6 +569,7 @@ fn validate_and_enqueue(
         translation_prompt: translation_prompt.to_string(),
         translation_model: translation_model.to_string(),
         translation_temperature,
+        translation_service: translation_service.to_string(),
         openrouter_key: openrouter_key.to_string(),
     };
 

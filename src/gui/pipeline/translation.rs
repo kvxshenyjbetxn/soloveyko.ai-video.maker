@@ -23,9 +23,41 @@ pub fn draw_translation_section(
     openrouter_models: &Arc<Mutex<Option<Result<Vec<OpenRouterModel>, String>>>>,
     openrouter_models_loading: &Arc<Mutex<bool>>,
     translation_temperature: &mut f32,
+    translation_service: &mut String,
 ) {
     ui.vertical(|ui| {
         ui.add_space(4.0);
+
+        // Вибір сервісу перекладу
+        ui.label(egui::RichText::new(translate(language, "translation_service_label")).strong());
+        ui.add_space(4.0);
+
+        let mut service_changed = false;
+        egui::ComboBox::from_id_source("translation_service_combo")
+            .selected_text(
+                if translation_service == "Claude Code" {
+                    translate(language, "translation_service_claude_code")
+                } else {
+                    translate(language, "translation_service_openrouter")
+                }
+            )
+            .show_ui(ui, |ui| {
+                if ui.selectable_value(translation_service, "OpenRouter".to_string(), translate(language, "translation_service_openrouter")).clicked() {
+                    service_changed = true;
+                }
+                if ui.selectable_value(translation_service, "Claude Code".to_string(), translate(language, "translation_service_claude_code")).clicked() {
+                    service_changed = true;
+                }
+            });
+
+        if service_changed && translation_service == "Claude Code" {
+            // Перевіряємо, чи модель валідна для Claude Code
+            if translation_model != "sonnet" && translation_model != "opus" && translation_model != "haiku" {
+                *translation_model = "sonnet".to_string();
+            }
+        }
+
+        ui.add_space(8.0);
 
         // Поле промту для моделі перекладу
         ui.label(egui::RichText::new(translate(language, "translation_prompt_label")).strong());
@@ -72,110 +104,161 @@ pub fn draw_translation_section(
             }
         }
 
-        ui.add_space(8.0);
-
-        // Вибір моделі OpenRouter
-        ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
         ui.add_space(4.0);
 
-        let is_loading = *openrouter_models_loading.lock().unwrap();
-        let models_snapshot = openrouter_models.lock().unwrap().clone();
+        // Кнопка швидкої вставки плейсхолдера {{text}} за поточним положенням курсора
+        if ui.button(translate(language, "translation_insert_placeholder")).clicked() {
+            let text_edit_id = te_resp.id;
+            if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), text_edit_id) {
+                let to_insert = "{{text}}";
+                if let Some(cursor_range) = state.cursor.char_range() {
+                    let cursor_idx = cursor_range.primary.index;
+                    
+                    // Перетворюємо char індекс у byte індекс для безпечної роботи з UTF-8 рядком
+                    let byte_idx = translation_prompt
+                        .char_indices()
+                        .map(|(b_idx, _)| b_idx)
+                        .nth(cursor_idx)
+                        .unwrap_or(translation_prompt.len());
+                    
+                    translation_prompt.insert_str(byte_idx, to_insert);
+                    
+                    // Встановлюємо курсор одразу після вставленого плейсхолдера
+                    let new_char_idx = cursor_idx + to_insert.chars().count();
+                    let new_cursor = egui::text::CCursor::new(new_char_idx);
+                    state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+                    state.store(ui.ctx(), text_edit_id);
+                } else {
+                    // Якщо поле не було у фокусі, додаємо в кінець
+                    translation_prompt.push_str(to_insert);
+                }
+            } else {
+                // Якщо стан ще не ініціалізовано
+                translation_prompt.push_str("{{text}}");
+            }
+            te_resp.request_focus();
+        }
 
-        if is_loading {
-            ui.label(
-                egui::RichText::new(translate(language, "translation_models_loading"))
-                    .weak()
-                    .size(12.0),
-            );
+        ui.add_space(8.0);
+
+        if translation_service == "Claude Code" {
+            // Вибір моделі Anthropic для Claude Code
+            ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+            ui.add_space(4.0);
+
+            egui::ComboBox::from_id_source("claude_code_model")
+                .selected_text(if translation_model.is_empty() { "sonnet" } else { translation_model.as_str() })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(translation_model, "sonnet".to_string(), "sonnet");
+                    ui.selectable_value(translation_model, "opus".to_string(), "opus");
+                    ui.selectable_value(translation_model, "haiku".to_string(), "haiku");
+                });
         } else {
-            match models_snapshot {
-                None => {
-                    // Запускаємо завантаження моделей у фоновому потоці
-                    *openrouter_models_loading.lock().unwrap() = true;
-                    let models_arc = Arc::clone(openrouter_models);
-                    let loading_arc = Arc::clone(openrouter_models_loading);
-                    let ctx = ui.ctx().clone();
+            // Вибір моделі OpenRouter
+            ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+            ui.add_space(4.0);
 
-                    std::thread::spawn(move || {
-                        let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
+            let is_loading = *openrouter_models_loading.lock().unwrap();
+            let models_snapshot = openrouter_models.lock().unwrap().clone();
 
-                        let agent = ureq::AgentBuilder::new()
-                            .timeout_connect(std::time::Duration::from_secs(10))
-                            .timeout(std::time::Duration::from_secs(15))
-                            .build();
+            if is_loading {
+                ui.label(
+                    egui::RichText::new(translate(language, "translation_models_loading"))
+                        .weak()
+                        .size(12.0),
+                );
+            } else {
+                match models_snapshot {
+                    None => {
+                        // Запускаємо завантаження моделей у фоновому потоці
+                        *openrouter_models_loading.lock().unwrap() = true;
+                        let models_arc = Arc::clone(openrouter_models);
+                        let loading_arc = Arc::clone(openrouter_models_loading);
+                        let ctx = ui.ctx().clone();
 
-                        let result = match agent
-                            .get("https://openrouter.ai/api/v1/models")
-                            .set("Accept", "application/json")
-                            .call()
-                        {
-                            Ok(response) => match response.into_json::<ModelsResponse>() {
-                                Ok(data) => {
-                                    let mut models = data.data;
-                                    models.sort_by(|a, b| a.name.cmp(&b.name));
-                                    Ok(models)
-                                }
-                                Err(e) => Err(format!("Помилка парсингу: {}", e)),
-                            },
-                            Err(e) => Err(format!("Помилка мережі: {}", e)),
-                        };
+                        std::thread::spawn(move || {
+                            let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
 
-                        *models_arc.lock().unwrap() = Some(result);
-                        *loading_arc.lock().unwrap() = false;
-                        ctx.request_repaint();
-                    });
+                            let agent = ureq::AgentBuilder::new()
+                                .timeout_connect(std::time::Duration::from_secs(10))
+                                .timeout(std::time::Duration::from_secs(15))
+                                .build();
 
-                    ui.label(
-                        egui::RichText::new(translate(language, "translation_models_loading"))
-                            .weak()
-                            .size(12.0),
-                    );
-                }
-                Some(Ok(models)) => {
-                    draw_model_selector(
-                        ui,
-                        language,
-                        translation_model,
-                        translation_model_search,
-                        &models,
-                    );
-                }
-                Some(Err(ref error)) => {
-                    ui.add(
-                        egui::Label::new(
-                            egui::RichText::new(format!("❌ {}", error))
-                                .color(egui::Color32::from_rgb(231, 76, 60))
+                            let result = match agent
+                                .get("https://openrouter.ai/api/v1/models")
+                                .set("Accept", "application/json")
+                                .call()
+                            {
+                                Ok(response) => match response.into_json::<ModelsResponse>() {
+                                    Ok(data) => {
+                                        let mut models = data.data;
+                                        models.sort_by(|a, b| a.name.cmp(&b.name));
+                                        Ok(models)
+                                    }
+                                    Err(e) => Err(format!("Помилка парсингу: {}", e)),
+                                },
+                                Err(e) => Err(format!("Помилка мережі: {}", e)),
+                            };
+
+                            *models_arc.lock().unwrap() = Some(result);
+                            *loading_arc.lock().unwrap() = false;
+                            ctx.request_repaint();
+                        });
+
+                        ui.label(
+                            egui::RichText::new(translate(language, "translation_models_loading"))
+                                .weak()
                                 .size(12.0),
-                        )
-                        .wrap(),
-                    );
-                    ui.add_space(4.0);
-                    if ui
-                        .button(translate(language, "translation_models_retry"))
-                        .clicked()
-                    {
-                        *openrouter_models.lock().unwrap() = None;
+                        );
+                    }
+                    Some(Ok(models)) => {
+                        draw_model_selector(
+                            ui,
+                            language,
+                            translation_model,
+                            translation_model_search,
+                            &models,
+                        );
+                    }
+                    Some(Err(ref error)) => {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(format!("❌ {}", error))
+                                    .color(egui::Color32::from_rgb(231, 76, 60))
+                                    .size(12.0),
+                            )
+                            .wrap(),
+                        );
+                        ui.add_space(4.0);
+                        if ui
+                            .button(translate(language, "translation_models_retry"))
+                            .clicked()
+                        {
+                            *openrouter_models.lock().unwrap() = None;
+                        }
                     }
                 }
             }
         }
 
-        ui.add_space(8.0);
+        if translation_service != "Claude Code" {
+            ui.add_space(8.0);
 
-        // Повзунок температури моделі
-        ui.label(egui::RichText::new(
-            format!("{}: {:.2}", translate(language, "translation_temperature_label"), *translation_temperature)
-        ).strong());
-        ui.add_space(4.0);
-        let slider_width = ui.available_width();
-        ui.scope(|ui| {
-            ui.style_mut().spacing.slider_width = slider_width;
-            ui.add(
-                egui::Slider::new(translation_temperature, 0.0..=2.0)
-                    .step_by(0.01)
-                    .show_value(false),
-            );
-        });
+            // Повзунок температури моделі
+            ui.label(egui::RichText::new(
+                format!("{}: {:.2}", translate(language, "translation_temperature_label"), *translation_temperature)
+            ).strong());
+            ui.add_space(4.0);
+            let slider_width = ui.available_width();
+            ui.scope(|ui| {
+                ui.style_mut().spacing.slider_width = slider_width;
+                ui.add(
+                    egui::Slider::new(translation_temperature, 0.0..=2.0)
+                        .step_by(0.01)
+                        .show_value(false),
+                );
+            });
+        }
 
         ui.add_space(6.0);
     });

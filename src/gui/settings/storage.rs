@@ -7,6 +7,7 @@ fn default_video_service() -> String { "Googler".to_string() }
 fn default_image_provider() -> String { "flow_IMAGEN_3_5".to_string() }
 fn default_temperature() -> f32 { 0.7 }
 fn default_openrouter_max_threads() -> usize { 5 }
+fn default_translation_service() -> String { "OpenRouter".to_string() }
 
 /// Структура для серіалізації налаштувань у формат JSON.
 ///
@@ -62,6 +63,9 @@ pub struct AppSettings {
     /// Температура моделі для перекладу (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub translation_temperature: f32,
+    /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code")
+    #[serde(default = "default_translation_service")]
+    pub translation_service: String,
     /// Шлях до папки збереження результатів пайплайну
     pub save_path: String,
     /// Максимальна кількість потоків для OpenRouter
@@ -92,6 +96,7 @@ impl Default for AppSettings {
             video_service: "Googler".to_string(),
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
             translation_temperature: 0.7,
+            translation_service: "OpenRouter".to_string(),
             save_path: String::new(),
             openrouter_max_threads: 5,
         }
@@ -207,6 +212,9 @@ pub struct PipelineTemplate {
     /// Температура моделі для перекладу (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub translation_temperature: f32,
+    /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code")
+    #[serde(default = "default_translation_service")]
+    pub translation_service: String,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -233,6 +241,7 @@ pub fn save_template(
     video_service: &str,
     googler_image_provider: &str,
     translation_temperature: f32,
+    translation_service: &str,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -254,6 +263,7 @@ pub fn save_template(
             video_service: video_service.to_string(),
             googler_image_provider: googler_image_provider.to_string(),
             translation_temperature,
+            translation_service: translation_service.to_string(),
         };
 
         let json = serde_json::to_string_pretty(&template)?;

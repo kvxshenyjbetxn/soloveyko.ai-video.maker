@@ -22,6 +22,7 @@ pub fn draw_templates_section(
     video_service: &mut String,
     googler_image_provider: &mut String,
     translation_temperature: &mut f32,
+    translation_service: &mut String, // НОВИЙ ПАРАМЕТР
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -61,6 +62,7 @@ pub fn draw_templates_section(
                             *video_service = template.video_service;
                             *googler_image_provider = template.googler_image_provider;
                             *translation_temperature = template.translation_temperature;
+                            *translation_service = template.translation_service;
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

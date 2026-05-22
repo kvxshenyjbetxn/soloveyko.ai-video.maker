@@ -11,6 +11,8 @@ pub enum Tab {
     Main,
     /// Вкладка налаштувань
     Settings,
+    /// Вкладка логів
+    Logs,
 }
 
 /// Головна структура нашого GUI додатку, що зберігає його поточний стан.
@@ -91,6 +93,8 @@ pub struct VideoMakerApp {
     pub googler_image_provider: String,
     /// Температура моделі для перекладу (0.0 — 2.0).
     pub translation_temperature: f32,
+    /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code").
+    pub translation_service: String,
     /// Чи відкрите вікно детальних балансів.
     pub balance_window_open: bool,
     /// Шлях до папки збереження результатів пайплайну.
@@ -150,6 +154,7 @@ impl Default for VideoMakerApp {
             video_service: "Googler".to_string(),
             googler_image_provider: "flow_IMAGEN_3_5".to_string(),
             translation_temperature: 0.7,
+            translation_service: "OpenRouter".to_string(),
             balance_window_open: false,
             save_path: String::new(),
             jobs: Vec::new(),
@@ -234,6 +239,7 @@ impl VideoMakerApp {
         let video_service = saved.video_service.clone();
         let googler_image_provider = saved.googler_image_provider.clone();
         let translation_temperature = saved.translation_temperature;
+        let translation_service = saved.translation_service.clone();
         let save_path = saved.save_path.clone();
         let openrouter_max_threads = saved.openrouter_max_threads;
 
@@ -307,6 +313,7 @@ impl VideoMakerApp {
             video_service,
             googler_image_provider,
             translation_temperature,
+            translation_service,
             balance_window_open: false,
             save_path,
             jobs: Vec::new(),
@@ -317,6 +324,142 @@ impl VideoMakerApp {
             openrouter_max_threads,
             last_saved_settings: saved,
         }
+    }
+
+    /// Малює вкладку системних логів роботи додатку.
+    fn draw_logs_tab(&self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.add_space(8.0);
+            
+            // Заголовок та кнопки керування логом у верхній панелі
+            ui.horizontal(|ui| {
+                ui.heading(egui::RichText::new(translate(self.language, "tab_logs")).strong());
+                
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Кнопка очищення логів
+                    let clear_btn = egui::Button::new(
+                        egui::RichText::new(translate(self.language, "logs_clear"))
+                            .color(egui::Color32::from_rgb(239, 83, 80))
+                    )
+                    .frame(true)
+                    .rounding(4.0);
+                    
+                    if ui.add(clear_btn).clicked() {
+                        crate::logger::clear_logs();
+                    }
+                    
+                    ui.add_space(8.0);
+                    
+                    // Кнопка копіювання логів
+                    let copy_btn = egui::Button::new(translate(self.language, "logs_copy"))
+                        .frame(true)
+                        .rounding(4.0);
+                        
+                    if ui.add(copy_btn).clicked() {
+                        let all_logs = crate::logger::get_logs().join("\n");
+                        ui.ctx().copy_text(all_logs);
+                    }
+                });
+            });
+            
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(8.0);
+
+            // Отримуємо поточні записи логу
+            let logs = crate::logger::get_logs();
+            
+            if logs.is_empty() {
+                ui.centered_and_justified(|ui| {
+                    ui.label(
+                        egui::RichText::new(translate(self.language, "logs_empty"))
+                            .weak()
+                            .size(14.0)
+                    );
+                });
+            } else {
+                // Преміальна темно-вугільна панель терміналу з внутрішніми відступами
+                let terminal_bg = if ui.visuals().dark_mode {
+                    egui::Color32::from_rgb(15, 15, 15) // Глибокий чорний для AMOLED/Dark теми
+                } else {
+                    egui::Color32::from_rgb(30, 30, 30) // Темно-вугільний навіть у світлій темі для стильного вигляду
+                };
+                
+                egui::Frame::none()
+                    .fill(terminal_bg)
+                    .rounding(6.0)
+                    .inner_margin(egui::Margin::same(12.0))
+                    .show(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .max_height(f32::INFINITY)
+                            .stick_to_bottom(true)
+                            .show(ui, |ui| {
+                                for log_line in logs {
+                                    // Парсимо часову мітку та повідомлення
+                                    let (time_part, msg_part) = if log_line.starts_with('[') && log_line.chars().nth(9) == Some(']') {
+                                        (&log_line[0..10], &log_line[10..])
+                                    } else {
+                                        ("", log_line.as_str())
+                                    };
+                                    
+                                    // Визначаємо колір тексту залежно від типу події
+                                    let is_error = msg_part.contains("помилка") 
+                                        || msg_part.contains("failed") 
+                                        || msg_part.contains("STDERR") 
+                                        || msg_part.contains("Error")
+                                        || msg_part.contains("Err");
+                                        
+                                    let is_success = msg_part.contains("успішно") 
+                                        || msg_part.contains("success")
+                                        || msg_part.contains("Ok");
+                                        
+                                    let is_command = msg_part.contains("Виконується:") 
+                                        || msg_part.contains("Запуск")
+                                        || msg_part.contains("Running");
+                                        
+                                    let text_color = if is_error {
+                                        egui::Color32::from_rgb(239, 83, 80) // М'який червоний
+                                    } else if is_success {
+                                        egui::Color32::from_rgb(102, 187, 106) // М'який зелений
+                                    } else if is_command {
+                                        egui::Color32::from_rgb(129, 212, 250) // М'який блакитний
+                                    } else {
+                                        egui::Color32::from_rgb(220, 220, 220) // Світло-сірий для звичайного тексту в терміналі
+                                    };
+                                    
+                                    ui.horizontal(|ui| {
+                                        ui.spacing_mut().item_spacing.x = 4.0;
+                                        
+                                        // Виводимо часову мітку приглушеним кольором
+                                        if !time_part.is_empty() {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(time_part)
+                                                        .monospace()
+                                                        .size(11.0)
+                                                        .color(egui::Color32::from_gray(110))
+                                                )
+                                            );
+                                        }
+                                        
+                                        // Виводимо повідомлення відповідним кольором
+                                        ui.add(
+                                            egui::Label::new(
+                                                egui::RichText::new(msg_part)
+                                                    .monospace()
+                                                    .size(11.0)
+                                                    .color(text_color)
+                                            )
+                                            .wrap()
+                                        );
+                                    });
+                                    
+                                    ui.add_space(3.0);
+                                }
+                            });
+                    });
+            }
+        });
     }
 }
 
@@ -523,6 +666,7 @@ fn draw_queue_panel(ui: &mut egui::Ui, language: crate::localization::Language, 
                 }
                 if job.settings.translation_enabled {
                     crate::core::pipeline::translate::run_translation(
+                        job.settings.translation_service.clone(),
                         job.settings.openrouter_key.clone(),
                         job.settings.translation_model.clone(),
                         job.settings.translation_prompt.clone(),
@@ -600,6 +744,7 @@ impl eframe::App for VideoMakerApp {
                 ui.separator();
                 ui.selectable_value(&mut self.active_tab, Tab::Main, translate(self.language, "tab_main"));
                 ui.selectable_value(&mut self.active_tab, Tab::Settings, translate(self.language, "tab_settings"));
+                ui.selectable_value(&mut self.active_tab, Tab::Logs, translate(self.language, "tab_logs"));
 
                 // Баланс-чіпи з правого боку (RTL: перший доданий — крайній правий)
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -705,6 +850,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.video_service,
                         &mut self.googler_image_provider,
                         &mut self.translation_temperature,
+                        &mut self.translation_service,
                         &mut self.save_path,
                         &self.text_input,
                         &mut self.jobs,
@@ -743,6 +889,9 @@ impl eframe::App for VideoMakerApp {
                             &mut self.accent_color,
                             &mut self.language,
                         );
+                    }
+                    Tab::Logs => {
+                        self.draw_logs_tab(ui);
                     }
                 }
             });
@@ -785,6 +934,7 @@ impl eframe::App for VideoMakerApp {
                 || self.video_service != self.last_saved_settings.video_service
                 || self.googler_image_provider != self.last_saved_settings.googler_image_provider
                 || (self.translation_temperature - self.last_saved_settings.translation_temperature).abs() > 0.001
+                || self.translation_service != self.last_saved_settings.translation_service
                 || self.save_path != self.last_saved_settings.save_path
                 || self.openrouter_max_threads != self.last_saved_settings.openrouter_max_threads
             {
@@ -809,6 +959,7 @@ impl eframe::App for VideoMakerApp {
                     video_service: self.video_service.clone(),
                     googler_image_provider: self.googler_image_provider.clone(),
                     translation_temperature: self.translation_temperature,
+                    translation_service: self.translation_service.clone(),
                     save_path: self.save_path.clone(),
                     openrouter_max_threads: self.openrouter_max_threads,
                 };
