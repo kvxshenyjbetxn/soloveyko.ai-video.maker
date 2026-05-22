@@ -96,6 +96,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "storage_browse_btn" => "Вибрати",
         "queue_add_btn" => "Додати в чергу",
         "queue_panel_title" => "Черга",
+        "queue_run_btn" => "▶ Запустити",
         "queue_status_pending" => "Очікує",
         "queue_status_running" => "Виконується...",
         "queue_status_done" => "Готово",
@@ -104,6 +105,13 @@ pub fn translate_uk(key: &str) -> &'static str {
         "queue_error_no_save_path" => "⚠ Вкажіть шлях збереження",
         "queue_error_no_model" => "⚠ Оберіть модель для перекладу",
         "queue_error_no_key" => "⚠ Вкажіть OpenRouter ключ в секції АПІ",
+        "queue_error_no_name" => "⚠ Назва задачі не може бути порожньою",
+        "queue_error_create_dir" => "⚠ Помилка створення папки задачі",
+        "job_name_dialog_title" => "Назва задачі",
+        "job_name_hint" => "Залиште пустим для авто-назви...",
+        "job_name_auto" => "Задача",
+        "job_name_confirm_btn" => "Додати",
+        "job_name_cancel_btn" => "Скасувати",
         _ => "",
     }
 }

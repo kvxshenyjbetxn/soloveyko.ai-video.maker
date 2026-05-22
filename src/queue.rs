@@ -24,24 +24,18 @@ pub struct JobSettings {
 /// Одна задача в черзі пайплайну.
 pub struct PipelineJob {
     pub id: u64,
-    /// Перші 50 символів тексту — для відображення у черзі
-    pub title: String,
+    /// Назва задачі, яку ввів користувач
+    pub name: String,
     pub status: Arc<Mutex<JobStatus>>,
     /// Знімок налаштувань — зберігається для можливого перезапуску задачі
     pub settings: JobSettings,
 }
 
 impl PipelineJob {
-    pub fn new(id: u64, settings: JobSettings) -> Self {
-        let char_count = settings.text.chars().count();
-        let title = if char_count > 50 {
-            format!("{}…", settings.text.chars().take(50).collect::<String>())
-        } else {
-            settings.text.clone()
-        };
+    pub fn new(id: u64, name: String, settings: JobSettings) -> Self {
         Self {
             id,
-            title,
+            name,
             status: Arc::new(Mutex::new(JobStatus::Pending)),
             settings,
         }

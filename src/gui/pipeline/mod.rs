@@ -98,6 +98,8 @@ pub fn draw_pipeline_panel(
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
     queue_error: &mut Option<String>,
+    job_name_dialog_open: &mut bool,
+    job_name_input: &mut String,
 ) {
     // Забороняємо будь-якому елементу розширювати панель за поточну ширину
     ui.set_max_width(ui.available_width());
@@ -171,49 +173,15 @@ pub fn draw_pipeline_panel(
         }
 
         ui.add_space(4.0);
-
-        // Помилка валідації (якщо є)
-        if let Some(err) = queue_error.as_ref() {
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(err.as_str())
-                        .color(egui::Color32::from_rgb(231, 76, 60))
-                        .size(11.0),
-                )
-                .wrap(),
-            );
-            ui.add_space(2.0);
-        }
-
-        // Кнопка "Додати в чергу" — перед ScrollArea, завжди видима
-        if ui.add_sized(
-            [ui.available_width(), 28.0],
-            egui::Button::new(
-                egui::RichText::new(translate(language, "queue_add_btn")).strong(),
-            ),
-        ).clicked() {
-            let ctx = ui.ctx().clone();
-            validate_and_enqueue(
-                language,
-                text_input,
-                save_path,
-                *pipeline_translation_enabled,
-                translation_prompt,
-                translation_model,
-                *translation_temperature,
-                openrouter_key,
-                jobs,
-                job_counter,
-                queue_error,
-                ctx,
-            );
-        }
-
-        ui.add_space(4.0);
         ui.separator();
         ui.add_space(8.0);
 
+        // Залишаємо місце внизу для кнопки "Додати в чергу" та можливої помилки
+        let bottom_reserve = 8.0 + 28.0 + 8.0;
+        let scroll_height = (ui.available_height() - bottom_reserve).max(80.0);
+
         egui::ScrollArea::vertical()
+            .max_height(scroll_height)
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 // 1. Шаблони
@@ -445,14 +413,131 @@ pub fn draw_pipeline_panel(
                     });
                 }
             }); // ScrollArea
+
+        ui.add_space(4.0);
+
+        // Помилка валідації (якщо є)
+        if let Some(err) = queue_error.as_ref() {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(err.as_str())
+                        .color(egui::Color32::from_rgb(231, 76, 60))
+                        .size(11.0),
+                )
+                .wrap(),
+            );
+            ui.add_space(2.0);
+        }
+
+        // Кнопка "Додати в чергу" — в самому низу панелі, завжди видима
+        if ui.add_sized(
+            [ui.available_width(), 28.0],
+            egui::Button::new(
+                egui::RichText::new(translate(language, "queue_add_btn")).strong(),
+            ),
+        ).clicked() {
+            // Спочатку валідуємо — лише якщо все ок, відкриваємо діалог назви
+            let error = if text_input.trim().is_empty() {
+                Some(translate(language, "queue_error_no_text").to_string())
+            } else if save_path.trim().is_empty() {
+                Some(translate(language, "queue_error_no_save_path").to_string())
+            } else if *pipeline_translation_enabled && translation_model.is_empty() {
+                Some(translate(language, "queue_error_no_model").to_string())
+            } else if *pipeline_translation_enabled && openrouter_key.is_empty() {
+                Some(translate(language, "queue_error_no_key").to_string())
+            } else {
+                None
+            };
+
+            if let Some(err) = error {
+                *queue_error = Some(err);
+            } else {
+                *queue_error = None;
+                *job_name_dialog_open = true;
+            }
+        }
+
+        // Вікно введення назви задачі
+        if *job_name_dialog_open {
+            egui::Window::new(translate(language, "job_name_dialog_title"))
+                .collapsible(false)
+                .resizable(false)
+                .default_width(280.0)
+                .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                .show(ui.ctx(), |ui| {
+                    let response = ui.add(
+                        egui::TextEdit::singleline(job_name_input)
+                            .hint_text(translate(language, "job_name_hint"))
+                            .desired_width(f32::INFINITY),
+                    );
+
+                    let enter_pressed = response.has_focus()
+                        && ui.input(|i| i.key_pressed(egui::Key::Enter));
+
+                    if let Some(err) = queue_error.as_ref() {
+                        ui.add_space(4.0);
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(err.as_str())
+                                    .color(egui::Color32::from_rgb(231, 76, 60))
+                                    .size(11.0),
+                            )
+                            .wrap(),
+                        );
+                    }
+
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        if ui.button(translate(language, "job_name_cancel_btn")).clicked() {
+                            *job_name_dialog_open = false;
+                            job_name_input.clear();
+                            *queue_error = None;
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let confirm_clicked = ui.add_sized(
+                                [80.0, 22.0],
+                                egui::Button::new(
+                                    egui::RichText::new(translate(language, "job_name_confirm_btn")).strong(),
+                                ),
+                            ).clicked();
+
+                            if confirm_clicked || enter_pressed {
+                                let name = if job_name_input.trim().is_empty() {
+                                    format!("{} {}", translate(language, "job_name_auto"), jobs.len() + 1)
+                                } else {
+                                    job_name_input.trim().to_string()
+                                };
+                                *job_name_dialog_open = false;
+                                job_name_input.clear();
+                                *queue_error = None;
+                                validate_and_enqueue(
+                                    language,
+                                    text_input,
+                                    save_path,
+                                    &name,
+                                    *pipeline_translation_enabled,
+                                    translation_prompt,
+                                    translation_model,
+                                    *translation_temperature,
+                                    openrouter_key,
+                                    jobs,
+                                    job_counter,
+                                    queue_error,
+                                );
+                            }
+                        });
+                    });
+                });
+        }
     });
 }
 
-/// Перевіряє налаштування та додає задачу в чергу, запускаючи фонове виконання.
+/// Створює папку задачі та додає її в чергу зі статусом Pending.
 fn validate_and_enqueue(
     language: Language,
     text_input: &str,
     save_path: &str,
+    task_name: &str,
     translation_enabled: bool,
     translation_prompt: &str,
     translation_model: &str,
@@ -461,30 +546,19 @@ fn validate_and_enqueue(
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
     queue_error: &mut Option<String>,
-    ctx: egui::Context,
 ) {
-    if text_input.trim().is_empty() {
-        *queue_error = Some(translate(language, "queue_error_no_text").to_string());
-        return;
-    }
-    if save_path.trim().is_empty() {
-        *queue_error = Some(translate(language, "queue_error_no_save_path").to_string());
-        return;
-    }
-    if translation_enabled && translation_model.is_empty() {
-        *queue_error = Some(translate(language, "queue_error_no_model").to_string());
-        return;
-    }
-    if translation_enabled && openrouter_key.is_empty() {
-        *queue_error = Some(translate(language, "queue_error_no_key").to_string());
-        return;
-    }
+    // Будуємо шлях: {save_path}/{task_name}
+    let base = save_path.trim_end_matches('/').trim_end_matches('\\');
+    let actual_path = format!("{}/{}", base, task_name);
 
-    *queue_error = None;
+    if let Err(e) = std::fs::create_dir_all(&actual_path) {
+        *queue_error = Some(format!("{}: {}", translate(language, "queue_error_create_dir"), e));
+        return;
+    }
 
     let settings = crate::queue::JobSettings {
         text: text_input.to_string(),
-        save_path: save_path.to_string(),
+        save_path: actual_path,
         translation_enabled,
         translation_prompt: translation_prompt.to_string(),
         translation_model: translation_model.to_string(),
@@ -494,21 +568,6 @@ fn validate_and_enqueue(
 
     let id = *job_counter;
     *job_counter += 1;
-    let job = crate::queue::PipelineJob::new(id, settings.clone());
-
-    // Запускаємо переклад у фоні одразу при додаванні в чергу
-    if settings.translation_enabled {
-        crate::core::pipeline::translate::run_translation(
-            settings.openrouter_key.clone(),
-            settings.translation_model.clone(),
-            settings.translation_prompt.clone(),
-            settings.text.clone(),
-            settings.translation_temperature,
-            settings.save_path.clone(),
-            Arc::clone(&job.status),
-            ctx,
-        );
-    }
-
+    let job = crate::queue::PipelineJob::new(id, task_name.to_string(), settings);
     jobs.push(job);
 }

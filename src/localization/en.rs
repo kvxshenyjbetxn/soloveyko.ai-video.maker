@@ -96,6 +96,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "storage_browse_btn" => "Browse",
         "queue_add_btn" => "Add to Queue",
         "queue_panel_title" => "Queue",
+        "queue_run_btn" => "▶ Run",
         "queue_status_pending" => "Pending",
         "queue_status_running" => "Running...",
         "queue_status_done" => "Done",
@@ -104,6 +105,13 @@ pub fn translate_en(key: &str) -> &'static str {
         "queue_error_no_save_path" => "⚠ Specify an output folder",
         "queue_error_no_model" => "⚠ Select a translation model",
         "queue_error_no_key" => "⚠ Enter the OpenRouter key in the API section",
+        "queue_error_no_name" => "⚠ Task name cannot be empty",
+        "queue_error_create_dir" => "⚠ Failed to create task folder",
+        "job_name_dialog_title" => "Task Name",
+        "job_name_hint" => "Leave empty for auto name...",
+        "job_name_auto" => "Task",
+        "job_name_confirm_btn" => "Add",
+        "job_name_cancel_btn" => "Cancel",
         _ => "",
     }
 }

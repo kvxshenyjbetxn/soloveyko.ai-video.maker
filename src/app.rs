@@ -101,6 +101,10 @@ pub struct VideoMakerApp {
     pub job_counter: u64,
     /// Повідомлення про помилку валідації перед додаванням в чергу.
     pub queue_error: Option<String>,
+    /// Чи відкрите вікно введення назви задачі.
+    pub job_name_dialog_open: bool,
+    /// Поточний текст у полі введення назви задачі.
+    pub job_name_input: String,
 }
 
 impl Default for VideoMakerApp {
@@ -149,6 +153,8 @@ impl Default for VideoMakerApp {
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,
+            job_name_dialog_open: false,
+            job_name_input: String::new(),
             last_saved_settings: default_settings,
         }
     }
@@ -299,6 +305,8 @@ impl VideoMakerApp {
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,
+            job_name_dialog_open: false,
+            job_name_input: String::new(),
             last_saved_settings: saved,
         }
     }
@@ -476,10 +484,39 @@ fn draw_balance_window(
 }
 
 /// Малює нижню панель черги задач пайплайну.
-fn draw_queue_panel(ui: &mut egui::Ui, language: crate::localization::Language, jobs: &[crate::queue::PipelineJob]) {
+fn draw_queue_panel(ui: &mut egui::Ui, language: crate::localization::Language, jobs: &mut Vec<crate::queue::PipelineJob>) {
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong());
+
+        let has_pending = jobs.iter().any(|j| {
+            *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
+        });
+
+        if ui.add_enabled(
+            has_pending,
+            egui::Button::new(egui::RichText::new(translate(language, "queue_run_btn")).strong()),
+        ).clicked() {
+            let ctx = ui.ctx().clone();
+            for job in jobs.iter() {
+                if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
+                    continue;
+                }
+                if job.settings.translation_enabled {
+                    crate::core::pipeline::translate::run_translation(
+                        job.settings.openrouter_key.clone(),
+                        job.settings.translation_model.clone(),
+                        job.settings.translation_prompt.clone(),
+                        job.settings.text.clone(),
+                        job.settings.translation_temperature,
+                        job.settings.save_path.clone(),
+                        std::sync::Arc::clone(&job.status),
+                        ctx.clone(),
+                    );
+                }
+            }
+        }
+
         ui.separator();
 
         egui::ScrollArea::horizontal()
@@ -510,9 +547,8 @@ fn draw_queue_panel(ui: &mut egui::Ui, language: crate::localization::Language, 
                         ui.set_max_width(200.0);
                         ui.vertical(|ui| {
                             ui.label(egui::RichText::new(
-                                format!("#{} {}", job.id + 1, &job.title)
+                                format!("#{} {}", job.id + 1, &job.name)
                             ).size(11.0));
-                            // Показуємо активні етапи задачі
                             let steps: Vec<&str> = [
                                 job.settings.translation_enabled.then_some("T"),
                             ].into_iter().flatten().collect();
@@ -602,7 +638,7 @@ impl eframe::App for VideoMakerApp {
                 .max_height(100.0)
                 .resizable(false)
                 .show(ctx, |ui| {
-                    draw_queue_panel(ui, self.language, &self.jobs);
+                    draw_queue_panel(ui, self.language, &mut self.jobs);
                 });
         }
 
@@ -654,6 +690,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.jobs,
                         &mut self.job_counter,
                         &mut self.queue_error,
+                        &mut self.job_name_dialog_open,
+                        &mut self.job_name_input,
                     );
                 });
         }

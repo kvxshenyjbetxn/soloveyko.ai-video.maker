@@ -96,6 +96,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "storage_browse_btn" => "Выбрать",
         "queue_add_btn" => "Добавить в очередь",
         "queue_panel_title" => "Очередь",
+        "queue_run_btn" => "▶ Запустить",
         "queue_status_pending" => "Ожидает",
         "queue_status_running" => "Выполняется...",
         "queue_status_done" => "Готово",
@@ -104,6 +105,13 @@ pub fn translate_ru(key: &str) -> &'static str {
         "queue_error_no_save_path" => "⚠ Укажите путь сохранения",
         "queue_error_no_model" => "⚠ Выберите модель для перевода",
         "queue_error_no_key" => "⚠ Укажите OpenRouter ключ в разделе API",
+        "queue_error_no_name" => "⚠ Название задачи не может быть пустым",
+        "queue_error_create_dir" => "⚠ Ошибка создания папки задачи",
+        "job_name_dialog_title" => "Название задачи",
+        "job_name_hint" => "Оставьте пустым для авто-названия...",
+        "job_name_auto" => "Задание",
+        "job_name_confirm_btn" => "Добавить",
+        "job_name_cancel_btn" => "Отмена",
         _ => "",
     }
 }
