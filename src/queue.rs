@@ -55,6 +55,8 @@ pub struct PipelineJob {
     pub voiceover_stage: Arc<Mutex<StageStatus>>,
     /// Знімок налаштувань — зберігається для можливого перезапуску задачі
     pub settings: JobSettings,
+    /// Збережений перекладений текст (заповнюється після перекладу)
+    pub translated_text: Arc<Mutex<Option<String>>>,
 }
 
 impl PipelineJob {
@@ -66,6 +68,7 @@ impl PipelineJob {
             translation_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             voiceover_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             settings,
+            translated_text: Arc::new(Mutex::new(None)),
         }
     }
 }

@@ -163,6 +163,9 @@ pub fn translate_en(key: &str) -> &'static str {
         "stats_words" => "Words:",
         "stats_paragraphs" => "Paragraphs:",
         "stats_tokens" => "Tokens:",
+        "stats_chars_short" => "chars",
+        "stats_tokens_short" => "tokens",
+        "queue_waiting_translation" => "awaiting translation",
         _ => "",
     }
 }

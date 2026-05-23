@@ -951,6 +951,7 @@ fn draw_queue_panel(
                         std::sync::Arc::clone(&job.status),
                         std::sync::Arc::clone(&job.translation_stage),
                         std::sync::Arc::clone(&job.voiceover_stage),
+                        std::sync::Arc::clone(&job.translated_text),
                         ctx.clone(),
                     );
                 }
@@ -1012,17 +1013,37 @@ fn draw_queue_panel(
                             }
 
                             // Активні етапи — кожен з нового рядка з кольором за статусом
+                            let orig_text = &job.settings.text;
+                            let orig_chars = orig_text.chars().count();
+                            let orig_tokens = crate::gui::editor::count_tokens(orig_text);
+
                             if job.settings.translation_enabled {
                                 // Етап перекладу: "Переклад" з кольором за stage статусом
+                                let translation_label = format!(
+                                    "{} ({} {}, {} {})",
+                                    translate(language, "translation"),
+                                    orig_tokens,
+                                    translate(language, "stats_tokens_short"),
+                                    orig_chars,
+                                    translate(language, "stats_chars_short")
+                                );
                                 ui.label(
-                                    egui::RichText::new(translate(language, "translation"))
+                                    egui::RichText::new(translation_label)
                                         .color(stage_color(&translation_stage, ui))
                                         .size(10.0),
                                 );
                             } else if job.settings.voiceover_enabled {
                                 // Переклад вимкнено, але озвучка увімкнена → показуємо "Оригінал" (завжди зелений)
+                                let original_label = format!(
+                                    "{} ({} {}, {} {})",
+                                    translate(language, "voiceover_text_source_original"),
+                                    orig_tokens,
+                                    translate(language, "stats_tokens_short"),
+                                    orig_chars,
+                                    translate(language, "stats_chars_short")
+                                );
                                 ui.label(
-                                    egui::RichText::new(translate(language, "voiceover_text_source_original"))
+                                    egui::RichText::new(original_label)
                                         .color(egui::Color32::from_rgb(46, 204, 113))
                                         .size(10.0),
                                 );
@@ -1030,8 +1051,39 @@ fn draw_queue_panel(
 
                             if job.settings.voiceover_enabled {
                                 // Етап озвучки: "Озвучка" з кольором за stage статусом
+                                let voice_label = if job.settings.translation_enabled {
+                                    let translated_opt = job.translated_text.lock().unwrap();
+                                    if let Some(ref trans_text) = *translated_opt {
+                                        let trans_chars = trans_text.chars().count();
+                                        let trans_tokens = crate::gui::editor::count_tokens(trans_text);
+                                        format!(
+                                            "{} ({} {}, {} {})",
+                                            translate(language, "voiceover"),
+                                            trans_tokens,
+                                            translate(language, "stats_tokens_short"),
+                                            trans_chars,
+                                            translate(language, "stats_chars_short")
+                                        )
+                                    } else {
+                                        format!(
+                                            "{} ({})",
+                                            translate(language, "voiceover"),
+                                            translate(language, "queue_waiting_translation")
+                                        )
+                                    }
+                                } else {
+                                    format!(
+                                        "{} ({} {}, {} {})",
+                                        translate(language, "voiceover"),
+                                        orig_tokens,
+                                        translate(language, "stats_tokens_short"),
+                                        orig_chars,
+                                        translate(language, "stats_chars_short")
+                                    )
+                                };
+
                                 ui.label(
-                                    egui::RichText::new(translate(language, "voiceover"))
+                                    egui::RichText::new(voice_label)
                                         .color(stage_color(&voiceover_stage, ui))
                                         .size(10.0),
                                 );

@@ -163,6 +163,9 @@ pub fn translate_ru(key: &str) -> &'static str {
         "stats_words" => "Слова:",
         "stats_paragraphs" => "Абзацы:",
         "stats_tokens" => "Токены:",
+        "stats_chars_short" => "симв.",
+        "stats_tokens_short" => "ток.",
+        "queue_waiting_translation" => "ожидает перевода",
         _ => "",
     }
 }

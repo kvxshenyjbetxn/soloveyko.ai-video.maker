@@ -13,6 +13,7 @@ pub fn run_pipeline(
     status: Arc<Mutex<crate::queue::JobStatus>>,
     translation_stage: Arc<Mutex<crate::queue::StageStatus>>,
     voiceover_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    translated_text: Arc<Mutex<Option<String>>>,
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
@@ -44,7 +45,8 @@ pub fn run_pipeline(
                         let _ = std::fs::write(dir.join("text.txt"), &translated);
                     }
                     crate::logger::log_job(job_id, &job_name, "Переклад збережено: text.txt");
-                    voice_text = translated;
+                    voice_text = translated.clone();
+                    *translated_text.lock().unwrap() = Some(translated);
                     *translation_stage.lock().unwrap() = crate::queue::StageStatus::Done;
                     ctx.request_repaint();
                 }

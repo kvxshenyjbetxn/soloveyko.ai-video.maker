@@ -163,6 +163,9 @@ pub fn translate_uk(key: &str) -> &'static str {
         "stats_words" => "Слова:",
         "stats_paragraphs" => "Абзаци:",
         "stats_tokens" => "Токени:",
+        "stats_chars_short" => "симв.",
+        "stats_tokens_short" => "ток.",
+        "queue_waiting_translation" => "очікує перекладу",
         _ => "",
     }
 }
