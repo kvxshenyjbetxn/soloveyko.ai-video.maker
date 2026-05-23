@@ -153,6 +153,10 @@ pub struct VideoMakerApp {
     pub googler_image_max_threads: usize,
     /// Максимальна кількість потоків відео Googler.
     pub googler_video_max_threads: usize,
+    /// Сповіщення про успішне копіювання (текст, час копіювання).
+    pub copied_toast: Option<(String, std::time::Instant)>,
+    /// Чи увімкнене автоматичне прокручування логу донизу.
+    pub auto_scroll_logs: bool,
 }
 
 impl Default for VideoMakerApp {
@@ -226,6 +230,8 @@ impl Default for VideoMakerApp {
             edge_tts_show_all_languages: false,
             googler_image_max_threads: default_settings.googler_image_max_threads,
             googler_video_max_threads: default_settings.googler_video_max_threads,
+            copied_toast: None,
+            auto_scroll_logs: true,
             last_saved_settings: default_settings,
         }
     }
@@ -445,12 +451,14 @@ impl VideoMakerApp {
             edge_tts_show_all_languages: false,
             googler_image_max_threads: saved.googler_image_max_threads,
             googler_video_max_threads: saved.googler_video_max_threads,
+            copied_toast: None,
+            auto_scroll_logs: true,
             last_saved_settings: saved,
         }
     }
 
     /// Малює вкладку системних логів роботи додатку.
-    fn draw_logs_tab(&self, ui: &mut egui::Ui) {
+    fn draw_logs_tab(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.add_space(8.0);
             
@@ -480,8 +488,14 @@ impl VideoMakerApp {
                         
                     if ui.add(copy_btn).clicked() {
                         let all_logs = crate::logger::get_logs().join("\n");
-                        ui.ctx().copy_text(all_logs);
+                        ui.ctx().copy_text(all_logs.clone());
+                        self.copied_toast = Some((all_logs, std::time::Instant::now()));
                     }
+
+                    ui.add_space(12.0);
+
+                    // Чекбокс автопрокрутки
+                    ui.checkbox(&mut self.auto_scroll_logs, translate(self.language, "logs_autoscroll"));
                 });
             });
             
@@ -515,7 +529,7 @@ impl VideoMakerApp {
                     .show(ui, |ui| {
                         egui::ScrollArea::vertical()
                             .max_height(f32::INFINITY)
-                            .stick_to_bottom(true)
+                            .stick_to_bottom(self.auto_scroll_logs)
                             .show(ui, |ui| {
                                 for log_line in logs {
                                     // Парсимо часову мітку та повідомлення
@@ -547,35 +561,47 @@ impl VideoMakerApp {
                                     } else if is_command {
                                         egui::Color32::from_rgb(129, 212, 250) // М'який блакитний
                                     } else {
-                                        egui::Color32::from_rgb(220, 220, 220) // Світло-сірий для звичайного тексту в терміналі
+                                        egui::Color32::from_rgb(220, 220, 220) // Світло-сірий
                                     };
                                     
-                                    ui.horizontal(|ui| {
-                                        ui.spacing_mut().item_spacing.x = 4.0;
-                                        
-                                        // Виводимо часову мітку приглушеним кольором
-                                        if !time_part.is_empty() {
-                                            ui.add(
-                                                egui::Label::new(
-                                                    egui::RichText::new(time_part)
-                                                        .monospace()
-                                                        .size(11.0)
-                                                        .color(egui::Color32::from_gray(110))
-                                                )
-                                            );
-                                        }
-                                        
-                                        // Виводимо повідомлення відповідним кольором
-                                        ui.add(
-                                            egui::Label::new(
-                                                egui::RichText::new(msg_part)
-                                                    .monospace()
-                                                    .size(11.0)
-                                                    .color(text_color)
-                                            )
-                                            .wrap()
+                                    // Створюємо єдиний LayoutJob для правильного переносу та вирівнювання тексту
+                                    let mut job = egui::text::LayoutJob::default();
+                                    
+                                    if !time_part.is_empty() {
+                                        job.append(
+                                            time_part,
+                                            0.0,
+                                            egui::TextFormat {
+                                                font_id: egui::FontId::monospace(11.0),
+                                                color: egui::Color32::from_gray(110),
+                                                ..Default::default()
+                                            },
                                         );
-                                    });
+                                    }
+                                    
+                                    job.append(
+                                        msg_part,
+                                        0.0,
+                                        egui::TextFormat {
+                                            font_id: egui::FontId::monospace(11.0),
+                                            color: text_color,
+                                            ..Default::default()
+                                        },
+                                    );
+                                    
+                                    // Виводимо весь рядок як клікабельний лейбл
+                                    let label_resp = ui.add(
+                                        egui::Label::new(job)
+                                            .wrap()
+                                            .sense(egui::Sense::click())
+                                    );
+                                    
+                                    if label_resp.clicked() {
+                                        ui.ctx().copy_text(log_line.clone());
+                                        self.copied_toast = Some((log_line.clone(), std::time::Instant::now()));
+                                    }
+                                    
+                                    label_resp.on_hover_text(translate(self.language, "logs_click_to_copy"));
                                     
                                     ui.add_space(3.0);
                                 }
@@ -1323,6 +1349,8 @@ impl eframe::App for VideoMakerApp {
         // Спливаюче вікно з логами обраної задачі
         if let Some((job_id, job_name)) = self.selected_job_logs.clone() {
             let mut is_open = true;
+            let mut copied_toast_data = None;
+            
             egui::Window::new(format!("{} #{}: {}", translate(self.language, "job_logs_title"), job_id + 1, job_name))
                 .open(&mut is_open)
                 .resizable(true)
@@ -1336,19 +1364,129 @@ impl eframe::App for VideoMakerApp {
                             ui.add_space(40.0);
                         });
                     } else {
-                        egui::ScrollArea::vertical()
-                            .auto_shrink([false, false])
+                        // Верхня панель з кнопкою копіювання всього логу та чекбоксом автопрокрутки
+                        ui.horizontal(|ui| {
+                            // Чекбокс автопрокрутки зліва
+                            ui.checkbox(&mut self.auto_scroll_logs, translate(self.language, "logs_autoscroll"));
+
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let copy_all_btn = egui::Button::new(translate(self.language, "job_logs_copy_all"))
+                                    .frame(true)
+                                    .rounding(4.0);
+                                    
+                                if ui.add(copy_all_btn).clicked() {
+                                    let all_job_logs = job_logs.join("\n");
+                                    ui.ctx().copy_text(all_job_logs.clone());
+                                    copied_toast_data = Some((all_job_logs, std::time::Instant::now()));
+                                }
+                            });
+                        });
+                        
+                        ui.add_space(6.0);
+                        ui.separator();
+                        ui.add_space(6.0);
+
+                        // Преміальна темно-вугільна панель терміналу з внутрішніми відступами
+                        let terminal_bg = if ui.visuals().dark_mode {
+                            egui::Color32::from_rgb(15, 15, 15) // Глибокий чорний для AMOLED/Dark теми
+                        } else {
+                            egui::Color32::from_rgb(30, 30, 30) // Темно-вугільний навіть у світлій темі
+                        };
+
+                        egui::Frame::none()
+                            .fill(terminal_bg)
+                            .rounding(6.0)
+                            .inner_margin(egui::Margin::same(12.0))
                             .show(ui, |ui| {
-                                ui.vertical(|ui| {
-                                    for log_line in job_logs {
-                                        ui.horizontal(|ui| {
-                                            ui.label(egui::RichText::new(log_line).monospace().size(11.0));
+                                egui::ScrollArea::vertical()
+                                    .auto_shrink([false, false])
+                                    .stick_to_bottom(self.auto_scroll_logs)
+                                    .show(ui, |ui| {
+                                        ui.vertical(|ui| {
+                                            for log_line in job_logs {
+                                                // Парсимо часову мітку та повідомлення
+                                                let (time_part, msg_part) = if log_line.starts_with('[') && log_line.chars().nth(9) == Some(']') {
+                                                    (&log_line[0..10], &log_line[10..])
+                                                } else {
+                                                    ("", log_line.as_str())
+                                                };
+                                                
+                                                // Визначаємо колір тексту залежно від типу події
+                                                let is_error = msg_part.contains("помилка") 
+                                                    || msg_part.contains("failed") 
+                                                    || msg_part.contains("STDERR") 
+                                                    || msg_part.contains("Error")
+                                                    || msg_part.contains("Err");
+                                                    
+                                                let is_success = msg_part.contains("успішно") 
+                                                    || msg_part.contains("success")
+                                                    || msg_part.contains("Ok");
+                                                    
+                                                let is_command = msg_part.contains("Виконується:") 
+                                                    || msg_part.contains("Запуск")
+                                                    || msg_part.contains("Running");
+                                                    
+                                                let text_color = if is_error {
+                                                    egui::Color32::from_rgb(239, 83, 80) // М'який червоний
+                                                } else if is_success {
+                                                    egui::Color32::from_rgb(102, 187, 106) // М'який зелений
+                                                } else if is_command {
+                                                    egui::Color32::from_rgb(129, 212, 250) // М'який блакитний
+                                                } else {
+                                                    egui::Color32::from_rgb(220, 220, 220) // Світло-сірий
+                                                };
+
+                                                // Створюємо єдиний LayoutJob для правильного переносу та вирівнювання тексту
+                                                let mut job = egui::text::LayoutJob::default();
+                                                
+                                                if !time_part.is_empty() {
+                                                    job.append(
+                                                        time_part,
+                                                        0.0,
+                                                        egui::TextFormat {
+                                                            font_id: egui::FontId::monospace(11.0),
+                                                            color: egui::Color32::from_gray(110),
+                                                            ..Default::default()
+                                                        },
+                                                    );
+                                                }
+                                                
+                                                job.append(
+                                                    msg_part,
+                                                    0.0,
+                                                    egui::TextFormat {
+                                                        font_id: egui::FontId::monospace(11.0),
+                                                        color: text_color,
+                                                        ..Default::default()
+                                                    },
+                                                );
+
+                                                // Виводимо весь рядок як клікабельний лейбл
+                                                let label_resp = ui.add(
+                                                    egui::Label::new(job)
+                                                        .wrap()
+                                                        .sense(egui::Sense::click())
+                                                );
+                                                
+                                                if label_resp.clicked() {
+                                                    ui.ctx().copy_text(log_line.clone());
+                                                    copied_toast_data = Some((log_line.clone(), std::time::Instant::now()));
+                                                }
+                                                
+                                                label_resp.on_hover_text(translate(self.language, "logs_click_to_copy"));
+                                                
+                                                ui.add_space(3.0);
+                                            }
                                         });
-                                    }
-                                });
+                                    });
                             });
                     }
                 });
+            
+            if let Some(toast) = copied_toast_data {
+                self.copied_toast = Some(toast);
+            }
+
             if !is_open {
                 self.selected_job_logs = None;
             }
@@ -1454,6 +1592,32 @@ impl eframe::App for VideoMakerApp {
                 
                 // Оновлюємо копію останніх збережених параметрів у пам'яті
                 self.last_saved_settings = new_settings;
+            }
+        }
+
+        // Відображаємо спливаюче сповіщення (Toast) про копіювання
+        if let Some((_, instant)) = &self.copied_toast {
+            if instant.elapsed().as_secs_f32() < 2.0 {
+                egui::Area::new(egui::Id::new("copied_toast"))
+                    .anchor(egui::Align2::RIGHT_BOTTOM, [-20.0, -20.0])
+                    .show(ctx, |ui| {
+                        egui::Frame::none()
+                            .fill(egui::Color32::from_black_alpha(220))
+                            .rounding(8.0)
+                            .stroke(egui::Stroke::new(1.0, self.accent_color))
+                            .inner_margin(egui::Margin::symmetric(16.0, 10.0))
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new(translate(self.language, "logs_copied_toast"))
+                                        .strong()
+                                        .color(egui::Color32::WHITE)
+                                        .size(13.0)
+                                );
+                            });
+                    });
+                
+                // Просимо eframe перемалювати екран, щоб таймер оновлювався плавно
+                ctx.request_repaint();
             }
         }
     }
