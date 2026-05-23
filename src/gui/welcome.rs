@@ -183,7 +183,10 @@ pub fn draw_welcome_dialog(
                     &npm_status,
                     translate(language, "welcome_npm_desc"),
                     language,
-                    &[r#"powershell -c "irm https://community.chocolatey.org/install.ps1|iex""#],
+                    &[
+                        r#"powershell -c "irm https://community.chocolatey.org/install.ps1|iex""#,
+                        r#"choco install nodejs --version="22.22.3""#,
+                    ],
                 );
                 ui.add_space(6.0);
             }
@@ -202,6 +205,7 @@ pub fn draw_welcome_dialog(
                 let mut cmds = Vec::new();
                 if npm_status == ToolStatus::NotInstalled {
                     cmds.push(r#"powershell -c "irm https://community.chocolatey.org/install.ps1|iex""#);
+                    cmds.push(r#"choco install nodejs --version="22.22.3""#);
                 }
                 cmds.push("npm install -g @google/gemini-cli");
                 cmds

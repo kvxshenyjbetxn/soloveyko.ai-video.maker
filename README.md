@@ -191,7 +191,7 @@ src/
 | Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
 | FFmpeg | `brew install ffmpeg` | `winget install Gyan.FFmpeg` |
 | Homebrew | `/bin/bash -c "$(curl ...install.sh)"` | — (не показується) |
-| npm/Node.js | — (не показується) | `powershell -c "irm ...chocolatey...install.ps1\|iex"` |
+| npm/Node.js | — (не показується) | `powershell -c "irm ...chocolatey...install.ps1\|iex"` → `choco install nodejs --version="22.22.3"` |
 
 **Умовна логіка відображення:**
 - **macOS:** Homebrew показується одним рядком **перед** залежними інструментами, якщо brew відсутній і хоча б один з Gemini CLI або FFmpeg відсутній. Якщо brew відсутній і натиснуто кнопку «Встановити» для Gemini чи FFmpeg — команда встановлення brew автоматично додається першим кроком у скрипт.
