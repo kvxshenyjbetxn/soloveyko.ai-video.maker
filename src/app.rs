@@ -1059,12 +1059,18 @@ fn draw_queue_panel(
                     *j.status.lock().unwrap() == crate::queue::JobStatus::Running
                 });
 
-                // Віднімаємо відступи, щоб прогресбар не притискався впритул
+                let pct_label = egui::RichText::new(format!("{:.0}%", overall_progress * 100.0))
+                    .size(11.0)
+                    .weak();
+                ui.label(pct_label);
+                ui.add_space(4.0);
+
                 let bar_width = ui.available_width() - 8.0;
                 if bar_width > 30.0 {
                     let bar = egui::ProgressBar::new(overall_progress)
-                        .animate(is_running);
-                    ui.add_sized([bar_width, 3.0], bar);
+                        .animate(is_running)
+                        .desired_height(6.0);
+                    ui.add_sized([bar_width, 6.0], bar);
                 }
             }
         });
@@ -1132,13 +1138,10 @@ fn draw_queue_panel(
                         ),
                     };
 
-                    let avail_h = ui.available_height();
-
                     let group_frame = egui::Frame::group(ui.style())
-                        .inner_margin(egui::Margin { left: 6.0, right: 6.0, top: 6.0, bottom: 0.0 });
+                        .inner_margin(egui::Margin { left: 6.0, right: 6.0, top: 6.0, bottom: 6.0 });
                     let response = group_frame.show(ui, |ui| {
-                        ui.set_width(230.0);
-                        ui.set_min_height((avail_h - 6.0).max(115.0));
+                        ui.set_width(190.0);
 
                         ui.vertical(|ui| {
                             ui.add_space(3.0);
@@ -1288,9 +1291,10 @@ fn draw_queue_panel(
                             let is_job_running = status == crate::queue::JobStatus::Running;
 
                             let bar = egui::ProgressBar::new(prog)
-                                .animate(is_job_running);
+                                .animate(is_job_running)
+                                .desired_height(6.0);
                             ui.add_sized(
-                                [ui.available_width() - 4.0, 2.0],
+                                [ui.available_width() - 4.0, 6.0],
                                 bar
                             );
                         });
