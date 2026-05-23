@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 pub enum JobStatus {
     Pending,
     Running,
+    AwaitingControl,
     Done,
     Failed(String),
 }
@@ -28,6 +29,7 @@ pub struct JobSettings {
     pub text: String,
     pub save_path: String,
     pub translation_enabled: bool,
+    pub translation_control_enabled: bool,
     pub translation_prompt: String,
     pub translation_model: String,
     pub translation_temperature: f32,

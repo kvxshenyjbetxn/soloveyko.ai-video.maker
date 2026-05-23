@@ -63,6 +63,9 @@ pub struct AppSettings {
     /// Чи увімкнено етап "Переклад" у пайплайні
     #[serde(default = "default_true")]
     pub pipeline_translation_enabled: bool,
+    /// Чи увімкнено контроль перекладу у пайплайні
+    #[serde(default)]
+    pub pipeline_translation_control_enabled: bool,
     /// Чи увімкнено етап "Озвучка" у пайплайні
     #[serde(default = "default_true")]
     pub pipeline_voiceover_enabled: bool,
@@ -158,6 +161,7 @@ impl Default for AppSettings {
             voiceover_template_uuid: String::new(),
             last_template: String::new(),
             pipeline_translation_enabled: true,
+            pipeline_translation_control_enabled: false,
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_subtitles_enabled: true,
@@ -287,6 +291,9 @@ pub struct PipelineTemplate {
     /// Чи увімкнено етап "Переклад"
     #[serde(default = "default_true")]
     pub pipeline_translation_enabled: bool,
+    /// Чи увімкнено контроль перекладу
+    #[serde(default)]
+    pub pipeline_translation_control_enabled: bool,
     /// Чи увімкнено етап "Озвучка"
     #[serde(default = "default_true")]
     pub pipeline_voiceover_enabled: bool,
@@ -360,6 +367,7 @@ pub fn save_template(
     voiceover_provider: &str,
     voiceover_template_uuid: &str,
     pipeline_translation_enabled: bool,
+    pipeline_translation_control_enabled: bool,
     pipeline_voiceover_enabled: bool,
     pipeline_video_enabled: bool,
     pipeline_subtitles_enabled: bool,
@@ -391,6 +399,7 @@ pub fn save_template(
             voiceover_provider: voiceover_provider.to_string(),
             voiceover_template_uuid: voiceover_template_uuid.to_string(),
             pipeline_translation_enabled,
+            pipeline_translation_control_enabled,
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_subtitles_enabled,

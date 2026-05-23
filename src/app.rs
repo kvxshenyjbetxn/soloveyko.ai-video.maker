@@ -65,6 +65,8 @@ pub struct VideoMakerApp {
     pub voicebot_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Чи увімкнено етап "Переклад" у пайплайні.
     pub pipeline_translation_enabled: bool,
+    /// Чи увімкнено контроль перекладу у пайплайні.
+    pub pipeline_translation_control_enabled: bool,
     /// Чи увімкнено етап "Озвучка" у пайплайні.
     pub pipeline_voiceover_enabled: bool,
     /// Чи увімкнено етап "Відеоряд" у пайплайні.
@@ -115,6 +117,10 @@ pub struct VideoMakerApp {
     pub queue_error: Option<String>,
     /// Обрана задача для перегляду її логів
     pub selected_job_logs: Option<(u64, String)>,
+    /// Задача, для якої зараз відкрито вікно контролю перекладу
+    pub selected_job_control: Option<u64>,
+    /// Текстовий буфер для редагування перекладу під час контролю
+    pub control_text_input: String,
     /// Чи відкрите вікно введення назви задачі.
     pub job_name_dialog_open: bool,
     /// Поточний текст у полі введення назви задачі.
@@ -186,6 +192,7 @@ impl Default for VideoMakerApp {
             voicebot_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             pipeline_translation_enabled: true,
+            pipeline_translation_control_enabled: false,
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_subtitles_enabled: true,
@@ -211,6 +218,8 @@ impl Default for VideoMakerApp {
             job_counter: 0,
             queue_error: None,
             selected_job_logs: None,
+            selected_job_control: None,
+            control_text_input: String::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
             openrouter_max_threads: 5,
@@ -299,6 +308,7 @@ impl VideoMakerApp {
         let voiceover_provider = saved.voiceover_provider.clone();
         let voiceover_template_uuid = saved.voiceover_template_uuid.clone();
         let pipeline_translation_enabled = saved.pipeline_translation_enabled;
+        let pipeline_translation_control_enabled = saved.pipeline_translation_control_enabled;
         let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
         let pipeline_video_enabled = saved.pipeline_video_enabled;
         let pipeline_subtitles_enabled = saved.pipeline_subtitles_enabled;
@@ -407,6 +417,7 @@ impl VideoMakerApp {
             voicebot_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             pipeline_translation_enabled,
+            pipeline_translation_control_enabled,
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_subtitles_enabled,
@@ -432,6 +443,8 @@ impl VideoMakerApp {
             job_counter: 0,
             queue_error: None,
             selected_job_logs: None,
+            selected_job_control: None,
+            control_text_input: String::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
             openrouter_max_threads,
@@ -922,6 +935,8 @@ fn draw_queue_panel(
     language: crate::localization::Language,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     selected_job_logs: &mut Option<(u64, String)>,
+    selected_job_control: &mut Option<u64>,
+    control_text_input: &mut String,
 ) {
     ui.add_space(4.0);
     
@@ -982,6 +997,10 @@ fn draw_queue_panel(
                         crate::queue::JobStatus::Running => (
                             translate(language, "queue_status_running"),
                             egui::Color32::from_rgb(255, 200, 0),
+                        ),
+                        crate::queue::JobStatus::AwaitingControl => (
+                            translate(language, "queue_status_awaiting_control"),
+                            egui::Color32::from_rgb(155, 89, 182), // Фіолетовий колір для контролю
                         ),
                         crate::queue::JobStatus::Done => (
                             translate(language, "queue_status_done"),
@@ -1148,7 +1167,16 @@ fn draw_queue_panel(
                     }
 
                     if interact.clicked() {
-                        *selected_job_logs = Some((job.id, job.name.clone()));
+                        if status == crate::queue::JobStatus::AwaitingControl {
+                            *selected_job_control = Some(job.id);
+                            if let Some(text) = job.translated_text.lock().unwrap().as_ref() {
+                                *control_text_input = text.clone();
+                            } else {
+                                *control_text_input = String::new();
+                            }
+                        } else {
+                            *selected_job_logs = Some((job.id, job.name.clone()));
+                        }
                     }
 
                     ui.add_space(4.0);
@@ -1333,6 +1361,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.saved_templates,
                         &mut self.template_status,
                         &mut self.pipeline_translation_enabled,
+                        &mut self.pipeline_translation_control_enabled,
                         &mut self.pipeline_voiceover_enabled,
                         &mut self.pipeline_video_enabled,
                         &mut self.pipeline_subtitles_enabled,
@@ -1380,7 +1409,14 @@ impl eframe::App for VideoMakerApp {
                 .max_height(350.0)
                 .resizable(true)
                 .show(ctx, |ui| {
-                    draw_queue_panel(ui, self.language, &mut self.jobs, &mut self.selected_job_logs);
+                    draw_queue_panel(
+                        ui,
+                        self.language,
+                        &mut self.jobs,
+                        &mut self.selected_job_logs,
+                        &mut self.selected_job_control,
+                        &mut self.control_text_input,
+                    );
                 });
         }
 
@@ -1569,6 +1605,106 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
+        // Спливаюче вікно контролю перекладу
+        if let Some(job_id) = self.selected_job_control {
+            let mut is_open = true;
+            let mut should_continue = false;
+            
+            // Знаходимо задачу в черзі
+            if let Some(job_idx) = self.jobs.iter().position(|j| j.id == job_id) {
+                let job_name = self.jobs[job_idx].name.clone();
+                let job_save_path = self.jobs[job_idx].settings.save_path.clone();
+                let translated_text_arc = std::sync::Arc::clone(&self.jobs[job_idx].translated_text);
+                let translation_cost_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_cost);
+                let status_arc = std::sync::Arc::clone(&self.jobs[job_idx].status);
+                let translation_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_stage);
+                let voiceover_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].voiceover_stage);
+                let job_settings = self.jobs[job_idx].settings.clone();
+
+                let mut control_closed = false;
+                egui::Window::new(format!("{} #{}", translate(self.language, "control_window_title"), job_id + 1))
+                    .open(&mut is_open)
+                    .resizable(true)
+                    .default_size([500.0, 350.0])
+                    .show(ctx, |ui| {
+                        ui.vertical(|ui| {
+                            ui.label(egui::RichText::new(translate(self.language, "control_window_text")).strong().size(12.0));
+                            ui.add_space(4.0);
+                            
+                            // Текстове поле для редагування перекладу
+                            egui::ScrollArea::vertical()
+                                .max_height(200.0)
+                                .show(ui, |ui| {
+                                    ui.add(
+                                        egui::TextEdit::multiline(&mut self.control_text_input)
+                                            .hint_text("Перекладений текст...")
+                                            .desired_width(f32::INFINITY)
+                                            .desired_rows(10)
+                                    );
+                                });
+                            
+                            ui.add_space(8.0);
+                            
+                            ui.horizontal(|ui| {
+                                if ui.button(translate(self.language, "job_name_cancel_btn")).clicked() {
+                                    control_closed = true;
+                                }
+                                
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui.add(
+                                        egui::Button::new(
+                                            egui::RichText::new(translate(self.language, "control_window_continue_btn")).strong()
+                                        )
+                                    ).clicked() {
+                                        should_continue = true;
+                                    }
+                                });
+                            });
+                        });
+                    });
+
+                if control_closed {
+                    is_open = false;
+                }
+
+                if should_continue {
+                    // 1. Оновлюємо перекладений текст у задачі
+                    *translated_text_arc.lock().unwrap() = Some(self.control_text_input.clone());
+                    
+                    // 2. Зберігаємо оновлений текст на диску
+                    let dir = std::path::Path::new(&job_save_path);
+                    let _ = std::fs::write(dir.join("text.txt"), &self.control_text_input);
+                    
+                    // 3. Змінюємо статус задачі на Running
+                    *status_arc.lock().unwrap() = crate::queue::JobStatus::Running;
+                    
+                    // 4. Запускаємо пайплайн знову!
+                    let ctx_clone = ctx.clone();
+                    crate::core::pipeline::run_pipeline(
+                        job_id,
+                        job_name,
+                        job_settings,
+                        status_arc,
+                        translation_stage_arc,
+                        voiceover_stage_arc,
+                        translated_text_arc,
+                        translation_cost_arc,
+                        ctx_clone,
+                    );
+                    
+                    // 5. Закриваємо вікно контролю
+                    is_open = false;
+                }
+            } else {
+                is_open = false;
+            }
+            
+            if !is_open {
+                self.selected_job_control = None;
+                self.control_text_input.clear();
+            }
+        }
+
         // АВТОЗБЕРЕЖЕННЯ:
         // Перевіряємо, чи користувач наразі не перетягує панель (миша відпущена).
         // Це запобігає надмірному навантаженню на диск та гарантує запис файлу лише після відпускання миші.
@@ -1597,6 +1733,7 @@ impl eframe::App for VideoMakerApp {
                 || self.voiceover_template_uuid != self.last_saved_settings.voiceover_template_uuid
                 || self.template_name_input != self.last_saved_settings.last_template
                 || self.pipeline_translation_enabled != self.last_saved_settings.pipeline_translation_enabled
+                || self.pipeline_translation_control_enabled != self.last_saved_settings.pipeline_translation_control_enabled
                 || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
                 || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
                 || self.pipeline_subtitles_enabled != self.last_saved_settings.pipeline_subtitles_enabled
@@ -1635,6 +1772,7 @@ impl eframe::App for VideoMakerApp {
                     voiceover_template_uuid: self.voiceover_template_uuid.clone(),
                     last_template: self.template_name_input.clone(),
                     pipeline_translation_enabled: self.pipeline_translation_enabled,
+                    pipeline_translation_control_enabled: self.pipeline_translation_control_enabled,
                     pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
                     pipeline_video_enabled: self.pipeline_video_enabled,
                     pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,

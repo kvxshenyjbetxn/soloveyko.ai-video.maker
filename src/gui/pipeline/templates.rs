@@ -13,6 +13,7 @@ pub fn draw_templates_section(
     template_status: &mut Option<String>,
     template_name_input: &mut String,
     pipeline_translation_enabled: &mut bool,
+    pipeline_translation_control_enabled: &mut bool,
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
     pipeline_subtitles_enabled: &mut bool,
@@ -62,6 +63,7 @@ pub fn draw_templates_section(
                             *voiceover_template_uuid = template.voiceover_template_uuid;
                             *template_name_input = template_name.clone();
                             *pipeline_translation_enabled = template.pipeline_translation_enabled;
+                            *pipeline_translation_control_enabled = template.pipeline_translation_control_enabled;
                             *pipeline_voiceover_enabled = template.pipeline_voiceover_enabled;
                             *pipeline_video_enabled = template.pipeline_video_enabled;
                             *pipeline_subtitles_enabled = template.pipeline_subtitles_enabled;

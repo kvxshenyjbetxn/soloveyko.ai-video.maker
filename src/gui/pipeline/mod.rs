@@ -1,4 +1,5 @@
 pub mod api;
+pub mod control;
 pub mod editing;
 pub mod storage;
 pub mod subtitles;
@@ -12,7 +13,7 @@ use crate::localization::{Language, translate};
 use std::sync::{Arc, Mutex};
 
 /// Малює toggle switch (повзунок вмик/вимк) та повертає Response.
-fn toggle_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
+pub(crate) fn toggle_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     let desired_size = egui::vec2(26.0, 14.0);
     let (rect, mut response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
@@ -53,11 +54,12 @@ fn toggle_switch(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
 /// 1. Шаблони
 /// 2. Шлях збереження
 /// 3. АПІ (API Keys)
-/// 4. Переклад
-/// 5. Озвучка
-/// 6. Відеоряд
-/// 7. Субтитри
-/// 8. Монтаж
+/// 4. Контроль
+/// 5. Переклад
+/// 6. Озвучка
+/// 7. Відеоряд
+/// 8. Субтитри
+/// 9. Монтаж
 #[allow(clippy::too_many_arguments)]
 pub fn draw_pipeline_panel(
     ui: &mut egui::Ui,
@@ -88,6 +90,7 @@ pub fn draw_pipeline_panel(
     saved_templates: &mut Vec<String>,
     template_status: &mut Option<String>,
     pipeline_translation_enabled: &mut bool,
+    pipeline_translation_control_enabled: &mut bool,
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
     pipeline_subtitles_enabled: &mut bool,
@@ -151,6 +154,7 @@ pub fn draw_pipeline_panel(
                             voiceover_provider,
                             voiceover_template_uuid,
                             *pipeline_translation_enabled,
+                            *pipeline_translation_control_enabled,
                             *pipeline_voiceover_enabled,
                             *pipeline_video_enabled,
                             *pipeline_subtitles_enabled,
@@ -236,6 +240,7 @@ pub fn draw_pipeline_panel(
                                     template_status,
                                     template_name_input,
                                     pipeline_translation_enabled,
+                                    pipeline_translation_control_enabled,
                                     pipeline_voiceover_enabled,
                                     pipeline_video_enabled,
                                     pipeline_subtitles_enabled,
@@ -315,7 +320,27 @@ pub fn draw_pipeline_panel(
 
                         ui.add_space(8.0);
 
-                        // 4. Переклад (з перемикачем)
+                        // 4. Контроль
+                        {
+                            let id = ui.make_persistent_id("control_section");
+                            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                                ui.ctx(), id, false,
+                            );
+                            let header = ui.horizontal(|ui| {
+                                state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                                let label = ui.add(egui::Label::new(translate(language, "control")).sense(egui::Sense::click()));
+                                label
+                            });
+                            if header.inner.clicked() { state.toggle(ui); }
+                            state.store(ui.ctx());
+                            state.show_body_indented(&header.response, ui, |ui| {
+                                control::draw_control_section(ui, language, pipeline_translation_control_enabled);
+                            });
+                        }
+
+                        ui.add_space(8.0);
+
+                        // 5. Переклад (з перемикачем)
                         {
                             let id = ui.make_persistent_id("translation_section");
                             let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
@@ -351,7 +376,7 @@ pub fn draw_pipeline_panel(
 
                         ui.add_space(8.0);
 
-                        // 5. Озвучка (з перемикачем)
+                        // 6. Озвучка (з перемикачем)
                         {
                             let id = ui.make_persistent_id("voiceover_section");
                             let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
@@ -389,7 +414,7 @@ pub fn draw_pipeline_panel(
 
                         ui.add_space(8.0);
 
-                        // 6. Відеоряд (з перемикачем)
+                        // 7. Відеоряд (з перемикачем)
                         {
                             let id = ui.make_persistent_id("video_section");
                             let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
@@ -417,7 +442,7 @@ pub fn draw_pipeline_panel(
 
                         ui.add_space(8.0);
 
-                        // 7. Субтитри (з перемикачем)
+                        // 8. Субтитри (з перемикачем)
                         {
                             let id = ui.make_persistent_id("subtitles_section");
                             let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
@@ -440,7 +465,7 @@ pub fn draw_pipeline_panel(
 
                         ui.add_space(8.0);
 
-                        // 8. Монтаж (з перемикачем)
+                        // 9. Монтаж (з перемикачем)
                         {
                             let id = ui.make_persistent_id("editing_section");
                             let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
@@ -573,6 +598,7 @@ pub fn draw_pipeline_panel(
                                     effective_save_path(save_path_macos, save_path_windows),
                                     &name,
                                     *pipeline_translation_enabled,
+                                    *pipeline_translation_control_enabled,
                                     translation_prompt,
                                     translation_model,
                                     *translation_temperature,
@@ -610,6 +636,7 @@ fn validate_and_enqueue(
     save_path: &str,
     task_name: &str,
     translation_enabled: bool,
+    translation_control_enabled: bool,
     translation_prompt: &str,
     translation_model: &str,
     translation_temperature: f32,
@@ -640,6 +667,7 @@ fn validate_and_enqueue(
         text: text_input.to_string(),
         save_path: actual_path,
         translation_enabled,
+        translation_control_enabled,
         translation_prompt: translation_prompt.to_string(),
         translation_model: translation_model.to_string(),
         translation_temperature,
