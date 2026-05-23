@@ -67,6 +67,8 @@ pub struct VideoMakerApp {
     pub pipeline_translation_enabled: bool,
     /// Чи увімкнено контроль перекладу у пайплайні.
     pub pipeline_translation_control_enabled: bool,
+    /// Чи відкривати вікно контролю автоматично при переході задачі в AwaitingControl.
+    pub pipeline_control_auto_open: bool,
     /// Чи увімкнено етап "Озвучка" у пайплайні.
     pub pipeline_voiceover_enabled: bool,
     /// Чи увімкнено етап "Відеоряд" у пайплайні.
@@ -145,6 +147,8 @@ pub struct VideoMakerApp {
     pub control_regen_loading: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Помилка перегенерації
     pub control_regen_error: Option<String>,
+    /// Задачі, для яких користувач вручну закрив вікно контролю (авто-відкриття їх пропускає).
+    pub control_dismissed: std::collections::HashSet<u64>,
     /// Чи відкрите вікно введення назви задачі.
     pub job_name_dialog_open: bool,
     /// Поточний текст у полі введення назви задачі.
@@ -217,6 +221,7 @@ impl Default for VideoMakerApp {
             voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             pipeline_translation_enabled: true,
             pipeline_translation_control_enabled: false,
+            pipeline_control_auto_open: false,
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_subtitles_enabled: true,
@@ -256,6 +261,7 @@ impl Default for VideoMakerApp {
             control_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             control_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             control_regen_error: None,
+            control_dismissed: std::collections::HashSet::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
             openrouter_max_threads: 5,
@@ -345,6 +351,7 @@ impl VideoMakerApp {
         let voiceover_template_uuid = saved.voiceover_template_uuid.clone();
         let pipeline_translation_enabled = saved.pipeline_translation_enabled;
         let pipeline_translation_control_enabled = saved.pipeline_translation_control_enabled;
+        let pipeline_control_auto_open = saved.pipeline_control_auto_open;
         let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
         let pipeline_video_enabled = saved.pipeline_video_enabled;
         let pipeline_subtitles_enabled = saved.pipeline_subtitles_enabled;
@@ -454,6 +461,7 @@ impl VideoMakerApp {
             voicebot_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             pipeline_translation_enabled,
             pipeline_translation_control_enabled,
+            pipeline_control_auto_open,
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_subtitles_enabled,
@@ -493,6 +501,7 @@ impl VideoMakerApp {
             control_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             control_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             control_regen_error: None,
+            control_dismissed: std::collections::HashSet::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
             openrouter_max_threads,
@@ -1394,6 +1403,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.template_status,
                         &mut self.pipeline_translation_enabled,
                         &mut self.pipeline_translation_control_enabled,
+                        &mut self.pipeline_control_auto_open,
                         &mut self.pipeline_voiceover_enabled,
                         &mut self.pipeline_video_enabled,
                         &mut self.pipeline_subtitles_enabled,
@@ -1637,10 +1647,24 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
+        // Авто-відкриття вікна контролю коли задача переходить в AwaitingControl
+        if self.pipeline_control_auto_open && self.selected_job_control.is_none() {
+            if let Some(job) = self.jobs.iter().find(|j| {
+                !self.control_dismissed.contains(&j.id)
+                    && *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingControl
+            }) {
+                let job_id = job.id;
+                let translated_text = job.translated_text.lock().unwrap().clone();
+                self.selected_job_control = Some(job_id);
+                self.control_text_input = translated_text.unwrap_or_default();
+            }
+        }
+
         // Спливаюче вікно контролю перекладу
         if let Some(job_id) = self.selected_job_control {
             let mut is_open = true;
             let mut should_continue = false;
+            let mut is_confirmed = false;
 
             // Перевіряємо результат фонової перегенерації
             {
@@ -1673,7 +1697,7 @@ impl eframe::App for VideoMakerApp {
                 let mut trigger_simple_regen = false;
                 let mut open_extended = false;
 
-                egui::Window::new(format!("{} #{}", translate(self.language, "control_window_title"), job_id + 1))
+                egui::Window::new(format!("{} — {}", translate(self.language, "control_window_title"), job_name))
                     .open(&mut is_open)
                     .resizable(true)
                     .default_size([500.0, 350.0])
@@ -1780,6 +1804,7 @@ impl eframe::App for VideoMakerApp {
 
                 if control_closed {
                     is_open = false;
+                    is_confirmed = true;
                 }
 
                 // Запускаємо просту перегенерацію з оригінальними налаштуваннями задачі
@@ -1950,6 +1975,9 @@ impl eframe::App for VideoMakerApp {
             }
 
             if !is_open {
+                if !is_confirmed {
+                    self.control_dismissed.insert(job_id);
+                }
                 self.selected_job_control = None;
                 self.control_text_input.clear();
                 self.control_regen_extended_open = false;
@@ -1986,6 +2014,7 @@ impl eframe::App for VideoMakerApp {
                 || self.template_name_input != self.last_saved_settings.last_template
                 || self.pipeline_translation_enabled != self.last_saved_settings.pipeline_translation_enabled
                 || self.pipeline_translation_control_enabled != self.last_saved_settings.pipeline_translation_control_enabled
+                || self.pipeline_control_auto_open != self.last_saved_settings.pipeline_control_auto_open
                 || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
                 || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
                 || self.pipeline_subtitles_enabled != self.last_saved_settings.pipeline_subtitles_enabled
@@ -2025,6 +2054,7 @@ impl eframe::App for VideoMakerApp {
                     last_template: self.template_name_input.clone(),
                     pipeline_translation_enabled: self.pipeline_translation_enabled,
                     pipeline_translation_control_enabled: self.pipeline_translation_control_enabled,
+                    pipeline_control_auto_open: self.pipeline_control_auto_open,
                     pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
                     pipeline_video_enabled: self.pipeline_video_enabled,
                     pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,

@@ -9,6 +9,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "api" => "API",
         "control" => "Контроль",
         "control_translation" => "Контроль перевода",
+        "control_auto_open" => "Показывать окно контроля автоматически",
         "translation" => "Перевод",
         "voiceover" => "Озвучка",
         "video" => "Видеоряд",

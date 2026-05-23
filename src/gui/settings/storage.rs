@@ -66,6 +66,9 @@ pub struct AppSettings {
     /// Чи увімкнено контроль перекладу у пайплайні
     #[serde(default)]
     pub pipeline_translation_control_enabled: bool,
+    /// Чи відкривати вікно контролю автоматично при переході задачі в AwaitingControl
+    #[serde(default)]
+    pub pipeline_control_auto_open: bool,
     /// Чи увімкнено етап "Озвучка" у пайплайні
     #[serde(default = "default_true")]
     pub pipeline_voiceover_enabled: bool,
@@ -162,6 +165,7 @@ impl Default for AppSettings {
             last_template: String::new(),
             pipeline_translation_enabled: true,
             pipeline_translation_control_enabled: false,
+            pipeline_control_auto_open: false,
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_subtitles_enabled: true,
@@ -294,6 +298,9 @@ pub struct PipelineTemplate {
     /// Чи увімкнено контроль перекладу
     #[serde(default)]
     pub pipeline_translation_control_enabled: bool,
+    /// Чи відкривати вікно контролю автоматично
+    #[serde(default)]
+    pub pipeline_control_auto_open: bool,
     /// Чи увімкнено етап "Озвучка"
     #[serde(default = "default_true")]
     pub pipeline_voiceover_enabled: bool,
@@ -368,6 +375,7 @@ pub fn save_template(
     voiceover_template_uuid: &str,
     pipeline_translation_enabled: bool,
     pipeline_translation_control_enabled: bool,
+    pipeline_control_auto_open: bool,
     pipeline_voiceover_enabled: bool,
     pipeline_video_enabled: bool,
     pipeline_subtitles_enabled: bool,
@@ -400,6 +408,7 @@ pub fn save_template(
             voiceover_template_uuid: voiceover_template_uuid.to_string(),
             pipeline_translation_enabled,
             pipeline_translation_control_enabled,
+            pipeline_control_auto_open,
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_subtitles_enabled,

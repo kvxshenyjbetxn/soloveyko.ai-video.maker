@@ -91,6 +91,7 @@ pub fn draw_pipeline_panel(
     template_status: &mut Option<String>,
     pipeline_translation_enabled: &mut bool,
     pipeline_translation_control_enabled: &mut bool,
+    pipeline_control_auto_open: &mut bool,
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
     pipeline_subtitles_enabled: &mut bool,
@@ -155,6 +156,7 @@ pub fn draw_pipeline_panel(
                             voiceover_template_uuid,
                             *pipeline_translation_enabled,
                             *pipeline_translation_control_enabled,
+                            *pipeline_control_auto_open,
                             *pipeline_voiceover_enabled,
                             *pipeline_video_enabled,
                             *pipeline_subtitles_enabled,
@@ -241,6 +243,7 @@ pub fn draw_pipeline_panel(
                                     template_name_input,
                                     pipeline_translation_enabled,
                                     pipeline_translation_control_enabled,
+                                    pipeline_control_auto_open,
                                     pipeline_voiceover_enabled,
                                     pipeline_video_enabled,
                                     pipeline_subtitles_enabled,
@@ -334,7 +337,7 @@ pub fn draw_pipeline_panel(
                             if header.inner.clicked() { state.toggle(ui); }
                             state.store(ui.ctx());
                             state.show_body_indented(&header.response, ui, |ui| {
-                                control::draw_control_section(ui, language, pipeline_translation_control_enabled);
+                                control::draw_control_section(ui, language, pipeline_translation_control_enabled, pipeline_control_auto_open);
                             });
                         }
 

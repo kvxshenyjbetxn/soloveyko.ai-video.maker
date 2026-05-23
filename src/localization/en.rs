@@ -9,6 +9,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "api" => "API",
         "control" => "Control",
         "control_translation" => "Translation Control",
+        "control_auto_open" => "Show control window automatically",
         "translation" => "Translation",
         "voiceover" => "Voiceover",
         "video" => "Video Sequence",

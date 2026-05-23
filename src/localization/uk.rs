@@ -9,6 +9,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "api" => "АПІ",
         "control" => "Контроль",
         "control_translation" => "Контроль перекладу",
+        "control_auto_open" => "Показувати вікно контролю автоматично",
         "translation" => "Переклад",
         "voiceover" => "Озвучка",
         "video" => "Відеоряд",
