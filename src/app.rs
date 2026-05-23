@@ -1062,12 +1062,9 @@ fn draw_queue_panel(
                 // Віднімаємо відступи, щоб прогресбар не притискався впритул
                 let bar_width = ui.available_width() - 8.0;
                 if bar_width > 30.0 {
-                    ui.add_sized(
-                        [bar_width, 10.0],
-                        egui::ProgressBar::new(overall_progress)
-                            .animate(is_running)
-                            .show_percentage()
-                    );
+                    let bar = egui::ProgressBar::new(overall_progress)
+                        .animate(is_running);
+                    ui.add_sized([bar_width, 3.0], bar);
                 }
             }
         });
@@ -1094,9 +1091,7 @@ fn draw_queue_panel(
         }
     });
 
-    ui.add_space(2.0);
-    ui.separator();
-    ui.add_space(2.0);
+    ui.add_space(10.0);
 
     // Список задач з горизонтальною прокруткою
     egui::ScrollArea::horizontal()
@@ -1108,25 +1103,31 @@ fn draw_queue_panel(
                     let translation_stage = job.translation_stage.lock().unwrap().clone();
                     let voiceover_stage = job.voiceover_stage.lock().unwrap().clone();
 
-                    let (status_text, status_color) = match &status {
+                    let (status_text, status_color): (String, egui::Color32) = match &status {
                         crate::queue::JobStatus::Pending => (
-                            translate(language, "queue_status_pending"),
+                            translate(language, "queue_status_pending").to_string(),
                             ui.visuals().weak_text_color(),
                         ),
-                        crate::queue::JobStatus::Running => (
-                            translate(language, "queue_status_running"),
-                            egui::Color32::from_rgb(255, 200, 0),
-                        ),
-                        crate::queue::JobStatus::AwaitingControl => (
-                            translate(language, "queue_status_awaiting_control"),
-                            egui::Color32::from_rgb(155, 89, 182), // Фіолетовий колір для контролю
-                        ),
+                        crate::queue::JobStatus::Running => {
+                            let (prog, _, _) = job.calculate_progress();
+                            (
+                                format!("{} ({:.0}%)", translate(language, "queue_status_running"), prog * 100.0),
+                                egui::Color32::from_rgb(255, 200, 0),
+                            )
+                        }
+                        crate::queue::JobStatus::AwaitingControl => {
+                            let (prog, _, _) = job.calculate_progress();
+                            (
+                                format!("{} ({:.0}%)", translate(language, "queue_status_awaiting_control"), prog * 100.0),
+                                egui::Color32::from_rgb(155, 89, 182),
+                            )
+                        }
                         crate::queue::JobStatus::Done => (
-                            translate(language, "queue_status_done"),
+                            translate(language, "queue_status_done").to_string(),
                             egui::Color32::from_rgb(46, 204, 113),
                         ),
                         crate::queue::JobStatus::Failed(_) => (
-                            translate(language, "queue_status_failed"),
+                            translate(language, "queue_status_failed").to_string(),
                             egui::Color32::from_rgb(231, 76, 60),
                         ),
                     };
@@ -1134,22 +1135,18 @@ fn draw_queue_panel(
                     let avail_h = ui.available_height();
 
                     let response = ui.group(|ui| {
-                        ui.set_width(180.0);
-                        ui.set_min_height((avail_h - 6.0).max(40.0));
+                        ui.set_width(215.0);
+                        ui.set_min_height((avail_h - 6.0).max(115.0));
 
                         ui.vertical(|ui| {
-                            if avail_h > 120.0 {
-                                ui.add_space(4.0);
-                            }
+                            ui.add_space(3.0);
 
                             // Назва завдання
                             ui.label(egui::RichText::new(
                                 format!("#{} {}", job.id + 1, &job.name)
-                            ).strong().size(if avail_h > 100.0 { 12.0 } else { 11.0 }));
+                            ).strong().size(15.0));
 
-                            if avail_h > 80.0 {
-                                ui.add_space(2.0);
-                            }
+                            ui.add_space(3.0);
 
                             // Активні етапи — кожен з нового рядка з кольором за статусом
                             let orig_text = &job.settings.text;
@@ -1193,7 +1190,7 @@ fn draw_queue_panel(
                                 ui.label(
                                     egui::RichText::new(translation_label)
                                         .color(stage_color(&translation_stage, ui))
-                                        .size(10.0),
+                                        .size(12.5),
                                 );
                             } else if job.settings.voiceover_enabled {
                                 // Переклад вимкнено, але озвучка увімкнена → показуємо "Оригінал" (завжди зелений)
@@ -1208,7 +1205,7 @@ fn draw_queue_panel(
                                 ui.label(
                                     egui::RichText::new(original_label)
                                         .color(egui::Color32::from_rgb(46, 204, 113))
-                                        .size(10.0),
+                                        .size(12.5),
                                 );
                             }
 
@@ -1260,29 +1257,42 @@ fn draw_queue_panel(
                                 ui.label(
                                     egui::RichText::new(voice_label)
                                         .color(stage_color(&voiceover_stage, ui))
-                                        .size(10.0),
+                                        .size(12.5),
                                 );
                             }
 
-                            // Загальний статус задачі
-                            ui.label(
-                                egui::RichText::new(status_text)
-                                    .color(status_color)
-                                    .size(if avail_h > 100.0 { 11.0 } else { 10.0 }),
+                            ui.horizontal(|ui| {
+                                // Загальний статус задачі
+                                ui.label(
+                                    egui::RichText::new(status_text)
+                                        .color(status_color)
+                                        .size(13.0),
+                                );
+
+                                // Показуємо помилку (hover підказка)
+                                if let crate::queue::JobStatus::Failed(err) = &status {
+                                    ui.label(
+                                        egui::RichText::new("⚠ помилка")
+                                            .color(egui::Color32::from_rgb(231, 76, 60))
+                                            .size(12.0),
+                                    ).on_hover_text(err);
+                                }
+                            });
+
+                            ui.add_space(3.0);
+
+                            // Індивідуальний прогрес бар картки задачі
+                            let (prog, _, _) = job.calculate_progress();
+                            let is_job_running = status == crate::queue::JobStatus::Running;
+
+                            let bar = egui::ProgressBar::new(prog)
+                                .animate(is_job_running);
+                            ui.add_sized(
+                                [ui.available_width() - 4.0, 2.0],
+                                bar
                             );
 
-                            // Показуємо помилку (hover підказка)
-                            if let crate::queue::JobStatus::Failed(err) = &status {
-                                ui.label(
-                                    egui::RichText::new("⚠ помилка")
-                                        .color(egui::Color32::from_rgb(231, 76, 60))
-                                        .size(10.0),
-                                ).on_hover_text(err);
-                            }
-
-                            if avail_h > 120.0 {
-                                ui.add_space(4.0);
-                            }
+                            ui.add_space(2.0);
                         });
                     });
 
@@ -1536,8 +1546,8 @@ impl eframe::App for VideoMakerApp {
         // Нижня панель черги задач (тільки якщо є задачі)
         if !self.jobs.is_empty() {
             egui::TopBottomPanel::bottom("queue_panel")
-                .min_height(75.0)
-                .default_height(90.0)
+                .min_height(140.0)
+                .default_height(160.0)
                 .max_height(350.0)
                 .resizable(true)
                 .show(ctx, |ui| {
