@@ -121,6 +121,30 @@ pub struct VideoMakerApp {
     pub selected_job_control: Option<u64>,
     /// Текстовий буфер для редагування перекладу під час контролю
     pub control_text_input: String,
+    /// Чи відкрите вікно розширеної перегенерації
+    pub control_regen_extended_open: bool,
+    /// Одноразовий сервіс перекладу для перегенерації
+    pub control_regen_service: String,
+    /// Одноразова активна модель для перегенерації
+    pub control_regen_model: String,
+    /// Одноразова модель OpenRouter для перегенерації
+    pub control_regen_model_openrouter: String,
+    /// Одноразова модель Claude для перегенерації
+    pub control_regen_model_claude: String,
+    /// Одноразова модель Gemini для перегенерації
+    pub control_regen_model_gemini: String,
+    /// Рядок пошуку моделі для перегенерації
+    pub control_regen_model_search: String,
+    /// Одноразовий промт для перегенерації
+    pub control_regen_prompt: String,
+    /// Одноразова температура для перегенерації
+    pub control_regen_temperature: f32,
+    /// Результат фонової перегенерації
+    pub control_regen_result: std::sync::Arc<std::sync::Mutex<Option<Result<String, String>>>>,
+    /// Прапорець виконання перегенерації
+    pub control_regen_loading: std::sync::Arc<std::sync::Mutex<bool>>,
+    /// Помилка перегенерації
+    pub control_regen_error: Option<String>,
     /// Чи відкрите вікно введення назви задачі.
     pub job_name_dialog_open: bool,
     /// Поточний текст у полі введення назви задачі.
@@ -220,6 +244,18 @@ impl Default for VideoMakerApp {
             selected_job_logs: None,
             selected_job_control: None,
             control_text_input: String::new(),
+            control_regen_extended_open: false,
+            control_regen_service: String::new(),
+            control_regen_model: String::new(),
+            control_regen_model_openrouter: String::new(),
+            control_regen_model_claude: "sonnet".to_string(),
+            control_regen_model_gemini: "gemini-2.5-flash".to_string(),
+            control_regen_model_search: String::new(),
+            control_regen_prompt: String::new(),
+            control_regen_temperature: 0.7,
+            control_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            control_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            control_regen_error: None,
             job_name_dialog_open: false,
             job_name_input: String::new(),
             openrouter_max_threads: 5,
@@ -445,6 +481,18 @@ impl VideoMakerApp {
             selected_job_logs: None,
             selected_job_control: None,
             control_text_input: String::new(),
+            control_regen_extended_open: false,
+            control_regen_service: String::new(),
+            control_regen_model: String::new(),
+            control_regen_model_openrouter: String::new(),
+            control_regen_model_claude: "sonnet".to_string(),
+            control_regen_model_gemini: "gemini-2.5-flash".to_string(),
+            control_regen_model_search: String::new(),
+            control_regen_prompt: String::new(),
+            control_regen_temperature: 0.7,
+            control_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            control_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            control_regen_error: None,
             job_name_dialog_open: false,
             job_name_input: String::new(),
             openrouter_max_threads,
@@ -1593,7 +1641,23 @@ impl eframe::App for VideoMakerApp {
         if let Some(job_id) = self.selected_job_control {
             let mut is_open = true;
             let mut should_continue = false;
-            
+
+            // Перевіряємо результат фонової перегенерації
+            {
+                let result = self.control_regen_result.lock().unwrap().take();
+                if let Some(res) = result {
+                    match res {
+                        Ok(text) => {
+                            self.control_text_input = text;
+                            self.control_regen_error = None;
+                        }
+                        Err(e) => {
+                            self.control_regen_error = Some(e);
+                        }
+                    }
+                }
+            }
+
             // Знаходимо задачу в черзі
             if let Some(job_idx) = self.jobs.iter().position(|j| j.id == job_id) {
                 let job_name = self.jobs[job_idx].name.clone();
@@ -1606,6 +1670,9 @@ impl eframe::App for VideoMakerApp {
                 let job_settings = self.jobs[job_idx].settings.clone();
 
                 let mut control_closed = false;
+                let mut trigger_simple_regen = false;
+                let mut open_extended = false;
+
                 egui::Window::new(format!("{} #{}", translate(self.language, "control_window_title"), job_id + 1))
                     .open(&mut is_open)
                     .resizable(true)
@@ -1614,7 +1681,7 @@ impl eframe::App for VideoMakerApp {
                         ui.vertical(|ui| {
                             ui.label(egui::RichText::new(translate(self.language, "control_window_text")).strong().size(12.0));
                             ui.add_space(4.0);
-                            
+
                             // Текстове поле для редагування перекладу
                             egui::ScrollArea::vertical()
                                 .max_height(200.0)
@@ -1626,7 +1693,7 @@ impl eframe::App for VideoMakerApp {
                                             .desired_rows(10)
                                     );
                                 });
-                            
+
                             ui.add_space(4.0);
 
                             // Статистика перекладеного тексту
@@ -1655,11 +1722,47 @@ impl eframe::App for VideoMakerApp {
                                 }
                             });
 
+                            // Помилка перегенерації
+                            if let Some(ref err) = self.control_regen_error {
+                                ui.add_space(4.0);
+                                ui.add(egui::Label::new(
+                                    egui::RichText::new(format!("{} {}", translate(self.language, "control_regen_error"), err))
+                                        .color(egui::Color32::from_rgb(231, 76, 60))
+                                        .size(11.0)
+                                ).wrap());
+                            }
+
                             ui.add_space(8.0);
+
+                            let is_regen_loading = *self.control_regen_loading.lock().unwrap();
 
                             ui.horizontal(|ui| {
                                 if ui.button(translate(self.language, "job_name_cancel_btn")).clicked() {
                                     control_closed = true;
+                                }
+
+                                // Перегенерувати з тим самим промтом задачі
+                                if ui.add_enabled(
+                                    !is_regen_loading,
+                                    egui::Button::new(translate(self.language, "control_regen_btn")),
+                                ).clicked() {
+                                    trigger_simple_regen = true;
+                                }
+
+                                // Відкрити вікно розширеної перегенерації
+                                if ui.add_enabled(
+                                    !is_regen_loading,
+                                    egui::Button::new(translate(self.language, "control_regen_extended_btn")),
+                                ).clicked() {
+                                    open_extended = true;
+                                }
+
+                                if is_regen_loading {
+                                    ui.label(
+                                        egui::RichText::new(translate(self.language, "control_regen_loading"))
+                                            .weak()
+                                            .size(11.0),
+                                    );
                                 }
 
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1679,18 +1782,153 @@ impl eframe::App for VideoMakerApp {
                     is_open = false;
                 }
 
+                // Запускаємо просту перегенерацію з оригінальними налаштуваннями задачі
+                if trigger_simple_regen {
+                    let result_arc = std::sync::Arc::clone(&self.control_regen_result);
+                    let loading_arc = std::sync::Arc::clone(&self.control_regen_loading);
+                    let ctx_clone = ctx.clone();
+                    let text = job_settings.text.clone();
+                    let service = job_settings.translation_service.clone();
+                    let model = job_settings.translation_model.clone();
+                    let prompt = job_settings.translation_prompt.clone();
+                    let temperature = job_settings.translation_temperature;
+                    let key = job_settings.openrouter_key.clone();
+                    let job_info = Some((job_id, job_name.clone()));
+
+                    self.control_regen_error = None;
+                    *loading_arc.lock().unwrap() = true;
+                    std::thread::spawn(move || {
+                        let result = crate::core::pipeline::translate::translate_text(
+                            &service, &key, &model, &prompt, &text, temperature, job_info,
+                        ).map(|(t, _)| t);
+                        *result_arc.lock().unwrap() = Some(result);
+                        *loading_arc.lock().unwrap() = false;
+                        ctx_clone.request_repaint();
+                    });
+                }
+
+                // Ініціалізуємо та відкриваємо вікно розширеної перегенерації
+                if open_extended && !self.control_regen_extended_open {
+                    self.control_regen_service = job_settings.translation_service.clone();
+                    self.control_regen_model = job_settings.translation_model.clone();
+                    self.control_regen_model_openrouter = if job_settings.translation_service == "OpenRouter" {
+                        job_settings.translation_model.clone()
+                    } else {
+                        self.control_regen_model_openrouter.clone()
+                    };
+                    self.control_regen_model_claude = if job_settings.translation_service == "Claude Code" {
+                        if job_settings.translation_model.is_empty() { "sonnet".to_string() } else { job_settings.translation_model.clone() }
+                    } else {
+                        self.control_regen_model_claude.clone()
+                    };
+                    self.control_regen_model_gemini = if job_settings.translation_service == "Gemini CLI" {
+                        if job_settings.translation_model.is_empty() { "gemini-2.5-flash".to_string() } else { job_settings.translation_model.clone() }
+                    } else {
+                        self.control_regen_model_gemini.clone()
+                    };
+                    self.control_regen_prompt = job_settings.translation_prompt.clone();
+                    self.control_regen_temperature = job_settings.translation_temperature;
+                    self.control_regen_model_search.clear();
+                    self.control_regen_extended_open = true;
+                }
+
+                // Вікно розширеної перегенерації з одноразовими налаштуваннями
+                if self.control_regen_extended_open {
+                    let openrouter_models_arc = std::sync::Arc::clone(&self.openrouter_models);
+                    let openrouter_models_loading_arc = std::sync::Arc::clone(&self.openrouter_models_loading);
+                    let text_to_translate = job_settings.text.clone();
+                    let openrouter_key_ext = job_settings.openrouter_key.clone();
+                    let job_info_ext = Some((job_id, job_name.clone()));
+
+                    let mut ext_is_open = true;
+                    let mut trigger_ext_regen = false;
+
+                    egui::Window::new(translate(self.language, "control_regen_extended_title"))
+                        .open(&mut ext_is_open)
+                        .resizable(true)
+                        .default_size([450.0, 500.0])
+                        .show(ctx, |ui| {
+                            ui.add(egui::Label::new(
+                                egui::RichText::new(translate(self.language, "control_regen_settings_note"))
+                                    .weak()
+                                    .size(11.0),
+                            ).wrap());
+                            ui.add_space(6.0);
+                            ui.separator();
+
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                ui.push_id("control_regen_translation", |ui| {
+                                    crate::gui::pipeline::translation::draw_translation_section(
+                                        ui,
+                                        self.language,
+                                        &mut self.control_regen_prompt,
+                                        &mut self.control_regen_model,
+                                        &mut self.control_regen_model_search,
+                                        &openrouter_models_arc,
+                                        &openrouter_models_loading_arc,
+                                        &mut self.control_regen_temperature,
+                                        &mut self.control_regen_service,
+                                        &mut self.control_regen_model_openrouter,
+                                        &mut self.control_regen_model_claude,
+                                        &mut self.control_regen_model_gemini,
+                                    );
+                                });
+                            });
+
+                            ui.add_space(4.0);
+                            ui.separator();
+                            ui.add_space(4.0);
+
+                            let is_regen_loading = *self.control_regen_loading.lock().unwrap();
+
+                            if is_regen_loading {
+                                ui.label(
+                                    egui::RichText::new(translate(self.language, "control_regen_loading"))
+                                        .weak(),
+                                );
+                            } else if ui.button(translate(self.language, "control_regen_run_btn")).clicked() {
+                                trigger_ext_regen = true;
+                            }
+                        });
+
+                    if !ext_is_open {
+                        self.control_regen_extended_open = false;
+                    }
+
+                    if trigger_ext_regen {
+                        let result_arc = std::sync::Arc::clone(&self.control_regen_result);
+                        let loading_arc = std::sync::Arc::clone(&self.control_regen_loading);
+                        let ctx_clone = ctx.clone();
+                        let service = self.control_regen_service.clone();
+                        let model = self.control_regen_model.clone();
+                        let prompt = self.control_regen_prompt.clone();
+                        let temperature = self.control_regen_temperature;
+
+                        self.control_regen_error = None;
+                        *loading_arc.lock().unwrap() = true;
+                        std::thread::spawn(move || {
+                            let result = crate::core::pipeline::translate::translate_text(
+                                &service, &openrouter_key_ext, &model, &prompt, &text_to_translate, temperature, job_info_ext,
+                            ).map(|(t, _)| t);
+                            *result_arc.lock().unwrap() = Some(result);
+                            *loading_arc.lock().unwrap() = false;
+                            ctx_clone.request_repaint();
+                        });
+                    }
+                }
+
                 if should_continue {
                     // 1. Оновлюємо перекладений текст у задачі
                     *translated_text_arc.lock().unwrap() = Some(self.control_text_input.clone());
-                    
+
                     // 2. Зберігаємо оновлений текст на диску
                     let dir = std::path::Path::new(&job_save_path);
                     let _ = std::fs::write(dir.join("text.txt"), &self.control_text_input);
-                    
+
                     // 3. Змінюємо статус задачі на Running
                     *status_arc.lock().unwrap() = crate::queue::JobStatus::Running;
-                    
-                    // 4. Запускаємо пайплайн знову!
+
+                    // 4. Запускаємо пайплайн знову
                     let ctx_clone = ctx.clone();
                     crate::core::pipeline::run_pipeline(
                         job_id,
@@ -1703,17 +1941,19 @@ impl eframe::App for VideoMakerApp {
                         translation_cost_arc,
                         ctx_clone,
                     );
-                    
+
                     // 5. Закриваємо вікно контролю
                     is_open = false;
                 }
             } else {
                 is_open = false;
             }
-            
+
             if !is_open {
                 self.selected_job_control = None;
                 self.control_text_input.clear();
+                self.control_regen_extended_open = false;
+                self.control_regen_error = None;
             }
         }
 
