@@ -25,8 +25,16 @@ pub fn run_pipeline(
         // Текст, який буде передано в озвучку (оригінал або результат перекладу)
         let mut voice_text = settings.text.clone();
 
+        // Перевіряємо, чи переклад уже був виконаний раніше (наприклад, при повторному запуску після контролю)
+        let has_translation = if settings.translation_enabled {
+            let tr_stage = translation_stage.lock().unwrap().clone();
+            tr_stage == crate::queue::StageStatus::Done
+        } else {
+            false
+        };
+
         // Етап 1: Переклад
-        if settings.translation_enabled {
+        if settings.translation_enabled && !has_translation {
             crate::logger::log_job(job_id, &job_name, "Запуск етапу перекладу...");
             *translation_stage.lock().unwrap() = crate::queue::StageStatus::Running;
             ctx.request_repaint();
@@ -50,6 +58,13 @@ pub fn run_pipeline(
                     *translated_text.lock().unwrap() = Some(translated);
                     *translation_cost.lock().unwrap() = cost;
                     *translation_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+
+                    if settings.translation_control_enabled {
+                        crate::logger::log_job(job_id, &job_name, "Переклад виконано. Задача очікує на контроль перекладу.");
+                        *status.lock().unwrap() = crate::queue::JobStatus::AwaitingControl;
+                        ctx.request_repaint();
+                        return; // Зупиняємо пайплайн для контролю
+                    }
                     ctx.request_repaint();
                 }
                 Err(e) => {
@@ -59,6 +74,11 @@ pub fn run_pipeline(
                     ctx.request_repaint();
                     return;
                 }
+            }
+        } else if settings.translation_enabled && has_translation {
+            // Якщо переклад уже виконано і ми продовжуємо після контролю
+            if let Some(text) = translated_text.lock().unwrap().as_ref() {
+                voice_text = text.clone();
             }
         }
 
