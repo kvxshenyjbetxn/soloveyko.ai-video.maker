@@ -130,6 +130,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "control_window_title" => "Контроль перекладу",
         "control_window_text" => "Перевірте та відредагуйте перекладений текст перед тим, як продовжити пайплайн:",
         "control_window_continue_btn" => "Підтвердити та продовжити",
+        "control_window_cost" => "Вартість:",
         "queue_error_no_text" => "⚠ Текст сценарію порожній",
         "queue_error_no_save_path" => "⚠ Вкажіть шлях збереження",
         "queue_error_no_model" => "⚠ Оберіть модель для перекладу",

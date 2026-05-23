@@ -130,6 +130,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "control_window_title" => "Translation Control",
         "control_window_text" => "Review and edit the translated text before continuing the pipeline:",
         "control_window_continue_btn" => "Confirm & Continue",
+        "control_window_cost" => "Cost:",
         "queue_error_no_text" => "⚠ Script text is empty",
         "queue_error_no_save_path" => "⚠ Specify an output folder",
         "queue_error_no_model" => "⚠ Select a translation model",

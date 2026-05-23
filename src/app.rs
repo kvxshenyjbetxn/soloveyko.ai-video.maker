@@ -1627,13 +1627,41 @@ impl eframe::App for VideoMakerApp {
                                     );
                                 });
                             
+                            ui.add_space(4.0);
+
+                            // Статистика перекладеного тексту
+                            let translated_char_count = self.control_text_input.chars().count();
+                            let translated_word_count = self.control_text_input.split_whitespace().count();
+                            let translated_token_count = crate::gui::editor::count_tokens(&self.control_text_input);
+                            let cost_snapshot = *translation_cost_arc.lock().unwrap();
+
+                            let text_color = ui.visuals().widgets.noninteractive.text_color();
+                            let accent_color = ui.visuals().selection.bg_fill;
+                            let bullet_color = text_color.linear_multiply(0.3);
+
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(translate(self.language, "stats_chars")).size(12.0).color(text_color));
+                                ui.label(egui::RichText::new(format!(" {}", translated_char_count)).size(12.0).strong().color(accent_color));
+                                ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
+                                ui.label(egui::RichText::new(translate(self.language, "stats_words")).size(12.0).color(text_color));
+                                ui.label(egui::RichText::new(format!(" {}", translated_word_count)).size(12.0).strong().color(accent_color));
+                                ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
+                                ui.label(egui::RichText::new(translate(self.language, "stats_tokens")).size(12.0).color(text_color));
+                                ui.label(egui::RichText::new(format!(" {}", translated_token_count)).size(12.0).strong().color(accent_color));
+                                if let Some(cost) = cost_snapshot {
+                                    ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
+                                    ui.label(egui::RichText::new(translate(self.language, "control_window_cost")).size(12.0).color(text_color));
+                                    ui.label(egui::RichText::new(format!(" ${:.5}", cost)).size(12.0).strong().color(accent_color));
+                                }
+                            });
+
                             ui.add_space(8.0);
-                            
+
                             ui.horizontal(|ui| {
                                 if ui.button(translate(self.language, "job_name_cancel_btn")).clicked() {
                                     control_closed = true;
                                 }
-                                
+
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.add(
                                         egui::Button::new(

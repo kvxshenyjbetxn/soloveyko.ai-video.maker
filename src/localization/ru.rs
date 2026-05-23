@@ -130,6 +130,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "control_window_title" => "Контроль перевода",
         "control_window_text" => "Проверьте и отредактируйте переведенный текст перед продолжением пайплайна:",
         "control_window_continue_btn" => "Подтвердить и продолжить",
+        "control_window_cost" => "Стоимость:",
         "queue_error_no_text" => "⚠ Текст сценария пуст",
         "queue_error_no_save_path" => "⚠ Укажите путь сохранения",
         "queue_error_no_model" => "⚠ Выберите модель для перевода",
