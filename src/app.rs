@@ -294,13 +294,12 @@ impl Default for VideoMakerApp {
 /// Малює компактний чіп з балансом. При наведенні підсвічується і змінює курсор.
 fn draw_balance_chip(ui: &mut egui::Ui, prefix: &str, value: &str) -> egui::Response {
     let text = format!("{}: {}", prefix, value);
-    let font_size = ui.text_style_height(&egui::TextStyle::Small);
-    let font_id = egui::FontId::new(font_size, egui::FontFamily::Monospace);
+    let font_id = egui::FontId::new(13.0, egui::FontFamily::Proportional);
     let text_color = ui.visuals().text_color();
 
     let galley = ui.fonts(|f| f.layout_no_wrap(text, font_id, text_color));
 
-    let padding = egui::vec2(6.0, 2.0);
+    let padding = egui::vec2(8.0, 4.0);
     let desired_size = galley.rect.size() + padding * 2.0;
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
@@ -1399,16 +1398,17 @@ impl eframe::App for VideoMakerApp {
         }
 
         // Верхня панель для навігації між вкладками
-        egui::TopBottomPanel::top("navigation_bar").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(translate(self.language, "app_title"));
-                ui.separator();
-                ui.selectable_value(&mut self.active_tab, Tab::Main, translate(self.language, "tab_main"));
-                ui.selectable_value(&mut self.active_tab, Tab::Settings, translate(self.language, "tab_settings"));
-                ui.selectable_value(&mut self.active_tab, Tab::Logs, translate(self.language, "tab_logs"));
+        egui::TopBottomPanel::top("navigation_bar")
+            .min_height(40.0)
+            .show(ctx, |ui| {
+            ui.horizontal_centered(|ui| {
+                ui.selectable_value(&mut self.active_tab, Tab::Main, egui::RichText::new(translate(self.language, "tab_main")).size(14.0));
+                ui.selectable_value(&mut self.active_tab, Tab::Settings, egui::RichText::new(translate(self.language, "tab_settings")).size(14.0));
+                ui.selectable_value(&mut self.active_tab, Tab::Logs, egui::RichText::new(translate(self.language, "tab_logs")).size(14.0));
 
                 // Баланс-чіпи з правого боку (RTL: перший доданий — крайній правий)
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 2.0;
                     if let Ok(guard) = self.openrouter_balance.try_lock() {
                         if let Some(text) = guard.as_ref() {
                             if draw_balance_chip(ui, "OpenRouter", text).clicked() {
@@ -1428,7 +1428,7 @@ impl eframe::App for VideoMakerApp {
                     if let Ok(guard) = self.googler_balance.try_lock() {
                         if let Some(bal) = guard.as_ref() {
                             let text = format!(
-                                "img: {}/{} vid: {}/{} th: {}/{} {}/{}",
+                                "img: {}/{} vid: {}/{} th: i{}/{} v{}/{}",
                                 bal.img_used, bal.img_limit,
                                 bal.video_used, bal.video_limit,
                                 bal.img_threads_active, self.googler_image_max_threads,
