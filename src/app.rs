@@ -1019,14 +1019,28 @@ fn draw_queue_panel(
 
                             if job.settings.translation_enabled {
                                 // Етап перекладу: "Переклад" з кольором за stage статусом
-                                let translation_label = format!(
-                                    "{} ({} {}, {} {})",
-                                    translate(language, "translation"),
-                                    orig_tokens,
-                                    translate(language, "stats_tokens_short"),
-                                    orig_chars,
-                                    translate(language, "stats_chars_short")
-                                );
+                                let translated_opt = job.translated_text.lock().unwrap();
+                                let translation_label = if let Some(ref trans_text) = *translated_opt {
+                                    let trans_chars = trans_text.chars().count();
+                                    let trans_tokens = crate::gui::editor::count_tokens(trans_text);
+                                    format!(
+                                        "{} ({} {}, {} {})",
+                                        translate(language, "translation"),
+                                        trans_tokens,
+                                        translate(language, "stats_tokens_short"),
+                                        trans_chars,
+                                        translate(language, "stats_chars_short")
+                                    )
+                                } else {
+                                    format!(
+                                        "{} ({} {}, {} {})",
+                                        translate(language, "translation"),
+                                        orig_tokens,
+                                        translate(language, "stats_tokens_short"),
+                                        orig_chars,
+                                        translate(language, "stats_chars_short")
+                                    )
+                                };
                                 ui.label(
                                     egui::RichText::new(translation_label)
                                         .color(stage_color(&translation_stage, ui))
