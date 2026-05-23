@@ -728,6 +728,8 @@ fn draw_balance_window(
                         }
                     }
                 }
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(translate(language, "balance_voicebot_limit")).weak());
             });
 
             ui.add_space(4.0);

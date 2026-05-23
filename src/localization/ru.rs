@@ -147,6 +147,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "welcome_not_installed" => "не установлено",
         "welcome_install_label" => "Для установки:",
         "balance_edge_tts_status" => "Бесплатно (Без лимитов)",
+        "balance_voicebot_limit" => "Ограничение потоков: 5 (фиксировано)",
         "settings_edge_tts_threads" => "Параллельные потоки Edge TTS:",
         "edge_tts_voices_loading" => "Загрузка голосов Edge TTS...",
         "edge_tts_voice_label" => "Голос озвучки:",

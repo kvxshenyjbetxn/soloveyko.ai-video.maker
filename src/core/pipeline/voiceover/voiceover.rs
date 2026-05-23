@@ -23,6 +23,8 @@ fn run_voicebot_voiceover(
     settings: &crate::queue::JobSettings,
     text: &str,
 ) -> Result<(), String> {
+    let _permit = crate::api::voicebot::VoiceBotLimiter::get().acquire();
+
     let template_uuid = &settings.voiceover_template_uuid;
     let voicebot_key = &settings.voicebot_key;
     let save_path = &settings.save_path;

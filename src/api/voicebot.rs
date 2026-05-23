@@ -1,5 +1,59 @@
 use eframe::egui;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
+
+/// Лімітер одночасних запитів до VoiceBot (семафор)
+pub struct VoiceBotLimiter {
+    active: Mutex<usize>,
+    condvar: Condvar,
+    max_threads: Mutex<usize>,
+}
+
+impl VoiceBotLimiter {
+    /// Повертає глобальний екземпляр лімітера
+    pub fn get() -> &'static Self {
+        static LIMITER: OnceLock<VoiceBotLimiter> = OnceLock::new();
+        LIMITER.get_or_init(|| VoiceBotLimiter {
+            active: Mutex::new(0),
+            condvar: Condvar::new(),
+            max_threads: Mutex::new(5), // Фіксовано 5 потоків за замовчуванням
+        })
+    }
+
+    /// Отримує дозвіл на виконання запиту (блокує потік, якщо досягнуто ліміту)
+    pub fn acquire(&self) -> VoiceBotPermit<'_> {
+        let mut active = self.active.lock().unwrap();
+        loop {
+            let max = *self.max_threads.lock().unwrap();
+            if *active < max {
+                break;
+            }
+            active = self.condvar.wait(active).unwrap();
+        }
+        *active += 1;
+        VoiceBotPermit { limiter: self }
+    }
+
+    /// Звільняє один потік та сповіщає інші очікуючі
+    fn release(&self) {
+        let mut active = self.active.lock().unwrap();
+        if *active > 0 {
+            *active -= 1;
+        }
+        self.condvar.notify_one();
+    }
+}
+
+/// Дозвіл на виконання запиту VoiceBot
+pub struct VoiceBotPermit<'a> {
+    limiter: &'a VoiceBotLimiter,
+}
+
+impl<'a> Drop for VoiceBotPermit<'a> {
+    fn drop(&mut self) {
+        self.limiter.release();
+    }
+}
+
 
 #[derive(serde::Deserialize)]
 pub struct BalanceResponse {

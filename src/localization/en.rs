@@ -147,6 +147,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "welcome_not_installed" => "not installed",
         "welcome_install_label" => "To install:",
         "balance_edge_tts_status" => "Free (No limits)",
+        "balance_voicebot_limit" => "Threads limit: 5 (fixed)",
         "settings_edge_tts_threads" => "Edge TTS Parallel Threads:",
         "edge_tts_voices_loading" => "Loading Edge TTS voices...",
         "edge_tts_voice_label" => "Voiceover Voice:",
