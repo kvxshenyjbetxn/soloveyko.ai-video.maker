@@ -10,7 +10,7 @@ pub fn translate_text(
     text: &str,
     temperature: f32,
     job_info: Option<(u64, String)>,
-) -> Result<String, String> {
+) -> Result<(String, Option<f64>), String> {
     let user_content = if prompt.contains("{{text}}") {
         prompt.replace("{{text}}", text)
     } else if !prompt.is_empty() {
@@ -20,9 +20,9 @@ pub fn translate_text(
     };
 
     if service == "Claude Code" {
-        crate::api::claude::call_claude_code(model, &user_content, job_info)
+        crate::api::claude::call_claude_code(model, &user_content, job_info).map(|res| (res, None))
     } else if service == "Gemini CLI" {
-        crate::api::gemini::call_gemini_cli(model, &user_content, job_info)
+        crate::api::gemini::call_gemini_cli(model, &user_content, job_info).map(|res| (res, None))
     } else {
         translate::call_openrouter(key, model, user_content, temperature, job_info)
     }

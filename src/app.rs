@@ -952,6 +952,7 @@ fn draw_queue_panel(
                         std::sync::Arc::clone(&job.translation_stage),
                         std::sync::Arc::clone(&job.voiceover_stage),
                         std::sync::Arc::clone(&job.translated_text),
+                        std::sync::Arc::clone(&job.translation_cost),
                         ctx.clone(),
                     );
                 }
@@ -1020,25 +1021,35 @@ fn draw_queue_panel(
                             if job.settings.translation_enabled {
                                 // Етап перекладу: "Переклад" з кольором за stage статусом
                                 let translated_opt = job.translated_text.lock().unwrap();
+                                let cost_opt = job.translation_cost.lock().unwrap();
+                                
+                                let cost_str = if let Some(cost) = *cost_opt {
+                                    format!(", ${:.5}", cost)
+                                } else {
+                                    String::new()
+                                };
+
                                 let translation_label = if let Some(ref trans_text) = *translated_opt {
                                     let trans_chars = trans_text.chars().count();
                                     let trans_tokens = crate::gui::editor::count_tokens(trans_text);
                                     format!(
-                                        "{} ({} {}, {} {})",
+                                        "{} ({} {}, {} {}{})",
                                         translate(language, "translation"),
                                         trans_tokens,
                                         translate(language, "stats_tokens_short"),
                                         trans_chars,
-                                        translate(language, "stats_chars_short")
+                                        translate(language, "stats_chars_short"),
+                                        cost_str
                                     )
                                 } else {
                                     format!(
-                                        "{} ({} {}, {} {})",
+                                        "{} ({} {}, {} {}{})",
                                         translate(language, "translation"),
                                         orig_tokens,
                                         translate(language, "stats_tokens_short"),
                                         orig_chars,
-                                        translate(language, "stats_chars_short")
+                                        translate(language, "stats_chars_short"),
+                                        cost_str
                                     )
                                 };
                                 ui.label(

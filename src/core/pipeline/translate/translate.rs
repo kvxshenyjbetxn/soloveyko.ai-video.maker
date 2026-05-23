@@ -24,18 +24,24 @@ struct ChatChoice {
 }
 
 #[derive(Deserialize)]
-struct ChatResponse {
-    choices: Vec<ChatChoice>,
+struct ChatUsage {
+    cost: Option<f64>,
 }
 
-/// Надсилає запит до OpenRouter Chat API та повертає текст відповіді.
+#[derive(Deserialize)]
+struct ChatResponse {
+    choices: Vec<ChatChoice>,
+    usage: Option<ChatUsage>,
+}
+
+/// Надсилає запит до OpenRouter Chat API та повертає текст відповіді та її вартість.
 pub fn call_openrouter(
     key: &str,
     model: &str,
     user_content: String,
     temperature: f32,
     job_info: Option<(u64, String)>,
-) -> Result<String, String> {
+) -> Result<(String, Option<f64>), String> {
     let log = |msg: &str| {
         if let Some((id, ref name)) = job_info {
             crate::logger::log_job(id, name, msg);
@@ -87,8 +93,17 @@ pub fn call_openrouter(
 
     log("OpenRouter успішно виконав переклад.");
 
-    Ok(data.choices.into_iter()
+    let cost = data.usage.as_ref().and_then(|u| u.cost);
+    if let Some(c) = cost {
+        log(&format!("Вартість запиту: ${:.5}", c));
+    } else {
+        log("Вартість запиту не вказана в об'єкті usage.cost.");
+    }
+
+    let text = data.choices.into_iter()
         .next()
         .map(|c| c.message.content)
-        .unwrap_or_default())
+        .unwrap_or_default();
+
+    Ok((text, cost))
 }

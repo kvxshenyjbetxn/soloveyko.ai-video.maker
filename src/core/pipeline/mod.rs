@@ -14,6 +14,7 @@ pub fn run_pipeline(
     translation_stage: Arc<Mutex<crate::queue::StageStatus>>,
     voiceover_stage: Arc<Mutex<crate::queue::StageStatus>>,
     translated_text: Arc<Mutex<Option<String>>>,
+    translation_cost: Arc<Mutex<Option<f64>>>,
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
@@ -39,7 +40,7 @@ pub fn run_pipeline(
                 settings.translation_temperature,
                 Some((job_id, job_name.clone())),
             ) {
-                Ok(translated) => {
+                Ok((translated, cost)) => {
                     let dir = std::path::Path::new(&settings.save_path);
                     if std::fs::create_dir_all(dir).is_ok() {
                         let _ = std::fs::write(dir.join("text.txt"), &translated);
@@ -47,6 +48,7 @@ pub fn run_pipeline(
                     crate::logger::log_job(job_id, &job_name, "Переклад збережено: text.txt");
                     voice_text = translated.clone();
                     *translated_text.lock().unwrap() = Some(translated);
+                    *translation_cost.lock().unwrap() = cost;
                     *translation_stage.lock().unwrap() = crate::queue::StageStatus::Done;
                     ctx.request_repaint();
                 }

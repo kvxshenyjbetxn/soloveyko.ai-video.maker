@@ -57,6 +57,8 @@ pub struct PipelineJob {
     pub settings: JobSettings,
     /// Збережений перекладений текст (заповнюється після перекладу)
     pub translated_text: Arc<Mutex<Option<String>>>,
+    /// Вартість перекладу (якщо використовується OpenRouter)
+    pub translation_cost: Arc<Mutex<Option<f64>>>,
 }
 
 impl PipelineJob {
@@ -69,6 +71,7 @@ impl PipelineJob {
             voiceover_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             settings,
             translated_text: Arc::new(Mutex::new(None)),
+            translation_cost: Arc::new(Mutex::new(None)),
         }
     }
 }
