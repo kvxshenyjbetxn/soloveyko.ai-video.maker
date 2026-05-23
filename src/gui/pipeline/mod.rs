@@ -105,6 +105,7 @@ pub fn draw_pipeline_panel(
     openrouter_models: &Arc<Mutex<Option<Result<Vec<translation::OpenRouterModel>, String>>>>,
     openrouter_models_loading: &Arc<Mutex<bool>>,
     video_service: &mut String,
+    video_media_type: &mut String,
     text_split_mode: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
@@ -186,6 +187,7 @@ pub fn draw_pipeline_panel(
                             video_prompt,
                             googler_image_priority.clone(),
                             googler_video_priority.clone(),
+                            video_media_type,
                         ) {
                             Ok(_) => {
                                 *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -264,6 +266,7 @@ pub fn draw_pipeline_panel(
                                     translation_model_claude,
                                     translation_model_gemini,
                                     video_service,
+                                    video_media_type,
                                     text_split_mode,
                                     text_split_char_limit,
                                     video_prompt,
@@ -454,6 +457,7 @@ pub fn draw_pipeline_panel(
                                     ui,
                                     language,
                                     video_service,
+                                    video_media_type,
                                     text_split_mode,
                                     text_split_char_limit,
                                     video_prompt,
@@ -641,11 +645,13 @@ pub fn draw_pipeline_panel(
                                     *voiceover_convert_to_wav,
                                     *pipeline_video_enabled,
                                     video_service,
+                                    video_media_type,
                                     video_prompt,
                                     text_split_mode,
                                     *text_split_char_limit,
                                     googler_key,
                                     googler_image_priority.clone(),
+                                    googler_video_priority.clone(),
                                     *googler_image_max_threads,
                                 );
                             }
@@ -688,11 +694,13 @@ fn validate_and_enqueue(
     voiceover_convert_to_wav: bool,
     video_enabled: bool,
     video_service: &str,
+    video_media_type: &str,
     video_prompt: &str,
     text_split_mode: &str,
     text_split_char_limit: usize,
     googler_key: &str,
     googler_image_priority: Vec<String>,
+    googler_video_priority: Vec<String>,
     googler_image_max_threads: usize,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
@@ -725,11 +733,13 @@ fn validate_and_enqueue(
         voiceover_convert_to_wav,
         video_enabled,
         video_service: video_service.to_string(),
+        video_media_type: video_media_type.to_string(),
         video_prompt: video_prompt.to_string(),
         text_split_mode: text_split_mode.to_string(),
         text_split_char_limit,
         googler_key: googler_key.to_string(),
         googler_image_priority,
+        googler_video_priority,
         googler_image_max_threads,
     };
 

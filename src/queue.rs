@@ -52,7 +52,9 @@ pub struct JobSettings {
     pub text_split_char_limit: usize,
     pub googler_key: String,
     pub googler_image_priority: Vec<String>,
+    pub googler_video_priority: Vec<String>,
     pub googler_image_max_threads: usize,
+    pub video_media_type: String,
 }
 
 /// Одна задача в черзі пайплайну.

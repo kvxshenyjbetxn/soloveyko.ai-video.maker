@@ -117,7 +117,7 @@ src/
 
 ### Черга задач (`src/queue.rs`)
 
-- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_image_max_threads`.
+- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`.
 - **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку.
 - **`translated_text` та `translation_cost`** — додаткові потокобезпечні поля в `PipelineJob`, які служать для надійного кешування результату перекладу сценарію та його фактичної вартості безпосередньо в оперативній пам'яті програми.
 - **`audio_duration: Arc<Mutex<Option<f64>>>`** — тривалість аудіофайлу в секундах, заповнюється після успішного завершення озвучки. `None` до завершення або якщо не вдалось визначити.
@@ -189,14 +189,14 @@ src/
 1. Визначає текст-джерело: перекладений (якщо переклад увімкнено і є результат) або оригінальний.
 2. Викликає `split_text` відповідно до `settings.text_split_mode` і `settings.text_split_char_limit`.
 3. Зберігає `segments.txt` у папку задачі у форматі `[N/total] текст` — для зручного дебагу.
-4. Створює підпапку `images/` у папці задачі.
-5. Для кожного сегмента підставляє його в `video_prompt` (якщо є плейсхолдер `{{text}}`) і запускає `generate_image_with_priority` з Googler API у окремому потоці.
+4. Створює підпапку `media/` у папці задачі (єдина папка для обох типів медіа).
+5. Перевіряє `settings.video_media_type`: `"image"` → `generate_image_with_priority` з `googler_image_priority`; `"video"` → `generate_video_with_priority` з `googler_video_priority`. Вибір типу задається радіокнопками «Тип медіа» у секції Відеоряд.
 6. Паралельність обмежена ручним семафором (`Semaphore`) на базі `Mutex` + `Condvar`. Ліміт — `googler_image_max_threads` з налаштувань.
 7. Результат кожного потоку — `(index, Result<PathBuf, String>)`. Після збору всіх потоків: якщо хоча б один помилковий — задача провалюється з переліком помилок.
 
 **`decode_result`** (`core/pipeline/mod.rs`) — обробляє відповідь Googler API:
-- Якщо результат починається з `data:` — розбирає data URI, визначає розширення файлу з mime-типу (png/webp/gif/jpg), декодує base64 (через крейт `base64 = "0.22"`) і записує байти у `images/{index:04}.{ext}`.
-- Якщо результат — HTTP URL — завантажує через `ureq::get` і зберігає аналогічно.
+- Якщо результат починається з `data:` — розбирає data URI, визначає розширення файлу з mime-типу (mp4/webm/mov/png/webp/gif/jpg), декодує base64 (через крейт `base64 = "0.22"`) і записує байти у `media/{index:04}.{ext}`. Відео-типи мають пріоритет при виборі розширення.
+- Якщо результат — HTTP URL — завантажує через `ureq::get`, розширення береться з кінця URL, зберігає аналогічно.
 
 **Визначення тривалості аудіо** (`core/pipeline/mod.rs`) — після збереження файлу `run_pipeline` зчитує його та визначає тривалість чистим Rust без залежностей:
 - **MP3** (`get_mp3_duration_secs`): знаходить перший валідний MPEG1 Layer3 фрейм, пропускаючи ID3v2 тег. Якщо є Xing/Info VBR заголовок з полем `total_frames` — рахує точно. Якщо CBR — оцінює з розміру файлу та бітрейту.
@@ -245,8 +245,8 @@ src/
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
 Два JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
-- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`).
-- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає поля `googler_image_max_threads`, `googler_video_max_threads` та `voiceover_convert_to_wav` — при завантаженні шаблону вони відновлюються разом з усіма іншими налаштуваннями.
+- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`).
+- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає поля `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav` та `video_media_type` — при завантаженні шаблону вони відновлюються разом з усіма іншими налаштуваннями.
 
 `AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються (дефолт для нових полів потоків Googler — `5`). Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
 
@@ -332,9 +332,13 @@ src/
 
 - **Секції "Субтитри" та "Монтаж"** поки порожні (заглушки).
 
-- **Googler API повертає data URI, а не HTTP URL.** За замовчуванням Googler повертає зображення у форматі `data:image/jpeg;base64,...` — це "resolved data URI" вбудований прямо у відповідь. `ureq::get()` такий формат відкидає з помилкою "EmptyHost". Тому `decode_result` спочатку перевіряє `result.starts_with("data:")` і тільки потім вирішує: base64-декодування або HTTP-завантаження.
+- **Googler API повертає data URI, а не HTTP URL.** За замовчуванням Googler повертає зображення у форматі `data:image/jpeg;base64,...` — це "resolved data URI" вбудований прямо у відповідь. `ureq::get()` такий формат відкидає з помилкою "EmptyHost". Тому `decode_result` спочатку перевіряє `result.starts_with("data:")` і тільки потім вирішує: base64-декодування або HTTP-завантаження. Для відео API аналогічно повертає `data:video/mp4;base64,...`.
 
-- **Семафор для відеоряду — не глобальний.** На відміну від `OpenRouterLimiter` / `EdgeTTSLimiter` (глобальні синглтони), семафор для генерації зображень у відеоряді створюється локально в `run_pipeline` на час виконання одного завдання. Це зроблено навмисно: ліміт потоків (`googler_image_max_threads`) береться зі знімку налаштувань задачі, тобто різні задачі в черзі можуть мати різні ліміти.
+- **`video_media_type` визначає і API-функцію, і список пріоритетів.** При значенні `"image"` використовуються `generate_image_with_priority` + `googler_image_priority`; при `"video"` — `generate_video_with_priority` + `googler_video_priority`. Обидва списки пріоритетів редагуються у вікні «Пріоритети» і зберігаються в `AppSettings`/`PipelineTemplate` незалежно один від одного.
+
+- **Усі медіафайли зберігаються у `media/`.** І картинки, і відео потрапляють в одну підпапку `{task_dir}/media/` з іменами `0001.jpg`, `0002.mp4` тощо. Розширення визначається виключно з mime-типу відповіді API (або з кінця URL), не з режиму генерації.
+
+- **Семафор для відеоряду — не глобальний.** На відміну від `OpenRouterLimiter` / `EdgeTTSLimiter` (глобальні синглтони), семафор для генерації медіа у відеоряді створюється локально в `run_pipeline` на час виконання одного завдання. Це зроблено навмисно: ліміт потоків (`googler_image_max_threads`) береться зі знімку налаштувань задачі, тобто різні задачі в черзі можуть мати різні ліміти.
 
 - **Стрілки в пріоритетах зображень — намальовані Painter, не Unicode.** Шрифт egui за замовчуванням не містить символів ▲/▼. Замість кнопок з текстом використовується функція `arrow_button()` у `video.rs`, яка малює заповнений трикутник через `ui.painter().add(egui::Shape::convex_polygon(...))`. Підхід повністю незалежний від шрифту.
 

@@ -25,6 +25,7 @@ pub fn draw_templates_section(
     translation_model_claude: &mut String,
     translation_model_gemini: &mut String,
     video_service: &mut String,
+    video_media_type: &mut String,
     text_split_mode: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
@@ -93,6 +94,7 @@ pub fn draw_templates_section(
                             }
 
                             *video_service = template.video_service;
+                            *video_media_type = template.video_media_type;
                             *text_split_mode = template.text_split_mode;
                             *text_split_char_limit = template.text_split_char_limit;
                             *video_prompt = template.video_prompt;

@@ -26,6 +26,7 @@ fn default_edge_tts_pitch() -> String { "0".to_string() }
 fn default_edge_tts_volume() -> String { "0".to_string() }
 fn default_edge_tts_max_threads() -> usize { 5 }
 fn default_googler_threads() -> usize { 5 }
+fn default_video_media_type() -> String { "image".to_string() }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -170,6 +171,9 @@ pub struct AppSettings {
     /// Пріоритетний список провайдерів відео
     #[serde(default = "default_video_priority")]
     pub googler_video_priority: Vec<String>,
+    /// Тип медіа для генерації: "image" або "video"
+    #[serde(default = "default_video_media_type")]
+    pub video_media_type: String,
 }
 
 impl Default for AppSettings {
@@ -220,6 +224,7 @@ impl Default for AppSettings {
             video_prompt: String::new(),
             googler_image_priority: default_image_priority(),
             googler_video_priority: default_video_priority(),
+            video_media_type: "image".to_string(),
         }
     }
 }
@@ -398,6 +403,9 @@ pub struct PipelineTemplate {
     /// Пріоритетний список провайдерів відео
     #[serde(default = "default_video_priority")]
     pub googler_video_priority: Vec<String>,
+    /// Тип медіа для генерації: "image" або "video"
+    #[serde(default = "default_video_media_type")]
+    pub video_media_type: String,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -442,6 +450,7 @@ pub fn save_template(
     video_prompt: &str,
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
+    video_media_type: &str,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -480,6 +489,7 @@ pub fn save_template(
             video_prompt: video_prompt.to_string(),
             googler_image_priority,
             googler_video_priority,
+            video_media_type: video_media_type.to_string(),
         };
 
         let json = serde_json::to_string_pretty(&template)?;

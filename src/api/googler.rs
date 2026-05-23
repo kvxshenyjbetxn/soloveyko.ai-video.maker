@@ -311,7 +311,6 @@ pub fn generate_image_with_priority(
 
 /// Генерує відео з перебором провайдерів за пріоритетом.
 /// Для кожного провайдера: 3 спроби з паузою 5с між ними.
-#[allow(dead_code)]
 pub fn generate_video_with_priority(
     key: &str,
     prompt: &str,

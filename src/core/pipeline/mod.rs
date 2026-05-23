@@ -172,7 +172,7 @@ fn decode_result(
     result: &str,
     index: usize,
     _total: usize,
-    images_dir: &std::path::Path,
+    media_dir: &std::path::Path,
 ) -> Result<std::path::PathBuf, String> {
     if result.starts_with("data:") {
         // data:[<mediatype>][;base64],<data>
@@ -181,7 +181,10 @@ fn decode_result(
         let header = &rest[..comma];
         let b64    = &rest[comma + 1..];
 
-        let ext = if header.contains("png")  { "png" }
+        let ext = if header.contains("mp4")  { "mp4" }
+             else if header.contains("webm") { "webm" }
+             else if header.contains("mov")  { "mov" }
+             else if header.contains("png")  { "png" }
              else if header.contains("webp") { "webp" }
              else if header.contains("gif")  { "gif" }
              else                            { "jpg" };
@@ -191,16 +194,16 @@ fn decode_result(
             .decode(b64)
             .map_err(|e| format!("Base64 decode error: {}", e))?;
 
-        let path = images_dir.join(format!("{:04}.{}", index, ext));
+        let path = media_dir.join(format!("{:04}.{}", index, ext));
         std::fs::write(&path, &bytes).map_err(|e| format!("Save error: {}", e))?;
         Ok(path)
     } else {
-        // Звичайний HTTP URL
+        // Звичайний HTTP URL — розширення беремо з URL
         let ext = result.split('?').next().unwrap_or(result)
             .rsplit('.').next()
             .filter(|e| e.len() <= 4 && e.chars().all(|c| c.is_ascii_alphanumeric()))
             .unwrap_or("jpg");
-        let path = images_dir.join(format!("{:04}.{}", index, ext));
+        let path = media_dir.join(format!("{:04}.{}", index, ext));
 
         use std::io::Read;
         let resp = ureq::get(result).call()
@@ -383,7 +386,8 @@ pub fn run_pipeline(
 
         // Етап 3: Відеоряд
         if settings.video_enabled {
-            crate::logger::log_job(job_id, &job_name, "Starting video stage (image generation)...");
+            let media_label = if settings.video_media_type == "video" { "video" } else { "image" };
+            crate::logger::log_job(job_id, &job_name, &format!("Starting video stage ({} generation)...", media_label));
             *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
             ctx.request_repaint();
 
@@ -418,25 +422,29 @@ pub fn run_pipeline(
                 crate::logger::log_job(job_id, &job_name, "Segments saved: segments.txt");
             }
 
-            // Створюємо папку images/
-            let images_dir = save_dir.join("images");
-            if let Err(e) = std::fs::create_dir_all(&images_dir) {
-                crate::logger::log_job(job_id, &job_name, &format!("Cannot create images dir: {}", e));
+            // Паралельна генерація медіа із семафором
+            let use_video = settings.video_media_type == "video";
+
+            let media_dir = save_dir.join("media");
+            if let Err(e) = std::fs::create_dir_all(&media_dir) {
+                crate::logger::log_job(job_id, &job_name, &format!("Cannot create media/ dir: {}", e));
                 *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
                 *status.lock().unwrap() = crate::queue::JobStatus::Failed(e.to_string());
                 ctx.request_repaint();
                 return;
             }
-
-            // Паралельна генерація зображень із семафором
             let sem = Arc::new(Semaphore::new(settings.googler_image_max_threads.max(1)));
             let mut handles = Vec::new();
 
             for (i, segment) in segments.iter().enumerate() {
                 let sem        = Arc::clone(&sem);
                 let key        = settings.googler_key.clone();
-                let priority   = settings.googler_image_priority.clone();
-                let images_dir = images_dir.clone();
+                let priority   = if use_video {
+                    settings.googler_video_priority.clone()
+                } else {
+                    settings.googler_image_priority.clone()
+                };
+                let media_dir  = media_dir.clone();
                 let prompt     = settings.video_prompt.replace("{{text}}", segment);
                 let job_id_c   = job_id;
                 let job_name_c = job_name.clone();
@@ -447,27 +455,26 @@ pub fn run_pipeline(
 
                     crate::logger::log_job(
                         job_id_c, &job_name_c,
-                        &format!("Generating image {}/{} ...", i + 1, total),
+                        &format!("Generating {} {}/{} ...", if use_video { "video" } else { "image" }, i + 1, total),
                     );
 
-                    let result = crate::api::googler::generate_image_with_priority(
-                        &key,
-                        &prompt,
-                        "16:9",
-                        &priority,
-                    );
+                    let result = if use_video {
+                        crate::api::googler::generate_video_with_priority(&key, &prompt, "16:9", &priority)
+                    } else {
+                        crate::api::googler::generate_image_with_priority(&key, &prompt, "16:9", &priority)
+                    };
 
                     sem.release();
 
                     match result {
                         Err(e) => (i, Err(e)),
                         Ok(data_uri) => {
-                            match decode_result(&data_uri, i + 1, total, &images_dir) {
+                            match decode_result(&data_uri, i + 1, total, &media_dir) {
                                 Err(e) => (i, Err(e)),
                                 Ok(path) => {
                                     crate::logger::log_job(
                                         job_id_c, &job_name_c,
-                                        &format!("Image {}/{} saved: {}", i + 1, total, path.display()),
+                                        &format!("{} {}/{} saved: {}", if use_video { "Video" } else { "Image" }, i + 1, total, path.display()),
                                     );
                                     (i, Ok(()))
                                 }
@@ -480,24 +487,25 @@ pub fn run_pipeline(
             }
 
             // Збираємо результати
+            let media_label = if use_video { "video" } else { "image" };
             let mut errors: Vec<String> = Vec::new();
             for handle in handles {
                 match handle.join() {
                     Ok((i, Err(e))) => {
                         let msg = format!("Segment {}: {}", i + 1, e);
-                        crate::logger::log_job(job_id, &job_name, &format!("Image error — {}", msg));
+                        crate::logger::log_job(job_id, &job_name, &format!("{} error — {}", media_label, msg));
                         errors.push(msg);
                     }
-                    Err(_) => errors.push("Thread panic during image generation".to_string()),
+                    Err(_) => errors.push(format!("Thread panic during {} generation", media_label)),
                     _ => {}
                 }
             }
 
             if errors.is_empty() {
-                crate::logger::log_job(job_id, &job_name, "All images generated successfully.");
+                crate::logger::log_job(job_id, &job_name, &format!("All {}s generated successfully.", media_label));
                 *video_stage.lock().unwrap() = crate::queue::StageStatus::Done;
             } else {
-                let msg = format!("Image generation failed ({} errors). First: {}", errors.len(), errors[0]);
+                let msg = format!("{} generation failed ({} errors). First: {}", media_label, errors.len(), errors[0]);
                 crate::logger::log_job(job_id, &job_name, &msg);
                 *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
                 *status.lock().unwrap() = crate::queue::JobStatus::Failed(msg);

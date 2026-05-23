@@ -71,6 +71,7 @@ pub fn draw_video_section(
     ui: &mut egui::Ui,
     language: Language,
     video_service: &mut String,
+    video_media_type: &mut String,
     text_split_mode: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
@@ -199,6 +200,16 @@ pub fn draw_video_section(
             });
 
         if video_service.as_str() == "Googler" {
+            ui.add_space(8.0);
+
+            // Вибір типу медіа: зображення або відео
+            ui.label(egui::RichText::new(translate(language, "video_media_type_label")).strong());
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.radio_value(video_media_type, "image".to_string(), translate(language, "video_media_type_image"));
+                ui.radio_value(video_media_type, "video".to_string(), translate(language, "video_media_type_video"));
+            });
+
             ui.add_space(8.0);
 
             // Кнопка відкриття вікна пріоритетів

@@ -99,6 +99,8 @@ pub struct VideoMakerApp {
     pub voicebot_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Обраний сервіс для генерації відеоряду.
     pub video_service: String,
+    /// Тип медіа для генерації: "image" або "video"
+    pub video_media_type: String,
     /// Режим нарізання тексту: "paragraphs" | "sentences" | "char_limit" | "full"
     pub text_split_mode: String,
     /// Ліміт символів для режиму char_limit.
@@ -247,6 +249,7 @@ impl Default for VideoMakerApp {
             openrouter_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voicebot_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_service: "Googler".to_string(),
+            video_media_type: "image".to_string(),
             text_split_mode: "paragraphs".to_string(),
             text_split_char_limit: 500,
             video_prompt: String::new(),
@@ -397,6 +400,7 @@ impl VideoMakerApp {
         }
 
         let video_service = saved.video_service.clone();
+        let video_media_type = saved.video_media_type.clone();
         let text_split_mode = saved.text_split_mode.clone();
         let text_split_char_limit = saved.text_split_char_limit;
         let video_prompt = saved.video_prompt.clone();
@@ -495,6 +499,7 @@ impl VideoMakerApp {
             openrouter_balance,
             voicebot_balance,
             video_service,
+            video_media_type,
             text_split_mode,
             text_split_char_limit,
             video_prompt,
@@ -1550,6 +1555,7 @@ impl eframe::App for VideoMakerApp {
                         &self.openrouter_models,
                         &self.openrouter_models_loading,
                         &mut self.video_service,
+                        &mut self.video_media_type,
                         &mut self.text_split_mode,
                         &mut self.text_split_char_limit,
                         &mut self.video_prompt,
@@ -2173,6 +2179,7 @@ impl eframe::App for VideoMakerApp {
                 || self.translation_model_gemini != self.last_saved_settings.translation_model_gemini
                 || self.googler_key != self.last_saved_settings.googler_key
                 || self.video_service != self.last_saved_settings.video_service
+                || self.video_media_type != self.last_saved_settings.video_media_type
                 || self.video_prompt != self.last_saved_settings.video_prompt
                 || self.text_split_mode != self.last_saved_settings.text_split_mode
                 || self.text_split_char_limit != self.last_saved_settings.text_split_char_limit
@@ -2217,6 +2224,7 @@ impl eframe::App for VideoMakerApp {
                     translation_model_claude: self.translation_model_claude.clone(),
                     translation_model_gemini: self.translation_model_gemini.clone(),
                     video_service: self.video_service.clone(),
+                    video_media_type: self.video_media_type.clone(),
                     text_split_mode: self.text_split_mode.clone(),
                     text_split_char_limit: self.text_split_char_limit,
                     video_prompt: self.video_prompt.clone(),
