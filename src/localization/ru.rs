@@ -4,7 +4,6 @@ pub fn translate_ru(key: &str) -> &'static str {
         "app_title" => "Soloveyko.AI-Video.Maker",
         "tab_main" => "Основная",
         "tab_settings" => "Настройки",
-        "pipeline_settings" => "Настройки пайплайна",
         "templates" => "Шаблоны",
         "storage" => "Путь сохранения",
         "api" => "API",

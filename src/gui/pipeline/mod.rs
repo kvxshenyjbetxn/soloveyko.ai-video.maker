@@ -119,102 +119,86 @@ pub fn draw_pipeline_panel(
     ui.set_max_width(ui.available_width());
 
     ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        // Обчислюємо ширину тексту для точного центрування
-        let title_text = translate(language, "pipeline_settings");
-        let text_width = ui.fonts(|f| {
-            let galley = f.layout_no_wrap(
-                title_text.to_string(),
-                egui::FontId::new(16.0, egui::FontFamily::Proportional),
-                ui.visuals().widgets.noninteractive.text_color()
-            );
-            galley.size().x
-        });
-        let pad_left = ((ui.available_width() - text_width) / 2.0).max(0.0);
-        ui.add_space(pad_left);
-        ui.label(egui::RichText::new(title_text).strong().size(16.0));
-    });
-    ui.add_space(4.0);
-    ui.separator();
-    ui.add_space(8.0);
 
-        // Форма створення нового шаблону (вгорі панелі пайплайну)
-        egui::Frame::none()
-            .inner_margin(egui::Margin::symmetric(8.0, 0.0))
-            .show(ui, |ui| {
-                let available_width = ui.available_width();
-                ui.horizontal(|ui| {
-                    let text_edit = egui::TextEdit::singleline(template_name_input)
-                        .hint_text(translate(language, "template_name_hint"))
-                        .desired_width((available_width - 95.0).max(100.0));
+    // Форма створення нового шаблону (вгорі панелі пайплайну)
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(8.0, 0.0))
+        .show(ui, |ui| {
+            let available_width = ui.available_width();
+            ui.horizontal(|ui| {
+                let text_edit = egui::TextEdit::singleline(template_name_input)
+                    .hint_text(translate(language, "template_name_hint"))
+                    .desired_width((available_width - 95.0).max(100.0));
 
-                    let name_resp = ui.add(text_edit);
-                    if name_resp.changed() {
-                        *template_status = None;
-                    }
+                let name_resp = ui.add(text_edit);
+                if name_resp.changed() {
+                    *template_status = None;
+                }
 
-                    let save_btn = ui.add_sized(
-                        [75.0, 20.0],
-                        egui::Button::new(translate(language, "template_save_btn"))
-                    );
+                let save_btn = ui.add_sized(
+                    [75.0, 20.0],
+                    egui::Button::new(translate(language, "template_save_btn"))
+                );
 
-                    if save_btn.clicked() {
-                        let name = template_name_input.trim();
-                        if name.is_empty() {
-                            *template_status = Some(translate(language, "template_status_empty").to_string());
-                        } else {
-                            match crate::gui::settings::storage::save_template(
-                                name,
-                                openrouter_key,
-                                voiceover_provider,
-                                voiceover_template_uuid,
-                                *pipeline_translation_enabled,
-                                *pipeline_voiceover_enabled,
-                                *pipeline_video_enabled,
-                                *pipeline_subtitles_enabled,
-                                *pipeline_editing_enabled,
-                                translation_prompt,
-                                translation_model,
-                                translation_model_openrouter,
-                                translation_model_claude,
-                                translation_model_gemini,
-                                video_service,
-                                googler_image_provider,
-                                *translation_temperature,
-                                translation_service,
-                                edge_tts_voice,
-                                edge_tts_rate,
-                                edge_tts_pitch,
-                                edge_tts_volume,
-                                *googler_image_max_threads,
-                                *googler_video_max_threads,
-                            ) {
-                                Ok(_) => {
-                                    *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
-                                    template_name_input.clear();
-                                    *saved_templates = crate::gui::settings::storage::load_saved_templates();
-                                }
-                                Err(err) => {
-                                    *template_status = Some(format!("❌ Error: {}", err));
-                                }
+                if save_btn.clicked() {
+                    let name = template_name_input.trim();
+                    if name.is_empty() {
+                        *template_status = Some(translate(language, "template_status_empty").to_string());
+                    } else {
+                        match crate::gui::settings::storage::save_template(
+                            name,
+                            openrouter_key,
+                            voiceover_provider,
+                            voiceover_template_uuid,
+                            *pipeline_translation_enabled,
+                            *pipeline_voiceover_enabled,
+                            *pipeline_video_enabled,
+                            *pipeline_subtitles_enabled,
+                            *pipeline_editing_enabled,
+                            translation_prompt,
+                            translation_model,
+                            translation_model_openrouter,
+                            translation_model_claude,
+                            translation_model_gemini,
+                            video_service,
+                            googler_image_provider,
+                            *translation_temperature,
+                            translation_service,
+                            edge_tts_voice,
+                            edge_tts_rate,
+                            edge_tts_pitch,
+                            edge_tts_volume,
+                            *googler_image_max_threads,
+                            *googler_video_max_threads,
+                        ) {
+                            Ok(_) => {
+                                *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
+                                template_name_input.clear();
+                                *saved_templates = crate::gui::settings::storage::load_saved_templates();
+                            }
+                            Err(err) => {
+                                *template_status = Some(format!("❌ Error: {}", err));
                             }
                         }
                     }
-                });
-
-                if let Some(status) = template_status {
-                    ui.add_space(2.0);
-                    let is_success = status.contains('✔') || status.contains('🗑') || status.contains("Завантажено") || status.contains("Loaded") || status.contains("Загружен");
-                    let color = if is_success {
-                        egui::Color32::from_rgb(46, 204, 113)
-                    } else {
-                        egui::Color32::from_rgb(231, 76, 60)
-                    };
-                    ui.add(egui::Label::new(egui::RichText::new(status.as_str()).color(color).size(11.0)).wrap());
                 }
             });
 
-        ui.add_space(4.0);
+            if let Some(status) = template_status {
+                ui.add_space(2.0);
+                let is_success = status.contains('✔') || status.contains('🗑') || status.contains("Завантажено") || status.contains("Loaded") || status.contains("Загружен");
+                let color = if is_success {
+                    egui::Color32::from_rgb(46, 204, 113)
+                } else {
+                    egui::Color32::from_rgb(231, 76, 60)
+                };
+                ui.add(egui::Label::new(egui::RichText::new(status.as_str()).color(color).size(11.0)).wrap());
+            }
+        });
+
+    ui.add_space(3.0);
+    ui.separator();
+    ui.add_space(3.0);
 
         // Залишаємо місце внизу для кнопки "Додати в чергу" та можливої помилки
         let bottom_reserve = 8.0 + 28.0 + 8.0 + 8.0;
