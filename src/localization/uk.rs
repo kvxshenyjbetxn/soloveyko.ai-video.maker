@@ -163,6 +163,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "stats_chars" => "Символи:",
         "stats_words" => "Слова:",
         "stats_paragraphs" => "Абзаци:",
+        "stats_tokens" => "Токени:",
         _ => "",
     }
 }

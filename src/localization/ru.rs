@@ -163,6 +163,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "stats_chars" => "Символы:",
         "stats_words" => "Слова:",
         "stats_paragraphs" => "Абзацы:",
+        "stats_tokens" => "Токены:",
         _ => "",
     }
 }

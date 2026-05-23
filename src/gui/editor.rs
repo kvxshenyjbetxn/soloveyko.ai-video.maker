@@ -1,6 +1,15 @@
 use eframe::egui;
 use crate::localization::{Language, translate};
 
+fn get_encoder() -> &'static tiktoken::CoreBpe {
+    tiktoken::get_encoding("cl100k_base").unwrap()
+}
+
+/// Динамічно рахує токени для вказаного тексту за допомогою кодування cl100k_base.
+pub fn count_tokens(text: &str) -> usize {
+    get_encoder().count(text)
+}
+
 /// Відображає редактор сценарію на всю доступну висоту та ширину.
 /// 
 /// Використовує `ScrollArea` з вимкненим автозменшенням (`auto_shrink`)
@@ -11,6 +20,7 @@ pub fn draw_editor(ui: &mut egui::Ui, text: &mut String, language: Language) {
     let char_count = text.chars().count();
     let word_count = text.split_whitespace().count();
     let paragraph_count = text.lines().filter(|line| !line.trim().is_empty()).count();
+    let token_count = count_tokens(text);
 
     // 2. Рендеринг панелі статистики (фіксована вгорі)
     ui.add_space(8.0);
@@ -38,6 +48,13 @@ pub fn draw_editor(ui: &mut egui::Ui, text: &mut String, language: Language) {
         // Абзаци
         ui.label(egui::RichText::new(translate(language, "stats_paragraphs")).size(16.0).color(text_color));
         ui.label(egui::RichText::new(format!(" {}", paragraph_count)).size(16.0).strong().color(accent_color));
+
+        // Роздільник
+        ui.label(egui::RichText::new("  •  ").size(16.0).color(bullet_color));
+
+        // Токени
+        ui.label(egui::RichText::new(translate(language, "stats_tokens")).size(16.0).color(text_color));
+        ui.label(egui::RichText::new(format!(" {}", token_count)).size(16.0).strong().color(accent_color));
     });
     ui.add_space(4.0);
     ui.separator();
