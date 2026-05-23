@@ -50,7 +50,7 @@ pub fn call_openrouter(
         }
     };
 
-    log(&format!("Запуск OpenRouter перекладу. Модель: {}, Температура: {}", model, temperature));
+    log(&format!("Starting OpenRouter translation. Model: {}, Temperature: {}", model, temperature));
 
     let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
 
@@ -73,12 +73,12 @@ pub fn call_openrouter(
         .set("Authorization", &format!("Bearer {}", key))
         .set("Content-Type", "application/json")
         .send_json(ureq::serde_json::to_value(&request).map_err(|e| {
-            let err_msg = format!("Помилка серіалізації: {}", e);
+            let err_msg = format!("Serialization error: {}", e);
             log(&err_msg);
             err_msg
         })?)
         .map_err(|e| {
-            let err_msg = format!("Помилка мережі: {}", e);
+            let err_msg = format!("Network error: {}", e);
             log(&err_msg);
             err_msg
         })?;
@@ -86,18 +86,18 @@ pub fn call_openrouter(
     let data = res
         .into_json::<ChatResponse>()
         .map_err(|e| {
-            let err_msg = format!("Помилка парсингу відповіді: {}", e);
+            let err_msg = format!("Response parsing error: {}", e);
             log(&err_msg);
             err_msg
         })?;
 
-    log("OpenRouter успішно виконав переклад.");
+    log("OpenRouter translation completed successfully.");
 
     let cost = data.usage.as_ref().and_then(|u| u.cost);
     if let Some(c) = cost {
-        log(&format!("Вартість запиту: ${:.5}", c));
+        log(&format!("Request cost: ${:.5}", c));
     } else {
-        log("Вартість запиту не вказана в об'єкті usage.cost.");
+        log("Request cost not provided in usage.cost.");
     }
 
     let text = data.choices.into_iter()

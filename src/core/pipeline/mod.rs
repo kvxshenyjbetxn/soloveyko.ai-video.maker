@@ -18,7 +18,7 @@ pub fn run_pipeline(
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
-        crate::logger::log_job(job_id, &job_name, "Початок виконання задачі.");
+        crate::logger::log_job(job_id, &job_name, "Job started.");
         *status.lock().unwrap() = crate::queue::JobStatus::Running;
         ctx.request_repaint();
 
@@ -35,7 +35,7 @@ pub fn run_pipeline(
 
         // Етап 1: Переклад
         if settings.translation_enabled && !has_translation {
-            crate::logger::log_job(job_id, &job_name, "Запуск етапу перекладу...");
+            crate::logger::log_job(job_id, &job_name, "Starting translation stage...");
             *translation_stage.lock().unwrap() = crate::queue::StageStatus::Running;
             ctx.request_repaint();
 
@@ -53,14 +53,14 @@ pub fn run_pipeline(
                     if std::fs::create_dir_all(dir).is_ok() {
                         let _ = std::fs::write(dir.join("text.txt"), &translated);
                     }
-                    crate::logger::log_job(job_id, &job_name, "Переклад збережено: text.txt");
+                    crate::logger::log_job(job_id, &job_name, "Translation saved: text.txt");
                     voice_text = translated.clone();
                     *translated_text.lock().unwrap() = Some(translated);
                     *translation_cost.lock().unwrap() = cost;
                     *translation_stage.lock().unwrap() = crate::queue::StageStatus::Done;
 
                     if settings.translation_control_enabled {
-                        crate::logger::log_job(job_id, &job_name, "Переклад виконано. Задача очікує на контроль перекладу.");
+                        crate::logger::log_job(job_id, &job_name, "Translation done. Job is awaiting translation review.");
                         *status.lock().unwrap() = crate::queue::JobStatus::AwaitingControl;
                         ctx.request_repaint();
                         return; // Зупиняємо пайплайн для контролю
@@ -68,7 +68,7 @@ pub fn run_pipeline(
                     ctx.request_repaint();
                 }
                 Err(e) => {
-                    crate::logger::log_job(job_id, &job_name, &format!("Помилка перекладу: {}", e));
+                    crate::logger::log_job(job_id, &job_name, &format!("Translation error: {}", e));
                     *translation_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
@@ -84,11 +84,11 @@ pub fn run_pipeline(
 
         // Етап 2: Озвучка
         if settings.voiceover_enabled {
-            let src_label = if settings.translation_enabled { "переклад" } else { "оригінал" };
+            let src_label = if settings.translation_enabled { "translation" } else { "original" };
             crate::logger::log_job(
                 job_id,
                 &job_name,
-                &format!("Запуск озвучки (джерело тексту: {})...", src_label),
+                &format!("Starting voiceover (text source: {})...", src_label),
             );
             *voiceover_stage.lock().unwrap() = crate::queue::StageStatus::Running;
             ctx.request_repaint();
@@ -100,12 +100,12 @@ pub fn run_pipeline(
                 &voice_text,
             ) {
                 Ok(_) => {
-                    crate::logger::log_job(job_id, &job_name, "Озвучку завершено.");
+                    crate::logger::log_job(job_id, &job_name, "Voiceover done.");
                     *voiceover_stage.lock().unwrap() = crate::queue::StageStatus::Done;
                     ctx.request_repaint();
                 }
                 Err(e) => {
-                    crate::logger::log_job(job_id, &job_name, &format!("Помилка озвучки: {}", e));
+                    crate::logger::log_job(job_id, &job_name, &format!("Voiceover error: {}", e));
                     *voiceover_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
@@ -114,7 +114,7 @@ pub fn run_pipeline(
             }
         }
 
-        crate::logger::log_job(job_id, &job_name, "Задачу успішно завершено.");
+        crate::logger::log_job(job_id, &job_name, "Job completed successfully.");
         *status.lock().unwrap() = crate::queue::JobStatus::Done;
         ctx.request_repaint();
     });

@@ -78,7 +78,7 @@ pub fn call_gemini_cli(
         }
     };
 
-    log(&format!("Запуск Gemini CLI для перекладу. Модель: {}", model));
+    log(&format!("Starting Gemini CLI translation. Model: {}", model));
 
     #[cfg(target_os = "windows")]
     let mut cmd = Command::new("cmd");
@@ -100,12 +100,12 @@ pub fn call_gemini_cli(
         .arg("--skip-trust");
 
     log(&format!(
-        "Виконується: gemini --model {} --output-format json --prompt \"[промпт]\" --yolo --skip-trust",
+        "Running: gemini --model {} --output-format json --prompt \"[prompt]\" --yolo --skip-trust",
         model
     ));
 
     let output = cmd.output().map_err(|e| {
-        let err_msg = format!("Не вдалося запустити gemini cli: {}. Перевірте, чи встановлено gemini CLI та чи додано його в PATH.", e);
+        let err_msg = format!("Failed to launch gemini CLI: {}. Make sure gemini CLI is installed and added to PATH.", e);
         log(&err_msg);
         err_msg
     })?;
@@ -113,20 +113,20 @@ pub fn call_gemini_cli(
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let response = parse_gemini_json_response(&stdout)
-            .ok_or_else(|| "Gemini CLI: не вдалося розпарсити JSON-відповідь".to_string())?;
-        log("Gemini CLI успішно виконав переклад.");
+            .ok_or_else(|| "Gemini CLI: failed to parse JSON response".to_string())?;
+        log("Gemini CLI translation completed successfully.");
         Ok(response)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let err_msg = format!(
-            "Gemini CLI помилка (код статусу: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
+            "Gemini CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
             output.status.code(),
             stderr,
             stdout
         );
         log(&err_msg);
-        Err(format!("Gemini CLI помилка: {}", stderr))
+        Err(format!("Gemini CLI error: {}", stderr))
     }
 }
 

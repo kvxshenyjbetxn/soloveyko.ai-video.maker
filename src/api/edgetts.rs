@@ -153,7 +153,7 @@ pub fn fetch_voices(
                     .collect();
                 Ok(edge_voices)
             }
-            Err(e) => Err(format!("Помилка отримання списку голосів: {}", e)),
+            Err(e) => Err(format!("Failed to fetch voice list: {}", e)),
         };
 
         *result.lock().unwrap() = Some(res);
@@ -186,20 +186,20 @@ pub fn synthesize(
     };
 
     // Підключаємось до Edge TTS клієнта
-    let mut client = connect().map_err(|e| format!("Не вдалося підключитися до Edge TTS: {}", e))?;
+    let mut client = connect().map_err(|e| format!("Failed to connect to Edge TTS: {}", e))?;
 
     // Синтезуємо текст в аудіо
     let audio = client
         .synthesize(text, &config)
-        .map_err(|e| format!("Помилка синтезу Edge TTS: {}", e))?;
+        .map_err(|e| format!("Edge TTS synthesis error: {}", e))?;
 
     // Створюємо вихідний файл
     let mut file = std::fs::File::create(output_path)
-        .map_err(|e| format!("Не вдалося створити вихідний файл: {}", e))?;
+        .map_err(|e| format!("Failed to create output file: {}", e))?;
 
-    // Записуємо байти
+    // Write audio bytes
     file.write_all(&audio.audio_bytes)
-        .map_err(|e| format!("Не вдалося записати аудіо у файл: {}", e))?;
+        .map_err(|e| format!("Failed to write audio to file: {}", e))?;
 
     Ok(())
 }
@@ -224,6 +224,6 @@ mod tests {
         assert!(metadata.is_ok(), "Файл не створено");
         let size = metadata.unwrap().len();
         assert!(size > 0, "Створено порожній файл");
-        println!("Успішно згенеровано аудіофайл розміром {} байт", size);
+        println!("Audio file generated successfully: {} bytes", size);
     }
 }

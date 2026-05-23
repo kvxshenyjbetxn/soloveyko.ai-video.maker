@@ -78,7 +78,7 @@ pub fn call_claude_code(
         }
     };
 
-    log(&format!("Запуск Claude CLI для перекладу. Модель: {}", model));
+    log(&format!("Starting Claude CLI translation. Model: {}", model));
 
     #[cfg(target_os = "windows")]
     let mut cmd = Command::new("cmd");
@@ -96,31 +96,31 @@ pub fn call_claude_code(
 
     // Записуємо інформацію про команду у лог
     let debug_command = format!(
-        "claude --model {} -p \"[текст промпту та сценарію]\"",
+        "claude --model {} -p \"[prompt and script text]\"",
         model
     );
-    log(&format!("Виконується: {}", debug_command));
+    log(&format!("Running: {}", debug_command));
 
     let output = cmd.output().map_err(|e| {
-        let err_msg = format!("Не вдалося запустити claude cli: {}. Перевірте, чи встановлено claude CLI та чи додано його в PATH.", e);
+        let err_msg = format!("Failed to launch claude CLI: {}. Make sure claude CLI is installed and added to PATH.", e);
         log(&err_msg);
         err_msg
     })?;
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        log("Claude CLI успішно виконав переклад.");
+        log("Claude CLI translation completed successfully.");
         Ok(stdout)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let err_msg = format!(
-            "Claude CLI помилка (код статусу: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
+            "Claude CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
             output.status.code(),
             stderr,
             stdout
         );
         log(&err_msg);
-        Err(format!("Claude CLI помилка: {}", stderr))
+        Err(format!("Claude CLI error: {}", stderr))
     }
 }

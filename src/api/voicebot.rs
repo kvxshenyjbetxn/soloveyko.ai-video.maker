@@ -115,15 +115,15 @@ pub fn create_tts_task(key: &str, text: &str, template_uuid: Option<&str>) -> Re
         .set("Content-Type", "application/json")
         .send_json(body)
         .map_err(|e| match e {
-            ureq::Error::Status(401, _) => "Невірний ключ VoiceBot (X-API-Key)".to_string(),
-            ureq::Error::Status(402, _) => "Недостатньо коштів на балансі VoiceBot".to_string(),
-            ureq::Error::Status(429, _) => "Перевищено ліміт активних TTS задач".to_string(),
-            other => format!("Помилка запиту: {}", other),
+            ureq::Error::Status(401, _) => "Invalid VoiceBot API key (X-API-Key)".to_string(),
+            ureq::Error::Status(402, _) => "Insufficient VoiceBot balance".to_string(),
+            ureq::Error::Status(429, _) => "Active TTS task limit exceeded".to_string(),
+            other => format!("Request error: {}", other),
         })?;
 
     resp.into_json::<TaskCreateResponse>()
         .map(|r| r.task_id)
-        .map_err(|e| format!("Помилка парсингу відповіді: {}", e))
+        .map_err(|e| format!("Response parsing error: {}", e))
 }
 
 /// Повертає поточний статус TTS-задачі.
@@ -138,11 +138,11 @@ pub fn get_task_status(key: &str, task_id: u64) -> Result<String, String> {
         .set("X-API-Key", key)
         .set("Accept", "application/json")
         .call()
-        .map_err(|e| format!("Помилка отримання статусу: {}", e))?;
+        .map_err(|e| format!("Failed to get task status: {}", e))?;
 
     resp.into_json::<TaskStatusResponse>()
         .map(|r| r.status)
-        .map_err(|e| format!("Помилка парсингу статусу: {}", e))
+        .map_err(|e| format!("Status parsing error: {}", e))
 }
 
 /// Завантажує результат TTS-задачі та зберігає у вказану папку як voice.mp3 або voice.zip.
@@ -159,7 +159,7 @@ pub fn download_task_result(key: &str, task_id: u64, save_dir: &str) -> Result<S
         .get(&format!("https://voiceapi.csv666.ru/tasks/{}/result", task_id))
         .set("X-API-Key", key)
         .call()
-        .map_err(|e| format!("Помилка завантаження результату: {}", e))?;
+        .map_err(|e| format!("Failed to download result: {}", e))?;
 
     let content_type = resp.content_type().to_string();
     let ext = if content_type.contains("zip") { "zip" } else { "mp3" };
@@ -168,11 +168,11 @@ pub fn download_task_result(key: &str, task_id: u64, save_dir: &str) -> Result<S
     let mut bytes = Vec::new();
     resp.into_reader()
         .read_to_end(&mut bytes)
-        .map_err(|e| format!("Помилка читання даних: {}", e))?;
+        .map_err(|e| format!("Failed to read response data: {}", e))?;
 
     let path = std::path::Path::new(save_dir).join(&filename);
     std::fs::write(&path, &bytes)
-        .map_err(|e| format!("Помилка збереження файлу: {}", e))?;
+        .map_err(|e| format!("Failed to save file: {}", e))?;
 
     Ok(filename)
 }
