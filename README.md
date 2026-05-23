@@ -174,15 +174,40 @@ src/
 
 ### Вікно привітання (`src/gui/welcome.rs`)
 
-З'являється при першому запуску (або якщо `show_welcome: true` у `settings.json`). Перевіряє наявність чотирьох CLI-інструментів асинхронно у фонових потоках, одразу при ініціалізації `VideoMakerApp::new()`.
+З'являється при першому запуску (або якщо `show_welcome: true` у `settings.json`). Перевіряє наявність CLI-інструментів асинхронно у фонових потоках при ініціалізації `VideoMakerApp::new()`.
 
-- **`ToolStatus`** — три стани: `Checking` / `Installed(String)` / `NotInstalled`. Зберігається в `Arc<Mutex<ToolStatus>>`.
-- **`ToolChecks::start()`** spawns чотири окремих `std::thread::spawn`: `npm --version`, `gemini --version`, `claude --version`, `ffmpeg -version`. Кожен оновлює статус після завершення через `ctx.request_repaint()`. **Важливо:** FFmpeg використовує одинарний дефіс `-version` (на відміну від `--version` у решти).
-- **На Windows** перевірки запускаються через `cmd /C <name> <flag>` (аналогічно до `api/gemini.rs` та `api/claude.rs`).
-- **Команди встановлення** показуються тільки якщо інструмент `NotInstalled`, залежать від OS: Mac — `brew install node` / `sudo npm install -g @google/gemini-cli` / `brew install ffmpeg`, Windows — `winget install OpenJS.NodeJS` / `npm install -g @google/gemini-cli` / `winget install Gyan.FFmpeg`. Claude Code орієнтований на curl для всіх систем.
-- **"Не показувати":** галочка `dont_show` + кнопка "Зрозуміло". `draw_welcome_dialog` повертає `true` лише коли кнопку натиснуто. Якщо `closed && dont_show` — `app.rs` миттєво зберігає `show_welcome: false` через явний виклик `save_settings` (не через автозбереження), щоб не гратися з `last_saved_settings`.
-- **Повернення вікна через Налаштування:** вкладка `Settings` → секція "Привітальне вікно" містить галочку `show_welcome`. При її зміні `draw_settings` повертає `bool`, і `app.rs` одразу викликає `save_settings` з актуальними `last_saved_settings`. Вікно з'явиться при наступному запуску програми.
-- **Фонова перевірка при виборі сервісу:** якщо користувач обирає `"Gemini CLI"` чи `"Claude Code"` як сервіс перекладу, автоматично запускається фонова перевірка. Для цього використовується поле `pending_tool_check` у `VideoMakerApp`. Коли перевірка завершується, якщо потрібний інструмент не встановлений (`NotInstalled` для `claude` або `npm`/`gemini`), програма автоматично відкриває привітальне вікно (`welcome_open = true`) з детальним статусом та інструкціями для встановлення.
+**Інструменти що перевіряються:**
+- `gemini --version`, `claude --version`, `ffmpeg -version` — на всіх платформах
+- `brew --version` — тільки macOS (на Windows одразу `Installed`)
+- `npm --version` — тільки Windows (на macOS одразу `Installed`)
+
+**Важливо:** FFmpeg використовує одинарний дефіс `-version`. На Windows всі перевірки проксуються через `cmd /C <name> <flag>`.
+
+**Команди встановлення:**
+
+| Інструмент | macOS | Windows |
+|---|---|---|
+| Gemini CLI | `brew install gemini-cli` | `npm install -g @google/gemini-cli` |
+| Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
+| FFmpeg | `brew install ffmpeg` | `winget install Gyan.FFmpeg` |
+| Homebrew | `/bin/bash -c "$(curl ...install.sh)"` | — (не показується) |
+| npm/Node.js | — (не показується) | `powershell -c "irm ...chocolatey...install.ps1\|iex"` |
+
+**Умовна логіка відображення:**
+- **macOS:** Homebrew показується одним рядком **перед** залежними інструментами, якщо brew відсутній і хоча б один з Gemini CLI або FFmpeg відсутній. Якщо brew відсутній і натиснуто кнопку «Встановити» для Gemini чи FFmpeg — команда встановлення brew автоматично додається першим кроком у скрипт.
+- **Windows:** npm показується перед Gemini CLI лише якщо Gemini відсутній. Аналогічно — команда встановлення npm включається першим кроком у кнопку Gemini.
+
+**Кнопка «↓ Встановити»** — відкриває Terminal (macOS) або PowerShell (Windows) через тимчасовий скрипт (`/tmp/soloveyko_install.sh` або `.ps1`). Підхід з тимчасовим файлом обраний навмисно — щоб уникнути проблем з екрануванням складних команд (наприклад, `$(curl ...)`) у `osascript`. PowerShell запускається з `-NoExit -ExecutionPolicy Bypass`.
+
+**Клік по команді** — копіює текст команди в буфер обміну (без `$`). Підказка при наведенні.
+
+**«↺ Перевірити знову»** — кнопка у нижній панелі поруч з «Зрозуміло». Викликає `ToolChecks::restart()`, що скидає всі статуси в `Checking` і перезапускає всі перевірки. Корисно після встановлення інструментів через Terminal.
+
+**"Не показувати":** галочка `dont_show` + кнопка "Зрозуміло". `draw_welcome_dialog` повертає `true` лише коли кнопку натиснуто. Якщо `closed && dont_show` — `app.rs` миттєво зберігає `show_welcome: false` через явний виклик `save_settings`.
+
+**Повернення вікна через Налаштування:** вкладка `Settings` → секція "Привітальне вікно" містить галочку `show_welcome`.
+
+**Фонова перевірка при виборі сервісу:** якщо користувач обирає `"Gemini CLI"` чи `"Claude Code"` як сервіс перекладу, автоматично запускається фонова перевірка через `pending_tool_check` у `VideoMakerApp`. Якщо відповідний інструмент не знайдено — програма відкриває привітальне вікно.
 
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
@@ -295,7 +320,7 @@ src/
 
 - **Обмеження обсягу логу:** Глобальний логер тримає в пам'яті не більше 1000 записів, автоматично очищаючи старі для оптимізації споживання ОЗП.
 
-- **Фонова валідація CLI-інструментів через `pending_tool_check`:** логіка відстежує зміну `translation_service` під час кожного `update()` та неблокуюче запускає перевірки `npm`, `gemini`, `claude`.
+- **Фонова валідація CLI-інструментів через `pending_tool_check`:** логіка відстежує зміну `translation_service` під час кожного `update()` та неблокуюче запускає перевірки `gemini`, `claude`. npm більше не перевіряється тут — Gemini залежить лише від самого `gemini` CLI (встановлюється через brew на macOS).
 
 - **Зворотна сумісність параметрів Edge TTS (`clean_numeric_param`):** Для забезпечення сумісності зі старими шаблонами та файлами `settings.json`, які могли зберігати налаштування з декоративними суфіксами (наприклад, `+0%` чи `+0Hz`), функція `clean_numeric_param` в `src/gui/settings/storage.rs` автоматично очищає завантажені текстові поля під час виклику `load_settings` та `load_template`. Вона видаляє будь-які літери, відсотки чи герци на льоту, перетворюючи старі значення на чисті числові рядки, що запобігає збоям у роботі рушія синтезу.
 

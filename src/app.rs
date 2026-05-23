@@ -1277,7 +1277,6 @@ impl eframe::App for VideoMakerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Перевірка статусів CLI для фонової перевірки
         if let Some(ref service) = self.pending_tool_check {
-            let npm = self.tool_checks.npm.lock().unwrap().clone();
             let gemini = self.tool_checks.gemini.lock().unwrap().clone();
             let claude = self.tool_checks.claude.lock().unwrap().clone();
 
@@ -1285,11 +1284,11 @@ impl eframe::App for VideoMakerApp {
             let mut needs_install = false;
 
             if service == "Gemini CLI" {
-                match (&npm, &gemini) {
-                    (crate::gui::welcome::ToolStatus::Checking, _) | (_, crate::gui::welcome::ToolStatus::Checking) => {
+                match &gemini {
+                    crate::gui::welcome::ToolStatus::Checking => {
                         // Перевірка ще триває
                     }
-                    (crate::gui::welcome::ToolStatus::NotInstalled, _) | (_, crate::gui::welcome::ToolStatus::NotInstalled) => {
+                    crate::gui::welcome::ToolStatus::NotInstalled => {
                         needs_install = true;
                         check_done = true;
                     }
