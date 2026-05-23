@@ -34,6 +34,7 @@ pub fn draw_templates_section(
     edge_tts_volume: &mut String,
     googler_image_max_threads: &mut usize,
     googler_video_max_threads: &mut usize,
+    voiceover_convert_to_wav: &mut bool,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -97,6 +98,7 @@ pub fn draw_templates_section(
                             *edge_tts_volume = template.edge_tts_volume;
                             *googler_image_max_threads = template.googler_image_max_threads;
                             *googler_video_max_threads = template.googler_video_max_threads;
+                            *voiceover_convert_to_wav = template.voiceover_convert_to_wav;
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

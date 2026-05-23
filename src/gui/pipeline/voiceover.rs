@@ -25,6 +25,7 @@ pub fn draw_voiceover_section(
     edge_tts_voices: &Arc<Mutex<Option<Result<Vec<crate::api::edgetts::EdgeTTSVoice>, String>>>>,
     edge_tts_loading_voices: &Arc<Mutex<bool>>,
     edge_tts_show_all_languages: &mut bool,
+    voiceover_convert_to_wav: &mut bool,
 ) {
     ui.vertical(|ui| {
         ui.add_space(4.0);
@@ -266,5 +267,7 @@ pub fn draw_voiceover_section(
         }
 
         ui.add_space(6.0);
+        ui.checkbox(voiceover_convert_to_wav, translate(language, "voiceover_convert_to_wav"));
+        ui.add_space(4.0);
     });
 }

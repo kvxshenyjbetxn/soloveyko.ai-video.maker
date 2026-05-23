@@ -148,6 +148,9 @@ pub struct AppSettings {
     /// Максимальна кількість потоків відео Googler
     #[serde(default = "default_googler_threads")]
     pub googler_video_max_threads: usize,
+    /// Конвертувати аудіо в WAV після озвучки
+    #[serde(default)]
+    pub voiceover_convert_to_wav: bool,
 }
 
 impl Default for AppSettings {
@@ -193,6 +196,7 @@ impl Default for AppSettings {
             edge_tts_max_threads: 5,
             googler_image_max_threads: 5,
             googler_video_max_threads: 5,
+            voiceover_convert_to_wav: false,
         }
     }
 }
@@ -356,6 +360,9 @@ pub struct PipelineTemplate {
     /// Максимальна кількість потоків відео Googler
     #[serde(default = "default_googler_threads")]
     pub googler_video_max_threads: usize,
+    /// Конвертувати аудіо в WAV після озвучки
+    #[serde(default)]
+    pub voiceover_convert_to_wav: bool,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -395,6 +402,7 @@ pub fn save_template(
     edge_tts_volume: &str,
     googler_image_max_threads: usize,
     googler_video_max_threads: usize,
+    voiceover_convert_to_wav: bool,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -428,6 +436,7 @@ pub fn save_template(
             edge_tts_volume: edge_tts_volume.to_string(),
             googler_image_max_threads,
             googler_video_max_threads,
+            voiceover_convert_to_wav,
         };
 
         let json = serde_json::to_string_pretty(&template)?;

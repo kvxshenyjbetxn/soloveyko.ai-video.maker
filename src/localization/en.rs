@@ -180,7 +180,11 @@ pub fn translate_en(key: &str) -> &'static str {
         "stats_tokens" => "Tokens:",
         "stats_chars_short" => "chars",
         "stats_tokens_short" => "tokens",
+        "voiceover_convert_to_wav" => "Convert to WAV",
         "queue_waiting_translation" => "awaiting translation",
+        "time_hours_short" => "h ",
+        "time_mins_short" => "m ",
+        "time_secs_short" => "s",
         _ => "",
     }
 }

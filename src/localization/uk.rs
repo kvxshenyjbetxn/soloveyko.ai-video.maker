@@ -180,7 +180,11 @@ pub fn translate_uk(key: &str) -> &'static str {
         "stats_tokens" => "Токени:",
         "stats_chars_short" => "симв.",
         "stats_tokens_short" => "ток.",
+        "voiceover_convert_to_wav" => "Конвертувати в WAV",
         "queue_waiting_translation" => "очікує перекладу",
+        "time_hours_short" => "г ",
+        "time_mins_short" => "хв ",
+        "time_secs_short" => "с",
         _ => "",
     }
 }

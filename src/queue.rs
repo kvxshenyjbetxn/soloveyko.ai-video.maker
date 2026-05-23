@@ -43,6 +43,7 @@ pub struct JobSettings {
     pub edge_tts_rate: String,
     pub edge_tts_pitch: String,
     pub edge_tts_volume: String,
+    pub voiceover_convert_to_wav: bool,
 }
 
 /// Одна задача в черзі пайплайну.
@@ -61,6 +62,8 @@ pub struct PipelineJob {
     pub translated_text: Arc<Mutex<Option<String>>>,
     /// Вартість перекладу (якщо використовується OpenRouter)
     pub translation_cost: Arc<Mutex<Option<f64>>>,
+    /// Тривалість аудіо після озвучки (в секундах)
+    pub audio_duration: Arc<Mutex<Option<f64>>>,
 }
 
 impl PipelineJob {
@@ -74,6 +77,7 @@ impl PipelineJob {
             settings,
             translated_text: Arc::new(Mutex::new(None)),
             translation_cost: Arc::new(Mutex::new(None)),
+            audio_duration: Arc::new(Mutex::new(None)),
         }
     }
 }

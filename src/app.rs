@@ -187,6 +187,8 @@ pub struct VideoMakerApp {
     pub googler_image_max_threads: usize,
     /// Максимальна кількість потоків відео Googler.
     pub googler_video_max_threads: usize,
+    /// Конвертувати аудіо в WAV після озвучки.
+    pub voiceover_convert_to_wav: bool,
     /// Сповіщення про успішне копіювання (текст, час копіювання).
     pub copied_toast: Option<(String, std::time::Instant)>,
     /// Чи увімкнене автоматичне прокручування логу донизу.
@@ -281,6 +283,7 @@ impl Default for VideoMakerApp {
             edge_tts_show_all_languages: false,
             googler_image_max_threads: default_settings.googler_image_max_threads,
             googler_video_max_threads: default_settings.googler_video_max_threads,
+            voiceover_convert_to_wav: false,
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: default_settings,
@@ -521,6 +524,7 @@ impl VideoMakerApp {
             edge_tts_show_all_languages: false,
             googler_image_max_threads: saved.googler_image_max_threads,
             googler_video_max_threads: saved.googler_video_max_threads,
+            voiceover_convert_to_wav: saved.voiceover_convert_to_wav,
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: saved,
@@ -1038,6 +1042,7 @@ fn draw_queue_panel(
                         std::sync::Arc::clone(&job.voiceover_stage),
                         std::sync::Arc::clone(&job.translated_text),
                         std::sync::Arc::clone(&job.translation_cost),
+                        std::sync::Arc::clone(&job.audio_duration),
                         ctx.clone(),
                     );
                 }
@@ -1165,7 +1170,35 @@ fn draw_queue_panel(
 
                             if job.settings.voiceover_enabled {
                                 // Етап озвучки: "Озвучка" з кольором за stage статусом
-                                let voice_label = if job.settings.translation_enabled {
+                                let voice_label = if voiceover_stage == crate::queue::StageStatus::Done {
+                                    // Після завершення показуємо тривалість аудіо
+                                    let dur_opt = job.audio_duration.lock().unwrap();
+                                    if let Some(secs) = *dur_opt {
+                                        let total_s = secs as u64;
+                                        let h = total_s / 3600;
+                                        let m = (total_s % 3600) / 60;
+                                        let s = total_s % 60;
+                                        let dur_str = if h > 0 {
+                                            format!(
+                                                "{}{}{}{}{}{}",
+                                                h, translate(language, "time_hours_short"),
+                                                m, translate(language, "time_mins_short"),
+                                                s, translate(language, "time_secs_short")
+                                            )
+                                        } else if m > 0 {
+                                            format!(
+                                                "{}{}{}{}",
+                                                m, translate(language, "time_mins_short"),
+                                                s, translate(language, "time_secs_short")
+                                            )
+                                        } else {
+                                            format!("{}{}", s, translate(language, "time_secs_short"))
+                                        };
+                                        format!("{} ({})", translate(language, "voiceover"), dur_str)
+                                    } else {
+                                        translate(language, "voiceover").to_string()
+                                    }
+                                } else if job.settings.translation_enabled {
                                     let translated_opt = job.translated_text.lock().unwrap();
                                     if translated_opt.is_some() {
                                         translate(language, "voiceover").to_string()
@@ -1437,6 +1470,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.save_path_windows,
                         &mut self.googler_image_max_threads,
                         &mut self.googler_video_max_threads,
+                        &mut self.voiceover_convert_to_wav,
                         &self.text_input,
                         &mut self.jobs,
                         &mut self.job_counter,
@@ -1685,6 +1719,7 @@ impl eframe::App for VideoMakerApp {
                 let job_save_path = self.jobs[job_idx].settings.save_path.clone();
                 let translated_text_arc = std::sync::Arc::clone(&self.jobs[job_idx].translated_text);
                 let translation_cost_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_cost);
+                let audio_duration_arc = std::sync::Arc::clone(&self.jobs[job_idx].audio_duration);
                 let status_arc = std::sync::Arc::clone(&self.jobs[job_idx].status);
                 let translation_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_stage);
                 let voiceover_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].voiceover_stage);
@@ -1982,6 +2017,7 @@ impl eframe::App for VideoMakerApp {
                         voiceover_stage_arc,
                         translated_text_arc,
                         translation_cost_arc,
+                        audio_duration_arc,
                         ctx_clone,
                     );
 
@@ -2058,6 +2094,7 @@ impl eframe::App for VideoMakerApp {
                 || self.edge_tts_max_threads != self.last_saved_settings.edge_tts_max_threads
                 || self.googler_image_max_threads != self.last_saved_settings.googler_image_max_threads
                 || self.googler_video_max_threads != self.last_saved_settings.googler_video_max_threads
+                || self.voiceover_convert_to_wav != self.last_saved_settings.voiceover_convert_to_wav
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -2099,6 +2136,7 @@ impl eframe::App for VideoMakerApp {
                     edge_tts_max_threads: self.edge_tts_max_threads,
                     googler_image_max_threads: self.googler_image_max_threads,
                     googler_video_max_threads: self.googler_video_max_threads,
+                    voiceover_convert_to_wav: self.voiceover_convert_to_wav,
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
                 

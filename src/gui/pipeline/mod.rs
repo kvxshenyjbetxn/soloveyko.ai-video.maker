@@ -112,6 +112,7 @@ pub fn draw_pipeline_panel(
     save_path_windows: &mut String,
     googler_image_max_threads: &mut usize,
     googler_video_max_threads: &mut usize,
+    voiceover_convert_to_wav: &mut bool,
     text_input: &str,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
@@ -176,6 +177,7 @@ pub fn draw_pipeline_panel(
                             edge_tts_volume,
                             *googler_image_max_threads,
                             *googler_video_max_threads,
+                            *voiceover_convert_to_wav,
                         ) {
                             Ok(_) => {
                                 *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -263,6 +265,7 @@ pub fn draw_pipeline_panel(
                                     edge_tts_volume,
                                     googler_image_max_threads,
                                     googler_video_max_threads,
+                                    voiceover_convert_to_wav,
                                 );
                             });
                         }
@@ -411,6 +414,7 @@ pub fn draw_pipeline_panel(
                                     edge_tts_voices,
                                     edge_tts_loading_voices,
                                     edge_tts_show_all_languages,
+                                    voiceover_convert_to_wav,
                                 );
                             });
                         }
@@ -618,6 +622,7 @@ pub fn draw_pipeline_panel(
                                     edge_tts_rate,
                                     edge_tts_pitch,
                                     edge_tts_volume,
+                                    *voiceover_convert_to_wav,
                                 );
                             }
                         });
@@ -656,6 +661,7 @@ fn validate_and_enqueue(
     edge_tts_rate: &str,
     edge_tts_pitch: &str,
     edge_tts_volume: &str,
+    voiceover_convert_to_wav: bool,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
     let base = save_path.trim_end_matches('/').trim_end_matches('\\');
@@ -684,6 +690,7 @@ fn validate_and_enqueue(
         edge_tts_rate: edge_tts_rate.to_string(),
         edge_tts_pitch: edge_tts_pitch.to_string(),
         edge_tts_volume: edge_tts_volume.to_string(),
+        voiceover_convert_to_wav,
     };
 
     let id = *job_counter;

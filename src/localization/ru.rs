@@ -180,7 +180,11 @@ pub fn translate_ru(key: &str) -> &'static str {
         "stats_tokens" => "Токены:",
         "stats_chars_short" => "симв.",
         "stats_tokens_short" => "ток.",
+        "voiceover_convert_to_wav" => "Конвертировать в WAV",
         "queue_waiting_translation" => "ожидает перевода",
+        "time_hours_short" => "ч ",
+        "time_mins_short" => "мин ",
+        "time_secs_short" => "с",
         _ => "",
     }
 }
