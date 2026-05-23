@@ -1618,7 +1618,7 @@ impl eframe::App for VideoMakerApp {
             .show(ctx, |ui| {
                 match self.active_tab {
                     Tab::Main => {
-                        gui::editor::draw_editor(ui, &mut self.text_input, self.language);
+                        gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit);
                     }
                     Tab::Settings => {
                         let welcome_changed = gui::settings::draw_settings(
