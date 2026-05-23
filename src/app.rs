@@ -1134,8 +1134,10 @@ fn draw_queue_panel(
 
                     let avail_h = ui.available_height();
 
-                    let response = ui.group(|ui| {
-                        ui.set_width(215.0);
+                    let group_frame = egui::Frame::group(ui.style())
+                        .inner_margin(egui::Margin { left: 6.0, right: 6.0, top: 6.0, bottom: 0.0 });
+                    let response = group_frame.show(ui, |ui| {
+                        ui.set_width(230.0);
                         ui.set_min_height((avail_h - 6.0).max(115.0));
 
                         ui.vertical(|ui| {
@@ -1291,8 +1293,6 @@ fn draw_queue_panel(
                                 [ui.available_width() - 4.0, 2.0],
                                 bar
                             );
-
-                            ui.add_space(2.0);
                         });
                     });
 
