@@ -80,4 +80,69 @@ impl PipelineJob {
             audio_duration: Arc::new(Mutex::new(None)),
         }
     }
+
+    /// Повертає (прогрес [0.0..1.0], кількість завершених етапів, загальна кількість активних етапів)
+    /// Спроектовано з можливістю легкого розширення у майбутньому для нових етапів.
+    pub fn calculate_progress(&self) -> (f32, usize, usize) {
+        let mut total_stages = 0;
+        let mut completed_score = 0.0f32;
+        let mut completed_count = 0;
+
+        // Етап 1: Переклад
+        if self.settings.translation_enabled {
+            total_stages += 1;
+            let stage = self.translation_stage.lock().unwrap().clone();
+            match stage {
+                StageStatus::Done => {
+                    completed_score += 1.0;
+                    completed_count += 1;
+                }
+                StageStatus::Running => {
+                    completed_score += 0.5;
+                }
+                _ => {}
+            }
+        }
+
+        // Етап 2: Озвучка
+        if self.settings.voiceover_enabled {
+            total_stages += 1;
+            let stage = self.voiceover_stage.lock().unwrap().clone();
+            match stage {
+                StageStatus::Done => {
+                    completed_score += 1.0;
+                    completed_count += 1;
+                }
+                StageStatus::Running => {
+                    completed_score += 0.5;
+                }
+                _ => {}
+            }
+        }
+
+        // У майбутньому сюди дуже легко додати нові етапи пайплайну:
+        // // Етап 3: Відеоряд
+        // if self.settings.video_enabled {
+        //     total_stages += 1;
+        //     let stage = *self.video_stage.lock().unwrap();
+        //     match stage {
+        //         StageStatus::Done => { completed_score += 1.0; completed_count += 1; }
+        //         StageStatus::Running => { completed_score += 0.5; }
+        //         _ => {}
+        //     }
+        // }
+
+        if total_stages == 0 {
+            // Якщо жоден етап не увімкнено, то прогрес залежить від загального статусу
+            let status = self.status.lock().unwrap().clone();
+            if status == JobStatus::Done {
+                (1.0, 0, 0)
+            } else {
+                (0.0, 0, 0)
+            }
+        } else {
+            let progress = completed_score / total_stages as f32;
+            (progress.clamp(0.0, 1.0), completed_count, total_stages)
+        }
+    }
 }

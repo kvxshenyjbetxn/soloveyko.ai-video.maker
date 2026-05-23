@@ -1023,31 +1023,75 @@ fn draw_queue_panel(
             *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
         });
 
+        let mut clicked = false;
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.add_enabled(
                 has_pending,
                 egui::Button::new(egui::RichText::new(translate(language, "queue_run_btn")).strong()),
             ).clicked() {
-                let ctx = ui.ctx().clone();
-                for job in jobs.iter() {
-                    if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
-                        continue;
-                    }
-                    crate::core::pipeline::run_pipeline(
-                        job.id,
-                        job.name.clone(),
-                        job.settings.clone(),
-                        std::sync::Arc::clone(&job.status),
-                        std::sync::Arc::clone(&job.translation_stage),
-                        std::sync::Arc::clone(&job.voiceover_stage),
-                        std::sync::Arc::clone(&job.translated_text),
-                        std::sync::Arc::clone(&job.translation_cost),
-                        std::sync::Arc::clone(&job.audio_duration),
-                        ctx.clone(),
+                clicked = true;
+            }
+
+            // Малюємо загальний прогресбар черги всередині right_to_left макету,
+            // щоб він зайняв весь доступний простір по центру.
+            if !jobs.is_empty() {
+                ui.add_space(8.0);
+
+                let total_jobs = jobs.len();
+                let overall_progress = if total_jobs > 0 {
+                    let sum: f32 = jobs.iter().map(|j| {
+                        let status = j.status.lock().unwrap().clone();
+                        match status {
+                            crate::queue::JobStatus::Done => 1.0,
+                            crate::queue::JobStatus::Running | crate::queue::JobStatus::AwaitingControl => {
+                                let (prog, _, _) = j.calculate_progress();
+                                prog
+                            }
+                            _ => 0.0,
+                        }
+                    }).sum();
+                    sum / total_jobs as f32
+                } else {
+                    0.0
+                };
+
+                let is_running = jobs.iter().any(|j| {
+                    *j.status.lock().unwrap() == crate::queue::JobStatus::Running
+                });
+
+                // Віднімаємо відступи, щоб прогресбар не притискався впритул
+                let bar_width = ui.available_width() - 8.0;
+                if bar_width > 30.0 {
+                    ui.add_sized(
+                        [bar_width, 10.0],
+                        egui::ProgressBar::new(overall_progress)
+                            .animate(is_running)
+                            .show_percentage()
                     );
                 }
             }
         });
+
+        if clicked {
+            let ctx = ui.ctx().clone();
+            for job in jobs.iter() {
+                if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
+                    continue;
+                }
+                crate::core::pipeline::run_pipeline(
+                    job.id,
+                    job.name.clone(),
+                    job.settings.clone(),
+                    std::sync::Arc::clone(&job.status),
+                    std::sync::Arc::clone(&job.translation_stage),
+                    std::sync::Arc::clone(&job.voiceover_stage),
+                    std::sync::Arc::clone(&job.translated_text),
+                    std::sync::Arc::clone(&job.translation_cost),
+                    std::sync::Arc::clone(&job.audio_duration),
+                    ctx.clone(),
+                );
+            }
+        }
     });
 
     ui.add_space(2.0);
