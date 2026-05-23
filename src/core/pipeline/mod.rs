@@ -1,8 +1,32 @@
 pub mod translate;
 pub mod voiceover;
+pub mod timeline;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use eframe::egui;
+
+/// Простий лічильний семафор для обмеження паралельних потоків.
+struct Semaphore {
+    count:   Mutex<usize>,
+    condvar: Condvar,
+}
+
+impl Semaphore {
+    fn new(n: usize) -> Self {
+        Self { count: Mutex::new(n), condvar: Condvar::new() }
+    }
+    fn acquire(&self) {
+        let mut guard = self.count.lock().unwrap();
+        while *guard == 0 {
+            guard = self.condvar.wait(guard).unwrap();
+        }
+        *guard -= 1;
+    }
+    fn release(&self) {
+        *self.count.lock().unwrap() += 1;
+        self.condvar.notify_one();
+    }
+}
 
 /// Визначає тривалість WAV-файлу в секундах, зчитуючи RIFF/fmt заголовок.
 fn get_wav_duration_secs(path: &std::path::Path) -> Option<f64> {
@@ -142,8 +166,55 @@ fn get_mp3_duration_secs(path: &std::path::Path) -> Option<f64> {
     None
 }
 
+/// Декодує результат генерації (data URI або HTTP URL) і зберігає файл.
+/// Повертає шлях до збереженого файлу.
+fn decode_result(
+    result: &str,
+    index: usize,
+    _total: usize,
+    images_dir: &std::path::Path,
+) -> Result<std::path::PathBuf, String> {
+    if result.starts_with("data:") {
+        // data:[<mediatype>][;base64],<data>
+        let rest = &result[5..];
+        let comma = rest.find(',').ok_or("Invalid data URI: no comma")?;
+        let header = &rest[..comma];
+        let b64    = &rest[comma + 1..];
+
+        let ext = if header.contains("png")  { "png" }
+             else if header.contains("webp") { "webp" }
+             else if header.contains("gif")  { "gif" }
+             else                            { "jpg" };
+
+        use base64::Engine;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| format!("Base64 decode error: {}", e))?;
+
+        let path = images_dir.join(format!("{:04}.{}", index, ext));
+        std::fs::write(&path, &bytes).map_err(|e| format!("Save error: {}", e))?;
+        Ok(path)
+    } else {
+        // Звичайний HTTP URL
+        let ext = result.split('?').next().unwrap_or(result)
+            .rsplit('.').next()
+            .filter(|e| e.len() <= 4 && e.chars().all(|c| c.is_ascii_alphanumeric()))
+            .unwrap_or("jpg");
+        let path = images_dir.join(format!("{:04}.{}", index, ext));
+
+        use std::io::Read;
+        let resp = ureq::get(result).call()
+            .map_err(|e| format!("Download error: {}", e))?;
+        let mut bytes = Vec::new();
+        resp.into_reader().read_to_end(&mut bytes)
+            .map_err(|e| format!("Read error: {}", e))?;
+        std::fs::write(&path, &bytes).map_err(|e| format!("Save error: {}", e))?;
+        Ok(path)
+    }
+}
+
 /// Виконує весь пайплайн у фоновому потоці.
-/// Послідовно запускає увімкнені етапи: переклад → озвучка.
+/// Послідовно запускає увімкнені етапи: переклад → озвучка → відеоряд.
 pub fn run_pipeline(
     job_id: u64,
     job_name: String,
@@ -151,6 +222,7 @@ pub fn run_pipeline(
     status: Arc<Mutex<crate::queue::JobStatus>>,
     translation_stage: Arc<Mutex<crate::queue::StageStatus>>,
     voiceover_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    video_stage: Arc<Mutex<crate::queue::StageStatus>>,
     translated_text: Arc<Mutex<Option<String>>>,
     translation_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
@@ -307,6 +379,133 @@ pub fn run_pipeline(
                     return;
                 }
             }
+        }
+
+        // Етап 3: Відеоряд
+        if settings.video_enabled {
+            crate::logger::log_job(job_id, &job_name, "Starting video stage (image generation)...");
+            *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+            ctx.request_repaint();
+
+            // Визначаємо текст: перекладений якщо є, інакше оригінал
+            let source_text = if settings.translation_enabled {
+                translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
+            } else {
+                settings.text.clone()
+            };
+
+            // Нарізаємо текст на сегменти
+            let segments = crate::core::pipeline::timeline::text_splitter::split_text(
+                &source_text,
+                &settings.text_split_mode,
+                settings.text_split_char_limit,
+            );
+
+            crate::logger::log_job(
+                job_id, &job_name,
+                &format!("Text split into {} segments (mode: {})", segments.len(), settings.text_split_mode),
+            );
+
+            // Зберігаємо debug-файл сегментів
+            let save_dir = std::path::Path::new(&settings.save_path);
+            let segments_path = save_dir.join("segments.txt");
+            {
+                let mut content = format!("=== Сегменти тексту: {} ===\n", segments.len());
+                for (i, seg) in segments.iter().enumerate() {
+                    content.push_str(&format!("\n[{}/{}]\n{}\n", i + 1, segments.len(), seg));
+                }
+                let _ = std::fs::write(&segments_path, &content);
+                crate::logger::log_job(job_id, &job_name, "Segments saved: segments.txt");
+            }
+
+            // Створюємо папку images/
+            let images_dir = save_dir.join("images");
+            if let Err(e) = std::fs::create_dir_all(&images_dir) {
+                crate::logger::log_job(job_id, &job_name, &format!("Cannot create images dir: {}", e));
+                *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                *status.lock().unwrap() = crate::queue::JobStatus::Failed(e.to_string());
+                ctx.request_repaint();
+                return;
+            }
+
+            // Паралельна генерація зображень із семафором
+            let sem = Arc::new(Semaphore::new(settings.googler_image_max_threads.max(1)));
+            let mut handles = Vec::new();
+
+            for (i, segment) in segments.iter().enumerate() {
+                let sem        = Arc::clone(&sem);
+                let key        = settings.googler_key.clone();
+                let priority   = settings.googler_image_priority.clone();
+                let images_dir = images_dir.clone();
+                let prompt     = settings.video_prompt.replace("{{text}}", segment);
+                let job_id_c   = job_id;
+                let job_name_c = job_name.clone();
+                let total      = segments.len();
+
+                let handle = std::thread::spawn(move || -> (usize, Result<(), String>) {
+                    sem.acquire();
+
+                    crate::logger::log_job(
+                        job_id_c, &job_name_c,
+                        &format!("Generating image {}/{} ...", i + 1, total),
+                    );
+
+                    let result = crate::api::googler::generate_image_with_priority(
+                        &key,
+                        &prompt,
+                        "16:9",
+                        &priority,
+                    );
+
+                    sem.release();
+
+                    match result {
+                        Err(e) => (i, Err(e)),
+                        Ok(data_uri) => {
+                            match decode_result(&data_uri, i + 1, total, &images_dir) {
+                                Err(e) => (i, Err(e)),
+                                Ok(path) => {
+                                    crate::logger::log_job(
+                                        job_id_c, &job_name_c,
+                                        &format!("Image {}/{} saved: {}", i + 1, total, path.display()),
+                                    );
+                                    (i, Ok(()))
+                                }
+                            }
+                        }
+                    }
+                });
+
+                handles.push(handle);
+            }
+
+            // Збираємо результати
+            let mut errors: Vec<String> = Vec::new();
+            for handle in handles {
+                match handle.join() {
+                    Ok((i, Err(e))) => {
+                        let msg = format!("Segment {}: {}", i + 1, e);
+                        crate::logger::log_job(job_id, &job_name, &format!("Image error — {}", msg));
+                        errors.push(msg);
+                    }
+                    Err(_) => errors.push("Thread panic during image generation".to_string()),
+                    _ => {}
+                }
+            }
+
+            if errors.is_empty() {
+                crate::logger::log_job(job_id, &job_name, "All images generated successfully.");
+                *video_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+            } else {
+                let msg = format!("Image generation failed ({} errors). First: {}", errors.len(), errors[0]);
+                crate::logger::log_job(job_id, &job_name, &msg);
+                *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                *status.lock().unwrap() = crate::queue::JobStatus::Failed(msg);
+                ctx.request_repaint();
+                return;
+            }
+
+            ctx.request_repaint();
         }
 
         crate::logger::log_job(job_id, &job_name, "Job completed successfully.");

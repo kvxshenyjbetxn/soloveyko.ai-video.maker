@@ -44,6 +44,15 @@ pub struct JobSettings {
     pub edge_tts_pitch: String,
     pub edge_tts_volume: String,
     pub voiceover_convert_to_wav: bool,
+    pub video_enabled: bool,
+    #[allow(dead_code)]
+    pub video_service: String,
+    pub video_prompt: String,
+    pub text_split_mode: String,
+    pub text_split_char_limit: usize,
+    pub googler_key: String,
+    pub googler_image_priority: Vec<String>,
+    pub googler_image_max_threads: usize,
 }
 
 /// Одна задача в черзі пайплайну.
@@ -56,6 +65,8 @@ pub struct PipelineJob {
     pub translation_stage: Arc<Mutex<StageStatus>>,
     /// Статус етапу озвучки
     pub voiceover_stage: Arc<Mutex<StageStatus>>,
+    /// Статус етапу відеоряду
+    pub video_stage: Arc<Mutex<StageStatus>>,
     /// Знімок налаштувань — зберігається для можливого перезапуску задачі
     pub settings: JobSettings,
     /// Збережений перекладений текст (заповнюється після перекладу)
@@ -74,6 +85,7 @@ impl PipelineJob {
             status: Arc::new(Mutex::new(JobStatus::Pending)),
             translation_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             voiceover_stage: Arc::new(Mutex::new(StageStatus::Pending)),
+            video_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             settings,
             translated_text: Arc::new(Mutex::new(None)),
             translation_cost: Arc::new(Mutex::new(None)),
@@ -120,17 +132,21 @@ impl PipelineJob {
             }
         }
 
-        // У майбутньому сюди дуже легко додати нові етапи пайплайну:
-        // // Етап 3: Відеоряд
-        // if self.settings.video_enabled {
-        //     total_stages += 1;
-        //     let stage = *self.video_stage.lock().unwrap();
-        //     match stage {
-        //         StageStatus::Done => { completed_score += 1.0; completed_count += 1; }
-        //         StageStatus::Running => { completed_score += 0.5; }
-        //         _ => {}
-        //     }
-        // }
+        // Етап 3: Відеоряд
+        if self.settings.video_enabled {
+            total_stages += 1;
+            let stage = self.video_stage.lock().unwrap().clone();
+            match stage {
+                StageStatus::Done => {
+                    completed_score += 1.0;
+                    completed_count += 1;
+                }
+                StageStatus::Running => {
+                    completed_score += 0.5;
+                }
+                _ => {}
+            }
+        }
 
         if total_stages == 0 {
             // Якщо жоден етап не увімкнено, то прогрес залежить від загального статусу

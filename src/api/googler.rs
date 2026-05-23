@@ -142,6 +142,210 @@ pub fn check_key(
     });
 }
 
+/// Відповідь після запуску операції генерації.
+#[allow(dead_code)]
+#[derive(serde::Deserialize)]
+struct OperationStarted {
+    operation_id: String,
+}
+
+/// Статус асинхронної операції при опитуванні.
+#[allow(dead_code)]
+#[derive(serde::Deserialize)]
+struct OperationPollStatus {
+    status: String,
+    result: Option<Vec<String>>,
+    error: Option<String>,
+}
+
+/// Опитує операцію до завершення (макс. ~5 хвилин). Повертає перший результат або помилку.
+#[allow(dead_code)]
+fn poll_operation(key: &str, operation_id: &str, agent: &ureq::Agent) -> Result<String, String> {
+    let url = format!("{}/v4/operations/{}", BASE_URL, operation_id);
+    let poll_interval = std::time::Duration::from_secs(3);
+
+    for _ in 0..100 {
+        std::thread::sleep(poll_interval);
+
+        let response = agent
+            .get(&url)
+            .set("X-API-Key", key)
+            .call()
+            .map_err(|e| format!("Помилка опитування: {}", e))?;
+
+        let status: OperationPollStatus = response
+            .into_json()
+            .map_err(|e| format!("Помилка парсингу статусу: {}", e))?;
+
+        match status.status.as_str() {
+            "success" => {
+                return status
+                    .result
+                    .and_then(|r| r.into_iter().next())
+                    .ok_or_else(|| "Порожній результат операції".to_string());
+            }
+            "error" => {
+                return Err(status.error.unwrap_or_else(|| "Невідома помилка провайдера".to_string()));
+            }
+            _ => {} // pending / processing — продовжуємо опитування
+        }
+    }
+
+    Err("Перевищено час очікування операції (5 хвилин)".to_string())
+}
+
+/// Спроба генерації зображення через конкретного провайдера.
+#[allow(dead_code)]
+fn try_generate_image(key: &str, prompt: &str, aspect_ratio: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
+    let (url, body) = match provider {
+        "flow_IMAGEN_3_5" => (
+            format!("{}/v4/flow/image/generate", BASE_URL),
+            serde_json::json!({"prompt": prompt, "model": "IMAGEN_3_5", "aspect_ratio": aspect_ratio}),
+        ),
+        "flow_GEM_PIX_2" => (
+            format!("{}/v4/flow/image/generate", BASE_URL),
+            serde_json::json!({"prompt": prompt, "model": "GEM_PIX_2", "aspect_ratio": aspect_ratio}),
+        ),
+        "flow_NARWHAL" => (
+            format!("{}/v4/flow/image/generate", BASE_URL),
+            serde_json::json!({"prompt": prompt, "model": "NARWHAL", "aspect_ratio": aspect_ratio}),
+        ),
+        "flower" => (
+            format!("{}/v4/flower/image/generate", BASE_URL),
+            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
+        ),
+        "grok" => (
+            format!("{}/v4/grok/image/generate", BASE_URL),
+            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
+        ),
+        "openai" => (
+            format!("{}/v4/openai/image/generate", BASE_URL),
+            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
+        ),
+        _ => return Err(format!("Невідомий провайдер зображень: {}", provider)),
+    };
+
+    let response = agent
+        .post(&url)
+        .set("X-API-Key", key)
+        .set("Content-Type", "application/json")
+        .send_json(body)
+        .map_err(|e| format!("Помилка запиту: {}", e))?;
+
+    let op: OperationStarted = response
+        .into_json()
+        .map_err(|e| format!("Помилка парсингу відповіді: {}", e))?;
+
+    poll_operation(key, &op.operation_id, agent)
+}
+
+/// Спроба генерації відео через конкретного провайдера.
+#[allow(dead_code)]
+fn try_generate_video(key: &str, prompt: &str, aspect_ratio: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
+    let (url, body) = match provider {
+        "flow" => (
+            format!("{}/v4/flow/video/from-text", BASE_URL),
+            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
+        ),
+        "flower" => (
+            format!("{}/v4/flower/video/from-text", BASE_URL),
+            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
+        ),
+        "grok" => (
+            format!("{}/v4/grok/video/from-text", BASE_URL),
+            serde_json::json!({"prompt": prompt, "aspect_ratio": aspect_ratio}),
+        ),
+        _ => return Err(format!("Невідомий провайдер відео: {}", provider)),
+    };
+
+    let response = agent
+        .post(&url)
+        .set("X-API-Key", key)
+        .set("Content-Type", "application/json")
+        .send_json(body)
+        .map_err(|e| format!("Помилка запиту: {}", e))?;
+
+    let op: OperationStarted = response
+        .into_json()
+        .map_err(|e| format!("Помилка парсингу відповіді: {}", e))?;
+
+    poll_operation(key, &op.operation_id, agent)
+}
+
+/// Генерує зображення з перебором провайдерів за пріоритетом.
+/// Для кожного провайдера: 3 спроби з паузою 5с між ними.
+#[allow(dead_code)]
+pub fn generate_image_with_priority(
+    key: &str,
+    prompt: &str,
+    aspect_ratio: &str,
+    priority: &[String],
+) -> Result<String, String> {
+    const RETRIES: u32 = 2;
+    const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(300))
+        .build();
+
+    for provider in priority {
+        for attempt in 0..=RETRIES {
+            if attempt > 0 {
+                std::thread::sleep(DELAY);
+            }
+            match try_generate_image(key, prompt, aspect_ratio, provider, &agent) {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    crate::logger::log(&format!(
+                        " Зображення [{}] спроба {}/{}: {}",
+                        provider, attempt + 1, RETRIES + 1, e
+                    ));
+                }
+            }
+        }
+    }
+
+    Err("Всі провайдери зображень вичерпані".to_string())
+}
+
+/// Генерує відео з перебором провайдерів за пріоритетом.
+/// Для кожного провайдера: 3 спроби з паузою 5с між ними.
+#[allow(dead_code)]
+pub fn generate_video_with_priority(
+    key: &str,
+    prompt: &str,
+    aspect_ratio: &str,
+    priority: &[String],
+) -> Result<String, String> {
+    const RETRIES: u32 = 2;
+    const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(300))
+        .build();
+
+    for provider in priority {
+        for attempt in 0..=RETRIES {
+            if attempt > 0 {
+                std::thread::sleep(DELAY);
+            }
+            match try_generate_video(key, prompt, aspect_ratio, provider, &agent) {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    crate::logger::log(&format!(
+                        " Відео [{}] спроба {}/{}: {}",
+                        provider, attempt + 1, RETRIES + 1, e
+                    ));
+                }
+            }
+        }
+    }
+
+    Err("Всі провайдери відео вичерпані".to_string())
+}
+
 /// Фоново завантажує інфо про ліміти Googler і записує результат у `result`.
 pub fn fetch_balance(key: String, result: Arc<Mutex<Option<GooglerBalance>>>, ctx: egui::Context) {
     std::thread::spawn(move || {

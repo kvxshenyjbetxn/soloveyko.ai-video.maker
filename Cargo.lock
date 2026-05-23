@@ -3568,6 +3568,7 @@ dependencies = [
 name = "soloveyko-ai-video-maker"
 version = "1.0.0"
 dependencies = [
+ "base64",
  "chrono",
  "dirs",
  "eframe",

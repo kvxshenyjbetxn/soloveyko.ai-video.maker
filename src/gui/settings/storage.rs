@@ -3,8 +3,15 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn default_true() -> bool { true }
+fn default_image_priority() -> Vec<String> {
+    vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()]
+}
+fn default_video_priority() -> Vec<String> {
+    vec!["flow".to_string(), "flower".to_string(), "grok".to_string()]
+}
 fn default_video_service() -> String { "Googler".to_string() }
-fn default_image_provider() -> String { "flow_IMAGEN_3_5".to_string() }
+fn default_text_split_mode() -> String { "paragraphs".to_string() }
+fn default_text_split_char_limit() -> usize { 500 }
 fn default_temperature() -> f32 { 0.7 }
 fn default_openrouter_max_threads() -> usize { 5 }
 fn default_claude_max_threads() -> usize { 5 }
@@ -97,9 +104,12 @@ pub struct AppSettings {
     /// Обраний сервіс для генерації відеоряду ("Googler")
     #[serde(default = "default_video_service")]
     pub video_service: String,
-    /// Обраний провайдер зображень для Googler ("flow", "flower", "grok", "openai")
-    #[serde(default = "default_image_provider")]
-    pub googler_image_provider: String,
+    /// Режим нарізання тексту: "paragraphs" | "sentences" | "char_limit" | "full"
+    #[serde(default = "default_text_split_mode")]
+    pub text_split_mode: String,
+    /// Ліміт символів для режиму нарізання "char_limit"
+    #[serde(default = "default_text_split_char_limit")]
+    pub text_split_char_limit: usize,
     /// Температура моделі для перекладу (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub translation_temperature: f32,
@@ -151,6 +161,15 @@ pub struct AppSettings {
     /// Конвертувати аудіо в WAV після озвучки
     #[serde(default)]
     pub voiceover_convert_to_wav: bool,
+    /// Промт для генерації зображень відеоряду
+    #[serde(default)]
+    pub video_prompt: String,
+    /// Пріоритетний список провайдерів зображень
+    #[serde(default = "default_image_priority")]
+    pub googler_image_priority: Vec<String>,
+    /// Пріоритетний список провайдерів відео
+    #[serde(default = "default_video_priority")]
+    pub googler_video_priority: Vec<String>,
 }
 
 impl Default for AppSettings {
@@ -179,7 +198,8 @@ impl Default for AppSettings {
             translation_model_claude: "sonnet".to_string(),
             translation_model_gemini: "gemini-2.5-flash".to_string(),
             video_service: "Googler".to_string(),
-            googler_image_provider: "flow_IMAGEN_3_5".to_string(),
+            text_split_mode: "paragraphs".to_string(),
+            text_split_char_limit: 500,
             translation_temperature: 0.7,
             translation_service: "OpenRouter".to_string(),
             save_path_macos: String::new(),
@@ -197,6 +217,9 @@ impl Default for AppSettings {
             googler_image_max_threads: 5,
             googler_video_max_threads: 5,
             voiceover_convert_to_wav: false,
+            video_prompt: String::new(),
+            googler_image_priority: default_image_priority(),
+            googler_video_priority: default_video_priority(),
         }
     }
 }
@@ -333,9 +356,12 @@ pub struct PipelineTemplate {
     /// Обраний сервіс для генерації відеоряду
     #[serde(default = "default_video_service")]
     pub video_service: String,
-    /// Обраний провайдер зображень для Googler
-    #[serde(default = "default_image_provider")]
-    pub googler_image_provider: String,
+    /// Режим нарізання тексту
+    #[serde(default = "default_text_split_mode")]
+    pub text_split_mode: String,
+    /// Ліміт символів для режиму нарізання "char_limit"
+    #[serde(default = "default_text_split_char_limit")]
+    pub text_split_char_limit: usize,
     /// Температура моделі для перекладу (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub translation_temperature: f32,
@@ -363,6 +389,15 @@ pub struct PipelineTemplate {
     /// Конвертувати аудіо в WAV після озвучки
     #[serde(default)]
     pub voiceover_convert_to_wav: bool,
+    /// Промт для генерації зображень відеоряду
+    #[serde(default)]
+    pub video_prompt: String,
+    /// Пріоритетний список провайдерів зображень
+    #[serde(default = "default_image_priority")]
+    pub googler_image_priority: Vec<String>,
+    /// Пріоритетний список провайдерів відео
+    #[serde(default = "default_video_priority")]
+    pub googler_video_priority: Vec<String>,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -393,7 +428,8 @@ pub fn save_template(
     translation_model_claude: &str,
     translation_model_gemini: &str,
     video_service: &str,
-    googler_image_provider: &str,
+    text_split_mode: &str,
+    text_split_char_limit: usize,
     translation_temperature: f32,
     translation_service: &str,
     edge_tts_voice: &str,
@@ -403,6 +439,9 @@ pub fn save_template(
     googler_image_max_threads: usize,
     googler_video_max_threads: usize,
     voiceover_convert_to_wav: bool,
+    video_prompt: &str,
+    googler_image_priority: Vec<String>,
+    googler_video_priority: Vec<String>,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -427,7 +466,8 @@ pub fn save_template(
             translation_model_claude: translation_model_claude.to_string(),
             translation_model_gemini: translation_model_gemini.to_string(),
             video_service: video_service.to_string(),
-            googler_image_provider: googler_image_provider.to_string(),
+            text_split_mode: text_split_mode.to_string(),
+            text_split_char_limit,
             translation_temperature,
             translation_service: translation_service.to_string(),
             edge_tts_voice: edge_tts_voice.to_string(),
@@ -437,6 +477,9 @@ pub fn save_template(
             googler_image_max_threads,
             googler_video_max_threads,
             voiceover_convert_to_wav,
+            video_prompt: video_prompt.to_string(),
+            googler_image_priority,
+            googler_video_priority,
         };
 
         let json = serde_json::to_string_pretty(&template)?;

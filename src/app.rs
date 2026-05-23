@@ -99,8 +99,16 @@ pub struct VideoMakerApp {
     pub voicebot_balance: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Обраний сервіс для генерації відеоряду.
     pub video_service: String,
-    /// Обраний провайдер зображень для Googler.
-    pub googler_image_provider: String,
+    /// Режим нарізання тексту: "paragraphs" | "sentences" | "char_limit" | "full"
+    pub text_split_mode: String,
+    /// Ліміт символів для режиму char_limit.
+    pub text_split_char_limit: usize,
+    /// Промт для генерації зображень відеоряду.
+    pub video_prompt: String,
+    /// Пріоритетний список провайдерів зображень Googler.
+    pub googler_image_priority: Vec<String>,
+    /// Пріоритетний список провайдерів відео Googler.
+    pub googler_video_priority: Vec<String>,
     /// Температура моделі для перекладу (0.0 — 2.0).
     pub translation_temperature: f32,
     /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code").
@@ -239,7 +247,11 @@ impl Default for VideoMakerApp {
             openrouter_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voicebot_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_service: "Googler".to_string(),
-            googler_image_provider: "flow_IMAGEN_3_5".to_string(),
+            text_split_mode: "paragraphs".to_string(),
+            text_split_char_limit: 500,
+            video_prompt: String::new(),
+            googler_image_priority: vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()],
+            googler_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string()],
             translation_temperature: 0.7,
             translation_service: "OpenRouter".to_string(),
             balance_window_open: false,
@@ -385,7 +397,11 @@ impl VideoMakerApp {
         }
 
         let video_service = saved.video_service.clone();
-        let googler_image_provider = saved.googler_image_provider.clone();
+        let text_split_mode = saved.text_split_mode.clone();
+        let text_split_char_limit = saved.text_split_char_limit;
+        let video_prompt = saved.video_prompt.clone();
+        let googler_image_priority = saved.googler_image_priority.clone();
+        let googler_video_priority = saved.googler_video_priority.clone();
         let translation_temperature = saved.translation_temperature;
         let save_path_macos = saved.save_path_macos.clone();
         let save_path_windows = saved.save_path_windows.clone();
@@ -479,7 +495,11 @@ impl VideoMakerApp {
             openrouter_balance,
             voicebot_balance,
             video_service,
-            googler_image_provider,
+            text_split_mode,
+            text_split_char_limit,
+            video_prompt,
+            googler_image_priority,
+            googler_video_priority,
             translation_temperature,
             translation_service,
             balance_window_open: false,
@@ -1087,6 +1107,7 @@ fn draw_queue_panel(
                     std::sync::Arc::clone(&job.status),
                     std::sync::Arc::clone(&job.translation_stage),
                     std::sync::Arc::clone(&job.voiceover_stage),
+                    std::sync::Arc::clone(&job.video_stage),
                     std::sync::Arc::clone(&job.translated_text),
                     std::sync::Arc::clone(&job.translation_cost),
                     std::sync::Arc::clone(&job.audio_duration),
@@ -1107,6 +1128,7 @@ fn draw_queue_panel(
                     let status = job.status.lock().unwrap().clone();
                     let translation_stage = job.translation_stage.lock().unwrap().clone();
                     let voiceover_stage = job.voiceover_stage.lock().unwrap().clone();
+                    let video_stage = job.video_stage.lock().unwrap().clone();
 
                     let (status_text, status_color): (String, egui::Color32) = match &status {
                         crate::queue::JobStatus::Pending => (
@@ -1261,6 +1283,14 @@ fn draw_queue_panel(
                                 ui.label(
                                     egui::RichText::new(voice_label)
                                         .color(stage_color(&voiceover_stage, ui))
+                                        .size(12.5),
+                                );
+                            }
+
+                            if job.settings.video_enabled {
+                                ui.label(
+                                    egui::RichText::new(translate(language, "video"))
+                                        .color(stage_color(&video_stage, ui))
                                         .size(12.5),
                                 );
                             }
@@ -1520,7 +1550,9 @@ impl eframe::App for VideoMakerApp {
                         &self.openrouter_models,
                         &self.openrouter_models_loading,
                         &mut self.video_service,
-                        &mut self.googler_image_provider,
+                        &mut self.text_split_mode,
+                        &mut self.text_split_char_limit,
+                        &mut self.video_prompt,
                         &mut self.translation_temperature,
                         &mut self.translation_service,
                         &mut self.save_path_macos,
@@ -1528,6 +1560,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.googler_image_max_threads,
                         &mut self.googler_video_max_threads,
                         &mut self.voiceover_convert_to_wav,
+                        &mut self.googler_image_priority,
+                        &mut self.googler_video_priority,
                         &self.text_input,
                         &mut self.jobs,
                         &mut self.job_counter,
@@ -1780,6 +1814,7 @@ impl eframe::App for VideoMakerApp {
                 let status_arc = std::sync::Arc::clone(&self.jobs[job_idx].status);
                 let translation_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_stage);
                 let voiceover_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].voiceover_stage);
+                let video_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].video_stage);
                 let job_settings = self.jobs[job_idx].settings.clone();
 
                 // Перевіряємо результат фонової перегенерації
@@ -2072,6 +2107,7 @@ impl eframe::App for VideoMakerApp {
                         status_arc,
                         translation_stage_arc,
                         voiceover_stage_arc,
+                        video_stage_arc,
                         translated_text_arc,
                         translation_cost_arc,
                         audio_duration_arc,
@@ -2137,7 +2173,9 @@ impl eframe::App for VideoMakerApp {
                 || self.translation_model_gemini != self.last_saved_settings.translation_model_gemini
                 || self.googler_key != self.last_saved_settings.googler_key
                 || self.video_service != self.last_saved_settings.video_service
-                || self.googler_image_provider != self.last_saved_settings.googler_image_provider
+                || self.video_prompt != self.last_saved_settings.video_prompt
+                || self.text_split_mode != self.last_saved_settings.text_split_mode
+                || self.text_split_char_limit != self.last_saved_settings.text_split_char_limit
                 || self.translation_service != self.last_saved_settings.translation_service
                 || self.save_path_macos != self.last_saved_settings.save_path_macos
                 || self.save_path_windows != self.last_saved_settings.save_path_windows
@@ -2152,6 +2190,8 @@ impl eframe::App for VideoMakerApp {
                 || self.googler_image_max_threads != self.last_saved_settings.googler_image_max_threads
                 || self.googler_video_max_threads != self.last_saved_settings.googler_video_max_threads
                 || self.voiceover_convert_to_wav != self.last_saved_settings.voiceover_convert_to_wav
+                || self.googler_image_priority != self.last_saved_settings.googler_image_priority
+                || self.googler_video_priority != self.last_saved_settings.googler_video_priority
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -2177,7 +2217,9 @@ impl eframe::App for VideoMakerApp {
                     translation_model_claude: self.translation_model_claude.clone(),
                     translation_model_gemini: self.translation_model_gemini.clone(),
                     video_service: self.video_service.clone(),
-                    googler_image_provider: self.googler_image_provider.clone(),
+                    text_split_mode: self.text_split_mode.clone(),
+                    text_split_char_limit: self.text_split_char_limit,
+                    video_prompt: self.video_prompt.clone(),
                     translation_temperature: self.translation_temperature,
                     translation_service: self.translation_service.clone(),
                     save_path_macos: self.save_path_macos.clone(),
@@ -2194,6 +2236,8 @@ impl eframe::App for VideoMakerApp {
                     googler_image_max_threads: self.googler_image_max_threads,
                     googler_video_max_threads: self.googler_video_max_threads,
                     voiceover_convert_to_wav: self.voiceover_convert_to_wav,
+                    googler_image_priority: self.googler_image_priority.clone(),
+                    googler_video_priority: self.googler_video_priority.clone(),
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
                 

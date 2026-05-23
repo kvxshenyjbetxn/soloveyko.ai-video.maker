@@ -25,7 +25,9 @@ pub fn draw_templates_section(
     translation_model_claude: &mut String,
     translation_model_gemini: &mut String,
     video_service: &mut String,
-    googler_image_provider: &mut String,
+    text_split_mode: &mut String,
+    text_split_char_limit: &mut usize,
+    video_prompt: &mut String,
     translation_temperature: &mut f32,
     translation_service: &mut String,
     edge_tts_voice: &mut String,
@@ -35,6 +37,8 @@ pub fn draw_templates_section(
     googler_image_max_threads: &mut usize,
     googler_video_max_threads: &mut usize,
     voiceover_convert_to_wav: &mut bool,
+    googler_image_priority: &mut Vec<String>,
+    googler_video_priority: &mut Vec<String>,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -89,7 +93,9 @@ pub fn draw_templates_section(
                             }
 
                             *video_service = template.video_service;
-                            *googler_image_provider = template.googler_image_provider;
+                            *text_split_mode = template.text_split_mode;
+                            *text_split_char_limit = template.text_split_char_limit;
+                            *video_prompt = template.video_prompt;
                             *translation_temperature = template.translation_temperature;
                             *translation_service = template.translation_service;
                             *edge_tts_voice = template.edge_tts_voice;
@@ -99,6 +105,8 @@ pub fn draw_templates_section(
                             *googler_image_max_threads = template.googler_image_max_threads;
                             *googler_video_max_threads = template.googler_video_max_threads;
                             *voiceover_convert_to_wav = template.voiceover_convert_to_wav;
+                            *googler_image_priority = template.googler_image_priority;
+                            *googler_video_priority = template.googler_video_priority;
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

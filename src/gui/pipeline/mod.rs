@@ -105,7 +105,9 @@ pub fn draw_pipeline_panel(
     openrouter_models: &Arc<Mutex<Option<Result<Vec<translation::OpenRouterModel>, String>>>>,
     openrouter_models_loading: &Arc<Mutex<bool>>,
     video_service: &mut String,
-    googler_image_provider: &mut String,
+    text_split_mode: &mut String,
+    text_split_char_limit: &mut usize,
+    video_prompt: &mut String,
     translation_temperature: &mut f32,
     translation_service: &mut String,
     save_path_macos: &mut String,
@@ -113,6 +115,8 @@ pub fn draw_pipeline_panel(
     googler_image_max_threads: &mut usize,
     googler_video_max_threads: &mut usize,
     voiceover_convert_to_wav: &mut bool,
+    googler_image_priority: &mut Vec<String>,
+    googler_video_priority: &mut Vec<String>,
     text_input: &str,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
@@ -168,7 +172,8 @@ pub fn draw_pipeline_panel(
                             translation_model_claude,
                             translation_model_gemini,
                             video_service,
-                            googler_image_provider,
+                            text_split_mode,
+                            *text_split_char_limit,
                             *translation_temperature,
                             translation_service,
                             edge_tts_voice,
@@ -178,6 +183,9 @@ pub fn draw_pipeline_panel(
                             *googler_image_max_threads,
                             *googler_video_max_threads,
                             *voiceover_convert_to_wav,
+                            video_prompt,
+                            googler_image_priority.clone(),
+                            googler_video_priority.clone(),
                         ) {
                             Ok(_) => {
                                 *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -256,7 +264,9 @@ pub fn draw_pipeline_panel(
                                     translation_model_claude,
                                     translation_model_gemini,
                                     video_service,
-                                    googler_image_provider,
+                                    text_split_mode,
+                                    text_split_char_limit,
+                                    video_prompt,
                                     translation_temperature,
                                     translation_service,
                                     edge_tts_voice,
@@ -266,6 +276,8 @@ pub fn draw_pipeline_panel(
                                     googler_image_max_threads,
                                     googler_video_max_threads,
                                     voiceover_convert_to_wav,
+                                    googler_image_priority,
+                                    googler_video_priority,
                                 );
                             });
                         }
@@ -442,7 +454,11 @@ pub fn draw_pipeline_panel(
                                     ui,
                                     language,
                                     video_service,
-                                    googler_image_provider,
+                                    text_split_mode,
+                                    text_split_char_limit,
+                                    video_prompt,
+                                    googler_image_priority,
+                                    googler_video_priority,
                                 );
                             });
                         }
@@ -623,6 +639,14 @@ pub fn draw_pipeline_panel(
                                     edge_tts_pitch,
                                     edge_tts_volume,
                                     *voiceover_convert_to_wav,
+                                    *pipeline_video_enabled,
+                                    video_service,
+                                    video_prompt,
+                                    text_split_mode,
+                                    *text_split_char_limit,
+                                    googler_key,
+                                    googler_image_priority.clone(),
+                                    *googler_image_max_threads,
                                 );
                             }
                         });
@@ -662,6 +686,14 @@ fn validate_and_enqueue(
     edge_tts_pitch: &str,
     edge_tts_volume: &str,
     voiceover_convert_to_wav: bool,
+    video_enabled: bool,
+    video_service: &str,
+    video_prompt: &str,
+    text_split_mode: &str,
+    text_split_char_limit: usize,
+    googler_key: &str,
+    googler_image_priority: Vec<String>,
+    googler_image_max_threads: usize,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
     let base = save_path.trim_end_matches('/').trim_end_matches('\\');
@@ -691,6 +723,14 @@ fn validate_and_enqueue(
         edge_tts_pitch: edge_tts_pitch.to_string(),
         edge_tts_volume: edge_tts_volume.to_string(),
         voiceover_convert_to_wav,
+        video_enabled,
+        video_service: video_service.to_string(),
+        video_prompt: video_prompt.to_string(),
+        text_split_mode: text_split_mode.to_string(),
+        text_split_char_limit,
+        googler_key: googler_key.to_string(),
+        googler_image_priority,
+        googler_image_max_threads,
     };
 
     let id = *job_counter;
