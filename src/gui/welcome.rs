@@ -10,11 +10,12 @@ pub enum ToolStatus {
     NotInstalled,
 }
 
-/// Асинхронні стани перевірки трьох CLI-інструментів.
+/// Асинхронні стани перевірки CLI-інструментів.
 pub struct ToolChecks {
     pub npm: Arc<Mutex<ToolStatus>>,
     pub gemini: Arc<Mutex<ToolStatus>>,
     pub claude: Arc<Mutex<ToolStatus>>,
+    pub ffmpeg: Arc<Mutex<ToolStatus>>,
 }
 
 impl ToolChecks {
@@ -23,26 +24,28 @@ impl ToolChecks {
             npm: Arc::new(Mutex::new(ToolStatus::Checking)),
             gemini: Arc::new(Mutex::new(ToolStatus::Checking)),
             claude: Arc::new(Mutex::new(ToolStatus::Checking)),
+            ffmpeg: Arc::new(Mutex::new(ToolStatus::Checking)),
         }
     }
 
-    /// Запускає всі три перевірки у фонових потоках.
+    /// Запускає всі перевірки у фонових потоках.
     pub fn start(&self, ctx: egui::Context) {
-        Self::check("npm", Arc::clone(&self.npm), ctx.clone());
-        Self::check("gemini", Arc::clone(&self.gemini), ctx.clone());
-        Self::check("claude", Arc::clone(&self.claude), ctx.clone());
+        Self::check("npm", "--version", Arc::clone(&self.npm), ctx.clone());
+        Self::check("gemini", "--version", Arc::clone(&self.gemini), ctx.clone());
+        Self::check("claude", "--version", Arc::clone(&self.claude), ctx.clone());
+        Self::check("ffmpeg", "-version", Arc::clone(&self.ffmpeg), ctx.clone());
     }
 
-    fn check(name: &'static str, status: Arc<Mutex<ToolStatus>>, ctx: egui::Context) {
+    fn check(name: &'static str, version_flag: &'static str, status: Arc<Mutex<ToolStatus>>, ctx: egui::Context) {
         std::thread::spawn(move || {
             #[cfg(target_os = "windows")]
             let result = std::process::Command::new("cmd")
-                .args(&["/C", name, "--version"])
+                .args(&["/C", name, version_flag])
                 .output();
 
             #[cfg(not(target_os = "windows"))]
             let result = std::process::Command::new(name)
-                .arg("--version")
+                .arg(version_flag)
                 .output();
 
             let new_status = match result {
@@ -96,6 +99,7 @@ pub fn draw_welcome_dialog(
             let npm_status = checks.npm.lock().unwrap().clone();
             let gemini_status = checks.gemini.lock().unwrap().clone();
             let claude_status = checks.claude.lock().unwrap().clone();
+            let ffmpeg_status = checks.ffmpeg.lock().unwrap().clone();
 
             // npm
             let npm_cmds: &[&str] = if is_macos {
@@ -127,22 +131,15 @@ pub fn draw_welcome_dialog(
                 &["curl -fsSL https://claude.ai/install.sh | bash"],
             );
 
-            ui.add_space(12.0);
-            ui.separator();
-            ui.add_space(8.0);
+            ui.add_space(6.0);
 
-            // Пояснення — для чого ці інструменти
-            egui::Frame::none()
-                .fill(ui.visuals().faint_bg_color)
-                .rounding(4.0)
-                .inner_margin(egui::Margin::same(8.0))
-                .show(ui, |ui| {
-                    ui.label(
-                        egui::RichText::new(translate(language, "welcome_note"))
-                            .weak()
-                            .size(12.0),
-                    );
-                });
+            // FFmpeg
+            let ffmpeg_cmds: &[&str] = if is_macos {
+                &["brew install ffmpeg"]
+            } else {
+                &["winget install Gyan.FFmpeg"]
+            };
+            draw_tool_row(ui, "FFmpeg", &ffmpeg_status, translate(language, "welcome_ffmpeg_desc"), language, ffmpeg_cmds);
 
             ui.add_space(10.0);
 

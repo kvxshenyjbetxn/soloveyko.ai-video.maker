@@ -174,12 +174,12 @@ src/
 
 ### Вікно привітання (`src/gui/welcome.rs`)
 
-З'являється при першому запуску (або якщо `show_welcome: true` у `settings.json`). Перевіряє наявність трьох CLI-інструментів асинхронно у фонових потоках, одразу при ініціалізації `VideoMakerApp::new()`.
+З'являється при першому запуску (або якщо `show_welcome: true` у `settings.json`). Перевіряє наявність чотирьох CLI-інструментів асинхронно у фонових потоках, одразу при ініціалізації `VideoMakerApp::new()`.
 
 - **`ToolStatus`** — три стани: `Checking` / `Installed(String)` / `NotInstalled`. Зберігається в `Arc<Mutex<ToolStatus>>`.
-- **`ToolChecks::start()`** spawns три окремих `std::thread::spawn`. Кожен запускає відповідну команду (`npm --version`, `gemini --version`, `claude --version`) та оновлює статус після завершення через `ctx.request_repaint()`.
-- **На Windows** перевірки запускаються через `cmd /C <name> --version` (аналогічно до `api/gemini.rs` та `api/claude.rs`).
-- **Команди встановлення** показуються тільки якщо інструмент `NotInstalled`, залежать від OS: Mac — `brew install node` / `sudo npm install -g @google/gemini-cli`, Windows — `winget install OpenJS.NodeJS` / `npm install -g @google/gemini-cli`. Claude Code орієнтований на npm для всіх систем.
+- **`ToolChecks::start()`** spawns чотири окремих `std::thread::spawn`: `npm --version`, `gemini --version`, `claude --version`, `ffmpeg -version`. Кожен оновлює статус після завершення через `ctx.request_repaint()`. **Важливо:** FFmpeg використовує одинарний дефіс `-version` (на відміну від `--version` у решти).
+- **На Windows** перевірки запускаються через `cmd /C <name> <flag>` (аналогічно до `api/gemini.rs` та `api/claude.rs`).
+- **Команди встановлення** показуються тільки якщо інструмент `NotInstalled`, залежать від OS: Mac — `brew install node` / `sudo npm install -g @google/gemini-cli` / `brew install ffmpeg`, Windows — `winget install OpenJS.NodeJS` / `npm install -g @google/gemini-cli` / `winget install Gyan.FFmpeg`. Claude Code орієнтований на curl для всіх систем.
 - **"Не показувати":** галочка `dont_show` + кнопка "Зрозуміло". `draw_welcome_dialog` повертає `true` лише коли кнопку натиснуто. Якщо `closed && dont_show` — `app.rs` миттєво зберігає `show_welcome: false` через явний виклик `save_settings` (не через автозбереження), щоб не гратися з `last_saved_settings`.
 - **Повернення вікна через Налаштування:** вкладка `Settings` → секція "Привітальне вікно" містить галочку `show_welcome`. При її зміні `draw_settings` повертає `bool`, і `app.rs` одразу викликає `save_settings` з актуальними `last_saved_settings`. Вікно з'явиться при наступному запуску програми.
 - **Фонова перевірка при виборі сервісу:** якщо користувач обирає `"Gemini CLI"` чи `"Claude Code"` як сервіс перекладу, автоматично запускається фонова перевірка. Для цього використовується поле `pending_tool_check` у `VideoMakerApp`. Коли перевірка завершується, якщо потрібний інструмент не встановлений (`NotInstalled` для `claude` або `npm`/`gemini`), програма автоматично відкриває привітальне вікно (`welcome_open = true`) з детальним статусом та інструкціями для встановлення.
