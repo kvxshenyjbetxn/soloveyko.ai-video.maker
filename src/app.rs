@@ -1097,17 +1097,8 @@ fn draw_queue_panel(
                                 // Етап озвучки: "Озвучка" з кольором за stage статусом
                                 let voice_label = if job.settings.translation_enabled {
                                     let translated_opt = job.translated_text.lock().unwrap();
-                                    if let Some(ref trans_text) = *translated_opt {
-                                        let trans_chars = trans_text.chars().count();
-                                        let trans_tokens = crate::gui::editor::count_tokens(trans_text);
-                                        format!(
-                                            "{} ({} {}, {} {})",
-                                            translate(language, "voiceover"),
-                                            trans_tokens,
-                                            translate(language, "stats_tokens_short"),
-                                            trans_chars,
-                                            translate(language, "stats_chars_short")
-                                        )
+                                    if translated_opt.is_some() {
+                                        translate(language, "voiceover").to_string()
                                     } else {
                                         format!(
                                             "{} ({})",
@@ -1116,14 +1107,7 @@ fn draw_queue_panel(
                                         )
                                     }
                                 } else {
-                                    format!(
-                                        "{} ({} {}, {} {})",
-                                        translate(language, "voiceover"),
-                                        orig_tokens,
-                                        translate(language, "stats_tokens_short"),
-                                        orig_chars,
-                                        translate(language, "stats_chars_short")
-                                    )
+                                    translate(language, "voiceover").to_string()
                                 };
 
                                 ui.label(
