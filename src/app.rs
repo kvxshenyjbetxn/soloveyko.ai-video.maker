@@ -141,8 +141,8 @@ pub struct VideoMakerApp {
     pub control_regen_prompt: String,
     /// Одноразова температура для перегенерації
     pub control_regen_temperature: f32,
-    /// Результат фонової перегенерації
-    pub control_regen_result: std::sync::Arc<std::sync::Mutex<Option<Result<String, String>>>>,
+    /// Результат фонової перегенерації (текст, вартість)
+    pub control_regen_result: std::sync::Arc<std::sync::Mutex<Option<Result<(String, Option<f64>), String>>>>,
     /// Прапорець виконання перегенерації
     pub control_regen_loading: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Помилка перегенерації
@@ -996,11 +996,24 @@ fn draw_queue_panel(
     control_text_input: &mut String,
 ) {
     ui.add_space(4.0);
-    
+
+    // Загальна вартість всіх OpenRouter запитів у черзі
+    let total_cost: f64 = jobs.iter()
+        .filter_map(|j| *j.translation_cost.lock().unwrap())
+        .sum();
+
     // Верхній рядок керування
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong().size(13.0));
         ui.label(egui::RichText::new(format!("({})", jobs.len())).weak().size(11.0));
+
+        if total_cost > 0.0 {
+            ui.label(
+                egui::RichText::new(format!("${:.5}", total_cost))
+                    .size(11.0)
+                    .color(egui::Color32::from_rgb(46, 204, 113)),
+            );
+        }
 
         let has_pending = jobs.iter().any(|j| {
             *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
@@ -1666,22 +1679,6 @@ impl eframe::App for VideoMakerApp {
             let mut should_continue = false;
             let mut is_confirmed = false;
 
-            // Перевіряємо результат фонової перегенерації
-            {
-                let result = self.control_regen_result.lock().unwrap().take();
-                if let Some(res) = result {
-                    match res {
-                        Ok(text) => {
-                            self.control_text_input = text;
-                            self.control_regen_error = None;
-                        }
-                        Err(e) => {
-                            self.control_regen_error = Some(e);
-                        }
-                    }
-                }
-            }
-
             // Знаходимо задачу в черзі
             if let Some(job_idx) = self.jobs.iter().position(|j| j.id == job_id) {
                 let job_name = self.jobs[job_idx].name.clone();
@@ -1692,6 +1689,27 @@ impl eframe::App for VideoMakerApp {
                 let translation_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_stage);
                 let voiceover_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].voiceover_stage);
                 let job_settings = self.jobs[job_idx].settings.clone();
+
+                // Перевіряємо результат фонової перегенерації
+                {
+                    let result = self.control_regen_result.lock().unwrap().take();
+                    if let Some(res) = result {
+                        match res {
+                            Ok((text, cost)) => {
+                                self.control_text_input = text;
+                                // Додаємо ціну перегенерації до накопиченої вартості задачі
+                                if let Some(new_cost) = cost {
+                                    let mut existing = translation_cost_arc.lock().unwrap();
+                                    *existing = Some(existing.unwrap_or(0.0) + new_cost);
+                                }
+                                self.control_regen_error = None;
+                            }
+                            Err(e) => {
+                                self.control_regen_error = Some(e);
+                            }
+                        }
+                    }
+                }
 
                 let mut control_closed = false;
                 let mut trigger_simple_regen = false;
@@ -1825,7 +1843,7 @@ impl eframe::App for VideoMakerApp {
                     std::thread::spawn(move || {
                         let result = crate::core::pipeline::translate::translate_text(
                             &service, &key, &model, &prompt, &text, temperature, job_info,
-                        ).map(|(t, _)| t);
+                        );
                         *result_arc.lock().unwrap() = Some(result);
                         *loading_arc.lock().unwrap() = false;
                         ctx_clone.request_repaint();
@@ -1934,7 +1952,7 @@ impl eframe::App for VideoMakerApp {
                         std::thread::spawn(move || {
                             let result = crate::core::pipeline::translate::translate_text(
                                 &service, &openrouter_key_ext, &model, &prompt, &text_to_translate, temperature, job_info_ext,
-                            ).map(|(t, _)| t);
+                            );
                             *result_arc.lock().unwrap() = Some(result);
                             *loading_arc.lock().unwrap() = false;
                             ctx_clone.request_repaint();
