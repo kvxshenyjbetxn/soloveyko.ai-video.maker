@@ -325,12 +325,8 @@ pub fn run_pipeline(
                         let wav_path = save_dir.join("voice.wav");
                         crate::logger::log_job(job_id, &job_name, "Converting audio to WAV via FFmpeg...");
 
-                        #[cfg(target_os = "windows")]
-                        let ffmpeg_cmd = "ffmpeg.exe";
-                        #[cfg(not(target_os = "windows"))]
-                        let ffmpeg_cmd = "ffmpeg";
-
-                        let result = std::process::Command::new(ffmpeg_cmd)
+                        let ffmpeg_cmd = crate::bundle::ffmpeg_path();
+                        let result = std::process::Command::new(&ffmpeg_cmd)
                             .args(&[
                                 "-y", "-hide_banner", "-loglevel", "error",
                                 "-i", mp3_path.to_str().unwrap_or("voice.mp3"),

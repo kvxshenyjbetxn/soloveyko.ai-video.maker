@@ -3,6 +3,7 @@
 mod api;
 mod app;
 mod core;
+mod bundle;
 mod gui;
 mod queue;
 mod theme;

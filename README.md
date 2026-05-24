@@ -25,6 +25,7 @@
 src/
 ├── main.rs                      — точка входу, конфіг вікна, запуск eframe
 ├── app.rs                       — VideoMakerApp: весь стан, логіка update(), топбар, вікно балансів, черга
+├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe) + авто-завантаження у UserConfigDir/bin/
 ├── queue.rs                     — PipelineJob, JobStatus, JobSettings: структури черги задач (із підтримкою кешування перекладеного тексту та витрат)
 ├── theme.rs                     — теми (Dark/Light/Amoled), застосування кольору акценту
 ├── logger.rs                    — структурований логер з підтримкою прив'язки логів до задач (OnceLock + Mutex)
@@ -208,36 +209,25 @@ src/
 
 **Конвертація в WAV** — якщо у секції Озвучка увімкнено чекбокс «Конвертувати в WAV», після збереження `voice.mp3` запускається `ffmpeg -i voice.mp3 voice.wav`. Graceful fallback: якщо FFmpeg недоступний або повернув помилку — логується попередження, тривалість визначається з MP3. MP3-файл при цьому залишається поруч із WAV.
 
+### Бандл бінарників (`src/bundle.rs`)
+
+Модуль відповідає за розпізнавання шляхів до системних інструментів та їх автоматичне завантаження у папку програми.
+
+- **`bin_dir()`** — повертає `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/` (той самий `config_dir`, що й для `settings.json`).
+- **`ffmpeg_path()` / `ffprobe_path()`** — спочатку перевіряє `bin_dir()`, якщо файл існує — повертає повний шлях. Якщо ні — повертає просто `"ffmpeg"` / `"ffprobe"` (системний PATH). Решта коду просто викликає `Command::new(ffmpeg_path())` і не знає звідки бінарник.
+- **`download_all(on_progress)`** — завантажує ffmpeg і ffprobe з GitHub releases у `bin_dir()`. Перед завантаженням перевіряє чи файл вже існує — якщо так, пропускає. Читає відповідь чанками по 64 KB, після кожного чанку викликає `on_progress` з рядком `"ffmpeg (7.2 / 76.0 MB, 9%)"`. Якщо сервер не повернув `Content-Length` — без відсотка. Після запису на macOS/Linux автоматично виставляє chmod 755.
+
 ### Вікно привітання (`src/gui/welcome.rs`)
 
 З'являється при першому запуску (або якщо `show_welcome: true` у `settings.json`). Перевіряє наявність CLI-інструментів асинхронно у фонових потоках при ініціалізації `VideoMakerApp::new()`.
 
-**Інструменти що перевіряються:**
-- `gemini --version`, `claude --version`, `ffmpeg -version` — на всіх платформах
-- `brew --version` — тільки macOS (на Windows одразу `Installed`)
-- `npm --version` — тільки Windows (на macOS одразу `Installed`)
+**Інструменти що перевіряються:** лише три — `gemini --version`, `claude --version`, FFmpeg. Brew, npm та команди встановлення прибрані — вікно тепер тільки інформаційне.
+
+**FFmpeg перевіряється особливо** (`check_ffmpeg`): спочатку викликає `crate::bundle::ffmpeg_path()` (тобто шукає і в `bin_dir`, і в PATH), запускає з `-version`. Якщо не знайдено — одразу автоматично запускає `bundle::download_all` у тому ж фоновому потоці. Окремий стан `FfmpegDownload` (Idle / Downloading(label) / Done / Failed) зберігається в `Arc<Mutex<FfmpegDownload>>`. UI показує спінер + жовтий текст прогресу `"ffmpeg (7.2 / 76.0 MB, 9%)"` → після завершення перевіряє знову і показує ✓.
 
 **Важливо:** FFmpeg використовує одинарний дефіс `-version`. На Windows всі перевірки проксуються через `cmd /C <name> <flag>`.
 
-**Команди встановлення:**
-
-| Інструмент | macOS | Windows |
-|---|---|---|
-| Gemini CLI | `brew install gemini-cli` | `npm install -g @google/gemini-cli` |
-| Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
-| FFmpeg | `brew install ffmpeg` | `winget install Gyan.FFmpeg` |
-| Homebrew | `/bin/bash -c "$(curl ...install.sh)"` | — (не показується) |
-| npm/Node.js | — (не показується) | `powershell -c "irm ...chocolatey...install.ps1\|iex"` → `choco install nodejs --version="22.22.3"` |
-
-**Умовна логіка відображення:**
-- **macOS:** Homebrew показується одним рядком **перед** залежними інструментами, якщо brew відсутній і хоча б один з Gemini CLI або FFmpeg відсутній. Якщо brew відсутній і натиснуто кнопку «Встановити» для Gemini чи FFmpeg — команда встановлення brew автоматично додається першим кроком у скрипт.
-- **Windows:** npm показується перед Gemini CLI лише якщо Gemini відсутній. Аналогічно — команда встановлення npm включається першим кроком у кнопку Gemini.
-
-**Кнопка «↓ Встановити»** — відкриває Terminal (macOS) або PowerShell (Windows) через тимчасовий скрипт (`/tmp/soloveyko_install.sh` або `.ps1`). Підхід з тимчасовим файлом обраний навмисно — щоб уникнути проблем з екрануванням складних команд (наприклад, `$(curl ...)`) у `osascript`. PowerShell запускається з `-NoExit -ExecutionPolicy Bypass`.
-
-**Клік по команді** — копіює текст команди в буфер обміну (без `$`). Підказка при наведенні.
-
-**«↺ Перевірити знову»** — кнопка у нижній панелі поруч з «Зрозуміло». Викликає `ToolChecks::restart()`, що скидає всі статуси в `Checking` і перезапускає всі перевірки. Корисно після встановлення інструментів через Terminal.
+**«↺ Перевірити знову»** — кнопка у нижній панелі поруч з «Зрозуміло». Викликає `ToolChecks::restart()`, що скидає всі статуси в `Checking` та `FfmpegDownload` в `Idle` і перезапускає всі перевірки.
 
 **"Не показувати":** галочка `dont_show` + кнопка "Зрозуміло". `draw_welcome_dialog` повертає `true` лише коли кнопку натиснуто. Якщо `closed && dont_show` — `app.rs` миттєво зберігає `show_welcome: false` через явний виклик `save_settings`.
 
@@ -356,6 +346,8 @@ src/
 - **Файл озвучки `voice.mp3` / `voice.zip`** — розширення визначається по `Content-Type` відповіді (`application/zip` → `.zip`, інакше → `.mp3`). VoiceBot може повернути ZIP коли увімкнено `chunks` режим у шаблоні. Для Edge TTS завжди створюється `.mp3`.
 
 - **Конвертація в WAV та тривалість аудіо:** Якщо увімкнено `voiceover_convert_to_wav`, після `voice.mp3` запускається `ffmpeg -i voice.mp3 voice.wav`. MP3 при цьому **не видаляється** — залишаються обидва файли. Тривалість вимірюється вже з фінального файлу (WAV або MP3). Парсери тривалості написані на чистому Rust без додаткових залежностей: MP3-парсер підтримує Xing VBR і CBR, WAV-парсер читає RIFF-чанки. Якщо FFmpeg недоступний — конвертація тихо пропускається, задача продовжується з MP3.
+
+- **Шлях до FFmpeg та ffprobe — через `bundle::ffmpeg_path()`:** Pipeline більше не хардкодить `"ffmpeg"` / `"ffmpeg.exe"`. Функція `ffmpeg_path()` спочатку шукає бінарник у `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/` (автоматично завантажений при першому запуску), і тільки якщо його там немає — передає просто `"ffmpeg"` (системний PATH). Це дозволяє програмі працювати без системного FFmpeg взагалі.
 
 - **VoiceBot polling:** `run_voiceover_sync` блокує потік `std::thread::sleep(5s)` між статусами. Для Edge TTS polling не потрібен — запит виконується синхронно за один виклик.
 

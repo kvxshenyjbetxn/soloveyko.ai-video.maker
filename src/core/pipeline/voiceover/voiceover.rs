@@ -329,12 +329,8 @@ fn merge_audio_ffmpeg(chunk_paths: &[PathBuf], output_path: &Path) -> Result<(),
     std::fs::write(&concat_list_path, file_content)
         .map_err(|e| format!("Failed to create concat_list.txt: {}", e))?;
 
-    #[cfg(target_os = "windows")]
-    let ffmpeg_cmd = "ffmpeg.exe";
-    #[cfg(not(target_os = "windows"))]
-    let ffmpeg_cmd = "ffmpeg";
-
-    let output = std::process::Command::new(ffmpeg_cmd)
+    let ffmpeg_cmd = crate::bundle::ffmpeg_path();
+    let output = std::process::Command::new(&ffmpeg_cmd)
         .current_dir(parent_dir)
         .args(&[
             "-y",
