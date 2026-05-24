@@ -34,6 +34,8 @@ fn default_montage_service() -> String { "FFmpeg".to_string() }
 fn default_montage_fps() -> u32 { 30 }
 fn default_montage_preset() -> String { "medium".to_string() }
 fn default_montage_bitrate() -> u32 { 8 }
+fn default_montage_transition() -> String { "none".to_string() }
+fn default_montage_transition_duration() -> f32 { 0.5 }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -202,6 +204,12 @@ pub struct AppSettings {
     /// Бітрейт відео у МБ/с
     #[serde(default = "default_montage_bitrate")]
     pub montage_bitrate: u32,
+    /// Тип переходу між кліпами ("none", "random", або конкретна назва xfade)
+    #[serde(default = "default_montage_transition")]
+    pub montage_transition: String,
+    /// Тривалість переходу в секундах
+    #[serde(default = "default_montage_transition_duration")]
+    pub montage_transition_duration: f32,
 }
 
 impl Default for AppSettings {
@@ -260,6 +268,8 @@ impl Default for AppSettings {
             montage_fps: 30,
             montage_preset: "medium".to_string(),
             montage_bitrate: 8,
+            montage_transition: "none".to_string(),
+            montage_transition_duration: 0.5,
         }
     }
 }
@@ -462,6 +472,12 @@ pub struct PipelineTemplate {
     /// Бітрейт відео у МБ/с
     #[serde(default = "default_montage_bitrate")]
     pub montage_bitrate: u32,
+    /// Тип переходу між кліпами ("none", "random", або конкретна назва xfade)
+    #[serde(default = "default_montage_transition")]
+    pub montage_transition: String,
+    /// Тривалість переходу в секундах
+    #[serde(default = "default_montage_transition_duration")]
+    pub montage_transition_duration: f32,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -514,6 +530,8 @@ pub fn save_template(
     montage_fps: u32,
     montage_preset: &str,
     montage_bitrate: u32,
+    montage_transition: &str,
+    montage_transition_duration: f32,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -560,6 +578,8 @@ pub fn save_template(
             montage_fps,
             montage_preset: montage_preset.to_string(),
             montage_bitrate,
+            montage_transition: montage_transition.to_string(),
+            montage_transition_duration,
         };
 
         let json = serde_json::to_string_pretty(&template)?;

@@ -65,6 +65,8 @@ pub struct JobSettings {
     pub montage_fps: u32,
     pub montage_preset: String,
     pub montage_bitrate: u32,
+    pub montage_transition: String,
+    pub montage_transition_duration: f32,
 }
 
 /// Одна задача в черзі пайплайну.

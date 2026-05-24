@@ -224,6 +224,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_fps_label" => "FPS",
         "montage_preset_label" => "Пресет кодирования",
         "montage_bitrate_label" => "Битрейт",
+        "montage_transition_label" => "Переход",
+        "montage_transition_duration_label" => "Длительность перехода",
+        "montage_transition_none" => "Без перехода",
+        "montage_transition_random" => "Случайно",
         _ => "",
     }
 }

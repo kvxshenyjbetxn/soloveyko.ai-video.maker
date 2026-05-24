@@ -47,6 +47,8 @@ pub fn draw_templates_section(
     montage_fps: &mut u32,
     montage_preset: &mut String,
     montage_bitrate: &mut u32,
+    montage_transition: &mut String,
+    montage_transition_duration: &mut f32,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -123,6 +125,8 @@ pub fn draw_templates_section(
                             *montage_fps = template.montage_fps;
                             *montage_preset = template.montage_preset;
                             *montage_bitrate = template.montage_bitrate;
+                            *montage_transition = template.montage_transition;
+                            *montage_transition_duration = template.montage_transition_duration;
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

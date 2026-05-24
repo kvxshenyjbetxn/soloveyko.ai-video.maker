@@ -224,6 +224,10 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_fps_label" => "FPS",
         "montage_preset_label" => "Encoding preset",
         "montage_bitrate_label" => "Bitrate",
+        "montage_transition_label" => "Transition",
+        "montage_transition_duration_label" => "Transition duration",
+        "montage_transition_none" => "No transition",
+        "montage_transition_random" => "Random",
         _ => "",
     }
 }

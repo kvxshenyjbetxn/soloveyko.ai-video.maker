@@ -665,6 +665,8 @@ pub fn run_pipeline(
                 settings.montage_fps,
                 &settings.montage_preset,
                 settings.montage_bitrate,
+                &settings.montage_transition,
+                settings.montage_transition_duration,
                 |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
                 move |pct| {
                     *montage_progress_arc.lock().unwrap() = Some(pct);

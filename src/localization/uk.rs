@@ -224,6 +224,10 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_fps_label" => "FPS",
         "montage_preset_label" => "Пресет кодування",
         "montage_bitrate_label" => "Бітрейт",
+        "montage_transition_label" => "Перехід",
+        "montage_transition_duration_label" => "Тривалість переходу",
+        "montage_transition_none" => "Без переходу",
+        "montage_transition_random" => "Рандом",
         _ => "",
     }
 }

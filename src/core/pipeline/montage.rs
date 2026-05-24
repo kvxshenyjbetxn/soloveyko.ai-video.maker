@@ -13,10 +13,12 @@ pub fn find_voice_file(save_dir: &Path) -> Option<PathBuf> {
 
 /// Будує та запускає FFmpeg-монтаж.
 ///
-/// Читає timeline.json для таймінгів, збирає медіафайли з media/,
-/// записує montage_script.txt і запускає ffmpeg у папці save_dir
-/// (всі шляхи — відносні, щоб не перевищувати ліміт командного рядка).
-/// `on_progress` викликається під час рендеру з відсотком [0.0..1.0].
+/// `transition` — "none", "random" або конкретна назва xfade-ефекту.
+/// `transition_duration_secs` — тривалість переходу в секундах (ігнорується якщо "none").
+///
+/// При переходах кожен кліп (крім останнього) розтягується на `transition_duration_secs`,
+/// щоб cumulative offset відповідав абсолютним start_secs із timeline і синхронізація
+/// з аудіо не розходилась.
 pub fn run_montage(
     save_dir: &Path,
     task_name: &str,
@@ -24,6 +26,8 @@ pub fn run_montage(
     fps: u32,
     preset: &str,
     bitrate_mbps: u32,
+    transition: &str,
+    transition_duration_secs: f32,
     log_fn: impl Fn(&str),
     on_progress: impl Fn(f32),
 ) -> Result<u64, String> {
@@ -42,7 +46,7 @@ pub fn run_montage(
 
     struct Clip {
         path: String,  // відносний шлях від save_dir
-        duration: f64,
+        duration: f64, // оригінальна тривалість (без урахування overlap переходу)
         is_video: bool,
     }
 
@@ -133,17 +137,34 @@ pub fn run_montage(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "voice.mp3".to_string());
 
-    // ─── Будуємо фільтр-граф ─────────────────────────────────────────────────
+    // ─── Параметри переходу ───────────────────────────────────────────────────
     let n = clips.len();
+    // Обмежуємо тривалість переходу до половини найкоротшого кліпу
+    let min_clip_dur = clips.iter().map(|c| c.duration).fold(f64::INFINITY, f64::min);
+    let t = if transition == "none" || n < 2 {
+        0.0f64
+    } else {
+        (transition_duration_secs as f64).clamp(0.05, min_clip_dur * 0.5)
+    };
+    let use_xfade = t > 0.0;
+
+    // ─── Будуємо фільтр-граф ─────────────────────────────────────────────────
     let mut filter_parts: Vec<String> = Vec::new();
 
     for (i, clip) in clips.iter().enumerate() {
-        let dur = clip.duration.max(0.05);
-        let frames = (dur * fps as f64).round().max(1.0) as u64;
+        // При xfade кожен кліп (крім останнього) потрібно подовжити на t,
+        // щоб зберегти синхронізацію: cumulative_dur[k] = start_secs[k+1].
+        let adj_dur = if use_xfade && i < n - 1 {
+            clip.duration + t
+        } else {
+            clip.duration
+        };
+        let adj_dur = adj_dur.max(0.05);
+        let frames = (adj_dur * fps as f64).round().max(1.0) as u64;
 
         if clip.is_video {
             filter_parts.push(format!(
-                "[{i}:v]trim=duration={dur:.6},setpts=PTS-STARTPTS,\
+                "[{i}:v]trim=duration={adj_dur:.6},setpts=PTS-STARTPTS,\
                 scale=1920:1080:force_original_aspect_ratio=increase,\
                 crop=1920:1080,format=yuv420p,setsar=1,fps={fps},settb=AVTB[v{i}_final]"
             ));
@@ -155,16 +176,49 @@ pub fn run_montage(
             filter_parts.push(format!(
                 "[v{i}_up]zoompan=z='1':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':\
                 d={frames}:s=1920x1080:fps={fps},format=yuv420p,setsar=1,settb=AVTB,\
-                trim=duration={dur:.6},setpts=PTS-STARTPTS[v{i}_final]"
+                trim=duration={adj_dur:.6},setpts=PTS-STARTPTS[v{i}_final]"
             ));
         }
     }
 
-    // Concat усіх кліпів
-    let concat_inputs: String = (0..n).map(|i| format!("[v{i}_final]")).collect();
-    filter_parts.push(format!("{concat_inputs}concat=n={n}:v=1:a=0[v_montage_raw]"));
+    if use_xfade {
+        // ─── Ланцюг xfade-переходів ───────────────────────────────────────────
+        // offset для k-го xfade = sum(orig_dur[0..=k]) = start_secs[k+1]
+        // Завдяки цьому cumulative відео-позиція кожного кліпу збігається
+        // з його start_secs із timeline.
+        let mut cumulative_offset = 0.0f64;
+        let mut prev_label = "v0_final".to_string();
+
+        for k in 0..n - 1 {
+            cumulative_offset += clips[k].duration; // = start_secs[k+1]
+            let trans_name = pick_transition(transition);
+            let out_label = if k == n - 2 {
+                "v_montage_raw".to_string()
+            } else {
+                format!("vchain{}", k + 1)
+            };
+            filter_parts.push(format!(
+                "[{prev}][v{next}_final]xfade=transition={trans}:\
+                duration={t:.6}:offset={offset:.6}[{out}]",
+                prev = prev_label,
+                next = k + 1,
+                trans = trans_name,
+                t = t,
+                offset = cumulative_offset,
+                out = out_label,
+            ));
+            prev_label = out_label;
+        }
+    } else {
+        // ─── Concat усіх кліпів (без переходів) ──────────────────────────────
+        let concat_inputs: String = (0..n).map(|i| format!("[v{i}_final]")).collect();
+        filter_parts.push(format!("{concat_inputs}concat=n={n}:v=1:a=0[v_montage_raw]"));
+    }
+
     filter_parts.push("[v_montage_raw]tpad=stop_mode=clone:stop=-1[v_padded]".to_string());
-    filter_parts.push(format!("[v_padded]trim=duration={total_dur:.6},setpts=PTS-STARTPTS[v_montage]"));
+    filter_parts.push(format!(
+        "[v_padded]trim=duration={total_dur:.6},setpts=PTS-STARTPTS[v_montage]"
+    ));
 
     let script = filter_parts.join(";");
     std::fs::write(save_dir.join("montage_script.txt"), &script)
@@ -240,12 +294,15 @@ pub fn run_montage(
     // out_time_us — мікросекунди (незважаючи на назву out_time_ms, FFmpeg пише мікросекунди).
     let stdout = child.stdout.take().unwrap();
     let mut out_time_us: i64 = 0;
+    let mut enc_fps = String::new();
     let mut speed = String::new();
     let mut bitrate = String::new();
 
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
         if let Some(v) = line.strip_prefix("out_time_us=") {
             out_time_us = v.trim().parse().unwrap_or(0);
+        } else if let Some(v) = line.strip_prefix("fps=") {
+            enc_fps = v.trim().to_string();
         } else if let Some(v) = line.strip_prefix("speed=") {
             speed = v.trim().to_string();
         } else if let Some(v) = line.strip_prefix("bitrate=") {
@@ -254,7 +311,10 @@ pub fn run_montage(
             // progress=end пропускаємо: значення там скинуті (N/A), on_progress(1.0) після циклу
             let pct = (out_time_us as f64 / 1_000_000.0 / total_dur).clamp(0.0, 1.0) as f32;
             on_progress(pct);
-            log_fn(&format!("{:.0}%  speed={}  bitrate={}", pct * 100.0, speed, bitrate));
+            log_fn(&format!(
+                "{:.0}%  fps={}  speed={}  bitrate={}",
+                pct * 100.0, enc_fps, speed, bitrate
+            ));
         }
     }
 
@@ -272,4 +332,24 @@ pub fn run_montage(
         .map(|m| m.len())
         .unwrap_or(0);
     Ok(file_size)
+}
+
+/// Повертає назву переходу: конкретну або випадкову з доступних xfade.
+fn pick_transition(transition: &str) -> &'static str {
+    use crate::gui::pipeline::editing::XFADE_TRANSITIONS;
+    if transition == "random" {
+        // Простий детермінований "рандом" на основі поточного часу
+        let idx = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos() as usize)
+            .unwrap_or(0)
+            % XFADE_TRANSITIONS.len();
+        XFADE_TRANSITIONS[idx]
+    } else {
+        // Повертаємо статичний рядок; якщо невідомо — fallback "fade"
+        XFADE_TRANSITIONS.iter()
+            .copied()
+            .find(|&t| t == transition)
+            .unwrap_or("fade")
+    }
 }

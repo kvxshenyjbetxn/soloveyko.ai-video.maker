@@ -126,6 +126,8 @@ pub fn draw_pipeline_panel(
     montage_fps: &mut u32,
     montage_preset: &mut String,
     montage_bitrate: &mut u32,
+    montage_transition: &mut String,
+    montage_transition_duration: &mut f32,
     text_input: &str,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
@@ -203,6 +205,8 @@ pub fn draw_pipeline_panel(
                             *montage_fps,
                             montage_preset,
                             *montage_bitrate,
+                            montage_transition,
+                            *montage_transition_duration,
                         ) {
                             Ok(_) => {
                                 *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -303,6 +307,8 @@ pub fn draw_pipeline_panel(
                                     montage_fps,
                                     montage_preset,
                                     montage_bitrate,
+                                    montage_transition,
+                                    montage_transition_duration,
                                 );
                             });
                         }
@@ -546,6 +552,8 @@ pub fn draw_pipeline_panel(
                                     montage_fps,
                                     montage_preset,
                                     montage_bitrate,
+                                    montage_transition,
+                                    montage_transition_duration,
                                 );
                             });
                         }
@@ -699,6 +707,8 @@ pub fn draw_pipeline_panel(
                                     *montage_fps,
                                     montage_preset,
                                     *montage_bitrate,
+                                    montage_transition,
+                                    *montage_transition_duration,
                                 );
                             }
                         });
@@ -757,6 +767,8 @@ fn validate_and_enqueue(
     montage_fps: u32,
     montage_preset: &str,
     montage_bitrate: u32,
+    montage_transition: &str,
+    montage_transition_duration: f32,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
     let base = save_path.trim_end_matches('/').trim_end_matches('\\');
@@ -805,6 +817,8 @@ fn validate_and_enqueue(
         montage_fps,
         montage_preset: montage_preset.to_string(),
         montage_bitrate,
+        montage_transition: montage_transition.to_string(),
+        montage_transition_duration,
     };
 
     let id = *job_counter;
