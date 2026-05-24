@@ -180,6 +180,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "welcome_not_installed" => "not installed",
         "welcome_recheck_btn" => "↺ Recheck",
         "welcome_ffmpeg_desc" => "FFmpeg — audio/video processing, WAV format conversion",
+        "welcome_whisper_desc" => "Whisper — speech recognition for subtitle generation",
         "balance_edge_tts_status" => "Free (No limits)",
         "balance_voicebot_limit" => "Threads limit: 5 (fixed)",
         "settings_edge_tts_threads" => "Edge TTS Parallel Threads:",

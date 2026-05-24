@@ -11,6 +11,11 @@ const FFPROBE_NAME: &str = "ffprobe.exe";
 const FFPROBE_NAME: &str = "ffprobe";
 
 #[cfg(target_os = "windows")]
+const WHISPER_NAME: &str = "whisper.exe";
+#[cfg(not(target_os = "windows"))]
+const WHISPER_NAME: &str = "whisper";
+
+#[cfg(target_os = "windows")]
 const FFMPEG_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffmpeg.exe";
 #[cfg(not(target_os = "windows"))]
 const FFMPEG_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffmpeg";
@@ -20,6 +25,12 @@ const FFPROBE_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/relea
 #[cfg(not(target_os = "windows"))]
 const FFPROBE_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/ffprobe";
 
+/// На Windows — zip-архів з папкою всередині, в якій лежить main.exe.
+#[cfg(target_os = "windows")]
+const WHISPER_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper.win.zip";
+#[cfg(not(target_os = "windows"))]
+const WHISPER_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper";
+
 /// Папка для бандлованих бінарників: <UserConfigDir>/Soloveyko.AI-Video.Maker/bin/
 pub fn bin_dir() -> PathBuf {
     dirs::config_dir()
@@ -28,7 +39,7 @@ pub fn bin_dir() -> PathBuf {
         .join("bin")
 }
 
-/// Шлях до ffmpeg: спочатку ~/bin/, потім системний PATH.
+/// Шлях до ffmpeg: спочатку bin_dir, потім системний PATH.
 pub fn ffmpeg_path() -> String {
     let local = bin_dir().join(FFMPEG_NAME);
     if local.exists() {
@@ -37,7 +48,7 @@ pub fn ffmpeg_path() -> String {
     FFMPEG_NAME.to_string()
 }
 
-/// Шлях до ffprobe: спочатку ~/bin/, потім системний PATH.
+/// Шлях до ffprobe: спочатку bin_dir, потім системний PATH.
 #[allow(dead_code)]
 pub fn ffprobe_path() -> String {
     let local = bin_dir().join(FFPROBE_NAME);
@@ -47,8 +58,23 @@ pub fn ffprobe_path() -> String {
     FFPROBE_NAME.to_string()
 }
 
-/// Завантажує ffmpeg і ffprobe у ~/bin/.
-/// `on_progress` викликається з рядком прогресу, наприклад `"ffmpeg (7.2 / 76.0 MB)"`.
+/// Шлях до whisper: спочатку bin_dir, потім системний PATH.
+#[allow(dead_code)]
+pub fn whisper_path() -> String {
+    let local = bin_dir().join(WHISPER_NAME);
+    if local.exists() {
+        return local.to_string_lossy().into_owned();
+    }
+    WHISPER_NAME.to_string()
+}
+
+/// Перевіряє, чи є whisper у локальному bin_dir.
+pub fn whisper_local_exists() -> bool {
+    bin_dir().join(WHISPER_NAME).exists()
+}
+
+/// Завантажує ffmpeg і ffprobe у bin_dir (пропускає вже наявні).
+/// `on_progress` викликається з рядком прогресу, наприклад `"ffmpeg (7.2 / 76.0 MB, 9%)"`.
 pub fn download_all(mut on_progress: impl FnMut(String)) -> Result<(), String> {
     let dir = bin_dir();
     std::fs::create_dir_all(&dir)
@@ -67,12 +93,63 @@ pub fn download_all(mut on_progress: impl FnMut(String)) -> Result<(), String> {
     Ok(())
 }
 
-fn download_file(
+/// Завантажує whisper у bin_dir (пропускає якщо вже є).
+/// На Windows — розпаковує zip і витягує main.exe.
+pub fn download_whisper(mut on_progress: impl FnMut(String)) -> Result<(), String> {
+    let dir = bin_dir();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
+
+    let dest = dir.join(WHISPER_NAME);
+    if dest.exists() {
+        return Ok(());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let bytes = download_to_bytes(WHISPER_URL, "whisper", &mut on_progress)?;
+        extract_main_exe_from_zip(&bytes, &dest)?;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    download_file(WHISPER_URL, &dest, "whisper", &mut on_progress)?;
+
+    Ok(())
+}
+
+/// Розпаковує main.exe з zip-архіву (шукає в будь-якій підпапці).
+#[cfg(target_os = "windows")]
+fn extract_main_exe_from_zip(bytes: &[u8], dest: &PathBuf) -> Result<(), String> {
+    use std::io::Read;
+
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor)
+        .map_err(|e| format!("Помилка відкриття zip: {}", e))?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)
+            .map_err(|e| format!("Помилка читання запису zip: {}", e))?;
+
+        let name = entry.name().to_string();
+        if name.ends_with("main.exe") {
+            let mut contents = Vec::new();
+            entry.read_to_end(&mut contents)
+                .map_err(|e| format!("Помилка розпакування main.exe: {}", e))?;
+            std::fs::write(dest, &contents)
+                .map_err(|e| format!("Помилка запису whisper.exe: {}", e))?;
+            return Ok(());
+        }
+    }
+
+    Err("main.exe не знайдено в архіві".to_string())
+}
+
+/// Завантажує URL у пам'ять з відображенням прогресу.
+fn download_to_bytes(
     url: &str,
-    dest: &PathBuf,
     label: &str,
     on_progress: &mut impl FnMut(String),
-) -> Result<(), String> {
+) -> Result<Vec<u8>, String> {
     let response = ureq::get(url)
         .call()
         .map_err(|e| format!("HTTP помилка: {}", e))?;
@@ -103,6 +180,18 @@ fn download_file(
         };
         on_progress(progress_str);
     }
+
+    Ok(buf)
+}
+
+/// Завантажує файл за URL і зберігає на диск.
+fn download_file(
+    url: &str,
+    dest: &PathBuf,
+    label: &str,
+    on_progress: &mut impl FnMut(String),
+) -> Result<(), String> {
+    let buf = download_to_bytes(url, label, on_progress)?;
 
     std::fs::write(dest, &buf)
         .map_err(|e| format!("Помилка запису: {}", e))?;

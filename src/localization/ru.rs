@@ -180,6 +180,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "welcome_not_installed" => "не установлено",
         "welcome_recheck_btn" => "↺ Проверить снова",
         "welcome_ffmpeg_desc" => "FFmpeg — обработка аудио/видео, конвертация в формат WAV",
+        "welcome_whisper_desc" => "Whisper — распознавание речи для генерации субтитров",
         "balance_edge_tts_status" => "Бесплатно (Без лимитов)",
         "balance_voicebot_limit" => "Ограничение потоков: 5 (фиксировано)",
         "settings_edge_tts_threads" => "Параллельные потоки Edge TTS:",

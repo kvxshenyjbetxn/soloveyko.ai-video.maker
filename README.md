@@ -25,7 +25,7 @@
 src/
 ├── main.rs                      — точка входу, конфіг вікна, запуск eframe
 ├── app.rs                       — VideoMakerApp: весь стан, логіка update(), топбар, вікно балансів, черга
-├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe) + авто-завантаження у UserConfigDir/bin/
+├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe, whisper) + авто-завантаження у UserConfigDir/bin/
 ├── queue.rs                     — PipelineJob, JobStatus, JobSettings: структури черги задач (із підтримкою кешування перекладеного тексту та витрат)
 ├── theme.rs                     — теми (Dark/Light/Amoled), застосування кольору акценту
 ├── logger.rs                    — структурований логер з підтримкою прив'язки логів до задач (OnceLock + Mutex)
@@ -214,20 +214,27 @@ src/
 Модуль відповідає за розпізнавання шляхів до системних інструментів та їх автоматичне завантаження у папку програми.
 
 - **`bin_dir()`** — повертає `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/` (той самий `config_dir`, що й для `settings.json`).
-- **`ffmpeg_path()` / `ffprobe_path()`** — спочатку перевіряє `bin_dir()`, якщо файл існує — повертає повний шлях. Якщо ні — повертає просто `"ffmpeg"` / `"ffprobe"` (системний PATH). Решта коду просто викликає `Command::new(ffmpeg_path())` і не знає звідки бінарник.
+- **`ffmpeg_path()` / `ffprobe_path()` / `whisper_path()`** — спочатку перевіряє `bin_dir()`, якщо файл існує — повертає повний шлях. Якщо ні — повертає просто `"ffmpeg"` / `"whisper"` (системний PATH). Решта коду просто викликає `Command::new(ffmpeg_path())` і не знає звідки бінарник.
 - **`download_all(on_progress)`** — завантажує ffmpeg і ffprobe з GitHub releases у `bin_dir()`. Перед завантаженням перевіряє чи файл вже існує — якщо так, пропускає. Читає відповідь чанками по 64 KB, після кожного чанку викликає `on_progress` з рядком `"ffmpeg (7.2 / 76.0 MB, 9%)"`. Якщо сервер не повернув `Content-Length` — без відсотка. Після запису на macOS/Linux автоматично виставляє chmod 755.
+- **`download_whisper(on_progress)`** — завантажує whisper у `bin_dir()`. На macOS: прямий бінарник (той самий механізм що й ffmpeg). На Windows: завантажує `whisper.win.zip`, розпаковує через крейт `zip`, шукає `main.exe` у будь-якій підпапці архіву та зберігає як `whisper.exe`. Перевіряє наявність файлу перед завантаженням — повторного скачування не відбувається.
+- **`whisper_local_exists()`** — перевіряє чи є whisper у `bin_dir()` (без fallback на PATH). Використовується `check_whisper` у welcome.rs щоб не запускати бінарник — досить перевірки файлу.
+- **Внутрішня рефакторизація:** `download_to_bytes()` — спільний примітив для завантаження в пам'ять з прогресом. `download_file()` тепер делегує туди і дописує на диск. Це дозволило додати Windows zip-flow без дублювання HTTP-логіки.
 
 ### Вікно привітання (`src/gui/welcome.rs`)
 
 З'являється при першому запуску (або якщо `show_welcome: true` у `settings.json`). Перевіряє наявність CLI-інструментів асинхронно у фонових потоках при ініціалізації `VideoMakerApp::new()`.
 
-**Інструменти що перевіряються:** лише три — `gemini --version`, `claude --version`, FFmpeg. Brew, npm та команди встановлення прибрані — вікно тепер тільки інформаційне.
+**Інструменти що перевіряються:** чотири — `gemini --version`, `claude --version`, FFmpeg, Whisper. Brew, npm та команди встановлення прибрані — вікно тільки інформаційне.
 
-**FFmpeg перевіряється особливо** (`check_ffmpeg`): спочатку викликає `crate::bundle::ffmpeg_path()` (тобто шукає і в `bin_dir`, і в PATH), запускає з `-version`. Якщо не знайдено — одразу автоматично запускає `bundle::download_all` у тому ж фоновому потоці. Окремий стан `FfmpegDownload` (Idle / Downloading(label) / Done / Failed) зберігається в `Arc<Mutex<FfmpegDownload>>`. UI показує спінер + жовтий текст прогресу `"ffmpeg (7.2 / 76.0 MB, 9%)"` → після завершення перевіряє знову і показує ✓.
+**FFmpeg перевіряється особливо** (`check_ffmpeg`): спочатку викликає `crate::bundle::ffmpeg_path()` (тобто шукає і в `bin_dir`, і в PATH), запускає з `-version`. Якщо не знайдено — одразу автоматично запускає `bundle::download_all` у тому ж фоновому потоці. Окремий стан `BinaryDownload` (Idle / Downloading(label) / Done / Failed) зберігається в `Arc<Mutex<BinaryDownload>>`. UI показує спінер + жовтий текст прогресу `"ffmpeg (7.2 / 76.0 MB, 9%)"` → після завершення перевіряє знову і показує ✓.
 
-**Важливо:** FFmpeg використовує одинарний дефіс `-version`. На Windows всі перевірки проксуються через `cmd /C <name> <flag>`.
+**Whisper перевіряється** (`check_whisper`): на відміну від FFmpeg, не запускає бінарник — лише перевіряє `bundle::whisper_local_exists()`. Якщо файлу нема — запускає `bundle::download_whisper` з прогресом. Після завершення знову перевіряє `whisper_local_exists()`. Результат: `ToolStatus::Installed("bundled")`.
 
-**«↺ Перевірити знову»** — кнопка у нижній панелі поруч з «Зрозуміло». Викликає `ToolChecks::restart()`, що скидає всі статуси в `Checking` та `FfmpegDownload` в `Idle` і перезапускає всі перевірки.
+**`BinaryDownload` (раніше `FfmpegDownload`):** загальний тип для всіх бінарників з авто-завантаженням. `FfmpegDownload` залишений як type alias для зворотної сумісності всередині файлу. Функція `draw_download_row` (раніше `draw_ffmpeg_row`) тепер використовується для обох: FFmpeg та Whisper.
+
+**Важливо:** FFmpeg використовує одинарний дефіс `-version`. На Windows всі перевірки CLI (Gemini, Claude) проксуються через `cmd /C <name> <flag>`.
+
+**«↺ Перевірити знову»** — кнопка у нижній панелі поруч з «Зрозуміло». Викликає `ToolChecks::restart()`, що скидає всі статуси в `Checking` та обидва `BinaryDownload` в `Idle` і перезапускає всі перевірки.
 
 **"Не показувати":** галочка `dont_show` + кнопка "Зрозуміло". `draw_welcome_dialog` повертає `true` лише коли кнопку натиснуто. Якщо `closed && dont_show` — `app.rs` миттєво зберігає `show_welcome: false` через явний виклик `save_settings`.
 

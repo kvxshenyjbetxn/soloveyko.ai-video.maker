@@ -10,21 +10,26 @@ pub enum ToolStatus {
     NotInstalled,
 }
 
-/// Стан авто-завантаження FFmpeg.
+/// Стан авто-завантаження бінарника (ffmpeg, whisper тощо).
 #[derive(Clone, PartialEq)]
-pub enum FfmpegDownload {
+pub enum BinaryDownload {
     Idle,
     Downloading(String),
     Done,
     Failed(String),
 }
 
+// Зворотна сумісність для коду, що ще використовує старе ім'я.
+pub type FfmpegDownload = BinaryDownload;
+
 /// Асинхронні стани перевірки CLI-інструментів.
 pub struct ToolChecks {
     pub gemini: Arc<Mutex<ToolStatus>>,
     pub claude: Arc<Mutex<ToolStatus>>,
     pub ffmpeg: Arc<Mutex<ToolStatus>>,
-    pub ffmpeg_download: Arc<Mutex<FfmpegDownload>>,
+    pub ffmpeg_download: Arc<Mutex<BinaryDownload>>,
+    pub whisper: Arc<Mutex<ToolStatus>>,
+    pub whisper_download: Arc<Mutex<BinaryDownload>>,
 }
 
 impl ToolChecks {
@@ -33,7 +38,9 @@ impl ToolChecks {
             gemini: Arc::new(Mutex::new(ToolStatus::Checking)),
             claude: Arc::new(Mutex::new(ToolStatus::Checking)),
             ffmpeg: Arc::new(Mutex::new(ToolStatus::Checking)),
-            ffmpeg_download: Arc::new(Mutex::new(FfmpegDownload::Idle)),
+            ffmpeg_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
+            whisper: Arc::new(Mutex::new(ToolStatus::Checking)),
+            whisper_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
         }
     }
 
@@ -42,7 +49,9 @@ impl ToolChecks {
         *self.gemini.lock().unwrap() = ToolStatus::Checking;
         *self.claude.lock().unwrap() = ToolStatus::Checking;
         *self.ffmpeg.lock().unwrap() = ToolStatus::Checking;
-        *self.ffmpeg_download.lock().unwrap() = FfmpegDownload::Idle;
+        *self.ffmpeg_download.lock().unwrap() = BinaryDownload::Idle;
+        *self.whisper.lock().unwrap() = ToolStatus::Checking;
+        *self.whisper_download.lock().unwrap() = BinaryDownload::Idle;
         self.start(ctx);
     }
 
@@ -53,6 +62,11 @@ impl ToolChecks {
         Self::check_ffmpeg(
             Arc::clone(&self.ffmpeg),
             Arc::clone(&self.ffmpeg_download),
+            ctx.clone(),
+        );
+        Self::check_whisper(
+            Arc::clone(&self.whisper),
+            Arc::clone(&self.whisper_download),
             ctx,
         );
     }
@@ -139,10 +153,53 @@ impl ToolChecks {
                         _ => ToolStatus::NotInstalled,
                     };
                     *ffmpeg_status.lock().unwrap() = new_status;
-                    *ffmpeg_download.lock().unwrap() = FfmpegDownload::Done;
+                    *ffmpeg_download.lock().unwrap() = BinaryDownload::Done;
                 }
                 Err(e) => {
-                    *ffmpeg_download.lock().unwrap() = FfmpegDownload::Failed(e);
+                    *ffmpeg_download.lock().unwrap() = BinaryDownload::Failed(e);
+                }
+            }
+            ctx.request_repaint();
+        });
+    }
+
+    /// Перевіряє whisper (бандлований), при відсутності — авто-скачує.
+    fn check_whisper(
+        whisper_status: Arc<Mutex<ToolStatus>>,
+        whisper_download: Arc<Mutex<BinaryDownload>>,
+        ctx: egui::Context,
+    ) {
+        std::thread::spawn(move || {
+            if crate::bundle::whisper_local_exists() {
+                *whisper_status.lock().unwrap() = ToolStatus::Installed("bundled".to_string());
+                ctx.request_repaint();
+                return;
+            }
+
+            // Не знайдено — починаємо авто-завантаження
+            *whisper_status.lock().unwrap() = ToolStatus::NotInstalled;
+            *whisper_download.lock().unwrap() = BinaryDownload::Downloading("підготовка...".to_string());
+            ctx.request_repaint();
+
+            let dl = Arc::clone(&whisper_download);
+            let ctx2 = ctx.clone();
+            let result = crate::bundle::download_whisper(move |label| {
+                *dl.lock().unwrap() = BinaryDownload::Downloading(label);
+                ctx2.request_repaint();
+            });
+
+            match result {
+                Ok(()) => {
+                    let new_status = if crate::bundle::whisper_local_exists() {
+                        ToolStatus::Installed("bundled".to_string())
+                    } else {
+                        ToolStatus::NotInstalled
+                    };
+                    *whisper_status.lock().unwrap() = new_status;
+                    *whisper_download.lock().unwrap() = BinaryDownload::Done;
+                }
+                Err(e) => {
+                    *whisper_download.lock().unwrap() = BinaryDownload::Failed(e);
                 }
             }
             ctx.request_repaint();
@@ -182,12 +239,16 @@ pub fn draw_welcome_dialog(
             let claude_status = checks.claude.lock().unwrap().clone();
             let ffmpeg_status = checks.ffmpeg.lock().unwrap().clone();
             let ffmpeg_download = checks.ffmpeg_download.lock().unwrap().clone();
+            let whisper_status = checks.whisper.lock().unwrap().clone();
+            let whisper_download = checks.whisper_download.lock().unwrap().clone();
 
             draw_tool_row(ui, "Gemini CLI", &gemini_status, translate(language, "welcome_gemini_desc"), language);
             ui.add_space(6.0);
             draw_tool_row(ui, "Claude Code", &claude_status, translate(language, "welcome_claude_desc"), language);
             ui.add_space(6.0);
-            draw_ffmpeg_row(ui, "FFmpeg", &ffmpeg_status, &ffmpeg_download, translate(language, "welcome_ffmpeg_desc"), language);
+            draw_download_row(ui, "FFmpeg", &ffmpeg_status, &ffmpeg_download, translate(language, "welcome_ffmpeg_desc"), language);
+            ui.add_space(6.0);
+            draw_download_row(ui, "Whisper", &whisper_status, &whisper_download, translate(language, "welcome_whisper_desc"), language);
 
             ui.add_space(10.0);
 
@@ -249,12 +310,12 @@ fn draw_tool_row(
     });
 }
 
-/// Окремий рядок для FFmpeg з відображенням прогресу авто-завантаження.
-fn draw_ffmpeg_row(
+/// Рядок для бінарника з авто-завантаженням — відображає прогрес скачування.
+fn draw_download_row(
     ui: &mut egui::Ui,
     name: &str,
     status: &ToolStatus,
-    download: &FfmpegDownload,
+    download: &BinaryDownload,
     description: &str,
     language: Language,
 ) {
@@ -265,10 +326,10 @@ fn draw_ffmpeg_row(
             (ToolStatus::Installed(_), _) => {
                 ui.label(egui::RichText::new("✓").color(egui::Color32::from_rgb(46, 204, 113)).size(16.0).strong());
             }
-            (_, FfmpegDownload::Downloading(_)) => {
+            (_, BinaryDownload::Downloading(_)) => {
                 ui.spinner();
             }
-            (_, FfmpegDownload::Failed(_)) => {
+            (_, BinaryDownload::Failed(_)) => {
                 ui.label(egui::RichText::new("✗").color(egui::Color32::from_rgb(231, 76, 60)).size(16.0).strong());
             }
             (ToolStatus::Checking, _) => {
@@ -287,13 +348,13 @@ fn draw_ffmpeg_row(
                     (ToolStatus::Installed(ver), _) => {
                         ui.label(egui::RichText::new(ver).color(egui::Color32::from_rgb(46, 204, 113)).size(11.0));
                     }
-                    (_, FfmpegDownload::Downloading(label)) => {
+                    (_, BinaryDownload::Downloading(label)) => {
                         ui.label(egui::RichText::new(label).color(egui::Color32::from_rgb(255, 200, 0)).size(11.0));
                     }
-                    (_, FfmpegDownload::Done) => {
+                    (_, BinaryDownload::Done) => {
                         ui.label(egui::RichText::new(translate(language, "welcome_checking")).weak().size(11.0));
                     }
-                    (_, FfmpegDownload::Failed(err)) => {
+                    (_, BinaryDownload::Failed(err)) => {
                         ui.label(egui::RichText::new(err).color(egui::Color32::from_rgb(231, 76, 60)).size(11.0));
                     }
                     (ToolStatus::Checking, _) => {

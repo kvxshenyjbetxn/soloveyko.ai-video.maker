@@ -17,6 +17,7 @@ msedge-tts = "0.4.0"
 rustls = { version = "0.23", features = ["ring"] }
 tiktoken = "3"
 base64 = "0.22"
+zip = "2"
 
 
 [package.metadata.bundle]
