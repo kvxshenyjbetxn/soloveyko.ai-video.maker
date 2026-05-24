@@ -38,11 +38,10 @@ src/
 │   ├── claude.rs                — call_claude_code (запуск локального Claude CLI з параметрами) + ClaudeLimiter (семафор лімітування запитів)
 │   └── gemini.rs                — call_gemini_cli (запуск локального Gemini CLI з параметрами) + GeminiLimiter (семафор лімітування запитів)
 ├── core/
+│   ├── mod.rs                   — реекспорт модулів core
+│   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini); call_openrouter: HTTP запит до OpenRouter Chat completions API
 │   └── pipeline/
 │       ├── mod.rs               — run_pipeline: головний потік задачі; після перекладу запускає [Озвучка+Субтитри] та [Відеоряд] паралельно, потім Timeline → Монтаж
-│       ├── translate/
-│       │   ├── mod.rs           — translate_text: синхронний переклад, повертає Result<(String, Option<f64>)>
-│       │   └── translate.rs     — call_openrouter: HTTP запит, повертає Result<(String, Option<f64>)>
 │       ├── voiceover/
 │       │   ├── mod.rs           — реекспорт run_voiceover_sync
 │       │   └── voiceover.rs     — run_voiceover_sync: TTS через VoiceBot API або Microsoft Edge TTS (з розбиттям на чанки, паралельною обробкою та FFmpeg/Direct Binary склеюванням)
@@ -63,7 +62,7 @@ src/
 │   │   ├── storage.rs           — секція "Шлях збереження" (два поля macOS/Windows + draw_path_row)
 │   │   ├── translation.rs       — секція перекладу (промт, вибір моделі OpenRouter, температура)
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
-│   │   ├── video.rs             — секція відеоряду (сервіс Googler, режим нарізання тексту, пріоритети зображень, промт)
+│   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт)
 │   │   ├── subtitles.rs         — секція субтитрів (сервіс, мова, модель Whisper, завантаження ggml-моделі)
 │   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами)
 │   └── settings/
@@ -159,11 +158,11 @@ src/
 
 **`run_pipeline`** (`mod.rs`) — єдина точка запуску задачі. Spawns один головний потік. Переклад виконується послідовно. Після нього запускаються два паралельних під-потоки: **гілка AV** (`run_av_branch`: Озвучка → Субтитри) та **гілка Video** (`run_video_branch`: Відеоряд). Головний потік чекає завершення обох (`join()`), перевіряє помилки, а потім виконує Timeline і Монтаж. Статус задачі: `Pending → Running → Done / Failed`.
 
-#### Переклад (`translate/`)
+#### Переклад
 
-- **`translate_text`** (`mod.rs`) — синхронна функція: будує `user_content` з промту + тексту, викликає відповідний сервіс. Повертає `Result<(String, Option<f64>), String>`, що включає перекладений текст та його вартість (для OpenRouter). Не знає нічого про статуси, файли чи потоки.
-- **`call_openrouter`** (`translate.rs`) — чистий HTTP виклик до OpenRouter Chat completions API. Повертає текст відповіді та її вартість (отриману безпосередньо з поля `usage.cost` у відповіді API, що гарантує 100% точний та миттєвий облік витрат).
-- **Плейсхолдер `{{text}}`:** якщо промт містить `{{text}}` — текст підставляється на місце. Якщо промт є але без плейсхолдера — текст додається після промту через `\n\n`. Якщо промт порожній — надсилається тільки текст.
+- **`call_llm`** (`src/core/llm.rs`) — єдина точка виклику будь-якого LLM-сервісу. Будує `user_content` з промту + тексту (підстановка `{{text}}`), диспетчеризує на відповідний сервіс (`Claude Code` → `call_claude_code`, `Gemini CLI` → `call_gemini_cli`, інше → `call_openrouter`). Повертає `Result<(String, Option<f64>), String>` — текст та вартість (вартість заповнюється тільки для OpenRouter). Використовується і для перекладу, і для генерації відеопромтів.
+- **`call_openrouter`** (`src/core/llm.rs`) — чистий HTTP виклик до OpenRouter Chat completions API. Повертає текст відповіді та її вартість (отриману з поля `usage.cost`, що гарантує 100% точний облік витрат). Лімітується через `OpenRouterLimiter::get().acquire()` — тому паралельні виклики не перевищують налаштований ліміт потоків.
+- **Плейсхолдер `{{text}}`:** якщо промт містить `{{text}}` — текст підставляється на місце. Якщо промт є але без плейсхолдера — текст додається після промту через `\n\n`. Якщо промт порожній — надсилається тільки текст. Та сама логіка для перекладу і для відеопромтів.
 - При успіху зберігає результат у `{save_path}/text.txt`. Цей же текст передається в озвучку якщо вона увімкнена.
 - **Контроль перекладу (Translation Control):** Якщо увімкнено відповідне налаштування у секції "Контроль", то після завершення перекладу задача призупиняється. Її статус змінюється на `Очікує контролю` (AwaitingControl), а фоновий потік завершує роботу. Клік по картці такої задачі відкриває вікно "Контроль перекладу", де користувач може перевірити та відредагувати текст. При натисканні "Підтвердити та продовжити" оновлений текст зберігається, а пайплайн перезапускається відразу з наступного кроку (Озвучки), використовуючи відредагований варіант.
 
@@ -266,11 +265,12 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 1. Визначає текст-джерело: перекладений (якщо переклад увімкнено і є результат) або оригінальний.
 2. Викликає `split_text` відповідно до `settings.text_split_mode` і `settings.text_split_char_limit`.
 3. Зберігає `segments.txt` у папку задачі у форматі `[N/total] текст` — для зручного дебагу.
-4. Створює підпапку `media/` у папці задачі (єдина папка для обох типів медіа).
-4.5. Встановлює `media_progress = Some((0, segments.len()))` — UI одразу бачить загальну кількість і показує `0/N` ще до першого завершеного файлу.
-5. Перевіряє `settings.video_media_type`: `"image"` → `generate_image_with_priority` з `googler_image_priority`; `"video"` → `generate_video_with_priority` з `googler_video_priority`. Вибір типу задається радіокнопками «Тип медіа» у секції Відеоряд.
-6. Паралельність обмежена ручним семафором (`Semaphore`) на базі `Mutex` + `Condvar`. Ліміт — `googler_image_max_threads` з налаштувань.
-7. Результат кожного потоку — `(index, Result<PathBuf, String>)`. Після успішного збереження файлу кожен потік інкрементує `media_progress.done` та викликає `ctx.request_repaint()` — прогресбар оновлюється в реальному часі. Після збору всіх потоків: якщо хоча б один помилковий — задача провалюється з переліком помилок.
+4. **Phase 1 — Генерація промтів (паралельна).** Якщо обрано LLM-сервіс (`video_llm_service != "None"`), для кожного сегменту spawns окремий потік, який викликає `call_llm`. Результати зберігаються у pre-allocated `Vec<String>` за індексом — порядок гарантований. Обмеження паралельності виконується автоматично через глобальний лімітер всередині `call_llm`. У разі помилки LLM — fallback на просту підстановку `{{text}}`. Якщо LLM не обрано — миттєве string-replace без мережевих запитів.
+5. Встановлює `prompts_progress = Some((0, total))` / `media_progress = Some((0, total))` для відображення у UI.
+6. Створює підпапку `media/` у папці задачі (єдина папка для обох типів медіа).
+7. Перевіряє `settings.video_media_type`: `"image"` → `generate_image_with_priority` з `googler_image_priority`; `"video"` → `generate_video_with_priority` з `googler_video_priority`. Вибір типу задається радіокнопками «Тип медіа» у секції Відеоряд.
+8. **Phase 2 — Завантаження медіа (паралельна).** Паралельність обмежена ручним семафором (`Semaphore`) на базі `Mutex` + `Condvar`. Ліміт — `googler_image_max_threads` з налаштувань.
+9. Результат кожного потоку — `(index, Result<PathBuf, String>)`. Після успішного збереження файлу кожен потік інкрементує `media_progress.done` та викликає `ctx.request_repaint()` — прогресбар оновлюється в реальному часі. Після збору всіх потоків: якщо хоча б один помилковий — задача провалюється з переліком помилок.
 
 **`decode_result`** (`core/pipeline/mod.rs`) — обробляє відповідь Googler API:
 - Якщо результат починається з `data:` — розбирає data URI, визначає розширення файлу з mime-типу (mp4/webm/mov/png/webp/gif/jpg), декодує base64 (через крейт `base64 = "0.22"`) і записує байти у `media/{index:04}.{ext}`. Відео-типи мають пріоритет при виборі розширення.
@@ -326,8 +326,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
 Два JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
-- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `montage_transition`, `montage_transition_duration`).
-- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, поля субтитрів `subtitles_service`, `whisper_language`, `whisper_model`, а також `montage_transition`, `montage_transition_duration` — при завантаженні шаблону вони відновлюються разом з усіма іншими налаштуваннями.
+- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`).
+- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, поля субтитрів `subtitles_service`, `whisper_language`, `whisper_model`, `montage_transition`, `montage_transition_duration`, а також `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature` — при завантаженні шаблону вони відновлюються разом з усіма іншими налаштуваннями.
 
 `AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються (дефолт для нових полів потоків Googler — `5`). Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
 
@@ -385,6 +385,12 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 ---
 
 ## Важливі нюанси та НО
+
+- **`call_llm` — спільна функція для перекладу і відеопромтів.** Раніше існував окремий модуль `core/pipeline/translate/` лише для перекладу. Оскільки генерація відеопромтів потребує того самого: взяти текст → підставити в промт → викликати LLM, логіку перенесено у `src/core/llm.rs` і використовується з обох місць. Ніякого дублювання HTTP-логіки.
+
+- **Phase 1 відеоряду — паралельна генерація промтів.** Якщо обрано LLM-сервіс для відеопромтів, для N сегментів spawns N потоків одночасно. Обмеження паралельності виконується автоматично всередині `call_llm` через глобальний лімітер (`OpenRouterLimiter`, `ClaudeLimiter`, `GeminiLimiter`) — ніякого додаткового семафору не потрібно. Результати зберігаються у `Vec<String>` з фіксованим розміром за індексом `(i, prompt)` — thread-safe порядок без mutex.
+
+- **`video_llm_service` / `video_llm_model` / `video_llm_temperature`** — окремий LLM-вибір для генерації відеопромтів, незалежний від LLM перекладу. Зберігається у `AppSettings`, `PipelineTemplate` та `JobSettings`. Дефолт — `"None"` (без LLM, миттєве string-replace). При перемиканні сервісу поточна модель зберігається у відповідний слот (`video_llm_model_openrouter` / `_claude` / `_gemini`), при поверненні — відновлюється. Температура актуальна лише для OpenRouter.
 
 - **Ініціалізація `rustls` `CryptoProvider`:**
   Через те, що в процесі одночасно скомпільовані два TLS криптопровайдери (`aws-lc-rs` від `ureq v3` та `ring` від `tungstenite`), бібліотека `rustls v0.23` вимагає явно встановити глобальний провайдер за замовчуванням. Ми додали пряму залежність `rustls` з фічею `ring` в `Cargo.toml` і викликаємо `let _ = rustls::crypto::ring::default_provider().install_default();` на початку `fetch_voices` та `synthesize`. Це запобігає паніці та гарантує стабільну роботу мережі на macOS та Windows.
