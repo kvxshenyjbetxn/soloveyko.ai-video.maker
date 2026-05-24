@@ -65,7 +65,7 @@ src/
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
 │   │   ├── video.rs             — секція відеоряду (сервіс Googler, режим нарізання тексту, пріоритети зображень, промт)
 │   │   ├── subtitles.rs         — секція субтитрів (сервіс, мова, модель Whisper, завантаження ggml-моделі)
-│   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт)
+│   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами)
 │   └── settings/
 │       ├── mod.rs               — draw_settings: вкладки налаштувань
 │       ├── general.rs           — вкладка "Основні" (тема, акцент, мова, відкрити папку)
@@ -124,7 +124,7 @@ src/
 
 ### Черга задач (`src/queue.rs`)
 
-- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`.
+- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`, `montage_transition`, `montage_transition_duration`.
 - **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку.
 - **`translated_text` та `translation_cost`** — додаткові потокобезпечні поля в `PipelineJob`, які служать для надійного кешування результату перекладу сценарію та його фактичної вартості безпосередньо в оперативній пам'яті програми.
 - **`audio_duration: Arc<Mutex<Option<f64>>>`** — тривалість аудіофайлу в секундах, заповнюється після успішного завершення озвучки. `None` до завершення або якщо не вдалось визначити.
@@ -211,6 +211,8 @@ src/
    - Результат завжди обрізається/доповнюється до `total_images`.
 5. Записує `timeline.json`: масив об'єктів `{file, start_ms, end_ms}` з відносними шляхами до `media/*.ext`.
 
+**Нормалізація таймінгів (усунення drift):** Після побудови `final_timings` виконується прохід, який робить сегменти суміжними: `end[i] = start[i+1]` для всіх сегментів. SRT-записи мають паузи між собою, і без цього кроку прогалини потрапляли б у тривалості кліпів. У FFmpeg concat cumulative sum тривалостей ≠ absolute start times → синхронізація з аудіо повільно "з'їжджала". Після нормалізації `sum(dur[0..N]) = start_secs[N]` для будь-якого кліпу.
+
 **Генерація таймлайну в `run_pipeline`** відбувається після субтитрів (крок 4.5): `build_timeline` отримує `save_dir`, `segments`, `audio_duration_secs`, `task_name` як підказку для логів. Якщо `subtitle.srt` відсутній — таймлайн будується на базі рівного розподілу часу (без fuzzy match).
 
 #### Монтаж (`montage.rs`)
@@ -227,10 +229,28 @@ src/
 5. Після filter graph — `concat` (склеювання кліпів) → `tpad` (дотяжка до тривалості аудіо) → `trim` (обрізка хвоста).
 6. Записує фільтр у `montage_script.txt` у папці задачі та запускає `ffmpeg -filter_complex_script montage_script.txt`.
 7. Виклик FFmpeg використовує `current_dir(save_dir)` + **відносні шляхи** — це обходить обмеження CLI на довжину командного рядка та дозволяє мати пробіли в `save_dir`.
-8. FFmpeg запускається через `.spawn()` з `-progress pipe:1 -loglevel error`. Stderr дренується у окремому потоці (щоб не заблокувати буфер). Stdout читається рядково у головному потоці: поля `out_time_us`, `speed`, `bitrate` та маркер `progress=continue` (блок `progress=end` ігнорується — там значення скинуті в N/A).
+8. FFmpeg запускається через `.spawn()` з `-progress pipe:1 -loglevel error`. Stderr дренується у окремому потоці (щоб не заблокувати буфер). Stdout читається рядково у головному потоці: поля `out_time_us`, `fps`, `speed`, `bitrate` та маркер `progress=continue` (блок `progress=end` ігнорується — там значення скинуті в N/A). Лог виводить: `42%  fps=28.3  speed=1.2x  bitrate=7842.5kbits/s`.
 9. Прогрес рахується як `out_time_us / 1_000_000 / total_dur`. Зверни увагу: поле називається `out_time_us` (мікросекунди), але у деяких версіях FFmpeg є також `out_time_ms` — воно теж у мікросекундах, назва оманлива.
 10. `run_montage` повертає `Result<u64, String>` — розмір вихідного файлу в байтах або опис помилки.
 11. Вихідний файл: `{safe_task_name}.mp4` у папці задачі (`safe_task_name` — назва задачі зі замощеними пробілами/спецсимволами).
+
+**Переходи між кліпами (xfade):**
+
+`montage_transition` приймає `"none"` (без переходу), `"random"` або конкретну назву FFmpeg xfade (44 варіанти: `fade`, `wipeleft`, `dissolve`, `circleopen`, `radial` тощо). При `"random"` — `pick_transition()` обирає новий випадковий xfade для **кожного** переходу між кліпами незалежно.
+
+**Sync-компенсація при переходах (критично важливо):**
+
+xfade накладає кліп `i+1` поверх кліпу `i` протягом `T` секунд, тобто їхні тривалості у вихідному відео перетинаються. Без компенсації cumulative offset кожного наступного кліпу зміщується на `T` відносно аудіо, накопичуючись по кожному переходу.
+
+Рішення: кожен кліп (крім останнього) подовжується на `T`:
+- `adj_dur[i] = orig_dur[i] + T` для `i < n-1`
+- `adj_dur[n-1] = orig_dur[n-1]`
+
+Тоді для k-го xfade: `offset = sum(orig_dur[0..=k]) = start_secs[k+1]` — абсолютна позиція початку наступного кліпу. Cumulative offset у відео = `start_secs[N]`, що точно збігається з аудіо.
+
+Підсумкова тривалість: `sum(adj_dur) - (n-1)*T = sum(orig_dur) = total_duration` ✓.
+
+Максимальна тривалість переходу обмежується `min_clip_duration * 0.5`, щоб xfade не перекривав весь кліп.
 
 **`split_text`** (`timeline/text_splitter.rs`) — розбиває текст на сегменти за 4 режимами:
 
@@ -306,8 +326,8 @@ src/
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
 Два JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
-- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`).
-- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, а також поля субтитрів `subtitles_service`, `whisper_language`, `whisper_model` — при завантаженні шаблону вони відновлюються разом з усіма іншими налаштуваннями.
+- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `montage_transition`, `montage_transition_duration`).
+- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, поля субтитрів `subtitles_service`, `whisper_language`, `whisper_model`, а також `montage_transition`, `montage_transition_duration` — при завантаженні шаблону вони відновлюються разом з усіма іншими налаштуваннями.
 
 `AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються (дефолт для нових полів потоків Googler — `5`). Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
 
@@ -390,6 +410,12 @@ src/
 - **Повзунок температури (`translation_temperature`)** — перед рендерингом зчитується `ui.available_width()` і тимчасово переписує стиль повзунка в межах `scope`, щоб Slider не розтягував SidePanel.
 
 - **Ширина елементів у `ui.horizontal()`:** egui додає `item_spacing.x` між кожною парою елементів. При розрахунку ширини треба відіймати саме `ui.spacing().item_spacing.x` — інакше SidePanel розповзається.
+
+- **Sync drift через прогалини в SRT.** SRT-записи мають паузи між собою (наприклад, entry 0 закінчується на 3.4s, entry 1 починається на 3.8s). Без нормалізації ці паузи потрапляють у тривалості кліпів, і cumulative sum у FFmpeg concat не збігається з absolute start_secs з timeline → sync повільно "з'їжджає". Виправлено в `build_timeline`: після побудови `final_timings` прохід `end[i] = max(end[i], start[i+1])` усуває прогалини перед записом `timeline.json`.
+
+- **xfade переходи потребують подовження кліпів для sync.** При `xfade=duration=T` кліп i+1 починається на T секунд раніше (overlap). Без компенсації кожен перехід зміщує відео на T секунд відносно аудіо. Рішення: кожен кліп крім останнього подовжується на T (`adj_dur = orig_dur + T`), offset для k-го xfade = `sum(orig_dur[0..=k])`. В результаті cumulative offset кліпу N = start_secs[N]. Сумарна тривалість = total_duration (переходи не збільшують відео).
+
+- **`whisper_language`, `whisper_model`, `subtitles_service`, `translation_temperature` не тригерили автозбереження.** Ці поля були відсутні в умові перевірки змін (`if current != last_saved`), тому зміни в них не писались на диск поки не змінилось щось інше. Виправлено — всі 4 поля додані до умови.
 
 - **Монтаж використовує `filter_complex_script`, а не `-filter_complex`.** FFmpeg має обмеження на довжину аргументу командного рядка (~8 KB). При великій кількості кліпів filter graph може перевищити цей ліміт. Рішення: записуємо фільтр у тимчасовий файл `montage_script.txt` і передаємо через `-filter_complex_script`. Це стабільно працює навіть для 100+ кліпів.
 

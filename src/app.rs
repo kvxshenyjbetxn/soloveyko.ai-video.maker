@@ -215,6 +215,10 @@ pub struct VideoMakerApp {
     pub montage_preset: String,
     /// Бітрейт відео у МБ/с.
     pub montage_bitrate: u32,
+    /// Тип переходу між кліпами ("none", "random" або назва xfade).
+    pub montage_transition: String,
+    /// Тривалість переходу в секундах.
+    pub montage_transition_duration: f32,
     /// Сповіщення про успішне копіювання (текст, час копіювання).
     pub copied_toast: Option<(String, std::time::Instant)>,
     /// Чи увімкнене автоматичне прокручування логу донизу.
@@ -323,6 +327,8 @@ impl Default for VideoMakerApp {
             montage_fps: 30,
             montage_preset: "medium".to_string(),
             montage_bitrate: 8,
+            montage_transition: "none".to_string(),
+            montage_transition_duration: 0.5,
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: default_settings,
@@ -581,6 +587,8 @@ impl VideoMakerApp {
             montage_fps: saved.montage_fps,
             montage_preset: saved.montage_preset.clone(),
             montage_bitrate: saved.montage_bitrate,
+            montage_transition: saved.montage_transition.clone(),
+            montage_transition_duration: saved.montage_transition_duration,
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: saved,
@@ -1704,6 +1712,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.montage_fps,
                         &mut self.montage_preset,
                         &mut self.montage_bitrate,
+                        &mut self.montage_transition,
+                        &mut self.montage_transition_duration,
                         &self.text_input,
                         &mut self.jobs,
                         &mut self.job_counter,
@@ -2343,10 +2353,16 @@ impl eframe::App for VideoMakerApp {
                 || self.voiceover_convert_to_wav != self.last_saved_settings.voiceover_convert_to_wav
                 || self.googler_image_priority != self.last_saved_settings.googler_image_priority
                 || self.googler_video_priority != self.last_saved_settings.googler_video_priority
+                || self.translation_temperature != self.last_saved_settings.translation_temperature
+                || self.subtitles_service != self.last_saved_settings.subtitles_service
+                || self.whisper_language != self.last_saved_settings.whisper_language
+                || self.whisper_model != self.last_saved_settings.whisper_model
                 || self.montage_service != self.last_saved_settings.montage_service
                 || self.montage_fps != self.last_saved_settings.montage_fps
                 || self.montage_preset != self.last_saved_settings.montage_preset
                 || self.montage_bitrate != self.last_saved_settings.montage_bitrate
+                || self.montage_transition != self.last_saved_settings.montage_transition
+                || self.montage_transition_duration != self.last_saved_settings.montage_transition_duration
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -2401,6 +2417,8 @@ impl eframe::App for VideoMakerApp {
                     montage_fps: self.montage_fps,
                     montage_preset: self.montage_preset.clone(),
                     montage_bitrate: self.montage_bitrate,
+                    montage_transition: self.montage_transition.clone(),
+                    montage_transition_duration: self.montage_transition_duration,
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
                 
