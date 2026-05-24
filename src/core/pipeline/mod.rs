@@ -1,6 +1,7 @@
 pub mod translate;
 pub mod voiceover;
 pub mod timeline;
+pub mod montage;
 
 use std::sync::{Arc, Condvar, Mutex};
 use eframe::egui;
@@ -227,6 +228,7 @@ pub fn run_pipeline(
     voiceover_stage: Arc<Mutex<crate::queue::StageStatus>>,
     video_stage: Arc<Mutex<crate::queue::StageStatus>>,
     subtitles_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    montage_stage: Arc<Mutex<crate::queue::StageStatus>>,
     translated_text: Arc<Mutex<Option<String>>>,
     translation_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
@@ -614,6 +616,65 @@ pub fn run_pipeline(
                     return;
                 }
             }
+        }
+
+        // Генеруємо timeline.json якщо відеоряд увімкнено і є тривалість аудіо
+        // (підготовка для етапу монтажу)
+        if settings.video_enabled {
+            let source_text = if settings.translation_enabled {
+                translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
+            } else {
+                settings.text.clone()
+            };
+
+            let segments = crate::core::pipeline::timeline::text_splitter::split_text(
+                &source_text,
+                &settings.text_split_mode,
+                settings.text_split_char_limit,
+            );
+
+            let audio_dur = *audio_duration.lock().unwrap();
+            let save_dir = std::path::Path::new(&settings.save_path);
+
+            match crate::core::pipeline::timeline::sync::build_timeline(save_dir, &segments, audio_dur, &job_name) {
+                Ok(_) => crate::logger::log_job(job_id, &job_name, "Timeline saved: timeline.json"),
+                Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Timeline warning: {}", e)),
+            }
+        }
+
+        // Етап 5: Монтаж
+        if settings.montage_enabled {
+            crate::logger::log_job(job_id, &job_name, "Starting montage stage...");
+            *montage_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+            ctx.request_repaint();
+
+            let audio_dur = *audio_duration.lock().unwrap();
+            let save_dir = std::path::Path::new(&settings.save_path);
+            let job_id_log = job_id;
+            let job_name_log = job_name.clone();
+
+            match crate::core::pipeline::montage::run_montage(
+                save_dir,
+                &job_name,
+                audio_dur,
+                settings.montage_fps,
+                &settings.montage_preset,
+                settings.montage_bitrate,
+                |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
+            ) {
+                Ok(_) => {
+                    crate::logger::log_job(job_id, &job_name, "Montage complete.");
+                    *montage_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+                }
+                Err(e) => {
+                    crate::logger::log_job(job_id, &job_name, &format!("Montage failed: {}", e));
+                    *montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(format!("Montage: {}", e));
+                    ctx.request_repaint();
+                    return;
+                }
+            }
+            ctx.request_repaint();
         }
 
         crate::logger::log_job(job_id, &job_name, "Job completed successfully.");

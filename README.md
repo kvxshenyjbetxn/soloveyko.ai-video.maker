@@ -46,9 +46,11 @@ src/
 │       ├── voiceover/
 │       │   ├── mod.rs           — реекспорт run_voiceover_sync
 │       │   └── voiceover.rs     — run_voiceover_sync: TTS через VoiceBot API або Microsoft Edge TTS (з розбиттям на чанки, паралельною обробкою та FFmpeg/Direct Binary склеюванням)
+│       ├── montage.rs           — run_montage: збірка фінального відео через FFmpeg filter_complex_script
 │       └── timeline/
 │           ├── mod.rs           — реекспорт модулів timeline
-│           └── text_splitter.rs — split_text: 4 режими нарізання тексту на сегменти для генерації медіа
+│           ├── text_splitter.rs — split_text: 4 режими нарізання тексту на сегменти для генерації медіа
+│           └── sync.rs          — build_timeline: прив'язка медіафайлів до часових відрізків SRT (Levenshtein fuzzy match)
 ├── gui/
 │   ├── mod.rs                   — реекспорт pipeline, settings та welcome
 │   ├── editor.rs                — central panel з текстовим редактором сценарію та динамічним підрахунком токенів cl100k_base
@@ -63,7 +65,7 @@ src/
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
 │   │   ├── video.rs             — секція відеоряду (сервіс Googler, режим нарізання тексту, пріоритети зображень, промт)
 │   │   ├── subtitles.rs         — секція субтитрів (сервіс, мова, модель Whisper, завантаження ggml-моделі)
-│   │   └── editing.rs           — секція монтажу (заглушка)
+│   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт)
 │   └── settings/
 │       ├── mod.rs               — draw_settings: вкладки налаштувань
 │       ├── general.rs           — вкладка "Основні" (тема, акцент, мова, відкрити папку)
@@ -119,15 +121,15 @@ src/
 
 ### Черга задач (`src/queue.rs`)
 
-- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`.
+- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`.
 - **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку.
 - **`translated_text` та `translation_cost`** — додаткові потокобезпечні поля в `PipelineJob`, які служать для надійного кешування результату перекладу сценарію та його фактичної вартості безпосередньо в оперативній пам'яті програми.
 - **`audio_duration: Arc<Mutex<Option<f64>>>`** — тривалість аудіофайлу в секундах, заповнюється після успішного завершення озвучки. `None` до завершення або якщо не вдалось визначити.
 - **`media_progress: Arc<Mutex<Option<(usize, usize)>>>`** — гранулярний лічильник генерації медіа: `(завершено, загалом)`. `None` поки кількість сегментів невідома (до нарізки тексту). Заповнюється на початку відеоряду після `split_text`, інкрементується кожним робочим потоком після збереження файлу. Використовується для точного відображення прогресу як у прогресбарі задачі, так і у мітці відеоряду (`Відеоряд (3/10)`).
 - **`voiceover_convert_to_wav` у `JobSettings`** — знімок налаштування конвертації в WAV на момент додавання задачі.
-- **`StageStatus`** — `Pending / Running / Done / Failed` (без деталей помилки). Кожен `PipelineJob` має чотири окремих поля: `translation_stage`, `voiceover_stage`, `video_stage` та `subtitles_stage`. Слугують виключно для UI: картка задачі фарбує назву кожного етапу відповідним кольором (сірий / жовтий / зелений / червоний). `subtitles_stage` відображається в картці лише якщо `subtitles_enabled`.
+- **`StageStatus`** — `Pending / Running / Done / Failed` (без деталей помилки). Кожен `PipelineJob` має п'ять окремих полів: `translation_stage`, `voiceover_stage`, `video_stage`, `subtitles_stage` та `montage_stage`. Слугують виключно для UI: картка задачі фарбує назву кожного етапу відповідним кольором (сірий / жовтий / зелений / червоний). `subtitles_stage` та `montage_stage` відображаються в картці лише якщо відповідний етап увімкнений.
 - **`PipelineJob::name`** — назва задачі, яку вводит користувач у діалозі. Якщо поле пусте — автоматично генерується як "Задача N" (де N = `jobs.len() + 1` на момент додавання).
-- **`calculate_progress`** — метод структури `PipelineJob`, який динамічно розраховує поточний прогрес виконання завдання у діапазоні `[0.0..1.0]`, а також кількість завершених та загальних активних етапів. Етапи мають однакову вагу (наприклад, по 50% при увімкнених перекладі та озвучці). Статус `Done` дає `1.0` прогресу для етапу. Для етапу відеоряду зі статусом `Running`: якщо `media_progress = Some((done, total))` — прогрес = `done/total` (гранулярно); якщо `None` (ще не знаємо кількість) — `0.1`. Для інших Running-етапів — `0.5`. Субтитри мають однакову вагу з іншими етапами. Метод спроектовано гнучким, що дозволяє легко додавати нові етапи пайплайну в майбутньому.
+- **`calculate_progress`** — метод структури `PipelineJob`, який динамічно розраховує поточний прогрес виконання завдання у діапазоні `[0.0..1.0]`, а також кількість завершених та загальних активних етапів. Враховує всі 5 можливих етапів: переклад, озвучка, відеоряд, субтитри, монтаж. Враховується лише ті, що увімкнені (через відповідний прапор `settings.*_enabled`). Статус `Done` дає `1.0` прогресу для етапу. Для відеоряду зі статусом `Running`: якщо `media_progress = Some((done, total))` — прогрес = `done/total` (гранулярно); якщо `None` — `0.1`. Для інших Running-етапів — `0.5`. Метод спроектовано гнучким, що дозволяє легко додавати нові етапи.
 - **Двоетапний workflow:** додавання задачі (`Pending`) і запуск (`Running`) — два окремі дії. Користувач може накопичити кілька задач у черзі і потім запустити їх усі кнопкою "▶ Запустити".
 
 ### Панель пайплайну (`src/gui/pipeline/mod.rs`)
@@ -189,6 +191,38 @@ src/
 - **Перевірка моделі перед запуском:** кнопка «▶ Запустити» у панелі черги блокується якщо хоча б одна задача Pending має `subtitles_enabled` та модель не завантажена (`!whisper_model_exists()`). `on_disabled_hover_text` показує пояснення. Якщо модель ще завантажується — відповідне повідомлення.
 
 #### Відеоряд (`timeline/`)
+
+#### Синхронізація медіа і таймлайн (`timeline/sync.rs`)
+
+**`build_timeline`** (`timeline/sync.rs`) — прив'язує медіафайли з `media/` до часових відрізків з `subtitle.srt`. Результат: `timeline.json` та `sync_debug.txt` (для відлагодження).
+
+**Алгоритм:**
+1. Парсить `subtitle.srt` → отримує масив записів `(start_ms, end_ms, text)`.
+2. Нормалізує текст (lowercase, прибирає пунктуацію, `ё → е`) для порівняння.
+3. Для кожного сегменту тексту (`segments`) шукає найбільш схожий рядок субтитра через Levenshtein-подібний fuzzy match із порогом `0.65`. Знайдений рядок стає «якорем» — кандидатом на часову мітку початку сегменту. Між якорями час розподіляється пропорційно до нормалізованої довжини тексту.
+4. **STRETCH / SPLIT / NORMAL** — стратегії призначення медіафайлів:
+   - **STRETCH** (`total_images < n_segs`): медіафайлів менше ніж сегментів — кілька сегментів об'єднуються під один медіафайл (групування). Часовий відрізок файлу охоплює всі призначені сегменти.
+   - **SPLIT / NORMAL** (`total_images >= n_segs`): медіафайлів стільки ж або більше — `image_per_seg = (total_images / n_segs).max(1)`. Кожен сегмент отримує кілька файлів, кожен із рівною часткою відрізку.
+   - Результат завжди обрізається/доповнюється до `total_images`.
+5. Записує `timeline.json`: масив об'єктів `{file, start_ms, end_ms}` з відносними шляхами до `media/*.ext`.
+
+**Генерація таймлайну в `run_pipeline`** відбувається після субтитрів (крок 4.5): `build_timeline` отримує `save_dir`, `segments`, `audio_duration_secs`, `task_name` як підказку для логів. Якщо `subtitle.srt` відсутній — таймлайн будується на базі рівного розподілу часу (без fuzzy match).
+
+#### Монтаж (`montage.rs`)
+
+**`run_montage`** (`core/pipeline/montage.rs`) — збирає фінальне відео з медіафайлів + голосового аудіо через FFmpeg.
+
+**Логіка:**
+1. Знаходить аудіофайл: спочатку `voice.wav`, потім `voice.mp3`.
+2. Читає `timeline.json` → будує вектор `Clip { file, start_ms, end_ms }`.
+3. **Fallback:** якщо `timeline.json` відсутній — бере всі файли з `media/` і рівномірно розподіляє тривалість (`audio_duration_hint / n_files`).
+4. Будує **filter graph** для кожного кліпу:
+   - **Зображення (jpg/png/webp/gif):** `scale+crop → zoompan` (ефект плавного наближення/відведення). Тривалість — `d=<кількість_кадрів>` відповідно до часового відрізку та `fps`.
+   - **Відео (mp4/webm/mov):** `trim → scale+crop → fps` (обрізає до потрібної тривалості).
+5. Після filter graph — `concat` (склеювання кліпів) → `tpad` (дотяжка до тривалості аудіо) → `trim` (обрізка хвоста).
+6. Записує фільтр у `montage_script.txt` у папці задачі та запускає `ffmpeg -filter_complex_script montage_script.txt`.
+7. Виклик FFmpeg використовує `current_dir(save_dir)` + **відносні шляхи** — це обходить обмеження CLI на довжину командного рядка та дозволяє мати пробіли в `save_dir`.
+8. Вихідний файл: `{safe_task_name}.mp4` у папці задачі (`safe_task_name` — назва задачі зі замощеними пробілами/спецсимволами).
 
 **`split_text`** (`timeline/text_splitter.rs`) — розбиває текст на сегменти за 4 режимами:
 
@@ -349,7 +383,13 @@ src/
 
 - **Ширина елементів у `ui.horizontal()`:** egui додає `item_spacing.x` між кожною парою елементів. При розрахунку ширини треба відіймати саме `ui.spacing().item_spacing.x` — інакше SidePanel розповзається.
 
-- **Секція "Монтаж"** поки порожня (заглушка).
+- **Монтаж використовує `filter_complex_script`, а не `-filter_complex`.** FFmpeg має обмеження на довжину аргументу командного рядка (~8 KB). При великій кількості кліпів filter graph може перевищити цей ліміт. Рішення: записуємо фільтр у тимчасовий файл `montage_script.txt` і передаємо через `-filter_complex_script`. Це стабільно працює навіть для 100+ кліпів.
+
+- **Відносні шляхи в FFmpeg для монтажу.** `run_montage` викликає FFmpeg з `current_dir(save_dir)` і записує у `montage_script.txt` відносні шляхи до файлів (`media/0001.jpg`, `voice.wav`). Це дозволяє уникнути проблем з пробілами або довгими шляхами у `save_dir` на Windows.
+
+- **STRETCH/SPLIT/NORMAL у `build_timeline`:** вибір стратегії залежить від співвідношення кількості медіафайлів і текстових сегментів. STRETCH — коли медіафайлів менше (кілька сегментів на один файл). SPLIT/NORMAL — коли більше або порівну. Це дозволяє коректно зібрати відео незалежно від того, скільки зображень/відео згенерував Googler.
+
+- **Fallback монтажу без `timeline.json`.** Якщо субтитри або синхронізація не виконувались і `timeline.json` відсутній, `run_montage` рівномірно розподіляє медіафайли по тривалості аудіо. Відео все одно збирається, але синхронізація з текстом не гарантована.
 
 - **Бандлований whisper — це whisper.cpp, а не openai-whisper.** Аргументи відрізняються критично: openai-whisper приймає `--output_format srt` + ім'я моделі (`-m base`), тоді як whisper.cpp вимагає `-m <шлях до ggml-файлу>`, `--output-srt` (boolean flag), `-of <stem>` (stem без розширення — `subtitle`, не `subtitle.srt`). Підміна формату аргументів призведе до помилки запуску.
 

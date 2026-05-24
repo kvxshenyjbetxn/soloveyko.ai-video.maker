@@ -207,6 +207,14 @@ pub struct VideoMakerApp {
     pub whisper_model: String,
     /// Стан завантаження ggml-моделі whisper.cpp у фоні.
     pub whisper_model_download: std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
+    /// Сервіс монтажу ("FFmpeg").
+    pub montage_service: String,
+    /// FPS для монтажу.
+    pub montage_fps: u32,
+    /// Пресет кодування FFmpeg.
+    pub montage_preset: String,
+    /// Бітрейт відео у МБ/с.
+    pub montage_bitrate: u32,
     /// Сповіщення про успішне копіювання (текст, час копіювання).
     pub copied_toast: Option<(String, std::time::Instant)>,
     /// Чи увімкнене автоматичне прокручування логу донизу.
@@ -311,6 +319,10 @@ impl Default for VideoMakerApp {
             whisper_language: "auto".to_string(),
             whisper_model: "base".to_string(),
             whisper_model_download: std::sync::Arc::new(std::sync::Mutex::new(crate::gui::welcome::BinaryDownload::Idle)),
+            montage_service: "FFmpeg".to_string(),
+            montage_fps: 30,
+            montage_preset: "medium".to_string(),
+            montage_bitrate: 8,
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: default_settings,
@@ -565,6 +577,10 @@ impl VideoMakerApp {
             whisper_language: saved.whisper_language.clone(),
             whisper_model: saved.whisper_model.clone(),
             whisper_model_download: std::sync::Arc::new(std::sync::Mutex::new(crate::gui::welcome::BinaryDownload::Idle)),
+            montage_service: saved.montage_service.clone(),
+            montage_fps: saved.montage_fps,
+            montage_preset: saved.montage_preset.clone(),
+            montage_bitrate: saved.montage_bitrate,
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: saved,
@@ -1155,6 +1171,7 @@ fn draw_queue_panel(
                     std::sync::Arc::clone(&job.voiceover_stage),
                     std::sync::Arc::clone(&job.video_stage),
                     std::sync::Arc::clone(&job.subtitles_stage),
+                    std::sync::Arc::clone(&job.montage_stage),
                     std::sync::Arc::clone(&job.translated_text),
                     std::sync::Arc::clone(&job.translation_cost),
                     std::sync::Arc::clone(&job.audio_duration),
@@ -1178,6 +1195,7 @@ fn draw_queue_panel(
                     let voiceover_stage = job.voiceover_stage.lock().unwrap().clone();
                     let video_stage = job.video_stage.lock().unwrap().clone();
                     let subtitles_stage = job.subtitles_stage.lock().unwrap().clone();
+                    let montage_stage = job.montage_stage.lock().unwrap().clone();
 
                     let (status_text, status_color): (String, egui::Color32) = match &status {
                         crate::queue::JobStatus::Pending => (
@@ -1357,6 +1375,14 @@ fn draw_queue_panel(
                                 ui.label(
                                     egui::RichText::new(translate(language, "subtitles"))
                                         .color(stage_color(&subtitles_stage, ui))
+                                        .size(12.5),
+                                );
+                            }
+
+                            if job.settings.montage_enabled {
+                                ui.label(
+                                    egui::RichText::new(translate(language, "editing"))
+                                        .color(stage_color(&montage_stage, ui))
                                         .size(12.5),
                                 );
                             }
@@ -1633,6 +1659,10 @@ impl eframe::App for VideoMakerApp {
                         &mut self.whisper_language,
                         &mut self.whisper_model,
                         &self.whisper_model_download,
+                        &mut self.montage_service,
+                        &mut self.montage_fps,
+                        &mut self.montage_preset,
+                        &mut self.montage_bitrate,
                         &self.text_input,
                         &mut self.jobs,
                         &mut self.job_counter,
@@ -2183,6 +2213,7 @@ impl eframe::App for VideoMakerApp {
                         voiceover_stage_arc,
                         video_stage_arc,
                         subtitles_stage_arc,
+                        std::sync::Arc::clone(&self.jobs[job_idx].montage_stage),
                         translated_text_arc,
                         translation_cost_arc,
                         audio_duration_arc,
@@ -2269,6 +2300,10 @@ impl eframe::App for VideoMakerApp {
                 || self.voiceover_convert_to_wav != self.last_saved_settings.voiceover_convert_to_wav
                 || self.googler_image_priority != self.last_saved_settings.googler_image_priority
                 || self.googler_video_priority != self.last_saved_settings.googler_video_priority
+                || self.montage_service != self.last_saved_settings.montage_service
+                || self.montage_fps != self.last_saved_settings.montage_fps
+                || self.montage_preset != self.last_saved_settings.montage_preset
+                || self.montage_bitrate != self.last_saved_settings.montage_bitrate
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -2319,6 +2354,10 @@ impl eframe::App for VideoMakerApp {
                     subtitles_service: self.subtitles_service.clone(),
                     whisper_language: self.whisper_language.clone(),
                     whisper_model: self.whisper_model.clone(),
+                    montage_service: self.montage_service.clone(),
+                    montage_fps: self.montage_fps,
+                    montage_preset: self.montage_preset.clone(),
+                    montage_bitrate: self.montage_bitrate,
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
                 

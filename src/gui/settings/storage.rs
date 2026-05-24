@@ -30,6 +30,10 @@ fn default_video_media_type() -> String { "image".to_string() }
 fn default_subtitles_service() -> String { "Whisper".to_string() }
 fn default_whisper_language() -> String { "auto".to_string() }
 fn default_whisper_model() -> String { "base".to_string() }
+fn default_montage_service() -> String { "FFmpeg".to_string() }
+fn default_montage_fps() -> u32 { 30 }
+fn default_montage_preset() -> String { "medium".to_string() }
+fn default_montage_bitrate() -> u32 { 8 }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -186,6 +190,18 @@ pub struct AppSettings {
     /// Модель Whisper ("tiny", "base", "small", "medium", "large-v3")
     #[serde(default = "default_whisper_model")]
     pub whisper_model: String,
+    /// Сервіс монтажу ("FFmpeg")
+    #[serde(default = "default_montage_service")]
+    pub montage_service: String,
+    /// FPS для монтажу
+    #[serde(default = "default_montage_fps")]
+    pub montage_fps: u32,
+    /// Пресет кодування FFmpeg (ultrafast, medium, slow, ...)
+    #[serde(default = "default_montage_preset")]
+    pub montage_preset: String,
+    /// Бітрейт відео у МБ/с
+    #[serde(default = "default_montage_bitrate")]
+    pub montage_bitrate: u32,
 }
 
 impl Default for AppSettings {
@@ -240,6 +256,10 @@ impl Default for AppSettings {
             subtitles_service: "Whisper".to_string(),
             whisper_language: "auto".to_string(),
             whisper_model: "base".to_string(),
+            montage_service: "FFmpeg".to_string(),
+            montage_fps: 30,
+            montage_preset: "medium".to_string(),
+            montage_bitrate: 8,
         }
     }
 }
@@ -430,6 +450,18 @@ pub struct PipelineTemplate {
     /// Модель Whisper ("tiny", "base", "small", "medium", "large-v3")
     #[serde(default = "default_whisper_model")]
     pub whisper_model: String,
+    /// Сервіс монтажу ("FFmpeg")
+    #[serde(default = "default_montage_service")]
+    pub montage_service: String,
+    /// FPS для монтажу
+    #[serde(default = "default_montage_fps")]
+    pub montage_fps: u32,
+    /// Пресет кодування FFmpeg
+    #[serde(default = "default_montage_preset")]
+    pub montage_preset: String,
+    /// Бітрейт відео у МБ/с
+    #[serde(default = "default_montage_bitrate")]
+    pub montage_bitrate: u32,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -478,6 +510,10 @@ pub fn save_template(
     subtitles_service: &str,
     whisper_language: &str,
     whisper_model: &str,
+    montage_service: &str,
+    montage_fps: u32,
+    montage_preset: &str,
+    montage_bitrate: u32,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -520,6 +556,10 @@ pub fn save_template(
             subtitles_service: subtitles_service.to_string(),
             whisper_language: whisper_language.to_string(),
             whisper_model: whisper_model.to_string(),
+            montage_service: montage_service.to_string(),
+            montage_fps,
+            montage_preset: montage_preset.to_string(),
+            montage_bitrate,
         };
 
         let json = serde_json::to_string_pretty(&template)?;

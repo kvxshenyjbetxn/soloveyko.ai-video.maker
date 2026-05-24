@@ -43,6 +43,10 @@ pub fn draw_templates_section(
     subtitles_service: &mut String,
     whisper_language: &mut String,
     whisper_model: &mut String,
+    montage_service: &mut String,
+    montage_fps: &mut u32,
+    montage_preset: &mut String,
+    montage_bitrate: &mut u32,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -115,6 +119,10 @@ pub fn draw_templates_section(
                             *subtitles_service = template.subtitles_service;
                             *whisper_language = template.whisper_language;
                             *whisper_model = template.whisper_model;
+                            *montage_service = template.montage_service;
+                            *montage_fps = template.montage_fps;
+                            *montage_preset = template.montage_preset;
+                            *montage_bitrate = template.montage_bitrate;
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

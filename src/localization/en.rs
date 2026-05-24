@@ -220,6 +220,10 @@ pub fn translate_en(key: &str) -> &'static str {
         "subtitles_model_download_btn" => "⬇ Download",
         "subtitles_model_retry" => "↺ Retry",
         "subtitles_model_failed" => "❌ Error:",
+        "montage_service_label" => "Assembly service",
+        "montage_fps_label" => "FPS",
+        "montage_preset_label" => "Encoding preset",
+        "montage_bitrate_label" => "Bitrate",
         _ => "",
     }
 }

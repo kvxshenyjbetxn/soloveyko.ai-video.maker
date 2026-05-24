@@ -122,6 +122,10 @@ pub fn draw_pipeline_panel(
     whisper_language: &mut String,
     whisper_model: &mut String,
     whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
+    montage_service: &mut String,
+    montage_fps: &mut u32,
+    montage_preset: &mut String,
+    montage_bitrate: &mut u32,
     text_input: &str,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
@@ -195,6 +199,10 @@ pub fn draw_pipeline_panel(
                             subtitles_service,
                             whisper_language,
                             whisper_model,
+                            montage_service,
+                            *montage_fps,
+                            montage_preset,
+                            *montage_bitrate,
                         ) {
                             Ok(_) => {
                                 *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -291,6 +299,10 @@ pub fn draw_pipeline_panel(
                                     subtitles_service,
                                     whisper_language,
                                     whisper_model,
+                                    montage_service,
+                                    montage_fps,
+                                    montage_preset,
+                                    montage_bitrate,
                                 );
                             });
                         }
@@ -527,7 +539,14 @@ pub fn draw_pipeline_panel(
                             if header.inner.clicked() { state.toggle(ui); }
                             state.store(ui.ctx());
                             state.show_body_indented(&header.response, ui, |ui| {
-                                editing::draw_editing_section(ui);
+                                editing::draw_editing_section(
+                                    ui,
+                                    language,
+                                    montage_service,
+                                    montage_fps,
+                                    montage_preset,
+                                    montage_bitrate,
+                                );
                             });
                         }
                     });
@@ -675,6 +694,11 @@ pub fn draw_pipeline_panel(
                                     subtitles_service,
                                     whisper_language,
                                     whisper_model,
+                                    *pipeline_editing_enabled,
+                                    montage_service,
+                                    *montage_fps,
+                                    montage_preset,
+                                    *montage_bitrate,
                                 );
                             }
                         });
@@ -728,6 +752,11 @@ fn validate_and_enqueue(
     subtitles_service: &str,
     whisper_language: &str,
     whisper_model: &str,
+    montage_enabled: bool,
+    montage_service: &str,
+    montage_fps: u32,
+    montage_preset: &str,
+    montage_bitrate: u32,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
     let base = save_path.trim_end_matches('/').trim_end_matches('\\');
@@ -771,6 +800,11 @@ fn validate_and_enqueue(
         subtitles_service: subtitles_service.to_string(),
         whisper_language: whisper_language.to_string(),
         whisper_model: whisper_model.to_string(),
+        montage_enabled,
+        montage_service: montage_service.to_string(),
+        montage_fps,
+        montage_preset: montage_preset.to_string(),
+        montage_bitrate,
     };
 
     let id = *job_counter;

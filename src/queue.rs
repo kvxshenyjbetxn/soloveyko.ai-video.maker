@@ -59,6 +59,12 @@ pub struct JobSettings {
     pub subtitles_service: String,
     pub whisper_language: String,
     pub whisper_model: String,
+    pub montage_enabled: bool,
+    #[allow(dead_code)]
+    pub montage_service: String,
+    pub montage_fps: u32,
+    pub montage_preset: String,
+    pub montage_bitrate: u32,
 }
 
 /// Одна задача в черзі пайплайну.
@@ -75,6 +81,8 @@ pub struct PipelineJob {
     pub video_stage: Arc<Mutex<StageStatus>>,
     /// Статус етапу субтитрів
     pub subtitles_stage: Arc<Mutex<StageStatus>>,
+    /// Статус етапу монтажу
+    pub montage_stage: Arc<Mutex<StageStatus>>,
     /// Знімок налаштувань — зберігається для можливого перезапуску задачі
     pub settings: JobSettings,
     /// Збережений перекладений текст (заповнюється після перекладу)
@@ -97,6 +105,7 @@ impl PipelineJob {
             voiceover_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             video_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             subtitles_stage: Arc::new(Mutex::new(StageStatus::Pending)),
+            montage_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             settings,
             translated_text: Arc::new(Mutex::new(None)),
             translation_cost: Arc::new(Mutex::new(None)),
@@ -169,6 +178,22 @@ impl PipelineJob {
         if self.settings.subtitles_enabled {
             total_stages += 1;
             let stage = self.subtitles_stage.lock().unwrap().clone();
+            match stage {
+                StageStatus::Done => {
+                    completed_score += 1.0;
+                    completed_count += 1;
+                }
+                StageStatus::Running => {
+                    completed_score += 0.5;
+                }
+                _ => {}
+            }
+        }
+
+        // Етап 5: Монтаж
+        if self.settings.montage_enabled {
+            total_stages += 1;
+            let stage = self.montage_stage.lock().unwrap().clone();
             match stage {
                 StageStatus::Done => {
                     completed_score += 1.0;

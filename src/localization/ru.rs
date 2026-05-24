@@ -220,6 +220,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         "subtitles_model_download_btn" => "⬇ Загрузить",
         "subtitles_model_retry" => "↺ Попробовать снова",
         "subtitles_model_failed" => "❌ Ошибка:",
+        "montage_service_label" => "Сервис монтажа",
+        "montage_fps_label" => "FPS",
+        "montage_preset_label" => "Пресет кодирования",
+        "montage_bitrate_label" => "Битрейт",
         _ => "",
     }
 }
