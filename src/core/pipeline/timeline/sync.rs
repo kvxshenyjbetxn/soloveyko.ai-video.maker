@@ -539,8 +539,15 @@ pub fn build_timeline(
 
     // Перший тайминг починається з 0 (поглинаємо початкову тишу)
     if let Some(first) = final_timings.first_mut() {
-        if first.0 > 0.0 {
-            first.0 = 0.0;
+        first.0 = 0.0;
+    }
+    // Усуваємо прогалини між сегментами: end[i] = start[i+1].
+    // SRT-записи мають паузи між собою; без цього в FFmpeg-concat накопичена
+    // прогалина зміщує відеоряд відносно аудіо на кожному кліпі.
+    for i in 0..final_timings.len().saturating_sub(1) {
+        let next_start = final_timings[i + 1].0;
+        if final_timings[i].1 < next_start {
+            final_timings[i].1 = next_start;
         }
     }
     // Останній тайминг закінчується точно на total_duration
