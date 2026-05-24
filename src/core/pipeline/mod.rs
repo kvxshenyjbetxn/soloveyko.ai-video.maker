@@ -233,6 +233,8 @@ pub fn run_pipeline(
     translation_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
+    montage_progress: Arc<Mutex<Option<f32>>>,
+    montage_file_size: Arc<Mutex<Option<u64>>>,
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
@@ -653,6 +655,9 @@ pub fn run_pipeline(
             let job_id_log = job_id;
             let job_name_log = job_name.clone();
 
+            let montage_progress_arc = Arc::clone(&montage_progress);
+            let ctx_montage = ctx.clone();
+
             match crate::core::pipeline::montage::run_montage(
                 save_dir,
                 &job_name,
@@ -661,8 +666,13 @@ pub fn run_pipeline(
                 &settings.montage_preset,
                 settings.montage_bitrate,
                 |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
+                move |pct| {
+                    *montage_progress_arc.lock().unwrap() = Some(pct);
+                    ctx_montage.request_repaint();
+                },
             ) {
-                Ok(_) => {
+                Ok(size) => {
+                    *montage_file_size.lock().unwrap() = Some(size);
                     crate::logger::log_job(job_id, &job_name, "Montage complete.");
                     *montage_stage.lock().unwrap() = crate::queue::StageStatus::Done;
                 }

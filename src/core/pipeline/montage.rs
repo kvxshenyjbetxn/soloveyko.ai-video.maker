@@ -16,6 +16,7 @@ pub fn find_voice_file(save_dir: &Path) -> Option<PathBuf> {
 /// Читає timeline.json для таймінгів, збирає медіафайли з media/,
 /// записує montage_script.txt і запускає ffmpeg у папці save_dir
 /// (всі шляхи — відносні, щоб не перевищувати ліміт командного рядка).
+/// `on_progress` викликається під час рендеру з відсотком [0.0..1.0].
 pub fn run_montage(
     save_dir: &Path,
     task_name: &str,
@@ -24,7 +25,8 @@ pub fn run_montage(
     preset: &str,
     bitrate_mbps: u32,
     log_fn: impl Fn(&str),
-) -> Result<(), String> {
+    on_progress: impl Fn(f32),
+) -> Result<u64, String> {
     // ─── Структури для timeline.json ─────────────────────────────────────────
     #[derive(serde::Deserialize)]
     struct SegTiming {
@@ -183,7 +185,9 @@ pub fn run_montage(
     let bufsize = format!("{}M", bitrate_mbps * 2);
 
     let mut args: Vec<String> = vec![
-        "-y".into(), "-hide_banner".into(), "-loglevel".into(), "info".into(), "-stats".into(),
+        "-y".into(), "-hide_banner".into(),
+        "-loglevel".into(), "error".into(),
+        "-progress".into(), "pipe:1".into(),
     ];
 
     for clip in &clips {
@@ -211,18 +215,61 @@ pub fn run_montage(
 
     log_fn(&format!("ffmpeg {}", args.join(" ")));
 
-    let output = std::process::Command::new(&ffmpeg)
+    use std::io::{BufRead, BufReader, Read};
+    use std::process::Stdio;
+
+    let mut child = std::process::Command::new(&ffmpeg)
         .args(&args)
         .current_dir(save_dir)
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| format!("FFmpeg launch error: {e}"))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let tail = &stderr[stderr.len().saturating_sub(3000)..];
+    // Читаємо stderr у окремому потоці, щоб не заблокувати буфер
+    let stderr_handle = {
+        let stderr = child.stderr.take().unwrap();
+        std::thread::spawn(move || {
+            let mut s = String::new();
+            BufReader::new(stderr).read_to_string(&mut s).ok();
+            s
+        })
+    };
+
+    // Парсимо прогрес з stdout (-progress pipe:1 format).
+    // out_time_us — мікросекунди (незважаючи на назву out_time_ms, FFmpeg пише мікросекунди).
+    let stdout = child.stdout.take().unwrap();
+    let mut out_time_us: i64 = 0;
+    let mut speed = String::new();
+    let mut bitrate = String::new();
+
+    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        if let Some(v) = line.strip_prefix("out_time_us=") {
+            out_time_us = v.trim().parse().unwrap_or(0);
+        } else if let Some(v) = line.strip_prefix("speed=") {
+            speed = v.trim().to_string();
+        } else if let Some(v) = line.strip_prefix("bitrate=") {
+            bitrate = v.trim().to_string();
+        } else if line == "progress=continue" {
+            // progress=end пропускаємо: значення там скинуті (N/A), on_progress(1.0) після циклу
+            let pct = (out_time_us as f64 / 1_000_000.0 / total_dur).clamp(0.0, 1.0) as f32;
+            on_progress(pct);
+            log_fn(&format!("{:.0}%  speed={}  bitrate={}", pct * 100.0, speed, bitrate));
+        }
+    }
+
+    let status = child.wait().map_err(|e| format!("FFmpeg wait error: {e}"))?;
+    let stderr_output = stderr_handle.join().unwrap_or_default();
+
+    if !status.success() {
+        let tail = &stderr_output[stderr_output.len().saturating_sub(3000)..];
         return Err(format!("FFmpeg failed:\n{tail}"));
     }
 
-    log_fn("Montage complete.");
-    Ok(())
+    on_progress(1.0);
+    let out_path = format!("{}.mp4", safe_name.trim());
+    let file_size = std::fs::metadata(save_dir.join(&out_path))
+        .map(|m| m.len())
+        .unwrap_or(0);
+    Ok(file_size)
 }

@@ -1037,6 +1037,10 @@ fn draw_balance_window(
 }
 
 /// Повертає колір для відображення статусу конкретного етапу пайплайну.
+fn format_file_size(bytes: u64) -> String {
+    format!("{:.2} GB", bytes as f64 / 1_000_000_000.0)
+}
+
 fn stage_color(stage: &crate::queue::StageStatus, ui: &egui::Ui) -> egui::Color32 {
     match stage {
         crate::queue::StageStatus::Pending => ui.visuals().weak_text_color(),
@@ -1176,6 +1180,8 @@ fn draw_queue_panel(
                     std::sync::Arc::clone(&job.translation_cost),
                     std::sync::Arc::clone(&job.audio_duration),
                     std::sync::Arc::clone(&job.media_progress),
+                    std::sync::Arc::clone(&job.montage_progress),
+                    std::sync::Arc::clone(&job.montage_file_size),
                     ctx.clone(),
                 );
             }
@@ -1196,6 +1202,7 @@ fn draw_queue_panel(
                     let video_stage = job.video_stage.lock().unwrap().clone();
                     let subtitles_stage = job.subtitles_stage.lock().unwrap().clone();
                     let montage_stage = job.montage_stage.lock().unwrap().clone();
+                    let montage_pct = *job.montage_progress.lock().unwrap();
 
                     let (status_text, status_color): (String, egui::Color32) = match &status {
                         crate::queue::JobStatus::Pending => (
@@ -1355,14 +1362,15 @@ fn draw_queue_panel(
                             }
 
                             if job.settings.video_enabled {
-                                let video_label = if video_stage == crate::queue::StageStatus::Running {
-                                    if let Some((done, total)) = *job.media_progress.lock().unwrap() {
-                                        format!("{} ({}/{})", translate(language, "video"), done, total)
-                                    } else {
-                                        translate(language, "video").to_string()
+                                let video_label = match &video_stage {
+                                    crate::queue::StageStatus::Running | crate::queue::StageStatus::Done => {
+                                        if let Some((done, total)) = *job.media_progress.lock().unwrap() {
+                                            format!("{} ({}/{})", translate(language, "video"), done, total)
+                                        } else {
+                                            translate(language, "video").to_string()
+                                        }
                                     }
-                                } else {
-                                    translate(language, "video").to_string()
+                                    _ => translate(language, "video").to_string(),
                                 };
                                 ui.label(
                                     egui::RichText::new(video_label)
@@ -1380,8 +1388,27 @@ fn draw_queue_panel(
                             }
 
                             if job.settings.montage_enabled {
+                                let montage_label = match &montage_stage {
+                                    crate::queue::StageStatus::Running => {
+                                        match montage_pct {
+                                            Some(pct) => format!("{} ({:.0}%)", translate(language, "editing"), pct * 100.0),
+                                            None => translate(language, "editing").to_string(),
+                                        }
+                                    }
+                                    crate::queue::StageStatus::Done => {
+                                        let size_str = job.montage_file_size.lock().unwrap()
+                                            .map(format_file_size)
+                                            .unwrap_or_default();
+                                        if size_str.is_empty() {
+                                            format!("{} (100%)", translate(language, "editing"))
+                                        } else {
+                                            format!("{} (100%  {})", translate(language, "editing"), size_str)
+                                        }
+                                    }
+                                    _ => translate(language, "editing").to_string(),
+                                };
                                 ui.label(
-                                    egui::RichText::new(translate(language, "editing"))
+                                    egui::RichText::new(montage_label)
                                         .color(stage_color(&montage_stage, ui))
                                         .size(12.5),
                                 );
@@ -1411,13 +1438,27 @@ fn draw_queue_panel(
                             let (prog, _, _) = job.calculate_progress();
                             let is_job_running = status == crate::queue::JobStatus::Running;
 
-                            let bar = egui::ProgressBar::new(prog)
-                                .animate(is_job_running)
-                                .desired_height(6.0);
-                            ui.add_sized(
-                                [ui.available_width() - 4.0, 6.0],
-                                bar
-                            );
+                            ui.horizontal(|ui| {
+                                let pct_text = format!("{:.0}%", prog * 100.0);
+                                let pct_galley = ui.painter().layout_no_wrap(
+                                    pct_text.clone(),
+                                    egui::FontId::proportional(11.0),
+                                    ui.visuals().weak_text_color(),
+                                );
+                                let pct_width = pct_galley.size().x + 4.0;
+                                let bar_width = (ui.available_width() - pct_width - ui.spacing().item_spacing.x).max(20.0);
+
+                                let bar = egui::ProgressBar::new(prog)
+                                    .animate(is_job_running)
+                                    .desired_height(6.0);
+                                ui.add_sized([bar_width, 6.0], bar);
+
+                                ui.label(
+                                    egui::RichText::new(pct_text)
+                                        .size(11.0)
+                                        .weak(),
+                                );
+                            });
                         });
                     });
 
@@ -2218,6 +2259,8 @@ impl eframe::App for VideoMakerApp {
                         translation_cost_arc,
                         audio_duration_arc,
                         media_progress_arc,
+                        std::sync::Arc::clone(&self.jobs[job_idx].montage_progress),
+                        std::sync::Arc::clone(&self.jobs[job_idx].montage_file_size),
                         ctx_clone,
                     );
 

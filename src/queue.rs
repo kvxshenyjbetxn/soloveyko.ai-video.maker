@@ -93,6 +93,10 @@ pub struct PipelineJob {
     pub audio_duration: Arc<Mutex<Option<f64>>>,
     /// Прогрес генерації медіа: (завершено, загалом). None — поки кількість невідома.
     pub media_progress: Arc<Mutex<Option<(usize, usize)>>>,
+    /// Прогрес монтажу [0.0..1.0]. None — ще не розпочато.
+    pub montage_progress: Arc<Mutex<Option<f32>>>,
+    /// Розмір фінального відеофайлу в байтах. None до завершення монтажу.
+    pub montage_file_size: Arc<Mutex<Option<u64>>>,
 }
 
 impl PipelineJob {
@@ -111,6 +115,8 @@ impl PipelineJob {
             translation_cost: Arc::new(Mutex::new(None)),
             audio_duration: Arc::new(Mutex::new(None)),
             media_progress: Arc::new(Mutex::new(None)),
+            montage_progress: Arc::new(Mutex::new(None)),
+            montage_file_size: Arc::new(Mutex::new(None)),
         }
     }
 
