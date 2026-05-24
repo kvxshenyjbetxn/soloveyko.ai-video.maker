@@ -229,6 +229,7 @@ pub fn run_pipeline(
     translated_text: Arc<Mutex<Option<String>>>,
     translation_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
+    media_progress: Arc<Mutex<Option<(usize, usize)>>>,
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
@@ -410,6 +411,10 @@ pub fn run_pipeline(
                 &format!("Text split into {} segments (mode: {})", segments.len(), settings.text_split_mode),
             );
 
+            // Ініціалізуємо лічильник медіа щоб прогресбар знав загальну кількість
+            *media_progress.lock().unwrap() = Some((0, segments.len()));
+            ctx.request_repaint();
+
             // Зберігаємо debug-файл сегментів
             let save_dir = std::path::Path::new(&settings.save_path);
             let segments_path = save_dir.join("segments.txt");
@@ -437,9 +442,11 @@ pub fn run_pipeline(
             let mut handles = Vec::new();
 
             for (i, segment) in segments.iter().enumerate() {
-                let sem        = Arc::clone(&sem);
-                let key        = settings.googler_key.clone();
-                let priority   = if use_video {
+                let sem              = Arc::clone(&sem);
+                let media_progress_c = Arc::clone(&media_progress);
+                let ctx_c            = ctx.clone();
+                let key              = settings.googler_key.clone();
+                let priority         = if use_video {
                     settings.googler_video_priority.clone()
                 } else {
                     settings.googler_image_priority.clone()
@@ -476,6 +483,13 @@ pub fn run_pipeline(
                                         job_id_c, &job_name_c,
                                         &format!("{} {}/{} saved: {}", if use_video { "Video" } else { "Image" }, i + 1, total, path.display()),
                                     );
+                                    // Збільшуємо лічильник завершених медіафайлів
+                                    if let Ok(mut mp) = media_progress_c.lock() {
+                                        if let Some((ref mut done, _)) = *mp {
+                                            *done += 1;
+                                        }
+                                    }
+                                    ctx_c.request_repaint();
                                     (i, Ok(()))
                                 }
                             }

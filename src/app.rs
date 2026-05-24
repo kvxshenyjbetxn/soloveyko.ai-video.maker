@@ -1116,6 +1116,7 @@ fn draw_queue_panel(
                     std::sync::Arc::clone(&job.translated_text),
                     std::sync::Arc::clone(&job.translation_cost),
                     std::sync::Arc::clone(&job.audio_duration),
+                    std::sync::Arc::clone(&job.media_progress),
                     ctx.clone(),
                 );
             }
@@ -1293,8 +1294,17 @@ fn draw_queue_panel(
                             }
 
                             if job.settings.video_enabled {
+                                let video_label = if video_stage == crate::queue::StageStatus::Running {
+                                    if let Some((done, total)) = *job.media_progress.lock().unwrap() {
+                                        format!("{} ({}/{})", translate(language, "video"), done, total)
+                                    } else {
+                                        translate(language, "video").to_string()
+                                    }
+                                } else {
+                                    translate(language, "video").to_string()
+                                };
                                 ui.label(
-                                    egui::RichText::new(translate(language, "video"))
+                                    egui::RichText::new(video_label)
                                         .color(stage_color(&video_stage, ui))
                                         .size(12.5),
                                 );
@@ -1821,6 +1831,7 @@ impl eframe::App for VideoMakerApp {
                 let translation_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_stage);
                 let voiceover_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].voiceover_stage);
                 let video_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].video_stage);
+                let media_progress_arc = std::sync::Arc::clone(&self.jobs[job_idx].media_progress);
                 let job_settings = self.jobs[job_idx].settings.clone();
 
                 // Перевіряємо результат фонової перегенерації
@@ -2117,6 +2128,7 @@ impl eframe::App for VideoMakerApp {
                         translated_text_arc,
                         translation_cost_arc,
                         audio_duration_arc,
+                        media_progress_arc,
                         ctx_clone,
                     );
 

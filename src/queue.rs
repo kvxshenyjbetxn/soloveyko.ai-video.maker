@@ -77,6 +77,8 @@ pub struct PipelineJob {
     pub translation_cost: Arc<Mutex<Option<f64>>>,
     /// Тривалість аудіо після озвучки (в секундах)
     pub audio_duration: Arc<Mutex<Option<f64>>>,
+    /// Прогрес генерації медіа: (завершено, загалом). None — поки кількість невідома.
+    pub media_progress: Arc<Mutex<Option<(usize, usize)>>>,
 }
 
 impl PipelineJob {
@@ -92,6 +94,7 @@ impl PipelineJob {
             translated_text: Arc::new(Mutex::new(None)),
             translation_cost: Arc::new(Mutex::new(None)),
             audio_duration: Arc::new(Mutex::new(None)),
+            media_progress: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -144,7 +147,12 @@ impl PipelineJob {
                     completed_count += 1;
                 }
                 StageStatus::Running => {
-                    completed_score += 0.5;
+                    // Якщо відома кількість медіафайлів — гранулярний прогрес
+                    let granular = self.media_progress.lock().unwrap()
+                        .and_then(|(done, total)| {
+                            if total > 0 { Some(done as f32 / total as f32) } else { None }
+                        });
+                    completed_score += granular.unwrap_or(0.1);
                 }
                 _ => {}
             }
