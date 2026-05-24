@@ -40,6 +40,9 @@ pub fn draw_templates_section(
     voiceover_convert_to_wav: &mut bool,
     googler_image_priority: &mut Vec<String>,
     googler_video_priority: &mut Vec<String>,
+    subtitles_service: &mut String,
+    whisper_language: &mut String,
+    whisper_model: &mut String,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -109,6 +112,9 @@ pub fn draw_templates_section(
                             *voiceover_convert_to_wav = template.voiceover_convert_to_wav;
                             *googler_image_priority = template.googler_image_priority;
                             *googler_video_priority = template.googler_video_priority;
+                            *subtitles_service = template.subtitles_service;
+                            *whisper_language = template.whisper_language;
+                            *whisper_model = template.whisper_model;
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),

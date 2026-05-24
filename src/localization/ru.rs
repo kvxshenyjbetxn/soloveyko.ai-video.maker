@@ -209,6 +209,17 @@ pub fn translate_ru(key: &str) -> &'static str {
         "video_priorities_image" => "Изображения",
         "video_priorities_video" => "Видео",
         "video_priorities_retry_hint" => "3 попытки на провайдера, пауза 5с, затем следующий",
+        "subtitles_service_label" => "Сервис субтитров",
+        "subtitles_whisper_model_label" => "Модель Whisper",
+        "subtitles_whisper_lang_label" => "Язык распознавания",
+        "subtitles_whisper_lang_auto" => "Авто (определить)",
+        "subtitles_no_audio" => "⚠ Аудио-файл не найден. Включите этап озвучки или убедитесь, что voice.mp3/voice.wav существует.",
+        "subtitles_stage_log_start" => "Запуск генерации субтитров через Whisper...",
+        "subtitles_stage_log_done" => "Субтитры сохранены: subtitle.srt",
+        "subtitles_model_downloaded" => "✓ Модель загружена",
+        "subtitles_model_download_btn" => "⬇ Загрузить",
+        "subtitles_model_retry" => "↺ Попробовать снова",
+        "subtitles_model_failed" => "❌ Ошибка:",
         _ => "",
     }
 }

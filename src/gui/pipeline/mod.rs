@@ -118,6 +118,10 @@ pub fn draw_pipeline_panel(
     voiceover_convert_to_wav: &mut bool,
     googler_image_priority: &mut Vec<String>,
     googler_video_priority: &mut Vec<String>,
+    subtitles_service: &mut String,
+    whisper_language: &mut String,
+    whisper_model: &mut String,
+    whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     text_input: &str,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
@@ -188,6 +192,9 @@ pub fn draw_pipeline_panel(
                             googler_image_priority.clone(),
                             googler_video_priority.clone(),
                             video_media_type,
+                            subtitles_service,
+                            whisper_language,
+                            whisper_model,
                         ) {
                             Ok(_) => {
                                 *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -281,6 +288,9 @@ pub fn draw_pipeline_panel(
                                     voiceover_convert_to_wav,
                                     googler_image_priority,
                                     googler_video_priority,
+                                    subtitles_service,
+                                    whisper_language,
+                                    whisper_model,
                                 );
                             });
                         }
@@ -486,7 +496,15 @@ pub fn draw_pipeline_panel(
                             if header.inner.clicked() { state.toggle(ui); }
                             state.store(ui.ctx());
                             state.show_body_indented(&header.response, ui, |ui| {
-                                subtitles::draw_subtitles_section(ui);
+                                subtitles::draw_subtitles_section(
+                                    ui,
+                                    language,
+                                    subtitles_service,
+                                    whisper_language,
+                                    whisper_model,
+                                    whisper_model_download,
+                                    ui.ctx().clone(),
+                                );
                             });
                         }
 
@@ -653,6 +671,10 @@ pub fn draw_pipeline_panel(
                                     googler_image_priority.clone(),
                                     googler_video_priority.clone(),
                                     *googler_image_max_threads,
+                                    *pipeline_subtitles_enabled,
+                                    subtitles_service,
+                                    whisper_language,
+                                    whisper_model,
                                 );
                             }
                         });
@@ -702,6 +724,10 @@ fn validate_and_enqueue(
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
     googler_image_max_threads: usize,
+    subtitles_enabled: bool,
+    subtitles_service: &str,
+    whisper_language: &str,
+    whisper_model: &str,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
     let base = save_path.trim_end_matches('/').trim_end_matches('\\');
@@ -741,6 +767,10 @@ fn validate_and_enqueue(
         googler_image_priority,
         googler_video_priority,
         googler_image_max_threads,
+        subtitles_enabled,
+        subtitles_service: subtitles_service.to_string(),
+        whisper_language: whisper_language.to_string(),
+        whisper_model: whisper_model.to_string(),
     };
 
     let id = *job_counter;

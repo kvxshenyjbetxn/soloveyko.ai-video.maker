@@ -27,6 +27,9 @@ fn default_edge_tts_volume() -> String { "0".to_string() }
 fn default_edge_tts_max_threads() -> usize { 5 }
 fn default_googler_threads() -> usize { 5 }
 fn default_video_media_type() -> String { "image".to_string() }
+fn default_subtitles_service() -> String { "Whisper".to_string() }
+fn default_whisper_language() -> String { "auto".to_string() }
+fn default_whisper_model() -> String { "base".to_string() }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -174,6 +177,15 @@ pub struct AppSettings {
     /// Тип медіа для генерації: "image" або "video"
     #[serde(default = "default_video_media_type")]
     pub video_media_type: String,
+    /// Обраний сервіс для генерації субтитрів ("Whisper")
+    #[serde(default = "default_subtitles_service")]
+    pub subtitles_service: String,
+    /// Мова розпізнавання для Whisper ("auto", "uk", "en", ...)
+    #[serde(default = "default_whisper_language")]
+    pub whisper_language: String,
+    /// Модель Whisper ("tiny", "base", "small", "medium", "large-v3")
+    #[serde(default = "default_whisper_model")]
+    pub whisper_model: String,
 }
 
 impl Default for AppSettings {
@@ -225,6 +237,9 @@ impl Default for AppSettings {
             googler_image_priority: default_image_priority(),
             googler_video_priority: default_video_priority(),
             video_media_type: "image".to_string(),
+            subtitles_service: "Whisper".to_string(),
+            whisper_language: "auto".to_string(),
+            whisper_model: "base".to_string(),
         }
     }
 }
@@ -406,6 +421,15 @@ pub struct PipelineTemplate {
     /// Тип медіа для генерації: "image" або "video"
     #[serde(default = "default_video_media_type")]
     pub video_media_type: String,
+    /// Обраний сервіс для генерації субтитрів ("Whisper")
+    #[serde(default = "default_subtitles_service")]
+    pub subtitles_service: String,
+    /// Мова розпізнавання для Whisper ("auto", "uk", "en", ...)
+    #[serde(default = "default_whisper_language")]
+    pub whisper_language: String,
+    /// Модель Whisper ("tiny", "base", "small", "medium", "large-v3")
+    #[serde(default = "default_whisper_model")]
+    pub whisper_model: String,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -451,6 +475,9 @@ pub fn save_template(
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
     video_media_type: &str,
+    subtitles_service: &str,
+    whisper_language: &str,
+    whisper_model: &str,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -490,6 +517,9 @@ pub fn save_template(
             googler_image_priority,
             googler_video_priority,
             video_media_type: video_media_type.to_string(),
+            subtitles_service: subtitles_service.to_string(),
+            whisper_language: whisper_language.to_string(),
+            whisper_model: whisper_model.to_string(),
         };
 
         let json = serde_json::to_string_pretty(&template)?;

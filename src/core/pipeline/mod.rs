@@ -226,6 +226,7 @@ pub fn run_pipeline(
     translation_stage: Arc<Mutex<crate::queue::StageStatus>>,
     voiceover_stage: Arc<Mutex<crate::queue::StageStatus>>,
     video_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    subtitles_stage: Arc<Mutex<crate::queue::StageStatus>>,
     translated_text: Arc<Mutex<Option<String>>>,
     translation_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
@@ -524,6 +525,95 @@ pub fn run_pipeline(
             }
 
             ctx.request_repaint();
+        }
+
+        // Етап 4: Субтитри (whisper.cpp)
+        if settings.subtitles_enabled && settings.subtitles_service == "Whisper" {
+            crate::logger::log_job(job_id, &job_name, "Starting subtitle generation via Whisper...");
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+            ctx.request_repaint();
+
+            let save_dir = std::path::Path::new(&settings.save_path);
+
+            // Перевіряємо наявність ggml-моделі
+            let model_path = crate::bundle::whisper_model_path(&settings.whisper_model);
+            if !model_path.exists() {
+                let msg = format!(
+                    "Subtitles error: model '{}' not found at '{}'. Download it in the subtitles settings.",
+                    settings.whisper_model,
+                    model_path.display()
+                );
+                crate::logger::log_job(job_id, &job_name, &msg);
+                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                *status.lock().unwrap() = crate::queue::JobStatus::Failed(msg);
+                ctx.request_repaint();
+                return;
+            }
+
+            // Вибираємо аудіо: WAV у пріоритеті, потім MP3
+            let audio_path = if save_dir.join("voice.wav").exists() {
+                save_dir.join("voice.wav")
+            } else if save_dir.join("voice.mp3").exists() {
+                save_dir.join("voice.mp3")
+            } else {
+                crate::logger::log_job(job_id, &job_name, "Subtitles error: audio file not found (voice.wav / voice.mp3).");
+                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                *status.lock().unwrap() = crate::queue::JobStatus::Failed(
+                    "Subtitles: audio file not found".to_string()
+                );
+                ctx.request_repaint();
+                return;
+            };
+
+            // Шлях вихідного файлу без розширення — whisper.cpp додасть .srt сам
+            let output_stem = save_dir.join("subtitle");
+            let whisper_cmd = crate::bundle::whisper_path();
+
+            // whisper.cpp аргументи: -m <model_file> --output-srt -of <stem> [-l <lang>]
+            let mut args: Vec<String> = vec![
+                audio_path.to_str().unwrap_or("voice.wav").to_string(),
+                "-m".to_string(), model_path.to_str().unwrap().to_string(),
+                "--output-srt".to_string(),
+                "-of".to_string(), output_stem.to_str().unwrap().to_string(),
+            ];
+            if settings.whisper_language != "auto" {
+                args.push("-l".to_string());
+                args.push(settings.whisper_language.clone());
+            }
+
+            crate::logger::log_job(
+                job_id, &job_name,
+                &format!("Running: {} {}", whisper_cmd, args.join(" ")),
+            );
+
+            match std::process::Command::new(&whisper_cmd).args(&args).output() {
+                Ok(out) if out.status.success() => {
+                    crate::logger::log_job(job_id, &job_name, "Subtitles saved: subtitle.srt");
+                    *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+                    ctx.request_repaint();
+                }
+                Ok(out) => {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    let msg = if !stderr.is_empty() { stderr.to_string() } else { stdout.to_string() };
+                    crate::logger::log_job(job_id, &job_name, &format!("Whisper error: {}", msg.trim()));
+                    *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(
+                        format!("Whisper error: {}", msg.chars().take(120).collect::<String>())
+                    );
+                    ctx.request_repaint();
+                    return;
+                }
+                Err(e) => {
+                    crate::logger::log_job(job_id, &job_name, &format!("Whisper not found or failed to start: {}", e));
+                    *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(
+                        format!("Whisper launch error: {}", e)
+                    );
+                    ctx.request_repaint();
+                    return;
+                }
+            }
         }
 
         crate::logger::log_job(job_id, &job_name, "Job completed successfully.");

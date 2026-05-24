@@ -209,6 +209,17 @@ pub fn translate_uk(key: &str) -> &'static str {
         "video_priorities_image" => "Зображення",
         "video_priorities_video" => "Відео",
         "video_priorities_retry_hint" => "3 спроби на провайдера, пауза 5с, потім наступний",
+        "subtitles_service_label" => "Сервіс субтитрів",
+        "subtitles_whisper_model_label" => "Модель Whisper",
+        "subtitles_whisper_lang_label" => "Мова розпізнавання",
+        "subtitles_whisper_lang_auto" => "Авто (визначити)",
+        "subtitles_no_audio" => "⚠ Аудіо-файл не знайдено. Увімкніть етап озвучки або переконайтесь, що voice.mp3/voice.wav існує.",
+        "subtitles_stage_log_start" => "Запуск генерації субтитрів через Whisper...",
+        "subtitles_stage_log_done" => "Субтитри збережено: subtitle.srt",
+        "subtitles_model_downloaded" => "✓ Модель завантажена",
+        "subtitles_model_download_btn" => "⬇ Завантажити",
+        "subtitles_model_retry" => "↺ Спробувати знову",
+        "subtitles_model_failed" => "❌ Помилка:",
         _ => "",
     }
 }

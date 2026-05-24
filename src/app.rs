@@ -199,6 +199,14 @@ pub struct VideoMakerApp {
     pub googler_video_max_threads: usize,
     /// Конвертувати аудіо в WAV після озвучки.
     pub voiceover_convert_to_wav: bool,
+    /// Обраний сервіс для генерації субтитрів.
+    pub subtitles_service: String,
+    /// Мова розпізнавання для Whisper.
+    pub whisper_language: String,
+    /// Модель Whisper.
+    pub whisper_model: String,
+    /// Стан завантаження ggml-моделі whisper.cpp у фоні.
+    pub whisper_model_download: std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     /// Сповіщення про успішне копіювання (текст, час копіювання).
     pub copied_toast: Option<(String, std::time::Instant)>,
     /// Чи увімкнене автоматичне прокручування логу донизу.
@@ -299,6 +307,10 @@ impl Default for VideoMakerApp {
             googler_image_max_threads: default_settings.googler_image_max_threads,
             googler_video_max_threads: default_settings.googler_video_max_threads,
             voiceover_convert_to_wav: false,
+            subtitles_service: "Whisper".to_string(),
+            whisper_language: "auto".to_string(),
+            whisper_model: "base".to_string(),
+            whisper_model_download: std::sync::Arc::new(std::sync::Mutex::new(crate::gui::welcome::BinaryDownload::Idle)),
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: default_settings,
@@ -549,6 +561,10 @@ impl VideoMakerApp {
             googler_image_max_threads: saved.googler_image_max_threads,
             googler_video_max_threads: saved.googler_video_max_threads,
             voiceover_convert_to_wav: saved.voiceover_convert_to_wav,
+            subtitles_service: saved.subtitles_service.clone(),
+            whisper_language: saved.whisper_language.clone(),
+            whisper_model: saved.whisper_model.clone(),
+            whisper_model_download: std::sync::Arc::new(std::sync::Mutex::new(crate::gui::welcome::BinaryDownload::Idle)),
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: saved,
@@ -1022,6 +1038,7 @@ fn draw_queue_panel(
     selected_job_logs: &mut Option<(u64, String)>,
     selected_job_control: &mut Option<u64>,
     control_text_input: &mut String,
+    whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
 ) {
     ui.add_space(4.0);
 
@@ -1047,13 +1064,37 @@ fn draw_queue_panel(
             *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
         });
 
+        // Перевіряємо, чи всі потрібні моделі завантажені для задач у черзі
+        let model_download_state = whisper_model_download.lock().unwrap().clone();
+        let whisper_blocked: Option<String> = jobs.iter()
+            .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::Pending)
+            .find(|j| {
+                j.settings.subtitles_enabled
+                    && j.settings.subtitles_service == "Whisper"
+                    && !crate::bundle::whisper_model_exists(&j.settings.whisper_model)
+            })
+            .map(|j| {
+                let is_downloading = matches!(model_download_state, crate::gui::welcome::BinaryDownload::Downloading(_));
+                if is_downloading {
+                    format!("⏳ Модель Whisper '{}' ще завантажується...", j.settings.whisper_model)
+                } else {
+                    format!("⚠ Модель Whisper '{}' не завантажена. Завантажте її в секції Субтитри.", j.settings.whisper_model)
+                }
+            });
+
+        let can_run = has_pending && whisper_blocked.is_none();
+
         let mut clicked = false;
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.add_enabled(
-                has_pending,
+            let run_btn = ui.add_enabled(
+                can_run,
                 egui::Button::new(egui::RichText::new(translate(language, "queue_run_btn")).strong()),
-            ).clicked() {
+            );
+            if run_btn.clicked() {
                 clicked = true;
+            }
+            if let Some(ref msg) = whisper_blocked {
+                run_btn.on_disabled_hover_text(msg);
             }
 
             // Малюємо загальний прогресбар черги всередині right_to_left макету,
@@ -1113,6 +1154,7 @@ fn draw_queue_panel(
                     std::sync::Arc::clone(&job.translation_stage),
                     std::sync::Arc::clone(&job.voiceover_stage),
                     std::sync::Arc::clone(&job.video_stage),
+                    std::sync::Arc::clone(&job.subtitles_stage),
                     std::sync::Arc::clone(&job.translated_text),
                     std::sync::Arc::clone(&job.translation_cost),
                     std::sync::Arc::clone(&job.audio_duration),
@@ -1135,6 +1177,7 @@ fn draw_queue_panel(
                     let translation_stage = job.translation_stage.lock().unwrap().clone();
                     let voiceover_stage = job.voiceover_stage.lock().unwrap().clone();
                     let video_stage = job.video_stage.lock().unwrap().clone();
+                    let subtitles_stage = job.subtitles_stage.lock().unwrap().clone();
 
                     let (status_text, status_color): (String, egui::Color32) = match &status {
                         crate::queue::JobStatus::Pending => (
@@ -1306,6 +1349,14 @@ fn draw_queue_panel(
                                 ui.label(
                                     egui::RichText::new(video_label)
                                         .color(stage_color(&video_stage, ui))
+                                        .size(12.5),
+                                );
+                            }
+
+                            if job.settings.subtitles_enabled {
+                                ui.label(
+                                    egui::RichText::new(translate(language, "subtitles"))
+                                        .color(stage_color(&subtitles_stage, ui))
                                         .size(12.5),
                                 );
                             }
@@ -1578,6 +1629,10 @@ impl eframe::App for VideoMakerApp {
                         &mut self.voiceover_convert_to_wav,
                         &mut self.googler_image_priority,
                         &mut self.googler_video_priority,
+                        &mut self.subtitles_service,
+                        &mut self.whisper_language,
+                        &mut self.whisper_model,
+                        &self.whisper_model_download,
                         &self.text_input,
                         &mut self.jobs,
                         &mut self.job_counter,
@@ -1612,6 +1667,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.selected_job_logs,
                         &mut self.selected_job_control,
                         &mut self.control_text_input,
+                        &self.whisper_model_download,
                     );
                 });
         }
@@ -1831,6 +1887,7 @@ impl eframe::App for VideoMakerApp {
                 let translation_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_stage);
                 let voiceover_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].voiceover_stage);
                 let video_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].video_stage);
+                let subtitles_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].subtitles_stage);
                 let media_progress_arc = std::sync::Arc::clone(&self.jobs[job_idx].media_progress);
                 let job_settings = self.jobs[job_idx].settings.clone();
 
@@ -2125,6 +2182,7 @@ impl eframe::App for VideoMakerApp {
                         translation_stage_arc,
                         voiceover_stage_arc,
                         video_stage_arc,
+                        subtitles_stage_arc,
                         translated_text_arc,
                         translation_cost_arc,
                         audio_duration_arc,
@@ -2258,6 +2316,9 @@ impl eframe::App for VideoMakerApp {
                     voiceover_convert_to_wav: self.voiceover_convert_to_wav,
                     googler_image_priority: self.googler_image_priority.clone(),
                     googler_video_priority: self.googler_video_priority.clone(),
+                    subtitles_service: self.subtitles_service.clone(),
+                    whisper_language: self.whisper_language.clone(),
+                    whisper_model: self.whisper_model.clone(),
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
                 

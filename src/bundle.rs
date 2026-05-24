@@ -59,7 +59,6 @@ pub fn ffprobe_path() -> String {
 }
 
 /// Шлях до whisper: спочатку bin_dir, потім системний PATH.
-#[allow(dead_code)]
 pub fn whisper_path() -> String {
     let local = bin_dir().join(WHISPER_NAME);
     if local.exists() {
@@ -71,6 +70,60 @@ pub fn whisper_path() -> String {
 /// Перевіряє, чи є whisper у локальному bin_dir.
 pub fn whisper_local_exists() -> bool {
     bin_dir().join(WHISPER_NAME).exists()
+}
+
+/// Папка для ggml-моделей whisper.cpp: <bin_dir>/models/
+pub fn models_dir() -> PathBuf {
+    bin_dir().join("models")
+}
+
+/// Повертає ім'я файлу ggml-моделі за її назвою (наприклад, "base" → "ggml-base.bin").
+pub fn whisper_model_filename(model: &str) -> String {
+    format!("ggml-{}.bin", model)
+}
+
+/// Повертає повний шлях до файлу ggml-моделі.
+pub fn whisper_model_path(model: &str) -> PathBuf {
+    models_dir().join(whisper_model_filename(model))
+}
+
+/// Перевіряє, чи завантажена дана модель у локальну папку models.
+pub fn whisper_model_exists(model: &str) -> bool {
+    whisper_model_path(model).exists()
+}
+
+/// Приблизний розмір ggml-моделі у MB (для відображення перед завантаженням).
+pub fn whisper_model_size_mb(model: &str) -> f64 {
+    match model {
+        "tiny"           => 75.0,
+        "base"           => 148.0,
+        "small"          => 488.0,
+        "medium"         => 1500.0,
+        "large-v3"       => 3100.0,
+        "large-v3-turbo" => 1600.0,
+        _                => 0.0,
+    }
+}
+
+/// Завантажує ggml-модель whisper.cpp із HuggingFace у папку bin/models.
+pub fn download_whisper_model(model: &str, mut on_progress: impl FnMut(String)) -> Result<(), String> {
+    let dir = models_dir();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Не вдалося створити папку models: {}", e))?;
+
+    let filename = whisper_model_filename(model);
+    let dest = dir.join(&filename);
+
+    if dest.exists() {
+        return Ok(());
+    }
+
+    let url = format!(
+        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
+        filename
+    );
+    download_file(&url, &dest, model, &mut on_progress)?;
+    Ok(())
 }
 
 /// Завантажує ffmpeg і ffprobe у bin_dir (пропускає вже наявні).

@@ -209,6 +209,17 @@ pub fn translate_en(key: &str) -> &'static str {
         "video_priorities_image" => "Images",
         "video_priorities_video" => "Video",
         "video_priorities_retry_hint" => "3 attempts per provider, 5s delay, then next",
+        "subtitles_service_label" => "Subtitle Service",
+        "subtitles_whisper_model_label" => "Whisper Model",
+        "subtitles_whisper_lang_label" => "Recognition Language",
+        "subtitles_whisper_lang_auto" => "Auto (detect)",
+        "subtitles_no_audio" => "⚠ Audio file not found. Enable the voiceover stage or ensure voice.mp3/voice.wav exists.",
+        "subtitles_stage_log_start" => "Starting subtitle generation via Whisper...",
+        "subtitles_stage_log_done" => "Subtitles saved: subtitle.srt",
+        "subtitles_model_downloaded" => "✓ Model downloaded",
+        "subtitles_model_download_btn" => "⬇ Download",
+        "subtitles_model_retry" => "↺ Retry",
+        "subtitles_model_failed" => "❌ Error:",
         _ => "",
     }
 }
