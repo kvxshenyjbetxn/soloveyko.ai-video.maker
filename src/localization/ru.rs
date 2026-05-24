@@ -13,6 +13,8 @@ pub fn translate_ru(key: &str) -> &'static str {
         "translation" => "Перевод",
         "voiceover" => "Озвучка",
         "video" => "Видеоряд",
+        "video_prompts" => "Промпты",
+        "video_media" => "Медиа",
         "subtitles" => "Субтитры",
         "editing" => "Монтаж",
         "editor_hint" => "Введите или вставьте сюда текст вашего будущего видеосценария...",
@@ -183,6 +185,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "welcome_whisper_desc" => "Whisper — распознавание речи для генерации субтитров",
         "balance_edge_tts_status" => "Бесплатно (Без лимитов)",
         "balance_voicebot_limit" => "Ограничение потоков: 5 (фиксировано)",
+        "balance_active_threads" => "Активные потоки:",
         "settings_edge_tts_threads" => "Параллельные потоки Edge TTS:",
         "edge_tts_voices_loading" => "Загрузка голосов Edge TTS...",
         "edge_tts_voice_label" => "Голос озвучки:",
@@ -228,6 +231,8 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_transition_duration_label" => "Длительность перехода",
         "montage_transition_none" => "Без перехода",
         "montage_transition_random" => "Случайно",
+        "video_llm_service_label" => "Сервис ЛЛМ для промптов",
+        "video_llm_service_none" => "Без ЛЛМ",
         _ => "",
     }
 }

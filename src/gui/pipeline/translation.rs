@@ -9,8 +9,8 @@ pub struct OpenRouterModel {
 }
 
 #[derive(serde::Deserialize)]
-struct ModelsResponse {
-    data: Vec<OpenRouterModel>,
+pub struct ModelsResponse {
+    pub data: Vec<OpenRouterModel>,
 }
 
 /// Малює секцію "Переклад" на панелі пайплайну.
@@ -346,7 +346,7 @@ pub fn draw_translation_section(
 }
 
 /// Відображає кнопку-дропдаун з пошуком для вибору моделі OpenRouter.
-fn draw_model_selector(
+pub fn draw_model_selector(
     ui: &mut egui::Ui,
     language: Language,
     translation_model: &mut String,

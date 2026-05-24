@@ -1,5 +1,6 @@
 use eframe::egui;
 use crate::localization::{Language, translate};
+use std::sync::{Arc, Mutex};
 
 /// Кнопка зі стрілкою вгору або вниз, намальованою через Painter (незалежно від шрифту).
 fn arrow_button(ui: &mut egui::Ui, up: bool, enabled: bool) -> egui::Response {
@@ -77,6 +78,15 @@ pub fn draw_video_section(
     video_prompt: &mut String,
     googler_image_priority: &mut Vec<String>,
     googler_video_priority: &mut Vec<String>,
+    video_llm_service: &mut String,
+    video_llm_model: &mut String,
+    video_llm_model_openrouter: &mut String,
+    video_llm_model_claude: &mut String,
+    video_llm_model_gemini: &mut String,
+    video_llm_temperature: &mut f32,
+    video_llm_model_search: &mut String,
+    openrouter_models: &Arc<Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>>,
+    openrouter_models_loading: &Arc<Mutex<bool>>,
 ) {
     ui.vertical(|ui| {
         ui.add_space(4.0);
@@ -100,6 +110,50 @@ pub fn draw_video_section(
         });
         ui.radio_value(text_split_mode, "full".to_string(), translate(language, "text_split_full"))
             .on_hover_text(translate(language, "text_split_full_hint"));
+
+        ui.add_space(8.0);
+
+        // Вибір ЛЛМ-сервісу для генерації промтів
+        ui.label(egui::RichText::new(translate(language, "video_llm_service_label")).strong());
+        ui.add_space(4.0);
+
+        let previous_llm_service = video_llm_service.clone();
+        egui::ComboBox::from_id_salt("video_llm_service_combo")
+            .selected_text(
+                if video_llm_service == "Claude Code" {
+                    translate(language, "translation_service_claude_code")
+                } else if video_llm_service == "Gemini CLI" {
+                    translate(language, "translation_service_gemini_cli")
+                } else if video_llm_service == "OpenRouter" {
+                    translate(language, "translation_service_openrouter")
+                } else {
+                    translate(language, "video_llm_service_none")
+                }
+            )
+            .show_ui(ui, |ui| {
+                ui.selectable_value(video_llm_service, "None".to_string(), translate(language, "video_llm_service_none"));
+                ui.selectable_value(video_llm_service, "OpenRouter".to_string(), translate(language, "translation_service_openrouter"));
+                ui.selectable_value(video_llm_service, "Claude Code".to_string(), translate(language, "translation_service_claude_code"));
+                ui.selectable_value(video_llm_service, "Gemini CLI".to_string(), translate(language, "translation_service_gemini_cli"));
+            });
+
+        // При зміні сервісу — відновлюємо відповідну збережену модель
+        if *video_llm_service != previous_llm_service {
+            if previous_llm_service == "OpenRouter" {
+                *video_llm_model_openrouter = video_llm_model.clone();
+            } else if previous_llm_service == "Claude Code" {
+                *video_llm_model_claude = video_llm_model.clone();
+            } else if previous_llm_service == "Gemini CLI" {
+                *video_llm_model_gemini = video_llm_model.clone();
+            }
+            if video_llm_service == "OpenRouter" {
+                *video_llm_model = video_llm_model_openrouter.clone();
+            } else if video_llm_service == "Claude Code" {
+                *video_llm_model = if video_llm_model_claude.is_empty() { "sonnet".to_string() } else { video_llm_model_claude.clone() };
+            } else if video_llm_service == "Gemini CLI" {
+                *video_llm_model = if video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { video_llm_model_gemini.clone() };
+            }
+        }
 
         ui.add_space(8.0);
 
@@ -185,6 +239,122 @@ pub fn draw_video_section(
                 .weak()
                 .size(11.0)
         );
+
+        // Вибір моделі та температури якщо обрано ЛЛМ-сервіс
+        if video_llm_service != "None" {
+            ui.add_space(8.0);
+
+            if video_llm_service == "Claude Code" {
+                ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+                ui.add_space(4.0);
+                egui::ComboBox::from_id_salt("video_llm_claude_model")
+                    .selected_text(if video_llm_model.is_empty() { "sonnet" } else { video_llm_model.as_str() })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(video_llm_model, "sonnet".to_string(), "sonnet");
+                        ui.selectable_value(video_llm_model, "opus".to_string(), "opus");
+                        ui.selectable_value(video_llm_model, "haiku".to_string(), "haiku");
+                    });
+                *video_llm_model_claude = video_llm_model.clone();
+            } else if video_llm_service == "Gemini CLI" {
+                ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+                ui.add_space(4.0);
+                egui::ComboBox::from_id_salt("video_llm_gemini_model")
+                    .selected_text(if video_llm_model.is_empty() { "gemini-2.5-flash" } else { video_llm_model.as_str() })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(video_llm_model, "gemini-2.5-flash".to_string(), "gemini-2.5-flash");
+                        ui.selectable_value(video_llm_model, "gemini-2.5-pro".to_string(), "gemini-2.5-pro");
+                        ui.selectable_value(video_llm_model, "gemini-3-flash-preview".to_string(), "gemini-3-flash-preview");
+                        ui.selectable_value(video_llm_model, "gemini-3.1-pro-preview".to_string(), "gemini-3.1-pro-preview");
+                        ui.selectable_value(video_llm_model, "gemini-2.5-flash-lite".to_string(), "gemini-2.5-flash-lite");
+                    });
+                *video_llm_model_gemini = video_llm_model.clone();
+            } else {
+                // OpenRouter — дропдаун з пошуком
+                ui.label(egui::RichText::new(translate(language, "translation_model_label")).strong());
+                ui.add_space(4.0);
+
+                let is_loading = *openrouter_models_loading.lock().unwrap();
+                let models_snapshot = openrouter_models.lock().unwrap().clone();
+
+                if is_loading {
+                    ui.label(egui::RichText::new(translate(language, "translation_models_loading")).weak().size(12.0));
+                } else {
+                    match models_snapshot {
+                        None => {
+                            *openrouter_models_loading.lock().unwrap() = true;
+                            let models_arc = Arc::clone(openrouter_models);
+                            let loading_arc = Arc::clone(openrouter_models_loading);
+                            let ctx = ui.ctx().clone();
+                            std::thread::spawn(move || {
+                                let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
+                                let agent = ureq::AgentBuilder::new()
+                                    .timeout_connect(std::time::Duration::from_secs(10))
+                                    .timeout(std::time::Duration::from_secs(15))
+                                    .build();
+                                let result = match agent
+                                    .get("https://openrouter.ai/api/v1/models")
+                                    .set("Accept", "application/json")
+                                    .call()
+                                {
+                                    Ok(response) => match response.into_json::<crate::gui::pipeline::translation::ModelsResponse>() {
+                                        Ok(data) => {
+                                            let mut models = data.data;
+                                            models.sort_by(|a, b| a.name.cmp(&b.name));
+                                            Ok(models)
+                                        }
+                                        Err(e) => Err(format!("Помилка парсингу: {}", e)),
+                                    },
+                                    Err(e) => Err(format!("Помилка мережі: {}", e)),
+                                };
+                                *models_arc.lock().unwrap() = Some(result);
+                                *loading_arc.lock().unwrap() = false;
+                                ctx.request_repaint();
+                            });
+                            ui.label(egui::RichText::new(translate(language, "translation_models_loading")).weak().size(12.0));
+                        }
+                        Some(Ok(models)) => {
+                            crate::gui::pipeline::translation::draw_model_selector(
+                                ui,
+                                language,
+                                video_llm_model,
+                                video_llm_model_search,
+                                &models,
+                            );
+                            *video_llm_model_openrouter = video_llm_model.clone();
+                        }
+                        Some(Err(ref error)) => {
+                            ui.add(egui::Label::new(
+                                egui::RichText::new(format!("❌ {}", error))
+                                    .color(egui::Color32::from_rgb(231, 76, 60))
+                                    .size(12.0),
+                            ).wrap());
+                            ui.add_space(4.0);
+                            if ui.button(translate(language, "translation_models_retry")).clicked() {
+                                *openrouter_models.lock().unwrap() = None;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Температура — тільки для OpenRouter
+            if video_llm_service == "OpenRouter" {
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new(
+                    format!("{}: {:.2}", translate(language, "translation_temperature_label"), *video_llm_temperature)
+                ).strong());
+                ui.add_space(4.0);
+                let slider_width = ui.available_width();
+                ui.scope(|ui| {
+                    ui.style_mut().spacing.slider_width = slider_width;
+                    ui.add(
+                        egui::Slider::new(video_llm_temperature, 0.0..=2.0)
+                            .step_by(0.01)
+                            .show_value(false),
+                    );
+                });
+            }
+        }
 
         ui.add_space(8.0);
 

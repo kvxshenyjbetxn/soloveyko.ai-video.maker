@@ -10,6 +10,9 @@ fn default_video_priority() -> Vec<String> {
     vec!["flow".to_string(), "flower".to_string(), "grok".to_string()]
 }
 fn default_video_service() -> String { "Googler".to_string() }
+fn default_video_llm_service() -> String { "None".to_string() }
+fn default_video_llm_model_claude() -> String { "sonnet".to_string() }
+fn default_video_llm_model_gemini() -> String { "gemini-2.5-flash".to_string() }
 fn default_text_split_mode() -> String { "paragraphs".to_string() }
 fn default_text_split_char_limit() -> usize { 500 }
 fn default_temperature() -> f32 { 0.7 }
@@ -210,6 +213,24 @@ pub struct AppSettings {
     /// Тривалість переходу в секундах
     #[serde(default = "default_montage_transition_duration")]
     pub montage_transition_duration: f32,
+    /// Сервіс ЛЛМ для генерації промтів відеоряду ("None", "OpenRouter", "Claude Code", "Gemini CLI")
+    #[serde(default = "default_video_llm_service")]
+    pub video_llm_service: String,
+    /// Активна модель для генерації відео-промтів (залежить від сервісу)
+    #[serde(default)]
+    pub video_llm_model: String,
+    /// Модель OpenRouter для відео-промтів
+    #[serde(default)]
+    pub video_llm_model_openrouter: String,
+    /// Модель Claude для відео-промтів
+    #[serde(default = "default_video_llm_model_claude")]
+    pub video_llm_model_claude: String,
+    /// Модель Gemini для відео-промтів
+    #[serde(default = "default_video_llm_model_gemini")]
+    pub video_llm_model_gemini: String,
+    /// Температура ЛЛМ для відео-промтів (0.0 — 2.0)
+    #[serde(default = "default_temperature")]
+    pub video_llm_temperature: f32,
 }
 
 impl Default for AppSettings {
@@ -270,6 +291,12 @@ impl Default for AppSettings {
             montage_bitrate: 8,
             montage_transition: "none".to_string(),
             montage_transition_duration: 0.5,
+            video_llm_service: "None".to_string(),
+            video_llm_model: String::new(),
+            video_llm_model_openrouter: String::new(),
+            video_llm_model_claude: "sonnet".to_string(),
+            video_llm_model_gemini: "gemini-2.5-flash".to_string(),
+            video_llm_temperature: 0.7,
         }
     }
 }
@@ -478,6 +505,24 @@ pub struct PipelineTemplate {
     /// Тривалість переходу в секундах
     #[serde(default = "default_montage_transition_duration")]
     pub montage_transition_duration: f32,
+    /// Сервіс ЛЛМ для генерації промтів відеоряду
+    #[serde(default = "default_video_llm_service")]
+    pub video_llm_service: String,
+    /// Активна модель для відео-промтів
+    #[serde(default)]
+    pub video_llm_model: String,
+    /// Модель OpenRouter для відео-промтів
+    #[serde(default)]
+    pub video_llm_model_openrouter: String,
+    /// Модель Claude для відео-промтів
+    #[serde(default = "default_video_llm_model_claude")]
+    pub video_llm_model_claude: String,
+    /// Модель Gemini для відео-промтів
+    #[serde(default = "default_video_llm_model_gemini")]
+    pub video_llm_model_gemini: String,
+    /// Температура ЛЛМ для відео-промтів
+    #[serde(default = "default_temperature")]
+    pub video_llm_temperature: f32,
 }
 
 /// Повертає шлях до підпапки templates всередині директорії налаштувань додатку.
@@ -532,6 +577,12 @@ pub fn save_template(
     montage_bitrate: u32,
     montage_transition: &str,
     montage_transition_duration: f32,
+    video_llm_service: &str,
+    video_llm_model: &str,
+    video_llm_model_openrouter: &str,
+    video_llm_model_claude: &str,
+    video_llm_model_gemini: &str,
+    video_llm_temperature: f32,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -580,6 +631,12 @@ pub fn save_template(
             montage_bitrate,
             montage_transition: montage_transition.to_string(),
             montage_transition_duration,
+            video_llm_service: video_llm_service.to_string(),
+            video_llm_model: video_llm_model.to_string(),
+            video_llm_model_openrouter: video_llm_model_openrouter.to_string(),
+            video_llm_model_claude: video_llm_model_claude.to_string(),
+            video_llm_model_gemini: video_llm_model_gemini.to_string(),
+            video_llm_temperature,
         };
 
         let json = serde_json::to_string_pretty(&template)?;

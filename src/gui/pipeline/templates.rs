@@ -29,6 +29,12 @@ pub fn draw_templates_section(
     text_split_mode: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
+    video_llm_service: &mut String,
+    video_llm_model: &mut String,
+    video_llm_model_openrouter: &mut String,
+    video_llm_model_claude: &mut String,
+    video_llm_model_gemini: &mut String,
+    video_llm_temperature: &mut f32,
     translation_temperature: &mut f32,
     translation_service: &mut String,
     edge_tts_voice: &mut String,
@@ -107,6 +113,17 @@ pub fn draw_templates_section(
                             *text_split_mode = template.text_split_mode;
                             *text_split_char_limit = template.text_split_char_limit;
                             *video_prompt = template.video_prompt;
+                            *video_llm_service = template.video_llm_service.clone();
+                            *video_llm_model_openrouter = template.video_llm_model_openrouter.clone();
+                            *video_llm_model_claude = if template.video_llm_model_claude.is_empty() { "sonnet".to_string() } else { template.video_llm_model_claude.clone() };
+                            *video_llm_model_gemini = if template.video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { template.video_llm_model_gemini.clone() };
+                            *video_llm_temperature = template.video_llm_temperature;
+                            *video_llm_model = match template.video_llm_service.as_str() {
+                                "OpenRouter" => template.video_llm_model_openrouter.clone(),
+                                "Claude Code" => video_llm_model_claude.clone(),
+                                "Gemini CLI" => video_llm_model_gemini.clone(),
+                                _ => template.video_llm_model.clone(),
+                            };
                             *translation_temperature = template.translation_temperature;
                             *translation_service = template.translation_service;
                             *edge_tts_voice = template.edge_tts_voice;

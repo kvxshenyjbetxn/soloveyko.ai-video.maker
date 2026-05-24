@@ -13,6 +13,8 @@ pub fn translate_uk(key: &str) -> &'static str {
         "translation" => "Переклад",
         "voiceover" => "Озвучка",
         "video" => "Відеоряд",
+        "video_prompts" => "Промти",
+        "video_media" => "Медіа",
         "subtitles" => "Субтитри",
         "editing" => "Монтаж",
         "editor_hint" => "Введіть або вставте сюди текст вашого майбутнього відео сценарію...",
@@ -183,6 +185,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "welcome_whisper_desc" => "Whisper — розпізнавання мовлення для генерації субтитрів",
         "balance_edge_tts_status" => "Безкоштовно (Без лімітів)",
         "balance_voicebot_limit" => "Обмеження потоків: 5 (фіксовано)",
+        "balance_active_threads" => "Активні потоки:",
         "settings_edge_tts_threads" => "Паралельні потоки Edge TTS:",
         "edge_tts_voices_loading" => "Завантаження голосів Edge TTS...",
         "edge_tts_voice_label" => "Голос озвучки:",
@@ -228,6 +231,8 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_transition_duration_label" => "Тривалість переходу",
         "montage_transition_none" => "Без переходу",
         "montage_transition_random" => "Рандом",
+        "video_llm_service_label" => "Сервіс ЛЛМ для промтів",
+        "video_llm_service_none" => "Без ЛЛМ",
         _ => "",
     }
 }

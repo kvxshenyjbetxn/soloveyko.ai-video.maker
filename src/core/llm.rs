@@ -50,7 +50,7 @@ pub fn call_openrouter(
         }
     };
 
-    log(&format!("Starting OpenRouter translation. Model: {}, Temperature: {}", model, temperature));
+    log(&format!("Starting OpenRouter request. Model: {}, Temperature: {}", model, temperature));
 
     let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
 
@@ -91,7 +91,7 @@ pub fn call_openrouter(
             err_msg
         })?;
 
-    log("OpenRouter translation completed successfully.");
+    log("OpenRouter request completed successfully.");
 
     let cost = data.usage.as_ref().and_then(|u| u.cost);
     if let Some(c) = cost {
@@ -106,4 +106,31 @@ pub fn call_openrouter(
         .unwrap_or_default();
 
     Ok((text, cost))
+}
+
+/// Викликає LLM-сервіс із підстановкою `{{text}}` у промт і повертає текст відповіді та вартість.
+pub fn call_llm(
+    service: &str,
+    key: &str,
+    model: &str,
+    prompt: &str,
+    text: &str,
+    temperature: f32,
+    job_info: Option<(u64, String)>,
+) -> Result<(String, Option<f64>), String> {
+    let user_content = if prompt.contains("{{text}}") {
+        prompt.replace("{{text}}", text)
+    } else if !prompt.is_empty() {
+        format!("{}\n\n{}", prompt, text)
+    } else {
+        text.to_string()
+    };
+
+    if service == "Claude Code" {
+        crate::api::claude::call_claude_code(model, &user_content, job_info).map(|res| (res, None))
+    } else if service == "Gemini CLI" {
+        crate::api::gemini::call_gemini_cli(model, &user_content, job_info).map(|res| (res, None))
+    } else {
+        call_openrouter(key, model, user_content, temperature, job_info)
+    }
 }

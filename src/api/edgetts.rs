@@ -62,6 +62,11 @@ impl EdgeTTSLimiter {
         }
         self.condvar.notify_one();
     }
+
+    /// Повертає кількість активних потоків
+    pub fn active_count(&self) -> usize {
+        *self.active.lock().unwrap()
+    }
 }
 
 /// Дозвіл на виконання запиту Edge TTS

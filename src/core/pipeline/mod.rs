@@ -1,4 +1,3 @@
-pub mod translate;
 pub mod voiceover;
 pub mod timeline;
 pub mod montage;
@@ -395,6 +394,7 @@ fn run_video_branch(
     settings: crate::queue::JobSettings,
     translated_text: Arc<Mutex<Option<String>>>,
     video_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
     ctx: egui::Context,
 ) -> Result<(), String> {
@@ -421,28 +421,124 @@ fn run_video_branch(
         settings.text_split_char_limit,
     );
 
+    let total = segments.len();
     crate::logger::log_job(
         job_id, &job_name,
-        &format!("Text split into {} segments (mode: {})", segments.len(), settings.text_split_mode),
+        &format!("Text split into {} segments (mode: {})", total, settings.text_split_mode),
     );
-
-    // Ініціалізуємо лічильник медіа щоб прогресбар знав загальну кількість
-    *media_progress.lock().unwrap() = Some((0, segments.len()));
-    ctx.request_repaint();
 
     // Зберігаємо debug-файл сегментів
     let save_dir = std::path::Path::new(&settings.save_path);
     let segments_path = save_dir.join("segments.txt");
     {
-        let mut content = format!("=== Сегменти тексту: {} ===\n", segments.len());
+        let mut content = format!("=== Сегменти тексту: {} ===\n", total);
         for (i, seg) in segments.iter().enumerate() {
-            content.push_str(&format!("\n[{}/{}]\n{}\n", i + 1, segments.len(), seg));
+            content.push_str(&format!("\n[{}/{}]\n{}\n", i + 1, total, seg));
         }
         let _ = std::fs::write(&segments_path, &content);
         crate::logger::log_job(job_id, &job_name, "Segments saved: segments.txt");
     }
 
-    // Паралельна генерація медіа із семафором
+    // Фаза 1: будуємо промти для всіх сегментів
+    let use_llm = settings.video_llm_service != "None" && !settings.video_llm_service.is_empty();
+    if use_llm {
+        crate::logger::log_job(
+            job_id, &job_name,
+            &format!("Generating prompts via {} for {} segments (parallel)...", settings.video_llm_service, total),
+        );
+    } else {
+        crate::logger::log_job(job_id, &job_name, &format!("Building prompts for {} segments...", total));
+    }
+    *prompts_progress.lock().unwrap() = Some((0, total));
+    ctx.request_repaint();
+
+    // Резервуємо масив промтів з правильним порядком за індексом
+    let mut prompts: Vec<String> = vec![String::new(); total];
+
+    if use_llm {
+        // Паралельна генерація: кожен сегмент в окремому потоці
+        // Обмеження паралельності виконується всередині call_llm через глобальний лімітер
+        let mut handles: Vec<std::thread::JoinHandle<(usize, String)>> = Vec::with_capacity(total);
+
+        for (i, segment) in segments.iter().enumerate() {
+            let segment          = segment.clone();
+            let llm_service      = settings.video_llm_service.clone();
+            let openrouter_key   = settings.openrouter_key.clone();
+            let llm_model        = settings.video_llm_model.clone();
+            let video_prompt     = settings.video_prompt.clone();
+            let llm_temperature  = settings.video_llm_temperature;
+            let prompts_progress_c = Arc::clone(&prompts_progress);
+            let ctx_c            = ctx.clone();
+            let job_id_c         = job_id;
+            let job_name_c       = job_name.clone();
+
+            handles.push(std::thread::spawn(move || {
+                let prompt = match crate::core::llm::call_llm(
+                    &llm_service,
+                    &openrouter_key,
+                    &llm_model,
+                    &video_prompt,
+                    &segment,
+                    llm_temperature,
+                    Some((job_id_c, job_name_c.clone())),
+                ) {
+                    Ok((generated, _)) => generated,
+                    Err(e) => {
+                        crate::logger::log_job(
+                            job_id_c, &job_name_c,
+                            &format!("LLM prompt {}/{} error: {}. Using fallback.", i + 1, total, e),
+                        );
+                        // Fallback: проста підстановка
+                        if video_prompt.contains("{{text}}") {
+                            video_prompt.replace("{{text}}", &segment)
+                        } else if video_prompt.is_empty() {
+                            segment.clone()
+                        } else {
+                            format!("{}\n\n{}", video_prompt, segment)
+                        }
+                    }
+                };
+
+                if let Ok(mut pp) = prompts_progress_c.lock() {
+                    if let Some((ref mut done, _)) = *pp {
+                        *done += 1;
+                    }
+                }
+                ctx_c.request_repaint();
+
+                (i, prompt)
+            }));
+        }
+
+        // Збираємо результати, зберігаючи порядок за індексом
+        for handle in handles {
+            if let Ok((i, prompt)) = handle.join() {
+                prompts[i] = prompt;
+            } else {
+                crate::logger::log_job(job_id, &job_name, "LLM prompt thread panicked.");
+            }
+        }
+    } else {
+        // Без ЛЛМ — миттєва підстановка
+        for (i, segment) in segments.iter().enumerate() {
+            prompts[i] = if settings.video_prompt.contains("{{text}}") {
+                settings.video_prompt.replace("{{text}}", segment)
+            } else if settings.video_prompt.is_empty() {
+                segment.clone()
+            } else {
+                format!("{}\n\n{}", settings.video_prompt, segment)
+            };
+            if let Ok(mut pp) = prompts_progress.lock() {
+                if let Some((ref mut done, _)) = *pp {
+                    *done += 1;
+                }
+            }
+            ctx.request_repaint();
+        }
+    }
+    crate::logger::log_job(job_id, &job_name, "Prompts ready. Starting media generation...");
+
+    // Фаза 2: паралельна генерація медіа із семафором
     let use_video = settings.video_media_type == "video";
 
     let media_dir = save_dir.join("media");
@@ -451,10 +547,14 @@ fn run_video_branch(
         *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
         return Err(e.to_string());
     }
+
+    *media_progress.lock().unwrap() = Some((0, total));
+    ctx.request_repaint();
+
     let sem = Arc::new(Semaphore::new(settings.googler_image_max_threads.max(1)));
     let mut handles = Vec::new();
 
-    for (i, segment) in segments.iter().enumerate() {
+    for (i, prompt) in prompts.into_iter().enumerate() {
         let sem              = Arc::clone(&sem);
         let media_progress_c = Arc::clone(&media_progress);
         let ctx_c            = ctx.clone();
@@ -465,10 +565,8 @@ fn run_video_branch(
             settings.googler_image_priority.clone()
         };
         let media_dir  = media_dir.clone();
-        let prompt     = settings.video_prompt.replace("{{text}}", segment);
         let job_id_c   = job_id;
         let job_name_c = job_name.clone();
-        let total      = segments.len();
 
         let handle = std::thread::spawn(move || -> (usize, Result<(), String>) {
             sem.acquire();
@@ -496,7 +594,6 @@ fn run_video_branch(
                                 job_id_c, &job_name_c,
                                 &format!("{} {}/{} saved: {}", if use_video { "Video" } else { "Image" }, i + 1, total, path.display()),
                             );
-                            // Збільшуємо лічильник завершених медіафайлів
                             if let Ok(mut mp) = media_progress_c.lock() {
                                 if let Some((ref mut done, _)) = *mp {
                                     *done += 1;
@@ -556,6 +653,7 @@ pub fn run_pipeline(
     translated_text: Arc<Mutex<Option<String>>>,
     translation_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
+    prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
     montage_progress: Arc<Mutex<Option<f32>>>,
     montage_file_size: Arc<Mutex<Option<u64>>>,
@@ -583,7 +681,7 @@ pub fn run_pipeline(
             *translation_stage.lock().unwrap() = crate::queue::StageStatus::Running;
             ctx.request_repaint();
 
-            match translate::translate_text(
+            match crate::core::llm::call_llm(
                 &settings.translation_service,
                 &settings.openrouter_key,
                 &settings.translation_model,
@@ -672,6 +770,7 @@ pub fn run_pipeline(
             let settings_video = settings.clone();
             let translated_text_video = Arc::clone(&translated_text);
             let video_stage_video = Arc::clone(&video_stage);
+            let prompts_progress_video = Arc::clone(&prompts_progress);
             let media_progress_video = Arc::clone(&media_progress);
             let ctx_video = ctx.clone();
             let job_id_video = job_id;
@@ -684,6 +783,7 @@ pub fn run_pipeline(
                     settings_video,
                     translated_text_video,
                     video_stage_video,
+                    prompts_progress_video,
                     media_progress_video,
                     ctx_video,
                 )

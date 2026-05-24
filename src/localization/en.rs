@@ -13,6 +13,8 @@ pub fn translate_en(key: &str) -> &'static str {
         "translation" => "Translation",
         "voiceover" => "Voiceover",
         "video" => "Video Sequence",
+        "video_prompts" => "Prompts",
+        "video_media" => "Media",
         "subtitles" => "Subtitles",
         "editing" => "Editing",
         "editor_hint" => "Enter or paste the text of your future video script here...",
@@ -183,6 +185,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "welcome_whisper_desc" => "Whisper — speech recognition for subtitle generation",
         "balance_edge_tts_status" => "Free (No limits)",
         "balance_voicebot_limit" => "Threads limit: 5 (fixed)",
+        "balance_active_threads" => "Active threads:",
         "settings_edge_tts_threads" => "Edge TTS Parallel Threads:",
         "edge_tts_voices_loading" => "Loading Edge TTS voices...",
         "edge_tts_voice_label" => "Voiceover Voice:",
@@ -228,6 +231,8 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_transition_duration_label" => "Transition duration",
         "montage_transition_none" => "No transition",
         "montage_transition_random" => "Random",
+        "video_llm_service_label" => "LLM service for prompts",
+        "video_llm_service_none" => "No LLM",
         _ => "",
     }
 }

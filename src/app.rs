@@ -107,6 +107,20 @@ pub struct VideoMakerApp {
     pub text_split_char_limit: usize,
     /// Промт для генерації зображень відеоряду.
     pub video_prompt: String,
+    /// Сервіс ЛЛМ для генерації промтів відеоряду.
+    pub video_llm_service: String,
+    /// Активна модель ЛЛМ для відео-промтів.
+    pub video_llm_model: String,
+    /// Модель OpenRouter для відео-промтів.
+    pub video_llm_model_openrouter: String,
+    /// Модель Claude для відео-промтів.
+    pub video_llm_model_claude: String,
+    /// Модель Gemini для відео-промтів.
+    pub video_llm_model_gemini: String,
+    /// Температура ЛЛМ для відео-промтів.
+    pub video_llm_temperature: f32,
+    /// Рядок пошуку у дропдауні вибору моделі ЛЛМ відеоряду.
+    pub video_llm_model_search: String,
     /// Пріоритетний список провайдерів зображень Googler.
     pub googler_image_priority: Vec<String>,
     /// Пріоритетний список провайдерів відео Googler.
@@ -273,6 +287,13 @@ impl Default for VideoMakerApp {
             text_split_mode: "paragraphs".to_string(),
             text_split_char_limit: 500,
             video_prompt: String::new(),
+            video_llm_service: "None".to_string(),
+            video_llm_model: String::new(),
+            video_llm_model_openrouter: String::new(),
+            video_llm_model_claude: "sonnet".to_string(),
+            video_llm_model_gemini: "gemini-2.5-flash".to_string(),
+            video_llm_temperature: 0.7,
+            video_llm_model_search: String::new(),
             googler_image_priority: vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()],
             googler_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string()],
             translation_temperature: 0.7,
@@ -434,6 +455,23 @@ impl VideoMakerApp {
         let text_split_mode = saved.text_split_mode.clone();
         let text_split_char_limit = saved.text_split_char_limit;
         let video_prompt = saved.video_prompt.clone();
+        let video_llm_service = saved.video_llm_service.clone();
+        let mut video_llm_model_openrouter = saved.video_llm_model_openrouter.clone();
+        let video_llm_model_claude = saved.video_llm_model_claude.clone();
+        let video_llm_model_gemini = saved.video_llm_model_gemini.clone();
+        let video_llm_temperature = saved.video_llm_temperature;
+        // Відновлюємо активну модель залежно від збереженого сервісу
+        let video_llm_model = match video_llm_service.as_str() {
+            "OpenRouter" => {
+                if saved.video_llm_model.is_empty() {
+                    video_llm_model_openrouter = saved.video_llm_model.clone();
+                }
+                saved.video_llm_model.clone()
+            }
+            "Claude Code" => video_llm_model_claude.clone(),
+            "Gemini CLI"  => video_llm_model_gemini.clone(),
+            _             => saved.video_llm_model.clone(),
+        };
         let googler_image_priority = saved.googler_image_priority.clone();
         let googler_video_priority = saved.googler_video_priority.clone();
         let translation_temperature = saved.translation_temperature;
@@ -533,6 +571,13 @@ impl VideoMakerApp {
             text_split_mode,
             text_split_char_limit,
             video_prompt,
+            video_llm_service,
+            video_llm_model,
+            video_llm_model_openrouter,
+            video_llm_model_claude,
+            video_llm_model_gemini,
+            video_llm_temperature,
+            video_llm_model_search: String::new(),
             googler_image_priority,
             googler_video_priority,
             translation_temperature,
@@ -807,6 +852,19 @@ fn draw_balance_window(
                     }
                 }
                 ui.add_space(4.0);
+                {
+                    let active = crate::api::openrouter::OpenRouterLimiter::get().active_count();
+                    ui.horizontal(|ui| {
+                        ui.label(translate(language, "balance_active_threads"));
+                        let color = if active > 0 {
+                            egui::Color32::from_rgb(255, 200, 0)
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
+                        ui.label(egui::RichText::new(format!("{} / {}", active, *openrouter_max_threads)).color(color));
+                    });
+                }
+                ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "settings_openrouter_threads"));
                     let mut val = *openrouter_max_threads;
@@ -828,6 +886,19 @@ fn draw_balance_window(
                 });
                 ui.separator();
                 ui.add_space(4.0);
+                {
+                    let active = crate::api::claude::ClaudeLimiter::get().active_count();
+                    ui.horizontal(|ui| {
+                        ui.label(translate(language, "balance_active_threads"));
+                        let color = if active > 0 {
+                            egui::Color32::from_rgb(255, 200, 0)
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
+                        ui.label(egui::RichText::new(format!("{} / {}", active, *claude_max_threads)).color(color));
+                    });
+                }
+                ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "settings_claude_threads"));
                     let mut val = *claude_max_threads;
@@ -848,6 +919,19 @@ fn draw_balance_window(
                     ui.label(egui::RichText::new("Gemini CLI").strong());
                 });
                 ui.separator();
+                ui.add_space(4.0);
+                {
+                    let active = crate::api::gemini::GeminiLimiter::get().active_count();
+                    ui.horizontal(|ui| {
+                        ui.label(translate(language, "balance_active_threads"));
+                        let color = if active > 0 {
+                            egui::Color32::from_rgb(255, 200, 0)
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
+                        ui.label(egui::RichText::new(format!("{} / {}", active, *gemini_max_threads)).color(color));
+                    });
+                }
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "settings_gemini_threads"));
@@ -893,6 +977,19 @@ fn draw_balance_window(
                     }
                 }
                 ui.add_space(4.0);
+                {
+                    let active = crate::api::voicebot::VoiceBotLimiter::get().active_count();
+                    ui.horizontal(|ui| {
+                        ui.label(translate(language, "balance_active_threads"));
+                        let color = if active > 0 {
+                            egui::Color32::from_rgb(255, 200, 0)
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
+                        ui.label(egui::RichText::new(format!("{} / 5", active)).color(color));
+                    });
+                }
+                ui.add_space(4.0);
                 ui.label(egui::RichText::new(translate(language, "balance_voicebot_limit")).weak());
             });
 
@@ -906,6 +1003,19 @@ fn draw_balance_window(
                 });
                 ui.separator();
                 ui.label(egui::RichText::new(translate(language, "balance_edge_tts_status")).weak());
+                ui.add_space(4.0);
+                {
+                    let active = crate::api::edgetts::EdgeTTSLimiter::get().active_count();
+                    ui.horizontal(|ui| {
+                        ui.label(translate(language, "balance_active_threads"));
+                        let color = if active > 0 {
+                            egui::Color32::from_rgb(255, 200, 0)
+                        } else {
+                            ui.visuals().weak_text_color()
+                        };
+                        ui.label(egui::RichText::new(format!("{} / {}", active, *edge_tts_max_threads)).color(color));
+                    });
+                }
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     ui.label(translate(language, "settings_edge_tts_threads"));
@@ -1187,6 +1297,7 @@ fn draw_queue_panel(
                     std::sync::Arc::clone(&job.translated_text),
                     std::sync::Arc::clone(&job.translation_cost),
                     std::sync::Arc::clone(&job.audio_duration),
+                    std::sync::Arc::clone(&job.prompts_progress),
                     std::sync::Arc::clone(&job.media_progress),
                     std::sync::Arc::clone(&job.montage_progress),
                     std::sync::Arc::clone(&job.montage_file_size),
@@ -1370,21 +1481,34 @@ fn draw_queue_panel(
                             }
 
                             if job.settings.video_enabled {
-                                let video_label = match &video_stage {
+                                match &video_stage {
                                     crate::queue::StageStatus::Running | crate::queue::StageStatus::Done => {
-                                        if let Some((done, total)) = *job.media_progress.lock().unwrap() {
-                                            format!("{} ({}/{})", translate(language, "video"), done, total)
-                                        } else {
-                                            translate(language, "video").to_string()
-                                        }
+                                        let prompts_opt = *job.prompts_progress.lock().unwrap();
+                                        let media_opt   = *job.media_progress.lock().unwrap();
+                                        let color = stage_color(&video_stage, ui);
+                                        ui.horizontal(|ui| {
+                                            // Промти
+                                            let prompts_str = match prompts_opt {
+                                                Some((done, total)) => format!("{} ({}/{})", translate(language, "video_prompts"), done, total),
+                                                None => translate(language, "video_prompts").to_string(),
+                                            };
+                                            ui.label(egui::RichText::new(prompts_str).color(color).size(12.5));
+                                            // Медіа
+                                            let media_str = match media_opt {
+                                                Some((done, total)) => format!("{} ({}/{})", translate(language, "video_media"), done, total),
+                                                None => translate(language, "video_media").to_string(),
+                                            };
+                                            ui.label(egui::RichText::new(media_str).color(color).size(12.5));
+                                        });
                                     }
-                                    _ => translate(language, "video").to_string(),
-                                };
-                                ui.label(
-                                    egui::RichText::new(video_label)
-                                        .color(stage_color(&video_stage, ui))
-                                        .size(12.5),
-                                );
+                                    _ => {
+                                        ui.label(
+                                            egui::RichText::new(translate(language, "video"))
+                                                .color(stage_color(&video_stage, ui))
+                                                .size(12.5),
+                                        );
+                                    }
+                                }
                             }
 
                             if job.settings.subtitles_enabled {
@@ -1582,7 +1706,9 @@ impl eframe::App for VideoMakerApp {
                     ui.spacing_mut().item_spacing.x = 2.0;
                     if let Ok(guard) = self.openrouter_balance.try_lock() {
                         if let Some(text) = guard.as_ref() {
-                            if draw_balance_chip(ui, "OpenRouter", text).clicked() {
+                            let active = crate::api::openrouter::OpenRouterLimiter::get().active_count();
+                            let chip_text = format!("{} th:{}/{}", text, active, self.openrouter_max_threads);
+                            if draw_balance_chip(ui, "OpenRouter", &chip_text).clicked() {
                                 self.balance_window_open = true;
                             }
                         }
@@ -1591,7 +1717,9 @@ impl eframe::App for VideoMakerApp {
                         if let Some(text) = guard.as_ref() {
                             // Показуємо лише числову частину, без слова "символів"
                             let display = text.split_whitespace().next().unwrap_or(text.as_str());
-                            if draw_balance_chip(ui, "VoiceBot", display).clicked() {
+                            let active = crate::api::voicebot::VoiceBotLimiter::get().active_count();
+                            let chip_text = format!("{} th:{}/5", display, active);
+                            if draw_balance_chip(ui, "VoiceBot", &chip_text).clicked() {
                                 self.balance_window_open = true;
                             }
                         }
@@ -1695,6 +1823,13 @@ impl eframe::App for VideoMakerApp {
                         &mut self.text_split_mode,
                         &mut self.text_split_char_limit,
                         &mut self.video_prompt,
+                        &mut self.video_llm_service,
+                        &mut self.video_llm_model,
+                        &mut self.video_llm_model_openrouter,
+                        &mut self.video_llm_model_claude,
+                        &mut self.video_llm_model_gemini,
+                        &mut self.video_llm_temperature,
+                        &mut self.video_llm_model_search,
                         &mut self.translation_temperature,
                         &mut self.translation_service,
                         &mut self.save_path_macos,
@@ -1969,6 +2104,7 @@ impl eframe::App for VideoMakerApp {
                 let voiceover_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].voiceover_stage);
                 let video_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].video_stage);
                 let subtitles_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].subtitles_stage);
+                let prompts_progress_arc = std::sync::Arc::clone(&self.jobs[job_idx].prompts_progress);
                 let media_progress_arc = std::sync::Arc::clone(&self.jobs[job_idx].media_progress);
                 let job_settings = self.jobs[job_idx].settings.clone();
 
@@ -2123,7 +2259,7 @@ impl eframe::App for VideoMakerApp {
                     self.control_regen_error = None;
                     *loading_arc.lock().unwrap() = true;
                     std::thread::spawn(move || {
-                        let result = crate::core::pipeline::translate::translate_text(
+                        let result = crate::core::llm::call_llm(
                             &service, &key, &model, &prompt, &text, temperature, job_info,
                         );
                         *result_arc.lock().unwrap() = Some(result);
@@ -2232,7 +2368,7 @@ impl eframe::App for VideoMakerApp {
                         self.control_regen_error = None;
                         *loading_arc.lock().unwrap() = true;
                         std::thread::spawn(move || {
-                            let result = crate::core::pipeline::translate::translate_text(
+                            let result = crate::core::llm::call_llm(
                                 &service, &openrouter_key_ext, &model, &prompt, &text_to_translate, temperature, job_info_ext,
                             );
                             *result_arc.lock().unwrap() = Some(result);
@@ -2268,6 +2404,7 @@ impl eframe::App for VideoMakerApp {
                         translated_text_arc,
                         translation_cost_arc,
                         audio_duration_arc,
+                        prompts_progress_arc,
                         media_progress_arc,
                         std::sync::Arc::clone(&self.jobs[job_idx].montage_progress),
                         std::sync::Arc::clone(&self.jobs[job_idx].montage_file_size),
@@ -2335,6 +2472,12 @@ impl eframe::App for VideoMakerApp {
                 || self.video_service != self.last_saved_settings.video_service
                 || self.video_media_type != self.last_saved_settings.video_media_type
                 || self.video_prompt != self.last_saved_settings.video_prompt
+                || self.video_llm_service != self.last_saved_settings.video_llm_service
+                || self.video_llm_model != self.last_saved_settings.video_llm_model
+                || self.video_llm_model_openrouter != self.last_saved_settings.video_llm_model_openrouter
+                || self.video_llm_model_claude != self.last_saved_settings.video_llm_model_claude
+                || self.video_llm_model_gemini != self.last_saved_settings.video_llm_model_gemini
+                || self.video_llm_temperature != self.last_saved_settings.video_llm_temperature
                 || self.text_split_mode != self.last_saved_settings.text_split_mode
                 || self.text_split_char_limit != self.last_saved_settings.text_split_char_limit
                 || self.translation_service != self.last_saved_settings.translation_service
@@ -2392,6 +2535,12 @@ impl eframe::App for VideoMakerApp {
                     text_split_mode: self.text_split_mode.clone(),
                     text_split_char_limit: self.text_split_char_limit,
                     video_prompt: self.video_prompt.clone(),
+                    video_llm_service: self.video_llm_service.clone(),
+                    video_llm_model: self.video_llm_model.clone(),
+                    video_llm_model_openrouter: self.video_llm_model_openrouter.clone(),
+                    video_llm_model_claude: self.video_llm_model_claude.clone(),
+                    video_llm_model_gemini: self.video_llm_model_gemini.clone(),
+                    video_llm_temperature: self.video_llm_temperature,
                     translation_temperature: self.translation_temperature,
                     translation_service: self.translation_service.clone(),
                     save_path_macos: self.save_path_macos.clone(),

@@ -48,6 +48,9 @@ pub struct JobSettings {
     #[allow(dead_code)]
     pub video_service: String,
     pub video_prompt: String,
+    pub video_llm_service: String,
+    pub video_llm_model: String,
+    pub video_llm_temperature: f32,
     pub text_split_mode: String,
     pub text_split_char_limit: usize,
     pub googler_key: String,
@@ -93,6 +96,8 @@ pub struct PipelineJob {
     pub translation_cost: Arc<Mutex<Option<f64>>>,
     /// Тривалість аудіо після озвучки (в секундах)
     pub audio_duration: Arc<Mutex<Option<f64>>>,
+    /// Прогрес підготовки промтів: (завершено, загалом). None — поки кількість невідома.
+    pub prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     /// Прогрес генерації медіа: (завершено, загалом). None — поки кількість невідома.
     pub media_progress: Arc<Mutex<Option<(usize, usize)>>>,
     /// Прогрес монтажу [0.0..1.0]. None — ще не розпочато.
@@ -116,6 +121,7 @@ impl PipelineJob {
             translated_text: Arc::new(Mutex::new(None)),
             translation_cost: Arc::new(Mutex::new(None)),
             audio_duration: Arc::new(Mutex::new(None)),
+            prompts_progress: Arc::new(Mutex::new(None)),
             media_progress: Arc::new(Mutex::new(None)),
             montage_progress: Arc::new(Mutex::new(None)),
             montage_file_size: Arc::new(Mutex::new(None)),
@@ -161,7 +167,7 @@ impl PipelineJob {
             }
         }
 
-        // Етап 3: Відеоряд
+        // Етап 3: Відеоряд (промти + медіа = 2 внутрішніх підетапи)
         if self.settings.video_enabled {
             total_stages += 1;
             let stage = self.video_stage.lock().unwrap().clone();
@@ -171,12 +177,18 @@ impl PipelineJob {
                     completed_count += 1;
                 }
                 StageStatus::Running => {
-                    // Якщо відома кількість медіафайлів — гранулярний прогрес
-                    let granular = self.media_progress.lock().unwrap()
+                    // Підетап промтів (0..0.5) + підетап медіа (0.5..1.0)
+                    let prompts_done = self.prompts_progress.lock().unwrap()
                         .and_then(|(done, total)| {
                             if total > 0 { Some(done as f32 / total as f32) } else { None }
-                        });
-                    completed_score += granular.unwrap_or(0.1);
+                        })
+                        .unwrap_or(0.0);
+                    let media_done = self.media_progress.lock().unwrap()
+                        .and_then(|(done, total)| {
+                            if total > 0 { Some(done as f32 / total as f32) } else { None }
+                        })
+                        .unwrap_or(0.0);
+                    completed_score += (prompts_done * 0.5 + media_done * 0.5).min(0.99);
                 }
                 _ => {}
             }
