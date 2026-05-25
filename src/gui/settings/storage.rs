@@ -28,6 +28,7 @@ fn default_edge_tts_rate() -> String { "0".to_string() }
 fn default_edge_tts_pitch() -> String { "0".to_string() }
 fn default_edge_tts_volume() -> String { "0".to_string() }
 fn default_edge_tts_max_threads() -> usize { 5 }
+fn default_ffmpeg_max_threads() -> usize { 2 }
 fn default_googler_threads() -> usize { 5 }
 fn default_video_media_type() -> String { "image".to_string() }
 fn default_subtitles_service() -> String { "Whisper".to_string() }
@@ -165,6 +166,9 @@ pub struct AppSettings {
     /// Максимальна кількість потоків для Edge TTS
     #[serde(default = "default_edge_tts_max_threads")]
     pub edge_tts_max_threads: usize,
+    /// Максимальна кількість одночасних процесів FFmpeg
+    #[serde(default = "default_ffmpeg_max_threads")]
+    pub ffmpeg_max_threads: usize,
     /// Максимальна кількість потоків зображень Googler
     #[serde(default = "default_googler_threads")]
     pub googler_image_max_threads: usize,
@@ -275,6 +279,7 @@ impl Default for AppSettings {
             edge_tts_pitch: "0".to_string(),
             edge_tts_volume: "0".to_string(),
             edge_tts_max_threads: 5,
+            ffmpeg_max_threads: 2,
             googler_image_max_threads: 5,
             googler_video_max_threads: 5,
             voiceover_convert_to_wav: false,

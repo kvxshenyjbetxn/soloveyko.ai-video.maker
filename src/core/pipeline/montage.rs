@@ -31,6 +31,9 @@ pub fn run_montage(
     log_fn: impl Fn(&str),
     on_progress: impl Fn(f32),
 ) -> Result<u64, String> {
+    // Займаємо слот лімітера — чекаємо якщо всі потоки FFmpeg зайняті
+    let _ffmpeg_permit = crate::api::ffmpeg::FfmpegLimiter::get().acquire();
+
     // ─── Структури для timeline.json ─────────────────────────────────────────
     #[derive(serde::Deserialize)]
     struct SegTiming {

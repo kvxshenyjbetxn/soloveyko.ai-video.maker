@@ -129,8 +129,10 @@ pub struct VideoMakerApp {
     pub translation_temperature: f32,
     /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code").
     pub translation_service: String,
-    /// Чи відкрите вікно детальних балансів.
+    /// Чи відкрите вікно балансів.
     pub balance_window_open: bool,
+    /// Чи відкрите вікно потоків.
+    pub threads_window_open: bool,
     /// Шлях збереження для macOS.
     pub save_path_macos: String,
     /// Шлях збереження для Windows.
@@ -201,6 +203,8 @@ pub struct VideoMakerApp {
     pub edge_tts_volume: String,
     /// Максимальна кількість потоків для Edge TTS.
     pub edge_tts_max_threads: usize,
+    /// Максимальна кількість одночасних процесів FFmpeg.
+    pub ffmpeg_max_threads: usize,
     /// Завантажені голоси Edge TTS.
     pub edge_tts_voices: std::sync::Arc<std::sync::Mutex<Option<Result<Vec<crate::api::edgetts::EdgeTTSVoice>, String>>>>,
     /// Прапорець завантаження голосів Edge TTS.
@@ -299,6 +303,7 @@ impl Default for VideoMakerApp {
             translation_temperature: 0.7,
             translation_service: "OpenRouter".to_string(),
             balance_window_open: false,
+            threads_window_open: false,
             save_path_macos: String::new(),
             save_path_windows: String::new(),
             jobs: Vec::new(),
@@ -334,6 +339,7 @@ impl Default for VideoMakerApp {
             edge_tts_pitch: default_settings.edge_tts_pitch.clone(),
             edge_tts_volume: default_settings.edge_tts_volume.clone(),
             edge_tts_max_threads: default_settings.edge_tts_max_threads,
+            ffmpeg_max_threads: default_settings.ffmpeg_max_threads,
             edge_tts_voices: std::sync::Arc::new(std::sync::Mutex::new(None)),
             edge_tts_loading_voices: std::sync::Arc::new(std::sync::Mutex::new(false)),
             edge_tts_show_all_languages: false,
@@ -357,18 +363,29 @@ impl Default for VideoMakerApp {
     }
 }
 
-/// Малює компактний чіп з балансом. При наведенні підсвічується і змінює курсор.
-fn draw_balance_chip(ui: &mut egui::Ui, prefix: &str, value: &str) -> egui::Response {
-    let text = format!("{}: {}", prefix, value);
+/// Повертає колір для відображення навантаження потоків за відсотком зайнятості.
+/// 0 → default, 1–40% → зелений, 41–75% → жовтий, 76–100% → червоний.
+fn thread_load_color(active: usize, max: usize, default: egui::Color32) -> egui::Color32 {
+    if active == 0 || max == 0 {
+        return default;
+    }
+    let pct = active as f32 / max as f32;
+    if pct <= 0.40 {
+        egui::Color32::from_rgb(80, 200, 100)
+    } else if pct <= 0.75 {
+        egui::Color32::from_rgb(255, 200, 0)
+    } else {
+        egui::Color32::from_rgb(220, 70, 70)
+    }
+}
+
+/// Малює клікабельний чіп з довільним кольором тексту. Основа для balance та thread чіпів.
+fn draw_chip(ui: &mut egui::Ui, text: &str, text_color: egui::Color32) -> egui::Response {
     let font_id = egui::FontId::new(13.0, egui::FontFamily::Proportional);
-    let text_color = ui.visuals().text_color();
-
-    let galley = ui.fonts(|f| f.layout_no_wrap(text, font_id, text_color));
-
+    let galley = ui.fonts(|f| f.layout_no_wrap(text.to_string(), font_id, text_color));
     let padding = egui::vec2(8.0, 4.0);
     let desired_size = galley.rect.size() + padding * 2.0;
     let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
-
     if ui.is_rect_visible(rect) {
         let fill = if response.hovered() {
             ui.visuals().widgets.hovered.weak_bg_fill
@@ -378,8 +395,12 @@ fn draw_balance_chip(ui: &mut egui::Ui, prefix: &str, value: &str) -> egui::Resp
         ui.painter().rect_filled(rect, egui::Rounding::same(4.0), fill);
         ui.painter().galley(rect.min + padding, galley, text_color);
     }
-
     response.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// Малює компактний чіп з балансом. При наведенні підсвічується і змінює курсор.
+fn draw_balance_chip(ui: &mut egui::Ui, prefix: &str, value: &str) -> egui::Response {
+    draw_chip(ui, &format!("{}: {}", prefix, value), ui.visuals().text_color())
 }
 
 impl VideoMakerApp {
@@ -490,6 +511,8 @@ impl VideoMakerApp {
         crate::api::gemini::GeminiLimiter::get().set_max_threads(gemini_max_threads);
         // Налаштовуємо глобальний лімітер одночасних запитів Edge TTS
         crate::api::edgetts::EdgeTTSLimiter::get().set_max_threads(saved.edge_tts_max_threads);
+        // Налаштовуємо глобальний лімітер одночасних процесів FFmpeg
+        crate::api::ffmpeg::FfmpegLimiter::get().set_max_threads(saved.ffmpeg_max_threads);
 
         let saved_templates = crate::gui::settings::storage::load_saved_templates();
 
@@ -583,6 +606,7 @@ impl VideoMakerApp {
             translation_temperature,
             translation_service,
             balance_window_open: false,
+            threads_window_open: false,
             save_path_macos,
             save_path_windows,
             jobs: Vec::new(),
@@ -618,6 +642,7 @@ impl VideoMakerApp {
             edge_tts_pitch: saved.edge_tts_pitch.clone(),
             edge_tts_volume: saved.edge_tts_volume.clone(),
             edge_tts_max_threads: saved.edge_tts_max_threads,
+            ffmpeg_max_threads: saved.ffmpeg_max_threads,
             edge_tts_voices: std::sync::Arc::new(std::sync::Mutex::new(None)),
             edge_tts_loading_voices: std::sync::Arc::new(std::sync::Mutex::new(false)),
             edge_tts_show_all_languages: false,
@@ -795,22 +820,17 @@ impl VideoMakerApp {
     }
 }
 
+/// Вікно балансів сервісів (OpenRouter, VoiceBot, Googler).
 fn draw_balance_window(
     ctx: &egui::Context,
     open: &mut bool,
     language: crate::localization::Language,
     openrouter_key: &str,
     openrouter_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
-    openrouter_max_threads: &mut usize,
-    claude_max_threads: &mut usize,
-    gemini_max_threads: &mut usize,
     voicebot_key: &str,
     voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     googler_key: &str,
     googler_balance: &std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
-    edge_tts_max_threads: &mut usize,
-    googler_image_max_threads: &mut usize,
-    googler_video_max_threads: &mut usize,
 ) {
     use crate::localization::translate;
     use std::sync::Arc;
@@ -851,97 +871,6 @@ fn draw_balance_window(
                         }
                     }
                 }
-                ui.add_space(4.0);
-                {
-                    let active = crate::api::openrouter::OpenRouterLimiter::get().active_count();
-                    ui.horizontal(|ui| {
-                        ui.label(translate(language, "balance_active_threads"));
-                        let color = if active > 0 {
-                            egui::Color32::from_rgb(255, 200, 0)
-                        } else {
-                            ui.visuals().weak_text_color()
-                        };
-                        ui.label(egui::RichText::new(format!("{} / {}", active, *openrouter_max_threads)).color(color));
-                    });
-                }
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.label(translate(language, "settings_openrouter_threads"));
-                    let mut val = *openrouter_max_threads;
-                    let slider = ui.add(egui::Slider::new(&mut val, 1..=25));
-                    if slider.changed() {
-                        *openrouter_max_threads = val;
-                        crate::api::openrouter::OpenRouterLimiter::get().set_max_threads(val);
-                    }
-                });
-            });
-
-            ui.add_space(4.0);
-
-            // --- Claude Code ---
-            ui.group(|ui| {
-                ui.set_min_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Claude Code").strong());
-                });
-                ui.separator();
-                ui.add_space(4.0);
-                {
-                    let active = crate::api::claude::ClaudeLimiter::get().active_count();
-                    ui.horizontal(|ui| {
-                        ui.label(translate(language, "balance_active_threads"));
-                        let color = if active > 0 {
-                            egui::Color32::from_rgb(255, 200, 0)
-                        } else {
-                            ui.visuals().weak_text_color()
-                        };
-                        ui.label(egui::RichText::new(format!("{} / {}", active, *claude_max_threads)).color(color));
-                    });
-                }
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.label(translate(language, "settings_claude_threads"));
-                    let mut val = *claude_max_threads;
-                    let slider = ui.add(egui::Slider::new(&mut val, 1..=25));
-                    if slider.changed() {
-                        *claude_max_threads = val;
-                        crate::api::claude::ClaudeLimiter::get().set_max_threads(val);
-                    }
-                });
-            });
-
-            ui.add_space(4.0);
-
-            // --- Gemini CLI ---
-            ui.group(|ui| {
-                ui.set_min_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Gemini CLI").strong());
-                });
-                ui.separator();
-                ui.add_space(4.0);
-                {
-                    let active = crate::api::gemini::GeminiLimiter::get().active_count();
-                    ui.horizontal(|ui| {
-                        ui.label(translate(language, "balance_active_threads"));
-                        let color = if active > 0 {
-                            egui::Color32::from_rgb(255, 200, 0)
-                        } else {
-                            ui.visuals().weak_text_color()
-                        };
-                        ui.label(egui::RichText::new(format!("{} / {}", active, *gemini_max_threads)).color(color));
-                    });
-                }
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.label(translate(language, "settings_gemini_threads"));
-                    let mut val = *gemini_max_threads;
-                    let slider = ui.add(egui::Slider::new(&mut val, 1..=25));
-                    if slider.changed() {
-                        *gemini_max_threads = val;
-                        crate::api::gemini::GeminiLimiter::get().set_max_threads(val);
-                    }
-                });
             });
 
             ui.add_space(4.0);
@@ -976,56 +905,6 @@ fn draw_balance_window(
                         }
                     }
                 }
-                ui.add_space(4.0);
-                {
-                    let active = crate::api::voicebot::VoiceBotLimiter::get().active_count();
-                    ui.horizontal(|ui| {
-                        ui.label(translate(language, "balance_active_threads"));
-                        let color = if active > 0 {
-                            egui::Color32::from_rgb(255, 200, 0)
-                        } else {
-                            ui.visuals().weak_text_color()
-                        };
-                        ui.label(egui::RichText::new(format!("{} / 5", active)).color(color));
-                    });
-                }
-                ui.add_space(4.0);
-                ui.label(egui::RichText::new(translate(language, "balance_voicebot_limit")).weak());
-            });
-
-            ui.add_space(4.0);
-
-            // --- Edge TTS ---
-            ui.group(|ui| {
-                ui.set_min_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Edge TTS").strong());
-                });
-                ui.separator();
-                ui.label(egui::RichText::new(translate(language, "balance_edge_tts_status")).weak());
-                ui.add_space(4.0);
-                {
-                    let active = crate::api::edgetts::EdgeTTSLimiter::get().active_count();
-                    ui.horizontal(|ui| {
-                        ui.label(translate(language, "balance_active_threads"));
-                        let color = if active > 0 {
-                            egui::Color32::from_rgb(255, 200, 0)
-                        } else {
-                            ui.visuals().weak_text_color()
-                        };
-                        ui.label(egui::RichText::new(format!("{} / {}", active, *edge_tts_max_threads)).color(color));
-                    });
-                }
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.label(translate(language, "settings_edge_tts_threads"));
-                    let mut val = *edge_tts_max_threads;
-                    let slider = ui.add(egui::Slider::new(&mut val, 1..=25));
-                    if slider.changed() {
-                        *edge_tts_max_threads = val;
-                        crate::api::edgetts::EdgeTTSLimiter::get().set_max_threads(val);
-                    }
-                });
             });
 
             ui.add_space(4.0);
@@ -1062,61 +941,13 @@ fn draw_balance_window(
                                     ui.label(translate(language, "balance_video_per_hour"));
                                     ui.label(format!("{} / {}", bal.video_used, bal.video_limit));
                                     ui.end_row();
-                                    ui.label(translate(language, "balance_img_threads"));
-                                    ui.horizontal(|ui| {
-                                        ui.label(format!("{} /", bal.img_threads_active));
-                                        let mut val = *googler_image_max_threads;
-                                        let slider = ui.add(egui::Slider::new(&mut val, 5..=25));
-                                        if slider.changed() {
-                                            *googler_image_max_threads = val;
-                                        }
-                                    });
-                                    ui.end_row();
-                                    ui.label(translate(language, "balance_video_threads"));
-                                    ui.horizontal(|ui| {
-                                        ui.label(format!("{} /", bal.video_threads_active));
-                                        let mut val = *googler_video_max_threads;
-                                        let slider = ui.add(egui::Slider::new(&mut val, 5..=25));
-                                        if slider.changed() {
-                                            *googler_video_max_threads = val;
-                                        }
-                                    });
-                                    ui.end_row();
                                 });
                         }
+                        None if googler_key.is_empty() => {
+                            ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
+                        }
                         None => {
-                            if googler_key.is_empty() {
-                                ui.label(egui::RichText::new(translate(language, "balance_no_key")).weak());
-                            } else {
-                                ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
-                            }
-                            
-                            ui.add_space(8.0);
-                            egui::Grid::new("googler_threads_offline_grid")
-                                .num_columns(2)
-                                .spacing([16.0, 4.0])
-                                .show(ui, |ui| {
-                                    ui.label(translate(language, "balance_img_threads"));
-                                    ui.horizontal(|ui| {
-                                        ui.label("0 /");
-                                        let mut val = *googler_image_max_threads;
-                                        let slider = ui.add(egui::Slider::new(&mut val, 5..=25));
-                                        if slider.changed() {
-                                            *googler_image_max_threads = val;
-                                        }
-                                    });
-                                    ui.end_row();
-                                    ui.label(translate(language, "balance_video_threads"));
-                                    ui.horizontal(|ui| {
-                                        ui.label("0 /");
-                                        let mut val = *googler_video_max_threads;
-                                        let slider = ui.add(egui::Slider::new(&mut val, 5..=25));
-                                        if slider.changed() {
-                                            *googler_video_max_threads = val;
-                                        }
-                                    });
-                                    ui.end_row();
-                                });
+                            ui.label(egui::RichText::new(translate(language, "balance_not_loaded")).weak());
                         }
                     }
                 }
@@ -1150,6 +981,209 @@ fn draw_balance_window(
                         );
                     }
                 }
+            });
+        });
+}
+
+/// Вікно потоків сервісів (ліміти і активні потоки).
+fn draw_threads_window(
+    ctx: &egui::Context,
+    open: &mut bool,
+    language: crate::localization::Language,
+    openrouter_max_threads: &mut usize,
+    claude_max_threads: &mut usize,
+    gemini_max_threads: &mut usize,
+    voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    edge_tts_max_threads: &mut usize,
+    googler_balance: &std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
+    googler_image_max_threads: &mut usize,
+    googler_video_max_threads: &mut usize,
+    ffmpeg_max_threads: &mut usize,
+) {
+    use crate::localization::translate;
+
+    egui::Window::new(translate(language, "threads_window_title"))
+        .open(open)
+        .resizable(false)
+        .collapsible(false)
+        .default_width(300.0)
+        .show(ctx, |ui| {
+            let active_label = |ui: &mut egui::Ui, active: usize, max: usize| {
+                let color = thread_load_color(active, max, ui.visuals().weak_text_color());
+                ui.label(egui::RichText::new(format!("{} / {}", active, max)).color(color));
+            };
+
+            // --- OpenRouter ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("OpenRouter").strong());
+                ui.separator();
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "balance_active_threads"));
+                    active_label(ui, crate::api::openrouter::OpenRouterLimiter::get().active_count(), *openrouter_max_threads);
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_openrouter_threads"));
+                    let mut val = *openrouter_max_threads;
+                    if ui.add(egui::Slider::new(&mut val, 1..=25)).changed() {
+                        *openrouter_max_threads = val;
+                        crate::api::openrouter::OpenRouterLimiter::get().set_max_threads(val);
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
+
+            // --- Claude Code ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("Claude Code").strong());
+                ui.separator();
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "balance_active_threads"));
+                    active_label(ui, crate::api::claude::ClaudeLimiter::get().active_count(), *claude_max_threads);
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_claude_threads"));
+                    let mut val = *claude_max_threads;
+                    if ui.add(egui::Slider::new(&mut val, 1..=25)).changed() {
+                        *claude_max_threads = val;
+                        crate::api::claude::ClaudeLimiter::get().set_max_threads(val);
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
+
+            // --- Gemini CLI ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("Gemini CLI").strong());
+                ui.separator();
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "balance_active_threads"));
+                    active_label(ui, crate::api::gemini::GeminiLimiter::get().active_count(), *gemini_max_threads);
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_gemini_threads"));
+                    let mut val = *gemini_max_threads;
+                    if ui.add(egui::Slider::new(&mut val, 1..=25)).changed() {
+                        *gemini_max_threads = val;
+                        crate::api::gemini::GeminiLimiter::get().set_max_threads(val);
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
+
+            // --- VoiceBot ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("VoiceBot").strong());
+                ui.separator();
+                ui.add_space(4.0);
+                let _ = voicebot_balance; // баланс не потрібен тут
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "balance_active_threads"));
+                    let active = crate::api::voicebot::VoiceBotLimiter::get().active_count();
+                    active_label(ui, active, 5);
+                });
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(translate(language, "balance_voicebot_limit")).weak());
+            });
+
+            ui.add_space(4.0);
+
+            // --- Edge TTS ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("Edge TTS").strong());
+                ui.separator();
+                ui.label(egui::RichText::new(translate(language, "balance_edge_tts_status")).weak());
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "balance_active_threads"));
+                    active_label(ui, crate::api::edgetts::EdgeTTSLimiter::get().active_count(), *edge_tts_max_threads);
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_edge_tts_threads"));
+                    let mut val = *edge_tts_max_threads;
+                    if ui.add(egui::Slider::new(&mut val, 1..=25)).changed() {
+                        *edge_tts_max_threads = val;
+                        crate::api::edgetts::EdgeTTSLimiter::get().set_max_threads(val);
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
+
+            // --- Googler ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("Googler").strong());
+                ui.separator();
+                ui.add_space(4.0);
+                if let Ok(guard) = googler_balance.try_lock() {
+                    let (img_active, vid_active) = match guard.as_ref() {
+                        Some(bal) => (bal.img_threads_active as usize, bal.video_threads_active as usize),
+                        None => (0, 0),
+                    };
+                    egui::Grid::new("googler_threads_grid")
+                        .num_columns(2)
+                        .spacing([16.0, 4.0])
+                        .show(ui, |ui| {
+                            ui.label(translate(language, "balance_img_threads"));
+                            ui.horizontal(|ui| {
+                                let color = thread_load_color(img_active, *googler_image_max_threads, ui.visuals().weak_text_color());
+                                ui.label(egui::RichText::new(format!("{} /", img_active)).color(color));
+                                let mut val = *googler_image_max_threads;
+                                if ui.add(egui::Slider::new(&mut val, 5..=25)).changed() {
+                                    *googler_image_max_threads = val;
+                                }
+                            });
+                            ui.end_row();
+                            ui.label(translate(language, "balance_video_threads"));
+                            ui.horizontal(|ui| {
+                                let color = thread_load_color(vid_active, *googler_video_max_threads, ui.visuals().weak_text_color());
+                                ui.label(egui::RichText::new(format!("{} /", vid_active)).color(color));
+                                let mut val = *googler_video_max_threads;
+                                if ui.add(egui::Slider::new(&mut val, 5..=25)).changed() {
+                                    *googler_video_max_threads = val;
+                                }
+                            });
+                            ui.end_row();
+                        });
+                }
+            });
+
+            ui.add_space(4.0);
+
+            // --- FFmpeg ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("FFmpeg").strong());
+                ui.separator();
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "balance_active_threads"));
+                    active_label(ui, crate::api::ffmpeg::FfmpegLimiter::get().active_count(), *ffmpeg_max_threads);
+                });
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "settings_ffmpeg_threads"));
+                    let mut val = *ffmpeg_max_threads;
+                    if ui.add(egui::Slider::new(&mut val, 1..=8)).changed() {
+                        *ffmpeg_max_threads = val;
+                        crate::api::ffmpeg::FfmpegLimiter::get().set_max_threads(val);
+                    }
+                });
             });
         });
 }
@@ -1701,37 +1735,38 @@ impl eframe::App for VideoMakerApp {
                 ui.selectable_value(&mut self.active_tab, Tab::Settings, egui::RichText::new(translate(self.language, "tab_settings")).size(14.0));
                 ui.selectable_value(&mut self.active_tab, Tab::Logs, egui::RichText::new(translate(self.language, "tab_logs")).size(14.0));
 
-                // Баланс-чіпи з правого боку (RTL: перший доданий — крайній правий)
+                // Баланс-чіпи та кнопка налаштувань з правого боку (RTL: перший доданий — крайній правий)
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 2.0;
+                    // Іконка шестерні — відкриває вікно "Баланс та Потоки"
+                    if ui.add(egui::Button::new(egui::RichText::new("⚙").size(16.0)).frame(false)).clicked() {
+                        self.balance_window_open = true;
+                    }
+                    ui.add_space(4.0);
                     if let Ok(guard) = self.openrouter_balance.try_lock() {
                         if let Some(text) = guard.as_ref() {
-                            let active = crate::api::openrouter::OpenRouterLimiter::get().active_count();
-                            let chip_text = format!("{} th:{}/{}", text, active, self.openrouter_max_threads);
-                            if draw_balance_chip(ui, "OpenRouter", &chip_text).clicked() {
+                            if draw_balance_chip(ui, "OpenRouter", text).clicked() {
                                 self.balance_window_open = true;
                             }
+                            ui.separator();
                         }
                     }
                     if let Ok(guard) = self.voicebot_balance.try_lock() {
                         if let Some(text) = guard.as_ref() {
                             // Показуємо лише числову частину, без слова "символів"
                             let display = text.split_whitespace().next().unwrap_or(text.as_str());
-                            let active = crate::api::voicebot::VoiceBotLimiter::get().active_count();
-                            let chip_text = format!("{} th:{}/5", display, active);
-                            if draw_balance_chip(ui, "VoiceBot", &chip_text).clicked() {
+                            if draw_balance_chip(ui, "VoiceBot", display).clicked() {
                                 self.balance_window_open = true;
                             }
+                            ui.separator();
                         }
                     }
                     if let Ok(guard) = self.googler_balance.try_lock() {
                         if let Some(bal) = guard.as_ref() {
                             let text = format!(
-                                "img: {}/{} vid: {}/{} th: i{}/{} v{}/{}",
+                                "img: {}/{} vid: {}/{}",
                                 bal.img_used, bal.img_limit,
                                 bal.video_used, bal.video_limit,
-                                bal.img_threads_active, self.googler_image_max_threads,
-                                bal.video_threads_active, self.googler_video_max_threads,
                             );
                             if draw_balance_chip(ui, "Googler", &text).clicked() {
                                 self.balance_window_open = true;
@@ -1749,17 +1784,69 @@ impl eframe::App for VideoMakerApp {
             self.language,
             &self.openrouter_key,
             &self.openrouter_balance,
-            &mut self.openrouter_max_threads,
-            &mut self.claude_max_threads,
-            &mut self.gemini_max_threads,
             &self.voicebot_key,
             &self.voicebot_balance,
             &self.googler_key,
             &self.googler_balance,
+        );
+
+        draw_threads_window(
+            ctx,
+            &mut self.threads_window_open,
+            self.language,
+            &mut self.openrouter_max_threads,
+            &mut self.claude_max_threads,
+            &mut self.gemini_max_threads,
+            &self.voicebot_balance,
             &mut self.edge_tts_max_threads,
+            &self.googler_balance,
             &mut self.googler_image_max_threads,
             &mut self.googler_video_max_threads,
+            &mut self.ffmpeg_max_threads,
         );
+
+        // Нижній рядок статусу потоків (реєструємо ДО SidePanel, щоб займав повну ширину)
+        egui::TopBottomPanel::bottom("status_bar")
+            .min_height(40.0)
+            .show(ctx, |ui| {
+                let mut open_threads = false;
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    let normal = ui.visuals().text_color();
+
+                    // Клікабельний чіп потоку — той самий стиль що й баланс-чіпи у топбарі
+                    let thread_chip = |ui: &mut egui::Ui, name: &str, active: usize, max: usize| -> bool {
+                        let color = thread_load_color(active, max, normal);
+                        draw_chip(ui, &format!("{}: {}/{}", name, active, max), color).clicked()
+                    };
+
+                    // RTL: шестерня першою → крайня права
+                    if ui.add(egui::Button::new(egui::RichText::new("⚙").size(16.0)).frame(false)).clicked() {
+                        open_threads = true;
+                    }
+                    ui.add_space(4.0);
+
+                    // RTL: додаємо у зворотному порядку, щоб на екрані йшло OR → Claude → ... → Googler
+                    if let Ok(guard) = self.googler_balance.try_lock() {
+                        if let Some(bal) = guard.as_ref() {
+                            if thread_chip(ui, "vid", bal.video_threads_active as usize, self.googler_video_max_threads) { open_threads = true; }
+                            if thread_chip(ui, "Googler img", bal.img_threads_active as usize, self.googler_image_max_threads) { open_threads = true; }
+                        } else if draw_chip(ui, "Googler: —", normal).clicked() {
+                            open_threads = true;
+                        }
+                    }
+                    ui.separator();
+                    if thread_chip(ui, "FFmpeg", crate::api::ffmpeg::FfmpegLimiter::get().active_count(), self.ffmpeg_max_threads) { open_threads = true; }
+                    ui.separator();
+                    if thread_chip(ui, "EdgeTTS", crate::api::edgetts::EdgeTTSLimiter::get().active_count(), self.edge_tts_max_threads) { open_threads = true; }
+                    if thread_chip(ui, "VoiceBot", crate::api::voicebot::VoiceBotLimiter::get().active_count(), 5) { open_threads = true; }
+                    ui.separator();
+                    if thread_chip(ui, "Gemini", crate::api::gemini::GeminiLimiter::get().active_count(), self.gemini_max_threads) { open_threads = true; }
+                    if thread_chip(ui, "Claude", crate::api::claude::ClaudeLimiter::get().active_count(), self.claude_max_threads) { open_threads = true; }
+                    if thread_chip(ui, "OR", crate::api::openrouter::OpenRouterLimiter::get().active_count(), self.openrouter_max_threads) { open_threads = true; }
+                });
+                if open_threads { self.threads_window_open = true; }
+            });
 
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
         if self.active_tab == Tab::Main {
@@ -1868,6 +1955,7 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
+        // Нижній рядок статусу потоків
         // Нижня панель черги задач (тільки якщо є задачі)
         if !self.jobs.is_empty() {
             egui::TopBottomPanel::bottom("queue_panel")
@@ -2491,6 +2579,7 @@ impl eframe::App for VideoMakerApp {
                 || self.edge_tts_pitch != self.last_saved_settings.edge_tts_pitch
                 || self.edge_tts_volume != self.last_saved_settings.edge_tts_volume
                 || self.edge_tts_max_threads != self.last_saved_settings.edge_tts_max_threads
+                || self.ffmpeg_max_threads != self.last_saved_settings.ffmpeg_max_threads
                 || self.googler_image_max_threads != self.last_saved_settings.googler_image_max_threads
                 || self.googler_video_max_threads != self.last_saved_settings.googler_video_max_threads
                 || self.voiceover_convert_to_wav != self.last_saved_settings.voiceover_convert_to_wav
@@ -2554,6 +2643,7 @@ impl eframe::App for VideoMakerApp {
                     edge_tts_pitch: self.edge_tts_pitch.clone(),
                     edge_tts_volume: self.edge_tts_volume.clone(),
                     edge_tts_max_threads: self.edge_tts_max_threads,
+                    ffmpeg_max_threads: self.ffmpeg_max_threads,
                     googler_image_max_threads: self.googler_image_max_threads,
                     googler_video_max_threads: self.googler_video_max_threads,
                     voiceover_convert_to_wav: self.voiceover_convert_to_wav,
