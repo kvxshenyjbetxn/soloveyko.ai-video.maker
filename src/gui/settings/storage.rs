@@ -90,6 +90,9 @@ pub struct AppSettings {
     /// Чи відкривати вікно контролю автоматично при переході задачі в AwaitingControl
     #[serde(default)]
     pub pipeline_control_auto_open: bool,
+    /// Чи увімкнено контроль зображень (пауза після відеоряду для перегляду)
+    #[serde(default)]
+    pub pipeline_media_control_enabled: bool,
     /// Чи увімкнено етап "Озвучка" у пайплайні
     #[serde(default = "default_true")]
     pub pipeline_voiceover_enabled: bool,
@@ -253,6 +256,7 @@ impl Default for AppSettings {
             pipeline_translation_enabled: true,
             pipeline_translation_control_enabled: false,
             pipeline_control_auto_open: false,
+            pipeline_media_control_enabled: false,
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_subtitles_enabled: true,
@@ -410,6 +414,9 @@ pub struct PipelineTemplate {
     /// Чи відкривати вікно контролю автоматично
     #[serde(default)]
     pub pipeline_control_auto_open: bool,
+    /// Чи увімкнено контроль зображень
+    #[serde(default)]
+    pub pipeline_media_control_enabled: bool,
     /// Чи увімкнено етап "Озвучка"
     #[serde(default = "default_true")]
     pub pipeline_voiceover_enabled: bool,
@@ -548,6 +555,7 @@ pub fn save_template(
     pipeline_translation_enabled: bool,
     pipeline_translation_control_enabled: bool,
     pipeline_control_auto_open: bool,
+    pipeline_media_control_enabled: bool,
     pipeline_voiceover_enabled: bool,
     pipeline_video_enabled: bool,
     pipeline_subtitles_enabled: bool,
@@ -602,6 +610,7 @@ pub fn save_template(
             pipeline_translation_enabled,
             pipeline_translation_control_enabled,
             pipeline_control_auto_open,
+            pipeline_media_control_enabled,
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_subtitles_enabled,

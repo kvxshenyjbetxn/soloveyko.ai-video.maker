@@ -10,6 +10,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "control" => "Контроль",
         "control_translation" => "Контроль перевода",
         "control_auto_open" => "Показывать окно контроля автоматически",
+        "control_media" => "Контроль изображений",
         "translation" => "Перевод",
         "voiceover" => "Озвучка",
         "video" => "Видеоряд",
@@ -144,6 +145,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "queue_status_pending" => "Ожидает",
         "queue_status_running" => "Выполняется...",
         "queue_status_awaiting_control" => "Ожидает контроля",
+        "queue_status_awaiting_media" => "Ожидает контроля медиа",
         "queue_status_done" => "Готово",
         "queue_status_failed" => "Ошибка",
         "control_window_title" => "Контроль перевода",
@@ -235,6 +237,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         "montage_transition_random" => "Случайно",
         "video_llm_service_label" => "Сервис ЛЛМ для промптов",
         "video_llm_service_none" => "Без ЛЛМ",
+        "tab_gallery" => "Галерея",
+        "gallery_continue_btn" => "Продолжить обработку",
+        "gallery_empty" => "Нет медиафайлов",
+        "gallery_awaiting_label" => "⏳ Ожидает проверки изображений",
         _ => "",
     }
 }

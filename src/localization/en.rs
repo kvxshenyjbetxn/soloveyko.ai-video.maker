@@ -10,6 +10,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "control" => "Control",
         "control_translation" => "Translation Control",
         "control_auto_open" => "Show control window automatically",
+        "control_media" => "Image Control",
         "translation" => "Translation",
         "voiceover" => "Voiceover",
         "video" => "Video Sequence",
@@ -144,6 +145,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "queue_status_pending" => "Pending",
         "queue_status_running" => "Running...",
         "queue_status_awaiting_control" => "Awaiting Control",
+        "queue_status_awaiting_media" => "Awaiting Media Control",
         "queue_status_done" => "Done",
         "queue_status_failed" => "Failed",
         "control_window_title" => "Translation Control",
@@ -235,6 +237,10 @@ pub fn translate_en(key: &str) -> &'static str {
         "montage_transition_random" => "Random",
         "video_llm_service_label" => "LLM service for prompts",
         "video_llm_service_none" => "No LLM",
+        "tab_gallery" => "Gallery",
+        "gallery_continue_btn" => "Continue Processing",
+        "gallery_empty" => "No media files",
+        "gallery_awaiting_label" => "⏳ Awaiting image review",
         _ => "",
     }
 }

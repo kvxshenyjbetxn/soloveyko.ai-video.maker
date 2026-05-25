@@ -663,6 +663,7 @@ pub fn run_pipeline(
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
     montage_progress: Arc<Mutex<Option<f32>>>,
     montage_file_size: Arc<Mutex<Option<u64>>>,
+    media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
@@ -799,9 +800,32 @@ pub fn run_pipeline(
             None
         };
 
-        // Чекаємо обидві гілки (barrier)
-        let av_result = av_handle.map(|h| h.join().unwrap_or_else(|_| Err("AV thread panicked".to_string())));
+        // Спочатку чекаємо відеогілку, щоб мати можливість зробити паузу для контролю зображень
+        // поки гілка AV (озвучка + субтитри) продовжує виконуватись паралельно.
         let video_result = video_handle.map(|h| h.join().unwrap_or_else(|_| Err("Video thread panicked".to_string())));
+
+        // Пауза для контролю зображень — AV гілка продовжує виконуватись
+        if settings.media_control_enabled && settings.video_enabled {
+            if let Some(Ok(())) = &video_result {
+                crate::logger::log_job(job_id, &job_name, "Video done. Awaiting media review by user...");
+                *status.lock().unwrap() = crate::queue::JobStatus::AwaitingMediaControl;
+                ctx.request_repaint();
+
+                let (lock, cvar) = &*media_control_resume;
+                let mut resumed = lock.lock().unwrap();
+                while !*resumed {
+                    resumed = cvar.wait(resumed).unwrap();
+                }
+                *resumed = false;
+
+                crate::logger::log_job(job_id, &job_name, "Media review confirmed. Resuming pipeline...");
+                *status.lock().unwrap() = crate::queue::JobStatus::Running;
+                ctx.request_repaint();
+            }
+        }
+
+        // Тепер чекаємо AV гілку
+        let av_result = av_handle.map(|h| h.join().unwrap_or_else(|_| Err("AV thread panicked".to_string())));
 
         // Перевіряємо помилки обох гілок
         if let Some(Err(e)) = av_result {

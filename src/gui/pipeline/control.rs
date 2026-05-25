@@ -7,6 +7,7 @@ pub fn draw_control_section(
     language: Language,
     pipeline_translation_control_enabled: &mut bool,
     pipeline_control_auto_open: &mut bool,
+    pipeline_media_control_enabled: &mut bool,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -22,6 +23,15 @@ pub fn draw_control_section(
             ui.add_space(4.0);
             ui.checkbox(pipeline_control_auto_open, translate(language, "control_auto_open"));
         }
+
+        ui.add_space(4.0);
+
+        ui.horizontal(|ui| {
+            ui.label(translate(language, "control_media"));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                super::toggle_switch(ui, pipeline_media_control_enabled);
+            });
+        });
 
         ui.add_space(2.0);
     });

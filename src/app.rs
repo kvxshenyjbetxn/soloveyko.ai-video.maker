@@ -9,6 +9,8 @@ use crate::localization::{Language, translate};
 pub enum Tab {
     /// Основна вкладка
     Main,
+    /// Галерея згенерованих медіафайлів
+    Gallery,
     /// Вкладка налаштувань
     Settings,
     /// Вкладка логів
@@ -69,6 +71,10 @@ pub struct VideoMakerApp {
     pub pipeline_translation_control_enabled: bool,
     /// Чи відкривати вікно контролю автоматично при переході задачі в AwaitingControl.
     pub pipeline_control_auto_open: bool,
+    /// Чи увімкнено контроль зображень (пауза після відеоряду для перегляду).
+    pub pipeline_media_control_enabled: bool,
+    /// Кеш текстур для галереї медіафайлів. None означає помилку завантаження.
+    pub gallery_textures: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     /// Чи увімкнено етап "Озвучка" у пайплайні.
     pub pipeline_voiceover_enabled: bool,
     /// Чи увімкнено етап "Відеоряд" у пайплайні.
@@ -272,6 +278,8 @@ impl Default for VideoMakerApp {
             pipeline_translation_enabled: true,
             pipeline_translation_control_enabled: false,
             pipeline_control_auto_open: false,
+            pipeline_media_control_enabled: false,
+            gallery_textures: std::collections::HashMap::new(),
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_subtitles_enabled: true,
@@ -441,6 +449,7 @@ impl VideoMakerApp {
         let pipeline_translation_enabled = saved.pipeline_translation_enabled;
         let pipeline_translation_control_enabled = saved.pipeline_translation_control_enabled;
         let pipeline_control_auto_open = saved.pipeline_control_auto_open;
+        let pipeline_media_control_enabled = saved.pipeline_media_control_enabled;
         let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
         let pipeline_video_enabled = saved.pipeline_video_enabled;
         let pipeline_subtitles_enabled = saved.pipeline_subtitles_enabled;
@@ -575,6 +584,8 @@ impl VideoMakerApp {
             pipeline_translation_enabled,
             pipeline_translation_control_enabled,
             pipeline_control_auto_open,
+            pipeline_media_control_enabled,
+            gallery_textures: std::collections::HashMap::new(),
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_subtitles_enabled,
@@ -1211,6 +1222,7 @@ fn draw_queue_panel(
     selected_job_control: &mut Option<u64>,
     control_text_input: &mut String,
     whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
+    active_tab: &mut Tab,
 ) {
     ui.add_space(4.0);
 
@@ -1280,7 +1292,9 @@ fn draw_queue_panel(
                         let status = j.status.lock().unwrap().clone();
                         match status {
                             crate::queue::JobStatus::Done => 1.0,
-                            crate::queue::JobStatus::Running | crate::queue::JobStatus::AwaitingControl => {
+                            crate::queue::JobStatus::Running
+                            | crate::queue::JobStatus::AwaitingControl
+                            | crate::queue::JobStatus::AwaitingMediaControl => {
                                 let (prog, _, _) = j.calculate_progress();
                                 prog
                             }
@@ -1293,7 +1307,8 @@ fn draw_queue_panel(
                 };
 
                 let is_running = jobs.iter().any(|j| {
-                    *j.status.lock().unwrap() == crate::queue::JobStatus::Running
+                    let s = j.status.lock().unwrap().clone();
+                    s == crate::queue::JobStatus::Running || s == crate::queue::JobStatus::AwaitingMediaControl
                 });
 
                 let pct_label = egui::RichText::new(format!("{:.0}%", overall_progress * 100.0))
@@ -1335,6 +1350,7 @@ fn draw_queue_panel(
                     std::sync::Arc::clone(&job.media_progress),
                     std::sync::Arc::clone(&job.montage_progress),
                     std::sync::Arc::clone(&job.montage_file_size),
+                    std::sync::Arc::clone(&job.media_control_resume),
                     ctx.clone(),
                 );
             }
@@ -1374,6 +1390,13 @@ fn draw_queue_panel(
                             (
                                 format!("{} ({:.0}%)", translate(language, "queue_status_awaiting_control"), prog * 100.0),
                                 egui::Color32::from_rgb(155, 89, 182),
+                            )
+                        }
+                        crate::queue::JobStatus::AwaitingMediaControl => {
+                            let (prog, _, _) = job.calculate_progress();
+                            (
+                                format!("{} ({:.0}%)", translate(language, "queue_status_awaiting_media"), prog * 100.0),
+                                egui::Color32::from_rgb(230, 126, 34),
                             )
                         }
                         crate::queue::JobStatus::Done => (
@@ -1604,7 +1627,8 @@ fn draw_queue_panel(
 
                             // Індивідуальний прогрес бар картки задачі
                             let (prog, _, _) = job.calculate_progress();
-                            let is_job_running = status == crate::queue::JobStatus::Running;
+                            let is_job_running = status == crate::queue::JobStatus::Running
+                                || status == crate::queue::JobStatus::AwaitingMediaControl;
 
                             ui.horizontal(|ui| {
                                 let pct_text = format!("{:.0}%", prog * 100.0);
@@ -1649,6 +1673,8 @@ fn draw_queue_panel(
                             } else {
                                 *control_text_input = String::new();
                             }
+                        } else if status == crate::queue::JobStatus::AwaitingMediaControl {
+                            *active_tab = Tab::Gallery;
                         } else {
                             *selected_job_logs = Some((job.id, job.name.clone()));
                         }
@@ -1657,6 +1683,153 @@ fn draw_queue_panel(
                     ui.add_space(4.0);
                 }
             });
+        });
+}
+
+/// Завантажує зображення з диску та повертає TextureHandle для egui.
+fn load_image_texture(ctx: &egui::Context, path: &std::path::Path) -> Option<egui::TextureHandle> {
+    let data = std::fs::read(path).ok()?;
+    let img = image::load_from_memory(&data).ok()?;
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let color_image = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], &rgba);
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("img");
+    Some(ctx.load_texture(name, color_image, egui::TextureOptions::LINEAR))
+}
+
+/// Малює вкладку галереї медіафайлів із деревом задач.
+fn draw_gallery_tab(
+    ui: &mut egui::Ui,
+    language: crate::localization::Language,
+    jobs: &[crate::queue::PipelineJob],
+    gallery_textures: &mut std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
+) {
+    use crate::localization::translate;
+
+    let awaiting: Vec<_> = jobs.iter()
+        .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl)
+        .collect();
+    if !awaiting.is_empty() {
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if ui.button(egui::RichText::new(translate(language, "gallery_continue_btn")).strong()).clicked() {
+                for job in awaiting {
+                    let (lock, cvar) = &*job.media_control_resume;
+                    *lock.lock().unwrap() = true;
+                    cvar.notify_one();
+                }
+            }
+        });
+        ui.add_space(4.0);
+    }
+
+    // Збираємо дані задач та їхніх медіафайлів заздалегідь, щоб уникнути borrow конфліктів
+    let mut job_media: Vec<(u64, String, Vec<std::path::PathBuf>, bool)> = Vec::new();
+    for job in jobs {
+        let media_dir = std::path::Path::new(&job.settings.save_path).join("media");
+        if !media_dir.exists() { continue; }
+
+        let mut files: Vec<std::path::PathBuf> = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&media_dir) {
+            let mut sorted: Vec<_> = entries
+                .filter_map(Result::ok)
+                .filter(|e| {
+                    let p = e.path();
+                    matches!(
+                        p.extension().and_then(|x| x.to_str()),
+                        Some("jpg") | Some("jpeg") | Some("png") | Some("webp")
+                    )
+                })
+                .collect();
+            sorted.sort_by_key(|e| e.path());
+            files = sorted.into_iter().map(|e| e.path()).collect();
+        }
+
+        if files.is_empty() { continue; }
+
+        let is_awaiting = *job.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl;
+        job_media.push((job.id, job.name.clone(), files, is_awaiting));
+    }
+
+    if job_media.is_empty() {
+        ui.centered_and_justified(|ui| {
+            ui.label(egui::RichText::new(translate(language, "gallery_empty")).weak().size(14.0));
+        });
+        return;
+    }
+
+    let ctx = ui.ctx().clone();
+
+    egui::ScrollArea::vertical()
+        .auto_shrink([false; 2])
+        .show(ui, |ui| {
+            for (job_id, job_name, files, is_awaiting) in &job_media {
+                let header_id = ui.make_persistent_id(format!("gallery_job_{}", job_id));
+                let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                    ui.ctx(), header_id, true,
+                );
+
+                let header = ui.horizontal(|ui| {
+                    state.show_toggle_button(ui, egui::collapsing_header::paint_default_icon);
+                    let label = ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!("#{} {} ({})", job_id + 1, job_name, files.len())).strong()
+                        ).sense(egui::Sense::click())
+                    );
+                    if *is_awaiting {
+                        ui.label(
+                            egui::RichText::new(translate(language, "gallery_awaiting_label"))
+                                .color(egui::Color32::from_rgb(230, 126, 34))
+                                .size(12.0),
+                        );
+                    }
+                    label
+                });
+
+                if header.inner.clicked() { state.toggle(ui); }
+                state.store(ui.ctx());
+
+                state.show_body_indented(&header.response, ui, |ui| {
+                    // Сітка прев'ю зображень
+                    let thumb_size = 120.0;
+                    let spacing = 8.0;
+                    let cols = ((ui.available_width() + spacing) / (thumb_size + spacing)).max(1.0) as usize;
+
+                    egui::Grid::new(format!("gallery_grid_{}", job_id))
+                        .num_columns(cols)
+                        .spacing([spacing, spacing])
+                        .show(ui, |ui| {
+                            for (idx, file_path) in files.iter().enumerate() {
+                                // Завантажуємо текстуру якщо ще не кешована
+                                if !gallery_textures.contains_key(file_path) {
+                                    let tex = load_image_texture(&ctx, file_path);
+                                    gallery_textures.insert(file_path.clone(), tex);
+                                }
+
+                                if let Some(Some(tex)) = gallery_textures.get(file_path) {
+                                    let img_size = tex.size_vec2();
+                                    let aspect = if img_size.y > 0.0 { img_size.x / img_size.y } else { 1.0 };
+                                    let display = egui::vec2(thumb_size * aspect, thumb_size);
+                                    ui.add(egui::Image::from_texture(tex).fit_to_exact_size(display));
+                                } else {
+                                    // Плейсхолдер якщо зображення не завантажилось
+                                    ui.add_sized(
+                                        [thumb_size, thumb_size],
+                                        egui::Label::new(
+                                            egui::RichText::new(format!("#{}", idx + 1)).weak()
+                                        ),
+                                    );
+                                }
+
+                                if (idx + 1) % cols == 0 { ui.end_row(); }
+                            }
+                        });
+
+                    ui.add_space(8.0);
+                });
+
+                ui.add_space(4.0);
+            }
         });
 }
 
@@ -1734,6 +1907,17 @@ impl eframe::App for VideoMakerApp {
             .show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.selectable_value(&mut self.active_tab, Tab::Main, egui::RichText::new(translate(self.language, "tab_main")).size(14.0));
+
+                // Вкладка Галерея — видима коли є хоч одне медіа
+                let has_media = self.jobs.iter().any(|j| {
+                    std::path::Path::new(&j.settings.save_path).join("media").exists()
+                });
+                if has_media {
+                    ui.selectable_value(&mut self.active_tab, Tab::Gallery, egui::RichText::new(translate(self.language, "tab_gallery")).size(14.0));
+                } else if self.active_tab == Tab::Gallery {
+                    self.active_tab = Tab::Main;
+                }
+
                 ui.selectable_value(&mut self.active_tab, Tab::Settings, egui::RichText::new(translate(self.language, "tab_settings")).size(14.0));
                 ui.selectable_value(&mut self.active_tab, Tab::Logs, egui::RichText::new(translate(self.language, "tab_logs")).size(14.0));
 
@@ -1895,6 +2079,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.pipeline_translation_enabled,
                         &mut self.pipeline_translation_control_enabled,
                         &mut self.pipeline_control_auto_open,
+                        &mut self.pipeline_media_control_enabled,
                         &mut self.pipeline_voiceover_enabled,
                         &mut self.pipeline_video_enabled,
                         &mut self.pipeline_subtitles_enabled,
@@ -1957,9 +2142,8 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
-        // Нижній рядок статусу потоків
-        // Нижня панель черги задач (тільки якщо є задачі)
-        if !self.jobs.is_empty() {
+        // Нижня панель черги задач (тільки якщо є задачі і ми не на Gallery)
+        if !self.jobs.is_empty() && self.active_tab != Tab::Gallery {
             egui::TopBottomPanel::bottom("queue_panel")
                 .min_height(140.0)
                 .default_height(160.0)
@@ -1974,9 +2158,11 @@ impl eframe::App for VideoMakerApp {
                         &mut self.selected_job_control,
                         &mut self.control_text_input,
                         &self.whisper_model_download,
+                        &mut self.active_tab,
                     );
                 });
         }
+
 
         // Конфігуруємо фрейм для центральної панелі.
         // Для редактора (Main) прибираємо відступи (margin), щоб поле було на всю висоту та ширину.
@@ -1997,6 +2183,9 @@ impl eframe::App for VideoMakerApp {
                 match self.active_tab {
                     Tab::Main => {
                         gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit);
+                    }
+                    Tab::Gallery => {
+                        draw_gallery_tab(ui, self.language, &self.jobs, &mut self.gallery_textures);
                     }
                     Tab::Settings => {
                         let welcome_changed = gui::settings::draw_settings(
@@ -2174,6 +2363,13 @@ impl eframe::App for VideoMakerApp {
                 self.selected_job_control = Some(job_id);
                 self.control_text_input = translated_text.unwrap_or_default();
             }
+        }
+
+        // Авто-перехід на вкладку Галерея коли задача переходить в AwaitingMediaControl
+        if self.jobs.iter().any(|j| {
+            *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl
+        }) {
+            self.active_tab = Tab::Gallery;
         }
 
         // Спливаюче вікно контролю перекладу
@@ -2498,6 +2694,7 @@ impl eframe::App for VideoMakerApp {
                         media_progress_arc,
                         std::sync::Arc::clone(&self.jobs[job_idx].montage_progress),
                         std::sync::Arc::clone(&self.jobs[job_idx].montage_file_size),
+                        std::sync::Arc::clone(&self.jobs[job_idx].media_control_resume),
                         ctx_clone,
                     );
 
@@ -2549,6 +2746,7 @@ impl eframe::App for VideoMakerApp {
                 || self.pipeline_translation_enabled != self.last_saved_settings.pipeline_translation_enabled
                 || self.pipeline_translation_control_enabled != self.last_saved_settings.pipeline_translation_control_enabled
                 || self.pipeline_control_auto_open != self.last_saved_settings.pipeline_control_auto_open
+                || self.pipeline_media_control_enabled != self.last_saved_settings.pipeline_media_control_enabled
                 || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
                 || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
                 || self.pipeline_subtitles_enabled != self.last_saved_settings.pipeline_subtitles_enabled
@@ -2612,6 +2810,7 @@ impl eframe::App for VideoMakerApp {
                     pipeline_translation_enabled: self.pipeline_translation_enabled,
                     pipeline_translation_control_enabled: self.pipeline_translation_control_enabled,
                     pipeline_control_auto_open: self.pipeline_control_auto_open,
+                    pipeline_media_control_enabled: self.pipeline_media_control_enabled,
                     pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
                     pipeline_video_enabled: self.pipeline_video_enabled,
                     pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,

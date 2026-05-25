@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
 /// Статус виконання задачі пайплайну.
 #[derive(Clone, PartialEq)]
@@ -6,6 +6,8 @@ pub enum JobStatus {
     Pending,
     Running,
     AwaitingControl,
+    /// Очікує перегляду згенерованих зображень користувачем
+    AwaitingMediaControl,
     Done,
     Failed(String),
 }
@@ -70,6 +72,7 @@ pub struct JobSettings {
     pub montage_bitrate: u32,
     pub montage_transition: String,
     pub montage_transition_duration: f32,
+    pub media_control_enabled: bool,
 }
 
 /// Одна задача в черзі пайплайну.
@@ -104,6 +107,8 @@ pub struct PipelineJob {
     pub montage_progress: Arc<Mutex<Option<f32>>>,
     /// Розмір фінального відеофайлу в байтах. None до завершення монтажу.
     pub montage_file_size: Arc<Mutex<Option<u64>>>,
+    /// Condvar для відновлення пайплайну після контролю зображень
+    pub media_control_resume: Arc<(Mutex<bool>, Condvar)>,
 }
 
 impl PipelineJob {
@@ -125,6 +130,7 @@ impl PipelineJob {
             media_progress: Arc::new(Mutex::new(None)),
             montage_progress: Arc::new(Mutex::new(None)),
             montage_file_size: Arc::new(Mutex::new(None)),
+            media_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
         }
     }
 

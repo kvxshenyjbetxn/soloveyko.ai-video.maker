@@ -10,6 +10,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "control" => "Контроль",
         "control_translation" => "Контроль перекладу",
         "control_auto_open" => "Показувати вікно контролю автоматично",
+        "control_media" => "Контроль зображень",
         "translation" => "Переклад",
         "voiceover" => "Озвучка",
         "video" => "Відеоряд",
@@ -144,6 +145,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "queue_status_pending" => "Очікує",
         "queue_status_running" => "Виконується...",
         "queue_status_awaiting_control" => "Очікує контролю",
+        "queue_status_awaiting_media" => "Очікує контролю медіа",
         "queue_status_done" => "Готово",
         "queue_status_failed" => "Помилка",
         "control_window_title" => "Контроль перекладу",
@@ -235,6 +237,10 @@ pub fn translate_uk(key: &str) -> &'static str {
         "montage_transition_random" => "Рандом",
         "video_llm_service_label" => "Сервіс ЛЛМ для промтів",
         "video_llm_service_none" => "Без ЛЛМ",
+        "tab_gallery" => "Галерея",
+        "gallery_continue_btn" => "Продовжити обробку",
+        "gallery_empty" => "Немає медіафайлів",
+        "gallery_awaiting_label" => "⏳ Очікує перевірки зображень",
         _ => "",
     }
 }
