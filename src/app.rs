@@ -275,6 +275,22 @@ pub struct VideoMakerApp {
     pub copied_toast: Option<(String, std::time::Instant)>,
     /// Чи увімкнене автоматичне прокручування логу донизу.
     pub auto_scroll_logs: bool,
+    /// Кеш кадрів hover-анімації відео: path → список текстур кадрів.
+    pub video_hover_frames: std::collections::HashMap<std::path::PathBuf, Vec<egui::TextureHandle>>,
+    /// Стан hover-анімації відео: path → (поточний кадр, час останнього переходу).
+    pub video_hover_state: std::collections::HashMap<std::path::PathBuf, (usize, std::time::Instant)>,
+    /// Набір шляхів відео, для яких зараз витягуються hover-кадри.
+    pub video_hover_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    /// Результат фонового витягування hover-кадрів.
+    pub video_hover_result: std::sync::Arc<std::sync::Mutex<Option<(std::path::PathBuf, Vec<egui::TextureHandle>)>>>,
+    /// Кеш першого кадру відео як thumbnail: path → текстура.
+    pub video_thumbnails: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
+    /// Набір шляхів відео, для яких зараз витягується thumbnail.
+    pub video_thumb_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    /// Результат фонового витягування thumbnail.
+    pub video_thumb_result: std::sync::Arc<std::sync::Mutex<Option<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
+    /// Активний повноекранний відеоплеєр (якщо відео відкрите).
+    pub video_player: Option<crate::gui::video_player::VideoPlayer>,
 }
 
 impl Default for VideoMakerApp {
@@ -409,6 +425,14 @@ impl Default for VideoMakerApp {
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: default_settings,
+            video_hover_frames: std::collections::HashMap::new(),
+            video_hover_state: std::collections::HashMap::new(),
+            video_hover_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            video_hover_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            video_thumbnails: std::collections::HashMap::new(),
+            video_thumb_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            video_player: None,
         }
     }
 }
@@ -729,6 +753,14 @@ impl VideoMakerApp {
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: saved,
+            video_hover_frames: std::collections::HashMap::new(),
+            video_hover_state: std::collections::HashMap::new(),
+            video_hover_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            video_hover_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            video_thumbnails: std::collections::HashMap::new(),
+            video_thumb_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+            video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            video_player: None,
         }
     }
 
@@ -1787,6 +1819,16 @@ fn draw_menu_icon(painter: &egui::Painter, center: egui::Pos2, half_w: f32, stro
     }
 }
 
+/// Малює трикутник ▶ по центру заданого прямокутника.
+fn draw_play_triangle(painter: &egui::Painter, center: egui::Pos2, size: f32) {
+    let pts = vec![
+        egui::pos2(center.x - size * 0.5, center.y - size * 0.8),
+        egui::pos2(center.x + size,       center.y),
+        egui::pos2(center.x - size * 0.5, center.y + size * 0.8),
+    ];
+    painter.add(egui::Shape::convex_polygon(pts, egui::Color32::from_gray(180), egui::Stroke::NONE));
+}
+
 /// Малює вкладку галереї медіафайлів із деревом задач.
 /// Повноекранний перегляд зображення поверх інтерфейсу.
 /// Повертає (keep_open, regen_kind): keep_open=false → закрити;
@@ -1888,6 +1930,13 @@ fn draw_gallery_tab(
     regen_action: &mut Option<RegenAction>,
     anim_loading: &std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     animate_all: &mut bool,
+    video_hover_frames: &std::collections::HashMap<std::path::PathBuf, Vec<egui::TextureHandle>>,
+    video_hover_state: &mut std::collections::HashMap<std::path::PathBuf, (usize, std::time::Instant)>,
+    video_hover_loading: &std::collections::HashSet<std::path::PathBuf>,
+    hover_extract_request: &mut Option<std::path::PathBuf>,
+    video_thumbnails: &std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
+    video_thumb_loading: &std::collections::HashSet<std::path::PathBuf>,
+    thumb_requests: &mut Vec<std::path::PathBuf>,
 ) {
     use crate::localization::translate;
 
@@ -1995,18 +2044,62 @@ fn draw_gallery_tab(
                             );
 
                             let img_resp = if is_video {
-                                // Відео-файл: темний прямокутник з іконкою ▶
                                 let display = egui::vec2(thumb_size * (16.0 / 9.0), thumb_size);
                                 let (resp, painter) = ui.allocate_painter(display, egui::Sense::click());
-                                painter.rect_filled(resp.rect, 4.0, egui::Color32::from_gray(25));
-                                let c = resp.rect.center();
-                                let s = 13.0_f32;
-                                let pts = vec![
-                                    egui::pos2(c.x - s * 0.5, c.y - s * 0.8),
-                                    egui::pos2(c.x + s,       c.y),
-                                    egui::pos2(c.x - s * 0.5, c.y + s * 0.8),
-                                ];
-                                painter.add(egui::Shape::convex_polygon(pts, egui::Color32::from_gray(180), egui::Stroke::NONE));
+
+                                let is_hovered = resp.hovered();
+                                let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+
+                                // Запит thumbnail якщо ще не завантажено
+                                if !video_thumbnails.contains_key(file_path)
+                                    && !video_thumb_loading.contains(file_path)
+                                {
+                                    thumb_requests.push(file_path.clone());
+                                }
+
+                                if is_hovered {
+                                    // Hover: анімація кадрів
+                                    if let Some(frames) = video_hover_frames.get(file_path) {
+                                        if !frames.is_empty() {
+                                            let state = video_hover_state
+                                                .entry(file_path.clone())
+                                                .or_insert((0, std::time::Instant::now()));
+                                            let frame_dur = std::time::Duration::from_millis(250);
+                                            if state.1.elapsed() >= frame_dur {
+                                                state.0 = (state.0 + 1) % frames.len();
+                                                state.1 = std::time::Instant::now();
+                                            }
+                                            ui.ctx().request_repaint_after(
+                                                frame_dur.saturating_sub(state.1.elapsed()),
+                                            );
+                                            painter.image(frames[state.0].id(), resp.rect, uv, egui::Color32::WHITE);
+                                        } else {
+                                            painter.rect_filled(resp.rect, 4.0, egui::Color32::from_gray(25));
+                                        }
+                                    } else {
+                                        // Ще немає hover-кадрів — запитуємо
+                                        if !video_hover_loading.contains(file_path) && hover_extract_request.is_none() {
+                                            *hover_extract_request = Some(file_path.clone());
+                                        }
+                                        // Показуємо thumbnail поки анімація завантажується
+                                        if let Some(Some(thumb)) = video_thumbnails.get(file_path) {
+                                            painter.image(thumb.id(), resp.rect, uv, egui::Color32::WHITE);
+                                        } else {
+                                            painter.rect_filled(resp.rect, 4.0, egui::Color32::from_gray(25));
+                                        }
+                                    }
+                                } else {
+                                    // Не наведено — показуємо thumbnail або темний фон
+                                    if let Some(Some(thumb)) = video_thumbnails.get(file_path) {
+                                        painter.image(thumb.id(), resp.rect, uv, egui::Color32::WHITE);
+                                    } else {
+                                        painter.rect_filled(resp.rect, 4.0, egui::Color32::from_gray(25));
+                                    }
+                                }
+
+                                // ▶ overlay завжди поверх зображення
+                                draw_play_triangle(&painter, resp.rect.center(), 13.0);
+
                                 resp
                             } else {
                                 if !gallery_textures.contains_key(file_path) {
@@ -2429,6 +2522,10 @@ impl eframe::App for VideoMakerApp {
         // Central Panel
         let mut regen_action: Option<RegenAction> = None;
         let mut animate_all = false;
+        let mut hover_extract_request: Option<std::path::PathBuf> = None;
+        let mut thumb_requests: Vec<std::path::PathBuf> = Vec::new();
+        let hover_loading_snapshot = self.video_hover_loading.lock().unwrap().clone();
+        let thumb_loading_snapshot = self.video_thumb_loading.lock().unwrap().clone();
         egui::CentralPanel::default()
             .frame(frame)
             .show(ctx, |ui| {
@@ -2446,6 +2543,13 @@ impl eframe::App for VideoMakerApp {
                             &mut regen_action,
                             &self.gallery_anim_loading,
                             &mut animate_all,
+                            &self.video_hover_frames,
+                            &mut self.video_hover_state,
+                            &hover_loading_snapshot,
+                            &mut hover_extract_request,
+                            &self.video_thumbnails,
+                            &thumb_loading_snapshot,
+                            &mut thumb_requests,
                         );
                     }
                     Tab::Settings => {
@@ -2507,6 +2611,39 @@ impl eframe::App for VideoMakerApp {
 
         // Очищення текстур для видалених файлів (після анімації .jpg → .mp4)
         self.gallery_textures.retain(|path, _| path.exists());
+
+        // Запуск hover-витягування кадрів, якщо галерея це запитала
+        if let Some(path) = hover_extract_request {
+            crate::gui::video_player::start_hover_extraction(
+                path,
+                ctx.clone(),
+                std::sync::Arc::clone(&self.video_hover_loading),
+                std::sync::Arc::clone(&self.video_hover_result),
+            );
+        }
+
+        // Запуск thumbnail-витягування для нових відео
+        for path in thumb_requests {
+            if !self.video_thumbnails.contains_key(&path) {
+                self.video_thumbnails.insert(path.clone(), None); // Резервуємо місце
+                crate::gui::video_player::start_thumbnail_extraction(
+                    path,
+                    ctx.clone(),
+                    std::sync::Arc::clone(&self.video_thumb_loading),
+                    std::sync::Arc::clone(&self.video_thumb_result),
+                );
+            }
+        }
+
+        // Обробка результату hover-витягування
+        if let Some((path, frames)) = self.video_hover_result.lock().unwrap().take() {
+            self.video_hover_frames.insert(path, frames);
+        }
+
+        // Обробка результату thumbnail-витягування
+        if let Some((path, tex)) = self.video_thumb_result.lock().unwrap().take() {
+            self.video_thumbnails.insert(path, tex);
+        }
 
         // Обробка кнопки "Анімувати все"
         if animate_all {
@@ -3353,61 +3490,92 @@ impl eframe::App for VideoMakerApp {
             }
         }
 
-        // Повноекранний перегляд зображення з галереї
+        // Повноекранний перегляд медіафайлу з галереї
         if let Some(path) = self.gallery_preview.clone() {
-            let tex = self.gallery_textures.get(&path).and_then(|t| t.as_ref()).cloned();
-            if let Some(texture) = tex {
-                let regen_loading_this = *self.media_regen_loading.lock().unwrap()
-                    && self.media_regen_target.as_deref() == Some(path.as_path());
-                let (keep_open, regen_kind) = draw_image_preview(ctx, &texture, regen_loading_this);
-                if !keep_open {
-                    self.gallery_preview = None;
-                }
-                if let Some(is_custom) = regen_kind {
-                    // Знаходимо задачу до якої належить цей файл
-                    let job_info = self.jobs.iter().find(|j| {
-                        let media_dir = std::path::Path::new(&j.settings.save_path).join("media");
-                        path.starts_with(&media_dir)
-                    }).map(|j| (j.id, j.name.clone(), j.settings.clone()));
+            let is_video = matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("mp4") | Some("webm") | Some("mov")
+            );
 
-                    if let Some((job_id, job_name, settings)) = job_info {
-                        if is_custom {
-                            self.media_regen_target = Some(path.clone());
-                            self.media_regen_media_type = settings.video_media_type.clone();
-                            self.media_regen_image_priority = settings.googler_image_priority.clone();
-                            self.media_regen_video_priority = settings.googler_video_priority.clone();
-                            self.media_regen_prompt = crate::core::pipeline::read_prompt_for_file(&path);
-                            self.media_regen_base_settings = Some(settings);
-                            self.media_regen_job_id = job_id;
-                            self.media_regen_job_name = job_name;
-                            self.media_regen_error = None;
-                            self.media_regen_window_open = true;
-                        } else {
-                            let priority = if settings.video_media_type == "video" {
-                                settings.googler_video_priority.clone()
-                            } else {
-                                settings.googler_image_priority.clone()
-                            };
-                            self.media_regen_target = Some(path.clone());
-                            self.media_regen_error = None;
-                            self.gallery_textures.remove(&path);
-                            crate::core::pipeline::regenerate_single_media(
-                                path,
-                                settings.video_media_type.clone(),
-                                priority,
-                                settings.googler_key.clone(),
-                                None,
-                                job_id,
-                                job_name,
-                                ctx.clone(),
-                                std::sync::Arc::clone(&self.media_regen_result),
-                                std::sync::Arc::clone(&self.media_regen_loading),
-                            );
-                        }
+            if is_video {
+                // Якщо плеєр для іншого файлу — скидаємо
+                if self.video_player.as_ref().map_or(false, |p| p.path != path) {
+                    self.video_player = None;
+                }
+
+                // Якщо плеєра ще немає — створюємо і запускаємо streaming
+                if self.video_player.is_none() {
+                    let player = crate::gui::video_player::VideoPlayer::new(path.clone(), 10.0);
+                    crate::gui::video_player::start_fullscreen_extraction(
+                        &player, path.clone(), ctx.clone(),
+                    );
+                    self.video_player = Some(player);
+                }
+
+                // Дренуємо нові кадри та відображаємо
+                if let Some(ref mut player) = self.video_player {
+                    player.drain_pending();
+                    let keep_open = crate::gui::video_player::draw_video_player(ctx, player);
+                    if !keep_open {
+                        self.gallery_preview = None;
+                        self.video_player = None;
                     }
                 }
             } else {
-                self.gallery_preview = None;
+                // Зображення — існуючий перегляд
+                let tex = self.gallery_textures.get(&path).and_then(|t| t.as_ref()).cloned();
+                if let Some(texture) = tex {
+                    let regen_loading_this = *self.media_regen_loading.lock().unwrap()
+                        && self.media_regen_target.as_deref() == Some(path.as_path());
+                    let (keep_open, regen_kind) = draw_image_preview(ctx, &texture, regen_loading_this);
+                    if !keep_open {
+                        self.gallery_preview = None;
+                    }
+                    if let Some(is_custom) = regen_kind {
+                        let job_info = self.jobs.iter().find(|j| {
+                            let media_dir = std::path::Path::new(&j.settings.save_path).join("media");
+                            path.starts_with(&media_dir)
+                        }).map(|j| (j.id, j.name.clone(), j.settings.clone()));
+
+                        if let Some((job_id, job_name, settings)) = job_info {
+                            if is_custom {
+                                self.media_regen_target = Some(path.clone());
+                                self.media_regen_media_type = settings.video_media_type.clone();
+                                self.media_regen_image_priority = settings.googler_image_priority.clone();
+                                self.media_regen_video_priority = settings.googler_video_priority.clone();
+                                self.media_regen_prompt = crate::core::pipeline::read_prompt_for_file(&path);
+                                self.media_regen_base_settings = Some(settings);
+                                self.media_regen_job_id = job_id;
+                                self.media_regen_job_name = job_name;
+                                self.media_regen_error = None;
+                                self.media_regen_window_open = true;
+                            } else {
+                                let priority = if settings.video_media_type == "video" {
+                                    settings.googler_video_priority.clone()
+                                } else {
+                                    settings.googler_image_priority.clone()
+                                };
+                                self.media_regen_target = Some(path.clone());
+                                self.media_regen_error = None;
+                                self.gallery_textures.remove(&path);
+                                crate::core::pipeline::regenerate_single_media(
+                                    path,
+                                    settings.video_media_type.clone(),
+                                    priority,
+                                    settings.googler_key.clone(),
+                                    None,
+                                    job_id,
+                                    job_name,
+                                    ctx.clone(),
+                                    std::sync::Arc::clone(&self.media_regen_result),
+                                    std::sync::Arc::clone(&self.media_regen_loading),
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    self.gallery_preview = None;
+                }
             }
         }
 
