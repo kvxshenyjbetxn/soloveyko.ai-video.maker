@@ -77,6 +77,8 @@ pub struct VideoMakerApp {
     pub gallery_textures: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     /// Зображення, яке зараз відкрите у повноекранному перегляді.
     pub gallery_preview: Option<std::path::PathBuf>,
+    /// Набір шляхів зображень, які зараз анімуються у фоні (image-to-video).
+    pub gallery_anim_loading: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
     /// Прапорець виконання перегенерації медіафайлу у фоні.
     pub media_regen_loading: std::sync::Arc<std::sync::Mutex<bool>>,
     /// Результат перегенерації. None = ще не завершено.
@@ -307,6 +309,7 @@ impl Default for VideoMakerApp {
             pipeline_media_control_enabled: false,
             gallery_textures: std::collections::HashMap::new(),
             gallery_preview: None,
+            gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             media_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             media_regen_target: None,
@@ -626,6 +629,7 @@ impl VideoMakerApp {
             pipeline_media_control_enabled,
             gallery_textures: std::collections::HashMap::new(),
             gallery_preview: None,
+            gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
             media_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             media_regen_target: None,
@@ -1882,15 +1886,21 @@ fn draw_gallery_tab(
     regen_loading: &std::sync::Arc<std::sync::Mutex<bool>>,
     regen_target: &Option<std::path::PathBuf>,
     regen_action: &mut Option<RegenAction>,
+    anim_loading: &std::sync::Arc<std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+    animate_all: &mut bool,
 ) {
     use crate::localization::translate;
 
     let awaiting: Vec<_> = jobs.iter()
         .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl)
         .collect();
-    if !awaiting.is_empty() {
-        ui.add_space(8.0);
-        ui.horizontal(|ui| {
+
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        if ui.button(egui::RichText::new(translate(language, "gallery_animate_all_btn")).strong()).clicked() {
+            *animate_all = true;
+        }
+        if !awaiting.is_empty() {
             if ui.button(egui::RichText::new(translate(language, "gallery_continue_btn")).strong()).clicked() {
                 for job in awaiting {
                     let (lock, cvar) = &*job.media_control_resume;
@@ -1898,9 +1908,9 @@ fn draw_gallery_tab(
                     cvar.notify_one();
                 }
             }
-        });
-        ui.add_space(4.0);
-    }
+        }
+    });
+    ui.add_space(4.0);
 
     // Збираємо дані задач та їхніх медіафайлів заздалегідь, щоб уникнути borrow конфліктів
     let mut job_media: Vec<(u64, String, Vec<std::path::PathBuf>, bool, crate::queue::JobSettings)> = Vec::new();
@@ -1917,6 +1927,7 @@ fn draw_gallery_tab(
                     matches!(
                         p.extension().and_then(|x| x.to_str()),
                         Some("jpg") | Some("jpeg") | Some("png") | Some("webp")
+                        | Some("mp4") | Some("webm") | Some("mov")
                     )
                 })
                 .collect();
@@ -1938,6 +1949,7 @@ fn draw_gallery_tab(
     }
 
     let ctx = ui.ctx().clone();
+    let anim_set = anim_loading.lock().unwrap().clone();
 
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
@@ -1973,35 +1985,57 @@ fn draw_gallery_tab(
                     let spacing = 8.0;
                     ui.spacing_mut().item_spacing = egui::vec2(spacing, spacing);
 
-                    let is_loading = *regen_loading.lock().unwrap();
+                    let is_regen_loading = *regen_loading.lock().unwrap();
 
                     ui.horizontal_wrapped(|ui| {
                         for (idx, file_path) in files.iter().enumerate() {
-                            if !gallery_textures.contains_key(file_path) {
-                                let tex = load_image_texture(&ctx, file_path);
-                                gallery_textures.insert(file_path.clone(), tex);
-                            }
+                            let is_video = matches!(
+                                file_path.extension().and_then(|e| e.to_str()),
+                                Some("mp4") | Some("webm") | Some("mov")
+                            );
 
-                            let img_resp = if let Some(Some(tex)) = gallery_textures.get(file_path) {
-                                let img_size = tex.size_vec2();
-                                let aspect = if img_size.y > 0.0 { img_size.x / img_size.y } else { 1.0 };
-                                let display = egui::vec2(thumb_size * aspect, thumb_size);
-                                ui.add(egui::Image::from_texture(tex).fit_to_exact_size(display).sense(egui::Sense::click()))
+                            let img_resp = if is_video {
+                                // Відео-файл: темний прямокутник з іконкою ▶
+                                let display = egui::vec2(thumb_size * (16.0 / 9.0), thumb_size);
+                                let (resp, painter) = ui.allocate_painter(display, egui::Sense::click());
+                                painter.rect_filled(resp.rect, 4.0, egui::Color32::from_gray(25));
+                                let c = resp.rect.center();
+                                let s = 13.0_f32;
+                                let pts = vec![
+                                    egui::pos2(c.x - s * 0.5, c.y - s * 0.8),
+                                    egui::pos2(c.x + s,       c.y),
+                                    egui::pos2(c.x - s * 0.5, c.y + s * 0.8),
+                                ];
+                                painter.add(egui::Shape::convex_polygon(pts, egui::Color32::from_gray(180), egui::Stroke::NONE));
+                                resp
                             } else {
-                                ui.add_sized(
-                                    [thumb_size, thumb_size],
-                                    egui::Label::new(egui::RichText::new(format!("#{}", idx + 1)).weak()),
-                                )
+                                if !gallery_textures.contains_key(file_path) {
+                                    let tex = load_image_texture(&ctx, file_path);
+                                    gallery_textures.insert(file_path.clone(), tex);
+                                }
+                                if let Some(Some(tex)) = gallery_textures.get(file_path) {
+                                    let img_size = tex.size_vec2();
+                                    let aspect = if img_size.y > 0.0 { img_size.x / img_size.y } else { 1.0 };
+                                    let display = egui::vec2(thumb_size * aspect, thumb_size);
+                                    ui.add(egui::Image::from_texture(tex).fit_to_exact_size(display).sense(egui::Sense::click()))
+                                } else {
+                                    ui.add_sized(
+                                        [thumb_size, thumb_size],
+                                        egui::Label::new(egui::RichText::new(format!("#{}", idx + 1)).weak()),
+                                    )
+                                }
                             };
 
-                            let this_loading = is_loading && regen_target.as_deref() == Some(file_path.as_path());
+                            // Перевірка станів завантаження
+                            let is_animating = anim_set.contains(file_path);
+                            let this_regen = is_regen_loading && regen_target.as_deref() == Some(file_path.as_path());
 
-                            if this_loading {
-                                // Затемнення + спінер поверх зображення
+                            if is_animating || this_regen {
+                                // Затемнення + спінер поверх зображення/відео
                                 ui.painter().rect_filled(img_resp.rect, 0.0, egui::Color32::from_black_alpha(130));
                                 ui.put(img_resp.rect, egui::Spinner::new());
-                            } else {
-                                // Оверлей іконки в правому нижньому куті картинки
+                            } else if !is_video {
+                                // Оверлей іконок перегенерації (тільки для зображень)
                                 let bw  = 22.0;
                                 let gap = 3.0;
                                 let pad = 4.0;
@@ -2034,6 +2068,9 @@ fn draw_gallery_tab(
                                 } else if img_resp.clicked() {
                                     *gallery_preview = Some(file_path.clone());
                                 }
+                            } else if img_resp.clicked() {
+                                // Відео-файл: клік відкриває прев'ю тільки якщо є текстура
+                                *gallery_preview = Some(file_path.clone());
                             }
                         }
                     });
@@ -2391,6 +2428,7 @@ impl eframe::App for VideoMakerApp {
 
         // Central Panel
         let mut regen_action: Option<RegenAction> = None;
+        let mut animate_all = false;
         egui::CentralPanel::default()
             .frame(frame)
             .show(ctx, |ui| {
@@ -2406,6 +2444,8 @@ impl eframe::App for VideoMakerApp {
                             &self.media_regen_loading,
                             &self.media_regen_target,
                             &mut regen_action,
+                            &self.gallery_anim_loading,
+                            &mut animate_all,
                         );
                     }
                     Tab::Settings => {
@@ -2462,6 +2502,43 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&self.media_regen_result),
                     std::sync::Arc::clone(&self.media_regen_loading),
                 );
+            }
+        }
+
+        // Очищення текстур для видалених файлів (після анімації .jpg → .mp4)
+        self.gallery_textures.retain(|path, _| path.exists());
+
+        // Обробка кнопки "Анімувати все"
+        if animate_all {
+            let anim_loading = std::sync::Arc::clone(&self.gallery_anim_loading);
+            for job in &self.jobs {
+                let media_dir = std::path::Path::new(&job.settings.save_path).join("media");
+                if !media_dir.exists() { continue; }
+                if let Ok(entries) = std::fs::read_dir(&media_dir) {
+                    let images: Vec<_> = entries
+                        .filter_map(Result::ok)
+                        .filter(|e| {
+                            matches!(
+                                e.path().extension().and_then(|x| x.to_str()),
+                                Some("jpg") | Some("jpeg") | Some("png") | Some("webp")
+                            )
+                        })
+                        .map(|e| e.path())
+                        .collect();
+                    for img_path in images {
+                        if anim_loading.lock().unwrap().contains(&img_path) { continue; }
+                        self.gallery_textures.remove(&img_path);
+                        crate::core::pipeline::animate_single_image(
+                            img_path,
+                            self.googler_video_priority.clone(),
+                            self.googler_key.clone(),
+                            job.id,
+                            job.name.clone(),
+                            ctx.clone(),
+                            std::sync::Arc::clone(&anim_loading),
+                        );
+                    }
+                }
             }
         }
 

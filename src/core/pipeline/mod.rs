@@ -923,6 +923,79 @@ pub fn run_pipeline(
 
 /// Зчитує збережений промт для конкретного медіафайлу з prompts.json.
 /// Індекс визначається з імені файлу (0001.jpg → індекс 0).
+/// Анімує одне зображення у відео у фоновому потоці (image-to-video).
+/// Зчитує файл як base64 data URI, відправляє на Googler, зберігає .mp4,
+/// видаляє оригінальне зображення. Прибирає шлях з loading_set після завершення.
+pub fn animate_single_image(
+    file_path: std::path::PathBuf,
+    priority: Vec<String>,
+    googler_key: String,
+    job_id: u64,
+    job_name: String,
+    ctx: egui::Context,
+    loading_set: Arc<Mutex<std::collections::HashSet<std::path::PathBuf>>>,
+) {
+    std::thread::spawn(move || {
+        loading_set.lock().unwrap().insert(file_path.clone());
+        ctx.request_repaint();
+
+        let file_name = file_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("?")
+            .to_string();
+
+        let result = (|| -> Result<std::path::PathBuf, String> {
+            let bytes = std::fs::read(&file_path)
+                .map_err(|e| format!("Помилка читання файлу: {}", e))?;
+
+            let ext = file_path.extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("jpg")
+                .to_lowercase();
+            let mime = match ext.as_str() {
+                "png"  => "image/png",
+                "webp" => "image/webp",
+                _      => "image/jpeg",
+            };
+            use base64::Engine;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+            let data_uri = format!("data:{};base64,{}", mime, b64);
+
+            let prompt = "Animate this image with smooth, natural motion.";
+            crate::logger::log_job(job_id, &job_name, &format!("Animate {}: запуск image-to-video", file_name));
+
+            let api_result = crate::api::googler::animate_image_with_priority(
+                &googler_key, &data_uri, prompt, &priority,
+            )?;
+
+            // Зберігаємо відео поряд з оригінальним зображенням (.mp4)
+            let video_path = file_path.with_extension("mp4");
+            save_media_bytes(&api_result, &video_path)?;
+
+            // Видаляємо оригінальне зображення
+            if video_path != file_path {
+                let _ = std::fs::remove_file(&file_path);
+            }
+
+            Ok(video_path)
+        })();
+
+        match &result {
+            Ok(out) => crate::logger::log_job(
+                job_id, &job_name,
+                &format!("Animate {} → {} готово", file_name, out.file_name().unwrap_or_default().to_string_lossy()),
+            ),
+            Err(e) => crate::logger::log_job(
+                job_id, &job_name,
+                &format!("Animate {} помилка: {}", file_name, e),
+            ),
+        }
+
+        loading_set.lock().unwrap().remove(&file_path);
+        ctx.request_repaint();
+    });
+}
+
 pub(crate) fn read_prompt_for_file(file_path: &std::path::Path) -> String {
     let media_dir = match file_path.parent() {
         Some(d) => d,

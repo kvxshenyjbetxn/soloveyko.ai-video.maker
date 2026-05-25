@@ -250,6 +250,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "gallery_regen_prompt_label" => "Prompt (empty = use saved prompt)",
         "gallery_regen_start_btn" => "Regenerate",
         "gallery_regen_loading" => "Generating...",
+        "gallery_animate_all_btn" => "Animate all",
         _ => "",
     }
 }

@@ -309,6 +309,74 @@ pub fn generate_image_with_priority(
     Err("Всі провайдери зображень вичерпані".to_string())
 }
 
+/// Спроба анімації зображення (image-to-video) через конкретного провайдера.
+fn try_animate_image(key: &str, image_data_uri: &str, prompt: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
+    let (url, body) = match provider {
+        "flower" => (
+            format!("{}/v4/flower/video/from-image", BASE_URL),
+            serde_json::json!({"image": image_data_uri, "prompt": prompt, "aspect_ratio": "16:9"}),
+        ),
+        "flow" => (
+            format!("{}/v4/flow/video/from-ingredients", BASE_URL),
+            serde_json::json!({"prompt": prompt, "reference_images": [image_data_uri], "aspect_ratio": "16:9"}),
+        ),
+        "grok" => (
+            format!("{}/v4/grok/video/from-image", BASE_URL),
+            serde_json::json!({"image": image_data_uri, "prompt": prompt}),
+        ),
+        _ => return Err(format!("Провайдер {} не підтримує анімацію зображень", provider)),
+    };
+
+    let response = agent
+        .post(&url)
+        .set("X-API-Key", key)
+        .set("Content-Type", "application/json")
+        .send_json(body)
+        .map_err(|e| format!("Помилка запиту: {}", e))?;
+
+    let op: OperationStarted = response
+        .into_json()
+        .map_err(|e| format!("Помилка парсингу відповіді: {}", e))?;
+
+    poll_operation(key, &op.operation_id, agent)
+}
+
+/// Анімує зображення в відео з перебором провайдерів за пріоритетом (image-to-video).
+/// Для кожного провайдера: 3 спроби з паузою 5с між ними.
+pub fn animate_image_with_priority(
+    key: &str,
+    image_data_uri: &str,
+    prompt: &str,
+    priority: &[String],
+) -> Result<String, String> {
+    const RETRIES: u32 = 2;
+    const DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(300))
+        .build();
+
+    for provider in priority {
+        for attempt in 0..=RETRIES {
+            if attempt > 0 {
+                std::thread::sleep(DELAY);
+            }
+            match try_animate_image(key, image_data_uri, prompt, provider, &agent) {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    crate::logger::log(&format!(
+                        " Анімація [{}] спроба {}/{}: {}",
+                        provider, attempt + 1, RETRIES + 1, e
+                    ));
+                }
+            }
+        }
+    }
+
+    Err("Всі відео-провайдери вичерпані для анімації".to_string())
+}
+
 /// Генерує відео з перебором провайдерів за пріоритетом.
 /// Для кожного провайдера: 3 спроби з паузою 5с між ними.
 pub fn generate_video_with_priority(

@@ -250,6 +250,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "gallery_regen_prompt_label" => "Промт (порожнє = зі збереженого файлу)",
         "gallery_regen_start_btn" => "Перегенерувати",
         "gallery_regen_loading" => "Генерую...",
+        "gallery_animate_all_btn" => "Анімувати все",
         _ => "",
     }
 }

@@ -250,6 +250,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "gallery_regen_prompt_label" => "Промт (пустое = из сохранённого файла)",
         "gallery_regen_start_btn" => "Перегенерировать",
         "gallery_regen_loading" => "Генерирую...",
+        "gallery_animate_all_btn" => "Анимировать всё",
         _ => "",
     }
 }
