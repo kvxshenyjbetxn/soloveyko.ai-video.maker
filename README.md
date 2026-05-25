@@ -46,7 +46,9 @@ src/
 │       ├── voiceover/
 │       │   ├── mod.rs           — реекспорт run_voiceover_sync
 │       │   └── voiceover.rs     — run_voiceover_sync: TTS через VoiceBot API або Microsoft Edge TTS (з розбиттям на чанки, паралельною обробкою та FFmpeg/Direct Binary склеюванням)
-│       ├── montage.rs           — run_montage: збірка фінального відео через FFmpeg filter_complex_script
+│       ├── montage/
+│       │   ├── mod.rs           — реекспорт run_montage
+│       │   └── montage.rs       — run_montage: збірка фінального відео через FFmpeg filter_complex_script
 │       └── timeline/
 │           ├── mod.rs           — реекспорт модулів timeline
 │           ├── text_splitter.rs — split_text: 4 режими нарізання тексту на сегменти для генерації медіа
@@ -223,9 +225,9 @@ src/
 
 **Генерація таймлайну в `run_pipeline`** відбувається після субтитрів (крок 4.5): `build_timeline` отримує `save_dir`, `segments`, `audio_duration_secs`, `task_name` як підказку для логів. Якщо `subtitle.srt` відсутній — таймлайн будується на базі рівного розподілу часу (без fuzzy match).
 
-#### Монтаж (`montage.rs`)
+#### Монтаж (`montage/`)
 
-**`run_montage`** (`core/pipeline/montage.rs`) — збирає фінальне відео з медіафайлів + голосового аудіо через FFmpeg.
+**`run_montage`** (`core/pipeline/montage/montage.rs`) — збирає фінальне відео з медіафайлів + голосового аудіо через FFmpeg.
 
 **Логіка:**
 1. Знаходить аудіофайл: спочатку `voice.wav`, потім `voice.mp3`.
