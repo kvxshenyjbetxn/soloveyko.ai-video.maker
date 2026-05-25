@@ -241,6 +241,15 @@ pub fn translate_ru(key: &str) -> &'static str {
         "gallery_continue_btn" => "Продолжить обработку",
         "gallery_empty" => "Нет медиафайлов",
         "gallery_awaiting_label" => "⏳ Ожидает проверки изображений",
+        "gallery_regen_same_tooltip" => "Перегенерировать с теми же настройками",
+        "gallery_regen_custom_tooltip" => "Перегенерировать с другими настройками",
+        "gallery_regen_window_title" => "Перегенерация",
+        "gallery_regen_media_type_label" => "Тип медиа",
+        "gallery_regen_priority_image_label" => "Приоритет провайдеров (изображения)",
+        "gallery_regen_priority_video_label" => "Приоритет провайдеров (видео)",
+        "gallery_regen_prompt_label" => "Промт (пустое = из сохранённого файла)",
+        "gallery_regen_start_btn" => "Перегенерировать",
+        "gallery_regen_loading" => "Генерирую...",
         _ => "",
     }
 }

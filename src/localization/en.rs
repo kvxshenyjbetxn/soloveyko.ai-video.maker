@@ -241,6 +241,15 @@ pub fn translate_en(key: &str) -> &'static str {
         "gallery_continue_btn" => "Continue Processing",
         "gallery_empty" => "No media files",
         "gallery_awaiting_label" => "⏳ Awaiting image review",
+        "gallery_regen_same_tooltip" => "Regenerate with the same settings",
+        "gallery_regen_custom_tooltip" => "Regenerate with custom settings",
+        "gallery_regen_window_title" => "Regenerate",
+        "gallery_regen_media_type_label" => "Media type",
+        "gallery_regen_priority_image_label" => "Provider priority (image)",
+        "gallery_regen_priority_video_label" => "Provider priority (video)",
+        "gallery_regen_prompt_label" => "Prompt (empty = use saved prompt)",
+        "gallery_regen_start_btn" => "Regenerate",
+        "gallery_regen_loading" => "Generating...",
         _ => "",
     }
 }

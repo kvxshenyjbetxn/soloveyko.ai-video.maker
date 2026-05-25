@@ -75,6 +75,32 @@ pub struct VideoMakerApp {
     pub pipeline_media_control_enabled: bool,
     /// Кеш текстур для галереї медіафайлів. None означає помилку завантаження.
     pub gallery_textures: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
+    /// Зображення, яке зараз відкрите у повноекранному перегляді.
+    pub gallery_preview: Option<std::path::PathBuf>,
+    /// Прапорець виконання перегенерації медіафайлу у фоні.
+    pub media_regen_loading: std::sync::Arc<std::sync::Mutex<bool>>,
+    /// Результат перегенерації. None = ще не завершено.
+    pub media_regen_result: std::sync::Arc<std::sync::Mutex<Option<Result<(), String>>>>,
+    /// Файл, що зараз перегенеровується.
+    pub media_regen_target: Option<std::path::PathBuf>,
+    /// Чи відкрите вікно кастомної перегенерації.
+    pub media_regen_window_open: bool,
+    /// Базові налаштування задачі (googler_key тощо) для перегенерації.
+    pub media_regen_base_settings: Option<crate::queue::JobSettings>,
+    /// Тип медіа для кастомної перегенерації.
+    pub media_regen_media_type: String,
+    /// Пріоритет провайдерів зображень для перегенерації.
+    pub media_regen_image_priority: Vec<String>,
+    /// Пріоритет провайдерів відео для перегенерації.
+    pub media_regen_video_priority: Vec<String>,
+    /// Кастомний промт для перегенерації (порожній = зчитати зі збереженого).
+    pub media_regen_prompt: String,
+    /// Помилка перегенерації для відображення.
+    pub media_regen_error: Option<String>,
+    /// ID задачі до якої належить медіафайл що перегенеровується.
+    pub media_regen_job_id: u64,
+    /// Назва задачі до якої належить медіафайл що перегенеровується.
+    pub media_regen_job_name: String,
     /// Чи увімкнено етап "Озвучка" у пайплайні.
     pub pipeline_voiceover_enabled: bool,
     /// Чи увімкнено етап "Відеоряд" у пайплайні.
@@ -280,6 +306,19 @@ impl Default for VideoMakerApp {
             pipeline_control_auto_open: false,
             pipeline_media_control_enabled: false,
             gallery_textures: std::collections::HashMap::new(),
+            gallery_preview: None,
+            media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            media_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            media_regen_target: None,
+            media_regen_window_open: false,
+            media_regen_base_settings: None,
+            media_regen_media_type: "image".to_string(),
+            media_regen_image_priority: vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()],
+            media_regen_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string()],
+            media_regen_prompt: String::new(),
+            media_regen_error: None,
+            media_regen_job_id: 0,
+            media_regen_job_name: String::new(),
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_subtitles_enabled: true,
@@ -586,6 +625,19 @@ impl VideoMakerApp {
             pipeline_control_auto_open,
             pipeline_media_control_enabled,
             gallery_textures: std::collections::HashMap::new(),
+            gallery_preview: None,
+            media_regen_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            media_regen_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            media_regen_target: None,
+            media_regen_window_open: false,
+            media_regen_base_settings: None,
+            media_regen_media_type: "image".to_string(),
+            media_regen_image_priority: vec!["flow_IMAGEN_3_5".to_string(), "flow_GEM_PIX_2".to_string(), "flow_NARWHAL".to_string(), "flower".to_string(), "grok".to_string(), "openai".to_string()],
+            media_regen_video_priority: vec!["flow".to_string(), "flower".to_string(), "grok".to_string()],
+            media_regen_prompt: String::new(),
+            media_regen_error: None,
+            media_regen_job_id: 0,
+            media_regen_job_name: String::new(),
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_subtitles_enabled,
@@ -1697,12 +1749,139 @@ fn load_image_texture(ctx: &egui::Context, path: &std::path::Path) -> Option<egu
     Some(ctx.load_texture(name, color_image, egui::TextureOptions::LINEAR))
 }
 
+/// Малює іконку "оновлення" (кругова стрілка ↻) через Painter.
+fn draw_refresh_icon(painter: &egui::Painter, center: egui::Pos2, r: f32, stroke: egui::Stroke) {
+    let segments = 14;
+    let arc = std::f32::consts::PI * (300.0_f32.to_radians());
+    let start = -std::f32::consts::FRAC_PI_2;
+    for i in 0..segments {
+        let a1 = start + arc * i as f32 / segments as f32;
+        let a2 = start + arc * (i + 1) as f32 / segments as f32;
+        painter.line_segment(
+            [center + egui::vec2(r * a1.cos(), r * a1.sin()),
+             center + egui::vec2(r * a2.cos(), r * a2.sin())],
+            stroke,
+        );
+    }
+    let end = start + arc;
+    let tip  = center + egui::vec2(r * end.cos(), r * end.sin());
+    let tang = end + std::f32::consts::FRAC_PI_2;
+    let aw   = stroke.width + 2.0;
+    let left  = tip + egui::vec2(aw * (tang - 0.5).cos(), aw * (tang - 0.5).sin());
+    let right = tip + egui::vec2(aw * (tang + 0.5).cos(), aw * (tang + 0.5).sin());
+    painter.add(egui::Shape::convex_polygon(vec![tip, left, right], stroke.color, egui::Stroke::NONE));
+}
+
+/// Малює іконку "налаштування" (три горизонтальні лінії ≡) через Painter.
+fn draw_menu_icon(painter: &egui::Painter, center: egui::Pos2, half_w: f32, stroke: egui::Stroke) {
+    for &dy in &[-half_w * 0.55, 0.0, half_w * 0.55] {
+        painter.line_segment(
+            [egui::pos2(center.x - half_w, center.y + dy),
+             egui::pos2(center.x + half_w, center.y + dy)],
+            stroke,
+        );
+    }
+}
+
 /// Малює вкладку галереї медіафайлів із деревом задач.
+/// Повноекранний перегляд зображення поверх інтерфейсу.
+/// Повертає (keep_open, regen_kind): keep_open=false → закрити;
+/// regen_kind: Some(false)=ті ж налаштування, Some(true)=кастомні.
+fn draw_image_preview(
+    ctx: &egui::Context,
+    texture: &egui::TextureHandle,
+    regen_loading: bool,
+) -> (bool, Option<bool>) {
+    let mut keep_open = true;
+    let mut regen_kind: Option<bool> = None;
+
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        return (false, None);
+    }
+
+    let screen_rect = ctx.screen_rect();
+    let padding = 40.0;
+
+    let max_w = screen_rect.width() - padding * 2.0;
+    let max_h = screen_rect.height() - padding * 2.0;
+    let img_size = texture.size_vec2();
+    let scale = (max_w / img_size.x).min(max_h / img_size.y);
+    let display_size = img_size * scale;
+    let img_rect = egui::Rect::from_center_size(screen_rect.center(), display_size);
+
+    egui::Area::new(egui::Id::new("gallery_preview_area"))
+        .fixed_pos(screen_rect.min)
+        .order(egui::Order::Foreground)
+        .show(ctx, |ui| {
+            let bg = ui.allocate_rect(screen_rect, egui::Sense::click());
+            ui.painter().rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(215));
+
+            // Зображення
+            ui.put(img_rect, egui::Image::from_texture(texture).fit_to_exact_size(display_size));
+
+            // Якщо перегенеровується — спінер поверх зображення
+            if regen_loading {
+                ui.painter().rect_filled(img_rect, 0.0, egui::Color32::from_black_alpha(120));
+                ui.put(img_rect, egui::Spinner::new().size(32.0));
+            }
+
+            let btn_size = egui::vec2(36.0, 36.0);
+            let top_y = screen_rect.top() + 22.0;
+
+            // Кнопка X (закрити)
+            let close_center = egui::pos2(screen_rect.right() - 22.0, top_y);
+            let close_rect   = egui::Rect::from_center_size(close_center, btn_size);
+            let close_resp   = ui.interact(close_rect, egui::Id::new("gp_close"), egui::Sense::click());
+            let close_color  = if close_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_gray(160) };
+            let xs = egui::Stroke::new(2.0, close_color);
+            let r = 8.0;
+            ui.painter().line_segment([close_center + egui::vec2(-r,-r), close_center + egui::vec2(r,r)], xs);
+            ui.painter().line_segment([close_center + egui::vec2(r,-r), close_center + egui::vec2(-r,r)], xs);
+
+            // Кнопка "Кастомна перегенерація" (≡)
+            let custom_center = egui::pos2(screen_rect.right() - 66.0, top_y);
+            let custom_rect   = egui::Rect::from_center_size(custom_center, btn_size);
+            let custom_resp   = ui.interact(custom_rect, egui::Id::new("gp_custom"), egui::Sense::click());
+            let custom_color  = if custom_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_gray(160) };
+            draw_menu_icon(ui.painter(), custom_center, 8.0, egui::Stroke::new(2.0, custom_color));
+
+            // Кнопка "Та сама перегенерація" (↻)
+            let same_center = egui::pos2(screen_rect.right() - 110.0, top_y);
+            let same_rect   = egui::Rect::from_center_size(same_center, btn_size);
+            let same_resp   = ui.interact(same_rect, egui::Id::new("gp_same"), egui::Sense::click());
+            let same_color  = if same_resp.hovered() { egui::Color32::WHITE } else { egui::Color32::from_gray(160) };
+            draw_refresh_icon(ui.painter(), same_center, 9.0, egui::Stroke::new(2.0, same_color));
+
+            if close_resp.clicked() {
+                keep_open = false;
+            } else if same_resp.clicked() {
+                regen_kind = Some(false);
+            } else if custom_resp.clicked() {
+                regen_kind = Some(true);
+            } else if bg.clicked() {
+                if let Some(pos) = bg.interact_pointer_pos() {
+                    if !img_rect.contains(pos) {
+                        keep_open = false;
+                    }
+                }
+            }
+        });
+
+    (keep_open, regen_kind)
+}
+
+/// Дія перегенерації: (файл, налаштування задачі, чи кастомна, job_id, job_name).
+type RegenAction = (std::path::PathBuf, crate::queue::JobSettings, bool, u64, String);
+
 fn draw_gallery_tab(
     ui: &mut egui::Ui,
     language: crate::localization::Language,
     jobs: &[crate::queue::PipelineJob],
     gallery_textures: &mut std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
+    gallery_preview: &mut Option<std::path::PathBuf>,
+    regen_loading: &std::sync::Arc<std::sync::Mutex<bool>>,
+    regen_target: &Option<std::path::PathBuf>,
+    regen_action: &mut Option<RegenAction>,
 ) {
     use crate::localization::translate;
 
@@ -1724,7 +1903,7 @@ fn draw_gallery_tab(
     }
 
     // Збираємо дані задач та їхніх медіафайлів заздалегідь, щоб уникнути borrow конфліктів
-    let mut job_media: Vec<(u64, String, Vec<std::path::PathBuf>, bool)> = Vec::new();
+    let mut job_media: Vec<(u64, String, Vec<std::path::PathBuf>, bool, crate::queue::JobSettings)> = Vec::new();
     for job in jobs {
         let media_dir = std::path::Path::new(&job.settings.save_path).join("media");
         if !media_dir.exists() { continue; }
@@ -1748,7 +1927,7 @@ fn draw_gallery_tab(
         if files.is_empty() { continue; }
 
         let is_awaiting = *job.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl;
-        job_media.push((job.id, job.name.clone(), files, is_awaiting));
+        job_media.push((job.id, job.name.clone(), files, is_awaiting, job.settings.clone()));
     }
 
     if job_media.is_empty() {
@@ -1763,7 +1942,7 @@ fn draw_gallery_tab(
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            for (job_id, job_name, files, is_awaiting) in &job_media {
+            for (job_id, job_name, files, is_awaiting, job_settings) in &job_media {
                 let header_id = ui.make_persistent_id(format!("gallery_job_{}", job_id));
                 let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
                     ui.ctx(), header_id, true,
@@ -1790,40 +1969,74 @@ fn draw_gallery_tab(
                 state.store(ui.ctx());
 
                 state.show_body_indented(&header.response, ui, |ui| {
-                    // Сітка прев'ю зображень
                     let thumb_size = 120.0;
                     let spacing = 8.0;
-                    let cols = ((ui.available_width() + spacing) / (thumb_size + spacing)).max(1.0) as usize;
+                    ui.spacing_mut().item_spacing = egui::vec2(spacing, spacing);
 
-                    egui::Grid::new(format!("gallery_grid_{}", job_id))
-                        .num_columns(cols)
-                        .spacing([spacing, spacing])
-                        .show(ui, |ui| {
-                            for (idx, file_path) in files.iter().enumerate() {
-                                // Завантажуємо текстуру якщо ще не кешована
-                                if !gallery_textures.contains_key(file_path) {
-                                    let tex = load_image_texture(&ctx, file_path);
-                                    gallery_textures.insert(file_path.clone(), tex);
-                                }
+                    let is_loading = *regen_loading.lock().unwrap();
 
-                                if let Some(Some(tex)) = gallery_textures.get(file_path) {
-                                    let img_size = tex.size_vec2();
-                                    let aspect = if img_size.y > 0.0 { img_size.x / img_size.y } else { 1.0 };
-                                    let display = egui::vec2(thumb_size * aspect, thumb_size);
-                                    ui.add(egui::Image::from_texture(tex).fit_to_exact_size(display));
-                                } else {
-                                    // Плейсхолдер якщо зображення не завантажилось
-                                    ui.add_sized(
-                                        [thumb_size, thumb_size],
-                                        egui::Label::new(
-                                            egui::RichText::new(format!("#{}", idx + 1)).weak()
-                                        ),
-                                    );
-                                }
-
-                                if (idx + 1) % cols == 0 { ui.end_row(); }
+                    ui.horizontal_wrapped(|ui| {
+                        for (idx, file_path) in files.iter().enumerate() {
+                            if !gallery_textures.contains_key(file_path) {
+                                let tex = load_image_texture(&ctx, file_path);
+                                gallery_textures.insert(file_path.clone(), tex);
                             }
-                        });
+
+                            let img_resp = if let Some(Some(tex)) = gallery_textures.get(file_path) {
+                                let img_size = tex.size_vec2();
+                                let aspect = if img_size.y > 0.0 { img_size.x / img_size.y } else { 1.0 };
+                                let display = egui::vec2(thumb_size * aspect, thumb_size);
+                                ui.add(egui::Image::from_texture(tex).fit_to_exact_size(display).sense(egui::Sense::click()))
+                            } else {
+                                ui.add_sized(
+                                    [thumb_size, thumb_size],
+                                    egui::Label::new(egui::RichText::new(format!("#{}", idx + 1)).weak()),
+                                )
+                            };
+
+                            let this_loading = is_loading && regen_target.as_deref() == Some(file_path.as_path());
+
+                            if this_loading {
+                                // Затемнення + спінер поверх зображення
+                                ui.painter().rect_filled(img_resp.rect, 0.0, egui::Color32::from_black_alpha(130));
+                                ui.put(img_resp.rect, egui::Spinner::new());
+                            } else {
+                                // Оверлей іконки в правому нижньому куті картинки
+                                let bw  = 22.0;
+                                let gap = 3.0;
+                                let pad = 4.0;
+                                let custom_rect = egui::Rect::from_min_size(
+                                    egui::pos2(img_resp.rect.right() - bw - pad, img_resp.rect.bottom() - bw - pad),
+                                    egui::vec2(bw, bw),
+                                );
+                                let same_rect = egui::Rect::from_min_size(
+                                    egui::pos2(img_resp.rect.right() - bw * 2.0 - gap - pad, img_resp.rect.bottom() - bw - pad),
+                                    egui::vec2(bw, bw),
+                                );
+
+                                let same_resp   = ui.interact(same_rect,   egui::Id::new(("gs", *job_id, idx)), egui::Sense::click());
+                                let custom_resp = ui.interact(custom_rect, egui::Id::new(("gc", *job_id, idx)), egui::Sense::click());
+
+                                let bg_n = egui::Color32::from_black_alpha(150);
+                                let bg_h = egui::Color32::from_black_alpha(220);
+                                let painter = ui.painter();
+                                painter.rect_filled(same_rect,   4.0, if same_resp.hovered()   { bg_h } else { bg_n });
+                                painter.rect_filled(custom_rect, 4.0, if custom_resp.hovered() { bg_h } else { bg_n });
+
+                                let col = egui::Color32::WHITE;
+                                draw_refresh_icon(painter, same_rect.center(),   5.5, egui::Stroke::new(1.5, col));
+                                draw_menu_icon(painter,    custom_rect.center(), 5.0, egui::Stroke::new(1.5, col));
+
+                                if same_resp.on_hover_text(translate(language, "gallery_regen_same_tooltip")).clicked() {
+                                    *regen_action = Some((file_path.clone(), job_settings.clone(), false, *job_id, job_name.clone()));
+                                } else if custom_resp.on_hover_text(translate(language, "gallery_regen_custom_tooltip")).clicked() {
+                                    *regen_action = Some((file_path.clone(), job_settings.clone(), true, *job_id, job_name.clone()));
+                                } else if img_resp.clicked() {
+                                    *gallery_preview = Some(file_path.clone());
+                                }
+                            }
+                        }
+                    });
 
                     ui.add_space(8.0);
                 });
@@ -2177,6 +2390,7 @@ impl eframe::App for VideoMakerApp {
         };
 
         // Central Panel
+        let mut regen_action: Option<RegenAction> = None;
         egui::CentralPanel::default()
             .frame(frame)
             .show(ctx, |ui| {
@@ -2185,7 +2399,14 @@ impl eframe::App for VideoMakerApp {
                         gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit);
                     }
                     Tab::Gallery => {
-                        draw_gallery_tab(ui, self.language, &self.jobs, &mut self.gallery_textures);
+                        draw_gallery_tab(
+                            ui, self.language, &self.jobs,
+                            &mut self.gallery_textures,
+                            &mut self.gallery_preview,
+                            &self.media_regen_loading,
+                            &self.media_regen_target,
+                            &mut regen_action,
+                        );
                     }
                     Tab::Settings => {
                         let welcome_changed = gui::settings::draw_settings(
@@ -2207,6 +2428,191 @@ impl eframe::App for VideoMakerApp {
             });
 
         // Спливаюче вікно з логами обраної задачі
+        // Обробка кнопок перегенерації з галереї
+        if let Some((file, settings, is_custom, job_id, job_name)) = regen_action {
+            if is_custom {
+                self.media_regen_target = Some(file.clone());
+                self.media_regen_media_type = settings.video_media_type.clone();
+                self.media_regen_image_priority = settings.googler_image_priority.clone();
+                self.media_regen_video_priority = settings.googler_video_priority.clone();
+                self.media_regen_prompt = crate::core::pipeline::read_prompt_for_file(&file);
+                self.media_regen_base_settings = Some(settings);
+                self.media_regen_job_id = job_id;
+                self.media_regen_job_name = job_name;
+                self.media_regen_error = None;
+                self.media_regen_window_open = true;
+            } else {
+                let priority = if settings.video_media_type == "video" {
+                    settings.googler_video_priority.clone()
+                } else {
+                    settings.googler_image_priority.clone()
+                };
+                self.media_regen_target = Some(file.clone());
+                self.media_regen_error = None;
+                self.gallery_textures.remove(&file);
+                crate::core::pipeline::regenerate_single_media(
+                    file,
+                    settings.video_media_type.clone(),
+                    priority,
+                    settings.googler_key.clone(),
+                    None,
+                    job_id,
+                    job_name,
+                    ctx.clone(),
+                    std::sync::Arc::clone(&self.media_regen_result),
+                    std::sync::Arc::clone(&self.media_regen_loading),
+                );
+            }
+        }
+
+        // Обробка результату перегенерації
+        {
+            let result = self.media_regen_result.lock().unwrap().take();
+            if let Some(outcome) = result {
+                match outcome {
+                    Ok(()) => {
+                        // Скидаємо кеш щоб нове зображення підтягнулось
+                        if let Some(ref path) = self.media_regen_target {
+                            self.gallery_textures.remove(path);
+                        }
+                        self.media_regen_target = None;
+                        self.media_regen_error = None;
+                    }
+                    Err(e) => {
+                        self.media_regen_error = Some(e);
+                        self.media_regen_target = None;
+                    }
+                }
+            }
+        }
+
+        // Вікно кастомної перегенерації
+        if self.media_regen_window_open {
+            let file_name = self.media_regen_target
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
+            let title = format!("{}: {}", translate(self.language, "gallery_regen_window_title"), file_name);
+            let mut is_open = self.media_regen_window_open;
+
+            egui::Window::new(title)
+                .open(&mut is_open)
+                .resizable(true)
+                .default_width(380.0)
+                .collapsible(false)
+                .show(ctx, |ui| {
+                    use crate::gui::pipeline::video::{arrow_button, image_provider_info, video_provider_info};
+
+                    ui.label(egui::RichText::new(translate(self.language, "gallery_regen_media_type_label")).strong());
+                    ui.add_space(4.0);
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut self.media_regen_media_type, "image".to_string(), translate(self.language, "video_media_type_image"));
+                        ui.radio_value(&mut self.media_regen_media_type, "video".to_string(), translate(self.language, "video_media_type_video"));
+                    });
+
+                    ui.add_space(8.0);
+
+                    // Пріоритет провайдерів
+                    if self.media_regen_media_type == "video" {
+                        ui.label(egui::RichText::new(translate(self.language, "gallery_regen_priority_video_label")).strong());
+                        ui.add_space(4.0);
+                        let mut swap: Option<(usize, usize)> = None;
+                        for i in 0..self.media_regen_video_priority.len() {
+                            let (name, credits) = video_provider_info(&self.media_regen_video_priority[i]);
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(format!("#{}", i + 1)).weak().monospace());
+                                ui.add_space(4.0);
+                                if arrow_button(ui, true, i > 0).clicked() { swap = Some((i - 1, i)); }
+                                if arrow_button(ui, false, i < self.media_regen_video_priority.len() - 1).clicked() { swap = Some((i, i + 1)); }
+                                ui.add_space(4.0);
+                                ui.label(name);
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    ui.label(egui::RichText::new(credits).weak().size(11.0));
+                                });
+                            });
+                        }
+                        if let Some((a, b)) = swap { self.media_regen_video_priority.swap(a, b); }
+                    } else {
+                        ui.label(egui::RichText::new(translate(self.language, "gallery_regen_priority_image_label")).strong());
+                        ui.add_space(4.0);
+                        let mut swap: Option<(usize, usize)> = None;
+                        for i in 0..self.media_regen_image_priority.len() {
+                            let (name, credits) = image_provider_info(&self.media_regen_image_priority[i]);
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(format!("#{}", i + 1)).weak().monospace());
+                                ui.add_space(4.0);
+                                if arrow_button(ui, true, i > 0).clicked() { swap = Some((i - 1, i)); }
+                                if arrow_button(ui, false, i < self.media_regen_image_priority.len() - 1).clicked() { swap = Some((i, i + 1)); }
+                                ui.add_space(4.0);
+                                ui.label(name);
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    ui.label(egui::RichText::new(credits).weak().size(11.0));
+                                });
+                            });
+                        }
+                        if let Some((a, b)) = swap { self.media_regen_image_priority.swap(a, b); }
+                    }
+
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new(translate(self.language, "gallery_regen_prompt_label")).strong());
+                    ui.add_space(4.0);
+                    ui.add_sized(
+                        [ui.available_width(), 80.0],
+                        egui::TextEdit::multiline(&mut self.media_regen_prompt),
+                    );
+
+                    ui.add_space(8.0);
+
+                    let is_loading = *self.media_regen_loading.lock().unwrap();
+                    ui.add_enabled_ui(!is_loading, |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.button(translate(self.language, "gallery_regen_start_btn")).clicked() {
+                            if let (Some(file), Some(base)) = (self.media_regen_target.clone(), &self.media_regen_base_settings) {
+                                let priority = if self.media_regen_media_type == "video" {
+                                    self.media_regen_video_priority.clone()
+                                } else {
+                                    self.media_regen_image_priority.clone()
+                                };
+                                let custom_prompt = if self.media_regen_prompt.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(self.media_regen_prompt.clone())
+                                };
+                                self.gallery_textures.remove(&file);
+                                self.media_regen_error = None;
+                                crate::core::pipeline::regenerate_single_media(
+                                    file,
+                                    self.media_regen_media_type.clone(),
+                                    priority,
+                                    base.googler_key.clone(),
+                                    custom_prompt,
+                                    self.media_regen_job_id,
+                                    self.media_regen_job_name.clone(),
+                                    ctx.clone(),
+                                    std::sync::Arc::clone(&self.media_regen_result),
+                                    std::sync::Arc::clone(&self.media_regen_loading),
+                                );
+                                self.media_regen_window_open = false;
+                            }
+                        }
+                        if is_loading {
+                            ui.spinner();
+                            ui.label(translate(self.language, "gallery_regen_loading"));
+                        }
+                    });
+                    }); // add_enabled_ui
+
+                    if let Some(ref err) = self.media_regen_error.clone() {
+                        ui.add_space(4.0);
+                        ui.colored_label(egui::Color32::from_rgb(220, 60, 60), err);
+                    }
+                });
+
+            self.media_regen_window_open = is_open;
+        }
+
         if let Some((job_id, job_name)) = self.selected_job_logs.clone() {
             let mut is_open = true;
             let mut copied_toast_data = None;
@@ -2867,6 +3273,64 @@ impl eframe::App for VideoMakerApp {
                 
                 // Оновлюємо копію останніх збережених параметрів у пам'яті
                 self.last_saved_settings = new_settings;
+            }
+        }
+
+        // Повноекранний перегляд зображення з галереї
+        if let Some(path) = self.gallery_preview.clone() {
+            let tex = self.gallery_textures.get(&path).and_then(|t| t.as_ref()).cloned();
+            if let Some(texture) = tex {
+                let regen_loading_this = *self.media_regen_loading.lock().unwrap()
+                    && self.media_regen_target.as_deref() == Some(path.as_path());
+                let (keep_open, regen_kind) = draw_image_preview(ctx, &texture, regen_loading_this);
+                if !keep_open {
+                    self.gallery_preview = None;
+                }
+                if let Some(is_custom) = regen_kind {
+                    // Знаходимо задачу до якої належить цей файл
+                    let job_info = self.jobs.iter().find(|j| {
+                        let media_dir = std::path::Path::new(&j.settings.save_path).join("media");
+                        path.starts_with(&media_dir)
+                    }).map(|j| (j.id, j.name.clone(), j.settings.clone()));
+
+                    if let Some((job_id, job_name, settings)) = job_info {
+                        if is_custom {
+                            self.media_regen_target = Some(path.clone());
+                            self.media_regen_media_type = settings.video_media_type.clone();
+                            self.media_regen_image_priority = settings.googler_image_priority.clone();
+                            self.media_regen_video_priority = settings.googler_video_priority.clone();
+                            self.media_regen_prompt = crate::core::pipeline::read_prompt_for_file(&path);
+                            self.media_regen_base_settings = Some(settings);
+                            self.media_regen_job_id = job_id;
+                            self.media_regen_job_name = job_name;
+                            self.media_regen_error = None;
+                            self.media_regen_window_open = true;
+                        } else {
+                            let priority = if settings.video_media_type == "video" {
+                                settings.googler_video_priority.clone()
+                            } else {
+                                settings.googler_image_priority.clone()
+                            };
+                            self.media_regen_target = Some(path.clone());
+                            self.media_regen_error = None;
+                            self.gallery_textures.remove(&path);
+                            crate::core::pipeline::regenerate_single_media(
+                                path,
+                                settings.video_media_type.clone(),
+                                priority,
+                                settings.googler_key.clone(),
+                                None,
+                                job_id,
+                                job_name,
+                                ctx.clone(),
+                                std::sync::Arc::clone(&self.media_regen_result),
+                                std::sync::Arc::clone(&self.media_regen_loading),
+                            );
+                        }
+                    }
+                }
+            } else {
+                self.gallery_preview = None;
             }
         }
 

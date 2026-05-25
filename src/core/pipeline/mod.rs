@@ -554,6 +554,12 @@ fn run_video_branch(
         return Err(e.to_string());
     }
 
+    // Зберігаємо промти у JSON для можливої перегенерації окремих файлів
+    let prompts_path = media_dir.join("prompts.json");
+    if let Ok(json) = serde_json::to_string_pretty(&prompts) {
+        let _ = std::fs::write(&prompts_path, json);
+    }
+
     *media_progress.lock().unwrap() = Some((0, total));
     ctx.request_repaint();
 
@@ -911,6 +917,111 @@ pub fn run_pipeline(
 
         crate::logger::log_job(job_id, &job_name, "Job completed successfully.");
         *status.lock().unwrap() = crate::queue::JobStatus::Done;
+        ctx.request_repaint();
+    });
+}
+
+/// Зчитує збережений промт для конкретного медіафайлу з prompts.json.
+/// Індекс визначається з імені файлу (0001.jpg → індекс 0).
+pub(crate) fn read_prompt_for_file(file_path: &std::path::Path) -> String {
+    let media_dir = match file_path.parent() {
+        Some(d) => d,
+        None => return String::new(),
+    };
+    let index = file_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .and_then(|s| s.parse::<usize>().ok())
+        .map(|n| n.saturating_sub(1))
+        .unwrap_or(0);
+
+    std::fs::read_to_string(media_dir.join("prompts.json"))
+        .ok()
+        .and_then(|c| serde_json::from_str::<Vec<String>>(&c).ok())
+        .and_then(|v| v.into_iter().nth(index))
+        .unwrap_or_default()
+}
+
+/// Зберігає байти медіа (data URI або HTTP URL) у вказаний файл, перезаписуючи його.
+fn save_media_bytes(data_uri: &str, file_path: &std::path::Path) -> Result<(), String> {
+    let bytes = if data_uri.starts_with("data:") {
+        let rest = &data_uri[5..];
+        let comma = rest.find(',').ok_or("Invalid data URI: no comma")?;
+        let b64 = &rest[comma + 1..];
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| format!("Base64 decode error: {}", e))?
+    } else {
+        use std::io::Read;
+        let resp = ureq::get(data_uri)
+            .call()
+            .map_err(|e| format!("Download error: {}", e))?;
+        let mut buf = Vec::new();
+        resp.into_reader()
+            .read_to_end(&mut buf)
+            .map_err(|e| format!("Read error: {}", e))?;
+        buf
+    };
+    std::fs::write(file_path, &bytes).map_err(|e| format!("Save error: {}", e))
+}
+
+/// Перегенерує один медіафайл у фоновому потоці.
+/// Якщо custom_prompt = None або порожній — читає збережений промт з prompts.json.
+pub fn regenerate_single_media(
+    file_path: std::path::PathBuf,
+    media_type: String,
+    priority: Vec<String>,
+    googler_key: String,
+    custom_prompt: Option<String>,
+    job_id: u64,
+    job_name: String,
+    ctx: egui::Context,
+    result_slot: Arc<Mutex<Option<Result<(), String>>>>,
+    loading: Arc<Mutex<bool>>,
+) {
+    std::thread::spawn(move || {
+        *loading.lock().unwrap() = true;
+
+        let file_name = file_path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("?")
+            .to_string();
+
+        let prompt = custom_prompt
+            .filter(|p| !p.is_empty())
+            .unwrap_or_else(|| read_prompt_for_file(&file_path));
+
+        crate::logger::log_job(
+            job_id, &job_name,
+            &format!("Regen {}: {} (prompt: {}...)", media_type, file_name, prompt.chars().take(60).collect::<String>()),
+        );
+
+        let api_result = if media_type == "video" {
+            crate::api::googler::generate_video_with_priority(&googler_key, &prompt, "16:9", &priority)
+        } else {
+            crate::api::googler::generate_image_with_priority(&googler_key, &prompt, "16:9", &priority)
+        };
+
+        let outcome = match api_result {
+            Err(e) => {
+                crate::logger::log_job(job_id, &job_name, &format!("Regen {} failed: {}", file_name, e));
+                Err(e)
+            }
+            Ok(data_uri) => match save_media_bytes(&data_uri, &file_path) {
+                Ok(()) => {
+                    crate::logger::log_job(job_id, &job_name, &format!("Regen {} done.", file_name));
+                    Ok(())
+                }
+                Err(e) => {
+                    crate::logger::log_job(job_id, &job_name, &format!("Regen {} save error: {}", file_name, e));
+                    Err(e)
+                }
+            },
+        };
+
+        *result_slot.lock().unwrap() = Some(outcome);
+        *loading.lock().unwrap() = false;
         ctx.request_repaint();
     });
 }

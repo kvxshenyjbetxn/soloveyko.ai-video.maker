@@ -241,6 +241,15 @@ pub fn translate_uk(key: &str) -> &'static str {
         "gallery_continue_btn" => "Продовжити обробку",
         "gallery_empty" => "Немає медіафайлів",
         "gallery_awaiting_label" => "⏳ Очікує перевірки зображень",
+        "gallery_regen_same_tooltip" => "Перегенерувати з тими ж налаштуваннями",
+        "gallery_regen_custom_tooltip" => "Перегенерувати з іншими налаштуваннями",
+        "gallery_regen_window_title" => "Перегенерація",
+        "gallery_regen_media_type_label" => "Тип медіа",
+        "gallery_regen_priority_image_label" => "Пріоритет провайдерів (зображення)",
+        "gallery_regen_priority_video_label" => "Пріоритет провайдерів (відео)",
+        "gallery_regen_prompt_label" => "Промт (порожнє = зі збереженого файлу)",
+        "gallery_regen_start_btn" => "Перегенерувати",
+        "gallery_regen_loading" => "Генерую...",
         _ => "",
     }
 }

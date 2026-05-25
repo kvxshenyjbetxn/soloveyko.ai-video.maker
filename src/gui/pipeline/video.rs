@@ -3,7 +3,7 @@ use crate::localization::{Language, translate};
 use std::sync::{Arc, Mutex};
 
 /// Кнопка зі стрілкою вгору або вниз, намальованою через Painter (незалежно від шрифту).
-fn arrow_button(ui: &mut egui::Ui, up: bool, enabled: bool) -> egui::Response {
+pub(crate) fn arrow_button(ui: &mut egui::Ui, up: bool, enabled: bool) -> egui::Response {
     let size = egui::vec2(20.0, 20.0);
     let sense = if enabled { egui::Sense::click() } else { egui::Sense::hover() };
     let (rect, response) = ui.allocate_exact_size(size, sense);
@@ -45,7 +45,7 @@ fn arrow_button(ui: &mut egui::Ui, up: bool, enabled: bool) -> egui::Response {
 }
 
 /// Повертає відображувану назву та вартість провайдера зображень.
-fn image_provider_info(key: &str) -> (&'static str, &'static str) {
+pub(crate) fn image_provider_info(key: &str) -> (&'static str, &'static str) {
     match key {
         "flow_IMAGEN_3_5" => ("Imagen 4 (Flow)",        "4 кр."),
         "flow_GEM_PIX_2"  => ("Nano Banana Pro (Flow)", "4 кр."),
@@ -58,7 +58,7 @@ fn image_provider_info(key: &str) -> (&'static str, &'static str) {
 }
 
 /// Повертає відображувану назву та вартість провайдера відео.
-fn video_provider_info(key: &str) -> (&'static str, &'static str) {
+pub(crate) fn video_provider_info(key: &str) -> (&'static str, &'static str) {
     match key {
         "flow"   => ("Flow (VEO)",       "1 кр."),
         "flower" => ("Flower (Veo 3.1)", "1 кр."),
