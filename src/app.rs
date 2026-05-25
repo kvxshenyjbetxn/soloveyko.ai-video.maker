@@ -1545,7 +1545,9 @@ fn draw_queue_panel(
                                 }
                             }
 
-                            if job.settings.subtitles_enabled {
+                            // Субтитри показуються завжди якщо є озвучка і Whisper налаштований.
+                            // subtitles_enabled впливає лише на burn-in у монтажі.
+                            if job.settings.voiceover_enabled && job.settings.subtitles_service == "Whisper" {
                                 ui.label(
                                     egui::RichText::new(translate(language, "subtitles"))
                                         .color(stage_color(&subtitles_stage, ui))

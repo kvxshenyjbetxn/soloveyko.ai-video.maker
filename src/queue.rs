@@ -194,8 +194,8 @@ impl PipelineJob {
             }
         }
 
-        // Етап 4: Субтитри
-        if self.settings.subtitles_enabled {
+        // Етап 4: Субтитри — завжди в прогресі якщо є озвучка і Whisper налаштований
+        if self.settings.voiceover_enabled && self.settings.subtitles_service == "Whisper" {
             total_stages += 1;
             let stage = self.subtitles_stage.lock().unwrap().clone();
             match stage {

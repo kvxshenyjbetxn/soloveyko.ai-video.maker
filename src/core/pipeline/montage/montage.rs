@@ -28,6 +28,7 @@ pub fn run_montage(
     bitrate_mbps: u32,
     transition: &str,
     transition_duration_secs: f32,
+    burn_subtitles: bool,
     log_fn: impl Fn(&str),
     on_progress: impl Fn(f32),
 ) -> Result<u64, String> {
@@ -223,6 +224,21 @@ pub fn run_montage(
         "[v_padded]trim=duration={total_dur:.6},setpts=PTS-STARTPTS[v_montage]"
     ));
 
+    // Якщо burn-in субтитрів увімкнено і файл subtitle.srt існує — вбудовуємо в відео
+    let srt_path = save_dir.join("subtitle.srt");
+    let video_map = if burn_subtitles && srt_path.exists() {
+        // subtitles фільтр потребує libass у збірці FFmpeg
+        // Використовуємо відносний шлях (current_dir = save_dir)
+        filter_parts.push("[v_montage]subtitles=subtitle.srt[v_with_subs]".to_string());
+        log_fn("Subtitles burn-in enabled: subtitle.srt will be embedded into video.");
+        "[v_with_subs]"
+    } else {
+        if burn_subtitles && !srt_path.exists() {
+            log_fn("Warning: subtitles_enabled=true but subtitle.srt not found — skipping burn-in.");
+        }
+        "[v_montage]"
+    };
+
     let script = filter_parts.join(";");
     std::fs::write(save_dir.join("montage_script.txt"), &script)
         .map_err(|e| format!("Failed to write montage_script.txt: {e}"))?;
@@ -254,7 +270,7 @@ pub fn run_montage(
 
     args.extend([
         "-filter_complex_script".into(), "montage_script.txt".into(),
-        "-map".into(), "[v_montage]".into(),
+        "-map".into(), video_map.to_string(),
         "-map".into(), format!("{audio_idx}:a"),
         "-c:v".into(), "libx264".into(),
         "-preset".into(), preset.to_string(),

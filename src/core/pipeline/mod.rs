@@ -305,9 +305,15 @@ fn run_av_branch(
         }
     }
 
-    // Субтитри (Whisper) — залежать від аудіо, тому після озвучки
-    if settings.subtitles_enabled && settings.subtitles_service == "Whisper" {
-        crate::logger::log_job(job_id, &job_name, "Starting subtitle generation via Whisper...");
+    // Субтитри (Whisper) — завжди генеруються якщо є Whisper (потрібні для синхронізації відеоряду).
+    // Накладання на відео контролюється окремо через параметр burn_subtitles у монтажі.
+    if settings.subtitles_service == "Whisper" {
+        let reason = if settings.subtitles_enabled {
+            "Starting subtitle generation via Whisper (burn-in enabled)..."
+        } else {
+            "Starting subtitle generation via Whisper (for timeline sync, burn-in disabled)..."
+        };
+        crate::logger::log_job(job_id, &job_name, reason);
         *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Running;
         ctx.request_repaint();
 
@@ -728,7 +734,8 @@ pub fn run_pipeline(
         // Озвучка та субтитри залежать одна від одної (субтитри потребують аудіо),
         // тому вони послідовні всередині гілки AV, але гілка AV паралельна з відеорядом.
 
-        let run_av = settings.voiceover_enabled || settings.subtitles_enabled;
+        // AV гілка виконується якщо є озвучка (Whisper залежить від аудіо, тому теж тут)
+        let run_av = settings.voiceover_enabled;
         let run_video = settings.video_enabled;
 
         if run_av {
@@ -855,6 +862,7 @@ pub fn run_pipeline(
                 settings.montage_bitrate,
                 &settings.montage_transition,
                 settings.montage_transition_duration,
+                settings.subtitles_enabled,
                 |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
                 move |pct| {
                     *montage_progress_arc.lock().unwrap() = Some(pct);
