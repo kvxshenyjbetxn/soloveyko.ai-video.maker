@@ -6,4 +6,5 @@ pub mod pipeline;
 pub mod queue;
 pub mod settings;
 pub mod topbar;
+pub mod translation_control;
 pub mod welcome;

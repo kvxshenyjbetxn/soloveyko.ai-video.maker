@@ -24,7 +24,7 @@
 ```
 src/
 ├── main.rs                      — точка входу, конфіг вікна, запуск eframe
-├── app.rs                       — VideoMakerApp: весь стан програми та eframe::App::update() з делегуванням на gui-субмодулі
+├── app.rs                       — VideoMakerApp: весь стан програми та eframe::App::update() — тільки виклики gui-субмодулів, без inline UI-логіки
 ├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe, whisper) + авто-завантаження у UserConfigDir/bin/
 ├── queue.rs                     — PipelineJob, JobStatus, JobSettings: структури черги задач (із підтримкою кешування перекладеного тексту та витрат)
 ├── theme.rs                     — теми (Dark/Light/Amoled), застосування кольору акценту
@@ -55,16 +55,18 @@ src/
 │           └── sync.rs          — build_timeline: прив'язка медіафайлів до часових відрізків SRT (Levenshtein fuzzy match)
 ├── gui/
 │   ├── mod.rs                   — реекспорт субмодулів
-│   ├── topbar.rs                — draw_chip, draw_balance_chip, thread_load_color: базові примітиви чіпів топбару та нижнього рядка
+│   ├── topbar.rs                — draw_navigation_bar, draw_status_bar (виклики панелей), draw_chip, draw_balance_chip, thread_load_color (базові примітиви)
 │   ├── balance.rs               — draw_balance_window, draw_threads_window: вікна балансів і лімітів потоків
 │   ├── queue.rs                 — draw_queue_panel: нижня панель черги задач (картки, прогрес, лог-вікно)
-│   ├── logs.rs                  — draw_logs_tab: вкладка системних логів з підсвічуванням і копіюванням
+│   ├── logs.rs                  — draw_job_logs_window (вікно логів конкретної задачі), draw_logs_tab (вкладка системних логів)
 │   ├── editor.rs                — central panel з текстовим редактором сценарію та динамічним підрахунком токенів cl100k_base
 │   ├── welcome.rs               — вікно привітання (перевірка CLI-інструментів при першому запуску)
+│   ├── translation_control.rs   — draw_translation_control_window: вікно контролю перекладу + розширена перегенерація
 │   ├── gallery/
 │   │   ├── mod.rs               — реекспорт публічного API + тип RegenAction
 │   │   ├── icons.rs             — painter-примітиви іконок (↻ ≡ ▶) — без залежності від шрифту
 │   │   ├── preview.rs           — load_image_texture, draw_image_preview: повноекранний перегляд зображення
+│   │   ├── regen.rs             — draw_media_regen_window: вікно кастомної перегенерації медіафайлу
 │   │   ├── tab.rs               — draw_gallery_tab: основна вкладка галереї медіафайлів
 │   │   └── video_player.rs      — VideoPlayer, streaming витягування кадрів, hover-анімація, thumbnail першого кадру
 │   ├── pipeline/

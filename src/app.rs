@@ -1,6 +1,5 @@
 use crate::gui;
 use crate::gui::settings::storage::{AppSettings, load_settings, save_settings};
-use crate::gui::topbar::{thread_load_color, draw_chip, draw_balance_chip};
 use eframe::egui;
 use crate::theme::AppTheme;
 use crate::localization::{Language, translate};
@@ -806,66 +805,16 @@ impl eframe::App for VideoMakerApp {
         }
 
         // Верхня панель для навігації між вкладками
-        egui::TopBottomPanel::top("navigation_bar")
-            .min_height(40.0)
-            .show(ctx, |ui| {
-            ui.horizontal_centered(|ui| {
-                ui.selectable_value(&mut self.active_tab, Tab::Main, egui::RichText::new(translate(self.language, "tab_main")).size(14.0));
-
-                // Вкладка Галерея — видима коли є хоч одне медіа
-                let has_media = self.jobs.iter().any(|j| {
-                    std::path::Path::new(&j.settings.save_path).join("media").exists()
-                });
-                if has_media {
-                    ui.selectable_value(&mut self.active_tab, Tab::Gallery, egui::RichText::new(translate(self.language, "tab_gallery")).size(14.0));
-                } else if self.active_tab == Tab::Gallery {
-                    self.active_tab = Tab::Main;
-                }
-
-                ui.selectable_value(&mut self.active_tab, Tab::Settings, egui::RichText::new(translate(self.language, "tab_settings")).size(14.0));
-                ui.selectable_value(&mut self.active_tab, Tab::Logs, egui::RichText::new(translate(self.language, "tab_logs")).size(14.0));
-
-                // Баланс-чіпи та кнопка налаштувань з правого боку (RTL: перший доданий — крайній правий)
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 2.0;
-                    // Іконка шестерні — відкриває вікно "Баланс та Потоки"
-                    if ui.add(egui::Button::new(egui::RichText::new("⚙").size(16.0)).frame(false)).clicked() {
-                        self.balance_window_open = true;
-                    }
-                    ui.add_space(4.0);
-                    if let Ok(guard) = self.openrouter_balance.try_lock() {
-                        if let Some(text) = guard.as_ref() {
-                            if draw_balance_chip(ui, "OpenRouter", text).clicked() {
-                                self.balance_window_open = true;
-                            }
-                            ui.separator();
-                        }
-                    }
-                    if let Ok(guard) = self.voicebot_balance.try_lock() {
-                        if let Some(text) = guard.as_ref() {
-                            // Показуємо лише числову частину, без слова "символів"
-                            let display = text.split_whitespace().next().unwrap_or(text.as_str());
-                            if draw_balance_chip(ui, "VoiceBot", display).clicked() {
-                                self.balance_window_open = true;
-                            }
-                            ui.separator();
-                        }
-                    }
-                    if let Ok(guard) = self.googler_balance.try_lock() {
-                        if let Some(bal) = guard.as_ref() {
-                            let text = format!(
-                                "img: {}/{} vid: {}/{}",
-                                bal.img_used, bal.img_limit,
-                                bal.video_used, bal.video_limit,
-                            );
-                            if draw_balance_chip(ui, "Googler", &text).clicked() {
-                                self.balance_window_open = true;
-                            }
-                        }
-                    }
-                });
-            });
-        });
+        crate::gui::topbar::draw_navigation_bar(
+            ctx,
+            &mut self.active_tab,
+            &self.jobs,
+            self.language,
+            &self.openrouter_balance,
+            &self.voicebot_balance,
+            &self.googler_balance,
+            &mut self.balance_window_open,
+        );
 
         // Плаваюче вікно з детальними балансами
         crate::gui::balance::draw_balance_window(
@@ -896,47 +845,18 @@ impl eframe::App for VideoMakerApp {
         );
 
         // Нижній рядок статусу потоків (реєструємо ДО SidePanel, щоб займав повну ширину)
-        egui::TopBottomPanel::bottom("status_bar")
-            .min_height(40.0)
-            .show(ctx, |ui| {
-                let mut open_threads = false;
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 8.0;
-                    let normal = ui.visuals().text_color();
-
-                    // Клікабельний чіп потоку — той самий стиль що й баланс-чіпи у топбарі
-                    let thread_chip = |ui: &mut egui::Ui, name: &str, active: usize, max: usize| -> bool {
-                        let color = thread_load_color(active, max, normal);
-                        draw_chip(ui, &format!("{}: {}/{}", name, active, max), color).clicked()
-                    };
-
-                    // RTL: шестерня першою → крайня права
-                    if ui.add(egui::Button::new(egui::RichText::new("⚙").size(16.0)).frame(false)).clicked() {
-                        open_threads = true;
-                    }
-                    ui.add_space(4.0);
-
-                    // RTL: додаємо у зворотному порядку, щоб на екрані йшло OR → Claude → ... → Googler
-                    if let Ok(guard) = self.googler_balance.try_lock() {
-                        if let Some(bal) = guard.as_ref() {
-                            if thread_chip(ui, "vid", bal.video_threads_active as usize, self.googler_video_max_threads) { open_threads = true; }
-                            if thread_chip(ui, "Googler img", bal.img_threads_active as usize, self.googler_image_max_threads) { open_threads = true; }
-                        } else if draw_chip(ui, "Googler: —", normal).clicked() {
-                            open_threads = true;
-                        }
-                    }
-                    ui.separator();
-                    if thread_chip(ui, "FFmpeg", crate::api::ffmpeg::FfmpegLimiter::get().active_count(), self.ffmpeg_max_threads) { open_threads = true; }
-                    ui.separator();
-                    if thread_chip(ui, "EdgeTTS", crate::api::edgetts::EdgeTTSLimiter::get().active_count(), self.edge_tts_max_threads) { open_threads = true; }
-                    if thread_chip(ui, "VoiceBot", crate::api::voicebot::VoiceBotLimiter::get().active_count(), 5) { open_threads = true; }
-                    ui.separator();
-                    if thread_chip(ui, "Gemini", crate::api::gemini::GeminiLimiter::get().active_count(), self.gemini_max_threads) { open_threads = true; }
-                    if thread_chip(ui, "Claude", crate::api::claude::ClaudeLimiter::get().active_count(), self.claude_max_threads) { open_threads = true; }
-                    if thread_chip(ui, "OR", crate::api::openrouter::OpenRouterLimiter::get().active_count(), self.openrouter_max_threads) { open_threads = true; }
-                });
-                if open_threads { self.threads_window_open = true; }
-            });
+        crate::gui::topbar::draw_status_bar(
+            ctx,
+            self.openrouter_max_threads,
+            self.claude_max_threads,
+            self.gemini_max_threads,
+            self.edge_tts_max_threads,
+            self.ffmpeg_max_threads,
+            self.googler_image_max_threads,
+            self.googler_video_max_threads,
+            &self.googler_balance,
+            &mut self.threads_window_open,
+        );
 
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
         if self.active_tab == Tab::Main {
@@ -1262,273 +1182,33 @@ impl eframe::App for VideoMakerApp {
         }
 
         // Вікно кастомної перегенерації
-        if self.media_regen_window_open {
-            let file_name = self.media_regen_target
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .and_then(|n| n.to_str())
-                .unwrap_or("")
-                .to_string();
-            let title = format!("{}: {}", translate(self.language, "gallery_regen_window_title"), file_name);
-            let mut is_open = self.media_regen_window_open;
-
-            egui::Window::new(title)
-                .open(&mut is_open)
-                .resizable(true)
-                .default_width(380.0)
-                .collapsible(false)
-                .show(ctx, |ui| {
-                    use crate::gui::pipeline::video::{arrow_button, image_provider_info, video_provider_info};
-
-                    ui.label(egui::RichText::new(translate(self.language, "gallery_regen_media_type_label")).strong());
-                    ui.add_space(4.0);
-                    ui.horizontal(|ui| {
-                        ui.radio_value(&mut self.media_regen_media_type, "image".to_string(), translate(self.language, "video_media_type_image"));
-                        ui.radio_value(&mut self.media_regen_media_type, "video".to_string(), translate(self.language, "video_media_type_video"));
-                    });
-
-                    ui.add_space(8.0);
-
-                    // Пріоритет провайдерів
-                    if self.media_regen_media_type == "video" {
-                        ui.label(egui::RichText::new(translate(self.language, "gallery_regen_priority_video_label")).strong());
-                        ui.add_space(4.0);
-                        let mut swap: Option<(usize, usize)> = None;
-                        for i in 0..self.media_regen_video_priority.len() {
-                            let (name, credits) = video_provider_info(&self.media_regen_video_priority[i]);
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(format!("#{}", i + 1)).weak().monospace());
-                                ui.add_space(4.0);
-                                if arrow_button(ui, true, i > 0).clicked() { swap = Some((i - 1, i)); }
-                                if arrow_button(ui, false, i < self.media_regen_video_priority.len() - 1).clicked() { swap = Some((i, i + 1)); }
-                                ui.add_space(4.0);
-                                ui.label(name);
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    ui.label(egui::RichText::new(credits).weak().size(11.0));
-                                });
-                            });
-                        }
-                        if let Some((a, b)) = swap { self.media_regen_video_priority.swap(a, b); }
-                    } else {
-                        ui.label(egui::RichText::new(translate(self.language, "gallery_regen_priority_image_label")).strong());
-                        ui.add_space(4.0);
-                        let mut swap: Option<(usize, usize)> = None;
-                        for i in 0..self.media_regen_image_priority.len() {
-                            let (name, credits) = image_provider_info(&self.media_regen_image_priority[i]);
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(format!("#{}", i + 1)).weak().monospace());
-                                ui.add_space(4.0);
-                                if arrow_button(ui, true, i > 0).clicked() { swap = Some((i - 1, i)); }
-                                if arrow_button(ui, false, i < self.media_regen_image_priority.len() - 1).clicked() { swap = Some((i, i + 1)); }
-                                ui.add_space(4.0);
-                                ui.label(name);
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    ui.label(egui::RichText::new(credits).weak().size(11.0));
-                                });
-                            });
-                        }
-                        if let Some((a, b)) = swap { self.media_regen_image_priority.swap(a, b); }
-                    }
-
-                    ui.add_space(8.0);
-                    ui.label(egui::RichText::new(translate(self.language, "gallery_regen_prompt_label")).strong());
-                    ui.add_space(4.0);
-                    ui.add_sized(
-                        [ui.available_width(), 80.0],
-                        egui::TextEdit::multiline(&mut self.media_regen_prompt),
-                    );
-
-                    ui.add_space(8.0);
-
-                    let is_loading = *self.media_regen_loading.lock().unwrap();
-                    ui.add_enabled_ui(!is_loading, |ui| {
-                    ui.horizontal(|ui| {
-                        if ui.button(translate(self.language, "gallery_regen_start_btn")).clicked() {
-                            if let (Some(file), Some(base)) = (self.media_regen_target.clone(), &self.media_regen_base_settings) {
-                                let priority = if self.media_regen_media_type == "video" {
-                                    self.media_regen_video_priority.clone()
-                                } else {
-                                    self.media_regen_image_priority.clone()
-                                };
-                                let custom_prompt = if self.media_regen_prompt.trim().is_empty() {
-                                    None
-                                } else {
-                                    Some(self.media_regen_prompt.clone())
-                                };
-                                self.gallery_textures.remove(&file);
-                                self.media_regen_error = None;
-                                crate::core::pipeline::regenerate_single_media(
-                                    file,
-                                    self.media_regen_media_type.clone(),
-                                    priority,
-                                    base.googler_key.clone(),
-                                    custom_prompt,
-                                    self.media_regen_job_id,
-                                    self.media_regen_job_name.clone(),
-                                    ctx.clone(),
-                                    std::sync::Arc::clone(&self.media_regen_result),
-                                    std::sync::Arc::clone(&self.media_regen_loading),
-                                );
-                                self.media_regen_window_open = false;
-                            }
-                        }
-                        if is_loading {
-                            ui.spinner();
-                            ui.label(translate(self.language, "gallery_regen_loading"));
-                        }
-                    });
-                    }); // add_enabled_ui
-
-                    if let Some(ref err) = self.media_regen_error.clone() {
-                        ui.add_space(4.0);
-                        ui.colored_label(egui::Color32::from_rgb(220, 60, 60), err);
-                    }
-                });
-
-            self.media_regen_window_open = is_open;
-        }
+        crate::gui::gallery::draw_media_regen_window(
+            ctx,
+            self.language,
+            &mut self.media_regen_window_open,
+            &self.media_regen_target,
+            &mut self.media_regen_media_type,
+            &mut self.media_regen_image_priority,
+            &mut self.media_regen_video_priority,
+            &mut self.media_regen_prompt,
+            &self.media_regen_loading,
+            &self.media_regen_base_settings,
+            &mut self.media_regen_error,
+            self.media_regen_job_id,
+            &self.media_regen_job_name,
+            &mut self.gallery_textures,
+            &self.media_regen_result,
+        );
 
         if let Some((job_id, job_name)) = self.selected_job_logs.clone() {
-            let mut is_open = true;
-            let mut copied_toast_data = None;
-            
-            egui::Window::new(format!("{} #{}: {}", translate(self.language, "job_logs_title"), job_id + 1, job_name))
-                .open(&mut is_open)
-                .resizable(true)
-                .default_size([550.0, 350.0])
-                .show(ctx, |ui| {
-                    let job_logs = crate::logger::get_job_logs(job_id);
-                    if job_logs.is_empty() {
-                        ui.vertical_centered(|ui| {
-                            ui.add_space(40.0);
-                            ui.colored_label(ui.visuals().weak_text_color(), translate(self.language, "job_logs_empty"));
-                            ui.add_space(40.0);
-                        });
-                    } else {
-                        // Верхня панель з кнопкою копіювання всього логу та чекбоксом автопрокрутки
-                        ui.horizontal(|ui| {
-                            // Чекбокс автопрокрутки зліва
-                            ui.checkbox(&mut self.auto_scroll_logs, translate(self.language, "logs_autoscroll"));
-
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                let copy_all_btn = egui::Button::new(translate(self.language, "job_logs_copy_all"))
-                                    .frame(true)
-                                    .rounding(4.0);
-                                    
-                                if ui.add(copy_all_btn).clicked() {
-                                    let all_job_logs = job_logs.join("\n");
-                                    ui.ctx().copy_text(all_job_logs.clone());
-                                    copied_toast_data = Some((all_job_logs, std::time::Instant::now()));
-                                }
-                            });
-                        });
-                        
-                        ui.add_space(6.0);
-                        ui.separator();
-                        ui.add_space(6.0);
-
-                        // Преміальна темно-вугільна панель терміналу з внутрішніми відступами
-                        let terminal_bg = if ui.visuals().dark_mode {
-                            egui::Color32::from_rgb(15, 15, 15) // Глибокий чорний для AMOLED/Dark теми
-                        } else {
-                            egui::Color32::from_rgb(30, 30, 30) // Темно-вугільний навіть у світлій темі
-                        };
-
-                        egui::Frame::none()
-                            .fill(terminal_bg)
-                            .rounding(6.0)
-                            .inner_margin(egui::Margin::same(12.0))
-                            .show(ui, |ui| {
-                                egui::ScrollArea::vertical()
-                                    .auto_shrink([false, false])
-                                    .stick_to_bottom(self.auto_scroll_logs)
-                                    .show(ui, |ui| {
-                                        ui.vertical(|ui| {
-                                            for log_line in job_logs {
-                                                // Парсимо часову мітку та повідомлення
-                                                let (time_part, msg_part) = if log_line.starts_with('[') && log_line.chars().nth(9) == Some(']') {
-                                                    (&log_line[0..10], &log_line[10..])
-                                                } else {
-                                                    ("", log_line.as_str())
-                                                };
-                                                
-                                                // Визначаємо колір тексту залежно від типу події
-                                                let is_error = msg_part.contains("помилка") 
-                                                    || msg_part.contains("failed") 
-                                                    || msg_part.contains("STDERR") 
-                                                    || msg_part.contains("Error")
-                                                    || msg_part.contains("Err");
-                                                    
-                                                let is_success = msg_part.contains("успішно") 
-                                                    || msg_part.contains("success")
-                                                    || msg_part.contains("Ok");
-                                                    
-                                                let is_command = msg_part.contains("Виконується:") 
-                                                    || msg_part.contains("Запуск")
-                                                    || msg_part.contains("Running");
-                                                    
-                                                let text_color = if is_error {
-                                                    egui::Color32::from_rgb(239, 83, 80) // М'який червоний
-                                                } else if is_success {
-                                                    egui::Color32::from_rgb(102, 187, 106) // М'який зелений
-                                                } else if is_command {
-                                                    egui::Color32::from_rgb(129, 212, 250) // М'який блакитний
-                                                } else {
-                                                    egui::Color32::from_rgb(220, 220, 220) // Світло-сірий
-                                                };
-
-                                                // Створюємо єдиний LayoutJob для правильного переносу та вирівнювання тексту
-                                                let mut job = egui::text::LayoutJob::default();
-                                                
-                                                if !time_part.is_empty() {
-                                                    job.append(
-                                                        time_part,
-                                                        0.0,
-                                                        egui::TextFormat {
-                                                            font_id: egui::FontId::monospace(11.0),
-                                                            color: egui::Color32::from_gray(110),
-                                                            ..Default::default()
-                                                        },
-                                                    );
-                                                }
-                                                
-                                                job.append(
-                                                    msg_part,
-                                                    0.0,
-                                                    egui::TextFormat {
-                                                        font_id: egui::FontId::monospace(11.0),
-                                                        color: text_color,
-                                                        ..Default::default()
-                                                    },
-                                                );
-
-                                                // Виводимо весь рядок як клікабельний лейбл
-                                                let label_resp = ui.add(
-                                                    egui::Label::new(job)
-                                                        .wrap()
-                                                        .sense(egui::Sense::click())
-                                                );
-                                                
-                                                if label_resp.clicked() {
-                                                    ui.ctx().copy_text(log_line.clone());
-                                                    copied_toast_data = Some((log_line.clone(), std::time::Instant::now()));
-                                                }
-                                                
-                                                label_resp.on_hover_text(translate(self.language, "logs_click_to_copy"));
-                                                
-                                                ui.add_space(3.0);
-                                            }
-                                        });
-                                    });
-                            });
-                    }
-                });
-            
-            if let Some(toast) = copied_toast_data {
-                self.copied_toast = Some(toast);
-            }
-
-            if !is_open {
+            if !crate::gui::logs::draw_job_logs_window(
+                ctx,
+                self.language,
+                job_id,
+                &job_name,
+                &mut self.auto_scroll_logs,
+                &mut self.copied_toast,
+            ) {
                 self.selected_job_logs = None;
             }
         }
@@ -1554,348 +1234,28 @@ impl eframe::App for VideoMakerApp {
         }
 
         // Спливаюче вікно контролю перекладу
-        if let Some(job_id) = self.selected_job_control {
-            let mut is_open = true;
-            let mut should_continue = false;
-            let mut is_confirmed = false;
-
-            // Знаходимо задачу в черзі
-            if let Some(job_idx) = self.jobs.iter().position(|j| j.id == job_id) {
-                let job_name = self.jobs[job_idx].name.clone();
-                let job_save_path = self.jobs[job_idx].settings.save_path.clone();
-                let translated_text_arc = std::sync::Arc::clone(&self.jobs[job_idx].translated_text);
-                let translation_cost_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_cost);
-                let audio_duration_arc = std::sync::Arc::clone(&self.jobs[job_idx].audio_duration);
-                let status_arc = std::sync::Arc::clone(&self.jobs[job_idx].status);
-                let translation_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].translation_stage);
-                let voiceover_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].voiceover_stage);
-                let video_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].video_stage);
-                let subtitles_stage_arc = std::sync::Arc::clone(&self.jobs[job_idx].subtitles_stage);
-                let prompts_progress_arc = std::sync::Arc::clone(&self.jobs[job_idx].prompts_progress);
-                let media_progress_arc = std::sync::Arc::clone(&self.jobs[job_idx].media_progress);
-                let job_settings = self.jobs[job_idx].settings.clone();
-
-                // Перевіряємо результат фонової перегенерації
-                {
-                    let result = self.control_regen_result.lock().unwrap().take();
-                    if let Some(res) = result {
-                        match res {
-                            Ok((text, cost)) => {
-                                self.control_text_input = text;
-                                // Додаємо ціну перегенерації до накопиченої вартості задачі
-                                if let Some(new_cost) = cost {
-                                    let mut existing = translation_cost_arc.lock().unwrap();
-                                    *existing = Some(existing.unwrap_or(0.0) + new_cost);
-                                }
-                                self.control_regen_error = None;
-                            }
-                            Err(e) => {
-                                self.control_regen_error = Some(e);
-                            }
-                        }
-                    }
-                }
-
-                let mut control_closed = false;
-                let mut trigger_simple_regen = false;
-                let mut open_extended = false;
-
-                egui::Window::new(format!("{} — {}", translate(self.language, "control_window_title"), job_name))
-                    .open(&mut is_open)
-                    .resizable(true)
-                    .default_size([500.0, 350.0])
-                    .show(ctx, |ui| {
-                        ui.vertical(|ui| {
-                            ui.label(egui::RichText::new(translate(self.language, "control_window_text")).strong().size(12.0));
-                            ui.add_space(4.0);
-
-                            // Текстове поле для редагування перекладу
-                            egui::ScrollArea::vertical()
-                                .max_height(200.0)
-                                .show(ui, |ui| {
-                                    ui.add(
-                                        egui::TextEdit::multiline(&mut self.control_text_input)
-                                            .hint_text("Перекладений текст...")
-                                            .desired_width(f32::INFINITY)
-                                            .desired_rows(10)
-                                    );
-                                });
-
-                            ui.add_space(4.0);
-
-                            // Статистика перекладеного тексту
-                            let translated_char_count = self.control_text_input.chars().count();
-                            let translated_word_count = self.control_text_input.split_whitespace().count();
-                            let translated_token_count = crate::gui::editor::count_tokens(&self.control_text_input);
-                            let cost_snapshot = *translation_cost_arc.lock().unwrap();
-
-                            let text_color = ui.visuals().widgets.noninteractive.text_color();
-                            let accent_color = ui.visuals().selection.bg_fill;
-                            let bullet_color = text_color.linear_multiply(0.3);
-
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(translate(self.language, "stats_chars")).size(12.0).color(text_color));
-                                ui.label(egui::RichText::new(format!(" {}", translated_char_count)).size(12.0).strong().color(accent_color));
-                                ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
-                                ui.label(egui::RichText::new(translate(self.language, "stats_words")).size(12.0).color(text_color));
-                                ui.label(egui::RichText::new(format!(" {}", translated_word_count)).size(12.0).strong().color(accent_color));
-                                ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
-                                ui.label(egui::RichText::new(translate(self.language, "stats_tokens")).size(12.0).color(text_color));
-                                ui.label(egui::RichText::new(format!(" {}", translated_token_count)).size(12.0).strong().color(accent_color));
-                                if let Some(cost) = cost_snapshot {
-                                    ui.label(egui::RichText::new("  •  ").size(12.0).color(bullet_color));
-                                    ui.label(egui::RichText::new(translate(self.language, "control_window_cost")).size(12.0).color(text_color));
-                                    ui.label(egui::RichText::new(format!(" ${:.5}", cost)).size(12.0).strong().color(accent_color));
-                                }
-                            });
-
-                            // Помилка перегенерації
-                            if let Some(ref err) = self.control_regen_error {
-                                ui.add_space(4.0);
-                                ui.add(egui::Label::new(
-                                    egui::RichText::new(format!("{} {}", translate(self.language, "control_regen_error"), err))
-                                        .color(egui::Color32::from_rgb(231, 76, 60))
-                                        .size(11.0)
-                                ).wrap());
-                            }
-
-                            ui.add_space(8.0);
-
-                            let is_regen_loading = *self.control_regen_loading.lock().unwrap();
-
-                            ui.horizontal(|ui| {
-                                if ui.button(translate(self.language, "job_name_cancel_btn")).clicked() {
-                                    control_closed = true;
-                                }
-
-                                // Перегенерувати з тим самим промтом задачі
-                                if ui.add_enabled(
-                                    !is_regen_loading,
-                                    egui::Button::new(translate(self.language, "control_regen_btn")),
-                                ).clicked() {
-                                    trigger_simple_regen = true;
-                                }
-
-                                // Відкрити вікно розширеної перегенерації
-                                if ui.add_enabled(
-                                    !is_regen_loading,
-                                    egui::Button::new(translate(self.language, "control_regen_extended_btn")),
-                                ).clicked() {
-                                    open_extended = true;
-                                }
-
-                                if is_regen_loading {
-                                    ui.label(
-                                        egui::RichText::new(translate(self.language, "control_regen_loading"))
-                                            .weak()
-                                            .size(11.0),
-                                    );
-                                }
-
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.add(
-                                        egui::Button::new(
-                                            egui::RichText::new(translate(self.language, "control_window_continue_btn")).strong()
-                                        )
-                                    ).clicked() {
-                                        should_continue = true;
-                                    }
-                                });
-                            });
-                        });
-                    });
-
-                if control_closed {
-                    is_open = false;
-                    is_confirmed = true;
-                }
-
-                // Запускаємо просту перегенерацію з оригінальними налаштуваннями задачі
-                if trigger_simple_regen {
-                    let result_arc = std::sync::Arc::clone(&self.control_regen_result);
-                    let loading_arc = std::sync::Arc::clone(&self.control_regen_loading);
-                    let ctx_clone = ctx.clone();
-                    let text = job_settings.text.clone();
-                    let service = job_settings.translation_service.clone();
-                    let model = job_settings.translation_model.clone();
-                    let prompt = job_settings.translation_prompt.clone();
-                    let temperature = job_settings.translation_temperature;
-                    let key = job_settings.openrouter_key.clone();
-                    let job_info = Some((job_id, job_name.clone()));
-
-                    self.control_regen_error = None;
-                    *loading_arc.lock().unwrap() = true;
-                    std::thread::spawn(move || {
-                        let result = crate::core::llm::call_llm(
-                            &service, &key, &model, &prompt, &text, temperature, job_info,
-                        );
-                        *result_arc.lock().unwrap() = Some(result);
-                        *loading_arc.lock().unwrap() = false;
-                        ctx_clone.request_repaint();
-                    });
-                }
-
-                // Ініціалізуємо та відкриваємо вікно розширеної перегенерації
-                if open_extended && !self.control_regen_extended_open {
-                    self.control_regen_service = job_settings.translation_service.clone();
-                    self.control_regen_model = job_settings.translation_model.clone();
-                    self.control_regen_model_openrouter = if job_settings.translation_service == "OpenRouter" {
-                        job_settings.translation_model.clone()
-                    } else {
-                        self.control_regen_model_openrouter.clone()
-                    };
-                    self.control_regen_model_claude = if job_settings.translation_service == "Claude Code" {
-                        if job_settings.translation_model.is_empty() { "sonnet".to_string() } else { job_settings.translation_model.clone() }
-                    } else {
-                        self.control_regen_model_claude.clone()
-                    };
-                    self.control_regen_model_gemini = if job_settings.translation_service == "Gemini CLI" {
-                        if job_settings.translation_model.is_empty() { "gemini-2.5-flash".to_string() } else { job_settings.translation_model.clone() }
-                    } else {
-                        self.control_regen_model_gemini.clone()
-                    };
-                    self.control_regen_prompt = job_settings.translation_prompt.clone();
-                    self.control_regen_temperature = job_settings.translation_temperature;
-                    self.control_regen_model_search.clear();
-                    self.control_regen_extended_open = true;
-                }
-
-                // Вікно розширеної перегенерації з одноразовими налаштуваннями
-                if self.control_regen_extended_open {
-                    let openrouter_models_arc = std::sync::Arc::clone(&self.openrouter_models);
-                    let openrouter_models_loading_arc = std::sync::Arc::clone(&self.openrouter_models_loading);
-                    let text_to_translate = job_settings.text.clone();
-                    let openrouter_key_ext = job_settings.openrouter_key.clone();
-                    let job_info_ext = Some((job_id, job_name.clone()));
-
-                    let mut ext_is_open = true;
-                    let mut trigger_ext_regen = false;
-
-                    egui::Window::new(translate(self.language, "control_regen_extended_title"))
-                        .open(&mut ext_is_open)
-                        .resizable(true)
-                        .default_size([450.0, 500.0])
-                        .show(ctx, |ui| {
-                            ui.add(egui::Label::new(
-                                egui::RichText::new(translate(self.language, "control_regen_settings_note"))
-                                    .weak()
-                                    .size(11.0),
-                            ).wrap());
-                            ui.add_space(6.0);
-                            ui.separator();
-
-                            egui::ScrollArea::vertical().show(ui, |ui| {
-                                ui.push_id("control_regen_translation", |ui| {
-                                    crate::gui::pipeline::translation::draw_translation_section(
-                                        ui,
-                                        self.language,
-                                        &mut self.control_regen_prompt,
-                                        &mut self.control_regen_model,
-                                        &mut self.control_regen_model_search,
-                                        &openrouter_models_arc,
-                                        &openrouter_models_loading_arc,
-                                        &mut self.control_regen_temperature,
-                                        &mut self.control_regen_service,
-                                        &mut self.control_regen_model_openrouter,
-                                        &mut self.control_regen_model_claude,
-                                        &mut self.control_regen_model_gemini,
-                                    );
-                                });
-                            });
-
-                            ui.add_space(4.0);
-                            ui.separator();
-                            ui.add_space(4.0);
-
-                            let is_regen_loading = *self.control_regen_loading.lock().unwrap();
-
-                            if is_regen_loading {
-                                ui.label(
-                                    egui::RichText::new(translate(self.language, "control_regen_loading"))
-                                        .weak(),
-                                );
-                            } else if ui.button(translate(self.language, "control_regen_run_btn")).clicked() {
-                                trigger_ext_regen = true;
-                            }
-                        });
-
-                    if !ext_is_open {
-                        self.control_regen_extended_open = false;
-                    }
-
-                    if trigger_ext_regen {
-                        let result_arc = std::sync::Arc::clone(&self.control_regen_result);
-                        let loading_arc = std::sync::Arc::clone(&self.control_regen_loading);
-                        let ctx_clone = ctx.clone();
-                        let service = self.control_regen_service.clone();
-                        let model = self.control_regen_model.clone();
-                        let prompt = self.control_regen_prompt.clone();
-                        let temperature = self.control_regen_temperature;
-
-                        self.control_regen_error = None;
-                        *loading_arc.lock().unwrap() = true;
-                        std::thread::spawn(move || {
-                            let result = crate::core::llm::call_llm(
-                                &service, &openrouter_key_ext, &model, &prompt, &text_to_translate, temperature, job_info_ext,
-                            );
-                            *result_arc.lock().unwrap() = Some(result);
-                            *loading_arc.lock().unwrap() = false;
-                            ctx_clone.request_repaint();
-                        });
-                    }
-                }
-
-                if should_continue {
-                    // 1. Оновлюємо перекладений текст у задачі
-                    *translated_text_arc.lock().unwrap() = Some(self.control_text_input.clone());
-
-                    // 2. Зберігаємо оновлений текст на диску
-                    let dir = std::path::Path::new(&job_save_path);
-                    let _ = std::fs::write(dir.join("text.txt"), &self.control_text_input);
-
-                    // 3. Змінюємо статус задачі на Running
-                    *status_arc.lock().unwrap() = crate::queue::JobStatus::Running;
-
-                    // 4. Запускаємо пайплайн знову
-                    let ctx_clone = ctx.clone();
-                    crate::core::pipeline::run_pipeline(
-                        job_id,
-                        job_name,
-                        job_settings,
-                        status_arc,
-                        translation_stage_arc,
-                        voiceover_stage_arc,
-                        video_stage_arc,
-                        subtitles_stage_arc,
-                        std::sync::Arc::clone(&self.jobs[job_idx].montage_stage),
-                        translated_text_arc,
-                        translation_cost_arc,
-                        audio_duration_arc,
-                        prompts_progress_arc,
-                        media_progress_arc,
-                        std::sync::Arc::clone(&self.jobs[job_idx].montage_progress),
-                        std::sync::Arc::clone(&self.jobs[job_idx].montage_file_size),
-                        std::sync::Arc::clone(&self.jobs[job_idx].media_control_resume),
-                        ctx_clone,
-                    );
-
-                    // 5. Закриваємо вікно контролю
-                    is_open = false;
-                }
-            } else {
-                is_open = false;
-            }
-
-            if !is_open {
-                if !is_confirmed {
-                    self.control_dismissed.insert(job_id);
-                }
-                self.selected_job_control = None;
-                self.control_text_input.clear();
-                self.control_regen_extended_open = false;
-                self.control_regen_error = None;
-            }
-        }
+        crate::gui::translation_control::draw_translation_control_window(
+            ctx,
+            self.language,
+            &self.jobs,
+            &mut self.selected_job_control,
+            &mut self.control_text_input,
+            &mut self.control_regen_extended_open,
+            &mut self.control_regen_service,
+            &mut self.control_regen_model,
+            &mut self.control_regen_model_openrouter,
+            &mut self.control_regen_model_claude,
+            &mut self.control_regen_model_gemini,
+            &mut self.control_regen_model_search,
+            &mut self.control_regen_prompt,
+            &mut self.control_regen_temperature,
+            &self.control_regen_result,
+            &self.control_regen_loading,
+            &mut self.control_regen_error,
+            &mut self.control_dismissed,
+            &self.openrouter_models,
+            &self.openrouter_models_loading,
+        );
 
         // АВТОЗБЕРЕЖЕННЯ:
         // Перевіряємо, чи користувач наразі не перетягує панель (миша відпущена).
