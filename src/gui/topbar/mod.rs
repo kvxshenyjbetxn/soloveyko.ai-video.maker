@@ -1,6 +1,9 @@
 use eframe::egui;
 use crate::localization::{Language, translate};
 
+pub mod balance;
+pub use balance::{draw_balance_window, draw_threads_window};
+
 /// Повертає колір для відображення навантаження потоків за відсотком зайнятості.
 /// 0 → default, 1–40% → зелений, 41–75% → жовтий, 76–100% → червоний.
 pub fn thread_load_color(active: usize, max: usize, default: egui::Color32) -> egui::Color32 {

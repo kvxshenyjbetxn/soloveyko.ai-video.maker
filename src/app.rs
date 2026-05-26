@@ -817,7 +817,7 @@ impl eframe::App for VideoMakerApp {
         );
 
         // Плаваюче вікно з детальними балансами
-        crate::gui::balance::draw_balance_window(
+        crate::gui::topbar::draw_balance_window(
             ctx,
             &mut self.balance_window_open,
             self.language,
@@ -829,7 +829,7 @@ impl eframe::App for VideoMakerApp {
             &self.googler_balance,
         );
 
-        crate::gui::balance::draw_threads_window(
+        crate::gui::topbar::draw_threads_window(
             ctx,
             &mut self.threads_window_open,
             self.language,
@@ -1234,7 +1234,7 @@ impl eframe::App for VideoMakerApp {
         }
 
         // Спливаюче вікно контролю перекладу
-        crate::gui::translation_control::draw_translation_control_window(
+        crate::gui::pipeline::translation_control::draw_translation_control_window(
             ctx,
             self.language,
             &self.jobs,

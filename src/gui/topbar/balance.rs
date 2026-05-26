@@ -1,6 +1,6 @@
 use eframe::egui;
 use crate::localization::{Language, translate};
-use crate::gui::topbar::thread_load_color;
+use super::thread_load_color;
 
 /// Вікно балансів сервісів (OpenRouter, VoiceBot, Googler).
 pub fn draw_balance_window(

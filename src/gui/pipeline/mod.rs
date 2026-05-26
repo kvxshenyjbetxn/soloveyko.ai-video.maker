@@ -5,6 +5,7 @@ pub mod storage;
 pub mod subtitles;
 pub mod templates;
 pub mod translation;
+pub mod translation_control;
 pub mod video;
 pub mod voiceover;
 

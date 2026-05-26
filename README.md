@@ -55,13 +55,13 @@ src/
 │           └── sync.rs          — build_timeline: прив'язка медіафайлів до часових відрізків SRT (Levenshtein fuzzy match)
 ├── gui/
 │   ├── mod.rs                   — реекспорт субмодулів
-│   ├── topbar.rs                — draw_navigation_bar, draw_status_bar (виклики панелей), draw_chip, draw_balance_chip, thread_load_color (базові примітиви)
-│   ├── balance.rs               — draw_balance_window, draw_threads_window: вікна балансів і лімітів потоків
+│   ├── topbar/
+│   │   ├── mod.rs               — draw_navigation_bar, draw_status_bar, draw_chip, draw_balance_chip, thread_load_color
+│   │   └── balance.rs           — draw_balance_window, draw_threads_window: вікна балансів і лімітів потоків
 │   ├── queue.rs                 — draw_queue_panel: нижня панель черги задач (картки, прогрес, лог-вікно)
 │   ├── logs.rs                  — draw_job_logs_window (вікно логів конкретної задачі), draw_logs_tab (вкладка системних логів)
 │   ├── editor.rs                — central panel з текстовим редактором сценарію та динамічним підрахунком токенів cl100k_base
 │   ├── welcome.rs               — вікно привітання (перевірка CLI-інструментів при першому запуску)
-│   ├── translation_control.rs   — draw_translation_control_window: вікно контролю перекладу + розширена перегенерація
 │   ├── gallery/
 │   │   ├── mod.rs               — реекспорт публічного API + тип RegenAction
 │   │   ├── icons.rs             — painter-примітиви іконок (↻ ≡ ▶) — без залежності від шрифту
@@ -76,6 +76,7 @@ src/
 │   │   ├── templates.rs         — секція списку збережених шаблонів (завантаження/видалення)
 │   │   ├── storage.rs           — секція "Шлях збереження" (два поля macOS/Windows + draw_path_row)
 │   │   ├── translation.rs       — секція перекладу (промт, вибір моделі OpenRouter, температура)
+│   │   ├── translation_control.rs — draw_translation_control_window: вікно контролю перекладу + розширена перегенерація
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
 │   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт)
 │   │   ├── subtitles.rs         — секція субтитрів (сервіс, мова, модель Whisper, завантаження ggml-моделі)
