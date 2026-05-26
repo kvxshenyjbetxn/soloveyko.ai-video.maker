@@ -52,10 +52,10 @@ pub fn draw_editing_section(
             ui.label(egui::RichText::new(translate(language, "montage_fps_label")).strong());
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                for &val in &[24u32, 30, 60] {
-                    ui.radio_value(montage_fps, val, format!("{val}"));
-                }
-                ui.add(egui::DragValue::new(montage_fps).range(1..=120).suffix(" fps"));
+                ui.add(
+                    egui::Slider::new(montage_fps, 1..=120)
+                        .suffix(" fps"),
+                );
             });
 
             ui.add_space(8.0);
