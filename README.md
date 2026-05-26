@@ -24,7 +24,7 @@
 ```
 src/
 ├── main.rs                      — точка входу, конфіг вікна, запуск eframe
-├── app.rs                       — VideoMakerApp: весь стан, логіка update(), топбар, вікно балансів, черга
+├── app.rs                       — VideoMakerApp: весь стан програми та eframe::App::update() з делегуванням на gui-субмодулі
 ├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe, whisper) + авто-завантаження у UserConfigDir/bin/
 ├── queue.rs                     — PipelineJob, JobStatus, JobSettings: структури черги задач (із підтримкою кешування перекладеного тексту та витрат)
 ├── theme.rs                     — теми (Dark/Light/Amoled), застосування кольору акценту
@@ -54,10 +54,19 @@ src/
 │           ├── text_splitter.rs — split_text: 4 режими нарізання тексту на сегменти для генерації медіа
 │           └── sync.rs          — build_timeline: прив'язка медіафайлів до часових відрізків SRT (Levenshtein fuzzy match)
 ├── gui/
-│   ├── mod.rs                   — реекспорт pipeline, settings, video_player та welcome
+│   ├── mod.rs                   — реекспорт субмодулів
+│   ├── topbar.rs                — draw_chip, draw_balance_chip, thread_load_color: базові примітиви чіпів топбару та нижнього рядка
+│   ├── balance.rs               — draw_balance_window, draw_threads_window: вікна балансів і лімітів потоків
+│   ├── queue.rs                 — draw_queue_panel: нижня панель черги задач (картки, прогрес, лог-вікно)
+│   ├── logs.rs                  — draw_logs_tab: вкладка системних логів з підсвічуванням і копіюванням
 │   ├── editor.rs                — central panel з текстовим редактором сценарію та динамічним підрахунком токенів cl100k_base
-│   ├── video_player.rs          — inline відеоплеєр: streaming витягування кадрів через ffmpeg pipe, hover-анімація мініатюр, thumbnail першого кадру
 │   ├── welcome.rs               — вікно привітання (перевірка CLI-інструментів при першому запуску)
+│   ├── gallery/
+│   │   ├── mod.rs               — реекспорт публічного API + тип RegenAction
+│   │   ├── icons.rs             — painter-примітиви іконок (↻ ≡ ▶) — без залежності від шрифту
+│   │   ├── preview.rs           — load_image_texture, draw_image_preview: повноекранний перегляд зображення
+│   │   ├── tab.rs               — draw_gallery_tab: основна вкладка галереї медіафайлів
+│   │   └── video_player.rs      — VideoPlayer, streaming витягування кадрів, hover-анімація, thumbnail першого кадру
 │   ├── pipeline/
 │   │   ├── mod.rs               — draw_pipeline_panel: головна функція панелі + toggle_switch + validate_and_enqueue
 │   │   ├── api.rs               — секція АПІ-ключів (OpenRouter, VoiceBot, Googler)
