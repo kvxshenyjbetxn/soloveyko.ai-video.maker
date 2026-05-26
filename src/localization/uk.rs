@@ -233,6 +233,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "subtitles_whisper_max_len_label" => "Макс. символів на сегмент",
         "subtitles_style_label" => "Стиль субтитрів",
         "subtitles_font_size_label" => "Розмір шрифту",
+        "subtitles_font_label" => "Шрифт",
         "subtitles_color_label" => "Колір тексту",
         "subtitles_margin_v_label" => "Відступ від низу",
         "subtitles_karaoke_label" => "Ефект Karaoke (підсвічення слова)",

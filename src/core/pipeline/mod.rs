@@ -304,7 +304,7 @@ fn run_whisperx(
                             }
 
                             // Генеруємо subtitle.ass зі стилем запеченим всередині
-                            let ass = srt_to_ass(&srt, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
+                            let ass = srt_to_ass(&srt, &settings.subtitle_font, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
                             let ass_path = save_dir.join("subtitle.ass");
                             if let Err(e) = std::fs::write(&ass_path, &ass) {
                                 crate::logger::log_job(job_id, job_name, &format!("Failed to save subtitle.ass: {}", e));
@@ -405,7 +405,7 @@ fn run_assemblyai(
                 .map_err(|e| format!("Failed to save subtitle.srt: {}", e))?;
 
             // Генеруємо subtitle.ass зі стилем запеченим всередині
-            let ass = srt_to_ass(&srt, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
+            let ass = srt_to_ass(&srt, &settings.subtitle_font, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
             let ass_path = save_dir.join("subtitle.ass");
             if let Err(e) = std::fs::write(&ass_path, &ass) {
                 crate::logger::log_job(job_id, job_name, &format!("Failed to save subtitle.ass: {}", e));
@@ -596,7 +596,7 @@ fn run_av_branch(
                 // Генеруємо subtitle.ass зі стилем запеченим всередині
                 let srt_path = save_dir.join("subtitle.srt");
                 if let Ok(srt) = std::fs::read_to_string(&srt_path) {
-                    let ass = srt_to_ass(&srt, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
+                    let ass = srt_to_ass(&srt, &settings.subtitle_font, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
                     let ass_path = save_dir.join("subtitle.ass");
                     if let Err(e) = std::fs::write(&ass_path, &ass) {
                         crate::logger::log_job(job_id, &job_name, &format!("Failed to save subtitle.ass: {}", e));
@@ -634,6 +634,7 @@ fn run_av_branch(
             match generate_karaoke_ass(
                 &json_path,
                 &settings.subtitles_service,
+                &settings.subtitle_font,
                 settings.subtitle_font_size,
                 settings.subtitle_color,
                 settings.subtitle_margin_v,
@@ -660,6 +661,7 @@ fn run_av_branch(
 fn generate_karaoke_ass(
     json_path: &std::path::Path,
     service: &str,
+    font_name: &str,
     font_size: u32,
     color: [u8; 3],
     margin_v: u32,
@@ -680,9 +682,10 @@ fn generate_karaoke_ass(
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n\
          [V4+ Styles]\n\
          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
-         Style: Default,Arial,{font_size},{primary},{secondary},{outline},{back},0,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
+         Style: Default,{font_name},{font_size},{primary},{secondary},{outline},{back},0,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
          [Events]\n\
          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
+        font_name = font_name,
         font_size = font_size,
         primary = primary,
         secondary = secondary,
@@ -787,7 +790,7 @@ fn ms_to_ass_time(ms: u64) -> String {
 }
 
 /// Конвертує SRT-рядок у ASS-формат із запеченим стилем.
-fn srt_to_ass(srt: &str, font_size: u32, color: [u8; 3], margin_v: u32) -> String {
+fn srt_to_ass(srt: &str, font_name: &str, font_size: u32, color: [u8; 3], margin_v: u32) -> String {
     // Формат кольору ASS: &HAABBGGRR (A=00 = непрозорий)
     let primary = format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
 
@@ -795,9 +798,10 @@ fn srt_to_ass(srt: &str, font_size: u32, color: [u8; 3], margin_v: u32) -> Strin
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n\
          [V4+ Styles]\n\
          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
-         Style: Default,Arial,{font_size},{primary},&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
+         Style: Default,{font_name},{font_size},{primary},&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
          [Events]\n\
          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
+        font_name = font_name,
         font_size = font_size,
         primary = primary,
         margin_v = margin_v,

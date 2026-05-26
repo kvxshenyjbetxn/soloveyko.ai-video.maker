@@ -233,6 +233,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "subtitles_whisper_max_len_label" => "Max chars per segment",
         "subtitles_style_label" => "Subtitle Style",
         "subtitles_font_size_label" => "Font Size",
+        "subtitles_font_label" => "Font",
         "subtitles_color_label" => "Text Color",
         "subtitles_margin_v_label" => "Bottom Margin",
         "subtitles_karaoke_label" => "Karaoke Effect (highlight current word)",

@@ -45,6 +45,7 @@ fn default_montage_transition_duration() -> f32 { 0.5 }
 fn default_subtitle_font_size() -> u32 { 24 }
 fn default_subtitle_color() -> [u8; 3] { [255, 255, 255] }
 fn default_subtitle_margin_v() -> u32 { 30 }
+fn default_subtitle_font() -> String { "Arial".to_string() }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -225,6 +226,9 @@ pub struct AppSettings {
     /// Ефект karaoke: підсвічує слово яке проговорюється (тільки WhisperX/AssemblyAI)
     #[serde(default)]
     pub subtitle_karaoke: bool,
+    /// Назва шрифту для субтитрів (наприклад "Arial", "Impact")
+    #[serde(default = "default_subtitle_font")]
+    pub subtitle_font: String,
     /// Сервіс монтажу ("FFmpeg")
     #[serde(default = "default_montage_service")]
     pub montage_service: String,
@@ -323,6 +327,7 @@ impl Default for AppSettings {
             subtitle_color: [255, 255, 255],
             subtitle_margin_v: 30,
             subtitle_karaoke: false,
+            subtitle_font: "Arial".to_string(),
             montage_service: "FFmpeg".to_string(),
             montage_fps: 30,
             montage_preset: "medium".to_string(),
@@ -546,6 +551,9 @@ pub struct PipelineTemplate {
     /// Ефект karaoke: підсвічує слово яке проговорюється (тільки WhisperX/AssemblyAI)
     #[serde(default)]
     pub subtitle_karaoke: bool,
+    /// Назва шрифту для субтитрів (наприклад "Arial", "Impact")
+    #[serde(default = "default_subtitle_font")]
+    pub subtitle_font: String,
     /// Сервіс монтажу ("FFmpeg")
     #[serde(default = "default_montage_service")]
     pub montage_service: String,
@@ -637,6 +645,7 @@ pub fn save_template(
     subtitle_color: [u8; 3],
     subtitle_margin_v: u32,
     subtitle_karaoke: bool,
+    subtitle_font: &str,
     montage_service: &str,
     montage_fps: u32,
     montage_preset: &str,
@@ -698,6 +707,7 @@ pub fn save_template(
             subtitle_color,
             subtitle_margin_v,
             subtitle_karaoke,
+            subtitle_font: subtitle_font.to_string(),
             montage_service: montage_service.to_string(),
             montage_fps,
             montage_preset: montage_preset.to_string(),

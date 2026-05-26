@@ -275,6 +275,10 @@ pub struct VideoMakerApp {
     pub subtitle_margin_v: u32,
     /// Ефект karaoke для субтитрів.
     pub subtitle_karaoke: bool,
+    /// Обраний шрифт для субтитрів.
+    pub subtitle_font: String,
+    /// Список шрифтів, завантажених із системи (заповнюється при старті).
+    pub available_subtitle_fonts: Vec<String>,
     /// Сервіс монтажу ("FFmpeg").
     pub montage_service: String,
     /// FPS для монтажу.
@@ -440,6 +444,8 @@ impl Default for VideoMakerApp {
             subtitle_color: [255, 255, 255],
             subtitle_margin_v: 30,
             subtitle_karaoke: false,
+            subtitle_font: "Arial".to_string(),
+            available_subtitle_fonts: Vec::new(),
             montage_service: "FFmpeg".to_string(),
             montage_fps: 30,
             montage_preset: "medium".to_string(),
@@ -738,6 +744,8 @@ impl VideoMakerApp {
             subtitle_color: saved.subtitle_color,
             subtitle_margin_v: saved.subtitle_margin_v,
             subtitle_karaoke: saved.subtitle_karaoke,
+            subtitle_font: saved.subtitle_font.clone(),
+            available_subtitle_fonts: crate::gui::subtitle_fonts::load_subtitle_fonts(&cc.egui_ctx),
             montage_service: saved.montage_service.clone(),
             montage_fps: saved.montage_fps,
             montage_preset: saved.montage_preset.clone(),
@@ -982,6 +990,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.subtitle_color,
                         &mut self.subtitle_margin_v,
                         &mut self.subtitle_karaoke,
+                        &mut self.subtitle_font,
+                        &self.available_subtitle_fonts,
                         &mut self.montage_service,
                         &mut self.montage_fps,
                         &mut self.montage_preset,
@@ -1377,6 +1387,7 @@ impl eframe::App for VideoMakerApp {
                 || self.subtitle_color != self.last_saved_settings.subtitle_color
                 || self.subtitle_margin_v != self.last_saved_settings.subtitle_margin_v
                 || self.subtitle_karaoke != self.last_saved_settings.subtitle_karaoke
+                || self.subtitle_font != self.last_saved_settings.subtitle_font
                 || self.montage_service != self.last_saved_settings.montage_service
                 || self.montage_fps != self.last_saved_settings.montage_fps
                 || self.montage_preset != self.last_saved_settings.montage_preset
@@ -1447,6 +1458,7 @@ impl eframe::App for VideoMakerApp {
                     subtitle_color: self.subtitle_color,
                     subtitle_margin_v: self.subtitle_margin_v,
                     subtitle_karaoke: self.subtitle_karaoke,
+                    subtitle_font: self.subtitle_font.clone(),
                     montage_service: self.montage_service.clone(),
                     montage_fps: self.montage_fps,
                     montage_preset: self.montage_preset.clone(),

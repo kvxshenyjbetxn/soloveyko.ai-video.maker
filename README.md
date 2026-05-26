@@ -70,6 +70,7 @@ src/
 │   │   ├── regen.rs             — draw_media_regen_window: вікно кастомної перегенерації медіафайлу
 │   │   ├── tab.rs               — draw_gallery_tab: основна вкладка галереї медіафайлів
 │   │   └── video_player.rs      — VideoPlayer, streaming витягування кадрів, hover-анімація, thumbnail першого кадру
+│   ├── subtitle_fonts.rs        — SUBTITLE_FONTS константа (37 шрифтів з fallback-іменами), load_subtitle_fonts(): завантажує системні шрифти у egui FontDefinitions при старті
 │   ├── pipeline/
 │   │   ├── mod.rs               — draw_pipeline_panel: головна функція панелі + toggle_switch + validate_and_enqueue
 │   │   ├── api.rs               — секція АПІ-ключів (OpenRouter, VoiceBot, Googler)
@@ -80,7 +81,7 @@ src/
 │   │   ├── translation_control.rs — draw_translation_control_window: вікно контролю перекладу + розширена перегенерація
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
 │   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт)
-│   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI, мова, модель, стиль: колір/розмір/відступ/karaoke, завантаження ggml-моделі для Whisper, ключ AssemblyAI)
+│   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI, мова, модель, стиль: шрифт/колір/розмір/відступ/karaoke, вибір шрифту з popup-прев'ю, завантаження ggml-моделі для Whisper, ключ AssemblyAI)
 │   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами)
 │   └── settings/
 │       ├── mod.rs               — draw_settings: вкладки налаштувань
@@ -182,7 +183,7 @@ src/
 
 - **Секція «Субтитри»** — вибір сервісу (**Whisper**, **WhisperX** або **AssemblyAI**), мови розпізнавання (авто + 14 мов), моделі та повзунок **«Макс. символів на сегмент»** (`whisper_max_line_width`, 0–200, де 0 = ∞). При виборі **Whisper** — відображається список ggml-моделей (`tiny` / `base` / `small` / `medium` / `large-v3` / `large-v3-turbo`) та статус: ✓ завантажено / кнопка завантаження з розміром (~MB) / прогрес / помилка з кнопкою «Повторити». При виборі **WhisperX** — відображається список faster-whisper моделей без кнопки скачування (моделі завантажує сам WhisperX при першому запуску). При виборі **AssemblyAI** — відображається поле API-ключа з кнопкою «Перевірити». Завантаження ggml-моделей відбувається у фоновому потоці через `Arc<Mutex<BinaryDownload>>` — той самий механізм, що й для ffmpeg у вікні привітання.
 
-  **Стиль субтитрів (доступний для всіх сервісів):** колір тексту (`egui::color_edit_button_srgb`), розмір шрифту (повзунок, 8–72 px), вертикальний відступ (`margin_v`, 0–200 px). **Karaoke-ефект** (`subtitle_karaoke`) — доступний лише для **WhisperX** та **AssemblyAI** (бо тільки вони надають word-level timestamps). При увімкненому karaoke `subtitle.ass` генерується з `\kf`-тегами — кожне слово підсвічується жовтим у момент вимовляння.
+  **Стиль субтитрів (доступний для всіх сервісів):** вибір шрифту з popup-прев'ю, колір тексту (`egui::color_edit_button_srgb`), розмір шрифту (повзунок, 8–72 px), вертикальний відступ (`margin_v`, 0–200 px). **Karaoke-ефект** (`subtitle_karaoke`) — доступний лише для **WhisperX** та **AssemblyAI** (бо тільки вони надають word-level timestamps). При увімкненому karaoke `subtitle.ass` генерується з `\kf`-тегами — кожне слово підсвічується жовтим у момент вимовляння.
 
 - **Ідеальне вирівнювання заголовків та розділювачів:** Ліва панель статистики сценарію (`src/gui/editor.rs`) та права бічна панель пайплайну мають ідентичні заголовки з великим шрифтом `16.0`. Їхні лінії-розділювачі вирівняні ідеально по горизонталі (на одній висоті `y`). Самі заголовки візуально відцентровані по вертикалі за допомогою точно збалансованих асиметричних відступів (`8.0` зверху та `4.0` знизу).
 - **Дизайн розділювачів "border-to-border":** Контейнери обох панелей (`CentralPanel` та `SidePanel`) мають нульові внутрішні відступи, завдяки чому горизонтальні лінії-розділювачі йдуть від лівого до правого краю без проміжків. Всі внутрішні елементи та секції налаштувань загорнуті у фрейми з бічними відступами `8.0` пікселів, що запобігає прилипанню елементів керування до країв екрана.
@@ -235,7 +236,7 @@ src/
 - **`subtitles_enabled` ≠ "виконувати субтитри".** Цей прапорець контролює лише **burn-in** (накладання тексту на відео у монтажі). Генерація субтитрів запускається завжди, якщо є озвучка (`voiceover_enabled`) — бо `subtitle.srt` потрібен для синхронізації відеоряду з аудіо у `build_timeline`.
 - **Відображення в картці задачі:** блок «Субтитри» показується якщо `voiceover_enabled`. Перевірка конкретного сервісу відсутня — всі три сервіси відображаються однаково.
 - **Єдина схема іменування файлів:** незалежно від сервісу, всі субтитри зберігаються як `subtitle.srt`, `subtitle.ass` та `subtitle.json`. Ніяких `voice.srt`, `voice.ass`, `karaoke.ass`.
-- **Автоматична генерація ASS:** після кожного SRT-файлу одразу генерується `subtitle.ass` через `srt_to_ass()` зі стилем запеченим у заголовку (`FontSize`, `PrimaryColour` у форматі `&H00BBGGRR`, `MarginV`). Монтаж завжди використовує ASS якщо він є.
+- **Автоматична генерація ASS:** після кожного SRT-файлу одразу генерується `subtitle.ass` через `srt_to_ass(font_name, font_size, color, margin_v)` зі стилем запеченим у заголовку (`FontName`, `FontSize`, `PrimaryColour` у форматі `&H00BBGGRR`, `MarginV`). Шрифт береться з `settings.subtitle_font` і вбудовується у поле `Fontname` ASS Style. Монтаж завжди використовує ASS якщо він є.
 - **Джерело аудіо:** спочатку шукає `voice.wav`, потім `voice.mp3`. Якщо нічого — задача провалюється.
 
 **Whisper (whisper.cpp):**
@@ -405,8 +406,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
 Два JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
-- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`).
-- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`), налаштування медіа та монтажу. При завантаженні шаблону всі поля відновлюються повністю.
+- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`).
+- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`), налаштування медіа та монтажу. При завантаженні шаблону всі поля відновлюються повністю.
 
 `AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються (дефолт для нових полів потоків Googler — `5`). Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
 
@@ -526,6 +527,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **Кнопка «▶ Запустити» блокується якщо модель Whisper не завантажена.** Перевіряється `whisper_model_exists()` для кожної `Pending`-задачі де `voiceover_enabled && subtitles_service == "Whisper"` (не `subtitles_enabled` — субтитри завжди виконуються за наявності озвучки та Whisper). Для WhisperX блокування не застосовується — моделі завантажує сам WhisperX. Якщо модель ще завантажується — показується `⏳` повідомлення через `on_disabled_hover_text`.
 
 - **`subtitles_enabled` — це burn-in toggle, а не "виконувати субтитри".** Whisper/WhisperX/AssemblyAI завжди генерує SRT-файл якщо є озвучка і сервіс налаштований, бо цей файл є вхідними даними для `build_timeline` (синхронізація відеоряду з аудіо). `subtitles_enabled` тільки вирішує: чи вбудовувати субтитри у фінальне відео через FFmpeg `subtitles=<file>` фільтр. Burn-in потребує збірки FFmpeg з `libass`.
+
+- **Шрифти для субтитрів завантажуються у egui при старті, а не при рендері.** `load_subtitle_fonts()` викликається один раз у `VideoMakerApp::new()` і перезаписує весь `FontDefinitions` (`ctx.set_fonts()`). Якщо потім щось інше викликає `ctx.set_fonts()` — завантажені шрифти зникнуть. Кожен шрифт реєструється через `FontFamily::Name(name.into())` і доступний у `RichText::font(FontId::new(size, Name(...)))`. Поточний вибір шрифту (`subtitle_font`) зберігається у `AppSettings` та `PipelineTemplate` і передається у `srt_to_ass()` / `generate_karaoke_ass()` де вбудовується у ASS `Style: Default,{font_name},...`. Якщо потрібний шрифт відсутній у системі — він просто не з'явиться у попапі вибору; `SUBTITLE_FONTS` містить 37 шрифтів з по 2–3 варіанти імені файлу (macOS / Windows).
 
 - **WhisperX CLI — нестандартний формат аргументів.** Бандлований `whisperx_cli` приймає іменовані аргументи: `--audio`, `--model`, `--output subtitle` (базова назва без розширення), `--ffmpeg-path`, `--language`. `--align-json` у CLI — це **INPUT** параметр (завантажує готовий JSON замість транскрипції), а не OUTPUT. Передавати `--align-json` як шлях виводу некоректно — CLI упаде з `FileNotFoundError`.
 

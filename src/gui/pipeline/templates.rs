@@ -57,6 +57,7 @@ pub fn draw_templates_section(
     subtitle_color: &mut [u8; 3],
     subtitle_margin_v: &mut u32,
     subtitle_karaoke: &mut bool,
+    subtitle_font: &mut String,
     montage_service: &mut String,
     montage_fps: &mut u32,
     montage_preset: &mut String,
@@ -154,6 +155,7 @@ pub fn draw_templates_section(
                             *subtitle_color = template.subtitle_color;
                             *subtitle_margin_v = template.subtitle_margin_v;
                             *subtitle_karaoke = template.subtitle_karaoke;
+                            *subtitle_font = template.subtitle_font;
                             *montage_service = template.montage_service;
                             *montage_fps = template.montage_fps;
                             *montage_preset = template.montage_preset;

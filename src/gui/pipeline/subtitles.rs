@@ -49,6 +49,8 @@ pub fn draw_subtitles_section(
     subtitle_color: &mut [u8; 3],
     subtitle_margin_v: &mut u32,
     subtitle_karaoke: &mut bool,
+    subtitle_font: &mut String,
+    available_subtitle_fonts: &[String],
     ctx: egui::Context,
 ) {
     ui.vertical(|ui| {
@@ -109,6 +111,8 @@ pub fn draw_subtitles_section(
             subtitle_color,
             subtitle_margin_v,
             subtitle_karaoke,
+            subtitle_font,
+            available_subtitle_fonts,
         );
     });
 }
@@ -340,7 +344,64 @@ fn draw_assemblyai_settings(
     });
 }
 
+/// Малює вибір шрифту з попереднім переглядом (popup).
+fn draw_font_picker(
+    ui: &mut egui::Ui,
+    language: Language,
+    subtitle_font: &mut String,
+    available_fonts: &[String],
+) {
+    if available_fonts.is_empty() {
+        return;
+    }
+
+    ui.label(egui::RichText::new(translate(language, "subtitles_font_label")));
+    ui.add_space(2.0);
+
+    let popup_id = ui.make_persistent_id("subtitle_font_popup");
+
+    let btn_font = if available_fonts.iter().any(|f| f == subtitle_font) {
+        egui::FontId::new(14.0, egui::FontFamily::Name(subtitle_font.clone().into()))
+    } else {
+        egui::FontId::proportional(14.0)
+    };
+
+    let btn = ui.add_sized(
+        [ui.available_width(), 24.0],
+        egui::Button::new(egui::RichText::new(subtitle_font.as_str()).font(btn_font)),
+    );
+
+    if btn.clicked() {
+        ui.memory_mut(|m| m.toggle_popup(popup_id));
+    }
+
+    egui::popup::popup_below_widget(
+        ui, popup_id, &btn,
+        egui::PopupCloseBehavior::CloseOnClick,
+        |ui| {
+            ui.set_min_width(180.0);
+            egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                for font_name in available_fonts {
+                    let font_id = egui::FontId::new(
+                        16.0,
+                        egui::FontFamily::Name(font_name.clone().into()),
+                    );
+                    let is_selected = font_name == subtitle_font;
+                    let resp = ui.add(egui::SelectableLabel::new(
+                        is_selected,
+                        egui::RichText::new(font_name.as_str()).font(font_id),
+                    ));
+                    if resp.clicked() {
+                        *subtitle_font = font_name.clone();
+                    }
+                }
+            });
+        },
+    );
+}
+
 /// Налаштування стилю субтитрів (колір, розмір шрифту, відступ, karaoke).
+#[allow(clippy::too_many_arguments)]
 fn draw_subtitle_style(
     ui: &mut egui::Ui,
     language: Language,
@@ -349,6 +410,8 @@ fn draw_subtitle_style(
     subtitle_color: &mut [u8; 3],
     subtitle_margin_v: &mut u32,
     subtitle_karaoke: &mut bool,
+    subtitle_font: &mut String,
+    available_subtitle_fonts: &[String],
 ) {
     ui.add_space(8.0);
     ui.label(egui::RichText::new(translate(language, "subtitles_style_label")).strong());
@@ -377,6 +440,11 @@ fn draw_subtitle_style(
         }
         ui.label(egui::RichText::new(format!("{}px", margin)).monospace());
     });
+
+    ui.add_space(6.0);
+
+    // Шрифт
+    draw_font_picker(ui, language, subtitle_font, available_subtitle_fonts);
 
     ui.add_space(6.0);
 

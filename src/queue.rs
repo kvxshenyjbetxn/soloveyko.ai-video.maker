@@ -70,6 +70,7 @@ pub struct JobSettings {
     pub subtitle_color: [u8; 3],
     pub subtitle_margin_v: u32,
     pub subtitle_karaoke: bool,
+    pub subtitle_font: String,
     pub montage_enabled: bool,
     #[allow(dead_code)]
     pub montage_service: String,
