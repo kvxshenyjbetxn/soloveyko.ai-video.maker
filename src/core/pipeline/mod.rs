@@ -359,6 +359,12 @@ fn run_av_branch(
             args.push("-l".to_string());
             args.push(settings.whisper_language.clone());
         }
+        if settings.whisper_max_line_width > 0 {
+            args.push("--max-len".to_string());
+            args.push(settings.whisper_max_line_width.to_string());
+            // Розбивати лише на межах слів, щоб не обрізати слова посередині
+            args.push("--split-on-word".to_string());
+        }
 
         crate::logger::log_job(
             job_id, &job_name,

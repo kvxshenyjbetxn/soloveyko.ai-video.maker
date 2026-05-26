@@ -227,6 +227,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "subtitles_model_download_btn" => "⬇ Download",
         "subtitles_model_retry" => "↺ Retry",
         "subtitles_model_failed" => "❌ Error:",
+        "subtitles_whisper_max_len_label" => "Max chars per segment",
         "montage_service_label" => "Assembly service",
         "montage_fps_label" => "FPS",
         "montage_preset_label" => "Encoding preset",

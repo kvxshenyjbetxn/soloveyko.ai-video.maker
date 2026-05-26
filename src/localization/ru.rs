@@ -227,6 +227,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "subtitles_model_download_btn" => "⬇ Загрузить",
         "subtitles_model_retry" => "↺ Попробовать снова",
         "subtitles_model_failed" => "❌ Ошибка:",
+        "subtitles_whisper_max_len_label" => "Макс. символов на сегмент",
         "montage_service_label" => "Сервис монтажа",
         "montage_fps_label" => "FPS",
         "montage_preset_label" => "Пресет кодирования",

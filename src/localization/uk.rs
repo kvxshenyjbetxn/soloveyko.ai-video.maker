@@ -227,6 +227,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "subtitles_model_download_btn" => "⬇ Завантажити",
         "subtitles_model_retry" => "↺ Спробувати знову",
         "subtitles_model_failed" => "❌ Помилка:",
+        "subtitles_whisper_max_len_label" => "Макс. символів на сегмент",
         "montage_service_label" => "Сервіс монтажу",
         "montage_fps_label" => "FPS",
         "montage_preset_label" => "Пресет кодування",

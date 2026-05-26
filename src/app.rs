@@ -257,6 +257,8 @@ pub struct VideoMakerApp {
     pub whisper_language: String,
     /// Модель Whisper.
     pub whisper_model: String,
+    /// Максимальна кількість символів у сегменті субтитрів (0 = без обмеження).
+    pub whisper_max_line_width: usize,
     /// Стан завантаження ggml-моделі whisper.cpp у фоні.
     pub whisper_model_download: std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     /// Сервіс монтажу ("FFmpeg").
@@ -415,6 +417,7 @@ impl Default for VideoMakerApp {
             subtitles_service: "Whisper".to_string(),
             whisper_language: "auto".to_string(),
             whisper_model: "base".to_string(),
+            whisper_max_line_width: 42,
             whisper_model_download: std::sync::Arc::new(std::sync::Mutex::new(crate::gui::welcome::BinaryDownload::Idle)),
             montage_service: "FFmpeg".to_string(),
             montage_fps: 30,
@@ -704,6 +707,7 @@ impl VideoMakerApp {
             subtitles_service: saved.subtitles_service.clone(),
             whisper_language: saved.whisper_language.clone(),
             whisper_model: saved.whisper_model.clone(),
+            whisper_max_line_width: saved.whisper_max_line_width,
             whisper_model_download: std::sync::Arc::new(std::sync::Mutex::new(crate::gui::welcome::BinaryDownload::Idle)),
             montage_service: saved.montage_service.clone(),
             montage_fps: saved.montage_fps,
@@ -940,6 +944,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.subtitles_service,
                         &mut self.whisper_language,
                         &mut self.whisper_model,
+                        &mut self.whisper_max_line_width,
                         &self.whisper_model_download,
                         &mut self.montage_service,
                         &mut self.montage_fps,
@@ -1330,6 +1335,7 @@ impl eframe::App for VideoMakerApp {
                 || self.subtitles_service != self.last_saved_settings.subtitles_service
                 || self.whisper_language != self.last_saved_settings.whisper_language
                 || self.whisper_model != self.last_saved_settings.whisper_model
+                || self.whisper_max_line_width != self.last_saved_settings.whisper_max_line_width
                 || self.montage_service != self.last_saved_settings.montage_service
                 || self.montage_fps != self.last_saved_settings.montage_fps
                 || self.montage_preset != self.last_saved_settings.montage_preset
@@ -1394,6 +1400,7 @@ impl eframe::App for VideoMakerApp {
                     subtitles_service: self.subtitles_service.clone(),
                     whisper_language: self.whisper_language.clone(),
                     whisper_model: self.whisper_model.clone(),
+                    whisper_max_line_width: self.whisper_max_line_width,
                     montage_service: self.montage_service.clone(),
                     montage_fps: self.montage_fps,
                     montage_preset: self.montage_preset.clone(),

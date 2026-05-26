@@ -34,6 +34,7 @@ pub fn draw_subtitles_section(
     subtitles_service: &mut String,
     whisper_language: &mut String,
     whisper_model: &mut String,
+    whisper_max_line_width: &mut usize,
     whisper_model_download: &Arc<Mutex<BinaryDownload>>,
     ctx: egui::Context,
 ) {
@@ -96,6 +97,20 @@ pub fn draw_subtitles_section(
                         ui.selectable_value(whisper_model, model.to_string(), *model);
                     }
                 });
+
+            ui.add_space(8.0);
+
+            // Максимальна кількість символів на сегмент субтитрів (--max-len, 0 = без обмеження)
+            ui.label(egui::RichText::new(translate(language, "subtitles_whisper_max_len_label")).strong());
+            ui.add_space(4.0);
+            let mut max_len = *whisper_max_line_width;
+            let label_text = if max_len == 0 { "∞".to_string() } else { max_len.to_string() };
+            ui.horizontal(|ui| {
+                if ui.add(egui::Slider::new(&mut max_len, 0..=200).show_value(false)).changed() {
+                    *whisper_max_line_width = max_len;
+                }
+                ui.label(egui::RichText::new(label_text).monospace());
+            });
 
             ui.add_space(6.0);
 
