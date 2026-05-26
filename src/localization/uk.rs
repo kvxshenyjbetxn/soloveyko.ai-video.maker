@@ -143,6 +143,8 @@ pub fn translate_uk(key: &str) -> &'static str {
         "queue_add_btn" => "Додати в чергу",
         "queue_panel_title" => "Черга",
         "queue_run_btn" => "▶ Запустити",
+        "queue_clear_btn" => "🗑 Очистити",
+        "queue_clear_disabled_hint" => "Неможливо очистити: є активні задачі",
         "queue_status_pending" => "Очікує",
         "queue_status_running" => "Виконується...",
         "queue_status_awaiting_control" => "Очікує контролю",

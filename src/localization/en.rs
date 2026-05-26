@@ -143,6 +143,8 @@ pub fn translate_en(key: &str) -> &'static str {
         "queue_add_btn" => "Add to Queue",
         "queue_panel_title" => "Queue",
         "queue_run_btn" => "▶ Run",
+        "queue_clear_btn" => "🗑 Clear",
+        "queue_clear_disabled_hint" => "Cannot clear: there are active tasks",
         "queue_status_pending" => "Pending",
         "queue_status_running" => "Running...",
         "queue_status_awaiting_control" => "Awaiting Control",

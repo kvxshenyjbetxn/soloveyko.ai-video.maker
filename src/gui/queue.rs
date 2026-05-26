@@ -20,6 +20,7 @@ pub fn draw_queue_panel(
     ui: &mut egui::Ui,
     language: crate::localization::Language,
     jobs: &mut Vec<crate::queue::PipelineJob>,
+    job_counter: &mut u64,
     selected_job_logs: &mut Option<(u64, String)>,
     selected_job_control: &mut Option<u64>,
     control_text_input: &mut String,
@@ -70,7 +71,19 @@ pub fn draw_queue_panel(
 
         let can_run = has_pending && whisper_blocked.is_none();
 
+        let has_active = jobs.iter().any(|j| {
+            let s = j.status.lock().unwrap().clone();
+            matches!(
+                s,
+                crate::queue::JobStatus::Running
+                    | crate::queue::JobStatus::AwaitingControl
+                    | crate::queue::JobStatus::AwaitingMediaControl
+            )
+        });
+        let can_clear = !jobs.is_empty() && !has_active;
+
         let mut clicked = false;
+        let mut clear_clicked = false;
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let run_btn = ui.add_enabled(
                 can_run,
@@ -81,6 +94,17 @@ pub fn draw_queue_panel(
             }
             if let Some(ref msg) = whisper_blocked {
                 run_btn.on_disabled_hover_text(msg);
+            }
+
+            let clear_btn = ui.add_enabled(
+                can_clear,
+                egui::Button::new(egui::RichText::new(translate(language, "queue_clear_btn"))),
+            );
+            if clear_btn.clicked() {
+                clear_clicked = true;
+            }
+            if has_active {
+                clear_btn.on_disabled_hover_text(translate(language, "queue_clear_disabled_hint"));
             }
 
             // Малюємо загальний прогресбар черги всередині right_to_left макету,
@@ -128,6 +152,11 @@ pub fn draw_queue_panel(
                 }
             }
         });
+
+        if clear_clicked {
+            jobs.clear();
+            *job_counter = 0;
+        }
 
         if clicked {
             let ctx = ui.ctx().clone();

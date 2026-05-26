@@ -1029,6 +1029,7 @@ impl eframe::App for VideoMakerApp {
                         ui,
                         self.language,
                         &mut self.jobs,
+                        &mut self.job_counter,
                         &mut self.selected_job_logs,
                         &mut self.selected_job_control,
                         &mut self.control_text_input,
