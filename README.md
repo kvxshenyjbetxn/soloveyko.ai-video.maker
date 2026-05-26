@@ -40,7 +40,7 @@ src/
 │   └── ffmpeg.rs                — FfmpegLimiter (семафор лімітування одночасних процесів FFmpeg, дефолт 2)
 ├── core/
 │   ├── mod.rs                   — реекспорт модулів core
-│   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini); call_openrouter: HTTP запит до OpenRouter Chat completions API
+│   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini); call_openrouter: HTTP запит до OpenRouter Chat completions API; ChatMessageContent.content: Option<String> (null-safe)
 │   └── pipeline/
 │       ├── mod.rs               — run_pipeline: головний потік задачі; після перекладу запускає [Озвучка+Субтитри] та [Відеоряд] паралельно, потім Timeline → Монтаж
 │       ├── voiceover/
@@ -79,7 +79,7 @@ src/
 │   │   ├── translation_control.rs — draw_translation_control_window: вікно контролю перекладу + розширена перегенерація
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
 │   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт)
-│   │   ├── subtitles.rs         — секція субтитрів (сервіс, мова, модель Whisper, завантаження ggml-моделі)
+│   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX, мова, модель, завантаження ggml-моделі для Whisper)
 │   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами)
 │   └── settings/
 │       ├── mod.rs               — draw_settings: вкладки налаштувань
@@ -170,7 +170,7 @@ src/
 - **`montage_progress: Arc<Mutex<Option<f32>>>`** — поточний прогрес монтажу `[0.0..1.0]`, оновлюється в реальному часі через `on_progress` callback з `run_montage`. Зберігається після завершення (1.0), тому картка показує `100%` і в стані `Done`.
 - **`montage_file_size: Arc<Mutex<Option<u64>>>`** — розмір вихідного `.mp4` файлу в байтах. Заповнюється одразу після успішного завершення `run_montage`. Відображається в картці поруч з відсотком: `Монтаж (100%  0.84 GB)`.
 - **`voiceover_convert_to_wav` у `JobSettings`** — знімок налаштування конвертації в WAV на момент додавання задачі.
-- **`StageStatus`** — `Pending / Running / Done / Failed` (без деталей помилки). Кожен `PipelineJob` має п'ять окремих полів: `translation_stage`, `voiceover_stage`, `video_stage`, `subtitles_stage` та `montage_stage`. Слугують виключно для UI: картка задачі фарбує назву кожного етапу відповідним кольором (сірий / жовтий / зелений / червоний). `montage_stage` відображається лише якщо `montage_enabled`. `subtitles_stage` відображається якщо `voiceover_enabled && subtitles_service == "Whisper"` — незалежно від `subtitles_enabled` (той впливає лише на burn-in).
+- **`StageStatus`** — `Pending / Running / Done / Failed` (без деталей помилки). Кожен `PipelineJob` має п'ять окремих полів: `translation_stage`, `voiceover_stage`, `video_stage`, `subtitles_stage` та `montage_stage`. Слугують виключно для UI: картка задачі фарбує назву кожного етапу відповідним кольором (сірий / жовтий / зелений / червоний). `montage_stage` відображається лише якщо `montage_enabled`. `subtitles_stage` відображається якщо `voiceover_enabled && (subtitles_service == "Whisper" || subtitles_service == "WhisperX")` — незалежно від `subtitles_enabled` (той впливає лише на burn-in).
 - **`PipelineJob::name`** — назва задачі, яку вводит користувач у діалозі. Якщо поле пусте — автоматично генерується як "Задача N" (де N = `jobs.len() + 1` на момент додавання).
 - **`calculate_progress`** — метод структури `PipelineJob`, який динамічно розраховує поточний прогрес виконання завдання у діапазоні `[0.0..1.0]`, а також кількість завершених та загальних активних етапів. Враховує всі 5 можливих етапів: переклад, озвучка, відеоряд, субтитри, монтаж. Враховується лише ті, що увімкнені (через відповідний прапор `settings.*_enabled`). Статус `Done` дає `1.0` прогресу для етапу. Для відеоряду зі статусом `Running`: якщо `media_progress = Some((done, total))` — прогрес = `done/total` (гранулярно); якщо `None` — `0.1`. Для інших Running-етапів — `0.5`. Метод спроектовано гнучким, що дозволяє легко додавати нові етапи.
 - **Двоетапний workflow:** додавання задачі (`Pending`) і запуск (`Running`) — два окремі дії. Користувач може накопичити кілька задач у черзі і потім запустити їх усі кнопкою "▶ Запустити".
@@ -179,7 +179,7 @@ src/
 
 Права бічна панель з 9 секціями у порядку: Шаблони → Шлях збереження → АПІ → Контроль → Переклад → Озвучка → Відеоряд → Субтитри → Монтаж.
 
-- **Секція «Субтитри»** — вибір сервісу (наразі лише Whisper), мови розпізнавання (авто + 14 мов), моделі ggml (`tiny` / `base` / `small` / `medium` / `large-v3` / `large-v3-turbo`), та повзунок **«Макс. символів на сегмент»** (`whisper_max_line_width`, 0–200, де 0 = ∞). Відображає статус моделі: ✓ завантажено / кнопка завантаження з розміром (~MB) / прогрес / помилка з кнопкою «Повторити». Завантаження відбувається у фоновому потоці через `Arc<Mutex<BinaryDownload>>` — той самий механізм, що й для ffmpeg у вікні привітання.
+- **Секція «Субтитри»** — вибір сервісу (**Whisper** або **WhisperX**), мови розпізнавання (авто + 14 мов), моделі та повзунок **«Макс. символів на сегмент»** (`whisper_max_line_width`, 0–200, де 0 = ∞). При виборі **Whisper** — відображається список ggml-моделей (`tiny` / `base` / `small` / `medium` / `large-v3` / `large-v3-turbo`) та статус: ✓ завантажено / кнопка завантаження з розміром (~MB) / прогрес / помилка з кнопкою «Повторити». При виборі **WhisperX** — відображається список faster-whisper моделей (`tiny` / `base` / `small` / `medium` / `large-v1/v2/v3` / `large` / `distil-large-v2/v3` / `distil-medium.en` / `distil-small.en`) без кнопки скачування (моделі завантажує сам WhisperX при першому запуску). Завантаження ggml-моделей відбувається у фоновому потоці через `Arc<Mutex<BinaryDownload>>` — той самий механізм, що й для ffmpeg у вікні привітання.
 
 - **Ідеальне вирівнювання заголовків та розділювачів:** Ліва панель статистики сценарію (`src/gui/editor.rs`) та права бічна панель пайплайну мають ідентичні заголовки з великим шрифтом `16.0`. Їхні лінії-розділювачі вирівняні ідеально по горизонталі (на одній висоті `y`). Самі заголовки візуально відцентровані по вертикалі за допомогою точно збалансованих асиметричних відступів (`8.0` зверху та `4.0` знизу).
 - **Дизайн розділювачів "border-to-border":** Контейнери обох панелей (`CentralPanel` та `SidePanel`) мають нульові внутрішні відступи, завдяки чому горизонтальні лінії-розділювачі йдуть від лівого до правого краю без проміжків. Всі внутрішні елементи та секції налаштувань загорнуті у фрейми з бічними відступами `8.0` пікселів, що запобігає прилипанню елементів керування до країв екрана.
@@ -225,18 +225,27 @@ src/
 
 **Джерело тексту:** якщо переклад увімкнено — озвучується перекладений текст. Якщо переклад вимкнено — оригінальний текст (`settings.text`). Картка задачі показує це окремим рядком: "Переклад" (кольоровий за статусом) або "Оригінал" (завжди зелений, бо текст уже є).
 
-#### Субтитри (Whisper)
+#### Субтитри (Whisper / WhisperX)
 
-Реалізований у `src/core/pipeline/mod.rs` як частина гілки AV після озвучки.
+Реалізовані у `src/core/pipeline/mod.rs` як частина гілки AV після озвучки.
 
-- **`subtitles_enabled` ≠ "виконувати субтитри".** Цей прапорець контролює лише **burn-in** (накладання тексту на відео у монтажі). Сам Whisper запускається завжди, якщо є озвучка (`voiceover_enabled`) та `subtitles_service == "Whisper"` — бо `subtitle.srt` потрібен для синхронізації відеоряду з аудіо у `build_timeline`.
-- **Відображення в картці задачі:** блок «Субтитри» показується (і враховується в прогресі) якщо `voiceover_enabled && subtitles_service == "Whisper"`. Якщо озвучку вимкнено або Whisper не обрано — блок не з'являється.
+- **`subtitles_enabled` ≠ "виконувати субтитри".** Цей прапорець контролює лише **burn-in** (накладання тексту на відео у монтажі). Генерація субтитрів запускається завжди, якщо є озвучка (`voiceover_enabled`) та обрано сервіс (`"Whisper"` або `"WhisperX"`) — бо `subtitle.srt` потрібен для синхронізації відеоряду з аудіо у `build_timeline`.
+- **Відображення в картці задачі:** блок «Субтитри» показується (і враховується в прогресі) якщо `voiceover_enabled && (subtitles_service == "Whisper" || subtitles_service == "WhisperX")`. Якщо озвучку вимкнено або сервіс не обрано — блок не з'являється.
+- **Джерело аудіо (обидва сервіси):** спочатку шукає `voice.wav` у папці задачі (якщо увімкнена конвертація), потім `voice.mp3`. Якщо жоден файл не знайдено — задача провалюється.
+
+**Whisper (whisper.cpp):**
 - **Бінарник whisper.cpp** (а не openai-whisper) — аргументи принципово відрізняються: `-m <шлях до .bin файлу>`, `--output-srt` (булевий прапорець), `-of <stem без розширення>` (whisper.cpp додає `.srt` автоматично), `-l <код мови>` (або відсутнє для авто).
-- **Джерело аудіо:** спочатку шукає `voice.wav` у папці задачі (якщо увімкнена конвертація), потім `voice.mp3`. Якщо жоден файл не знайдено — задача провалюється.
 - **Вихід:** `subtitle.srt` у папці задачі. `-of {save_dir}/subtitle` → whisper.cpp зберігає `subtitle.srt` без потреби перейменування.
 - **Мова:** якщо `whisper_language != "auto"` — передається `-l <code>`. Якщо `"auto"` — прапорець `-l` не передається взагалі (whisper.cpp сам визначить).
 - **Обмеження довжини сегмента:** якщо `whisper_max_line_width > 0` — передаються `--max-len N --split-on-word`. `--max-len` обмежує кількість символів у сегменті SRT, `--split-on-word` гарантує розбиття на межах слів (без обрізання слів посередині). Якщо `whisper_max_line_width == 0` — ці аргументи не передаються (whisper.cpp визначить довжину сам).
 - **Перевірка моделі перед запуском:** кнопка «▶ Запустити» у панелі черги блокується якщо хоча б одна задача Pending має `voiceover_enabled && subtitles_service == "Whisper"` та модель не завантажена. `on_disabled_hover_text` показує пояснення.
+
+**WhisperX (`run_whisperx`):**
+- **Бінарник:** `bin_dir/whisperx_mac/whisperx_cli` — PyInstaller-бандл. CLI формат нестандартний: `--audio <file> --model <model> --output subtitle.srt --align-json voice.json --ffmpeg-path <ffmpeg> [--language <code>]`. `--output` задає повний шлях до вихідного SRT (не stem!), `--align-json` — куди зберегти JSON з таймінгами вирівнювання.
+- **Вихід:** `subtitle.srt` та `voice.json` (таймінги вирівнювання) безпосередньо у папці задачі — без перейменувань.
+- **Мова:** якщо `whisper_language != "auto"` — передається `--language <code>`. Якщо `"auto"` — аргумент не передається.
+- **Моделі WhisperX** — faster-whisper/HuggingFace формат. Список відрізняється від whisper.cpp: немає `large-v3-turbo`, натомість є `large-v1/v2/v3`, `large`, `distil-large-v2/v3`, `distil-medium.en`, `distil-small.en`. Моделі завантажує сам WhisperX при першому запуску — кнопки скачування у GUI немає.
+- **`whisperx_max_line_width`** передається через `--max_line_width N` (не `--max-len`). Якщо `0` — не передається.
 
 #### Відеоряд (`timeline/`)
 
@@ -343,7 +352,7 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`download_all(on_progress)`** — завантажує ffmpeg і ffprobe з GitHub releases у `bin_dir()`. Перед завантаженням перевіряє чи файл вже існує — якщо так, пропускає. Читає відповідь чанками по 64 KB, після кожного чанку викликає `on_progress` з рядком `"ffmpeg (7.2 / 76.0 MB, 9%)"`. Якщо сервер не повернув `Content-Length` — без відсотка. Після запису на macOS/Linux автоматично виставляє chmod 755.
 - **`download_whisper(on_progress)`** — завантажує whisper у `bin_dir()`. На macOS: прямий бінарник (той самий механізм що й ffmpeg). На Windows: завантажує `whisper.win.zip`, розпаковує через крейт `zip`, шукає `main.exe` у будь-якій підпапці архіву та зберігає як `whisper.exe`. Перевіряє наявність файлу перед завантаженням — повторного скачування не відбувається.
 - **`whisper_local_exists()`** — перевіряє чи є whisper у `bin_dir()` (без fallback на PATH). Використовується `check_whisper` у welcome.rs щоб не запускати бінарник — досить перевірки файлу.
-- **`download_whisperx(on_progress)`** — завантажує `whisperx_mac.zip` та розпаковує папку `whisperx_mac/` у `bin_dir()` зберігаючи всю внутрішню структуру. На Windows повертає помилку (URL поки не визначено). Рекурсивне розпакування реалізовано через `extract_folder_from_zip`: ітерує по всіх записах zip, зберігає права виконання з unix_mode архіву (`unix_mode & 0o111 != 0` → chmod 755). Захист від path traversal: записи з `..` пропускаються.
+- **`download_whisperx(on_progress)`** — завантажує `whisperx_mac.zip` та розпаковує папку `whisperx_mac/` у `bin_dir()` зберігаючи всю внутрішню структуру. На Windows повертає помилку (URL поки не визначено). Рекурсивне розпакування реалізовано через `extract_folder_from_zip`: ітерує по всіх записах zip, зберігає права виконання з unix_mode архіву (`unix_mode & 0o111 != 0` → chmod 755). **Symlink-підтримка:** unix mode `0o170000 & entry_mode == 0o120000` → замість запису байтів створюється реальний symlink через `std::os::unix::fs::symlink`. Це критично для PyInstaller-бандлів де `_internal/Python` є симлінком на `Python.framework/Versions/3.11/Python` — без цього PyInstaller падав з "slice is not valid mach-o file". Захист від path traversal: записи з `..` пропускаються.
 - **`whisperx_local_exists()`** — перевіряє наявність папки `whisperx_mac/` у `bin_dir()` через `is_dir()` (не окремий файл, а ціла папка).
 - **Управління ggml-моделями:**
   - `models_dir()` — `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/models/`
@@ -498,9 +507,15 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 - **Моделі whisper.cpp завантажуються у `bin/models/`.** Ggml-файли `ggml-{model}.bin` розміщуються в `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/models/`. `large-v3-turbo` (~1.6 GB) доступна для завантаження з HuggingFace. Whisper-бінарник не поставляється з моделями — кожну потрібно завантажувати окремо.
 
-- **Кнопка «▶ Запустити» блокується якщо модель Whisper не завантажена.** Перевіряється `whisper_model_exists()` для кожної `Pending`-задачі де `voiceover_enabled && subtitles_service == "Whisper"` (не `subtitles_enabled` — субтитри завжди виконуються за наявності озвучки та Whisper). Якщо модель ще завантажується — показується `⏳` повідомлення через `on_disabled_hover_text`.
+- **Кнопка «▶ Запустити» блокується якщо модель Whisper не завантажена.** Перевіряється `whisper_model_exists()` для кожної `Pending`-задачі де `voiceover_enabled && subtitles_service == "Whisper"` (не `subtitles_enabled` — субтитри завжди виконуються за наявності озвучки та Whisper). Для WhisperX блокування не застосовується — моделі завантажує сам WhisperX. Якщо модель ще завантажується — показується `⏳` повідомлення через `on_disabled_hover_text`.
 
-- **`subtitles_enabled` — це burn-in toggle, а не "виконувати субтитри".** Whisper завжди генерує `subtitle.srt` якщо є озвучка і Whisper налаштований, бо цей файл є вхідними даними для `build_timeline` (синхронізація відеоряду з аудіо). `subtitles_enabled` тільки вирішує: чи вбудовувати субтитри у фінальне відео через FFmpeg `subtitles=subtitle.srt` фільтр. Burn-in потребує збірки FFmpeg з `libass`.
+- **`subtitles_enabled` — це burn-in toggle, а не "виконувати субтитри".** Whisper/WhisperX завжди генерує `subtitle.srt` якщо є озвучка і сервіс налаштований, бо цей файл є вхідними даними для `build_timeline` (синхронізація відеоряду з аудіо). `subtitles_enabled` тільки вирішує: чи вбудовувати субтитри у фінальне відео через FFmpeg `subtitles=subtitle.srt` фільтр. Burn-in потребує збірки FFmpeg з `libass`.
+
+- **WhisperX CLI — нестандартний формат аргументів.** На відміну від стандартного whisperx (positional args), бандлований `whisperx_cli` приймає іменовані аргументи: `--audio`, `--model`, `--output` (повний шлях до `.srt`, не stem), `--align-json` (шлях до JSON таймінгів), `--ffmpeg-path`, `--language`. Пряма підміна на стандартний whisperx CLI без оновлення аргументів призведе до помилки.
+
+- **`voice.json` — файл таймінгів WhisperX.** WhisperX через `--align-json voice.json` зберігає JSON з таймінгами вирівнювання слів прямо у папці задачі. Це відповідає `voice.wav` / `voice.mp3` за конвенцією іменування (все що пов'язано з голосом — `voice.*`).
+
+- **OpenRouter null content.** `ChatMessageContent.content` зберігається як `Option<String>` (не `String`). OpenRouter може повернути `null` коли модель відмовила або повернула порожній результат. Без `Option` парсинг JSON крашився з "invalid type: null". Витяг тексту відповіді: `.and_then(|c| c.message.content)` замість `.map()`.
 
 - **Googler API повертає data URI, а не HTTP URL.** За замовчуванням Googler повертає зображення у форматі `data:image/jpeg;base64,...` — це "resolved data URI" вбудований прямо у відповідь. `ureq::get()` такий формат відкидає з помилкою "EmptyHost". Тому `decode_result` спочатку перевіряє `result.starts_with("data:")` і тільки потім вирішує: base64-декодування або HTTP-завантаження. Для відео API аналогічно повертає `data:video/mp4;base64,...`.
 

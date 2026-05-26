@@ -15,7 +15,8 @@ struct ChatRequest {
 
 #[derive(Deserialize)]
 struct ChatMessageContent {
-    content: String,
+    // OpenRouter може повернути null коли модель відмовила або повернула порожній результат
+    content: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -102,7 +103,7 @@ pub fn call_openrouter(
 
     let text = data.choices.into_iter()
         .next()
-        .map(|c| c.message.content)
+        .and_then(|c| c.message.content)
         .unwrap_or_default();
 
     Ok((text, cost))

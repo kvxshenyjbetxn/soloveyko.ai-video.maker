@@ -216,6 +216,97 @@ fn decode_result(
     }
 }
 
+/// Запускає WhisperX для генерації субтитрів та зберігає результат як subtitle.srt.
+fn run_whisperx(
+    settings: &crate::queue::JobSettings,
+    job_id: u64,
+    job_name: &str,
+    subtitles_stage: &std::sync::Arc<std::sync::Mutex<crate::queue::StageStatus>>,
+    ctx: &egui::Context,
+) -> Result<(), String> {
+    let reason = if settings.subtitles_enabled {
+        "Starting subtitle generation via WhisperX (burn-in enabled)..."
+    } else {
+        "Starting subtitle generation via WhisperX (for timeline sync, burn-in disabled)..."
+    };
+    crate::logger::log_job(job_id, job_name, reason);
+    *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+    ctx.request_repaint();
+
+    let save_dir = std::path::Path::new(&settings.save_path);
+
+    // Перевіряємо наявність директорії whisperx у bin_dir
+    if !crate::bundle::whisperx_local_exists() {
+        let msg = "WhisperX not found. Download it in the Welcome window.".to_string();
+        crate::logger::log_job(job_id, job_name, &format!("Subtitles error: {}", msg));
+        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        return Err(msg);
+    }
+
+    // Вибираємо аудіо: WAV у пріоритеті, потім MP3
+    let audio_path = if save_dir.join("voice.wav").exists() {
+        save_dir.join("voice.wav")
+    } else if save_dir.join("voice.mp3").exists() {
+        save_dir.join("voice.mp3")
+    } else {
+        let msg = "Subtitles: audio file not found (voice.wav / voice.mp3)".to_string();
+        crate::logger::log_job(job_id, job_name, &format!("Subtitles error: {}", msg));
+        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        return Err(msg);
+    };
+
+    // Знаходимо виконуваний файл whisperx всередині папки bin_dir/whisperx_mac/
+    let whisperx_dir = crate::bundle::bin_dir().join("whisperx_mac");
+    let whisperx_cmd = whisperx_dir.join("whisperx_cli");
+
+    // Цей whisperx_cli має власний CLI-формат:
+    // whisperx_cli --audio <file> --model <model> --output <output.srt>
+    //              [--language <lang>] [--ffmpeg-path <ffmpeg>]
+    let output_srt = save_dir.join("subtitle.srt");
+    let output_json = save_dir.join("voice.json");
+    let mut args: Vec<String> = vec![
+        "--audio".to_string(), audio_path.to_str().unwrap_or("voice.wav").to_string(),
+        "--model".to_string(), settings.whisper_model.clone(),
+        "--output".to_string(), output_srt.to_str().unwrap_or("subtitle.srt").to_string(),
+        "--align-json".to_string(), output_json.to_str().unwrap_or("voice.json").to_string(),
+        "--ffmpeg-path".to_string(), crate::bundle::ffmpeg_path(),
+    ];
+    if settings.whisper_language != "auto" {
+        args.push("--language".to_string());
+        args.push(settings.whisper_language.clone());
+    }
+
+    crate::logger::log_job(
+        job_id, job_name,
+        &format!("Running: {} {}", whisperx_cmd.display(), args.join(" ")),
+    );
+
+    match std::process::Command::new(&whisperx_cmd).args(&args).output() {
+        Ok(out) if out.status.success() => {
+
+            crate::logger::log_job(job_id, job_name, "Subtitles saved: subtitle.srt");
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+            ctx.request_repaint();
+            Ok(())
+        }
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let msg = if !stderr.is_empty() { stderr.to_string() } else { stdout.to_string() };
+            let short = format!("WhisperX error: {}", msg.chars().take(120).collect::<String>());
+            crate::logger::log_job(job_id, job_name, &format!("WhisperX error: {}", msg.trim()));
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+            Err(short)
+        }
+        Err(e) => {
+            let msg = format!("WhisperX launch error: {}", e);
+            crate::logger::log_job(job_id, job_name, &format!("WhisperX not found or failed to start: {}", e));
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+            Err(msg)
+        }
+    }
+}
+
 /// Гілка Озвучка + Субтитри (виконується паралельно з відеорядом).
 /// Повертає Ok(()) або Err з описом першої помилки.
 fn run_av_branch(
@@ -305,9 +396,11 @@ fn run_av_branch(
         }
     }
 
-    // Субтитри (Whisper) — завжди генеруються якщо є Whisper (потрібні для синхронізації відеоряду).
+    // Субтитри (Whisper/WhisperX) — завжди генеруються якщо увімкнено (потрібні для синхронізації відеоряду).
     // Накладання на відео контролюється окремо через параметр burn_subtitles у монтажі.
-    if settings.subtitles_service == "Whisper" {
+    if settings.subtitles_service == "WhisperX" {
+        run_whisperx(&settings, job_id, &job_name, &subtitles_stage, &ctx)?;
+    } else if settings.subtitles_service == "Whisper" {
         let reason = if settings.subtitles_enabled {
             "Starting subtitle generation via Whisper (burn-in enabled)..."
         } else {

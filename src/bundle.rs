@@ -306,17 +306,38 @@ fn extract_folder_from_zip(bytes: &[u8], dest_parent: &PathBuf) -> Result<(), St
             let mut contents = Vec::new();
             entry.read_to_end(&mut contents)
                 .map_err(|e| format!("Помилка читання файлу {}: {}", entry_name, e))?;
-            std::fs::write(&out_path, &contents)
-                .map_err(|e| format!("Помилка запису {}: {}", entry_name, e))?;
 
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                // Якщо у файлу в архіві виставлені права виконання — зберігаємо їх
                 let unix_mode = entry.unix_mode().unwrap_or(0o644);
-                if unix_mode & 0o111 != 0 {
-                    let _ = std::fs::set_permissions(&out_path, std::fs::Permissions::from_mode(0o755));
+
+                // Unix mode 0o120000 = символьне посилання (symlink).
+                // PyInstaller-бандли містять симлінки всередині _internal/ — їх треба
+                // відновлювати як справжні симлінки, інакше dylib виглядатиме як текстовий файл.
+                if unix_mode & 0o170000 == 0o120000 {
+                    let target = std::str::from_utf8(&contents)
+                        .map_err(|e| format!("Некоректна ціль симлінку {}: {}", entry_name, e))?
+                        .trim_end_matches('\0');
+                    // Якщо симлінк вже існує — видаляємо перед створенням
+                    if out_path.exists() || out_path.symlink_metadata().is_ok() {
+                        let _ = std::fs::remove_file(&out_path);
+                    }
+                    std::os::unix::fs::symlink(target, &out_path)
+                        .map_err(|e| format!("Помилка створення симлінку {}: {}", entry_name, e))?;
+                } else {
+                    std::fs::write(&out_path, &contents)
+                        .map_err(|e| format!("Помилка запису {}: {}", entry_name, e))?;
+                    if unix_mode & 0o111 != 0 {
+                        let _ = std::fs::set_permissions(&out_path, std::fs::Permissions::from_mode(0o755));
+                    }
                 }
+            }
+
+            #[cfg(not(unix))]
+            {
+                std::fs::write(&out_path, &contents)
+                    .map_err(|e| format!("Помилка запису {}: {}", entry_name, e))?;
             }
         }
     }
