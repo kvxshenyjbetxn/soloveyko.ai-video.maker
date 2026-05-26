@@ -183,6 +183,8 @@ pub struct VideoMakerApp {
     pub job_counter: u64,
     /// Повідомлення про помилку валідації перед додаванням в чергу.
     pub queue_error: Option<String>,
+    /// Запит на повтор конкретного етапу задачі: (job_id, stage)
+    pub retry_request: Option<(u64, crate::queue::RetryStage)>,
     /// Обрана задача для перегляду її логів
     pub selected_job_logs: Option<(u64, String)>,
     /// Задача, для якої зараз відкрито вікно контролю перекладу
@@ -398,6 +400,7 @@ impl Default for VideoMakerApp {
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,
+            retry_request: None,
             selected_job_logs: None,
             selected_job_control: None,
             control_text_input: String::new(),
@@ -698,6 +701,7 @@ impl VideoMakerApp {
             jobs: Vec::new(),
             job_counter: 0,
             queue_error: None,
+            retry_request: None,
             selected_job_logs: None,
             selected_job_control: None,
             control_text_input: String::new(),
@@ -1035,10 +1039,38 @@ impl eframe::App for VideoMakerApp {
                         &mut self.control_text_input,
                         &self.whisper_model_download,
                         &mut self.active_tab,
+                        &mut self.retry_request,
                     );
                 });
         }
 
+
+        // Обробляємо запит на повтор етапу задачі
+        if let Some((target_id, stage)) = self.retry_request.take() {
+            if let Some(job) = self.jobs.iter().find(|j| j.id == target_id) {
+                crate::core::pipeline::retry_from_stage(
+                    stage,
+                    job.id,
+                    job.name.clone(),
+                    job.settings.clone(),
+                    std::sync::Arc::clone(&job.status),
+                    std::sync::Arc::clone(&job.translation_stage),
+                    std::sync::Arc::clone(&job.voiceover_stage),
+                    std::sync::Arc::clone(&job.video_stage),
+                    std::sync::Arc::clone(&job.subtitles_stage),
+                    std::sync::Arc::clone(&job.montage_stage),
+                    std::sync::Arc::clone(&job.translated_text),
+                    std::sync::Arc::clone(&job.translation_cost),
+                    std::sync::Arc::clone(&job.audio_duration),
+                    std::sync::Arc::clone(&job.prompts_progress),
+                    std::sync::Arc::clone(&job.media_progress),
+                    std::sync::Arc::clone(&job.montage_progress),
+                    std::sync::Arc::clone(&job.montage_file_size),
+                    std::sync::Arc::clone(&job.media_control_resume),
+                    ctx.clone(),
+                );
+            }
+        }
 
         // Конфігуруємо фрейм для центральної панелі.
         // Для редактора (Main) прибираємо відступи (margin), щоб поле було на всю висоту та ширину.

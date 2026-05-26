@@ -12,6 +12,16 @@ pub enum JobStatus {
     Failed(String),
 }
 
+/// Ідентифікатор етапу для повтору виконання з цього місця.
+#[derive(Clone, PartialEq, Debug)]
+pub enum RetryStage {
+    Translation,
+    Voiceover,
+    Video,
+    Subtitles,
+    Montage,
+}
+
 /// Статус окремого етапу пайплайну для відображення в карточці задачі.
 #[derive(Clone, PartialEq)]
 pub enum StageStatus {

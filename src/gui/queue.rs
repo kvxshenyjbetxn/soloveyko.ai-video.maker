@@ -26,6 +26,7 @@ pub fn draw_queue_panel(
     control_text_input: &mut String,
     whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     active_tab: &mut Tab,
+    retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
 ) {
     ui.add_space(4.0);
 
@@ -240,22 +241,54 @@ pub fn draw_queue_panel(
                         ),
                     };
 
+                    // Визначаємо чи задача може бути повторена (не виконується зараз)
+                    let can_retry = !matches!(
+                        status,
+                        crate::queue::JobStatus::Running
+                            | crate::queue::JobStatus::AwaitingControl
+                            | crate::queue::JobStatus::AwaitingMediaControl
+                    );
+
                     let group_frame = egui::Frame::group(ui.style())
                         .inner_margin(egui::Margin { left: 6.0, right: 6.0, top: 6.0, bottom: 6.0 });
-                    let response = group_frame.show(ui, |ui| {
-                        ui.set_width(190.0);
+                    // Closure повертає (card_clicked, retry_clicked).
+                    let response = group_frame.show(ui, |ui| -> (bool, bool) {
+                        ui.set_width(210.0);
+                        let mut card_clicked = false;
+                        let mut retry_clicked = false;
 
                         ui.vertical(|ui| {
                             ui.add_space(3.0);
 
-                            // Назва завдання
-                            ui.label(egui::RichText::new(
-                                format!("#{} {}", job.id + 1, &job.name)
-                            ).strong().size(15.0));
+                            // Назва задачі — клікабельна для відкриття логу; ↺ — retry всієї задачі
+                            ui.horizontal(|ui| {
+                                let title = ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(format!("#{} {}", job.id + 1, &job.name))
+                                            .strong().size(15.0)
+                                    ).sense(egui::Sense::click())
+                                );
+                                if title.hovered() {
+                                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                }
+                                if title.clicked() {
+                                    card_clicked = true;
+                                }
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    let btn = ui.add_enabled(
+                                        can_retry,
+                                        egui::Button::new(egui::RichText::new("↺").size(11.0)).small(),
+                                    );
+                                    if btn.on_hover_text(translate(language, "job_retry_tooltip")).clicked() {
+                                        *retry_request = Some((job.id, crate::queue::RetryStage::Translation));
+                                        retry_clicked = true;
+                                    }
+                                });
+                            });
 
                             ui.add_space(3.0);
 
-                            // Активні етапи — кожен з нового рядка з кольором за статусом
+                            // Активні етапи — кожен з нового рядка з кольором та кнопкою retry
                             let orig_text = &job.settings.text;
                             let orig_chars = orig_text.chars().count();
                             let orig_tokens = crate::gui::editor::count_tokens(orig_text);
@@ -276,37 +309,39 @@ pub fn draw_queue_panel(
                                     format!(
                                         "{} ({} {}, {} {}{})",
                                         translate(language, "translation"),
-                                        trans_tokens,
-                                        translate(language, "stats_tokens_short"),
-                                        trans_chars,
-                                        translate(language, "stats_chars_short"),
+                                        trans_tokens, translate(language, "stats_tokens_short"),
+                                        trans_chars, translate(language, "stats_chars_short"),
                                         cost_str
                                     )
                                 } else {
                                     format!(
                                         "{} ({} {}, {} {}{})",
                                         translate(language, "translation"),
-                                        orig_tokens,
-                                        translate(language, "stats_tokens_short"),
-                                        orig_chars,
-                                        translate(language, "stats_chars_short"),
+                                        orig_tokens, translate(language, "stats_tokens_short"),
+                                        orig_chars, translate(language, "stats_chars_short"),
                                         cost_str
                                     )
                                 };
-                                ui.label(
-                                    egui::RichText::new(translation_label)
-                                        .color(stage_color(&translation_stage, ui))
-                                        .size(12.5),
-                                );
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(translation_label)
+                                        .color(stage_color(&translation_stage, ui)).size(12.5));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let btn = ui.add_enabled(
+                                            can_retry,
+                                            egui::Button::new(egui::RichText::new("↺").size(10.0)).small(),
+                                        );
+                                        if btn.on_hover_text(translate(language, "stage_retry_tooltip")).clicked() {
+                                            *retry_request = Some((job.id, crate::queue::RetryStage::Translation));
+                                            retry_clicked = true;
+                                        }
+                                    });
+                                });
                             } else if job.settings.voiceover_enabled {
-                                // Переклад вимкнено, але озвучка увімкнена → показуємо "Оригінал"
                                 let original_label = format!(
                                     "{} ({} {}, {} {})",
                                     translate(language, "voiceover_text_source_original"),
-                                    orig_tokens,
-                                    translate(language, "stats_tokens_short"),
-                                    orig_chars,
-                                    translate(language, "stats_chars_short")
+                                    orig_tokens, translate(language, "stats_tokens_short"),
+                                    orig_chars, translate(language, "stats_chars_short")
                                 );
                                 ui.label(
                                     egui::RichText::new(original_label)
@@ -324,18 +359,14 @@ pub fn draw_queue_panel(
                                         let m = (total_s % 3600) / 60;
                                         let s = total_s % 60;
                                         let dur_str = if h > 0 {
-                                            format!(
-                                                "{}{}{}{}{}{}",
+                                            format!("{}{}{}{}{}{}",
                                                 h, translate(language, "time_hours_short"),
                                                 m, translate(language, "time_mins_short"),
-                                                s, translate(language, "time_secs_short")
-                                            )
+                                                s, translate(language, "time_secs_short"))
                                         } else if m > 0 {
-                                            format!(
-                                                "{}{}{}{}",
+                                            format!("{}{}{}{}",
                                                 m, translate(language, "time_mins_short"),
-                                                s, translate(language, "time_secs_short")
-                                            )
+                                                s, translate(language, "time_secs_short"))
                                         } else {
                                             format!("{}{}", s, translate(language, "time_secs_short"))
                                         };
@@ -348,21 +379,27 @@ pub fn draw_queue_panel(
                                     if translated_opt.is_some() {
                                         translate(language, "voiceover").to_string()
                                     } else {
-                                        format!(
-                                            "{} ({})",
-                                            translate(language, "voiceover"),
-                                            translate(language, "queue_waiting_translation")
-                                        )
+                                        format!("{} ({})", translate(language, "voiceover"),
+                                            translate(language, "queue_waiting_translation"))
                                     }
                                 } else {
                                     translate(language, "voiceover").to_string()
                                 };
 
-                                ui.label(
-                                    egui::RichText::new(voice_label)
-                                        .color(stage_color(&voiceover_stage, ui))
-                                        .size(12.5),
-                                );
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(voice_label)
+                                        .color(stage_color(&voiceover_stage, ui)).size(12.5));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let btn = ui.add_enabled(
+                                            can_retry,
+                                            egui::Button::new(egui::RichText::new("↺").size(10.0)).small(),
+                                        );
+                                        if btn.on_hover_text(translate(language, "stage_retry_tooltip")).clicked() {
+                                            *retry_request = Some((job.id, crate::queue::RetryStage::Voiceover));
+                                            retry_clicked = true;
+                                        }
+                                    });
+                                });
                             }
 
                             if job.settings.video_enabled {
@@ -382,24 +419,52 @@ pub fn draw_queue_panel(
                                                 None => translate(language, "video_media").to_string(),
                                             };
                                             ui.label(egui::RichText::new(media_str).color(color).size(12.5));
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                let btn = ui.add_enabled(
+                                                    can_retry,
+                                                    egui::Button::new(egui::RichText::new("↺").size(10.0)).small(),
+                                                );
+                                                if btn.on_hover_text(translate(language, "stage_retry_tooltip")).clicked() {
+                                                    *retry_request = Some((job.id, crate::queue::RetryStage::Video));
+                                                    retry_clicked = true;
+                                                }
+                                            });
                                         });
                                     }
                                     _ => {
-                                        ui.label(
-                                            egui::RichText::new(translate(language, "video"))
-                                                .color(stage_color(&video_stage, ui))
-                                                .size(12.5),
-                                        );
+                                        ui.horizontal(|ui| {
+                                            ui.label(egui::RichText::new(translate(language, "video"))
+                                                .color(stage_color(&video_stage, ui)).size(12.5));
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                let btn = ui.add_enabled(
+                                                    can_retry,
+                                                    egui::Button::new(egui::RichText::new("↺").size(10.0)).small(),
+                                                );
+                                                if btn.on_hover_text(translate(language, "stage_retry_tooltip")).clicked() {
+                                                    *retry_request = Some((job.id, crate::queue::RetryStage::Video));
+                                                    retry_clicked = true;
+                                                }
+                                            });
+                                        });
                                     }
                                 }
                             }
 
                             if job.settings.voiceover_enabled {
-                                ui.label(
-                                    egui::RichText::new(translate(language, "subtitles"))
-                                        .color(stage_color(&subtitles_stage, ui))
-                                        .size(12.5),
-                                );
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(translate(language, "subtitles"))
+                                        .color(stage_color(&subtitles_stage, ui)).size(12.5));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let btn = ui.add_enabled(
+                                            can_retry,
+                                            egui::Button::new(egui::RichText::new("↺").size(10.0)).small(),
+                                        );
+                                        if btn.on_hover_text(translate(language, "stage_retry_tooltip")).clicked() {
+                                            *retry_request = Some((job.id, crate::queue::RetryStage::Subtitles));
+                                            retry_clicked = true;
+                                        }
+                                    });
+                                });
                             }
 
                             if job.settings.montage_enabled {
@@ -422,11 +487,20 @@ pub fn draw_queue_panel(
                                     }
                                     _ => translate(language, "editing").to_string(),
                                 };
-                                ui.label(
-                                    egui::RichText::new(montage_label)
-                                        .color(stage_color(&montage_stage, ui))
-                                        .size(12.5),
-                                );
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(montage_label)
+                                        .color(stage_color(&montage_stage, ui)).size(12.5));
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        let btn = ui.add_enabled(
+                                            can_retry,
+                                            egui::Button::new(egui::RichText::new("↺").size(10.0)).small(),
+                                        );
+                                        if btn.on_hover_text(translate(language, "stage_retry_tooltip")).clicked() {
+                                            *retry_request = Some((job.id, crate::queue::RetryStage::Montage));
+                                            retry_clicked = true;
+                                        }
+                                    });
+                                });
                             }
 
                             ui.horizontal(|ui| {
@@ -474,20 +548,13 @@ pub fn draw_queue_panel(
                                 );
                             });
                         });
+
+                        (card_clicked, retry_clicked)
                     });
 
-                    // Робимо групу клікабельною для показу логів задачі
-                    let interact = ui.interact(
-                        response.response.rect,
-                        ui.make_persistent_id(format!("job_click_{}", job.id)),
-                        egui::Sense::click()
-                    );
+                    let (card_clicked, any_retry_clicked) = response.inner;
 
-                    if interact.hovered() {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                    }
-
-                    if interact.clicked() {
+                    if card_clicked && !any_retry_clicked {
                         if status == crate::queue::JobStatus::AwaitingControl {
                             *selected_job_control = Some(job.id);
                             if let Some(text) = job.translated_text.lock().unwrap().as_ref() {

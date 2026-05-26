@@ -430,6 +430,132 @@ fn run_assemblyai(
     }
 }
 
+/// Виконує лише генерацію субтитрів (без озвучки).
+/// Використовується як для основного пайплайну, так і для повтору субтитрів.
+fn run_subtitles_only(
+    settings: &crate::queue::JobSettings,
+    job_id: u64,
+    job_name: &str,
+    subtitles_stage: &Arc<Mutex<crate::queue::StageStatus>>,
+    ctx: &egui::Context,
+) -> Result<(), String> {
+    if settings.subtitles_service == "WhisperX" {
+        run_whisperx(settings, job_id, job_name, subtitles_stage, ctx)?;
+    } else if settings.subtitles_service == "AssemblyAI" {
+        run_assemblyai(settings, job_id, job_name, subtitles_stage, ctx)?;
+    } else if settings.subtitles_service == "Whisper" {
+        let reason = if settings.subtitles_enabled {
+            "Starting subtitle generation via Whisper (burn-in enabled)..."
+        } else {
+            "Starting subtitle generation via Whisper (for timeline sync, burn-in disabled)..."
+        };
+        crate::logger::log_job(job_id, job_name, reason);
+        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+        ctx.request_repaint();
+
+        let save_dir = std::path::Path::new(&settings.save_path);
+        let model_path = crate::bundle::whisper_model_path(&settings.whisper_model);
+        if !model_path.exists() {
+            let msg = format!(
+                "Subtitles error: model '{}' not found at '{}'. Download it in the subtitles settings.",
+                settings.whisper_model, model_path.display()
+            );
+            crate::logger::log_job(job_id, job_name, &msg);
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+            return Err(msg);
+        }
+
+        let audio_path = if save_dir.join("voice.wav").exists() {
+            save_dir.join("voice.wav")
+        } else if save_dir.join("voice.mp3").exists() {
+            save_dir.join("voice.mp3")
+        } else {
+            let msg = "Subtitles: audio file not found (voice.wav / voice.mp3)".to_string();
+            crate::logger::log_job(job_id, job_name, &format!("Subtitles error: {}", msg));
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+            return Err(msg);
+        };
+
+        let output_stem = save_dir.join("subtitle");
+        let whisper_cmd = crate::bundle::whisper_path();
+        let mut args: Vec<String> = vec![
+            audio_path.to_str().unwrap_or("voice.wav").to_string(),
+            "-m".to_string(), model_path.to_str().unwrap().to_string(),
+            "--output-srt".to_string(),
+            "-of".to_string(), output_stem.to_str().unwrap().to_string(),
+        ];
+        if settings.whisper_language != "auto" {
+            args.push("-l".to_string());
+            args.push(settings.whisper_language.clone());
+        }
+        if settings.whisper_max_line_width > 0 {
+            args.push("--max-len".to_string());
+            args.push(settings.whisper_max_line_width.to_string());
+            args.push("--split-on-word".to_string());
+        }
+
+        crate::logger::log_job(job_id, job_name, &format!("Running: {} {}", whisper_cmd, args.join(" ")));
+
+        match std::process::Command::new(&whisper_cmd).args(&args).output() {
+            Ok(out) if out.status.success() => {
+                crate::logger::log_job(job_id, job_name, "Subtitles saved: subtitle.srt");
+                let srt_path = save_dir.join("subtitle.srt");
+                if let Ok(srt) = std::fs::read_to_string(&srt_path) {
+                    let ass = srt_to_ass(&srt, &settings.subtitle_font, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
+                    let _ = std::fs::write(save_dir.join("subtitle.ass"), &ass);
+                }
+                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+                ctx.request_repaint();
+            }
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let msg = if !stderr.is_empty() { stderr.to_string() } else { stdout.to_string() };
+                let short = format!("Whisper error: {}", msg.chars().take(120).collect::<String>());
+                crate::logger::log_job(job_id, job_name, &format!("Whisper error: {}", msg.trim()));
+                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                return Err(short);
+            }
+            Err(e) => {
+                let msg = format!("Whisper launch error: {}", e);
+                crate::logger::log_job(job_id, job_name, &format!("Whisper not found or failed to start: {}", e));
+                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                return Err(msg);
+            }
+        }
+    }
+
+    // Karaoke-ефект якщо увімкнено
+    if settings.subtitle_karaoke
+        && (settings.subtitles_service == "WhisperX" || settings.subtitles_service == "AssemblyAI")
+    {
+        let save_dir = std::path::Path::new(&settings.save_path);
+        let json_path = save_dir.join("subtitle.json");
+        if json_path.exists() {
+            match generate_karaoke_ass(
+                &json_path,
+                &settings.subtitles_service,
+                &settings.subtitle_font,
+                settings.subtitle_font_size,
+                settings.subtitle_color,
+                settings.subtitle_margin_v,
+            ) {
+                Ok(ass_content) => {
+                    match std::fs::write(save_dir.join("subtitle.ass"), &ass_content) {
+                        Ok(_) => crate::logger::log_job(job_id, job_name, "Karaoke ASS generated: subtitle.ass"),
+                        Err(e) => crate::logger::log_job(job_id, job_name, &format!("Failed to save subtitle.ass (karaoke): {}", e)),
+                    }
+                }
+                Err(e) => crate::logger::log_job(job_id, job_name, &format!("Karaoke generation error: {}", e)),
+            }
+        } else {
+            crate::logger::log_job(job_id, job_name, "Karaoke: subtitle.json not found, skipping.");
+        }
+    }
+
+    Ok(())
+}
+
 /// Гілка Озвучка + Субтитри (виконується паралельно з відеорядом).
 /// Повертає Ok(()) або Err з описом першої помилки.
 fn run_av_branch(
@@ -519,139 +645,8 @@ fn run_av_branch(
         }
     }
 
-    // Субтитри (Whisper/WhisperX/AssemblyAI) — завжди генеруються якщо увімкнено (потрібні для синхронізації відеоряду).
-    // Накладання на відео контролюється окремо через параметр burn_subtitles у монтажі.
-    if settings.subtitles_service == "WhisperX" {
-        run_whisperx(&settings, job_id, &job_name, &subtitles_stage, &ctx)?;
-    } else if settings.subtitles_service == "AssemblyAI" {
-        run_assemblyai(&settings, job_id, &job_name, &subtitles_stage, &ctx)?;
-    } else if settings.subtitles_service == "Whisper" {
-        let reason = if settings.subtitles_enabled {
-            "Starting subtitle generation via Whisper (burn-in enabled)..."
-        } else {
-            "Starting subtitle generation via Whisper (for timeline sync, burn-in disabled)..."
-        };
-        crate::logger::log_job(job_id, &job_name, reason);
-        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Running;
-        ctx.request_repaint();
-
-        let save_dir = std::path::Path::new(&settings.save_path);
-
-        // Перевіряємо наявність ggml-моделі
-        let model_path = crate::bundle::whisper_model_path(&settings.whisper_model);
-        if !model_path.exists() {
-            let msg = format!(
-                "Subtitles error: model '{}' not found at '{}'. Download it in the subtitles settings.",
-                settings.whisper_model,
-                model_path.display()
-            );
-            crate::logger::log_job(job_id, &job_name, &msg);
-            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-            return Err(msg);
-        }
-
-        // Вибираємо аудіо: WAV у пріоритеті, потім MP3
-        let audio_path = if save_dir.join("voice.wav").exists() {
-            save_dir.join("voice.wav")
-        } else if save_dir.join("voice.mp3").exists() {
-            save_dir.join("voice.mp3")
-        } else {
-            let msg = "Subtitles: audio file not found (voice.wav / voice.mp3)".to_string();
-            crate::logger::log_job(job_id, &job_name, &format!("Subtitles error: {}", msg));
-            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-            return Err(msg);
-        };
-
-        // Шлях вихідного файлу без розширення — whisper.cpp додасть .srt сам
-        let output_stem = save_dir.join("subtitle");
-        let whisper_cmd = crate::bundle::whisper_path();
-
-        // whisper.cpp аргументи: -m <model_file> --output-srt -of <stem> [-l <lang>]
-        let mut args: Vec<String> = vec![
-            audio_path.to_str().unwrap_or("voice.wav").to_string(),
-            "-m".to_string(), model_path.to_str().unwrap().to_string(),
-            "--output-srt".to_string(),
-            "-of".to_string(), output_stem.to_str().unwrap().to_string(),
-        ];
-        if settings.whisper_language != "auto" {
-            args.push("-l".to_string());
-            args.push(settings.whisper_language.clone());
-        }
-        if settings.whisper_max_line_width > 0 {
-            args.push("--max-len".to_string());
-            args.push(settings.whisper_max_line_width.to_string());
-            // Розбивати лише на межах слів, щоб не обрізати слова посередині
-            args.push("--split-on-word".to_string());
-        }
-
-        crate::logger::log_job(
-            job_id, &job_name,
-            &format!("Running: {} {}", whisper_cmd, args.join(" ")),
-        );
-
-        match std::process::Command::new(&whisper_cmd).args(&args).output() {
-            Ok(out) if out.status.success() => {
-                crate::logger::log_job(job_id, &job_name, "Subtitles saved: subtitle.srt");
-
-                // Генеруємо subtitle.ass зі стилем запеченим всередині
-                let srt_path = save_dir.join("subtitle.srt");
-                if let Ok(srt) = std::fs::read_to_string(&srt_path) {
-                    let ass = srt_to_ass(&srt, &settings.subtitle_font, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
-                    let ass_path = save_dir.join("subtitle.ass");
-                    if let Err(e) = std::fs::write(&ass_path, &ass) {
-                        crate::logger::log_job(job_id, &job_name, &format!("Failed to save subtitle.ass: {}", e));
-                    }
-                }
-
-                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Done;
-                ctx.request_repaint();
-            }
-            Ok(out) => {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                let stdout = String::from_utf8_lossy(&out.stdout);
-                let msg = if !stderr.is_empty() { stderr.to_string() } else { stdout.to_string() };
-                let short = format!("Whisper error: {}", msg.chars().take(120).collect::<String>());
-                crate::logger::log_job(job_id, &job_name, &format!("Whisper error: {}", msg.trim()));
-                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                return Err(short);
-            }
-            Err(e) => {
-                let msg = format!("Whisper launch error: {}", e);
-                crate::logger::log_job(job_id, &job_name, &format!("Whisper not found or failed to start: {}", e));
-                *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
-                return Err(msg);
-            }
-        }
-    }
-
-    // Генеруємо subtitle.ass з karaoke-ефектом якщо увімкнено і є subtitle.json з word-мітками
-    if settings.subtitle_karaoke
-        && (settings.subtitles_service == "WhisperX" || settings.subtitles_service == "AssemblyAI")
-    {
-        let save_dir = std::path::Path::new(&settings.save_path);
-        let json_path = save_dir.join("subtitle.json");
-        if json_path.exists() {
-            match generate_karaoke_ass(
-                &json_path,
-                &settings.subtitles_service,
-                &settings.subtitle_font,
-                settings.subtitle_font_size,
-                settings.subtitle_color,
-                settings.subtitle_margin_v,
-            ) {
-                Ok(ass_content) => {
-                    let ass_path = save_dir.join("subtitle.ass");
-                    match std::fs::write(&ass_path, &ass_content) {
-                        Ok(_) => crate::logger::log_job(job_id, &job_name, "Karaoke ASS generated: subtitle.ass"),
-                        Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Failed to save subtitle.ass (karaoke): {}", e)),
-                    }
-                }
-                Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Karaoke generation error: {}", e)),
-            }
-        } else {
-            crate::logger::log_job(job_id, &job_name, "Karaoke: subtitle.json not found, skipping.");
-        }
-    }
+    // Субтитри — виконуємо через спільний хелпер
+    run_subtitles_only(&settings, job_id, &job_name, &subtitles_stage, &ctx)?;
 
     Ok(())
 }
@@ -1386,6 +1381,289 @@ pub fn run_pipeline(
         *status.lock().unwrap() = crate::queue::JobStatus::Done;
         ctx.request_repaint();
     });
+}
+
+/// Виконує timeline + montage (спільна фінальна частина для retry-функцій).
+fn run_final_stages(
+    job_id: u64,
+    job_name: &str,
+    settings: &crate::queue::JobSettings,
+    translated_text: &Arc<Mutex<Option<String>>>,
+    audio_duration: &Arc<Mutex<Option<f64>>>,
+    montage_stage: &Arc<Mutex<crate::queue::StageStatus>>,
+    montage_progress: &Arc<Mutex<Option<f32>>>,
+    montage_file_size: &Arc<Mutex<Option<u64>>>,
+    ctx: &egui::Context,
+) -> Result<(), String> {
+    // Timeline
+    if settings.video_enabled {
+        let source_text = if settings.translation_enabled {
+            translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
+        } else {
+            settings.text.clone()
+        };
+        let segments = crate::core::pipeline::timeline::text_splitter::split_text(
+            &source_text, &settings.text_split_mode, settings.text_split_char_limit,
+        );
+        let audio_dur = *audio_duration.lock().unwrap();
+        let save_dir = std::path::Path::new(&settings.save_path);
+        match crate::core::pipeline::timeline::sync::build_timeline(save_dir, &segments, audio_dur, job_name) {
+            Ok(_) => crate::logger::log_job(job_id, job_name, "Timeline saved: timeline.json"),
+            Err(e) => crate::logger::log_job(job_id, job_name, &format!("Timeline warning: {}", e)),
+        }
+    }
+
+    // Монтаж
+    if settings.montage_enabled {
+        crate::logger::log_job(job_id, job_name, "Starting montage stage...");
+        *montage_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+        ctx.request_repaint();
+
+        let audio_dur = *audio_duration.lock().unwrap();
+        let save_dir = std::path::Path::new(&settings.save_path);
+        let job_id_log = job_id;
+        let job_name_log = job_name.to_string();
+        let montage_progress_arc = Arc::clone(montage_progress);
+        let ctx_montage = ctx.clone();
+
+        match crate::core::pipeline::montage::run_montage(
+            save_dir, job_name, audio_dur,
+            settings.montage_fps, &settings.montage_preset, settings.montage_bitrate,
+            &settings.montage_transition, settings.montage_transition_duration,
+            settings.subtitles_enabled,
+            |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
+            move |pct| {
+                *montage_progress_arc.lock().unwrap() = Some(pct);
+                ctx_montage.request_repaint();
+            },
+        ) {
+            Ok(size) => {
+                *montage_file_size.lock().unwrap() = Some(size);
+                crate::logger::log_job(job_id, job_name, "Montage complete.");
+                *montage_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+                ctx.request_repaint();
+            }
+            Err(e) => {
+                crate::logger::log_job(job_id, job_name, &format!("Montage failed: {}", e));
+                *montage_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                return Err(format!("Montage: {}", e));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Повторює пайплайн починаючи з вказаного етапу.
+/// Скидає статуси цього та всіх наступних етапів, потім запускає їх у фоновому потоці.
+pub fn retry_from_stage(
+    stage: crate::queue::RetryStage,
+    job_id: u64,
+    job_name: String,
+    settings: crate::queue::JobSettings,
+    status: Arc<Mutex<crate::queue::JobStatus>>,
+    translation_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    voiceover_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    video_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    subtitles_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    montage_stage: Arc<Mutex<crate::queue::StageStatus>>,
+    translated_text: Arc<Mutex<Option<String>>>,
+    translation_cost: Arc<Mutex<Option<f64>>>,
+    audio_duration: Arc<Mutex<Option<f64>>>,
+    prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
+    media_progress: Arc<Mutex<Option<(usize, usize)>>>,
+    montage_progress: Arc<Mutex<Option<f32>>>,
+    montage_file_size: Arc<Mutex<Option<u64>>>,
+    media_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    ctx: egui::Context,
+) {
+    use crate::queue::RetryStage::*;
+    use crate::queue::StageStatus::Pending as SPending;
+
+    match stage {
+        // Повний перезапуск з перекладу
+        Translation => {
+            *translation_stage.lock().unwrap() = SPending;
+            *voiceover_stage.lock().unwrap() = SPending;
+            *video_stage.lock().unwrap() = SPending;
+            *subtitles_stage.lock().unwrap() = SPending;
+            *montage_stage.lock().unwrap() = SPending;
+            *translated_text.lock().unwrap() = None;
+            *translation_cost.lock().unwrap() = None;
+            *audio_duration.lock().unwrap() = None;
+            *prompts_progress.lock().unwrap() = None;
+            *media_progress.lock().unwrap() = None;
+            *montage_progress.lock().unwrap() = None;
+            *montage_file_size.lock().unwrap() = None;
+            *media_control_resume.0.lock().unwrap() = false;
+            run_pipeline(
+                job_id, job_name, settings, status,
+                translation_stage, voiceover_stage, video_stage, subtitles_stage, montage_stage,
+                translated_text, translation_cost, audio_duration,
+                prompts_progress, media_progress, montage_progress, montage_file_size,
+                media_control_resume, ctx,
+            );
+        }
+
+        // Повтор озвучки → субтитри → монтаж (відеоряд не чіпаємо)
+        Voiceover => {
+            *voiceover_stage.lock().unwrap() = SPending;
+            *subtitles_stage.lock().unwrap() = SPending;
+            *montage_stage.lock().unwrap() = SPending;
+            *audio_duration.lock().unwrap() = None;
+            *montage_progress.lock().unwrap() = None;
+            *montage_file_size.lock().unwrap() = None;
+
+            let voice_text = translated_text.lock().unwrap().clone()
+                .unwrap_or_else(|| settings.text.clone());
+
+            std::thread::spawn(move || {
+                *status.lock().unwrap() = crate::queue::JobStatus::Running;
+                ctx.request_repaint();
+
+                crate::logger::log_job(job_id, &job_name, "Retry: AV branch (voiceover + subtitles)...");
+                if let Err(e) = run_av_branch(
+                    job_id, job_name.clone(), settings.clone(), voice_text,
+                    Arc::clone(&voiceover_stage), Arc::clone(&subtitles_stage),
+                    Arc::clone(&audio_duration), ctx.clone(),
+                ) {
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = run_final_stages(
+                    job_id, &job_name, &settings, &translated_text, &audio_duration,
+                    &montage_stage, &montage_progress, &montage_file_size, &ctx,
+                ) {
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                crate::logger::log_job(job_id, &job_name, "Job completed successfully.");
+                *status.lock().unwrap() = crate::queue::JobStatus::Done;
+                ctx.request_repaint();
+            });
+        }
+
+        // Повтор відеоряду → медіа-контроль → монтаж
+        Video => {
+            *video_stage.lock().unwrap() = SPending;
+            *montage_stage.lock().unwrap() = SPending;
+            *prompts_progress.lock().unwrap() = None;
+            *media_progress.lock().unwrap() = None;
+            *montage_progress.lock().unwrap() = None;
+            *montage_file_size.lock().unwrap() = None;
+            *media_control_resume.0.lock().unwrap() = false;
+
+            std::thread::spawn(move || {
+                *status.lock().unwrap() = crate::queue::JobStatus::Running;
+                ctx.request_repaint();
+
+                crate::logger::log_job(job_id, &job_name, "Retry: video branch...");
+                let video_result = run_video_branch(
+                    job_id, job_name.clone(), settings.clone(), Arc::clone(&translated_text),
+                    Arc::clone(&video_stage), Arc::clone(&prompts_progress),
+                    Arc::clone(&media_progress), ctx.clone(),
+                );
+
+                // Пауза для контролю зображень
+                if settings.media_control_enabled && settings.video_enabled {
+                    if let Ok(()) = &video_result {
+                        crate::logger::log_job(job_id, &job_name, "Video done. Awaiting media review...");
+                        *status.lock().unwrap() = crate::queue::JobStatus::AwaitingMediaControl;
+                        ctx.request_repaint();
+                        let (lock, cvar) = &*media_control_resume;
+                        let mut resumed = lock.lock().unwrap();
+                        while !*resumed { resumed = cvar.wait(resumed).unwrap(); }
+                        *resumed = false;
+                        crate::logger::log_job(job_id, &job_name, "Media review confirmed. Resuming...");
+                        *status.lock().unwrap() = crate::queue::JobStatus::Running;
+                        ctx.request_repaint();
+                    }
+                }
+
+                if let Err(e) = video_result {
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = run_final_stages(
+                    job_id, &job_name, &settings, &translated_text, &audio_duration,
+                    &montage_stage, &montage_progress, &montage_file_size, &ctx,
+                ) {
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                crate::logger::log_job(job_id, &job_name, "Job completed successfully.");
+                *status.lock().unwrap() = crate::queue::JobStatus::Done;
+                ctx.request_repaint();
+            });
+        }
+
+        // Повтор лише субтитрів → монтаж
+        Subtitles => {
+            *subtitles_stage.lock().unwrap() = SPending;
+            *montage_stage.lock().unwrap() = SPending;
+            *montage_progress.lock().unwrap() = None;
+            *montage_file_size.lock().unwrap() = None;
+
+            std::thread::spawn(move || {
+                *status.lock().unwrap() = crate::queue::JobStatus::Running;
+                ctx.request_repaint();
+
+                crate::logger::log_job(job_id, &job_name, "Retry: subtitles...");
+                if let Err(e) = run_subtitles_only(&settings, job_id, &job_name, &subtitles_stage, &ctx) {
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                if let Err(e) = run_final_stages(
+                    job_id, &job_name, &settings, &translated_text, &audio_duration,
+                    &montage_stage, &montage_progress, &montage_file_size, &ctx,
+                ) {
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                crate::logger::log_job(job_id, &job_name, "Job completed successfully.");
+                *status.lock().unwrap() = crate::queue::JobStatus::Done;
+                ctx.request_repaint();
+            });
+        }
+
+        // Повтор лише монтажу (timeline + montage)
+        Montage => {
+            *montage_stage.lock().unwrap() = SPending;
+            *montage_progress.lock().unwrap() = None;
+            *montage_file_size.lock().unwrap() = None;
+
+            std::thread::spawn(move || {
+                *status.lock().unwrap() = crate::queue::JobStatus::Running;
+                ctx.request_repaint();
+
+                crate::logger::log_job(job_id, &job_name, "Retry: montage...");
+                if let Err(e) = run_final_stages(
+                    job_id, &job_name, &settings, &translated_text, &audio_duration,
+                    &montage_stage, &montage_progress, &montage_file_size, &ctx,
+                ) {
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    ctx.request_repaint();
+                    return;
+                }
+
+                crate::logger::log_job(job_id, &job_name, "Job completed successfully.");
+                *status.lock().unwrap() = crate::queue::JobStatus::Done;
+                ctx.request_repaint();
+            });
+        }
+    }
 }
 
 /// Зчитує збережений промт для конкретного медіафайлу з prompts.json.

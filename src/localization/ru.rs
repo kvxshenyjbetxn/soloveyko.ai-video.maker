@@ -175,6 +175,8 @@ pub fn translate_ru(key: &str) -> &'static str {
         "job_name_auto" => "Задание",
         "job_name_confirm_btn" => "Добавить",
         "job_name_cancel_btn" => "Отмена",
+        "stage_retry_tooltip" => "Повторить этот этап и все последующие",
+        "job_retry_tooltip" => "Повторить всё задание заново",
         "job_logs_title" => "Логи задачи",
         "job_logs_empty" => "Логи для этой задачи отсутствуют.",
         "welcome_title" => "Добро пожаловать!",
