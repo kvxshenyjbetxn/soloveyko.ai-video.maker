@@ -31,6 +31,12 @@ const WHISPER_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/relea
 #[cfg(not(target_os = "windows"))]
 const WHISPER_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper";
 
+/// На macOS — zip-архів з папкою всередині. Windows поки не підтримується.
+#[cfg(target_os = "macos")]
+const WHISPERX_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisperx_mac.zip";
+
+const WHISPERX_DIR_NAME: &str = "whisperx_mac";
+
 /// Папка для бандлованих бінарників: <UserConfigDir>/Soloveyko.AI-Video.Maker/bin/
 pub fn bin_dir() -> PathBuf {
     dirs::config_dir()
@@ -70,6 +76,36 @@ pub fn whisper_path() -> String {
 /// Перевіряє, чи є whisper у локальному bin_dir.
 pub fn whisper_local_exists() -> bool {
     bin_dir().join(WHISPER_NAME).exists()
+}
+
+/// Перевіряє, чи є папка whisperx у локальному bin_dir.
+pub fn whisperx_local_exists() -> bool {
+    bin_dir().join(WHISPERX_DIR_NAME).is_dir()
+}
+
+/// Завантажує whisperx у bin_dir (розпаковує папку з zip).
+/// Підтримується лише macOS. На Windows повертає помилку.
+pub fn download_whisperx(mut on_progress: impl FnMut(String)) -> Result<(), String> {
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = on_progress;
+        return Err("WhisperX автоматичне завантаження підтримується лише на macOS".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let dir = bin_dir();
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
+
+        if whisperx_local_exists() {
+            return Ok(());
+        }
+
+        let bytes = download_to_bytes(WHISPERX_URL, "whisperx", &mut on_progress)?;
+        extract_folder_from_zip(&bytes, &dir)?;
+        Ok(())
+    }
 }
 
 /// Папка для ggml-моделей whisper.cpp: <bin_dir>/models/
@@ -235,6 +271,57 @@ fn download_to_bytes(
     }
 
     Ok(buf)
+}
+
+/// Розпаковує всю папку з zip-архіву у вказану папку призначення.
+/// Бере першу папку верхнього рівня в архіві та рекурсивно витягує її вміст.
+fn extract_folder_from_zip(bytes: &[u8], dest_parent: &PathBuf) -> Result<(), String> {
+    use std::io::Read;
+
+    let cursor = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor)
+        .map_err(|e| format!("Помилка відкриття zip: {}", e))?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)
+            .map_err(|e| format!("Помилка читання запису zip: {}", e))?;
+
+        let entry_name = entry.name().to_string();
+
+        // Пропускаємо записи з небезпечними шляхами
+        if entry_name.contains("..") {
+            continue;
+        }
+
+        let out_path = dest_parent.join(&entry_name);
+
+        if entry.is_dir() {
+            std::fs::create_dir_all(&out_path)
+                .map_err(|e| format!("Помилка створення папки {}: {}", entry_name, e))?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Помилка створення папки: {}", e))?;
+            }
+            let mut contents = Vec::new();
+            entry.read_to_end(&mut contents)
+                .map_err(|e| format!("Помилка читання файлу {}: {}", entry_name, e))?;
+            std::fs::write(&out_path, &contents)
+                .map_err(|e| format!("Помилка запису {}: {}", entry_name, e))?;
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                // Якщо у файлу в архіві виставлені права виконання — зберігаємо їх
+                let unix_mode = entry.unix_mode().unwrap_or(0o644);
+                if unix_mode & 0o111 != 0 {
+                    let _ = std::fs::set_permissions(&out_path, std::fs::Permissions::from_mode(0o755));
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Завантажує файл за URL і зберігає на диск.

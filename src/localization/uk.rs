@@ -186,6 +186,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "welcome_recheck_btn" => "↺ Перевірити знову",
         "welcome_ffmpeg_desc" => "FFmpeg — обробка аудіо/відео, конвертація у формат WAV",
         "welcome_whisper_desc" => "Whisper — розпізнавання мовлення для генерації субтитрів",
+        "welcome_whisperx_desc" => "WhisperX — покращений двигун субтитрів з точнішою синхронізацією",
         "balance_edge_tts_status" => "Безкоштовно (Без лімітів)",
         "balance_voicebot_limit" => "Обмеження потоків: 5 (фіксовано)",
         "balance_active_threads" => "Активні потоки:",

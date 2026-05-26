@@ -343,6 +343,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`download_all(on_progress)`** — завантажує ffmpeg і ffprobe з GitHub releases у `bin_dir()`. Перед завантаженням перевіряє чи файл вже існує — якщо так, пропускає. Читає відповідь чанками по 64 KB, після кожного чанку викликає `on_progress` з рядком `"ffmpeg (7.2 / 76.0 MB, 9%)"`. Якщо сервер не повернув `Content-Length` — без відсотка. Після запису на macOS/Linux автоматично виставляє chmod 755.
 - **`download_whisper(on_progress)`** — завантажує whisper у `bin_dir()`. На macOS: прямий бінарник (той самий механізм що й ffmpeg). На Windows: завантажує `whisper.win.zip`, розпаковує через крейт `zip`, шукає `main.exe` у будь-якій підпапці архіву та зберігає як `whisper.exe`. Перевіряє наявність файлу перед завантаженням — повторного скачування не відбувається.
 - **`whisper_local_exists()`** — перевіряє чи є whisper у `bin_dir()` (без fallback на PATH). Використовується `check_whisper` у welcome.rs щоб не запускати бінарник — досить перевірки файлу.
+- **`download_whisperx(on_progress)`** — завантажує `whisperx_mac.zip` та розпаковує папку `whisperx_mac/` у `bin_dir()` зберігаючи всю внутрішню структуру. На Windows повертає помилку (URL поки не визначено). Рекурсивне розпакування реалізовано через `extract_folder_from_zip`: ітерує по всіх записах zip, зберігає права виконання з unix_mode архіву (`unix_mode & 0o111 != 0` → chmod 755). Захист від path traversal: записи з `..` пропускаються.
+- **`whisperx_local_exists()`** — перевіряє наявність папки `whisperx_mac/` у `bin_dir()` через `is_dir()` (не окремий файл, а ціла папка).
 - **Управління ggml-моделями:**
   - `models_dir()` — `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/models/`
   - `whisper_model_filename(model)` — `ggml-{model}.bin`
@@ -356,11 +358,13 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 З'являється при першому запуску (або якщо `show_welcome: true` у `settings.json`). Перевіряє наявність CLI-інструментів асинхронно у фонових потоках при ініціалізації `VideoMakerApp::new()`.
 
-**Інструменти що перевіряються:** чотири — `gemini --version`, `claude --version`, FFmpeg, Whisper. Brew, npm та команди встановлення прибрані — вікно тільки інформаційне.
+**Інструменти що перевіряються:** п'ять — `gemini --version`, `claude --version`, FFmpeg, Whisper, WhisperX. Brew, npm та команди встановлення прибрані — вікно тільки інформаційне.
 
 **FFmpeg перевіряється особливо** (`check_ffmpeg`): спочатку викликає `crate::bundle::ffmpeg_path()` (тобто шукає і в `bin_dir`, і в PATH), запускає з `-version`. Якщо не знайдено — одразу автоматично запускає `bundle::download_all` у тому ж фоновому потоці. Окремий стан `BinaryDownload` (Idle / Downloading(label) / Done / Failed) зберігається в `Arc<Mutex<BinaryDownload>>`. UI показує спінер + жовтий текст прогресу `"ffmpeg (7.2 / 76.0 MB, 9%)"` → після завершення перевіряє знову і показує ✓.
 
 **Whisper перевіряється** (`check_whisper`): на відміну від FFmpeg, не запускає бінарник — лише перевіряє `bundle::whisper_local_exists()`. Якщо файлу нема — запускає `bundle::download_whisper` з прогресом. Після завершення знову перевіряє `whisper_local_exists()`. Результат: `ToolStatus::Installed("bundled")`.
+
+**WhisperX перевіряється** (`check_whisperx`): аналогічно Whisper — перевіряє `bundle::whisperx_local_exists()` (наявність папки `whisperx_mac/`). Якщо відсутня — запускає `bundle::download_whisperx`. Авто-завантаження підтримується лише на macOS; на Windows одразу повертає `Failed` з повідомленням.
 
 **`BinaryDownload` (раніше `FfmpegDownload`):** загальний тип для всіх бінарників з авто-завантаженням. `FfmpegDownload` залишений як type alias для зворотної сумісності всередині файлу. Функція `draw_download_row` (раніше `draw_ffmpeg_row`) тепер використовується для обох: FFmpeg та Whisper.
 

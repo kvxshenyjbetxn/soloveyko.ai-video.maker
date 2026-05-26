@@ -186,6 +186,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "welcome_recheck_btn" => "↺ Проверить снова",
         "welcome_ffmpeg_desc" => "FFmpeg — обработка аудио/видео, конвертация в формат WAV",
         "welcome_whisper_desc" => "Whisper — распознавание речи для генерации субтитров",
+        "welcome_whisperx_desc" => "WhisperX — улучшенный движок субтитров с точной синхронизацией",
         "balance_edge_tts_status" => "Бесплатно (Без лимитов)",
         "balance_voicebot_limit" => "Ограничение потоков: 5 (фиксировано)",
         "balance_active_threads" => "Активные потоки:",

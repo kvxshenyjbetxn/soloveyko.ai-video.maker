@@ -30,6 +30,8 @@ pub struct ToolChecks {
     pub ffmpeg_download: Arc<Mutex<BinaryDownload>>,
     pub whisper: Arc<Mutex<ToolStatus>>,
     pub whisper_download: Arc<Mutex<BinaryDownload>>,
+    pub whisperx: Arc<Mutex<ToolStatus>>,
+    pub whisperx_download: Arc<Mutex<BinaryDownload>>,
 }
 
 impl ToolChecks {
@@ -41,6 +43,8 @@ impl ToolChecks {
             ffmpeg_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
             whisper: Arc::new(Mutex::new(ToolStatus::Checking)),
             whisper_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
+            whisperx: Arc::new(Mutex::new(ToolStatus::Checking)),
+            whisperx_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
         }
     }
 
@@ -52,6 +56,8 @@ impl ToolChecks {
         *self.ffmpeg_download.lock().unwrap() = BinaryDownload::Idle;
         *self.whisper.lock().unwrap() = ToolStatus::Checking;
         *self.whisper_download.lock().unwrap() = BinaryDownload::Idle;
+        *self.whisperx.lock().unwrap() = ToolStatus::Checking;
+        *self.whisperx_download.lock().unwrap() = BinaryDownload::Idle;
         self.start(ctx);
     }
 
@@ -67,6 +73,11 @@ impl ToolChecks {
         Self::check_whisper(
             Arc::clone(&self.whisper),
             Arc::clone(&self.whisper_download),
+            ctx.clone(),
+        );
+        Self::check_whisperx(
+            Arc::clone(&self.whisperx),
+            Arc::clone(&self.whisperx_download),
             ctx,
         );
     }
@@ -163,6 +174,49 @@ impl ToolChecks {
         });
     }
 
+    /// Перевіряє whisperx (папка у bin_dir), при відсутності — авто-скачує.
+    fn check_whisperx(
+        whisperx_status: Arc<Mutex<ToolStatus>>,
+        whisperx_download: Arc<Mutex<BinaryDownload>>,
+        ctx: egui::Context,
+    ) {
+        std::thread::spawn(move || {
+            if crate::bundle::whisperx_local_exists() {
+                *whisperx_status.lock().unwrap() = ToolStatus::Installed("bundled".to_string());
+                ctx.request_repaint();
+                return;
+            }
+
+            // Не знайдено — починаємо авто-завантаження
+            *whisperx_status.lock().unwrap() = ToolStatus::NotInstalled;
+            *whisperx_download.lock().unwrap() = BinaryDownload::Downloading("підготовка...".to_string());
+            ctx.request_repaint();
+
+            let dl = Arc::clone(&whisperx_download);
+            let ctx2 = ctx.clone();
+            let result = crate::bundle::download_whisperx(move |label| {
+                *dl.lock().unwrap() = BinaryDownload::Downloading(label);
+                ctx2.request_repaint();
+            });
+
+            match result {
+                Ok(()) => {
+                    let new_status = if crate::bundle::whisperx_local_exists() {
+                        ToolStatus::Installed("bundled".to_string())
+                    } else {
+                        ToolStatus::NotInstalled
+                    };
+                    *whisperx_status.lock().unwrap() = new_status;
+                    *whisperx_download.lock().unwrap() = BinaryDownload::Done;
+                }
+                Err(e) => {
+                    *whisperx_download.lock().unwrap() = BinaryDownload::Failed(e);
+                }
+            }
+            ctx.request_repaint();
+        });
+    }
+
     /// Перевіряє whisper (бандлований), при відсутності — авто-скачує.
     fn check_whisper(
         whisper_status: Arc<Mutex<ToolStatus>>,
@@ -241,6 +295,8 @@ pub fn draw_welcome_dialog(
             let ffmpeg_download = checks.ffmpeg_download.lock().unwrap().clone();
             let whisper_status = checks.whisper.lock().unwrap().clone();
             let whisper_download = checks.whisper_download.lock().unwrap().clone();
+            let whisperx_status = checks.whisperx.lock().unwrap().clone();
+            let whisperx_download = checks.whisperx_download.lock().unwrap().clone();
 
             draw_tool_row(ui, "Gemini CLI", &gemini_status, translate(language, "welcome_gemini_desc"), language);
             ui.add_space(6.0);
@@ -249,6 +305,8 @@ pub fn draw_welcome_dialog(
             draw_download_row(ui, "FFmpeg", &ffmpeg_status, &ffmpeg_download, translate(language, "welcome_ffmpeg_desc"), language);
             ui.add_space(6.0);
             draw_download_row(ui, "Whisper", &whisper_status, &whisper_download, translate(language, "welcome_whisper_desc"), language);
+            ui.add_space(6.0);
+            draw_download_row(ui, "WhisperX", &whisperx_status, &whisperx_download, translate(language, "welcome_whisperx_desc"), language);
 
             ui.add_space(10.0);
 

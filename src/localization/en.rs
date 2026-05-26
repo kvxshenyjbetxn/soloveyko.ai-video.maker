@@ -186,6 +186,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "welcome_recheck_btn" => "↺ Recheck",
         "welcome_ffmpeg_desc" => "FFmpeg — audio/video processing, WAV format conversion",
         "welcome_whisper_desc" => "Whisper — speech recognition for subtitle generation",
+        "welcome_whisperx_desc" => "WhisperX — enhanced subtitle engine with more precise synchronization",
         "balance_edge_tts_status" => "Free (No limits)",
         "balance_voicebot_limit" => "Threads limit: 5 (fixed)",
         "balance_active_threads" => "Active threads:",
