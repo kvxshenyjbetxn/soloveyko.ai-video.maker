@@ -80,7 +80,7 @@ src/
 │   │   ├── translation_control.rs — draw_translation_control_window: вікно контролю перекладу + розширена перегенерація
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
 │   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт)
-│   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI, мова, модель, завантаження ggml-моделі для Whisper, ключ AssemblyAI)
+│   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI, мова, модель, стиль: колір/розмір/відступ/karaoke, завантаження ggml-моделі для Whisper, ключ AssemblyAI)
 │   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами)
 │   └── settings/
 │       ├── mod.rs               — draw_settings: вкладки налаштувань
@@ -171,7 +171,7 @@ src/
 - **`montage_progress: Arc<Mutex<Option<f32>>>`** — поточний прогрес монтажу `[0.0..1.0]`, оновлюється в реальному часі через `on_progress` callback з `run_montage`. Зберігається після завершення (1.0), тому картка показує `100%` і в стані `Done`.
 - **`montage_file_size: Arc<Mutex<Option<u64>>>`** — розмір вихідного `.mp4` файлу в байтах. Заповнюється одразу після успішного завершення `run_montage`. Відображається в картці поруч з відсотком: `Монтаж (100%  0.84 GB)`.
 - **`voiceover_convert_to_wav` у `JobSettings`** — знімок налаштування конвертації в WAV на момент додавання задачі.
-- **`StageStatus`** — `Pending / Running / Done / Failed` (без деталей помилки). Кожен `PipelineJob` має п'ять окремих полів: `translation_stage`, `voiceover_stage`, `video_stage`, `subtitles_stage` та `montage_stage`. Слугують виключно для UI: картка задачі фарбує назву кожного етапу відповідним кольором (сірий / жовтий / зелений / червоний). `montage_stage` відображається лише якщо `montage_enabled`. `subtitles_stage` відображається якщо `voiceover_enabled && (subtitles_service == "Whisper" || subtitles_service == "WhisperX" || subtitles_service == "AssemblyAI")` — незалежно від `subtitles_enabled` (той впливає лише на burn-in).
+- **`StageStatus`** — `Pending / Running / Done / Failed` (без деталей помилки). Кожен `PipelineJob` має п'ять окремих полів: `translation_stage`, `voiceover_stage`, `video_stage`, `subtitles_stage` та `montage_stage`. Слугують виключно для UI: картка задачі фарбує назву кожного етапу відповідним кольором (сірий / жовтий / зелений / червоний). `montage_stage` відображається лише якщо `montage_enabled`. `subtitles_stage` відображається якщо `voiceover_enabled` — незалежно від `subtitles_enabled` (той впливає лише на burn-in) та від конкретного сервісу.
 - **`PipelineJob::name`** — назва задачі, яку вводит користувач у діалозі. Якщо поле пусте — автоматично генерується як "Задача N" (де N = `jobs.len() + 1` на момент додавання).
 - **`calculate_progress`** — метод структури `PipelineJob`, який динамічно розраховує поточний прогрес виконання завдання у діапазоні `[0.0..1.0]`, а також кількість завершених та загальних активних етапів. Враховує всі 5 можливих етапів: переклад, озвучка, відеоряд, субтитри, монтаж. Враховується лише ті, що увімкнені (через відповідний прапор `settings.*_enabled`). Статус `Done` дає `1.0` прогресу для етапу. Для відеоряду зі статусом `Running`: якщо `media_progress = Some((done, total))` — прогрес = `done/total` (гранулярно); якщо `None` — `0.1`. Для інших Running-етапів — `0.5`. Метод спроектовано гнучким, що дозволяє легко додавати нові етапи.
 - **Двоетапний workflow:** додавання задачі (`Pending`) і запуск (`Running`) — два окремі дії. Користувач може накопичити кілька задач у черзі і потім запустити їх усі кнопкою "▶ Запустити".
@@ -180,7 +180,9 @@ src/
 
 Права бічна панель з 9 секціями у порядку: Шаблони → Шлях збереження → АПІ → Контроль → Переклад → Озвучка → Відеоряд → Субтитри → Монтаж.
 
-- **Секція «Субтитри»** — вибір сервісу (**Whisper**, **WhisperX** або **AssemblyAI**), мови розпізнавання (авто + 14 мов), моделі та повзунок **«Макс. символів на сегмент»** (`whisper_max_line_width`, 0–200, де 0 = ∞). При виборі **Whisper** — відображається список ggml-моделей (`tiny` / `base` / `small` / `medium` / `large-v3` / `large-v3-turbo`) та статус: ✓ завантажено / кнопка завантаження з розміром (~MB) / прогрес / помилка з кнопкою «Повторити». При виборі **WhisperX** — відображається список faster-whisper моделей (`tiny` / `base` / `small` / `medium` / `large-v1/v2/v3` / `large` / `distil-large-v2/v3` / `distil-medium.en` / `distil-small.en`) без кнопки скачування (моделі завантажує сам WhisperX при першому запуску). При виборі **AssemblyAI** — відображається поле API-ключа з кнопкою «Перевірити». Завантаження ggml-моделей відбувається у фоновому потоці через `Arc<Mutex<BinaryDownload>>` — той самий механізм, що й для ffmpeg у вікні привітання.
+- **Секція «Субтитри»** — вибір сервісу (**Whisper**, **WhisperX** або **AssemblyAI**), мови розпізнавання (авто + 14 мов), моделі та повзунок **«Макс. символів на сегмент»** (`whisper_max_line_width`, 0–200, де 0 = ∞). При виборі **Whisper** — відображається список ggml-моделей (`tiny` / `base` / `small` / `medium` / `large-v3` / `large-v3-turbo`) та статус: ✓ завантажено / кнопка завантаження з розміром (~MB) / прогрес / помилка з кнопкою «Повторити». При виборі **WhisperX** — відображається список faster-whisper моделей без кнопки скачування (моделі завантажує сам WhisperX при першому запуску). При виборі **AssemblyAI** — відображається поле API-ключа з кнопкою «Перевірити». Завантаження ggml-моделей відбувається у фоновому потоці через `Arc<Mutex<BinaryDownload>>` — той самий механізм, що й для ffmpeg у вікні привітання.
+
+  **Стиль субтитрів (доступний для всіх сервісів):** колір тексту (`egui::color_edit_button_srgb`), розмір шрифту (повзунок, 8–72 px), вертикальний відступ (`margin_v`, 0–200 px). **Karaoke-ефект** (`subtitle_karaoke`) — доступний лише для **WhisperX** та **AssemblyAI** (бо тільки вони надають word-level timestamps). При увімкненому karaoke `subtitle.ass` генерується з `\kf`-тегами — кожне слово підсвічується жовтим у момент вимовляння.
 
 - **Ідеальне вирівнювання заголовків та розділювачів:** Ліва панель статистики сценарію (`src/gui/editor.rs`) та права бічна панель пайплайну мають ідентичні заголовки з великим шрифтом `16.0`. Їхні лінії-розділювачі вирівняні ідеально по горизонталі (на одній висоті `y`). Самі заголовки візуально відцентровані по вертикалі за допомогою точно збалансованих асиметричних відступів (`8.0` зверху та `4.0` знизу).
 - **Дизайн розділювачів "border-to-border":** Контейнери обох панелей (`CentralPanel` та `SidePanel`) мають нульові внутрішні відступи, завдяки чому горизонтальні лінії-розділювачі йдуть від лівого до правого краю без проміжків. Всі внутрішні елементи та секції налаштувань загорнуті у фрейми з бічними відступами `8.0` пікселів, що запобігає прилипанню елементів керування до країв екрана.
@@ -226,35 +228,39 @@ src/
 
 **Джерело тексту:** якщо переклад увімкнено — озвучується перекладений текст. Якщо переклад вимкнено — оригінальний текст (`settings.text`). Картка задачі показує це окремим рядком: "Переклад" (кольоровий за статусом) або "Оригінал" (завжди зелений, бо текст уже є).
 
-#### Субтитри (Whisper / WhisperX)
+#### Субтитри (Whisper / WhisperX / AssemblyAI)
 
 Реалізовані у `src/core/pipeline/mod.rs` як частина гілки AV після озвучки.
 
-- **`subtitles_enabled` ≠ "виконувати субтитри".** Цей прапорець контролює лише **burn-in** (накладання тексту на відео у монтажі). Генерація субтитрів запускається завжди, якщо є озвучка (`voiceover_enabled`) та обрано сервіс (`"Whisper"`, `"WhisperX"` або `"AssemblyAI"`) — бо SRT-файл потрібен для синхронізації відеоряду з аудіо у `build_timeline`.
-- **Відображення в картці задачі:** блок «Субтитри» показується (і враховується в прогресі) якщо `voiceover_enabled && (subtitles_service == "Whisper" || subtitles_service == "WhisperX" || subtitles_service == "AssemblyAI")`. Якщо озвучку вимкнено або сервіс не обрано — блок не з'являється.
-- **Джерело аудіо (обидва сервіси):** спочатку шукає `voice.wav` у папці задачі (якщо увімкнена конвертація), потім `voice.mp3`. Якщо жоден файл не знайдено — задача провалюється.
+- **`subtitles_enabled` ≠ "виконувати субтитри".** Цей прапорець контролює лише **burn-in** (накладання тексту на відео у монтажі). Генерація субтитрів запускається завжди, якщо є озвучка (`voiceover_enabled`) — бо `subtitle.srt` потрібен для синхронізації відеоряду з аудіо у `build_timeline`.
+- **Відображення в картці задачі:** блок «Субтитри» показується якщо `voiceover_enabled`. Перевірка конкретного сервісу відсутня — всі три сервіси відображаються однаково.
+- **Єдина схема іменування файлів:** незалежно від сервісу, всі субтитри зберігаються як `subtitle.srt`, `subtitle.ass` та `subtitle.json`. Ніяких `voice.srt`, `voice.ass`, `karaoke.ass`.
+- **Автоматична генерація ASS:** після кожного SRT-файлу одразу генерується `subtitle.ass` через `srt_to_ass()` зі стилем запеченим у заголовку (`FontSize`, `PrimaryColour` у форматі `&H00BBGGRR`, `MarginV`). Монтаж завжди використовує ASS якщо він є.
+- **Джерело аудіо:** спочатку шукає `voice.wav`, потім `voice.mp3`. Якщо нічого — задача провалюється.
 
 **Whisper (whisper.cpp):**
-- **Бінарник whisper.cpp** (а не openai-whisper) — аргументи принципово відрізняються: `-m <шлях до .bin файлу>`, `--output-srt` (булевий прапорець), `-of <stem без розширення>` (whisper.cpp додає `.srt` автоматично), `-l <код мови>` (або відсутнє для авто).
-- **Вихід:** `subtitle.srt` у папці задачі. `-of {save_dir}/subtitle` → whisper.cpp зберігає `subtitle.srt` без потреби перейменування.
-- **Мова:** якщо `whisper_language != "auto"` — передається `-l <code>`. Якщо `"auto"` — прапорець `-l` не передається взагалі (whisper.cpp сам визначить).
-- **Обмеження довжини сегмента:** якщо `whisper_max_line_width > 0` — передаються `--max-len N --split-on-word`. `--max-len` обмежує кількість символів у сегменті SRT, `--split-on-word` гарантує розбиття на межах слів (без обрізання слів посередині). Якщо `whisper_max_line_width == 0` — ці аргументи не передаються (whisper.cpp визначить довжину сам).
-- **Перевірка моделі перед запуском:** кнопка «▶ Запустити» у панелі черги блокується якщо хоча б одна задача Pending має `voiceover_enabled && subtitles_service == "Whisper"` та модель не завантажена. `on_disabled_hover_text` показує пояснення.
+- Аргументи: `-m <ggml-шлях>`, `--output-srt`, `-of {save_dir}/subtitle`, `-l <код>` (без для авто), `--max-len N --split-on-word` якщо `whisper_max_line_width > 0`.
+- Вихід: `subtitle.srt` → потім Rust генерує `subtitle.ass`.
+- Перевірка моделі перед запуском: кнопка «▶ Запустити» блокується якщо модель не завантажена.
 
 **WhisperX (`run_whisperx`):**
-- **Бінарник:** `bin_dir/whisperx_mac/whisperx_cli` — PyInstaller-бандл. CLI формат: `--audio <file> --model <model> --output voice --ffmpeg-path <ffmpeg> [--language <code>]`. `--output voice` (без розширення) → CLI зберігає `voice.json` з word-мітками та `voice.srt` (від імені аудіо-файлу).
-- **Власна генерація SRT:** після успішного CLI Rust зчитує `voice.json`, викликає `whisperx_words_to_srt(words, max_line_width)` і записує результат у `voice.srt` — перезаписуючи CLI-варіант. Так `max_line_width` застосовується коректно (CLI не підтримує цей параметр). Вихідний `voice.srt` — єдиний SRT-файл для WhisperX.
-- **`voice.json` фільтрується:** зберігаються тільки `language` + `words` (без `segments`). Поля `words`: `{word, start, end, score}` в **секундах** (на відміну від AssemblyAI, де мілісекунди).
-- **`whisperx_words_to_srt`** (`src/api/assemblyai.rs`) — та сама логіка що й для AssemblyAI, але читає поле `word` (не `text`) і конвертує секунди в мілісекунди `× 1000`.
-- **Мова:** якщо `whisper_language != "auto"` — передається `--language <code>`. Якщо `"auto"` — аргумент не передається.
-- **Моделі WhisperX** — faster-whisper/HuggingFace формат. Список відрізняється від whisper.cpp: немає `large-v3-turbo`, натомість є `large-v1/v2/v3`, `large`, `distil-large-v2/v3`, `distil-medium.en`, `distil-small.en`. Моделі завантажує сам WhisperX при першому запуску — кнопки скачування у GUI немає.
+- CLI: `--audio <file> --model <model> --output {save_dir}/subtitle --ffmpeg-path <ffmpeg>`. `--output subtitle` → CLI зберігає `subtitle.json` з word-мітками.
+- **Власна генерація SRT:** Rust зчитує `subtitle.json`, викликає `whisperx_words_to_srt(words, max_line_width)` і записує `subtitle.srt` (CLI-версія SRT ігнорується — CLI не підтримує `max_line_width`).
+- **`subtitle.json` фільтрується:** зберігаються тільки `language` + `words`. Поля `words`: `{word, start, end, score}` в **секундах**.
+- `whisperx_words_to_srt` (`src/api/assemblyai.rs`) — читає поле `word` (не `text`), конвертує секунди → мілісекунди `× 1000`.
+- Після `subtitle.srt` генерується `subtitle.ass`.
 
 **AssemblyAI (`run_assemblyai`):**
-- **Хмарна транскрипція:** REST API — upload → create transcript → polling (кожні 3s) → word-level timestamps. Ключ зберігається в `AppSettings` (`assemblyai_key`) і `PipelineTemplate`.
-- **`whisper_max_line_width` застосовується на стороні Rust** через `words_to_srt()` (`src/api/assemblyai.rs`) — AssemblyAI не приймає параметр довжини рядка. `0` = розбиття лише по кінцю речення (`.!?`), `> 0` = ліміт символів.
-- **`voice.json` AssemblyAI:** зберігає тільки масив `words` (`[{text, start, end, confidence}]` в **мілісекундах**) — без сотень метаданих відповіді.
-- **SRT:** зберігається як `subtitle.srt`.
-- **Лімітер `AssemblyAILimiter`:** семафор, фіксовано 5 одночасних запитів. Чіп у нижньому рядку статусу та у вікні потоків.
+- REST API: upload → create transcript → polling (кожні 3s) → word-level timestamps.
+- `whisper_max_line_width` застосовується на стороні Rust через `words_to_srt()` — API не підтримує параметр довжини.
+- `subtitle.json`: тільки масив `words` (`[{text, start_ms, end_ms, confidence}]` в **мілісекундах**).
+- Вихід: `subtitle.srt` → `subtitle.ass`.
+- `AssemblyAILimiter`: семафор, фіксовано 5 одночасних запитів.
+
+**Karaoke-ефект:**
+- Якщо `subtitle_karaoke == true` і сервіс WhisperX або AssemblyAI — після генерації `subtitle.ass` він **перезаписується** karaoke-версією через `generate_karaoke_ass()`.
+- Karaoke ASS містить `\kf<centisecs>` теги — кожне слово підсвічується жовтим (`SecondaryColour`) у момент вимовляння. Слова групуються у рядки по ~50 символів або ~5 секунд.
+- Для Whisper karaoke недоступний — немає word-level timestamps.
 
 #### Відеоряд (`timeline/`)
 
@@ -274,7 +280,7 @@ src/
 
 **Нормалізація таймінгів (усунення drift):** Після побудови `final_timings` виконується прохід, який робить сегменти суміжними: `end[i] = start[i+1]` для всіх сегментів. SRT-записи мають паузи між собою, і без цього кроку прогалини потрапляли б у тривалості кліпів. У FFmpeg concat cumulative sum тривалостей ≠ absolute start times → синхронізація з аудіо повільно "з'їжджала". Після нормалізації `sum(dur[0..N]) = start_secs[N]` для будь-якого кліпу.
 
-**Генерація таймлайну в `run_pipeline`** відбувається після субтитрів (крок 4.5): `build_timeline` отримує `save_dir`, `segments`, `audio_duration_secs`, `task_name` як підказку для логів. Шукає `subtitle.srt` або `voice.srt` (перший знайдений). Якщо жоден не знайдено — таймлайн будується на базі рівного розподілу часу (без fuzzy match).
+**Генерація таймлайну в `run_pipeline`** відбувається після субтитрів (крок 4.5): `build_timeline` отримує `save_dir`, `segments`, `audio_duration_secs`, `task_name`. Шукає `subtitle.srt`. Якщо не знайдено — таймлайн будується на базі рівного розподілу часу (без fuzzy match).
 
 #### Монтаж (`montage/`)
 
@@ -288,7 +294,7 @@ src/
    - **Зображення (jpg/png/webp/gif):** `scale+crop → zoompan` (ефект плавного наближення/відведення). Тривалість — `d=<кількість_кадрів>` відповідно до часового відрізку та `fps`.
    - **Відео (mp4/webm/mov):** `trim → scale+crop → fps` (обрізає до потрібної тривалості).
 5. Після filter graph — `concat` (склеювання кліпів) → `tpad` (дотяжка до тривалості аудіо) → `trim` (обрізка хвоста).
-5.5. **Burn-in субтитрів:** якщо `burn_subtitles == true`, монтаж шукає `subtitle.srt` або `voice.srt` (перший знайдений). Додає `[v_montage]subtitles=<name>[v_with_subs]` до filter graph. Потребує збірки FFmpeg з підтримкою `libass`. Якщо жоден файл не знайдено — логується попередження, монтаж продовжується без субтитрів. WhisperX завжди генерує `voice.srt`, Whisper і AssemblyAI — `subtitle.srt`.
+5.5. **Burn-in субтитрів:** якщо `burn_subtitles == true`, монтаж шукає спочатку `subtitle.ass` (стиль запечений, через `ass=` фільтр), потім `subtitle.srt` як запасний варіант (`subtitles=` фільтр, дефолтний стиль libass). Потребує FFmpeg з `libass`. Якщо жоден файл не знайдено — логується попередження, монтаж продовжується без субтитрів.
 6. Записує фільтр у `montage_script.txt` у папці задачі та запускає `ffmpeg -filter_complex_script montage_script.txt`.
 7. Виклик FFmpeg використовує `current_dir(save_dir)` + **відносні шляхи** — це обходить обмеження CLI на довжину командного рядка та дозволяє мати пробіли в `save_dir`.
 8. FFmpeg запускається через `.spawn()` з `-progress pipe:1 -loglevel error`. Stderr дренується у окремому потоці (щоб не заблокувати буфер). Stdout читається рядково у головному потоці: поля `out_time_us`, `fps`, `speed`, `bitrate` та маркер `progress=continue` (блок `progress=end` ігнорується — там значення скинуті в N/A). Лог виводить: `42%  fps=28.3  speed=1.2x  bitrate=7842.5kbits/s`.
@@ -399,8 +405,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
 Два JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
-- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`).
-- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, поля субтитрів `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, а також `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature` — при завантаженні шаблону вони відновлюються разом з усіма іншими налаштуваннями.
+- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`).
+- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`), налаштування медіа та монтажу. При завантаженні шаблону всі поля відновлюються повністю.
 
 `AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються (дефолт для нових полів потоків Googler — `5`). Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
 
@@ -521,11 +527,11 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 - **`subtitles_enabled` — це burn-in toggle, а не "виконувати субтитри".** Whisper/WhisperX/AssemblyAI завжди генерує SRT-файл якщо є озвучка і сервіс налаштований, бо цей файл є вхідними даними для `build_timeline` (синхронізація відеоряду з аудіо). `subtitles_enabled` тільки вирішує: чи вбудовувати субтитри у фінальне відео через FFmpeg `subtitles=<file>` фільтр. Burn-in потребує збірки FFmpeg з `libass`.
 
-- **WhisperX CLI — нестандартний формат аргументів.** На відміну від стандартного whisperx (positional args), бандлований `whisperx_cli` приймає іменовані аргументи: `--audio`, `--model`, `--output` (базова назва без розширення), `--ffmpeg-path`, `--language`. `--align-json` у CLI — це **INPUT** параметр (завантажує готовий JSON замість транскрипції), а не OUTPUT. Передавати `--align-json` як шлях виводу некоректно — CLI упаде з `FileNotFoundError`.
+- **WhisperX CLI — нестандартний формат аргументів.** Бандлований `whisperx_cli` приймає іменовані аргументи: `--audio`, `--model`, `--output subtitle` (базова назва без розширення), `--ffmpeg-path`, `--language`. `--align-json` у CLI — це **INPUT** параметр (завантажує готовий JSON замість транскрипції), а не OUTPUT. Передавати `--align-json` як шлях виводу некоректно — CLI упаде з `FileNotFoundError`.
 
-- **WhisperX генерує `voice.srt`, а не `subtitle.srt`.** CLI пише SRT за іменем аудіо-файлу (`voice.wav` → `voice.srt`) незалежно від `--output`. Rust записує власний SRT (з `max_line_width`) теж у `voice.srt`, перезаписуючи CLI-версію. Монтаж і синхронізація шукають `subtitle.srt` або `voice.srt` — перший знайдений перемагає.
+- **WhisperX output: `--output subtitle`.** CLI отримує базу `subtitle` → генерує `subtitle.json`. Rust потім сам генерує `subtitle.srt` (з `max_line_width`) і `subtitle.ass` — CLI-версія SRT ігнорується.
 
-- **`voice.json` — файл word-таймінгів (WhisperX і AssemblyAI).** WhisperX зберігає `{language, words: [{word, start_s, end_s, score}]}`. AssemblyAI — просто масив `[{text, start_ms, end_ms, confidence}]`. Одиниці різні: WhisperX у секундах, AssemblyAI у мілісекундах. `whisperx_words_to_srt` і `words_to_srt` в `assemblyai.rs` враховують цю різницю.
+- **`subtitle.json` — файл word-таймінгів (WhisperX і AssemblyAI).** WhisperX зберігає `{language, words: [{word, start_s, end_s, score}]}`. AssemblyAI — просто масив `[{text, start_ms, end_ms, confidence}]`. Одиниці різні: WhisperX у секундах, AssemblyAI у мілісекундах. `whisperx_words_to_srt` і `words_to_srt` в `assemblyai.rs` враховують цю різницю. Використовується для генерації karaoke ASS.
 
 - **`max_line_width` для AssemblyAI і WhisperX — client-side.** Обидва хмарних/CLI сервіси не підтримують параметр довжини рядка нативно. Rust генерує SRT самостійно з word-таймінгів: кінець речення (`.!?`) або переповнення `max_line_width`. `0` = лише кінець речення, без символьного ліміту.
 

@@ -48,7 +48,7 @@ impl<'a> Drop for AssemblyAIPermit<'a> {
 }
 
 /// Транскрибує аудіофайл через AssemblyAI.
-/// Повертає SRT-рядок та JSON з word-level timestamps (для збереження як voice.json).
+/// Повертає SRT-рядок та JSON з word-level timestamps (для збереження як subtitle.json).
 pub fn transcribe(
     key: &str,
     audio_path: &std::path::Path,

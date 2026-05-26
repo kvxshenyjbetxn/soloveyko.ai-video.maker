@@ -53,6 +53,10 @@ pub fn draw_templates_section(
     whisper_language: &mut String,
     whisper_model: &mut String,
     whisper_max_line_width: &mut usize,
+    subtitle_font_size: &mut u32,
+    subtitle_color: &mut [u8; 3],
+    subtitle_margin_v: &mut u32,
+    subtitle_karaoke: &mut bool,
     montage_service: &mut String,
     montage_fps: &mut u32,
     montage_preset: &mut String,
@@ -146,6 +150,10 @@ pub fn draw_templates_section(
                             *whisper_language = template.whisper_language;
                             *whisper_model = template.whisper_model;
                             *whisper_max_line_width = template.whisper_max_line_width;
+                            *subtitle_font_size = template.subtitle_font_size;
+                            *subtitle_color = template.subtitle_color;
+                            *subtitle_margin_v = template.subtitle_margin_v;
+                            *subtitle_karaoke = template.subtitle_karaoke;
                             *montage_service = template.montage_service;
                             *montage_fps = template.montage_fps;
                             *montage_preset = template.montage_preset;

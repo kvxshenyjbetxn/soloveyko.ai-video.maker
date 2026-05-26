@@ -66,6 +66,10 @@ pub struct JobSettings {
     pub whisper_language: String,
     pub whisper_model: String,
     pub whisper_max_line_width: usize,
+    pub subtitle_font_size: u32,
+    pub subtitle_color: [u8; 3],
+    pub subtitle_margin_v: u32,
+    pub subtitle_karaoke: bool,
     pub montage_enabled: bool,
     #[allow(dead_code)]
     pub montage_service: String,

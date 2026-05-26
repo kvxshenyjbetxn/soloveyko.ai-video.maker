@@ -261,18 +261,16 @@ fn run_whisperx(
 
     // whisperx_cli --audio <file> --model <model> --output <base_without_ext>
     //              [--language <lang>] [--ffmpeg-path <ffmpeg>]
-    // CLI збереже JSON як <output_base>.json і SRT як <output_dir>/<audio_name>.srt.
-    // Ми передаємо "voice" як базу, щоб отримати voice.json з word-рівневими мітками.
+    // CLI збереже JSON як <output_base>.json (тобто subtitle.json з word-рівневими мітками).
     // Після цього самостійно генеруємо subtitle.srt із урахуванням max_line_width.
-    let output_base = save_dir.join("voice");
-    let output_json = save_dir.join("voice.json");
-    // CLI пише voice.srt (за іменем аудіо-файлу) — ми пишемо в той самий файл, щоб перезаписати
-    let output_srt  = save_dir.join("voice.srt");
+    let output_base = save_dir.join("subtitle");
+    let output_json = save_dir.join("subtitle.json");
+    let output_srt  = save_dir.join("subtitle.srt");
 
     let mut args: Vec<String> = vec![
         "--audio".to_string(), audio_path.to_str().unwrap_or("voice.wav").to_string(),
         "--model".to_string(), settings.whisper_model.clone(),
-        "--output".to_string(), output_base.to_str().unwrap_or("voice").to_string(),
+        "--output".to_string(), output_base.to_str().unwrap_or("subtitle").to_string(),
         "--ffmpeg-path".to_string(), crate::bundle::ffmpeg_path(),
     ];
     if settings.whisper_language != "auto" {
@@ -287,7 +285,7 @@ fn run_whisperx(
 
     match std::process::Command::new(&whisperx_cmd).args(&args).output() {
         Ok(out) if out.status.success() => {
-            // Зчитуємо voice.json і генеруємо subtitle.srt з max_line_width
+            // Зчитуємо subtitle.json і генеруємо subtitle.srt з max_line_width
             match std::fs::read_to_string(&output_json) {
                 Ok(json_str) => {
                     match serde_json::from_str::<serde_json::Value>(&json_str) {
@@ -302,7 +300,14 @@ fn run_whisperx(
                                 settings.whisper_max_line_width,
                             );
                             if let Err(e) = std::fs::write(&output_srt, &srt) {
-                                crate::logger::log_job(job_id, job_name, &format!("Failed to save voice.srt: {}", e));
+                                crate::logger::log_job(job_id, job_name, &format!("Failed to save subtitle.srt: {}", e));
+                            }
+
+                            // Генеруємо subtitle.ass зі стилем запеченим всередині
+                            let ass = srt_to_ass(&srt, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
+                            let ass_path = save_dir.join("subtitle.ass");
+                            if let Err(e) = std::fs::write(&ass_path, &ass) {
+                                crate::logger::log_job(job_id, job_name, &format!("Failed to save subtitle.ass: {}", e));
                             }
 
                             // Зберігаємо тільки words + language (без segments)
@@ -315,16 +320,16 @@ fn run_whisperx(
                             }
                         }
                         Err(e) => {
-                            crate::logger::log_job(job_id, job_name, &format!("WhisperX: failed to parse voice.json: {}", e));
+                            crate::logger::log_job(job_id, job_name, &format!("WhisperX: failed to parse subtitle.json: {}", e));
                         }
                     }
                 }
                 Err(e) => {
-                    crate::logger::log_job(job_id, job_name, &format!("WhisperX: voice.json not found: {}", e));
+                    crate::logger::log_job(job_id, job_name, &format!("WhisperX: subtitle.json not found: {}", e));
                 }
             }
 
-            crate::logger::log_job(job_id, job_name, "Subtitles saved: voice.srt");
+            crate::logger::log_job(job_id, job_name, "Subtitles saved: subtitle.srt");
             *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Done;
             ctx.request_repaint();
             Ok(())
@@ -347,7 +352,7 @@ fn run_whisperx(
     }
 }
 
-/// Транскрибує аудіо через AssemblyAI та зберігає subtitle.srt і voice.json.
+/// Транскрибує аудіо через AssemblyAI та зберігає subtitle.srt і subtitle.json.
 fn run_assemblyai(
     settings: &crate::queue::JobSettings,
     job_id: u64,
@@ -394,10 +399,18 @@ fn run_assemblyai(
     ) {
         Ok((srt, json_response)) => {
             let srt_path = save_dir.join("subtitle.srt");
-            let json_path = save_dir.join("voice.json");
+            let json_path = save_dir.join("subtitle.json");
 
             std::fs::write(&srt_path, &srt)
                 .map_err(|e| format!("Failed to save subtitle.srt: {}", e))?;
+
+            // Генеруємо subtitle.ass зі стилем запеченим всередині
+            let ass = srt_to_ass(&srt, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
+            let ass_path = save_dir.join("subtitle.ass");
+            if let Err(e) = std::fs::write(&ass_path, &ass) {
+                crate::logger::log_job(job_id, job_name, &format!("Failed to save subtitle.ass: {}", e));
+            }
+
             // Зберігаємо лише масив words — решта метадані API-запиту, не потрібні для таймлайну
             let words_only = json_response.get("words").cloned().unwrap_or(serde_json::Value::Array(vec![]));
             if let Ok(json_str) = serde_json::to_string_pretty(&words_only) {
@@ -579,6 +592,17 @@ fn run_av_branch(
         match std::process::Command::new(&whisper_cmd).args(&args).output() {
             Ok(out) if out.status.success() => {
                 crate::logger::log_job(job_id, &job_name, "Subtitles saved: subtitle.srt");
+
+                // Генеруємо subtitle.ass зі стилем запеченим всередині
+                let srt_path = save_dir.join("subtitle.srt");
+                if let Ok(srt) = std::fs::read_to_string(&srt_path) {
+                    let ass = srt_to_ass(&srt, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
+                    let ass_path = save_dir.join("subtitle.ass");
+                    if let Err(e) = std::fs::write(&ass_path, &ass) {
+                        crate::logger::log_job(job_id, &job_name, &format!("Failed to save subtitle.ass: {}", e));
+                    }
+                }
+
                 *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Done;
                 ctx.request_repaint();
             }
@@ -600,7 +624,227 @@ fn run_av_branch(
         }
     }
 
+    // Генеруємо subtitle.ass з karaoke-ефектом якщо увімкнено і є subtitle.json з word-мітками
+    if settings.subtitle_karaoke
+        && (settings.subtitles_service == "WhisperX" || settings.subtitles_service == "AssemblyAI")
+    {
+        let save_dir = std::path::Path::new(&settings.save_path);
+        let json_path = save_dir.join("subtitle.json");
+        if json_path.exists() {
+            match generate_karaoke_ass(
+                &json_path,
+                &settings.subtitles_service,
+                settings.subtitle_font_size,
+                settings.subtitle_color,
+                settings.subtitle_margin_v,
+            ) {
+                Ok(ass_content) => {
+                    let ass_path = save_dir.join("subtitle.ass");
+                    match std::fs::write(&ass_path, &ass_content) {
+                        Ok(_) => crate::logger::log_job(job_id, &job_name, "Karaoke ASS generated: subtitle.ass"),
+                        Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Failed to save subtitle.ass (karaoke): {}", e)),
+                    }
+                }
+                Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Karaoke generation error: {}", e)),
+            }
+        } else {
+            crate::logger::log_job(job_id, &job_name, "Karaoke: subtitle.json not found, skipping.");
+        }
+    }
+
     Ok(())
+}
+
+/// Генерує ASS файл з karaoke-ефектом (\kf теги) з word-level timestamps.
+/// Підтримує формати WhisperX (секунди) та AssemblyAI (мілісекунди).
+fn generate_karaoke_ass(
+    json_path: &std::path::Path,
+    service: &str,
+    font_size: u32,
+    color: [u8; 3],
+    margin_v: u32,
+) -> Result<String, String> {
+    let content = std::fs::read_to_string(json_path)
+        .map_err(|e| format!("Cannot read subtitle.json: {}", e))?;
+    let json: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Cannot parse subtitle.json: {}", e))?;
+
+    // Формат кольору ASS: &HAABBGGRR (A=00 = непрозорий)
+    let primary = format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
+    // Жовтий для підсвічування вже вимовленого
+    let secondary = "&H0000FFFF".to_string();
+    let outline = "&H00000000".to_string();
+    let back = "&H80000000".to_string();
+
+    let header = format!(
+        "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n\
+         [V4+ Styles]\n\
+         Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
+         Style: Default,Arial,{font_size},{primary},{secondary},{outline},{back},0,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
+         [Events]\n\
+         Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
+        font_size = font_size,
+        primary = primary,
+        secondary = secondary,
+        outline = outline,
+        back = back,
+        margin_v = margin_v,
+    );
+
+    // Розбираємо слова залежно від сервісу
+    struct Word {
+        text: String,
+        start_ms: u64,
+        end_ms: u64,
+    }
+
+    let words: Vec<Word> = if service == "WhisperX" {
+        // {"language": ..., "words": [{"word": "...", "start": 0.5, "end": 1.0, ...}]}
+        let arr = json.get("words").and_then(|w| w.as_array())
+            .ok_or("WhisperX subtitle.json: no 'words' array")?;
+        arr.iter().filter_map(|w| {
+            let text = w.get("word")?.as_str()?.to_string();
+            let start = w.get("start")?.as_f64()?;
+            let end = w.get("end")?.as_f64()?;
+            Some(Word { text, start_ms: (start * 1000.0) as u64, end_ms: (end * 1000.0) as u64 })
+        }).collect()
+    } else {
+        // AssemblyAI: [{text, start, end, confidence}] в мілісекундах
+        let arr = if let Some(arr) = json.as_array() {
+            arr.as_slice()
+        } else {
+            json.get("words").and_then(|w| w.as_array())
+                .ok_or("AssemblyAI subtitle.json: expected array or 'words' array")?
+                .as_slice()
+        };
+        arr.iter().filter_map(|w| {
+            let text = w.get("text")?.as_str()?.to_string();
+            let start = w.get("start")?.as_u64()?;
+            let end = w.get("end")?.as_u64()?;
+            Some(Word { text, start_ms: start, end_ms: end })
+        }).collect()
+    };
+
+    if words.is_empty() {
+        return Err("No words in subtitle.json".to_string());
+    }
+
+    // Групуємо слова у рядки по ~5 секунд або по ~50 символів
+    let mut lines: Vec<(u64, u64, Vec<&Word>)> = Vec::new();
+    let mut group_start = 0usize;
+
+    while group_start < words.len() {
+        let mut group_end = group_start;
+        let line_start_ms = words[group_start].start_ms;
+        let mut char_count = 0usize;
+
+        while group_end < words.len() {
+            char_count += words[group_end].text.len() + 1;
+            let dur_ms = words[group_end].end_ms.saturating_sub(line_start_ms);
+            group_end += 1;
+            // Закінчуємо групу якщо перевищено ліміт символів (~50) або тривалість (~5s)
+            if char_count >= 50 || dur_ms >= 5000 {
+                break;
+            }
+        }
+
+        let group = &words[group_start..group_end];
+        let line_end_ms = group.last().map(|w| w.end_ms).unwrap_or(line_start_ms + 1000);
+        lines.push((line_start_ms, line_end_ms, group.iter().collect()));
+        group_start = group_end;
+    }
+
+    // Генеруємо ASS Dialogue рядки з \kf тегами
+    let mut events = String::new();
+    for (start_ms, end_ms, group) in &lines {
+        let start_str = ms_to_ass_time(*start_ms);
+        let end_str = ms_to_ass_time(*end_ms);
+
+        let mut text = String::new();
+        for word in group {
+            let dur_centisecs = (word.end_ms.saturating_sub(word.start_ms) / 10).max(1);
+            text.push_str(&format!("{{\\kf{}}}{} ", dur_centisecs, word.text));
+        }
+        events.push_str(&format!(
+            "Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
+            start_str, end_str, text.trim_end()
+        ));
+    }
+
+    Ok(format!("{}{}", header, events))
+}
+
+/// Конвертує мілісекунди у формат часу ASS (H:MM:SS.CC).
+fn ms_to_ass_time(ms: u64) -> String {
+    let total_cs = ms / 10;
+    let cs = total_cs % 100;
+    let total_secs = total_cs / 100;
+    let secs = total_secs % 60;
+    let total_mins = total_secs / 60;
+    let mins = total_mins % 60;
+    let hours = total_mins / 60;
+    format!("{}:{:02}:{:02}.{:02}", hours, mins, secs, cs)
+}
+
+/// Конвертує SRT-рядок у ASS-формат із запеченим стилем.
+fn srt_to_ass(srt: &str, font_size: u32, color: [u8; 3], margin_v: u32) -> String {
+    // Формат кольору ASS: &HAABBGGRR (A=00 = непрозорий)
+    let primary = format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
+
+    let header = format!(
+        "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n\
+         [V4+ Styles]\n\
+         Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
+         Style: Default,Arial,{font_size},{primary},&H00FFFFFF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
+         [Events]\n\
+         Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
+        font_size = font_size,
+        primary = primary,
+        margin_v = margin_v,
+    );
+
+    let mut events = String::new();
+    for block in srt.split("\n\n") {
+        let block = block.trim();
+        if block.is_empty() { continue; }
+
+        let mut lines = block.lines();
+        let first = lines.next().unwrap_or("").trim();
+
+        // Якщо перший рядок — номер субтитра, пропускаємо його
+        let timing_line = if first.parse::<u32>().is_ok() {
+            lines.next().unwrap_or("").trim()
+        } else {
+            first
+        };
+
+        if let Some((start_str, end_str)) = timing_line.split_once(" --> ") {
+            let start = srt_time_to_ass(start_str.trim());
+            let end   = srt_time_to_ass(end_str.trim());
+            let text: String = lines.collect::<Vec<_>>().join("\\N");
+            if !text.is_empty() {
+                events.push_str(&format!(
+                    "Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
+                    start, end, text
+                ));
+            }
+        }
+    }
+
+    format!("{}{}", header, events)
+}
+
+/// Конвертує SRT час (HH:MM:SS,mmm) у ASS час (H:MM:SS.cc).
+fn srt_time_to_ass(srt: &str) -> String {
+    let parts: Vec<&str> = srt.splitn(2, ',').collect();
+    if parts.len() != 2 { return "0:00:00.00".to_string(); }
+    let hms: Vec<&str> = parts[0].split(':').collect();
+    if hms.len() != 3 { return "0:00:00.00".to_string(); }
+    let hours: u32 = hms[0].parse().unwrap_or(0);
+    let mins: u32  = hms[1].parse().unwrap_or(0);
+    let secs: u32  = hms[2].parse().unwrap_or(0);
+    let cs: u32    = parts[1].trim().parse::<u32>().unwrap_or(0) / 10;
+    format!("{}:{:02}:{:02}.{:02}", hours, mins, secs, cs)
 }
 
 /// Гілка Відеоряд (виконується паралельно з озвучкою та субтитрами).

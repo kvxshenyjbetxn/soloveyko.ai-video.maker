@@ -42,6 +42,9 @@ fn default_montage_preset() -> String { "medium".to_string() }
 fn default_montage_bitrate() -> u32 { 8 }
 fn default_montage_transition() -> String { "none".to_string() }
 fn default_montage_transition_duration() -> f32 { 0.5 }
+fn default_subtitle_font_size() -> u32 { 24 }
+fn default_subtitle_color() -> [u8; 3] { [255, 255, 255] }
+fn default_subtitle_margin_v() -> u32 { 30 }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -210,6 +213,18 @@ pub struct AppSettings {
     /// Максимальна кількість символів у сегменті субтитрів (0 = без обмеження)
     #[serde(default = "default_whisper_max_line_width")]
     pub whisper_max_line_width: usize,
+    /// Розмір шрифту субтитрів (пунктів)
+    #[serde(default = "default_subtitle_font_size")]
+    pub subtitle_font_size: u32,
+    /// RGB колір тексту субтитрів [r, g, b]
+    #[serde(default = "default_subtitle_color")]
+    pub subtitle_color: [u8; 3],
+    /// Вертикальний відступ субтитрів від нижнього краю (пікселів)
+    #[serde(default = "default_subtitle_margin_v")]
+    pub subtitle_margin_v: u32,
+    /// Ефект karaoke: підсвічує слово яке проговорюється (тільки WhisperX/AssemblyAI)
+    #[serde(default)]
+    pub subtitle_karaoke: bool,
     /// Сервіс монтажу ("FFmpeg")
     #[serde(default = "default_montage_service")]
     pub montage_service: String,
@@ -304,6 +319,10 @@ impl Default for AppSettings {
             whisper_language: "auto".to_string(),
             whisper_model: "base".to_string(),
             whisper_max_line_width: 42,
+            subtitle_font_size: 24,
+            subtitle_color: [255, 255, 255],
+            subtitle_margin_v: 30,
+            subtitle_karaoke: false,
             montage_service: "FFmpeg".to_string(),
             montage_fps: 30,
             montage_preset: "medium".to_string(),
@@ -515,6 +534,18 @@ pub struct PipelineTemplate {
     /// Максимальна кількість символів у сегменті субтитрів (0 = без обмеження)
     #[serde(default = "default_whisper_max_line_width")]
     pub whisper_max_line_width: usize,
+    /// Розмір шрифту субтитрів (пунктів)
+    #[serde(default = "default_subtitle_font_size")]
+    pub subtitle_font_size: u32,
+    /// RGB колір тексту субтитрів [r, g, b]
+    #[serde(default = "default_subtitle_color")]
+    pub subtitle_color: [u8; 3],
+    /// Вертикальний відступ субтитрів від нижнього краю (пікселів)
+    #[serde(default = "default_subtitle_margin_v")]
+    pub subtitle_margin_v: u32,
+    /// Ефект karaoke: підсвічує слово яке проговорюється (тільки WhisperX/AssemblyAI)
+    #[serde(default)]
+    pub subtitle_karaoke: bool,
     /// Сервіс монтажу ("FFmpeg")
     #[serde(default = "default_montage_service")]
     pub montage_service: String,
@@ -602,6 +633,10 @@ pub fn save_template(
     whisper_language: &str,
     whisper_model: &str,
     whisper_max_line_width: usize,
+    subtitle_font_size: u32,
+    subtitle_color: [u8; 3],
+    subtitle_margin_v: u32,
+    subtitle_karaoke: bool,
     montage_service: &str,
     montage_fps: u32,
     montage_preset: &str,
@@ -659,6 +694,10 @@ pub fn save_template(
             whisper_language: whisper_language.to_string(),
             whisper_model: whisper_model.to_string(),
             whisper_max_line_width,
+            subtitle_font_size,
+            subtitle_color,
+            subtitle_margin_v,
+            subtitle_karaoke,
             montage_service: montage_service.to_string(),
             montage_fps,
             montage_preset: montage_preset.to_string(),

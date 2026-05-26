@@ -267,6 +267,14 @@ pub struct VideoMakerApp {
     pub whisper_max_line_width: usize,
     /// Стан завантаження ggml-моделі whisper.cpp у фоні.
     pub whisper_model_download: std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
+    /// Розмір шрифту субтитрів (пунктів).
+    pub subtitle_font_size: u32,
+    /// RGB колір тексту субтитрів.
+    pub subtitle_color: [u8; 3],
+    /// Вертикальний відступ субтитрів від нижнього краю (пікселів).
+    pub subtitle_margin_v: u32,
+    /// Ефект karaoke для субтитрів.
+    pub subtitle_karaoke: bool,
     /// Сервіс монтажу ("FFmpeg").
     pub montage_service: String,
     /// FPS для монтажу.
@@ -428,6 +436,10 @@ impl Default for VideoMakerApp {
             whisper_model: "base".to_string(),
             whisper_max_line_width: 42,
             whisper_model_download: std::sync::Arc::new(std::sync::Mutex::new(crate::gui::welcome::BinaryDownload::Idle)),
+            subtitle_font_size: 24,
+            subtitle_color: [255, 255, 255],
+            subtitle_margin_v: 30,
+            subtitle_karaoke: false,
             montage_service: "FFmpeg".to_string(),
             montage_fps: 30,
             montage_preset: "medium".to_string(),
@@ -722,6 +734,10 @@ impl VideoMakerApp {
             whisper_model: saved.whisper_model.clone(),
             whisper_max_line_width: saved.whisper_max_line_width,
             whisper_model_download: std::sync::Arc::new(std::sync::Mutex::new(crate::gui::welcome::BinaryDownload::Idle)),
+            subtitle_font_size: saved.subtitle_font_size,
+            subtitle_color: saved.subtitle_color,
+            subtitle_margin_v: saved.subtitle_margin_v,
+            subtitle_karaoke: saved.subtitle_karaoke,
             montage_service: saved.montage_service.clone(),
             montage_fps: saved.montage_fps,
             montage_preset: saved.montage_preset.clone(),
@@ -962,6 +978,10 @@ impl eframe::App for VideoMakerApp {
                         &mut self.whisper_model,
                         &mut self.whisper_max_line_width,
                         &self.whisper_model_download,
+                        &mut self.subtitle_font_size,
+                        &mut self.subtitle_color,
+                        &mut self.subtitle_margin_v,
+                        &mut self.subtitle_karaoke,
                         &mut self.montage_service,
                         &mut self.montage_fps,
                         &mut self.montage_preset,
@@ -1353,6 +1373,10 @@ impl eframe::App for VideoMakerApp {
                 || self.whisper_language != self.last_saved_settings.whisper_language
                 || self.whisper_model != self.last_saved_settings.whisper_model
                 || self.whisper_max_line_width != self.last_saved_settings.whisper_max_line_width
+                || self.subtitle_font_size != self.last_saved_settings.subtitle_font_size
+                || self.subtitle_color != self.last_saved_settings.subtitle_color
+                || self.subtitle_margin_v != self.last_saved_settings.subtitle_margin_v
+                || self.subtitle_karaoke != self.last_saved_settings.subtitle_karaoke
                 || self.montage_service != self.last_saved_settings.montage_service
                 || self.montage_fps != self.last_saved_settings.montage_fps
                 || self.montage_preset != self.last_saved_settings.montage_preset
@@ -1419,6 +1443,10 @@ impl eframe::App for VideoMakerApp {
                     whisper_language: self.whisper_language.clone(),
                     whisper_model: self.whisper_model.clone(),
                     whisper_max_line_width: self.whisper_max_line_width,
+                    subtitle_font_size: self.subtitle_font_size,
+                    subtitle_color: self.subtitle_color,
+                    subtitle_margin_v: self.subtitle_margin_v,
+                    subtitle_karaoke: self.subtitle_karaoke,
                     montage_service: self.montage_service.clone(),
                     montage_fps: self.montage_fps,
                     montage_preset: self.montage_preset.clone(),

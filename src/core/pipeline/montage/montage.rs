@@ -224,19 +224,18 @@ pub fn run_montage(
         "[v_padded]trim=duration={total_dur:.6},setpts=PTS-STARTPTS[v_montage]"
     ));
 
-    // Якщо burn-in субтитрів увімкнено — шукаємо subtitle.srt або voice.srt
-    let srt_path = ["subtitle.srt", "voice.srt"]
-        .iter()
-        .map(|n| save_dir.join(n))
-        .find(|p| p.exists());
+    // Якщо burn-in субтитрів увімкнено — шукаємо subtitle.ass, потім subtitle.srt як запасний
     let video_map = if burn_subtitles {
-        if let Some(ref path) = srt_path {
-            let name = path.file_name().unwrap_or_default().to_string_lossy();
-            filter_parts.push(format!("[v_montage]subtitles={}[v_with_subs]", name));
-            log_fn(&format!("Subtitles burn-in enabled: {} will be embedded into video.", name));
+        if save_dir.join("subtitle.ass").exists() {
+            filter_parts.push("[v_montage]ass=subtitle.ass[v_with_subs]".to_string());
+            log_fn("Subtitles burn-in: subtitle.ass embedded.");
+            "[v_with_subs]"
+        } else if save_dir.join("subtitle.srt").exists() {
+            filter_parts.push("[v_montage]subtitles=subtitle.srt[v_with_subs]".to_string());
+            log_fn("Subtitles burn-in: subtitle.srt (fallback)");
             "[v_with_subs]"
         } else {
-            log_fn("Warning: subtitles_enabled=true but no .srt file found — skipping burn-in.");
+            log_fn("Warning: subtitles_enabled=true but no subtitle file found — skipping burn-in.");
             "[v_montage]"
         }
     } else {

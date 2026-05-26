@@ -365,11 +365,7 @@ pub fn draw_queue_panel(
                                 }
                             }
 
-                            // subtitles_enabled впливає лише на burn-in у монтажі.
-                            if job.settings.voiceover_enabled
-                && (job.settings.subtitles_service == "Whisper"
-                    || job.settings.subtitles_service == "WhisperX")
-            {
+                            if job.settings.voiceover_enabled {
                                 ui.label(
                                     egui::RichText::new(translate(language, "subtitles"))
                                         .color(stage_color(&subtitles_stage, ui))

@@ -36,6 +36,7 @@ const WHISPERX_MODELS: &[&str] = &[
 ];
 
 /// Малює секцію "Субтитри" на панелі пайплайну.
+#[allow(clippy::too_many_arguments)]
 pub fn draw_subtitles_section(
     ui: &mut egui::Ui,
     language: Language,
@@ -44,6 +45,10 @@ pub fn draw_subtitles_section(
     whisper_model: &mut String,
     whisper_max_line_width: &mut usize,
     whisper_model_download: &Arc<Mutex<BinaryDownload>>,
+    subtitle_font_size: &mut u32,
+    subtitle_color: &mut [u8; 3],
+    subtitle_margin_v: &mut u32,
+    subtitle_karaoke: &mut bool,
     ctx: egui::Context,
 ) {
     ui.vertical(|ui| {
@@ -94,6 +99,17 @@ pub fn draw_subtitles_section(
                 whisper_max_line_width,
             );
         }
+
+        // Стиль субтитрів (загальний для всіх сервісів)
+        draw_subtitle_style(
+            ui,
+            language,
+            subtitles_service,
+            subtitle_font_size,
+            subtitle_color,
+            subtitle_margin_v,
+            subtitle_karaoke,
+        );
     });
 }
 
@@ -322,6 +338,58 @@ fn draw_assemblyai_settings(
         }
         ui.label(egui::RichText::new(label_text).monospace());
     });
+}
+
+/// Налаштування стилю субтитрів (колір, розмір шрифту, відступ, karaoke).
+fn draw_subtitle_style(
+    ui: &mut egui::Ui,
+    language: Language,
+    subtitles_service: &str,
+    subtitle_font_size: &mut u32,
+    subtitle_color: &mut [u8; 3],
+    subtitle_margin_v: &mut u32,
+    subtitle_karaoke: &mut bool,
+) {
+    ui.add_space(8.0);
+    ui.label(egui::RichText::new(translate(language, "subtitles_style_label")).strong());
+    ui.add_space(4.0);
+
+    // Розмір шрифту
+    ui.label(egui::RichText::new(translate(language, "subtitles_font_size_label")));
+    ui.add_space(2.0);
+    let mut font_size = *subtitle_font_size;
+    ui.horizontal(|ui| {
+        if ui.add(egui::Slider::new(&mut font_size, 10..=72).show_value(false)).changed() {
+            *subtitle_font_size = font_size;
+        }
+        ui.label(egui::RichText::new(format!("{}pt", font_size)).monospace());
+    });
+
+    ui.add_space(6.0);
+
+    // Відступ від нижнього краю
+    ui.label(egui::RichText::new(translate(language, "subtitles_margin_v_label")));
+    ui.add_space(2.0);
+    let mut margin = *subtitle_margin_v;
+    ui.horizontal(|ui| {
+        if ui.add(egui::Slider::new(&mut margin, 0..=200).show_value(false)).changed() {
+            *subtitle_margin_v = margin;
+        }
+        ui.label(egui::RichText::new(format!("{}px", margin)).monospace());
+    });
+
+    ui.add_space(6.0);
+
+    // Колір тексту
+    ui.label(egui::RichText::new(translate(language, "subtitles_color_label")));
+    ui.add_space(2.0);
+    ui.color_edit_button_srgb(subtitle_color);
+
+    // Karaoke (тільки для WhisperX та AssemblyAI, бо потрібні word-level timestamps)
+    if subtitles_service == "WhisperX" || subtitles_service == "AssemblyAI" {
+        ui.add_space(6.0);
+        ui.checkbox(subtitle_karaoke, translate(language, "subtitles_karaoke_label"));
+    }
 }
 
 /// Запускає завантаження ggml-моделі whisper.cpp у фоновому потоці.
