@@ -5,3 +5,4 @@ pub mod claude;
 pub mod gemini;
 pub mod edgetts;
 pub mod ffmpeg;
+pub mod assemblyai;

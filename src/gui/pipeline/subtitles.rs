@@ -58,6 +58,7 @@ pub fn draw_subtitles_section(
             .show_ui(ui, |ui| {
                 ui.selectable_value(subtitles_service, "Whisper".to_string(), "Whisper");
                 ui.selectable_value(subtitles_service, "WhisperX".to_string(), "WhisperX");
+                ui.selectable_value(subtitles_service, "AssemblyAI".to_string(), "AssemblyAI");
             });
 
         // Налаштування Whisper
@@ -80,6 +81,16 @@ pub fn draw_subtitles_section(
                 language,
                 whisper_language,
                 whisper_model,
+                whisper_max_line_width,
+            );
+        }
+
+        // Налаштування AssemblyAI
+        if subtitles_service == "AssemblyAI" {
+            draw_assemblyai_settings(
+                ui,
+                language,
+                whisper_language,
                 whisper_max_line_width,
             );
         }
@@ -248,6 +259,59 @@ fn draw_whisperx_settings(
     );
 
     // Максимальна кількість символів на сегмент (передається через --max_line_width)
+    ui.label(egui::RichText::new(translate(language, "subtitles_whisper_max_len_label")).strong());
+    ui.add_space(4.0);
+    let mut max_len = *whisper_max_line_width;
+    let label_text = if max_len == 0 { "∞".to_string() } else { max_len.to_string() };
+    ui.horizontal(|ui| {
+        if ui.add(egui::Slider::new(&mut max_len, 0..=200).show_value(false)).changed() {
+            *whisper_max_line_width = max_len;
+        }
+        ui.label(egui::RichText::new(label_text).monospace());
+    });
+}
+
+/// Налаштування AssemblyAI (cloud API — без локальних моделей).
+fn draw_assemblyai_settings(
+    ui: &mut egui::Ui,
+    language: Language,
+    whisper_language: &mut String,
+    whisper_max_line_width: &mut usize,
+) {
+    ui.add_space(8.0);
+
+    // Мова розпізнавання (спільна зі Whisper)
+    ui.label(egui::RichText::new(translate(language, "subtitles_whisper_lang_label")).strong());
+    ui.add_space(4.0);
+
+    let lang_display = WHISPER_LANGUAGES.iter()
+        .find(|(code, _)| *code == whisper_language.as_str())
+        .map(|(code, name)| {
+            if *code == "auto" {
+                translate(language, "subtitles_whisper_lang_auto").to_string()
+            } else {
+                format!("{} ({})", name, code)
+            }
+        })
+        .unwrap_or_else(|| whisper_language.clone());
+
+    egui::ComboBox::from_id_salt("assemblyai_lang_combo")
+        .selected_text(lang_display)
+        .width(ui.available_width())
+        .show_ui(ui, |ui| {
+            for (code, name) in WHISPER_LANGUAGES {
+                let label = if *code == "auto" {
+                    translate(language, "subtitles_whisper_lang_auto").to_string()
+                } else {
+                    format!("{} ({})", name, code)
+                };
+                ui.selectable_value(whisper_language, code.to_string(), label);
+            }
+        });
+
+    ui.add_space(8.0);
+
+    // Максимальна кількість символів на сегмент
     ui.label(egui::RichText::new(translate(language, "subtitles_whisper_max_len_label")).strong());
     ui.add_space(4.0);
     let mut max_len = *whisper_max_line_width;

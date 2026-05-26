@@ -156,6 +156,7 @@ pub fn draw_status_bar(
                 ui.separator();
                 if thread_chip(ui, "FFmpeg", crate::api::ffmpeg::FfmpegLimiter::get().active_count(), ffmpeg_max_threads) { open_threads = true; }
                 ui.separator();
+                if thread_chip(ui, "AssemblyAI", crate::api::assemblyai::AssemblyAILimiter::get().active_count(), 5) { open_threads = true; }
                 if thread_chip(ui, "EdgeTTS", crate::api::edgetts::EdgeTTSLimiter::get().active_count(), edge_tts_max_threads) { open_threads = true; }
                 if thread_chip(ui, "VoiceBot", crate::api::voicebot::VoiceBotLimiter::get().active_count(), 5) { open_threads = true; }
                 ui.separator();

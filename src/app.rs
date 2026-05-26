@@ -51,6 +51,12 @@ pub struct VideoMakerApp {
     pub googler_key: String,
     /// Статус перевірки Googler API ключа.
     pub googler_status: Option<String>,
+    /// Ключ API для AssemblyAI.
+    pub assemblyai_key: String,
+    /// Статус перевірки AssemblyAI API ключа.
+    pub assemblyai_status: Option<String>,
+    /// Результат фонового тесту API ключа AssemblyAI.
+    pub assemblyai_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Результат фонового тесту API ключа Googler.
     pub googler_test_result: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     /// Баланс Googler для відображення у топбарі.
@@ -316,6 +322,9 @@ impl Default for VideoMakerApp {
             googler_status: None,
             googler_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             googler_balance: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            assemblyai_key: String::new(),
+            assemblyai_status: None,
+            assemblyai_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voiceover_provider: "Voice Bot".to_string(),
             voiceover_template_uuid: String::new(),
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -474,6 +483,7 @@ impl VideoMakerApp {
         let openrouter_key = saved.openrouter_key.clone();
         let voicebot_key = saved.voicebot_key.clone();
         let googler_key = saved.googler_key.clone();
+        let assemblyai_key = saved.assemblyai_key.clone();
         let voiceover_provider = saved.voiceover_provider.clone();
         let voiceover_template_uuid = saved.voiceover_template_uuid.clone();
         let pipeline_translation_enabled = saved.pipeline_translation_enabled;
@@ -606,6 +616,9 @@ impl VideoMakerApp {
             googler_status: None,
             googler_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             googler_balance,
+            assemblyai_key,
+            assemblyai_status: None,
+            assemblyai_test_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             voiceover_provider,
             voiceover_template_uuid,
             voicebot_templates: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -890,6 +903,9 @@ impl eframe::App for VideoMakerApp {
                         &mut self.googler_status,
                         &self.googler_test_result,
                         &self.googler_balance,
+                        &mut self.assemblyai_key,
+                        &mut self.assemblyai_status,
+                        &self.assemblyai_test_result,
                         &mut self.voiceover_provider,
                         &mut self.voiceover_template_uuid,
                         &self.voicebot_templates,
@@ -1303,6 +1319,7 @@ impl eframe::App for VideoMakerApp {
                 || self.translation_model_claude != self.last_saved_settings.translation_model_claude
                 || self.translation_model_gemini != self.last_saved_settings.translation_model_gemini
                 || self.googler_key != self.last_saved_settings.googler_key
+                || self.assemblyai_key != self.last_saved_settings.assemblyai_key
                 || self.video_service != self.last_saved_settings.video_service
                 || self.video_media_type != self.last_saved_settings.video_media_type
                 || self.video_prompt != self.last_saved_settings.video_prompt
@@ -1351,6 +1368,7 @@ impl eframe::App for VideoMakerApp {
                     openrouter_key: self.openrouter_key.clone(),
                     voicebot_key: self.voicebot_key.clone(),
                     googler_key: self.googler_key.clone(),
+                    assemblyai_key: self.assemblyai_key.clone(),
                     voiceover_provider: self.voiceover_provider.clone(),
                     voiceover_template_uuid: self.voiceover_template_uuid.clone(),
                     last_template: self.template_name_input.clone(),

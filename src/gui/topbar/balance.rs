@@ -279,6 +279,23 @@ pub fn draw_threads_window(
 
             ui.add_space(4.0);
 
+            // --- AssemblyAI ---
+            ui.group(|ui| {
+                ui.set_min_width(ui.available_width());
+                ui.label(egui::RichText::new("AssemblyAI").strong());
+                ui.separator();
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.label(translate(language, "balance_active_threads"));
+                    let active = crate::api::assemblyai::AssemblyAILimiter::get().active_count();
+                    active_label(ui, active, 5);
+                });
+                ui.add_space(4.0);
+                ui.label(egui::RichText::new(translate(language, "balance_assemblyai_limit")).weak());
+            });
+
+            ui.add_space(4.0);
+
             // --- Edge TTS ---
             ui.group(|ui| {
                 ui.set_min_width(ui.available_width());

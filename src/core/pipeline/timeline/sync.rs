@@ -420,13 +420,17 @@ pub fn build_timeline(
         return Err("No segments to build timeline for".to_string());
     }
 
-    let srt_path = save_dir.join("subtitle.srt");
+    let srt_path = ["subtitle.srt", "voice.srt"]
+        .iter()
+        .map(|n| save_dir.join(n))
+        .find(|p| p.exists())
+        .ok_or_else(|| "subtitle.srt not found — run subtitles stage first".to_string())?;
     let srt_data = std::fs::read_to_string(&srt_path)
         .map_err(|_| "subtitle.srt not found — run subtitles stage first".to_string())?;
 
     let blocks = parse_srt(&srt_data);
     if blocks.is_empty() {
-        return Err("subtitle.srt parsed but has no entries".to_string());
+        return Err("SRT file parsed but has no entries".to_string());
     }
 
     // Визначаємо загальну тривалість

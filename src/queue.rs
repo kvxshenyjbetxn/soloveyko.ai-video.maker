@@ -60,6 +60,7 @@ pub struct JobSettings {
     pub googler_video_priority: Vec<String>,
     pub googler_image_max_threads: usize,
     pub video_media_type: String,
+    pub assemblyai_key: String,
     pub subtitles_enabled: bool,
     pub subtitles_service: String,
     pub whisper_language: String,
@@ -201,10 +202,11 @@ impl PipelineJob {
             }
         }
 
-        // Етап 4: Субтитри — завжди в прогресі якщо є озвучка і Whisper/WhisperX налаштований
+        // Етап 4: Субтитри — завжди в прогресі якщо є озвучка і відповідний сервіс налаштований
         let subtitles_active = self.settings.voiceover_enabled
             && (self.settings.subtitles_service == "Whisper"
-                || self.settings.subtitles_service == "WhisperX");
+                || self.settings.subtitles_service == "WhisperX"
+                || self.settings.subtitles_service == "AssemblyAI");
         if subtitles_active {
             total_stages += 1;
             let stage = self.subtitles_stage.lock().unwrap().clone();

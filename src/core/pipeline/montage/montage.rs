@@ -224,18 +224,22 @@ pub fn run_montage(
         "[v_padded]trim=duration={total_dur:.6},setpts=PTS-STARTPTS[v_montage]"
     ));
 
-    // Якщо burn-in субтитрів увімкнено і файл subtitle.srt існує — вбудовуємо в відео
-    let srt_path = save_dir.join("subtitle.srt");
-    let video_map = if burn_subtitles && srt_path.exists() {
-        // subtitles фільтр потребує libass у збірці FFmpeg
-        // Використовуємо відносний шлях (current_dir = save_dir)
-        filter_parts.push("[v_montage]subtitles=subtitle.srt[v_with_subs]".to_string());
-        log_fn("Subtitles burn-in enabled: subtitle.srt will be embedded into video.");
-        "[v_with_subs]"
-    } else {
-        if burn_subtitles && !srt_path.exists() {
-            log_fn("Warning: subtitles_enabled=true but subtitle.srt not found — skipping burn-in.");
+    // Якщо burn-in субтитрів увімкнено — шукаємо subtitle.srt або voice.srt
+    let srt_path = ["subtitle.srt", "voice.srt"]
+        .iter()
+        .map(|n| save_dir.join(n))
+        .find(|p| p.exists());
+    let video_map = if burn_subtitles {
+        if let Some(ref path) = srt_path {
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            filter_parts.push(format!("[v_montage]subtitles={}[v_with_subs]", name));
+            log_fn(&format!("Subtitles burn-in enabled: {} will be embedded into video.", name));
+            "[v_with_subs]"
+        } else {
+            log_fn("Warning: subtitles_enabled=true but no .srt file found — skipping burn-in.");
+            "[v_montage]"
         }
+    } else {
         "[v_montage]"
     };
 

@@ -259,16 +259,20 @@ fn run_whisperx(
     let whisperx_dir = crate::bundle::bin_dir().join("whisperx_mac");
     let whisperx_cmd = whisperx_dir.join("whisperx_cli");
 
-    // Цей whisperx_cli має власний CLI-формат:
-    // whisperx_cli --audio <file> --model <model> --output <output.srt>
+    // whisperx_cli --audio <file> --model <model> --output <base_without_ext>
     //              [--language <lang>] [--ffmpeg-path <ffmpeg>]
-    let output_srt = save_dir.join("subtitle.srt");
+    // CLI збереже JSON як <output_base>.json і SRT як <output_dir>/<audio_name>.srt.
+    // Ми передаємо "voice" як базу, щоб отримати voice.json з word-рівневими мітками.
+    // Після цього самостійно генеруємо subtitle.srt із урахуванням max_line_width.
+    let output_base = save_dir.join("voice");
     let output_json = save_dir.join("voice.json");
+    // CLI пише voice.srt (за іменем аудіо-файлу) — ми пишемо в той самий файл, щоб перезаписати
+    let output_srt  = save_dir.join("voice.srt");
+
     let mut args: Vec<String> = vec![
         "--audio".to_string(), audio_path.to_str().unwrap_or("voice.wav").to_string(),
         "--model".to_string(), settings.whisper_model.clone(),
-        "--output".to_string(), output_srt.to_str().unwrap_or("subtitle.srt").to_string(),
-        "--align-json".to_string(), output_json.to_str().unwrap_or("voice.json").to_string(),
+        "--output".to_string(), output_base.to_str().unwrap_or("voice").to_string(),
         "--ffmpeg-path".to_string(), crate::bundle::ffmpeg_path(),
     ];
     if settings.whisper_language != "auto" {
@@ -283,8 +287,44 @@ fn run_whisperx(
 
     match std::process::Command::new(&whisperx_cmd).args(&args).output() {
         Ok(out) if out.status.success() => {
+            // Зчитуємо voice.json і генеруємо subtitle.srt з max_line_width
+            match std::fs::read_to_string(&output_json) {
+                Ok(json_str) => {
+                    match serde_json::from_str::<serde_json::Value>(&json_str) {
+                        Ok(json) => {
+                            let words = json.get("words")
+                                .and_then(|w| w.as_array())
+                                .map(|v| v.as_slice())
+                                .unwrap_or(&[]);
 
-            crate::logger::log_job(job_id, job_name, "Subtitles saved: subtitle.srt");
+                            let srt = crate::api::assemblyai::whisperx_words_to_srt(
+                                words,
+                                settings.whisper_max_line_width,
+                            );
+                            if let Err(e) = std::fs::write(&output_srt, &srt) {
+                                crate::logger::log_job(job_id, job_name, &format!("Failed to save voice.srt: {}", e));
+                            }
+
+                            // Зберігаємо тільки words + language (без segments)
+                            let filtered = serde_json::json!({
+                                "language": json.get("language").cloned().unwrap_or(serde_json::Value::Null),
+                                "words": json.get("words").cloned().unwrap_or(serde_json::Value::Array(vec![])),
+                            });
+                            if let Ok(s) = serde_json::to_string_pretty(&filtered) {
+                                let _ = std::fs::write(&output_json, s);
+                            }
+                        }
+                        Err(e) => {
+                            crate::logger::log_job(job_id, job_name, &format!("WhisperX: failed to parse voice.json: {}", e));
+                        }
+                    }
+                }
+                Err(e) => {
+                    crate::logger::log_job(job_id, job_name, &format!("WhisperX: voice.json not found: {}", e));
+                }
+            }
+
+            crate::logger::log_job(job_id, job_name, "Subtitles saved: voice.srt");
             *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Done;
             ctx.request_repaint();
             Ok(())
@@ -303,6 +343,76 @@ fn run_whisperx(
             crate::logger::log_job(job_id, job_name, &format!("WhisperX not found or failed to start: {}", e));
             *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
             Err(msg)
+        }
+    }
+}
+
+/// Транскрибує аудіо через AssemblyAI та зберігає subtitle.srt і voice.json.
+fn run_assemblyai(
+    settings: &crate::queue::JobSettings,
+    job_id: u64,
+    job_name: &str,
+    subtitles_stage: &std::sync::Arc<std::sync::Mutex<crate::queue::StageStatus>>,
+    ctx: &egui::Context,
+) -> Result<(), String> {
+    let reason = if settings.subtitles_enabled {
+        "Starting subtitle generation via AssemblyAI (burn-in enabled)..."
+    } else {
+        "Starting subtitle generation via AssemblyAI (for timeline sync, burn-in disabled)..."
+    };
+    crate::logger::log_job(job_id, job_name, reason);
+    *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+    ctx.request_repaint();
+
+    if settings.assemblyai_key.trim().is_empty() {
+        let msg = "AssemblyAI key is not set.".to_string();
+        crate::logger::log_job(job_id, job_name, &format!("Subtitles error: {}", msg));
+        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        return Err(msg);
+    }
+
+    let save_dir = std::path::Path::new(&settings.save_path);
+
+    let audio_path = if save_dir.join("voice.wav").exists() {
+        save_dir.join("voice.wav")
+    } else if save_dir.join("voice.mp3").exists() {
+        save_dir.join("voice.mp3")
+    } else {
+        let msg = "Subtitles: audio file not found (voice.wav / voice.mp3)".to_string();
+        crate::logger::log_job(job_id, job_name, &format!("Subtitles error: {}", msg));
+        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        return Err(msg);
+    };
+
+    crate::logger::log_job(job_id, job_name, &format!("Uploading audio to AssemblyAI: {}", audio_path.display()));
+
+    match crate::api::assemblyai::transcribe(
+        &settings.assemblyai_key,
+        &audio_path,
+        &settings.whisper_language,
+        settings.whisper_max_line_width,
+    ) {
+        Ok((srt, json_response)) => {
+            let srt_path = save_dir.join("subtitle.srt");
+            let json_path = save_dir.join("voice.json");
+
+            std::fs::write(&srt_path, &srt)
+                .map_err(|e| format!("Failed to save subtitle.srt: {}", e))?;
+            // Зберігаємо лише масив words — решта метадані API-запиту, не потрібні для таймлайну
+            let words_only = json_response.get("words").cloned().unwrap_or(serde_json::Value::Array(vec![]));
+            if let Ok(json_str) = serde_json::to_string_pretty(&words_only) {
+                let _ = std::fs::write(&json_path, json_str);
+            }
+
+            crate::logger::log_job(job_id, job_name, "Subtitles saved: subtitle.srt (AssemblyAI)");
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+            ctx.request_repaint();
+            Ok(())
+        }
+        Err(e) => {
+            crate::logger::log_job(job_id, job_name, &format!("AssemblyAI error: {}", e));
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+            Err(e)
         }
     }
 }
@@ -396,10 +506,12 @@ fn run_av_branch(
         }
     }
 
-    // Субтитри (Whisper/WhisperX) — завжди генеруються якщо увімкнено (потрібні для синхронізації відеоряду).
+    // Субтитри (Whisper/WhisperX/AssemblyAI) — завжди генеруються якщо увімкнено (потрібні для синхронізації відеоряду).
     // Накладання на відео контролюється окремо через параметр burn_subtitles у монтажі.
     if settings.subtitles_service == "WhisperX" {
         run_whisperx(&settings, job_id, &job_name, &subtitles_stage, &ctx)?;
+    } else if settings.subtitles_service == "AssemblyAI" {
+        run_assemblyai(&settings, job_id, &job_name, &subtitles_stage, &ctx)?;
     } else if settings.subtitles_service == "Whisper" {
         let reason = if settings.subtitles_enabled {
             "Starting subtitle generation via Whisper (burn-in enabled)..."

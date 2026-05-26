@@ -32,6 +32,7 @@ fn default_ffmpeg_max_threads() -> usize { 2 }
 fn default_googler_threads() -> usize { 5 }
 fn default_video_media_type() -> String { "image".to_string() }
 fn default_subtitles_service() -> String { "Whisper".to_string() }
+fn default_assemblyai_key() -> String { String::new() }
 fn default_whisper_language() -> String { "auto".to_string() }
 fn default_whisper_model() -> String { "base".to_string() }
 fn default_whisper_max_line_width() -> usize { 42 }
@@ -76,6 +77,9 @@ pub struct AppSettings {
     pub voicebot_key: String,
     /// Ключ API для Googler
     pub googler_key: String,
+    /// Ключ API для AssemblyAI
+    #[serde(default = "default_assemblyai_key")]
+    pub assemblyai_key: String,
     /// Поточний вибраний сервіс озвучки ("Voice Bot")
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки
@@ -254,6 +258,7 @@ impl Default for AppSettings {
             openrouter_key: String::new(),
             voicebot_key: String::new(),
             googler_key: String::new(),
+            assemblyai_key: String::new(),
             voiceover_provider: "Voice Bot".to_string(),
             voiceover_template_uuid: String::new(),
             last_template: String::new(),
@@ -406,6 +411,9 @@ pub fn open_settings_folder() {
 pub struct PipelineTemplate {
     /// Збережений API ключ для OpenRouter
     pub openrouter_key: String,
+    /// Збережений API ключ для AssemblyAI
+    #[serde(default = "default_assemblyai_key")]
+    pub assemblyai_key: String,
     /// Обраний провайдер озвучки
     pub voiceover_provider: String,
     /// UUID обраного шаблону озвучки
@@ -558,6 +566,7 @@ pub fn get_templates_dir() -> Option<PathBuf> {
 pub fn save_template(
     name: &str,
     openrouter_key: &str,
+    assemblyai_key: &str,
     voiceover_provider: &str,
     voiceover_template_uuid: &str,
     pipeline_translation_enabled: bool,
@@ -614,6 +623,7 @@ pub fn save_template(
 
         let template = PipelineTemplate {
             openrouter_key: openrouter_key.to_string(),
+            assemblyai_key: assemblyai_key.to_string(),
             voiceover_provider: voiceover_provider.to_string(),
             voiceover_template_uuid: voiceover_template_uuid.to_string(),
             pipeline_translation_enabled,

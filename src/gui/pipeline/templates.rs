@@ -8,6 +8,8 @@ pub fn draw_templates_section(
     saved_templates: &mut Vec<String>,
     openrouter_key: &mut String,
     openrouter_status: &mut Option<String>,
+    assemblyai_key: &mut String,
+    assemblyai_status: &mut Option<String>,
     voiceover_provider: &mut String,
     voiceover_template_uuid: &mut String,
     template_status: &mut Option<String>,
@@ -83,6 +85,8 @@ pub fn draw_templates_section(
                         if let Some(template) = crate::gui::settings::storage::load_template(&template_name) {
                             *openrouter_key = template.openrouter_key;
                             *openrouter_status = None;
+                            *assemblyai_key = template.assemblyai_key;
+                            *assemblyai_status = None;
                             *voiceover_provider = template.voiceover_provider;
                             *voiceover_template_uuid = template.voiceover_template_uuid;
                             *template_name_input = template_name.clone();
