@@ -22,6 +22,7 @@ struct ChatMessageContent {
 #[derive(Deserialize)]
 struct ChatChoice {
     message: ChatMessageContent,
+    finish_reason: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -36,6 +37,7 @@ struct ChatResponse {
 }
 
 /// Надсилає запит до OpenRouter Chat API та повертає текст відповіді та її вартість.
+/// При порожній відповіді повторює до 5 разів.
 pub fn call_openrouter(
     key: &str,
     model: &str,
@@ -51,9 +53,12 @@ pub fn call_openrouter(
         }
     };
 
-    log(&format!("Starting OpenRouter request. Model: {}, Temperature: {}", model, temperature));
+    const MAX_RETRIES: u32 = 5;
 
-    let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(120))
+        .build();
 
     let request = ChatRequest {
         model: model.to_string(),
@@ -64,49 +69,58 @@ pub fn call_openrouter(
         temperature,
     };
 
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(std::time::Duration::from_secs(15))
-        .timeout(std::time::Duration::from_secs(120))
-        .build();
+    let request_value = ureq::serde_json::to_value(&request).map_err(|e| {
+        format!("Serialization error: {}", e)
+    })?;
 
-    let res = agent
-        .post("https://openrouter.ai/api/v1/chat/completions")
-        .set("Authorization", &format!("Bearer {}", key))
-        .set("Content-Type", "application/json")
-        .send_json(ureq::serde_json::to_value(&request).map_err(|e| {
-            let err_msg = format!("Serialization error: {}", e);
-            log(&err_msg);
-            err_msg
-        })?)
-        .map_err(|e| {
-            let err_msg = format!("Network error: {}", e);
-            log(&err_msg);
-            err_msg
-        })?;
+    for attempt in 1..=MAX_RETRIES {
+        log(&format!("OpenRouter request. Model: {}, attempt {}/{}", model, attempt, MAX_RETRIES));
 
-    let data = res
-        .into_json::<ChatResponse>()
-        .map_err(|e| {
-            let err_msg = format!("Response parsing error: {}", e);
-            log(&err_msg);
-            err_msg
-        })?;
+        let _permit = crate::api::openrouter::OpenRouterLimiter::get().acquire();
 
-    log("OpenRouter request completed successfully.");
+        let res = match agent
+            .post("https://openrouter.ai/api/v1/chat/completions")
+            .set("Authorization", &format!("Bearer {}", key))
+            .set("Content-Type", "application/json")
+            .send_json(request_value.clone())
+        {
+            Ok(r) => r,
+            Err(e) => {
+                log(&format!("Network error (attempt {}): {}", attempt, e));
+                continue;
+            }
+        };
 
-    let cost = data.usage.as_ref().and_then(|u| u.cost);
-    if let Some(c) = cost {
-        log(&format!("Request cost: ${:.5}", c));
-    } else {
-        log("Request cost not provided in usage.cost.");
+        let data = match res.into_json::<ChatResponse>() {
+            Ok(d) => d,
+            Err(e) => {
+                log(&format!("Response parsing error (attempt {}): {}", attempt, e));
+                continue;
+            }
+        };
+
+        let cost = data.usage.as_ref().and_then(|u| u.cost);
+
+        let choice = data.choices.into_iter().next();
+        let finish_reason = choice.as_ref()
+            .and_then(|c| c.finish_reason.as_deref())
+            .unwrap_or("unknown")
+            .to_string();
+        let text = choice.and_then(|c| c.message.content).unwrap_or_default();
+
+        if text.trim().is_empty() {
+            log(&format!("Порожня відповідь (attempt {}/{}, finish_reason: {}), повтор...", attempt, MAX_RETRIES, finish_reason));
+            continue;
+        }
+
+        if let Some(c) = cost {
+            log(&format!("Request cost: ${:.5}", c));
+        }
+
+        return Ok((text, cost));
     }
 
-    let text = data.choices.into_iter()
-        .next()
-        .and_then(|c| c.message.content)
-        .unwrap_or_default();
-
-    Ok((text, cost))
+    Err(format!("LLM не повернув відповідь після {} спроб", MAX_RETRIES))
 }
 
 /// Викликає LLM-сервіс із підстановкою `{{text}}` у промт і повертає текст відповіді та вартість.

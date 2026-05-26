@@ -2078,7 +2078,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ModelInfo"
+                    "$ref": "#/components/schemas/src__api__v5__models__ModelInfo"
                   },
                   "title": "Response V5 List Models"
                 }
@@ -2124,7 +2124,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ModelInfo"
+                  "$ref": "#/components/schemas/src__api__v5__models__ModelInfo"
                 }
               }
             }
@@ -2344,6 +2344,142 @@
           }
         },
         "x-experimental": true
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "tags": [
+          "openai-compatible"
+        ],
+        "summary": "Create a chat completion",
+        "description": "OpenAI-compatible Chat Completions endpoint backed by stored web accounts.\n\nUse OpenRouter-style model ids such as `openai/gpt-4o`, `x-ai/grok-4`, or `google/gemini-2.5-flash`. Unprefixed aliases such as `gpt-4o`, `grok-4`, and `gemini-2.5-flash` remain accepted. `models` and `provider` are accepted in the OpenRouter style for provider-aware routing.\n\nEstimated chat prompt and completion tokens are counted against the same `prompt_tokens_per_hour_limit` license bucket as prompt generation.\n\nStreaming responses use `text/event-stream` and emit text deltas as upstream responses are parsed.",
+        "operationId": "openai_compatible_chat_completions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OpenAI-compatible chat completion. If `stream=true`, the same endpoint returns server-sent events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCompletionResponse"
+                },
+                "example": {
+                  "id": "chatcmpl-00000000000000000000000000000000",
+                  "object": "chat.completion",
+                  "created": 1760000000,
+                  "model": "openai/gpt-4o",
+                  "choices": [
+                    {
+                      "index": 0,
+                      "message": {
+                        "role": "assistant",
+                        "content": "Hello."
+                      },
+                      "finish_reason": "stop"
+                    }
+                  ],
+                  "usage": {
+                    "prompt_tokens": 8,
+                    "completion_tokens": 2,
+                    "total_tokens": 10
+                  }
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "data: {\"id\":\"chatcmpl-...\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n\n"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "tags": [
+          "openai-compatible"
+        ],
+        "summary": "List OpenRouter-style chat models",
+        "description": "List OpenRouter-style model ids supported by the compatibility API.",
+        "operationId": "openai_compatible_list_models",
+        "responses": {
+          "200": {
+            "description": "List of canonical OpenRouter-style model ids available through this compatibility API.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelListResponse"
+                },
+                "example": {
+                  "object": "list",
+                  "data": [
+                    {
+                      "id": "openai/gpt-4o",
+                      "canonical_slug": "openai/gpt-4o",
+                      "object": "model",
+                      "created": 0,
+                      "owned_by": "openai",
+                      "name": "GPT-4o",
+                      "description": "GPT-4o via ChatGPT web accounts.",
+                      "context_length": 128000,
+                      "architecture": {
+                        "input_modalities": [
+                          "text"
+                        ],
+                        "output_modalities": [
+                          "text"
+                        ],
+                        "modality": "text->text",
+                        "tokenizer": "GPT"
+                      },
+                      "pricing": {
+                        "prompt": "0",
+                        "completion": "0",
+                        "request": "0",
+                        "image": "0",
+                        "web_search": "0",
+                        "internal_reasoning": "0",
+                        "input_cache_read": "0",
+                        "input_cache_write": "0"
+                      },
+                      "top_provider": {
+                        "context_length": 128000,
+                        "is_moderated": true
+                      },
+                      "supported_parameters": [
+                        "max_tokens",
+                        "temperature",
+                        "top_p",
+                        "stop"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -2604,6 +2740,355 @@
         "title": "CancelAllResponse",
         "description": "Response for cancel-all operations request.\n\nReturned by GET /api/v4/operations/cancel-all endpoint.\nContains the result for each active operation that was cancelled."
       },
+      "ChatCompletionChoice": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "message": {
+            "$ref": "#/components/schemas/ChatCompletionMessage"
+          },
+          "finish_reason": {
+            "type": "string",
+            "title": "Finish Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "message",
+          "finish_reason"
+        ],
+        "title": "ChatCompletionChoice"
+      },
+      "ChatCompletionMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "const": "assistant",
+            "title": "Role",
+            "default": "assistant"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "ChatCompletionMessage"
+      },
+      "ChatCompletionRequest": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model",
+            "description": "OpenRouter-style model id, such as `openai/gpt-4o`, `x-ai/grok-4`, or `google/gemini-2.5-flash`. Unprefixed provider aliases like `gpt-4o`, `grok-4`, and `gemini-2.5-flash` are accepted.",
+            "default": "openai/auto"
+          },
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models",
+            "description": "Optional OpenRouter-style fallback list. The first supported model is used."
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Messages",
+            "description": "Conversation messages in OpenAI Chat Completions format."
+          },
+          "stream": {
+            "type": "boolean",
+            "title": "Stream",
+            "description": "When true, returns OpenAI-compatible SSE chunks as upstream text deltas arrive.",
+            "default": false
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider",
+            "description": "OpenRouter-style provider preferences. Currently validates `only` and `ignore` against the selected model provider."
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature",
+            "description": "Accepted for OpenAI compatibility. ChatGPT web may ignore this parameter."
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens",
+            "description": "Accepted for OpenAI compatibility. ChatGPT web may ignore this parameter."
+          },
+          "max_completion_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Completion Tokens",
+            "description": "Accepted for OpenAI compatibility. ChatGPT web may ignore this parameter."
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P",
+            "description": "Accepted for OpenAI compatibility. ChatGPT web may ignore this parameter."
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop",
+            "description": "Accepted for OpenAI compatibility. ChatGPT web may ignore this parameter."
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "title": "ChatCompletionRequest",
+        "examples": [
+          {
+            "messages": [
+              {
+                "content": "Say hello in one sentence.",
+                "role": "user"
+              }
+            ],
+            "model": "openai/gpt-4o",
+            "stream": false
+          },
+          {
+            "messages": [
+              {
+                "content": "Solve 19 * 23 and explain briefly.",
+                "role": "user"
+              }
+            ],
+            "models": [
+              "openai/gpt-5-thinking",
+              "openai/gpt-4o"
+            ],
+            "provider": {
+              "allow_fallbacks": true,
+              "only": [
+                "openai"
+              ]
+            }
+          },
+          {
+            "messages": [
+              {
+                "content": "Say hello in one sentence.",
+                "role": "user"
+              }
+            ],
+            "model": "x-ai/grok-4",
+            "provider": {
+              "only": [
+                "x-ai"
+              ]
+            }
+          },
+          {
+            "messages": [
+              {
+                "content": "Say hello in one sentence.",
+                "role": "user"
+              }
+            ],
+            "model": "google/gemini-2.5-flash",
+            "provider": {
+              "only": [
+                "google"
+              ]
+            }
+          }
+        ]
+      },
+      "ChatCompletionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "object": {
+            "type": "string",
+            "const": "chat.completion",
+            "title": "Object",
+            "default": "chat.completion"
+          },
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "Canonical OpenRouter-style model id used for this request."
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ChatCompletionChoice"
+            },
+            "type": "array",
+            "title": "Choices"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/ChatCompletionUsage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "created",
+          "model",
+          "choices",
+          "usage"
+        ],
+        "title": "ChatCompletionResponse"
+      },
+      "ChatCompletionUsage": {
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "title": "Prompt Tokens",
+            "description": "Estimated prompt tokens. ChatGPT web does not return API token accounting."
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "title": "Completion Tokens",
+            "description": "Estimated completion tokens. ChatGPT web does not return API token accounting."
+          },
+          "total_tokens": {
+            "type": "integer",
+            "title": "Total Tokens",
+            "description": "Estimated total tokens counted against the prompt token limiter."
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens"
+        ],
+        "title": "ChatCompletionUsage"
+      },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "system",
+              "developer",
+              "user",
+              "assistant",
+              "tool"
+            ],
+            "title": "Role",
+            "description": "Message author role. `developer` is accepted and sent upstream as a system-style instruction. `tool` is rejected because tool calling is not supported.",
+            "default": "user"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content",
+            "description": "Plain text content, or OpenAI-style content parts. Text parts are joined with newlines.",
+            "default": ""
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "Optional OpenAI-compatible participant name. Currently accepted for compatibility but not sent upstream."
+          }
+        },
+        "type": "object",
+        "title": "ChatMessage"
+      },
       "CurrentUsage": {
         "properties": {
           "hourly_usage": {
@@ -2684,6 +3169,25 @@
             "minLength": 1,
             "title": "Prompt",
             "description": "Text prompt describing the edit/transformation (e.g., 'make it HDR', 'cartoon style', 'add sunset lighting')"
+          },
+          "aspect_ratio": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "1:1",
+                  "2:3",
+                  "3:2",
+                  "9:16",
+                  "16:9"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aspect Ratio",
+            "description": "Optional output aspect ratio for single-image edits. Ignored for multi-image edits."
           }
         },
         "type": "object",
@@ -2691,49 +3195,6 @@
           "prompt"
         ],
         "title": "EditImageRequest"
-      },
-      "ExtractPromptRequest": {
-        "properties": {
-          "input_image": {
-            "$ref": "#/components/schemas/ImageInput",
-            "description": "Image to extract a text description from"
-          }
-        },
-        "type": "object",
-        "required": [
-          "input_image"
-        ],
-        "title": "ExtractPromptRequest"
-      },
-      "ExtractPromptResponse": {
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "title": "Success",
-            "default": true
-          },
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider"
-          },
-          "result": {
-            "type": "string",
-            "title": "Result"
-          },
-          "task_id": {
-            "type": "string",
-            "title": "Task Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "provider",
-          "result",
-          "task_id"
-        ],
-        "title": "ExtractPromptResponse",
-        "description": "Response for successful prompt extraction."
       },
       "FlowGenerateImageRequest": {
         "properties": {
@@ -2747,9 +3208,10 @@
             "type": "string",
             "enum": [
               "16:9",
-              "9:16",
               "4:3",
-              "3:4"
+              "1:1",
+              "3:4",
+              "9:16"
             ],
             "title": "Aspect Ratio",
             "description": "Image aspect ratio in n:n format.",
@@ -3019,26 +3481,6 @@
         ],
         "title": "GeneratePromptResponse",
         "description": "Response from server-side prompt generation."
-      },
-      "GenerateVideoFromImageRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt to guide the video generation"
-          },
-          "input_image": {
-            "$ref": "#/components/schemas/ImageInput",
-            "description": "Starting image for the video"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt",
-          "input_image"
-        ],
-        "title": "GenerateVideoFromImageRequest"
       },
       "GenerateVideoFromIngredientsRequest": {
         "properties": {
@@ -3319,11 +3761,11 @@
           },
           "inputs": {
             "items": {
-              "$ref": "#/components/schemas/V5ImageInput"
+              "$ref": "#/components/schemas/V5MediaInput"
             },
             "type": "array",
             "title": "Inputs",
-            "description": "Input images as data URIs or 32-character storage file ids. Meaning is inferred from the selected model and input count."
+            "description": "Input media as data URIs or 32-character storage file ids. Meaning is inferred from the selected model and input count."
           },
           "aspect_ratio": {
             "type": "string",
@@ -3674,36 +4116,6 @@
         "type": "object",
         "title": "GenerationUsage"
       },
-      "GoogleFxExtractPromptRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "input_image": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^data:[^;]+;base64,"
-              },
-              {
-                "type": "string",
-                "pattern": "^file:[a-f0-9]{32}$"
-              }
-            ],
-            "title": "Input Image",
-            "description": "Image to analyze (data URI or file reference)"
-          }
-        },
-        "type": "object",
-        "required": [
-          "input_image"
-        ],
-        "title": "GoogleFxExtractPromptRequest",
-        "description": "Extract a text description from an image using Google FX."
-      },
       "GoogleFxGenerateImageFlowRequest": {
         "properties": {
           "provider": {
@@ -3724,7 +4136,8 @@
               "IMAGE_ASPECT_RATIO_PORTRAIT",
               "IMAGE_ASPECT_RATIO_PORTRAIT_THREE_FOUR",
               "IMAGE_ASPECT_RATIO_LANDSCAPE",
-              "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE"
+              "IMAGE_ASPECT_RATIO_LANDSCAPE_FOUR_THREE",
+              "IMAGE_ASPECT_RATIO_SQUARE"
             ],
             "title": "Aspect Ratio",
             "description": "Output image aspect ratio (portrait or landscape only). Accepts: '16:9', '9:16', 'landscape', 'portrait', or full Google format",
@@ -3785,89 +4198,6 @@
         ],
         "title": "GoogleFxGenerateImageFlowRequest",
         "description": "Generate an image from a text prompt using Google FX Flow API (GEM_PIX_2 or Imagen 4)."
-      },
-      "GoogleFxGenerateImageRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text description of the image to generate"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "IMAGE_ASPECT_RATIO_PORTRAIT",
-              "IMAGE_ASPECT_RATIO_LANDSCAPE",
-              "IMAGE_ASPECT_RATIO_SQUARE"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Output image aspect ratio. Accepts: '16:9', '9:16', '1:1', 'landscape', 'portrait', 'square', or full Google format",
-            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Seed for reproducible generation"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "GoogleFxGenerateImageRequest",
-        "description": "Generate an image from a text prompt using Google FX (Imagen 4)."
-      },
-      "GoogleFxGenerateVideoFromImageLegacyRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text description guiding the video generation"
-          },
-          "input_image": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^data:[^;]+;base64,"
-              },
-              {
-                "type": "string",
-                "pattern": "^file:[a-f0-9]{32}$"
-              }
-            ],
-            "title": "Input Image",
-            "description": "Starting image (data URI or file reference). Max 5MB"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt",
-          "input_image"
-        ],
-        "title": "GoogleFxGenerateVideoFromImageLegacyRequest",
-        "description": "Generate a video from a single input image using Google FX (legacy)."
       },
       "GoogleFxGenerateVideoFromIngredientsRequest": {
         "properties": {
@@ -3934,28 +4264,6 @@
         ],
         "title": "GoogleFxGenerateVideoFromIngredientsRequest",
         "description": "Generate a video from 1-3 reference images using Google FX."
-      },
-      "GoogleFxGenerateVideoFromPromptLegacyRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text description of the video to generate"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "GoogleFxGenerateVideoFromPromptLegacyRequest",
-        "description": "Generate a video from a text prompt using Google FX (legacy alternative method)."
       },
       "GoogleFxGenerateVideoFromPromptRequest": {
         "properties": {
@@ -4084,106 +4392,6 @@
         "title": "GoogleFxGenerateVideoStartEndRequest",
         "description": "Generate a video with start and optional end keyframes using Google FX."
       },
-      "GoogleFxRemixImageRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text description guiding the remix"
-          },
-          "reference_images": {
-            "items": {
-              "$ref": "#/components/schemas/src__api__v3__models__image__RemixReference"
-            },
-            "type": "array",
-            "maxItems": 3,
-            "minItems": 1,
-            "title": "Reference Images",
-            "description": "1-3 reference images with categories"
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "IMAGE_ASPECT_RATIO_PORTRAIT",
-              "IMAGE_ASPECT_RATIO_LANDSCAPE",
-              "IMAGE_ASPECT_RATIO_SQUARE"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Output image aspect ratio. Accepts: '16:9', '9:16', '1:1', 'landscape', 'portrait', 'square', or full Google format",
-            "default": "IMAGE_ASPECT_RATIO_LANDSCAPE"
-          },
-          "seed": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "maximum": 2147483647
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed",
-            "description": "Seed for reproducible generation"
-          },
-          "strict_mode": {
-            "type": "boolean",
-            "title": "Strict Mode",
-            "description": "Use strict mode (R2I model) or relaxed mode (IMAGEN_3_5 model)",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt",
-          "reference_images"
-        ],
-        "title": "GoogleFxRemixImageRequest",
-        "description": "Remix images by combining subjects, scenes, and styles from reference images."
-      },
-      "GoogleFxTransformImageRequest": {
-        "properties": {
-          "provider": {
-            "type": "string",
-            "const": "google_fx",
-            "title": "Provider",
-            "default": "google_fx"
-          },
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text description of the transformation to apply"
-          },
-          "input_image": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^data:[^;]+;base64,"
-              },
-              {
-                "type": "string",
-                "pattern": "^file:[a-f0-9]{32}$"
-              }
-            ],
-            "title": "Input Image",
-            "description": "Image to transform (data URI or file reference)"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt",
-          "input_image"
-        ],
-        "title": "GoogleFxTransformImageRequest",
-        "description": "Transform an existing image based on a text prompt using Google FX."
-      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -4307,23 +4515,31 @@
         "title": "ImageResponse",
         "description": "Response for successful image generation/transformation."
       },
-      "ModelInfo": {
+      "ModelArchitecture": {
         "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
+          "input_modalities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Input Modalities"
           },
-          "provider": {
-            "type": "string",
-            "enum": [
-              "flow",
-              "flower",
-              "grok",
-              "openai"
-            ],
-            "title": "Provider"
+          "output_modalities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Output Modalities"
           },
-          "provider_model": {
+          "modality": {
+            "type": "string",
+            "title": "Modality"
+          },
+          "tokenizer": {
+            "type": "string",
+            "title": "Tokenizer"
+          },
+          "instruct_type": {
             "anyOf": [
               {
                 "type": "string"
@@ -4332,89 +4548,17 @@
                 "type": "null"
               }
             ],
-            "title": "Provider Model",
-            "description": "Underlying provider model code used by the adapter, when applicable."
-          },
-          "display_name": {
-            "type": "string",
-            "title": "Display Name"
-          },
-          "media_type": {
-            "type": "string",
-            "enum": [
-              "image",
-              "video",
-              "text"
-            ],
-            "title": "Media Type"
-          },
-          "routes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Routes"
-          },
-          "default": {
-            "type": "boolean",
-            "title": "Default",
-            "default": false
-          },
-          "deprecated": {
-            "type": "boolean",
-            "title": "Deprecated",
-            "default": false
-          },
-          "experimental": {
-            "type": "boolean",
-            "title": "Experimental",
-            "default": false
-          },
-          "inputs": {
-            "$ref": "#/components/schemas/ModelInputInfo"
-          },
-          "outputs": {
-            "$ref": "#/components/schemas/ModelOutputInfo"
-          },
-          "billing": {
-            "$ref": "#/components/schemas/BillingInfo"
-          },
-          "operations": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Operations"
-          },
-          "options": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ModelOptionInfo"
-            },
-            "type": "object",
-            "title": "Options"
-          },
-          "quirks": {
-            "items": {
-              "$ref": "#/components/schemas/ModelQuirkInfo"
-            },
-            "type": "array",
-            "title": "Quirks"
+            "title": "Instruct Type"
           }
         },
         "type": "object",
         "required": [
-          "id",
-          "provider",
-          "display_name",
-          "media_type",
-          "routes",
-          "inputs",
-          "outputs",
-          "billing",
-          "operations",
-          "options"
+          "input_modalities",
+          "output_modalities",
+          "modality",
+          "tokenizer"
         ],
-        "title": "ModelInfo"
+        "title": "ModelArchitecture"
       },
       "ModelInputInfo": {
         "properties": {
@@ -4438,6 +4582,74 @@
           "semantics"
         ],
         "title": "ModelInputInfo"
+      },
+      "ModelListResponse": {
+        "properties": {
+          "object": {
+            "type": "string",
+            "const": "list",
+            "title": "Object",
+            "default": "list"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/src__api__openai_compatible__ModelInfo"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "ModelListResponse"
+      },
+      "ModelModeInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/ModelInputInfo"
+          },
+          "options": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelOptionInfo"
+            },
+            "type": "object",
+            "title": "Options"
+          },
+          "operations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Operations"
+          },
+          "constraints": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Constraints"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "description",
+          "inputs"
+        ],
+        "title": "ModelModeInfo"
       },
       "ModelOptionInfo": {
         "properties": {
@@ -4514,6 +4726,54 @@
           "types"
         ],
         "title": "ModelOutputInfo"
+      },
+      "ModelPricing": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "title": "Prompt"
+          },
+          "completion": {
+            "type": "string",
+            "title": "Completion"
+          },
+          "request": {
+            "type": "string",
+            "title": "Request"
+          },
+          "image": {
+            "type": "string",
+            "title": "Image"
+          },
+          "web_search": {
+            "type": "string",
+            "title": "Web Search"
+          },
+          "internal_reasoning": {
+            "type": "string",
+            "title": "Internal Reasoning"
+          },
+          "input_cache_read": {
+            "type": "string",
+            "title": "Input Cache Read"
+          },
+          "input_cache_write": {
+            "type": "string",
+            "title": "Input Cache Write"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "completion",
+          "request",
+          "image",
+          "web_search",
+          "internal_reasoning",
+          "input_cache_read",
+          "input_cache_write"
+        ],
+        "title": "ModelPricing"
       },
       "ModelQuirkInfo": {
         "properties": {
@@ -4728,7 +4988,7 @@
           "operation_type": {
             "type": "string",
             "title": "Operation Type",
-            "description": "Type of operation (e.g., 'flow_image_generate', 'whisk_image_transform')"
+            "description": "Type of operation (e.g., 'flow_image_generate', 'grok_image_edit')"
           },
           "status": {
             "type": "string",
@@ -4993,82 +5253,34 @@
         ],
         "title": "ProviderInfo"
       },
-      "RemixImageRequest": {
+      "TopProvider": {
         "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the desired output"
+          "context_length": {
+            "type": "integer",
+            "title": "Context Length"
           },
-          "reference_images": {
-            "items": {
-              "$ref": "#/components/schemas/src__api__v4__whisk__models__image__RemixReference"
-            },
-            "type": "array",
-            "maxItems": 3,
-            "minItems": 1,
-            "title": "Reference Images",
-            "description": "Reference images with categories (1-3 images). Max 1 style and 1 scene reference allowed."
-          },
-          "aspect_ratio": {
-            "type": "string",
-            "enum": [
-              "16:9",
-              "9:16",
-              "1:1"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Image aspect ratio in n:n format.",
-            "default": "16:9"
-          },
-          "seed": {
+          "max_completion_tokens": {
             "anyOf": [
               {
-                "type": "integer",
-                "maximum": 2147483647,
-                "minimum": 0
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Seed",
-            "description": "Random seed for reproducibility"
+            "title": "Max Completion Tokens"
           },
-          "strict_mode": {
+          "is_moderated": {
             "type": "boolean",
-            "title": "Strict Mode",
-            "description": "Enable strict mode for closer reference adherence",
-            "default": false
+            "title": "Is Moderated"
           }
         },
         "type": "object",
         "required": [
-          "prompt",
-          "reference_images"
+          "context_length",
+          "is_moderated"
         ],
-        "title": "RemixImageRequest"
-      },
-      "TransformImageRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the transformation"
-          },
-          "input_image": {
-            "$ref": "#/components/schemas/ImageInput",
-            "description": "Image to transform"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt",
-          "input_image"
-        ],
-        "title": "TransformImageRequest"
+        "title": "TopProvider"
       },
       "UsageResponse": {
         "properties": {
@@ -5119,7 +5331,7 @@
         "title": "UsageResponse",
         "description": "Response for usage statistics endpoint."
       },
-      "V5ImageInput": {
+      "V5MediaInput": {
         "anyOf": [
           {
             "type": "string",
@@ -5130,7 +5342,7 @@
             "pattern": "^[a-f0-9]{32}$"
           }
         ],
-        "description": "Image as a data URI or a 32-character storage file id. Maximum size: 5MB."
+        "description": "Image or video as a data URI, or a 32-character storage file id. Inline images are limited to 5MB; inline videos are limited to 1GB."
       },
       "ValidationError": {
         "properties": {
@@ -5250,7 +5462,7 @@
               "16:9"
             ],
             "title": "Aspect Ratio",
-            "description": "Video aspect ratio: 1:1, 2:3, 3:2, 9:16, or 16:9",
+            "description": "Video aspect ratio for multi-image references. Single-image animation follows the input image framing.",
             "default": "16:9"
           },
           "resolution": {
@@ -5364,119 +5576,215 @@
         "title": "VideoStatusResponse",
         "description": "Response for video generation status check."
       },
-      "WhiskGenerateImageRequest": {
+      "src__api__openai_compatible__ModelInfo": {
         "properties": {
-          "prompt": {
+          "id": {
             "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the image to generate"
+            "title": "Id",
+            "description": "Canonical OpenRouter-style model id to send in chat requests."
           },
-          "aspect_ratio": {
+          "canonical_slug": {
             "type": "string",
-            "enum": [
-              "16:9",
-              "9:16",
-              "1:1"
-            ],
-            "title": "Aspect Ratio",
-            "description": "Image aspect ratio in n:n format.",
-            "default": "16:9"
+            "title": "Canonical Slug"
           },
-          "seed": {
+          "object": {
+            "type": "string",
+            "const": "model",
+            "title": "Object",
+            "default": "model"
+          },
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "owned_by": {
+            "type": "string",
+            "title": "Owned By"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "context_length": {
+            "type": "integer",
+            "title": "Context Length"
+          },
+          "architecture": {
+            "$ref": "#/components/schemas/ModelArchitecture"
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/ModelPricing"
+          },
+          "top_provider": {
+            "$ref": "#/components/schemas/TopProvider"
+          },
+          "per_request_limits": {
             "anyOf": [
               {
-                "type": "integer",
-                "maximum": 2147483647,
-                "minimum": 0
+                "additionalProperties": true,
+                "type": "object"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Seed",
-            "description": "Random seed for reproducibility"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "WhiskGenerateImageRequest"
-      },
-      "WhiskGenerateVideoFromTextRequest": {
-        "properties": {
-          "prompt": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Prompt",
-            "description": "Text prompt describing the video to generate"
-          }
-        },
-        "type": "object",
-        "required": [
-          "prompt"
-        ],
-        "title": "WhiskGenerateVideoFromTextRequest"
-      },
-      "src__api__v3__models__image__RemixReference": {
-        "properties": {
-          "image": {
+            "title": "Per Request Limits"
+          },
+          "supported_parameters": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Supported Parameters"
+          },
+          "default_parameters": {
             "anyOf": [
               {
-                "type": "string",
-                "pattern": "^data:[^;]+;base64,"
+                "additionalProperties": true,
+                "type": "object"
               },
               {
-                "type": "string",
-                "pattern": "^file:[a-f0-9]{32}$"
+                "type": "null"
               }
             ],
-            "title": "Image",
-            "description": "Reference image (data URI or file reference)"
-          },
-          "category": {
-            "type": "string",
-            "enum": [
-              "MEDIA_CATEGORY_SUBJECT",
-              "MEDIA_CATEGORY_SCENE",
-              "MEDIA_CATEGORY_STYLE"
-            ],
-            "title": "Category",
-            "description": "How this image should be used: MEDIA_CATEGORY_SUBJECT, MEDIA_CATEGORY_SCENE, or MEDIA_CATEGORY_STYLE"
+            "title": "Default Parameters"
           }
         },
         "type": "object",
         "required": [
-          "image",
-          "category"
+          "id",
+          "canonical_slug",
+          "created",
+          "owned_by",
+          "name",
+          "description",
+          "context_length",
+          "architecture",
+          "pricing",
+          "top_provider",
+          "supported_parameters"
         ],
-        "title": "RemixReference",
-        "description": "A reference image with its category for the remix operation."
+        "title": "ModelInfo"
       },
-      "src__api__v4__whisk__models__image__RemixReference": {
+      "src__api__v5__models__ModelInfo": {
         "properties": {
-          "image": {
-            "$ref": "#/components/schemas/ImageInput",
-            "description": "Reference image"
+          "id": {
+            "type": "string",
+            "title": "Id"
           },
-          "category": {
+          "provider": {
             "type": "string",
             "enum": [
-              "MEDIA_CATEGORY_SUBJECT",
-              "MEDIA_CATEGORY_SCENE",
-              "MEDIA_CATEGORY_STYLE"
+              "flow",
+              "flower",
+              "grok",
+              "openai"
             ],
-            "title": "Category",
-            "description": "Category: MEDIA_CATEGORY_SUBJECT, MEDIA_CATEGORY_SCENE, or MEDIA_CATEGORY_STYLE"
+            "title": "Provider"
+          },
+          "provider_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Model",
+            "description": "Underlying provider model code used by the adapter, when applicable."
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video",
+              "text"
+            ],
+            "title": "Media Type"
+          },
+          "routes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Routes"
+          },
+          "default": {
+            "type": "boolean",
+            "title": "Default",
+            "default": false
+          },
+          "deprecated": {
+            "type": "boolean",
+            "title": "Deprecated",
+            "default": false
+          },
+          "experimental": {
+            "type": "boolean",
+            "title": "Experimental",
+            "default": false
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/ModelInputInfo"
+          },
+          "outputs": {
+            "$ref": "#/components/schemas/ModelOutputInfo"
+          },
+          "billing": {
+            "$ref": "#/components/schemas/BillingInfo"
+          },
+          "operations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Operations"
+          },
+          "options": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelOptionInfo"
+            },
+            "type": "object",
+            "title": "Options"
+          },
+          "modes": {
+            "items": {
+              "$ref": "#/components/schemas/ModelModeInfo"
+            },
+            "type": "array",
+            "title": "Modes"
+          },
+          "quirks": {
+            "items": {
+              "$ref": "#/components/schemas/ModelQuirkInfo"
+            },
+            "type": "array",
+            "title": "Quirks"
           }
         },
         "type": "object",
         "required": [
-          "image",
-          "category"
+          "id",
+          "provider",
+          "display_name",
+          "media_type",
+          "routes",
+          "inputs",
+          "outputs",
+          "billing",
+          "operations",
+          "options"
         ],
-        "title": "RemixReference"
+        "title": "ModelInfo"
       }
     },
     "securitySchemes": {

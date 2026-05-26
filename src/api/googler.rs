@@ -225,12 +225,19 @@ fn try_generate_image(key: &str, prompt: &str, aspect_ratio: &str, provider: &st
         _ => return Err(format!("Невідомий провайдер зображень: {}", provider)),
     };
 
-    let response = agent
+    let response = match agent
         .post(&url)
         .set("X-API-Key", key)
         .set("Content-Type", "application/json")
         .send_json(body)
-        .map_err(|e| format!("Помилка запиту: {}", e))?;
+    {
+        Ok(r) => r,
+        Err(ureq::Error::Status(code, r)) => {
+            let body = r.into_string().unwrap_or_default();
+            return Err(format!("HTTP {}: {}", code, body));
+        }
+        Err(e) => return Err(format!("Помилка запиту: {}", e)),
+    };
 
     let op: OperationStarted = response
         .into_json()
@@ -258,12 +265,19 @@ fn try_generate_video(key: &str, prompt: &str, aspect_ratio: &str, provider: &st
         _ => return Err(format!("Невідомий провайдер відео: {}", provider)),
     };
 
-    let response = agent
+    let response = match agent
         .post(&url)
         .set("X-API-Key", key)
         .set("Content-Type", "application/json")
         .send_json(body)
-        .map_err(|e| format!("Помилка запиту: {}", e))?;
+    {
+        Ok(r) => r,
+        Err(ureq::Error::Status(code, r)) => {
+            let body = r.into_string().unwrap_or_default();
+            return Err(format!("HTTP {}: {}", code, body));
+        }
+        Err(e) => return Err(format!("Помилка запиту: {}", e)),
+    };
 
     let op: OperationStarted = response
         .into_json()
@@ -327,12 +341,19 @@ fn try_animate_image(key: &str, image_data_uri: &str, prompt: &str, provider: &s
         _ => return Err(format!("Провайдер {} не підтримує анімацію зображень", provider)),
     };
 
-    let response = agent
+    let response = match agent
         .post(&url)
         .set("X-API-Key", key)
         .set("Content-Type", "application/json")
         .send_json(body)
-        .map_err(|e| format!("Помилка запиту: {}", e))?;
+    {
+        Ok(r) => r,
+        Err(ureq::Error::Status(code, r)) => {
+            let body = r.into_string().unwrap_or_default();
+            return Err(format!("HTTP {}: {}", code, body));
+        }
+        Err(e) => return Err(format!("Помилка запиту: {}", e)),
+    };
 
     let op: OperationStarted = response
         .into_json()

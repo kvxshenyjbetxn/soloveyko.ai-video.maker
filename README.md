@@ -40,7 +40,7 @@ src/
 │   └── ffmpeg.rs                — FfmpegLimiter (семафор лімітування одночасних процесів FFmpeg, дефолт 2)
 ├── core/
 │   ├── mod.rs                   — реекспорт модулів core
-│   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini); call_openrouter: HTTP запит до OpenRouter Chat completions API; ChatMessageContent.content: Option<String> (null-safe)
+│   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini); call_openrouter: HTTP запит до OpenRouter Chat completions API з авто-ретраями при порожній відповіді (до 5 спроб); ChatMessageContent.content: Option<String> (null-safe)
 │   └── pipeline/
 │       ├── mod.rs               — run_pipeline: головний потік задачі; після перекладу запускає [Озвучка+Субтитри] та [Відеоряд] паралельно, потім Timeline → Монтаж
 │       ├── voiceover/
@@ -202,7 +202,7 @@ src/
 #### Переклад
 
 - **`call_llm`** (`src/core/llm.rs`) — єдина точка виклику будь-якого LLM-сервісу. Будує `user_content` з промту + тексту (підстановка `{{text}}`), диспетчеризує на відповідний сервіс (`Claude Code` → `call_claude_code`, `Gemini CLI` → `call_gemini_cli`, інше → `call_openrouter`). Повертає `Result<(String, Option<f64>), String>` — текст та вартість (вартість заповнюється тільки для OpenRouter). Використовується і для перекладу, і для генерації відеопромтів.
-- **`call_openrouter`** (`src/core/llm.rs`) — чистий HTTP виклик до OpenRouter Chat completions API. Повертає текст відповіді та її вартість (отриману з поля `usage.cost`, що гарантує 100% точний облік витрат). Лімітується через `OpenRouterLimiter::get().acquire()` — тому паралельні виклики не перевищують налаштований ліміт потоків.
+- **`call_openrouter`** (`src/core/llm.rs`) — HTTP виклик до OpenRouter Chat completions API з авто-ретраями. До 5 спроб: якщо відповідь порожня (`content: null` або `""`) — повторює без паузи, логуючи `finish_reason` кожної невдалої спроби. Якщо всі 5 спроб порожні — повертає `Err`. Лімітується через `OpenRouterLimiter::get().acquire()` перед кожною спробою. Повертає текст та `usage.cost`.
 - **Плейсхолдер `{{text}}`:** якщо промт містить `{{text}}` — текст підставляється на місце. Якщо промт є але без плейсхолдера — текст додається після промту через `\n\n`. Якщо промт порожній — надсилається тільки текст. Та сама логіка для перекладу і для відеопромтів.
 - При успіху зберігає результат у `{save_path}/text.txt`. Цей же текст передається в озвучку якщо вона увімкнена.
 - **Контроль перекладу (Translation Control):** Якщо увімкнено відповідне налаштування у секції "Контроль", то після завершення перекладу задача призупиняється. Її статус змінюється на `Очікує контролю` (AwaitingControl), а фоновий потік завершує роботу. Клік по картці такої задачі відкриває вікно "Контроль перекладу", де користувач може перевірити та відредагувати текст. При натисканні "Підтвердити та продовжити" оновлений текст зберігається, а пайплайн перезапускається відразу з наступного кроку (Озвучки), використовуючи відредагований варіант.
@@ -515,7 +515,9 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 - **`voice.json` — файл таймінгів WhisperX.** WhisperX через `--align-json voice.json` зберігає JSON з таймінгами вирівнювання слів прямо у папці задачі. Це відповідає `voice.wav` / `voice.mp3` за конвенцією іменування (все що пов'язано з голосом — `voice.*`).
 
-- **OpenRouter null content.** `ChatMessageContent.content` зберігається як `Option<String>` (не `String`). OpenRouter може повернути `null` коли модель відмовила або повернула порожній результат. Без `Option` парсинг JSON крашився з "invalid type: null". Витяг тексту відповіді: `.and_then(|c| c.message.content)` замість `.map()`.
+- **OpenRouter null content + авто-ретрай.** `ChatMessageContent.content` зберігається як `Option<String>` (не `String`). OpenRouter може повернути `null` коли модель відмовила або спрацював content_filter — без `Option` парсинг JSON крашився з "invalid type: null". При порожній відповіді `call_openrouter` автоматично повторює до 5 разів, логуючи `finish_reason` (наприклад `content_filter`, `stop`, `unknown`). Якщо після 5 спроб відповідь все одно порожня — повертає `Err`, pipeline активує fallback на текст сегменту. Промпти з порожнім текстом після цього перехоплюються в `run_pipeline` і пропускаються (без запиту до Googler API).
+
+- **Googler API повертає тіло помилки при HTTP-статусах.** `try_generate_image`, `try_generate_video`, `try_animate_image` явно обробляють `ureq::Error::Status(code, response)`: зчитують тіло відповіді (`response.into_string()`) і повертають `Err("HTTP 422: {...}")`. До цього помилки 422/429/etc. логувались лише зі статус-кодом без деталей валідації FastAPI.
 
 - **Googler API повертає data URI, а не HTTP URL.** За замовчуванням Googler повертає зображення у форматі `data:image/jpeg;base64,...` — це "resolved data URI" вбудований прямо у відповідь. `ureq::get()` такий формат відкидає з помилкою "EmptyHost". Тому `decode_result` спочатку перевіряє `result.starts_with("data:")` і тільки потім вирішує: base64-декодування або HTTP-завантаження. Для відео API аналогічно повертає `data:video/mp4;base64,...`.
 

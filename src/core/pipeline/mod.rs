@@ -687,6 +687,14 @@ fn run_video_branch(
                 &format!("Generating {} {}/{} ...", if use_video { "video" } else { "image" }, i + 1, total),
             );
 
+            if prompt.trim().is_empty() {
+                crate::logger::log_job(
+                    job_id_c, &job_name_c,
+                    &format!("Segment {}/{}: empty prompt, skipping.", i + 1, total),
+                );
+                return (i, Err("Порожній промпт — пропущено".to_string()));
+            }
+
             let result = if use_video {
                 crate::api::googler::generate_video_with_priority(&key, &prompt, "16:9", &priority)
             } else {
