@@ -265,6 +265,10 @@ pub fn translate_en(key: &str) -> &'static str {
         "gallery_regen_start_btn" => "Regenerate",
         "gallery_regen_loading" => "Generating...",
         "gallery_animate_all_btn" => "Animate all",
+        "gallery_prompt_tooltip" => "View prompt",
+        "gallery_prompt_window_title" => "Image prompt",
+        "gallery_prompt_empty" => "Prompt not found",
+        "gallery_prompt_copy_btn" => "Copy",
         _ => "",
     }
 }

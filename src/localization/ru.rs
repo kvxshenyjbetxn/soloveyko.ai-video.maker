@@ -265,6 +265,10 @@ pub fn translate_ru(key: &str) -> &'static str {
         "gallery_regen_start_btn" => "Перегенерировать",
         "gallery_regen_loading" => "Генерирую...",
         "gallery_animate_all_btn" => "Анимировать всё",
+        "gallery_prompt_tooltip" => "Посмотреть промт",
+        "gallery_prompt_window_title" => "Промт изображения",
+        "gallery_prompt_empty" => "Промт не найден",
+        "gallery_prompt_copy_btn" => "Копировать",
         _ => "",
     }
 }

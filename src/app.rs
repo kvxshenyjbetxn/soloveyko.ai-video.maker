@@ -313,6 +313,8 @@ pub struct VideoMakerApp {
     pub video_thumb_result: std::sync::Arc<std::sync::Mutex<Option<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
     /// Активний повноекранний відеоплеєр (якщо відео відкрите).
     pub video_player: Option<crate::gui::gallery::video_player::VideoPlayer>,
+    /// Текст промту, який зараз показується у popup-вікні галереї. None = вікно закрите.
+    pub gallery_prompt_popup: Option<String>,
 }
 
 impl Default for VideoMakerApp {
@@ -466,6 +468,7 @@ impl Default for VideoMakerApp {
             video_thumb_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_player: None,
+            gallery_prompt_popup: None,
         }
     }
 }
@@ -767,6 +770,7 @@ impl VideoMakerApp {
             video_thumb_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_player: None,
+            gallery_prompt_popup: None,
         }
     }
 
@@ -1089,6 +1093,7 @@ impl eframe::App for VideoMakerApp {
         let mut animate_all = false;
         let mut hover_extract_request: Option<std::path::PathBuf> = None;
         let mut thumb_requests: Vec<std::path::PathBuf> = Vec::new();
+        let mut prompt_view_request: Option<std::path::PathBuf> = None;
         let hover_loading_snapshot = self.video_hover_loading.lock().unwrap().clone();
         let thumb_loading_snapshot = self.video_thumb_loading.lock().unwrap().clone();
         egui::CentralPanel::default()
@@ -1115,6 +1120,7 @@ impl eframe::App for VideoMakerApp {
                             &self.video_thumbnails,
                             &thumb_loading_snapshot,
                             &mut thumb_requests,
+                            &mut prompt_view_request,
                         );
                     }
                     Tab::Settings => {
@@ -1172,6 +1178,11 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&self.media_regen_loading),
                 );
             }
+        }
+
+        // Відкриття popup-вікна з промтом для обраного медіафайлу
+        if let Some(file) = prompt_view_request {
+            self.gallery_prompt_popup = Some(crate::core::pipeline::read_prompt_for_file(&file));
         }
 
         // Очищення текстур для видалених файлів (після анімації .jpg → .mp4)
@@ -1283,6 +1294,32 @@ impl eframe::App for VideoMakerApp {
             &mut self.gallery_textures,
             &self.media_regen_result,
         );
+
+        // Popup-вікно перегляду промту медіафайлу
+        if let Some(ref prompt_text) = self.gallery_prompt_popup.clone() {
+            let mut is_open = true;
+            egui::Window::new(translate(self.language, "gallery_prompt_window_title"))
+                .open(&mut is_open)
+                .resizable(true)
+                .default_width(420.0)
+                .collapsible(false)
+                .show(ctx, |ui| {
+                    if prompt_text.is_empty() {
+                        ui.label(egui::RichText::new(translate(self.language, "gallery_prompt_empty")).weak());
+                    } else {
+                        egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                            ui.label(prompt_text.as_str());
+                        });
+                        ui.add_space(8.0);
+                        if ui.button(translate(self.language, "gallery_prompt_copy_btn")).clicked() {
+                            ui.output_mut(|o| o.copied_text = prompt_text.clone());
+                        }
+                    }
+                });
+            if !is_open {
+                self.gallery_prompt_popup = None;
+            }
+        }
 
         if let Some((job_id, job_name)) = self.selected_job_logs.clone() {
             if !crate::gui::logs::draw_job_logs_window(

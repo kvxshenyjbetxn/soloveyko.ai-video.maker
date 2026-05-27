@@ -265,6 +265,10 @@ pub fn translate_uk(key: &str) -> &'static str {
         "gallery_regen_start_btn" => "Перегенерувати",
         "gallery_regen_loading" => "Генерую...",
         "gallery_animate_all_btn" => "Анімувати все",
+        "gallery_prompt_tooltip" => "Переглянути промт",
+        "gallery_prompt_window_title" => "Промт зображення",
+        "gallery_prompt_empty" => "Промт не знайдено",
+        "gallery_prompt_copy_btn" => "Копіювати",
         _ => "",
     }
 }
