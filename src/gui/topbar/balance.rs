@@ -176,7 +176,6 @@ pub fn draw_threads_window(
     gemini_max_threads: &mut usize,
     voicebot_balance: &std::sync::Arc<std::sync::Mutex<Option<String>>>,
     edge_tts_max_threads: &mut usize,
-    googler_balance: &std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
     googler_image_max_threads: &mut usize,
     googler_video_max_threads: &mut usize,
     ffmpeg_max_threads: &mut usize,
@@ -326,37 +325,35 @@ pub fn draw_threads_window(
                 ui.label(egui::RichText::new("Googler").strong());
                 ui.separator();
                 ui.add_space(4.0);
-                if let Ok(guard) = googler_balance.try_lock() {
-                    let (img_active, vid_active) = match guard.as_ref() {
-                        Some(bal) => (bal.img_threads_active as usize, bal.video_threads_active as usize),
-                        None => (0, 0),
-                    };
-                    egui::Grid::new("googler_threads_grid")
-                        .num_columns(2)
-                        .spacing([16.0, 4.0])
-                        .show(ui, |ui| {
-                            ui.label(translate(language, "balance_img_threads"));
-                            ui.horizontal(|ui| {
-                                let color = thread_load_color(img_active, *googler_image_max_threads, ui.visuals().weak_text_color());
-                                ui.label(egui::RichText::new(format!("{} /", img_active)).color(color));
-                                let mut val = *googler_image_max_threads;
-                                if ui.add(egui::Slider::new(&mut val, 5..=25)).changed() {
-                                    *googler_image_max_threads = val;
-                                }
-                            });
-                            ui.end_row();
-                            ui.label(translate(language, "balance_video_threads"));
-                            ui.horizontal(|ui| {
-                                let color = thread_load_color(vid_active, *googler_video_max_threads, ui.visuals().weak_text_color());
-                                ui.label(egui::RichText::new(format!("{} /", vid_active)).color(color));
-                                let mut val = *googler_video_max_threads;
-                                if ui.add(egui::Slider::new(&mut val, 5..=25)).changed() {
-                                    *googler_video_max_threads = val;
-                                }
-                            });
-                            ui.end_row();
+                let img_active = crate::api::googler::GooglerImageLimiter::get().active_count();
+                let vid_active = crate::api::googler::GooglerVideoLimiter::get().active_count();
+                egui::Grid::new("googler_threads_grid")
+                    .num_columns(2)
+                    .spacing([16.0, 4.0])
+                    .show(ui, |ui| {
+                        ui.label(translate(language, "balance_img_threads"));
+                        ui.horizontal(|ui| {
+                            let color = thread_load_color(img_active, *googler_image_max_threads, ui.visuals().weak_text_color());
+                            ui.label(egui::RichText::new(format!("{} /", img_active)).color(color));
+                            let mut val = *googler_image_max_threads;
+                            if ui.add(egui::Slider::new(&mut val, 5..=25)).changed() {
+                                *googler_image_max_threads = val;
+                                crate::api::googler::GooglerImageLimiter::get().set_max_threads(val);
+                            }
                         });
-                }
+                        ui.end_row();
+                        ui.label(translate(language, "balance_video_threads"));
+                        ui.horizontal(|ui| {
+                            let color = thread_load_color(vid_active, *googler_video_max_threads, ui.visuals().weak_text_color());
+                            ui.label(egui::RichText::new(format!("{} /", vid_active)).color(color));
+                            let mut val = *googler_video_max_threads;
+                            if ui.add(egui::Slider::new(&mut val, 5..=25)).changed() {
+                                *googler_video_max_threads = val;
+                                crate::api::googler::GooglerVideoLimiter::get().set_max_threads(val);
+                            }
+                        });
+                        ui.end_row();
+                    });
             });
 
             ui.add_space(4.0);

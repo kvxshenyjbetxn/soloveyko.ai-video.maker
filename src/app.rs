@@ -334,7 +334,7 @@ pub struct VideoMakerApp {
 impl Default for VideoMakerApp {
     fn default() -> Self {
         let default_settings = AppSettings::default();
-        Self {
+        let app = Self {
             active_tab: Tab::Main,
             text_input: String::new(),
             theme: AppTheme::Dark, // Сучасна темна тема за замовчуванням
@@ -490,7 +490,12 @@ impl Default for VideoMakerApp {
             video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_player: None,
             gallery_prompt_popup: None,
-        }
+        };
+
+        crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
+        crate::api::googler::GooglerVideoLimiter::get().set_max_threads(app.googler_video_max_threads);
+
+        app
     }
 }
 
@@ -643,7 +648,7 @@ impl VideoMakerApp {
             );
         }
 
-        Self {
+        let app = Self {
             active_tab: Tab::Main,
             text_input: String::new(),
             theme,
@@ -799,7 +804,13 @@ impl VideoMakerApp {
             video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_player: None,
             gallery_prompt_popup: None,
-        }
+        };
+
+        // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
+        crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
+        crate::api::googler::GooglerVideoLimiter::get().set_max_threads(app.googler_video_max_threads);
+
+        app
     }
 
     /// Малює вкладку системних логів роботи додатку.
@@ -915,7 +926,6 @@ impl eframe::App for VideoMakerApp {
             &mut self.gemini_max_threads,
             &self.voicebot_balance,
             &mut self.edge_tts_max_threads,
-            &self.googler_balance,
             &mut self.googler_image_max_threads,
             &mut self.googler_video_max_threads,
             &mut self.ffmpeg_max_threads,
@@ -931,7 +941,6 @@ impl eframe::App for VideoMakerApp {
             self.ffmpeg_max_threads,
             self.googler_image_max_threads,
             self.googler_video_max_threads,
-            &self.googler_balance,
             &mut self.threads_window_open,
         );
 

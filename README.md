@@ -34,7 +34,7 @@ src/
 │   ├── openrouter.rs            — fetch_balance (залишок кредитів) + OpenRouterLimiter (семафор лімітування запитів)
 │   ├── voicebot.rs              — fetch_balance (баланс VoiceBot у символах) + VoiceBotLimiter (семафор лімітування запитів, фіксовано 5 потоків)
 │   ├── edgetts.rs               — fetch_voices (завантаження голосів через msedge-tts) + EdgeTTSLimiter (семафор лімітування запитів до Edge TTS) + synthesize (генерація аудіо)
-│   ├── googler.rs               — check_key + fetch_balance (ліміти зображень/відео/потоків)
+│   ├── googler.rs               — check_key + fetch_balance (ліміти зображень/відео) + GooglerImageLimiter + GooglerVideoLimiter (локальний підрахунок активних потоків генерації)
 │   ├── claude.rs                — call_claude_code (запуск локального Claude CLI з параметрами) + ClaudeLimiter (семафор лімітування запитів)
 │   ├── gemini.rs                — call_gemini_cli (запуск локального Gemini CLI з параметрами) + GeminiLimiter (семафор лімітування запитів)
 │   ├── assemblyai.rs            — transcribe (upload → create → poll → SRT), whisperx_words_to_srt (генерація SRT з word-мітками WhisperX), AssemblyAILimiter (семафор, фіксовано 5 потоків), check_key
@@ -465,11 +465,11 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 Тільки утилітарні запити (баланс, перевірка ключа, TTS). Всі запити — синхронні `ureq` або WebSocket-з'єднання, загорнуті в `std::thread::spawn`. Результат пишеться у `Arc<Mutex<Option<T>>>`, після чого `ctx.request_repaint()` ініціює перемальовування UI.
 
-- **Глобальне лімітування запитів OpenRouter (`OpenRouterLimiter`), Claude Code (`ClaudeLimiter`), Gemini CLI (`GeminiLimiter`), Edge TTS (`EdgeTTSLimiter`), VoiceBot (`VoiceBotLimiter`), AssemblyAI (`AssemblyAILimiter`) та FFmpeg (`FfmpegLimiter`):**
+- **Глобальне лімітування запитів OpenRouter (`OpenRouterLimiter`), Claude Code (`ClaudeLimiter`), Gemini CLI (`GeminiLimiter`), Edge TTS (`EdgeTTSLimiter`), VoiceBot (`VoiceBotLimiter`), AssemblyAI (`AssemblyAILimiter`), FFmpeg (`FfmpegLimiter`), Googler зображення (`GooglerImageLimiter`) та Googler відео (`GooglerVideoLimiter`):**
   Потокобезпечні лімітери (семафори на базі `Mutex` та `Condvar` зі стандартної бібліотеки Rust) обмежують кількість одночасних запитів та паралельних запусків по всій програмі.
-  - Метод `acquire()` блокує потік, якщо досягнуто ліміту активних запитів, повертаючи відповідний дозвіл-перміт (`OpenRouterPermit<'a>`, `ClaudePermit<'a>`, `GeminiPermit<'a>`, `EdgeTTSPermit<'a>`, `VoiceBotPermit<'a>` або `FfmpegPermit<'a>`).
+  - Метод `acquire()` блокує потік, якщо досягнуто ліміту активних запитів, повертаючи відповідний дозвіл-перміт (`OpenRouterPermit<'a>`, `ClaudePermit<'a>`, `GeminiPermit<'a>`, `EdgeTTSPermit<'a>`, `VoiceBotPermit<'a>`, `FfmpegPermit<'a>`, `GooglerImagePermit<'a>`, `GooglerVideoPermit<'a>`).
   - Завдяки реалізації трейту `Drop` для дозволів, ліміт автоматично звільняється (викликається `release()`) при виході з області видимості.
-  - Лімітер OpenRouter інтегрований у перевірку балансу, переклад сценарію та фонове завантаження моделей. Лімітери Claude Code та Gemini CLI — у функції виклику відповідних CLI. Лімітер Edge TTS обмежує кількість паралельних фонових WebSocket-з'єднань при синтезі великої кількості чанків тексту. Лімітер VoiceBot обмежує кількість одночасних активних задач озвучки на сервері (фіксовано 5). **`FfmpegLimiter`** обмежує кількість одночасних процесів монтажу FFmpeg (дефолт 2, діапазон 1–8) — бо FFmpeg є CPU-важким і запуск багатьох екземплярів одночасно суттєво деградує продуктивність.
+  - Лімітер OpenRouter інтегрований у перевірку балансу, переклад сценарію та фонове завантаження моделей. Лімітери Claude Code та Gemini CLI — у функції виклику відповідних CLI. Лімітер Edge TTS обмежує кількість паралельних фонових WebSocket-з'єднань при синтезі великої кількості чанків тексту. Лімітер VoiceBot обмежує кількість одночасних активних задач озвучки на сервері (фіксовано 5). **`FfmpegLimiter`** обмежує кількість одночасних процесів монтажу FFmpeg (дефолт 2, діапазон 1–8) — бо FFmpeg є CPU-важким і запуск багатьох екземплярів одночасно суттєво деградує продуктивність. **`GooglerImageLimiter`** — набуває permit у `try_generate_image`; **`GooglerVideoLimiter`** — у `try_generate_video` та `try_animate_image`. Обидва ініціалізуються зі збережених налаштувань (`googler_image_max_threads` / `googler_video_max_threads`) при старті програми у `VideoMakerApp::new()`.
 
 | Сервіс | Метод / Ендпоінт | Що робить / повертає |
 |---|---|---|
@@ -538,7 +538,7 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 - **`draw_chip` — єдина база для обох типів чіпів.** `draw_balance_chip` та чіпи нижнього рядка побудовані на одній функції. Це гарантує ідентичний hover-ефект та padding між топбаром і нижнім рядком.
 
-- **Повзунки Googler у вікні потоків вбудовані в Grid.** Повзунки `egui::Slider` для `googler_image_max_threads` та `googler_video_max_threads` відображаються поруч з числом активних потоків (`bal.img_threads_active` / `bal.video_threads_active` з мьютексу балансу). Якщо баланс ще не завантажено — активних потоків показується `0`.
+- **Потоки Googler рахуються локально, а не з сервера.** `GooglerImageLimiter::get().active_count()` та `GooglerVideoLimiter::get().active_count()` — єдине джерело даних у вікні потоків та нижньому рядку. Раніше ці числа брались з `googler_balance` (запит до API `/v3/account/usage`) і були умовними (не відображались доки баланс не завантажено). Тепер чіпи `Googler img` / `Googler vid` у нижньому рядку **завжди видимі** (починаючи з 0/N, як і решта сервісів). Слайдери у вікні потоків тепер додатково викликають `set_max_threads()` при зміні — реакція миттєва.
 
 - **`windows_subsystem = "windows"`** у `main.rs` — приховує консоль у release-білді на Windows. У debug-режимі консоль є.
 
@@ -602,7 +602,9 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 - **Усі медіафайли зберігаються у `media/`.** І картинки, і відео потрапляють в одну підпапку `{task_dir}/media/` з іменами `0001.jpg`, `0002.mp4` тощо. Розширення визначається виключно з mime-типу відповіді API (або з кінця URL), не з режиму генерації.
 
-- **Семафор для відеоряду — не глобальний.** На відміну від `OpenRouterLimiter` / `EdgeTTSLimiter` (глобальні синглтони), семафор для генерації медіа у відеоряді створюється локально в `run_pipeline` на час виконання одного завдання. Це зроблено навмисно: ліміт потоків (`googler_image_max_threads`) береться зі знімку налаштувань задачі, тобто різні задачі в черзі можуть мати різні ліміти.
+- **Два рівні лімітування для Googler.** У відеоряді діють два незалежних механізми:
+  1. **Локальний семафор у `run_pipeline`** — створюється на час одного завдання, ліміт береться зі знімку налаштувань задачі (`googler_image_max_threads`). Обмежує скільки потоків-завантажень запущено з боку `run_pipeline` для конкретної задачі.
+  2. **Глобальні `GooglerImageLimiter` / `GooglerVideoLimiter`** — блокують всередині `try_generate_image` / `try_generate_video` / `try_animate_image` незалежно від того, яка задача ініціює запит. При одному завданні з однаковим значенням ліміту обидва механізми пропускають рівно N запитів — поведінка ідентична. При кількох паралельних задачах глобальні лімітери стають додатковим cross-task обмеженням. Рахунок `active_count()` відображається в UI в реальному часі.
 
 - **Стрілки в пріоритетах зображень — намальовані Painter, не Unicode.** Шрифт egui за замовчуванням не містить символів ▲/▼. Замість кнопок з текстом використовується функція `arrow_button()` у `video.rs`, яка малює заповнений трикутник через `ui.painter().add(egui::Shape::convex_polygon(...))`. Підхід повністю незалежний від шрифту.
 
