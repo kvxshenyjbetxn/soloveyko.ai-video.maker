@@ -539,10 +539,11 @@ fn run_subtitles_only(
                 settings.subtitle_font_size,
                 settings.subtitle_color,
                 settings.subtitle_margin_v,
-                settings.subtitle_karaoke_fill,
+                settings.subtitle_karaoke_mode,
                 settings.subtitle_karaoke_highlight_color,
                 settings.subtitle_karaoke_outline_color,
                 settings.subtitle_karaoke_bold,
+                settings.subtitle_karaoke_scale,
             ) {
                 Ok(ass_content) => {
                     match std::fs::write(save_dir.join("subtitle.ass"), &ass_content) {
@@ -657,6 +658,7 @@ fn run_av_branch(
 
 /// Генерує ASS файл з karaoke-ефектом з word-level timestamps.
 /// Підтримує формати WhisperX (секунди) та AssemblyAI (мілісекунди).
+/// karaoke_mode: 0 = fill (\kf), 1 = switch (\k), 2 = follow (підсвітка + повернення).
 fn generate_karaoke_ass(
     json_path: &std::path::Path,
     service: &str,
@@ -664,41 +666,50 @@ fn generate_karaoke_ass(
     font_size: u32,
     color: [u8; 3],
     margin_v: u32,
-    karaoke_fill: bool,
+    karaoke_mode: u8,
     highlight_color: [u8; 3],
     outline_color: [u8; 3],
     bold: bool,
+    scale: u32,
 ) -> Result<String, String> {
     let content = std::fs::read_to_string(json_path)
         .map_err(|e| format!("Cannot read subtitle.json: {}", e))?;
     let json: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| format!("Cannot parse subtitle.json: {}", e))?;
 
-    // Формат кольору ASS: &HAABBGGRR (A=00 = непрозорий)
-    let primary = format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
-    let secondary = format!("&H00{:02X}{:02X}{:02X}", highlight_color[2], highlight_color[1], highlight_color[0]);
-    let outline = format!("&H00{:02X}{:02X}{:02X}", outline_color[2], outline_color[1], outline_color[0]);
-    let back = "&H80000000".to_string();
+    // Формат кольору ASS у заголовку: &H00BBGGRR
+    // Для режимів fill/switch:
+    //   PrimaryColour   = highlight_color (колір ПІСЛЯ активації — слово вже проговорене)
+    //   SecondaryColour = color           (колір ДО активації — слово ще не проговорене)
+    // Для режиму follow — обидва = color (inline \1c теги перекривають)
+    let (header_primary, header_secondary) = if karaoke_mode == 2 {
+        let c = format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
+        (c.clone(), c)
+    } else {
+        (
+            format!("&H00{:02X}{:02X}{:02X}", highlight_color[2], highlight_color[1], highlight_color[0]),
+            format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]),
+        )
+    };
+    let outline_hex = format!("&H00{:02X}{:02X}{:02X}", outline_color[2], outline_color[1], outline_color[0]);
     let bold_flag = if bold { 1 } else { 0 };
 
     let header = format!(
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n\
          [V4+ Styles]\n\
          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
-         Style: Default,{font_name},{font_size},{primary},{secondary},{outline},{back},{bold},0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
+         Style: Default,{font_name},{font_size},{primary},{secondary},{outline},&H80000000,{bold},0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
          [Events]\n\
          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
         font_name = font_name,
         font_size = font_size,
-        primary = primary,
-        secondary = secondary,
-        outline = outline,
-        back = back,
+        primary = header_primary,
+        secondary = header_secondary,
+        outline = outline_hex,
         bold = bold_flag,
         margin_v = margin_v,
     );
 
-    // Розбираємо слова залежно від сервісу
     struct Word {
         text: String,
         start_ms: u64,
@@ -706,7 +717,6 @@ fn generate_karaoke_ass(
     }
 
     let words: Vec<Word> = if service == "WhisperX" {
-        // {"language": ..., "words": [{"word": "...", "start": 0.5, "end": 1.0, ...}]}
         let arr = json.get("words").and_then(|w| w.as_array())
             .ok_or("WhisperX subtitle.json: no 'words' array")?;
         arr.iter().filter_map(|w| {
@@ -716,7 +726,6 @@ fn generate_karaoke_ass(
             Some(Word { text, start_ms: (start * 1000.0) as u64, end_ms: (end * 1000.0) as u64 })
         }).collect()
     } else {
-        // AssemblyAI: [{text, start, end, confidence}] в мілісекундах
         let arr = if let Some(arr) = json.as_array() {
             arr.as_slice()
         } else {
@@ -737,61 +746,99 @@ fn generate_karaoke_ass(
     }
 
     // Групуємо слова у рядки по ~5 секунд або по ~50 символів
-    let mut lines: Vec<(u64, u64, Vec<&Word>)> = Vec::new();
+    let mut lines: Vec<(u64, u64, Vec<usize>)> = Vec::new();
     let mut group_start = 0usize;
-
     while group_start < words.len() {
         let mut group_end = group_start;
         let line_start_ms = words[group_start].start_ms;
         let mut char_count = 0usize;
-
         while group_end < words.len() {
             char_count += words[group_end].text.len() + 1;
             let dur_ms = words[group_end].end_ms.saturating_sub(line_start_ms);
             group_end += 1;
-            // Закінчуємо групу якщо перевищено ліміт символів (~50) або тривалість (~5s)
             if char_count >= 50 || dur_ms >= 5000 {
                 break;
             }
         }
-
-        let group = &words[group_start..group_end];
-        let line_end_ms = group.last().map(|w| w.end_ms).unwrap_or(line_start_ms + 1000);
-        lines.push((line_start_ms, line_end_ms, group.iter().collect()));
+        let line_end_ms = words[group_end - 1].end_ms;
+        lines.push((line_start_ms, line_end_ms, (group_start..group_end).collect()));
         group_start = group_end;
     }
 
-    // Генеруємо ASS Dialogue рядки з \kf тегами.
-    // cursor_ms відстежує поточну позицію в часі — паузи між словами
-    // компенсуються тегом {\k{gap}} без тексту, щоб тайминг був точним.
     let mut events = String::new();
-    for (start_ms, end_ms, group) in &lines {
-        let start_str = ms_to_ass_time(*start_ms);
-        let end_str = ms_to_ass_time(*end_ms);
 
-        let mut text = String::new();
-        let ktag = if karaoke_fill { "kf" } else { "k" };
-        let mut cursor_ms = *start_ms;
-
-        for word in group {
-            // Пауза між попереднім словом і цим — просуваємо таймер без підсвічування
-            if word.start_ms > cursor_ms {
-                let gap_cs = (word.start_ms - cursor_ms) / 10;
-                text.push_str(&format!("{{\\k{}}}", gap_cs));
+    // Closure для побудови рядка follow-режиму: current = usize::MAX → всі слова нормальним кольором.
+    let build_follow_text = |indices: &[usize], current: usize, hi_hex: &str, normal_hex: &str,
+                              scale_tag: &str, reset_scale: &str| -> String {
+        let mut s = String::new();
+        for (j, &idx) in indices.iter().enumerate() {
+            if j == current {
+                s.push_str(&format!("{{\\1c&H{}&{}}}{} ", hi_hex, scale_tag, words[idx].text));
+            } else {
+                s.push_str(&format!("{{\\1c&H{}&{}}}{} ", normal_hex, reset_scale, words[idx].text));
             }
-            let dur_cs = (word.end_ms.saturating_sub(word.start_ms) / 10).max(1);
-            text.push_str(&format!("{{\\{}{}}}{} ", ktag, dur_cs, word.text));
-            cursor_ms = word.end_ms;
         }
+        s.trim_end().to_string()
+    };
 
-        events.push_str(&format!(
-            "Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
-            start_str, end_str, text.trim_end()
-        ));
+    if karaoke_mode == 2 {
+        // Follow-режим: окрема Dialogue-подія для кожного слова.
+        // Кожна подія показує весь рядок, але лише поточне слово підсвічене.
+        // Після проговорення слово повертається до нормального кольору.
+        let normal_hex = format!("{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
+        let hi_hex = format!("{:02X}{:02X}{:02X}", highlight_color[2], highlight_color[1], highlight_color[0]);
+        let scale_tag = if scale != 100 { format!("\\fscx{}\\fscy{}", scale, scale) } else { String::new() };
+        let reset_scale = if scale != 100 { "\\fscx100\\fscy100" } else { "" };
+
+        for (group_start_ms, group_end_ms, indices) in &lines {
+            let n = indices.len();
+
+            // Пауза до першого слова — всі нормальним кольором
+            let first_word_start = words[indices[0]].start_ms;
+            if first_word_start > *group_start_ms {
+                let text = build_follow_text(indices, usize::MAX, &hi_hex, &normal_hex, &scale_tag, reset_scale);
+                events.push_str(&format!("Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
+                    ms_to_ass_time(*group_start_ms), ms_to_ass_time(first_word_start), text));
+            }
+
+            for (i, &word_idx) in indices.iter().enumerate() {
+                let event_start = words[word_idx].start_ms;
+                let event_end = if i + 1 < n { words[indices[i + 1]].start_ms } else { *group_end_ms };
+                let text = build_follow_text(indices, i, &hi_hex, &normal_hex, &scale_tag, reset_scale);
+                events.push_str(&format!("Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
+                    ms_to_ass_time(event_start), ms_to_ass_time(event_end), text));
+            }
+        }
+    } else {
+        // Режими fill (\kf) та switch (\k): одна Dialogue-подія на групу.
+        // cursor_ms компенсує паузи між словами порожнім {\k{gap}}.
+        let ktag = if karaoke_mode == 0 { "kf" } else { "k" };
+
+        for (start_ms, end_ms, indices) in &lines {
+            let start_str = ms_to_ass_time(*start_ms);
+            let end_str = ms_to_ass_time(*end_ms);
+            let mut text = String::new();
+            let mut cursor_ms = *start_ms;
+
+            for &word_idx in indices {
+                let word = &words[word_idx];
+                if word.start_ms > cursor_ms {
+                    let gap_cs = (word.start_ms - cursor_ms) / 10;
+                    text.push_str(&format!("{{\\k{}}}", gap_cs));
+                }
+                let dur_cs = (word.end_ms.saturating_sub(word.start_ms) / 10).max(1);
+                text.push_str(&format!("{{\\{}{}}}{} ", ktag, dur_cs, word.text));
+                cursor_ms = word.end_ms;
+            }
+
+            events.push_str(&format!("Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
+                start_str, end_str, text.trim_end()));
+        }
     }
 
     Ok(format!("{}{}", header, events))
 }
+
 
 /// Конвертує мілісекунди у формат часу ASS (H:MM:SS.CC).
 fn ms_to_ass_time(ms: u64) -> String {

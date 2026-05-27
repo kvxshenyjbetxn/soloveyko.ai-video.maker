@@ -80,10 +80,13 @@ pub struct JobSettings {
     pub subtitle_color: [u8; 3],
     pub subtitle_margin_v: u32,
     pub subtitle_karaoke: bool,
-    pub subtitle_karaoke_fill: bool,
+    /// 0 = fill (\kf), 1 = switch (\k), 2 = follow (per-word highlight + повернення)
+    pub subtitle_karaoke_mode: u8,
     pub subtitle_karaoke_highlight_color: [u8; 3],
     pub subtitle_karaoke_outline_color: [u8; 3],
     pub subtitle_karaoke_bold: bool,
+    /// Масштаб поточного слова у %, лише для режиму follow (100 = без змін)
+    pub subtitle_karaoke_scale: u32,
     pub subtitle_font: String,
     pub montage_enabled: bool,
     #[allow(dead_code)]
