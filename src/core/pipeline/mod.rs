@@ -1423,6 +1423,8 @@ pub fn run_pipeline(
                 &settings.montage_transition,
                 settings.montage_transition_duration,
                 settings.subtitles_enabled,
+                settings.overlay_triggers_enabled,
+                &settings.overlay_triggers,
                 |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
                 move |pct| {
                     *montage_progress_arc.lock().unwrap() = Some(pct);
@@ -1499,6 +1501,8 @@ fn run_final_stages(
             settings.montage_fps, &settings.montage_preset, settings.montage_bitrate,
             &settings.montage_transition, settings.montage_transition_duration,
             settings.subtitles_enabled,
+            settings.overlay_triggers_enabled,
+            &settings.overlay_triggers,
             |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
             move |pct| {
                 *montage_progress_arc.lock().unwrap() = Some(pct);

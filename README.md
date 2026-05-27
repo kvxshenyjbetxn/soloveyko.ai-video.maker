@@ -49,7 +49,8 @@ src/
 │       │   └── voiceover.rs     — run_voiceover_sync: TTS через VoiceBot API або Microsoft Edge TTS (з розбиттям на чанки, паралельною обробкою та FFmpeg/Direct Binary склеюванням)
 │       ├── montage/
 │       │   ├── mod.rs           — реекспорт run_montage
-│       │   └── montage.rs       — run_montage: збірка фінального відео через FFmpeg filter_complex_script
+│       │   ├── montage.rs       — run_montage: збірка фінального відео через FFmpeg filter_complex_script
+│       │   └── trigger.rs       — OverlayTrigger структура; find_text_timing: нечіткий пошук фрази у ASS/SRT субтитрах для визначення часу накладки
 │       └── timeline/
 │           ├── mod.rs           — реекспорт модулів timeline
 │           ├── text_splitter.rs — split_text: 4 режими нарізання тексту на сегменти для генерації медіа
@@ -331,6 +332,23 @@ src/
 10. `run_montage` повертає `Result<u64, String>` — розмір вихідного файлу в байтах або опис помилки.
 11. Вихідний файл: `{safe_task_name}.mp4` у папці задачі (`safe_task_name` — назва задачі зі замощеними пробілами/спецсимволами).
 
+**Overlay-тригери (`overlay_triggers`):**
+
+Якщо `overlay_triggers_enabled == true` і є хоча б один тригер — монтаж накладає медіафайли (зображення або відео з альфа-каналом) поверх основного відео у момент появи заданої фрази в субтитрах.
+
+Кожен `OverlayTrigger` містить: `phrase` (ключова фраза), `path` (шлях до медіафайлу), `x/y/w/h` (позиція і розміри, `0` = повна ширина/висота відео), `start_time` (явний час у секундах або `None` для автопошуку), `duration` (тривалість або `None` для авто з тривалості медіафайлу).
+
+**Як тригер знаходить час:**
+- Якщо `start_time = Some(t)` — час береться явно.
+- Якщо `start_time = None` — викликається `find_text_timing(sub_path, phrase)` (`trigger.rs`): парсить ASS або SRT субтитри, нормалізує текст (lowercase, `ё→е`, тільки літери/цифри), виконує нечіткий пошук із Levenshtein-дистанцією. Поріг схожості: для фраз ≤ 2 слова — 100% (точний збіг), для довших — 60% (dist/maxLen ≤ 0.4 для кожного слова).
+
+**FFmpeg filter для тригерів:**
+- Кожен тригер додається як окремий вхідний файл (`-i`).
+- Для **зображень**: `-loop 1` перед `-i` (зображення loopується на всю тривалість тригера — без цього FFmpeg генерує лише 1 кадр).
+- Filter chain: `[N:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setpts=PTS-STARTPTS+{start}/TB[overlayN]` → `overlay=x={x}:y={y}:enable='between(t,{start},{end})'`.
+- `format=yuva420p` зберігає альфа-канал відео — `overlay` фільтр FFmpeg автоматично використовує A-план для прозорості.
+- `force_original_aspect_ratio=increase,crop` — гарантує що зображення заповнює задану область без чорних смуг.
+
 **Переходи між кліпами (xfade):**
 
 `montage_transition` приймає `"none"` (без переходу), `"random"` або конкретну назву FFmpeg xfade (44 варіанти: `fade`, `wipeleft`, `dissolve`, `circleopen`, `radial` тощо). При `"random"` — `pick_transition()` обирає новий випадковий xfade для **кожного** переходу між кліпами незалежно.
@@ -436,7 +454,7 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
 Два JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
-- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`).
+- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`, `overlay_triggers_enabled`, `overlay_triggers`).
 - `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`), налаштування медіа та монтажу. При завантаженні шаблону всі поля відновлюються повністю.
 
 `AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються (дефолт для нових полів потоків Googler — `5`). Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
@@ -537,6 +555,12 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **xfade переходи потребують подовження кліпів для sync.** При `xfade=duration=T` кліп i+1 починається на T секунд раніше (overlap). Без компенсації кожен перехід зміщує відео на T секунд відносно аудіо. Рішення: кожен кліп крім останнього подовжується на T (`adj_dur = orig_dur + T`), offset для k-го xfade = `sum(orig_dur[0..=k])`. В результаті cumulative offset кліпу N = start_secs[N]. Сумарна тривалість = total_duration (переходи не збільшують відео).
 
 - **`whisper_language`, `whisper_model`, `subtitles_service`, `translation_temperature` не тригерили автозбереження.** Ці поля були відсутні в умові перевірки змін (`if current != last_saved`), тому зміни в них не писались на диск поки не змінилось щось інше. Виправлено — всі 4 поля додані до умови.
+
+- **Overlay-тригери зберігаються і в `AppSettings`, і в `PipelineTemplate`.** Поля `overlay_triggers_enabled` та `overlay_triggers` присутні в обох структурах — `AppSettings` (глобальне автозбереження) та `PipelineTemplate` (шаблон пайплайну). Зміна тригерів у UI одразу потрапляє в автозбереження `settings.json` через стандартну перевірку `current != last_saved_settings`. `OverlayTrigger` реалізує `PartialEq` — обов'язково для рівняння векторів у перевірці змін.
+
+- **`-loop 1` для зображень в overlay-тригерах — критично.** Без цього прапорця FFmpeg декодує статичне зображення як один кадр і відразу закриває stream — накладка зникає після першого кадру. З `-loop 1` зображення loopується на всю тривалість overlay. Для відеофайлів `-loop 1` не додається — відеопотік уже має власні кадри.
+
+- **`find_text_timing` — логіка ідентична Go-версії.** Алгоритм у `trigger.rs` відтворює `findTextTiming` з Go: `ё→е` нормалізація, Levenshtein без обмеження довжини, `is_word_similar` через `dist/maxLen ≤ threshold` (а не `similarity ≥ threshold`), вікно lookahead 6 слів без `break` у внутрішньому циклі — всі збіги рахуються.
 
 - **Монтаж використовує `filter_complex_script`, а не `-filter_complex`.** FFmpeg має обмеження на довжину аргументу командного рядка (~8 KB). При великій кількості кліпів filter graph може перевищити цей ліміт. Рішення: записуємо фільтр у тимчасовий файл `montage_script.txt` і передаємо через `-filter_complex_script`. Це стабільно працює навіть для 100+ кліпів.
 

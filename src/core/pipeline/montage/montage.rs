@@ -29,6 +29,8 @@ pub fn run_montage(
     transition: &str,
     transition_duration_secs: f32,
     burn_subtitles: bool,
+    overlay_triggers_enabled: bool,
+    overlay_triggers: &[super::trigger::OverlayTrigger],
     log_fn: impl Fn(&str),
     on_progress: impl Fn(f32),
 ) -> Result<u64, String> {
@@ -225,25 +227,161 @@ pub fn run_montage(
     ));
 
     // Якщо burn-in субтитрів увімкнено — шукаємо subtitle.ass, потім subtitle.srt як запасний.
-    let video_map = if burn_subtitles {
+    let after_subs_label = if burn_subtitles {
         let ass_path = save_dir.join("subtitle.ass");
         let srt_path = save_dir.join("subtitle.srt");
         if ass_path.exists() {
             let path_str = ffmpeg_escape_filter_path(&ass_path.to_string_lossy());
             filter_parts.push(format!("[v_montage]ass=filename='{}'[v_with_subs]", path_str));
             log_fn("Subtitles burn-in: subtitle.ass embedded.");
-            "[v_with_subs]"
+            "v_with_subs".to_string()
         } else if srt_path.exists() {
             let path_str = ffmpeg_escape_filter_path(&srt_path.to_string_lossy());
             filter_parts.push(format!("[v_montage]ass=filename='{}'[v_with_subs]", path_str));
             log_fn("Subtitles burn-in: subtitle.srt (fallback).");
-            "[v_with_subs]"
+            "v_with_subs".to_string()
         } else {
             log_fn("Warning: subtitles_enabled=true but no subtitle file found — skipping burn-in.");
-            "[v_montage]"
+            "v_montage".to_string()
         }
     } else {
-        "[v_montage]"
+        "v_montage".to_string()
+    };
+
+    // ─── Тригери накладення медіа ─────────────────────────────────────────────
+    // Кожен активний тригер стає окремим FFmpeg input і накладається через overlay.
+    struct ActiveTrigger {
+        input_idx: usize,
+        start: f64,
+        duration: f64,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        is_video: bool,
+    }
+
+    let mut active_triggers: Vec<ActiveTrigger> = Vec::new();
+
+    // Шукаємо файл субтитрів для пошуку тайм-кодів фраз
+    let sub_path = {
+        let ass = save_dir.join("subtitle.ass");
+        let srt = save_dir.join("subtitle.srt");
+        if ass.exists() { Some(ass) } else if srt.exists() { Some(srt) } else { None }
+    };
+
+    // Список додаткових input-файлів тригерів: (шлях, is_video)
+    // is_video=false → додаємо -loop 1 щоб зображення повторювалось протягом тривалості
+    let mut trigger_input_paths: Vec<(String, bool)> = Vec::new();
+
+    if overlay_triggers_enabled && !overlay_triggers.is_empty() {
+        for tr in overlay_triggers {
+            if tr.phrase.is_empty() || tr.path.is_empty() { continue; }
+            let tr_path = std::path::Path::new(&tr.path);
+            if !tr_path.exists() {
+                log_fn(&format!("Trigger path not found, skipping: {}", tr.path));
+                continue;
+            }
+
+            // Визначаємо час початку: явний або пошук по субтитрах
+            let start = if let Some(t) = tr.start_time {
+                t
+            } else if let Some(ref sp) = sub_path {
+                match super::trigger::find_text_timing(sp, &tr.phrase) {
+                    Some(t) => {
+                        log_fn(&format!("Trigger '{}' found at {:.3}s", tr.phrase, t));
+                        t
+                    }
+                    None => {
+                        log_fn(&format!("Trigger phrase not found: '{}'", tr.phrase));
+                        continue;
+                    }
+                }
+            } else {
+                log_fn(&format!("No subtitle file for trigger '{}', skipping", tr.phrase));
+                continue;
+            };
+
+            let is_video = is_video_ext(&tr.path);
+
+            // Тривалість: явна, або з ffprobe для відео, або 3.0 за замовчуванням
+            let duration = if let Some(d) = tr.duration {
+                d
+            } else if is_video {
+                // Намагаємося отримати тривалість через ffprobe
+                let ffprobe = crate::bundle::ffprobe_path();
+                let out = std::process::Command::new(&ffprobe)
+                    .args([
+                        "-v", "error", "-show_entries", "format=duration",
+                        "-of", "default=noprint_wrappers=1:nokey=1",
+                        &tr.path,
+                    ])
+                    .output()
+                    .ok()
+                    .and_then(|o| String::from_utf8(o.stdout).ok())
+                    .and_then(|s| s.trim().parse::<f64>().ok())
+                    .unwrap_or(3.0);
+                out
+            } else {
+                3.0
+            };
+
+            // Індекс цього input у FFmpeg (clips + 1 аудіо + попередні тригери)
+            let input_idx = n + 1 + trigger_input_paths.len();
+            trigger_input_paths.push((tr.path.clone(), is_video));
+
+            active_triggers.push(ActiveTrigger {
+                input_idx,
+                start,
+                duration,
+                x: tr.x,
+                y: tr.y,
+                w: if tr.w > 0 { tr.w } else { 1920 },
+                h: if tr.h > 0 { tr.h } else { 1080 },
+                is_video,
+            });
+        }
+        log_fn(&format!("Active triggers: {}", active_triggers.len()));
+    }
+
+    // Будуємо фільтри для тригерів поверх поточного відео-потоку
+    let video_map_label = if active_triggers.is_empty() {
+        format!("[{after_subs_label}]")
+    } else {
+        let mut current = after_subs_label.clone();
+        for (i, tr) in active_triggers.iter().enumerate() {
+            let w = (tr.w / 2) * 2;
+            let h = (tr.h / 2) * 2;
+            let ready_label = format!("v_trig_ready_{i}");
+            let out_label = format!("v_trig_out_{i}");
+            let enable_expr = format!("between(t,{:.3},{:.3})", tr.start, tr.start + tr.duration);
+
+            if tr.is_video {
+                filter_parts.push(format!(
+                    "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=increase,\
+                    crop={w}:{h},setpts=PTS-STARTPTS+{:.3}/TB[{ready_label}]",
+                    tr.input_idx, tr.start, ready_label = ready_label, w = w, h = h,
+                ));
+                filter_parts.push(format!(
+                    "[{current}][{ready_label}]overlay=x={x}:y={y}:eof_action=pass:enable='{enable_expr}'[{out_label}]",
+                    current = current, ready_label = ready_label, x = tr.x, y = tr.y,
+                    enable_expr = enable_expr, out_label = out_label,
+                ));
+            } else {
+                filter_parts.push(format!(
+                    "[{}:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=increase,\
+                    crop={w}:{h},setpts=PTS-STARTPTS+{:.3}/TB[{ready_label}]",
+                    tr.input_idx, tr.start, ready_label = ready_label, w = w, h = h,
+                ));
+                filter_parts.push(format!(
+                    "[{current}][{ready_label}]overlay=x={x}:y={y}:enable='{enable_expr}'[{out_label}]",
+                    current = current, ready_label = ready_label, x = tr.x, y = tr.y,
+                    enable_expr = enable_expr, out_label = out_label,
+                ));
+            }
+            current = out_label;
+        }
+        format!("[{current}]")
     };
 
     let script = filter_parts.join(";");
@@ -275,9 +413,18 @@ pub fn run_montage(
     }
     args.extend(["-i".into(), audio_rel]);
 
+    // Додаємо input-файли тригерів: -loop 1 для зображень (щоб frame повторювався)
+    for (tp, is_vid) in &trigger_input_paths {
+        if !is_vid {
+            args.push("-loop".into());
+            args.push("1".into());
+        }
+        args.extend(["-i".into(), tp.clone()]);
+    }
+
     args.extend([
         "-filter_complex_script".into(), "montage_script.txt".into(),
-        "-map".into(), video_map.to_string(),
+        "-map".into(), video_map_label.clone(),
         "-map".into(), format!("{audio_idx}:a"),
         "-c:v".into(), "libx264".into(),
         "-preset".into(), preset.to_string(),

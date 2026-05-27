@@ -152,6 +152,8 @@ pub fn draw_pipeline_panel(
     montage_bitrate: &mut u32,
     montage_transition: &mut String,
     montage_transition_duration: &mut f32,
+    overlay_triggers_enabled: &mut bool,
+    overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
     text_input: &str,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
@@ -250,6 +252,8 @@ pub fn draw_pipeline_panel(
                             video_llm_model_claude,
                             video_llm_model_gemini,
                             *video_llm_temperature,
+                            *overlay_triggers_enabled,
+                            overlay_triggers.clone(),
                         ) {
                             Ok(_) => {
                                 *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -372,6 +376,8 @@ pub fn draw_pipeline_panel(
                                     montage_bitrate,
                                     montage_transition,
                                     montage_transition_duration,
+                                    overlay_triggers_enabled,
+                                    overlay_triggers,
                                 );
                             });
                         }
@@ -566,6 +572,8 @@ pub fn draw_pipeline_panel(
                                     video_llm_model_search,
                                     openrouter_models,
                                     openrouter_models_loading,
+                                    overlay_triggers_enabled,
+                                    overlay_triggers,
                                 );
                             });
                         }
@@ -812,6 +820,8 @@ pub fn draw_pipeline_panel(
                                     *montage_bitrate,
                                     montage_transition,
                                     *montage_transition_duration,
+                                    *overlay_triggers_enabled,
+                                    overlay_triggers.clone(),
                                 );
                             }
                         });
@@ -888,6 +898,8 @@ fn validate_and_enqueue(
     montage_bitrate: u32,
     montage_transition: &str,
     montage_transition_duration: f32,
+    overlay_triggers_enabled: bool,
+    overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
 ) {
     // Будуємо шлях: {save_path}/{task_name}
     let base = save_path.trim_end_matches('/').trim_end_matches('\\');
@@ -954,6 +966,8 @@ fn validate_and_enqueue(
         montage_transition: montage_transition.to_string(),
         montage_transition_duration,
         media_control_enabled,
+        overlay_triggers_enabled,
+        overlay_triggers,
     };
 
     let id = *job_counter;

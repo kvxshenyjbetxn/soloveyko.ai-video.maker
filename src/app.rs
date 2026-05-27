@@ -303,6 +303,10 @@ pub struct VideoMakerApp {
     pub montage_transition: String,
     /// Тривалість переходу в секундах.
     pub montage_transition_duration: f32,
+    /// Чи увімкнено тригери накладення медіа за ключовими фразами.
+    pub overlay_triggers_enabled: bool,
+    /// Список тригерів накладення медіа.
+    pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
     /// Сповіщення про успішне копіювання (текст, час копіювання).
     pub copied_toast: Option<(String, std::time::Instant)>,
     /// Чи увімкнене автоматичне прокручування логу донизу.
@@ -472,6 +476,8 @@ impl Default for VideoMakerApp {
             montage_bitrate: 8,
             montage_transition: "none".to_string(),
             montage_transition_duration: 0.5,
+            overlay_triggers_enabled: false,
+            overlay_triggers: vec![],
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: default_settings,
@@ -779,6 +785,8 @@ impl VideoMakerApp {
             montage_bitrate: saved.montage_bitrate,
             montage_transition: saved.montage_transition.clone(),
             montage_transition_duration: saved.montage_transition_duration,
+            overlay_triggers_enabled: saved.overlay_triggers_enabled,
+            overlay_triggers: saved.overlay_triggers.clone(),
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: saved,
@@ -1031,6 +1039,8 @@ impl eframe::App for VideoMakerApp {
                         &mut self.montage_bitrate,
                         &mut self.montage_transition,
                         &mut self.montage_transition_duration,
+                        &mut self.overlay_triggers_enabled,
+                        &mut self.overlay_triggers,
                         &self.text_input,
                         &mut self.jobs,
                         &mut self.job_counter,
@@ -1494,6 +1504,8 @@ impl eframe::App for VideoMakerApp {
                 || self.montage_bitrate != self.last_saved_settings.montage_bitrate
                 || self.montage_transition != self.last_saved_settings.montage_transition
                 || self.montage_transition_duration != self.last_saved_settings.montage_transition_duration
+                || self.overlay_triggers_enabled != self.last_saved_settings.overlay_triggers_enabled
+                || self.overlay_triggers != self.last_saved_settings.overlay_triggers
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -1570,6 +1582,8 @@ impl eframe::App for VideoMakerApp {
                     montage_bitrate: self.montage_bitrate,
                     montage_transition: self.montage_transition.clone(),
                     montage_transition_duration: self.montage_transition_duration,
+                    overlay_triggers_enabled: self.overlay_triggers_enabled,
+                    overlay_triggers: self.overlay_triggers.clone(),
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
                 

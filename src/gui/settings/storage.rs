@@ -284,6 +284,12 @@ pub struct AppSettings {
     /// Температура ЛЛМ для відео-промтів (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub video_llm_temperature: f32,
+    /// Чи увімкнено тригери накладення медіа за ключовими фразами
+    #[serde(default)]
+    pub overlay_triggers_enabled: bool,
+    /// Список тригерів накладення медіа
+    #[serde(default)]
+    pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
 }
 
 impl Default for AppSettings {
@@ -364,6 +370,8 @@ impl Default for AppSettings {
             video_llm_model_claude: "sonnet".to_string(),
             video_llm_model_gemini: "gemini-2.5-flash".to_string(),
             video_llm_temperature: 0.7,
+            overlay_triggers_enabled: false,
+            overlay_triggers: vec![],
         }
     }
 }
@@ -515,6 +523,12 @@ pub struct PipelineTemplate {
     /// Температура моделі для перекладу (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub translation_temperature: f32,
+    /// Чи увімкнено тригери накладення медіа за ключовими фразами
+    #[serde(default)]
+    pub overlay_triggers_enabled: bool,
+    /// Список тригерів накладення медіа
+    #[serde(default)]
+    pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
     /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code")
     #[serde(default = "default_translation_service")]
     pub translation_service: String,
@@ -623,7 +637,7 @@ pub struct PipelineTemplate {
     /// Модель Claude для відео-промтів
     #[serde(default = "default_video_llm_model_claude")]
     pub video_llm_model_claude: String,
-    /// Модель Gemini для відео-промтів
+    /// Модель Gemini для відево-промтів
     #[serde(default = "default_video_llm_model_gemini")]
     pub video_llm_model_gemini: String,
     /// Температура ЛЛМ для відео-промтів
@@ -702,6 +716,8 @@ pub fn save_template(
     video_llm_model_claude: &str,
     video_llm_model_gemini: &str,
     video_llm_temperature: f32,
+    overlay_triggers_enabled: bool,
+    overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -769,6 +785,8 @@ pub fn save_template(
             video_llm_model_claude: video_llm_model_claude.to_string(),
             video_llm_model_gemini: video_llm_model_gemini.to_string(),
             video_llm_temperature,
+            overlay_triggers_enabled,
+            overlay_triggers,
         };
 
         let json = serde_json::to_string_pretty(&template)?;

@@ -97,6 +97,10 @@ pub struct JobSettings {
     pub montage_transition: String,
     pub montage_transition_duration: f32,
     pub media_control_enabled: bool,
+    /// Чи увімкнено тригери накладення медіа за ключовими фразами
+    pub overlay_triggers_enabled: bool,
+    /// Список тригерів накладення медіа
+    pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
 }
 
 /// Одна задача в черзі пайплайну.

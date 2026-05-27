@@ -2,6 +2,41 @@ use eframe::egui;
 use crate::localization::{Language, translate};
 use std::sync::{Arc, Mutex};
 
+/// Кнопка "дублювати" — коло з плюсом (⊕), намальоване через Painter (незалежно від шрифту).
+pub(crate) fn duplicate_button(ui: &mut egui::Ui) -> egui::Response {
+    let size = egui::vec2(16.0, 16.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+
+    if ui.is_rect_visible(rect) {
+        let visuals = if response.is_pointer_button_down_on() {
+            ui.visuals().widgets.active
+        } else if response.hovered() {
+            ui.visuals().widgets.hovered
+        } else {
+            ui.visuals().widgets.inactive
+        };
+
+        ui.painter().rect(rect, visuals.rounding, visuals.bg_fill, visuals.bg_stroke);
+
+        let c = rect.center();
+        let r = 5.0_f32;
+        let stroke = egui::Stroke::new(1.2, visuals.fg_stroke.color);
+        let arm = r * 0.55;
+
+        ui.painter().circle_stroke(c, r, stroke);
+        ui.painter().line_segment(
+            [egui::pos2(c.x, c.y - arm), egui::pos2(c.x, c.y + arm)],
+            stroke,
+        );
+        ui.painter().line_segment(
+            [egui::pos2(c.x - arm, c.y), egui::pos2(c.x + arm, c.y)],
+            stroke,
+        );
+    }
+
+    response
+}
+
 /// Кнопка зі стрілкою вгору або вниз, намальованою через Painter (незалежно від шрифту).
 pub(crate) fn arrow_button(ui: &mut egui::Ui, up: bool, enabled: bool) -> egui::Response {
     let size = egui::vec2(20.0, 20.0);
@@ -87,6 +122,8 @@ pub fn draw_video_section(
     video_llm_model_search: &mut String,
     openrouter_models: &Arc<Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>>,
     openrouter_models_loading: &Arc<Mutex<bool>>,
+    overlay_triggers_enabled: &mut bool,
+    overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
 ) {
     ui.vertical(|ui| {
         ui.add_space(4.0);
@@ -489,6 +526,118 @@ pub fn draw_video_section(
                 if !still_open {
                     ui.data_mut(|d| d.insert_persisted(prio_id, false));
                 }
+            }
+        }
+
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        // Тригери медіа — накладення по ключовим фразам субтитрів
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(translate(language, "overlay_triggers_label")).strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                super::toggle_switch(ui, overlay_triggers_enabled);
+            });
+        });
+
+        if *overlay_triggers_enabled {
+            ui.add_space(6.0);
+
+            let mut to_remove: Option<usize> = None;
+            let mut to_duplicate: Option<usize> = None;
+
+            for (idx, trigger) in overlay_triggers.iter_mut().enumerate() {
+                ui.add_space(4.0);
+                egui::Frame::none()
+                    .stroke(egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
+                    .inner_margin(egui::Margin::same(6.0))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(translate(language, "overlay_triggers_phrase")).weak().size(11.0));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.add(
+                                    egui::Button::new(
+                                        egui::RichText::new("×").color(egui::Color32::from_rgb(231, 76, 60))
+                                    ).small()
+                                ).clicked() {
+                                    to_remove = Some(idx);
+                                }
+                                if duplicate_button(ui)
+                                    .on_hover_text(translate(language, "overlay_triggers_duplicate"))
+                                    .clicked()
+                                {
+                                    to_duplicate = Some(idx);
+                                }
+                            });
+                        });
+                        let btn_w = 68.0;
+                        let spacing = ui.spacing().item_spacing.x;
+                        let avail = ui.available_width();
+
+                        ui.add_sized(
+                            [avail, 18.0],
+                            egui::TextEdit::singleline(&mut trigger.phrase)
+                                .hint_text(translate(language, "overlay_triggers_phrase_hint")),
+                        );
+
+                        ui.add_space(4.0);
+
+                        ui.label(egui::RichText::new(translate(language, "overlay_triggers_path")).weak().size(11.0));
+                        ui.horizontal(|ui| {
+                            let path_w = (avail - btn_w - spacing).max(40.0);
+                            ui.add_sized(
+                                [path_w, 18.0],
+                                egui::TextEdit::singleline(&mut trigger.path)
+                                    .hint_text(translate(language, "overlay_triggers_path_hint")),
+                            );
+                            if ui.add_sized([btn_w, 18.0], egui::Button::new(
+                                translate(language, "overlay_triggers_select_file")
+                            )).clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("Media", &["mp4", "mov", "avi", "mkv", "webm", "jpg", "jpeg", "png", "gif", "webp"])
+                                    .pick_file()
+                                {
+                                    trigger.path = path.to_string_lossy().to_string();
+                                }
+                            }
+                        });
+
+                        ui.add_space(4.0);
+
+                        // Grid вирівнює всі 4 колонки (мітка, значення, мітка, значення) рівномірно
+                        egui::Grid::new(format!("trigger_xywh_{}", idx))
+                            .num_columns(4)
+                            .spacing([4.0, 4.0])
+                            .show(ui, |ui| {
+                                ui.label(egui::RichText::new("X:").weak().size(11.0));
+                                ui.add(egui::DragValue::new(&mut trigger.x).speed(1.0).max_decimals(0));
+                                ui.label(egui::RichText::new("Y:").weak().size(11.0));
+                                ui.add(egui::DragValue::new(&mut trigger.y).speed(1.0).max_decimals(0));
+                                ui.end_row();
+                                ui.label(egui::RichText::new("W:").weak().size(11.0));
+                                ui.add(egui::DragValue::new(&mut trigger.w).range(0..=9999).speed(1.0).max_decimals(0));
+                                ui.label(egui::RichText::new("H:").weak().size(11.0));
+                                ui.add(egui::DragValue::new(&mut trigger.h).range(0..=9999).speed(1.0).max_decimals(0));
+                                ui.end_row();
+                            });
+                    });
+            }
+
+            if let Some(idx) = to_remove {
+                overlay_triggers.remove(idx);
+            }
+            if let Some(idx) = to_duplicate {
+                let cloned = overlay_triggers[idx].clone();
+                overlay_triggers.insert(idx + 1, cloned);
+            }
+
+            ui.add_space(4.0);
+            if ui.add_sized(
+                [ui.available_width(), 22.0],
+                egui::Button::new(translate(language, "overlay_triggers_add")),
+            ).clicked() {
+                overlay_triggers.push(crate::core::pipeline::montage::OverlayTrigger::default());
             }
         }
 

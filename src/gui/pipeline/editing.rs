@@ -121,6 +121,7 @@ pub fn draw_editing_section(
                     );
                 });
             }
+
         }
 
         ui.add_space(6.0);
