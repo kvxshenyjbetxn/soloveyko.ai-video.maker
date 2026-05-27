@@ -128,27 +128,34 @@ pub fn draw_video_section(
     ui.vertical(|ui| {
         ui.add_space(4.0);
 
-        // Режим нарізання тексту — вгорі, бо визначає логіку передачі тексту в промт
-        ui.label(egui::RichText::new(translate(language, "text_split_mode_label")).strong());
-        ui.add_space(4.0);
+        // Якщо обрано Claude Code або Gemini CLI, то режим нарізання тексту не показуємо,
+        // а примусово встановлюємо його у "full" (без нарізання).
+        let is_cli_service = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI";
+        if is_cli_service {
+            *text_split_mode = "full".to_string();
+        } else {
+            // Режим нарізання тексту — вгорі, бо визначає логіку передачі тексту в промт
+            ui.label(egui::RichText::new(translate(language, "text_split_mode_label")).strong());
+            ui.add_space(4.0);
 
-        ui.horizontal(|ui| {
-            ui.radio_value(text_split_mode, "paragraphs".to_string(), translate(language, "text_split_paragraphs"))
-                .on_hover_text(translate(language, "text_split_paragraphs_hint"));
-            ui.radio_value(text_split_mode, "sentences".to_string(), translate(language, "text_split_sentences"))
-                .on_hover_text(translate(language, "text_split_sentences_hint"));
-        });
-        ui.horizontal(|ui| {
-            ui.radio_value(text_split_mode, "char_limit".to_string(), translate(language, "text_split_char_limit"))
-                .on_hover_text(translate(language, "text_split_char_limit_hint"));
-            if text_split_mode.as_str() == "char_limit" {
-                ui.add(egui::DragValue::new(text_split_char_limit).range(50..=5000).suffix(" симв."));
-            }
-        });
-        ui.radio_value(text_split_mode, "full".to_string(), translate(language, "text_split_full"))
-            .on_hover_text(translate(language, "text_split_full_hint"));
+            ui.horizontal(|ui| {
+                ui.radio_value(text_split_mode, "paragraphs".to_string(), translate(language, "text_split_paragraphs"))
+                    .on_hover_text(translate(language, "text_split_paragraphs_hint"));
+                ui.radio_value(text_split_mode, "sentences".to_string(), translate(language, "text_split_sentences"))
+                    .on_hover_text(translate(language, "text_split_sentences_hint"));
+            });
+            ui.horizontal(|ui| {
+                ui.radio_value(text_split_mode, "char_limit".to_string(), translate(language, "text_split_char_limit"))
+                    .on_hover_text(translate(language, "text_split_char_limit_hint"));
+                if text_split_mode.as_str() == "char_limit" {
+                    ui.add(egui::DragValue::new(text_split_char_limit).range(50..=5000).suffix(" симв."));
+                }
+            });
+            ui.radio_value(text_split_mode, "full".to_string(), translate(language, "text_split_full"))
+                .on_hover_text(translate(language, "text_split_full_hint"));
 
-        ui.add_space(8.0);
+            ui.add_space(8.0);
+        }
 
         // Вибір ЛЛМ-сервісу для генерації промтів
         ui.label(egui::RichText::new(translate(language, "video_llm_service_label")).strong());
