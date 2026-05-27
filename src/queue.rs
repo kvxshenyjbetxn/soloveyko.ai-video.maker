@@ -123,8 +123,8 @@ pub struct PipelineJob {
     pub settings: JobSettings,
     /// Збережений перекладений текст (заповнюється після перекладу)
     pub translated_text: Arc<Mutex<Option<String>>>,
-    /// Вартість перекладу (якщо використовується OpenRouter)
-    pub translation_cost: Arc<Mutex<Option<f64>>>,
+    /// Загальна вартість всіх LLM-запитів задачі (якщо використовується OpenRouter)
+    pub total_cost: Arc<Mutex<Option<f64>>>,
     /// Тривалість аудіо після озвучки (в секундах)
     pub audio_duration: Arc<Mutex<Option<f64>>>,
     /// Прогрес підготовки промтів: (завершено, загалом). None — поки кількість невідома.
@@ -152,7 +152,7 @@ impl PipelineJob {
             montage_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             settings,
             translated_text: Arc::new(Mutex::new(None)),
-            translation_cost: Arc::new(Mutex::new(None)),
+            total_cost: Arc::new(Mutex::new(None)),
             audio_duration: Arc::new(Mutex::new(None)),
             prompts_progress: Arc::new(Mutex::new(None)),
             media_progress: Arc::new(Mutex::new(None)),

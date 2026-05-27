@@ -1099,7 +1099,7 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&job.subtitles_stage),
                     std::sync::Arc::clone(&job.montage_stage),
                     std::sync::Arc::clone(&job.translated_text),
-                    std::sync::Arc::clone(&job.translation_cost),
+                    std::sync::Arc::clone(&job.total_cost),
                     std::sync::Arc::clone(&job.audio_duration),
                     std::sync::Arc::clone(&job.prompts_progress),
                     std::sync::Arc::clone(&job.media_progress),

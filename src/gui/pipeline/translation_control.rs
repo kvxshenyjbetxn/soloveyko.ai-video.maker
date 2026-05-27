@@ -42,7 +42,7 @@ pub fn draw_translation_control_window(
     let job_name = jobs[job_idx].name.clone();
     let job_save_path = jobs[job_idx].settings.save_path.clone();
     let translated_text_arc = std::sync::Arc::clone(&jobs[job_idx].translated_text);
-    let translation_cost_arc = std::sync::Arc::clone(&jobs[job_idx].translation_cost);
+    let translation_cost_arc = std::sync::Arc::clone(&jobs[job_idx].total_cost);
     let audio_duration_arc = std::sync::Arc::clone(&jobs[job_idx].audio_duration);
     let status_arc = std::sync::Arc::clone(&jobs[job_idx].status);
     let translation_stage_arc = std::sync::Arc::clone(&jobs[job_idx].translation_stage);

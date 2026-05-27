@@ -924,6 +924,7 @@ fn run_video_branch(
     video_stage: Arc<Mutex<crate::queue::StageStatus>>,
     prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
+    total_cost: Arc<Mutex<Option<f64>>>,
     ctx: egui::Context,
 ) -> Result<(), String> {
     if !settings.video_enabled {
@@ -986,7 +987,7 @@ fn run_video_branch(
     if use_llm {
         // Паралельна генерація: кожен сегмент в окремому потоці
         // Обмеження паралельності виконується всередині call_llm через глобальний лімітер
-        let mut handles: Vec<std::thread::JoinHandle<(usize, String)>> = Vec::with_capacity(total);
+        let mut handles: Vec<std::thread::JoinHandle<(usize, String, Option<f64>)>> = Vec::with_capacity(total);
 
         for (i, segment) in segments.iter().enumerate() {
             let segment          = segment.clone();
@@ -1001,7 +1002,7 @@ fn run_video_branch(
             let job_name_c       = job_name.clone();
 
             handles.push(std::thread::spawn(move || {
-                let prompt = match crate::core::llm::call_llm(
+                let (prompt, cost) = match crate::core::llm::call_llm(
                     &llm_service,
                     &openrouter_key,
                     &llm_model,
@@ -1010,20 +1011,21 @@ fn run_video_branch(
                     llm_temperature,
                     Some((job_id_c, job_name_c.clone())),
                 ) {
-                    Ok((generated, _)) => generated,
+                    Ok((generated, cost)) => (generated, cost),
                     Err(e) => {
                         crate::logger::log_job(
                             job_id_c, &job_name_c,
                             &format!("LLM prompt {}/{} error: {}. Using fallback.", i + 1, total, e),
                         );
                         // Fallback: проста підстановка
-                        if video_prompt.contains("{{text}}") {
+                        let fallback = if video_prompt.contains("{{text}}") {
                             video_prompt.replace("{{text}}", &segment)
                         } else if video_prompt.is_empty() {
                             segment.clone()
                         } else {
                             format!("{}\n\n{}", video_prompt, segment)
-                        }
+                        };
+                        (fallback, None)
                     }
                 };
 
@@ -1034,14 +1036,18 @@ fn run_video_branch(
                 }
                 ctx_c.request_repaint();
 
-                (i, prompt)
+                (i, prompt, cost)
             }));
         }
 
-        // Збираємо результати, зберігаючи порядок за індексом
+        // Збираємо результати, зберігаючи порядок за індексом; накопичуємо вартість LLM-запитів
         for handle in handles {
-            if let Ok((i, prompt)) = handle.join() {
+            if let Ok((i, prompt, cost)) = handle.join() {
                 prompts[i] = prompt;
+                if let Some(c) = cost {
+                    let mut tc = total_cost.lock().unwrap();
+                    *tc = Some(tc.unwrap_or(0.0) + c);
+                }
             } else {
                 crate::logger::log_job(job_id, &job_name, "LLM prompt thread panicked.");
             }
@@ -1193,7 +1199,7 @@ pub fn run_pipeline(
     subtitles_stage: Arc<Mutex<crate::queue::StageStatus>>,
     montage_stage: Arc<Mutex<crate::queue::StageStatus>>,
     translated_text: Arc<Mutex<Option<String>>>,
-    translation_cost: Arc<Mutex<Option<f64>>>,
+    total_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
     prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
@@ -1241,7 +1247,11 @@ pub fn run_pipeline(
                     crate::logger::log_job(job_id, &job_name, "Translation saved: text.txt");
                     voice_text = translated.clone();
                     *translated_text.lock().unwrap() = Some(translated);
-                    *translation_cost.lock().unwrap() = cost;
+                    // Накопичуємо вартість (враховуючи перегенерацію)
+                    if let Some(c) = cost {
+                        let mut tc = total_cost.lock().unwrap();
+                        *tc = Some(tc.unwrap_or(0.0) + c);
+                    }
                     *translation_stage.lock().unwrap() = crate::queue::StageStatus::Done;
 
                     if settings.translation_control_enabled {
@@ -1316,6 +1326,7 @@ pub fn run_pipeline(
             let video_stage_video = Arc::clone(&video_stage);
             let prompts_progress_video = Arc::clone(&prompts_progress);
             let media_progress_video = Arc::clone(&media_progress);
+            let total_cost_video = Arc::clone(&total_cost);
             let ctx_video = ctx.clone();
             let job_id_video = job_id;
             let job_name_video = job_name.clone();
@@ -1329,6 +1340,7 @@ pub fn run_pipeline(
                     video_stage_video,
                     prompts_progress_video,
                     media_progress_video,
+                    total_cost_video,
                     ctx_video,
                 )
             }))
@@ -1540,7 +1552,7 @@ pub fn retry_from_stage(
     subtitles_stage: Arc<Mutex<crate::queue::StageStatus>>,
     montage_stage: Arc<Mutex<crate::queue::StageStatus>>,
     translated_text: Arc<Mutex<Option<String>>>,
-    translation_cost: Arc<Mutex<Option<f64>>>,
+    total_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
     prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
@@ -1561,7 +1573,7 @@ pub fn retry_from_stage(
             *subtitles_stage.lock().unwrap() = SPending;
             *montage_stage.lock().unwrap() = SPending;
             *translated_text.lock().unwrap() = None;
-            *translation_cost.lock().unwrap() = None;
+            *total_cost.lock().unwrap() = None;
             *audio_duration.lock().unwrap() = None;
             *prompts_progress.lock().unwrap() = None;
             *media_progress.lock().unwrap() = None;
@@ -1571,7 +1583,7 @@ pub fn retry_from_stage(
             run_pipeline(
                 job_id, job_name, settings, status,
                 translation_stage, voiceover_stage, video_stage, subtitles_stage, montage_stage,
-                translated_text, translation_cost, audio_duration,
+                translated_text, total_cost, audio_duration,
                 prompts_progress, media_progress, montage_progress, montage_file_size,
                 media_control_resume, ctx,
             );
@@ -1637,7 +1649,7 @@ pub fn retry_from_stage(
                 let video_result = run_video_branch(
                     job_id, job_name.clone(), settings.clone(), Arc::clone(&translated_text),
                     Arc::clone(&video_stage), Arc::clone(&prompts_progress),
-                    Arc::clone(&media_progress), ctx.clone(),
+                    Arc::clone(&media_progress), Arc::clone(&total_cost), ctx.clone(),
                 );
 
                 // Пауза для контролю зображень

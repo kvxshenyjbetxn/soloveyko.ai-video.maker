@@ -32,21 +32,13 @@ pub fn draw_queue_panel(
 
     // Загальна вартість всіх OpenRouter запитів у черзі
     let total_cost: f64 = jobs.iter()
-        .filter_map(|j| *j.translation_cost.lock().unwrap())
+        .filter_map(|j| *j.total_cost.lock().unwrap())
         .sum();
 
     // Верхній рядок керування
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong().size(13.0));
         ui.label(egui::RichText::new(format!("({})", jobs.len())).weak().size(11.0));
-
-        if total_cost > 0.0 {
-            ui.label(
-                egui::RichText::new(format!("${:.5}", total_cost))
-                    .size(11.0)
-                    .color(egui::Color32::from_rgb(46, 204, 113)),
-            );
-        }
 
         let has_pending = jobs.iter().any(|j| {
             *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
@@ -144,12 +136,37 @@ pub fn draw_queue_panel(
                 ui.label(pct_label);
                 ui.add_space(4.0);
 
-                let bar_width = ui.available_width() - 8.0;
-                if bar_width > 30.0 {
+                // Резервуємо місце для лейблу вартості зліва від бару
+                let cost_text_opt = if total_cost > 0.0 {
+                    Some(format!("${:.5}", total_cost))
+                } else {
+                    None
+                };
+                let cost_reserve = cost_text_opt.as_deref().map(|text| {
+                    let galley = ui.painter().layout_no_wrap(
+                        text.to_string(),
+                        egui::FontId::proportional(11.0),
+                        egui::Color32::WHITE,
+                    );
+                    galley.size().x + ui.spacing().item_spacing.x + 4.0
+                }).unwrap_or(0.0);
+
+                let bar_width = (ui.available_width() - 8.0 - cost_reserve).max(20.0);
+                if bar_width > 20.0 {
                     let bar = egui::ProgressBar::new(overall_progress)
                         .animate(is_running)
                         .desired_height(6.0);
                     ui.add_sized([bar_width, 6.0], bar);
+                }
+
+                // Вартість всіх задач зліва від прогрес бару
+                if let Some(text) = cost_text_opt {
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new(text)
+                            .size(11.0)
+                            .color(egui::Color32::from_rgb(46, 204, 113)),
+                    );
                 }
             }
         });
@@ -176,7 +193,7 @@ pub fn draw_queue_panel(
                     std::sync::Arc::clone(&job.subtitles_stage),
                     std::sync::Arc::clone(&job.montage_stage),
                     std::sync::Arc::clone(&job.translated_text),
-                    std::sync::Arc::clone(&job.translation_cost),
+                    std::sync::Arc::clone(&job.total_cost),
                     std::sync::Arc::clone(&job.audio_duration),
                     std::sync::Arc::clone(&job.prompts_progress),
                     std::sync::Arc::clone(&job.media_progress),
@@ -295,7 +312,7 @@ pub fn draw_queue_panel(
 
                             if job.settings.translation_enabled {
                                 let translated_opt = job.translated_text.lock().unwrap();
-                                let cost_opt = job.translation_cost.lock().unwrap();
+                                let cost_opt = job.total_cost.lock().unwrap();
 
                                 let cost_str = if let Some(cost) = *cost_opt {
                                     format!(", ${:.5}", cost)
@@ -527,6 +544,9 @@ pub fn draw_queue_panel(
                                 || status == crate::queue::JobStatus::AwaitingMediaControl;
 
                             ui.horizontal(|ui| {
+                                let job_cost = *job.total_cost.lock().unwrap();
+                                let job_cost_text = job_cost.filter(|&c| c > 0.0).map(|c| format!("${:.5}", c));
+
                                 let pct_text = format!("{:.0}%", prog * 100.0);
                                 let pct_galley = ui.painter().layout_no_wrap(
                                     pct_text.clone(),
@@ -534,7 +554,26 @@ pub fn draw_queue_panel(
                                     ui.visuals().weak_text_color(),
                                 );
                                 let pct_width = pct_galley.size().x + 4.0;
-                                let bar_width = (ui.available_width() - pct_width - ui.spacing().item_spacing.x).max(20.0);
+
+                                let cost_reserve = job_cost_text.as_deref().map(|text| {
+                                    let galley = ui.painter().layout_no_wrap(
+                                        text.to_string(),
+                                        egui::FontId::proportional(11.0),
+                                        egui::Color32::WHITE,
+                                    );
+                                    galley.size().x + ui.spacing().item_spacing.x
+                                }).unwrap_or(0.0);
+
+                                let bar_width = (ui.available_width() - pct_width - cost_reserve - ui.spacing().item_spacing.x).max(20.0);
+
+                                // Вартість задачі зліва від прогрес бару
+                                if let Some(ref text) = job_cost_text {
+                                    ui.label(
+                                        egui::RichText::new(text)
+                                            .size(11.0)
+                                            .color(egui::Color32::from_rgb(46, 204, 113)),
+                                    );
+                                }
 
                                 let bar = egui::ProgressBar::new(prog)
                                     .animate(is_job_running)
