@@ -76,6 +76,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "voiceover_templates_loading" => "Loading templates...",
         "voiceover_templates_retry" => "🔄 Retry",
         "voiceover_template_hint" => "Select voice template...",
+        "prompt_expand_hint" => "Open in a separate window",
         "translation_prompt_label" => "Translation Prompt",
         "translation_prompt_hint" => "Enter instructions for the translation model...",
         "translation_insert_placeholder" => "{{text}}",

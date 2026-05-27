@@ -111,49 +111,33 @@ pub fn draw_translation_section(
         ui.add_space(8.0);
 
         // Поле промту для моделі перекладу
-        ui.label(egui::RichText::new(translate(language, "translation_prompt_label")).strong());
+        let expand_id = ui.make_persistent_id("translation_prompt_expand");
+        let mut expand_open: bool = ui.data_mut(|d| d.get_persisted(expand_id).unwrap_or(false));
+
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(translate(language, "translation_prompt_label")).strong());
+            if ui.small_button("⛶")
+                .on_hover_text(translate(language, "prompt_expand_hint"))
+                .clicked()
+            {
+                expand_open = !expand_open;
+                ui.data_mut(|d| d.insert_persisted(expand_id, expand_open));
+            }
+        });
         ui.add_space(4.0);
 
-        let height_id = ui.make_persistent_id("translation_prompt_height");
-        let prompt_height: f32 = ui.data_mut(|d| d.get_persisted(height_id).unwrap_or(60.0));
         let available_width = ui.available_width();
-
-        let te_resp = ui.add_sized(
-            [available_width, prompt_height],
-            egui::TextEdit::multiline(translation_prompt)
-                .hint_text(translate(language, "translation_prompt_hint")),
-        );
-
-        // Ручка зміни розміру
-        let handle_rect = egui::Rect::from_min_size(
-            egui::pos2(te_resp.rect.left(), te_resp.rect.bottom()),
-            egui::vec2(te_resp.rect.width(), 8.0),
-        );
-        let handle_resp = ui.allocate_rect(handle_rect, egui::Sense::drag());
-
-        if handle_resp.hovered() || handle_resp.dragged() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
-        }
-        if handle_resp.dragged() {
-            let new_height = (prompt_height + handle_resp.drag_delta().y).max(40.0);
-            ui.data_mut(|d| d.insert_persisted(height_id, new_height));
-        }
-
-        if ui.is_rect_visible(handle_rect) {
-            let color = if handle_resp.dragged() || handle_resp.hovered() {
-                ui.visuals().selection.bg_fill
-            } else {
-                ui.visuals().widgets.noninteractive.bg_stroke.color
-            };
-            let center = handle_rect.center();
-            for i in -1_i32..=1 {
-                ui.painter().circle_filled(
-                    egui::pos2(center.x + i as f32 * 8.0, center.y),
-                    2.0,
-                    color,
-                );
-            }
-        }
+        let te_resp = egui::ScrollArea::vertical()
+            .max_height(60.0)
+            .id_salt("translation_prompt_scroll")
+            .show(ui, |ui| {
+                ui.add(
+                    egui::TextEdit::multiline(translation_prompt)
+                        .desired_width(available_width)
+                        .hint_text(translate(language, "translation_prompt_hint")),
+                )
+            })
+            .inner;
 
         ui.add_space(4.0);
 
@@ -164,27 +148,20 @@ pub fn draw_translation_section(
                 let to_insert = "{{text}}";
                 if let Some(cursor_range) = state.cursor.char_range() {
                     let cursor_idx = cursor_range.primary.index;
-                    
-                    // Перетворюємо char індекс у byte індекс для безпечної роботи з UTF-8 рядком
                     let byte_idx = translation_prompt
                         .char_indices()
                         .map(|(b_idx, _)| b_idx)
                         .nth(cursor_idx)
                         .unwrap_or(translation_prompt.len());
-                    
                     translation_prompt.insert_str(byte_idx, to_insert);
-                    
-                    // Встановлюємо курсор одразу після вставленого плейсхолдера
                     let new_char_idx = cursor_idx + to_insert.chars().count();
                     let new_cursor = egui::text::CCursor::new(new_char_idx);
                     state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
                     state.store(ui.ctx(), text_edit_id);
                 } else {
-                    // Якщо поле не було у фокусі, додаємо в кінець
                     translation_prompt.push_str(to_insert);
                 }
             } else {
-                // Якщо стан ще не ініціалізовано
                 translation_prompt.push_str("{{text}}");
             }
             te_resp.request_focus();
@@ -196,6 +173,52 @@ pub fn draw_translation_section(
                 .weak()
                 .size(11.0)
         );
+
+        // Розгорнуте вікно редагування промту
+        if expand_open {
+            let mut still_open = true;
+            egui::Window::new(translate(language, "translation_prompt_label"))
+                .open(&mut still_open)
+                .resizable(true)
+                .collapsible(false)
+                .default_size([600.0, 400.0])
+                .show(ui.ctx(), |ui| {
+                    let te_height = (ui.available_height() - 36.0).max(100.0);
+                    let win_te_resp = ui.add_sized(
+                        [ui.available_width(), te_height],
+                        egui::TextEdit::multiline(translation_prompt)
+                            .hint_text(translate(language, "translation_prompt_hint")),
+                    );
+                    let win_te_id = win_te_resp.id;
+                    ui.add_space(4.0);
+                    if ui.button(translate(language, "translation_insert_placeholder")).clicked() {
+                        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), win_te_id) {
+                            let to_insert = "{{text}}";
+                            if let Some(cursor_range) = state.cursor.char_range() {
+                                let cursor_idx = cursor_range.primary.index;
+                                let byte_idx = translation_prompt
+                                    .char_indices()
+                                    .map(|(b_idx, _)| b_idx)
+                                    .nth(cursor_idx)
+                                    .unwrap_or(translation_prompt.len());
+                                translation_prompt.insert_str(byte_idx, to_insert);
+                                let new_char_idx = cursor_idx + to_insert.chars().count();
+                                let new_cursor = egui::text::CCursor::new(new_char_idx);
+                                state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+                                state.store(ui.ctx(), win_te_id);
+                            } else {
+                                translation_prompt.push_str(to_insert);
+                            }
+                        } else {
+                            translation_prompt.push_str("{{text}}");
+                        }
+                        ui.ctx().memory_mut(|m| m.request_focus(win_te_id));
+                    }
+                });
+            if !still_open {
+                ui.data_mut(|d| d.insert_persisted(expand_id, false));
+            }
+        }
 
         ui.add_space(8.0);
 

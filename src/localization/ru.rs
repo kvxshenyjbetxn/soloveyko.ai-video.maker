@@ -76,6 +76,7 @@ pub fn translate_ru(key: &str) -> &'static str {
         "voiceover_templates_loading" => "Загрузка шаблонов...",
         "voiceover_templates_retry" => "🔄 Попробовать снова",
         "voiceover_template_hint" => "Выберите шаблон голоса...",
+        "prompt_expand_hint" => "Открыть в отдельном окне",
         "translation_prompt_label" => "Промт для перевода",
         "translation_prompt_hint" => "Введите инструкцию для модели перевода...",
         "translation_insert_placeholder" => "{{text}}",

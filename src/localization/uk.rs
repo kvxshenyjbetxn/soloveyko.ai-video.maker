@@ -76,6 +76,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "voiceover_templates_loading" => "Завантаження шаблонів...",
         "voiceover_templates_retry" => "🔄 Спробувати знову",
         "voiceover_template_hint" => "Оберіть шаблон голосу...",
+        "prompt_expand_hint" => "Відкрити в окремому вікні",
         "translation_prompt_label" => "Промт для перекладу",
         "translation_prompt_hint" => "Введіть інструкцію для моделі перекладу...",
         "translation_insert_placeholder" => "{{text}}",
