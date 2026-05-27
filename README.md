@@ -25,7 +25,7 @@
 src/
 ├── main.rs                      — точка входу, конфіг вікна, запуск eframe
 ├── app.rs                       — VideoMakerApp: весь стан програми та eframe::App::update() — тільки виклики gui-субмодулів, без inline UI-логіки
-├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe, whisper) + авто-завантаження у UserConfigDir/bin/; пріоритет: системний PATH → бандлований бінарник
+├── bundle.rs                    — шляхи до бінарників (ffmpeg, ffprobe, whisper) + авто-завантаження у UserConfigDir/bin/; бандлований ffmpeg/ffprobe завжди пріоритетніший за системний
 ├── queue.rs                     — PipelineJob, JobStatus, JobSettings: структури черги задач (із підтримкою кешування перекладеного тексту та витрат)
 ├── theme.rs                     — теми (Dark/Light/Amoled), застосування кольору акценту
 ├── logger.rs                    — структурований логер з підтримкою прив'язки логів до задач (OnceLock + Mutex)
@@ -187,7 +187,7 @@ src/
 
 - **Секція «Субтитри»** — вибір сервісу (**Whisper**, **WhisperX** або **AssemblyAI**), мови розпізнавання (авто + 14 мов), моделі та повзунок **«Макс. символів на сегмент»** (`whisper_max_line_width`, 0–200, де 0 = ∞). При виборі **Whisper** — відображається список ggml-моделей (`tiny` / `base` / `small` / `medium` / `large-v3` / `large-v3-turbo`) та статус: ✓ завантажено / кнопка завантаження з розміром (~MB) / прогрес / помилка з кнопкою «Повторити». При виборі **WhisperX** — відображається список faster-whisper моделей без кнопки скачування (моделі завантажує сам WhisperX при першому запуску). При виборі **AssemblyAI** — відображається поле API-ключа з кнопкою «Перевірити». Завантаження ggml-моделей відбувається у фоновому потоці через `Arc<Mutex<BinaryDownload>>` — той самий механізм, що й для ffmpeg у вікні привітання.
 
-  **Стиль субтитрів (доступний для всіх сервісів):** вибір шрифту з popup-прев'ю, колір тексту (`egui::color_edit_button_srgb`), розмір шрифту (повзунок, 8–72 px), вертикальний відступ (`margin_v`, 0–200 px). **Karaoke-ефект** (`subtitle_karaoke`) — доступний лише для **WhisperX** та **AssemblyAI** (бо тільки вони надають word-level timestamps). При увімкненому karaoke `subtitle.ass` генерується з `\kf`-тегами — кожне слово підсвічується жовтим у момент вимовляння.
+  **Стиль субтитрів (доступний для всіх сервісів):** вибір шрифту з popup-прев'ю, колір тексту (`egui::color_edit_button_srgb`), колір обводки (`subtitle_karaoke_outline_color`), розмір шрифту (повзунок, 8–72 px), вертикальний відступ (`margin_v`, 0–200 px). **Karaoke-ефект** (`subtitle_karaoke`) — доступний лише для **WhisperX** та **AssemblyAI** (бо тільки вони надають word-level timestamps). При увімкненому karaoke відображається підпанель: вибір стилю (`\kf` fill sweep або `\k` instant switch), колір підсвічування, жирний шрифт. `subtitle.ass` генерується з відповідними тегами — кожне слово підсвічується обраним кольором у момент вимовляння.
 
 - **Ідеальне вирівнювання заголовків та розділювачів:** Ліва панель статистики сценарію (`src/gui/editor.rs`) та права бічна панель пайплайну мають ідентичні заголовки з великим шрифтом `16.0`. Їхні лінії-розділювачі вирівняні ідеально по горизонталі (на одній висоті `y`). Самі заголовки візуально відцентровані по вертикалі за допомогою точно збалансованих асиметричних відступів (`8.0` зверху та `4.0` знизу).
 - **Дизайн розділювачів "border-to-border":** Контейнери обох панелей (`CentralPanel` та `SidePanel`) мають нульові внутрішні відступи, завдяки чому горизонтальні лінії-розділювачі йдуть від лівого до правого краю без проміжків. Всі внутрішні елементи та секції налаштувань загорнуті у фрейми з бічними відступами `8.0` пікселів, що запобігає прилипанню елементів керування до країв екрана.
@@ -277,7 +277,14 @@ src/
 
 **Karaoke-ефект:**
 - Якщо `subtitle_karaoke == true` і сервіс WhisperX або AssemblyAI — після генерації `subtitle.ass` він **перезаписується** karaoke-версією через `generate_karaoke_ass()`.
-- Karaoke ASS містить `\kf<centisecs>` теги — кожне слово підсвічується жовтим (`SecondaryColour`) у момент вимовляння. Слова групуються у рядки по ~50 символів або ~5 секунд.
+- Karaoke ASS містить `\kf` або `\k` теги залежно від `subtitle_karaoke_fill`:
+  - `\kf` (fill sweep) — плавне заповнення слова кольором у момент вимовляння (дефолт).
+  - `\k` (instant switch) — миттєва зміна кольору.
+- Колір підсвічування (`subtitle_karaoke_highlight_color`) задає `SecondaryColour` у ASS-заголовку — дефолт жовтий `[255, 255, 0]`.
+- Колір обводки (`subtitle_karaoke_outline_color`) задає `OutlineColour` — дефолт чорний `[0, 0, 0]`. Застосовується для всіх субтитрів (не лише karaoke).
+- Жирний текст (`subtitle_karaoke_bold`) — `Bold: 1` у ASS Style, дефолт `false`.
+- Слова групуються у рядки по ~50 символів або ~5 секунд.
+- **Sync-компенсація прогалин:** ASS karaoke timing кумулятивна від початку Dialogue. Прогалини між словами (`word.start_ms > cursor_ms`) компенсуються порожнім сегментом `{\k{gap_cs}}` що просуває таймер без підсвічування. Без цього наступне слово підсвічувалось би передчасно, бо gap враховувався б у тривалості попереднього слова.
 - Для Whisper karaoke недоступний — немає word-level timestamps.
 
 #### Відеоряд (`timeline/`)
@@ -312,7 +319,7 @@ src/
    - **Зображення (jpg/png/webp/gif):** `scale+crop → zoompan` (ефект плавного наближення/відведення). Тривалість — `d=<кількість_кадрів>` відповідно до часового відрізку та `fps`.
    - **Відео (mp4/webm/mov):** `trim → scale+crop → fps` (обрізає до потрібної тривалості).
 5. Після filter graph — `concat` (склеювання кліпів) → `tpad` (дотяжка до тривалості аудіо) → `trim` (обрізка хвоста).
-5.5. **Burn-in субтитрів:** якщо `burn_subtitles == true`, монтаж шукає спочатку `subtitle.ass` (стиль запечений, через `ass=` фільтр), потім `subtitle.srt` як запасний варіант (`subtitles=` фільтр, дефолтний стиль libass). Потребує FFmpeg з `libass`. Якщо жоден файл не знайдено — логується попередження, монтаж продовжується без субтитрів.
+5.5. **Burn-in субтитрів:** якщо `burn_subtitles == true`, монтаж шукає `subtitle.ass` (стиль запечений у заголовку). Фільтр: `ass=filename='<абсолютний шлях>'` — одинарні лапки обов'язкові, зворотні слеші замінюються на прямі, вбудована одинарна лапка екранується як `'\''`. Потребує FFmpeg з `libass` (бандлований збірник завжди містить libass). Якщо файл не знайдено — логується попередження, монтаж продовжується без субтитрів.
 6. Записує фільтр у `montage_script.txt` у папці задачі та запускає `ffmpeg -filter_complex_script montage_script.txt`.
 7. Виклик FFmpeg використовує `current_dir(save_dir)` + **відносні шляхи** — це обходить обмеження CLI на довжину командного рядка та дозволяє мати пробіли в `save_dir`.
 8. FFmpeg запускається через `.spawn()` з `-progress pipe:1 -loglevel error`. Stderr дренується у окремому потоці (щоб не заблокувати буфер). Stdout читається рядково у головному потоці: поля `out_time_us`, `fps`, `speed`, `bitrate` та маркер `progress=continue` (блок `progress=end` ігнорується — там значення скинуті в N/A). Лог виводить: `42%  fps=28.3  speed=1.2x  bitrate=7842.5kbits/s`.
@@ -381,9 +388,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 Модуль відповідає за розпізнавання шляхів до системних інструментів та їх автоматичне завантаження у папку програми.
 
 - **`bin_dir()`** — повертає `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/` (той самий `config_dir`, що й для `settings.json`).
-- **`is_in_system_path(name)`** — приватний хелпер. Сканує `$PATH` (розділювач `;` на Windows, `:` на решті) без запуску процесу: перевіряє чи існує файл `{dir}/{name}` у кожному з каталогів. Використовується функціями нижче.
-- **`ffmpeg_path()` / `ffprobe_path()`** — пріоритет: системний PATH (через `is_in_system_path`) → бандлований бінарник у `bin_dir()` → просто `"ffmpeg"` як запасний варіант. Якщо системний ffmpeg є — бандлований ігнорується повністю.
-- **`whisper_path()`** — зворотний пріоритет (бандлований → системний): whisper.cpp і openai-whisper мають різний CLI, тому краще зафіксувати конкретний бандлований бінарник.
+- **`ffmpeg_path()` / `ffprobe_path()`** — завжди повертають бандлований бінарник у `bin_dir()` якщо він є, інакше просто `"ffmpeg"` / `"ffprobe"` як запасний варіант. Системний PATH більше не перевіряється — бо системний FFmpeg може не мати `libass`, потрібного для burn-in субтитрів (`ass=filename=...` фільтр).
+- **`whisper_path()`** — пріоритет: бандлований → системний. whisper.cpp і openai-whisper мають різний CLI, тому краще зафіксувати конкретний бандлований бінарник.
 - Решта коду просто викликає `Command::new(ffmpeg_path())` і не знає звідки бінарник.
 - **`download_all(on_progress)`** — завантажує ffmpeg і ffprobe з GitHub releases у `bin_dir()`. Перед завантаженням перевіряє чи файл вже існує — якщо так, пропускає. Читає відповідь чанками по 64 KB, після кожного чанку викликає `on_progress` з рядком `"ffmpeg (7.2 / 76.0 MB, 9%)"`. Якщо сервер не повернув `Content-Length` — без відсотка. Після запису на macOS/Linux автоматично виставляє chmod 755.
 - **`download_whisper(on_progress)`** — завантажує whisper у `bin_dir()`. На macOS: прямий бінарник (той самий механізм що й ffmpeg). На Windows: завантажує `whisper.win.zip`, розпаковує через крейт `zip`, шукає `main.exe` у будь-якій підпапці архіву та зберігає як `whisper.exe`. Перевіряє наявність файлу перед завантаженням — повторного скачування не відбувається.
@@ -405,7 +411,7 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 **Інструменти що перевіряються:** п'ять — `gemini --version`, `claude --version`, FFmpeg, Whisper, WhisperX. Brew, npm та команди встановлення прибрані — вікно тільки інформаційне.
 
-**FFmpeg перевіряється особливо** (`check_ffmpeg`): викликає `crate::bundle::ffmpeg_path()` — той повертає системний FFmpeg якщо він є в PATH, інакше бандлований — і запускає з `-version`. Якщо знайдено (незалежно від джерела) — відразу `Installed`, завантаження не потрібне. Якщо не знайдено ні в PATH, ні в `bin_dir` — одразу автоматично запускає `bundle::download_all` у тому ж фоновому потоці. Окремий стан `BinaryDownload` (Idle / Downloading(label) / Done / Failed) зберігається в `Arc<Mutex<BinaryDownload>>`. UI показує спінер + жовтий текст прогресу `"ffmpeg (7.2 / 76.0 MB, 9%)"` → після завершення перевіряє знову і показує ✓.
+**FFmpeg перевіряється особливо** (`check_ffmpeg`): викликає `crate::bundle::ffmpeg_path()` — той повертає бандлований FFmpeg якщо він є в `bin_dir`, інакше `"ffmpeg"` як запасний — і запускає з `-version`. Якщо знайдено — відразу `Installed`, завантаження не потрібне. Якщо не знайдено в `bin_dir` — одразу автоматично запускає `bundle::download_all` у тому ж фоновому потоці. Окремий стан `BinaryDownload` (Idle / Downloading(label) / Done / Failed) зберігається в `Arc<Mutex<BinaryDownload>>`. UI показує спінер + жовтий текст прогресу `"ffmpeg (7.2 / 76.0 MB, 9%)"` → після завершення перевіряє знову і показує ✓.
 
 **Whisper перевіряється** (`check_whisper`): на відміну від FFmpeg, не запускає бінарник — лише перевіряє `bundle::whisper_local_exists()`. Якщо файлу нема — запускає `bundle::download_whisper` з прогресом. Після завершення знову перевіряє `whisper_local_exists()`. Результат: `ToolStatus::Installed("bundled")`.
 
@@ -426,8 +432,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
 Два JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
-- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`).
-- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`), налаштування медіа та монтажу. При завантаженні шаблону всі поля відновлюються повністю.
+- `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_fill`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`).
+- `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_fill`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`), налаштування медіа та монтажу. При завантаженні шаблону всі поля відновлюються повністю.
 
 `AppSettings` та `PipelineTemplate` мають `#[serde(default)]`, тому старі файли без нових полів не ламаються (дефолт для нових полів потоків Googler — `5`). Поле `show_welcome` має `default_true`, тому після оновлення на нову версію вікно привітання покаже себе один раз.
 
@@ -596,7 +602,7 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 - **Конвертація в WAV та тривалість аудіо:** Якщо увімкнено `voiceover_convert_to_wav`, після `voice.mp3` запускається `ffmpeg -i voice.mp3 voice.wav`. MP3 при цьому **не видаляється** — залишаються обидва файли. Тривалість вимірюється вже з фінального файлу (WAV або MP3). Парсери тривалості написані на чистому Rust без додаткових залежностей: MP3-парсер підтримує Xing VBR і CBR, WAV-парсер читає RIFF-чанки. Якщо FFmpeg недоступний — конвертація тихо пропускається, задача продовжується з MP3.
 
-- **Шлях до FFmpeg та ffprobe — через `bundle::ffmpeg_path()`:** Pipeline більше не хардкодить `"ffmpeg"` / `"ffmpeg.exe"`. Пріоритет: системний PATH → бандлований бінарник. Якщо в системі вже є ffmpeg — програма використовує його і не завантажує бандлований. Якщо немає ні в PATH, ні в `bin_dir` — вікно привітання автоматично завантажує бандлований. Перевірка наявності в PATH виконується без запуску процесу (`is_in_system_path`: сканування директорій `$PATH`).
+- **Шлях до FFmpeg та ffprobe — через `bundle::ffmpeg_path()`:** Pipeline більше не хардкодить `"ffmpeg"` / `"ffmpeg.exe"`. Завжди використовується бандлований бінарник (якщо він є в `bin_dir`). Системний FFmpeg ігнорується — він може не мати `libass`, яка потрібна для burn-in субтитрів через `ass=filename='...'` фільтр. Якщо бандлований не знайдений — вікно привітання автоматично його завантажує.
 
 - **VoiceBot polling:** `run_voiceover_sync` блокує потік `std::thread::sleep(5s)` між статусами. Для Edge TTS polling не потрібен — запит виконується синхронно за один виклик.
 

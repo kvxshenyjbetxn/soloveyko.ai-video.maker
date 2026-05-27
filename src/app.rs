@@ -277,6 +277,14 @@ pub struct VideoMakerApp {
     pub subtitle_margin_v: u32,
     /// Ефект karaoke для субтитрів.
     pub subtitle_karaoke: bool,
+    /// Стиль karaoke: true = заповнення (kf), false = миттєвий перехід (k).
+    pub subtitle_karaoke_fill: bool,
+    /// RGB колір слова що проговорюється.
+    pub subtitle_karaoke_highlight_color: [u8; 3],
+    /// RGB колір обводки субтитрів.
+    pub subtitle_karaoke_outline_color: [u8; 3],
+    /// Жирний текст для karaoke субтитрів.
+    pub subtitle_karaoke_bold: bool,
     /// Обраний шрифт для субтитрів.
     pub subtitle_font: String,
     /// Список шрифтів, завантажених із системи (заповнюється при старті).
@@ -449,6 +457,10 @@ impl Default for VideoMakerApp {
             subtitle_color: [255, 255, 255],
             subtitle_margin_v: 30,
             subtitle_karaoke: false,
+            subtitle_karaoke_fill: true,
+            subtitle_karaoke_highlight_color: [255, 255, 0],
+            subtitle_karaoke_outline_color: [0, 0, 0],
+            subtitle_karaoke_bold: false,
             subtitle_font: "Arial".to_string(),
             available_subtitle_fonts: Vec::new(),
             montage_service: "FFmpeg".to_string(),
@@ -751,6 +763,10 @@ impl VideoMakerApp {
             subtitle_color: saved.subtitle_color,
             subtitle_margin_v: saved.subtitle_margin_v,
             subtitle_karaoke: saved.subtitle_karaoke,
+            subtitle_karaoke_fill: saved.subtitle_karaoke_fill,
+            subtitle_karaoke_highlight_color: saved.subtitle_karaoke_highlight_color,
+            subtitle_karaoke_outline_color: saved.subtitle_karaoke_outline_color,
+            subtitle_karaoke_bold: saved.subtitle_karaoke_bold,
             subtitle_font: saved.subtitle_font.clone(),
             available_subtitle_fonts: crate::gui::subtitle_fonts::load_subtitle_fonts(&cc.egui_ctx),
             montage_service: saved.montage_service.clone(),
@@ -998,6 +1014,10 @@ impl eframe::App for VideoMakerApp {
                         &mut self.subtitle_color,
                         &mut self.subtitle_margin_v,
                         &mut self.subtitle_karaoke,
+                        &mut self.subtitle_karaoke_fill,
+                        &mut self.subtitle_karaoke_highlight_color,
+                        &mut self.subtitle_karaoke_outline_color,
+                        &mut self.subtitle_karaoke_bold,
                         &mut self.subtitle_font,
                         &self.available_subtitle_fonts,
                         &mut self.montage_service,
@@ -1457,6 +1477,10 @@ impl eframe::App for VideoMakerApp {
                 || self.subtitle_color != self.last_saved_settings.subtitle_color
                 || self.subtitle_margin_v != self.last_saved_settings.subtitle_margin_v
                 || self.subtitle_karaoke != self.last_saved_settings.subtitle_karaoke
+                || self.subtitle_karaoke_fill != self.last_saved_settings.subtitle_karaoke_fill
+                || self.subtitle_karaoke_highlight_color != self.last_saved_settings.subtitle_karaoke_highlight_color
+                || self.subtitle_karaoke_outline_color != self.last_saved_settings.subtitle_karaoke_outline_color
+                || self.subtitle_karaoke_bold != self.last_saved_settings.subtitle_karaoke_bold
                 || self.subtitle_font != self.last_saved_settings.subtitle_font
                 || self.montage_service != self.last_saved_settings.montage_service
                 || self.montage_fps != self.last_saved_settings.montage_fps
@@ -1528,6 +1552,10 @@ impl eframe::App for VideoMakerApp {
                     subtitle_color: self.subtitle_color,
                     subtitle_margin_v: self.subtitle_margin_v,
                     subtitle_karaoke: self.subtitle_karaoke,
+                    subtitle_karaoke_fill: self.subtitle_karaoke_fill,
+                    subtitle_karaoke_highlight_color: self.subtitle_karaoke_highlight_color,
+                    subtitle_karaoke_outline_color: self.subtitle_karaoke_outline_color,
+                    subtitle_karaoke_bold: self.subtitle_karaoke_bold,
                     subtitle_font: self.subtitle_font.clone(),
                     montage_service: self.montage_service.clone(),
                     montage_fps: self.montage_fps,

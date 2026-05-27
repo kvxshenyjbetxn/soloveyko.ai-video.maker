@@ -49,6 +49,10 @@ pub fn draw_subtitles_section(
     subtitle_color: &mut [u8; 3],
     subtitle_margin_v: &mut u32,
     subtitle_karaoke: &mut bool,
+    subtitle_karaoke_fill: &mut bool,
+    subtitle_karaoke_highlight_color: &mut [u8; 3],
+    subtitle_karaoke_outline_color: &mut [u8; 3],
+    subtitle_karaoke_bold: &mut bool,
     subtitle_font: &mut String,
     available_subtitle_fonts: &[String],
     ctx: egui::Context,
@@ -111,6 +115,10 @@ pub fn draw_subtitles_section(
             subtitle_color,
             subtitle_margin_v,
             subtitle_karaoke,
+            subtitle_karaoke_fill,
+            subtitle_karaoke_highlight_color,
+            subtitle_karaoke_outline_color,
+            subtitle_karaoke_bold,
             subtitle_font,
             available_subtitle_fonts,
         );
@@ -410,6 +418,10 @@ fn draw_subtitle_style(
     subtitle_color: &mut [u8; 3],
     subtitle_margin_v: &mut u32,
     subtitle_karaoke: &mut bool,
+    subtitle_karaoke_fill: &mut bool,
+    subtitle_karaoke_highlight_color: &mut [u8; 3],
+    subtitle_karaoke_outline_color: &mut [u8; 3],
+    subtitle_karaoke_bold: &mut bool,
     subtitle_font: &mut String,
     available_subtitle_fonts: &[String],
 ) {
@@ -453,10 +465,46 @@ fn draw_subtitle_style(
     ui.add_space(2.0);
     ui.color_edit_button_srgb(subtitle_color);
 
+    ui.add_space(6.0);
+
+    // Колір обводки
+    ui.label(egui::RichText::new(translate(language, "subtitles_outline_color_label")));
+    ui.add_space(2.0);
+    ui.color_edit_button_srgb(subtitle_karaoke_outline_color);
+
     // Karaoke (тільки для WhisperX та AssemblyAI, бо потрібні word-level timestamps)
     if subtitles_service == "WhisperX" || subtitles_service == "AssemblyAI" {
         ui.add_space(6.0);
         ui.checkbox(subtitle_karaoke, translate(language, "subtitles_karaoke_label"));
+
+        if *subtitle_karaoke {
+            ui.add_space(4.0);
+            egui::Frame::none()
+                .inner_margin(egui::Margin { left: 12.0, ..Default::default() })
+                .show(ui, |ui| {
+                    // Стиль анімації
+                    ui.label(egui::RichText::new(translate(language, "subtitles_karaoke_style_label")));
+                    ui.add_space(2.0);
+                    ui.horizontal(|ui| {
+                        ui.radio_value(subtitle_karaoke_fill, true,
+                            translate(language, "subtitles_karaoke_fill"));
+                        ui.radio_value(subtitle_karaoke_fill, false,
+                            translate(language, "subtitles_karaoke_switch"));
+                    });
+
+                    ui.add_space(6.0);
+
+                    // Колір виділеного слова
+                    ui.label(egui::RichText::new(translate(language, "subtitles_karaoke_highlight_color_label")));
+                    ui.add_space(2.0);
+                    ui.color_edit_button_srgb(subtitle_karaoke_highlight_color);
+
+                    ui.add_space(6.0);
+
+                    // Жирний текст
+                    ui.checkbox(subtitle_karaoke_bold, translate(language, "subtitles_karaoke_bold_label"));
+                });
+        }
     }
 }
 

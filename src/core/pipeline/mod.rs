@@ -539,6 +539,10 @@ fn run_subtitles_only(
                 settings.subtitle_font_size,
                 settings.subtitle_color,
                 settings.subtitle_margin_v,
+                settings.subtitle_karaoke_fill,
+                settings.subtitle_karaoke_highlight_color,
+                settings.subtitle_karaoke_outline_color,
+                settings.subtitle_karaoke_bold,
             ) {
                 Ok(ass_content) => {
                     match std::fs::write(save_dir.join("subtitle.ass"), &ass_content) {
@@ -651,7 +655,7 @@ fn run_av_branch(
     Ok(())
 }
 
-/// Генерує ASS файл з karaoke-ефектом (\kf теги) з word-level timestamps.
+/// Генерує ASS файл з karaoke-ефектом з word-level timestamps.
 /// Підтримує формати WhisperX (секунди) та AssemblyAI (мілісекунди).
 fn generate_karaoke_ass(
     json_path: &std::path::Path,
@@ -660,6 +664,10 @@ fn generate_karaoke_ass(
     font_size: u32,
     color: [u8; 3],
     margin_v: u32,
+    karaoke_fill: bool,
+    highlight_color: [u8; 3],
+    outline_color: [u8; 3],
+    bold: bool,
 ) -> Result<String, String> {
     let content = std::fs::read_to_string(json_path)
         .map_err(|e| format!("Cannot read subtitle.json: {}", e))?;
@@ -668,16 +676,16 @@ fn generate_karaoke_ass(
 
     // Формат кольору ASS: &HAABBGGRR (A=00 = непрозорий)
     let primary = format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
-    // Жовтий для підсвічування вже вимовленого
-    let secondary = "&H0000FFFF".to_string();
-    let outline = "&H00000000".to_string();
+    let secondary = format!("&H00{:02X}{:02X}{:02X}", highlight_color[2], highlight_color[1], highlight_color[0]);
+    let outline = format!("&H00{:02X}{:02X}{:02X}", outline_color[2], outline_color[1], outline_color[0]);
     let back = "&H80000000".to_string();
+    let bold_flag = if bold { 1 } else { 0 };
 
     let header = format!(
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n\
          [V4+ Styles]\n\
          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
-         Style: Default,{font_name},{font_size},{primary},{secondary},{outline},{back},0,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
+         Style: Default,{font_name},{font_size},{primary},{secondary},{outline},{back},{bold},0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
          [Events]\n\
          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
         font_name = font_name,
@@ -686,6 +694,7 @@ fn generate_karaoke_ass(
         secondary = secondary,
         outline = outline,
         back = back,
+        bold = bold_flag,
         margin_v = margin_v,
     );
 
@@ -752,17 +761,29 @@ fn generate_karaoke_ass(
         group_start = group_end;
     }
 
-    // Генеруємо ASS Dialogue рядки з \kf тегами
+    // Генеруємо ASS Dialogue рядки з \kf тегами.
+    // cursor_ms відстежує поточну позицію в часі — паузи між словами
+    // компенсуються тегом {\k{gap}} без тексту, щоб тайминг був точним.
     let mut events = String::new();
     for (start_ms, end_ms, group) in &lines {
         let start_str = ms_to_ass_time(*start_ms);
         let end_str = ms_to_ass_time(*end_ms);
 
         let mut text = String::new();
+        let ktag = if karaoke_fill { "kf" } else { "k" };
+        let mut cursor_ms = *start_ms;
+
         for word in group {
-            let dur_centisecs = (word.end_ms.saturating_sub(word.start_ms) / 10).max(1);
-            text.push_str(&format!("{{\\kf{}}}{} ", dur_centisecs, word.text));
+            // Пауза між попереднім словом і цим — просуваємо таймер без підсвічування
+            if word.start_ms > cursor_ms {
+                let gap_cs = (word.start_ms - cursor_ms) / 10;
+                text.push_str(&format!("{{\\k{}}}", gap_cs));
+            }
+            let dur_cs = (word.end_ms.saturating_sub(word.start_ms) / 10).max(1);
+            text.push_str(&format!("{{\\{}{}}}{} ", ktag, dur_cs, word.text));
+            cursor_ms = word.end_ms;
         }
+
         events.push_str(&format!(
             "Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
             start_str, end_str, text.trim_end()

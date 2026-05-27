@@ -46,21 +46,8 @@ pub fn bin_dir() -> PathBuf {
 }
 
 /// Перевіряє, чи є бінарник у системному PATH (без запуску процесу).
-fn is_in_system_path(name: &str) -> bool {
-    let sep = if cfg!(target_os = "windows") { ';' } else { ':' };
-    std::env::var("PATH").ok()
-        .map(|path_var| {
-            path_var.split(sep)
-                .any(|dir| std::path::Path::new(dir).join(name).is_file())
-        })
-        .unwrap_or(false)
-}
-
-/// Шлях до ffmpeg: спочатку системний PATH, потім бандлований бінарник.
+/// Шлях до бандлованого ffmpeg.
 pub fn ffmpeg_path() -> String {
-    if is_in_system_path(FFMPEG_NAME) {
-        return FFMPEG_NAME.to_string();
-    }
     let local = bin_dir().join(FFMPEG_NAME);
     if local.exists() {
         return local.to_string_lossy().into_owned();
@@ -68,12 +55,9 @@ pub fn ffmpeg_path() -> String {
     FFMPEG_NAME.to_string()
 }
 
-/// Шлях до ffprobe: спочатку системний PATH, потім бандлований бінарник.
+/// Шлях до бандлованого ffprobe.
 #[allow(dead_code)]
 pub fn ffprobe_path() -> String {
-    if is_in_system_path(FFPROBE_NAME) {
-        return FFPROBE_NAME.to_string();
-    }
     let local = bin_dir().join(FFPROBE_NAME);
     if local.exists() {
         return local.to_string_lossy().into_owned();

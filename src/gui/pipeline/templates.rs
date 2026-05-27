@@ -57,6 +57,10 @@ pub fn draw_templates_section(
     subtitle_color: &mut [u8; 3],
     subtitle_margin_v: &mut u32,
     subtitle_karaoke: &mut bool,
+    subtitle_karaoke_fill: &mut bool,
+    subtitle_karaoke_highlight_color: &mut [u8; 3],
+    subtitle_karaoke_outline_color: &mut [u8; 3],
+    subtitle_karaoke_bold: &mut bool,
     subtitle_font: &mut String,
     montage_service: &mut String,
     montage_fps: &mut u32,
@@ -155,6 +159,10 @@ pub fn draw_templates_section(
                             *subtitle_color = template.subtitle_color;
                             *subtitle_margin_v = template.subtitle_margin_v;
                             *subtitle_karaoke = template.subtitle_karaoke;
+                            *subtitle_karaoke_fill = template.subtitle_karaoke_fill;
+                            *subtitle_karaoke_highlight_color = template.subtitle_karaoke_highlight_color;
+                            *subtitle_karaoke_outline_color = template.subtitle_karaoke_outline_color;
+                            *subtitle_karaoke_bold = template.subtitle_karaoke_bold;
                             *subtitle_font = template.subtitle_font;
                             *montage_service = template.montage_service;
                             *montage_fps = template.montage_fps;

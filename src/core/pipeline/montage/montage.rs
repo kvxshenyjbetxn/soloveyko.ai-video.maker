@@ -224,15 +224,19 @@ pub fn run_montage(
         "[v_padded]trim=duration={total_dur:.6},setpts=PTS-STARTPTS[v_montage]"
     ));
 
-    // Якщо burn-in субтитрів увімкнено — шукаємо subtitle.ass, потім subtitle.srt як запасний
+    // Якщо burn-in субтитрів увімкнено — шукаємо subtitle.ass, потім subtitle.srt як запасний.
     let video_map = if burn_subtitles {
-        if save_dir.join("subtitle.ass").exists() {
-            filter_parts.push("[v_montage]ass=subtitle.ass[v_with_subs]".to_string());
+        let ass_path = save_dir.join("subtitle.ass");
+        let srt_path = save_dir.join("subtitle.srt");
+        if ass_path.exists() {
+            let path_str = ffmpeg_escape_filter_path(&ass_path.to_string_lossy());
+            filter_parts.push(format!("[v_montage]ass=filename='{}'[v_with_subs]", path_str));
             log_fn("Subtitles burn-in: subtitle.ass embedded.");
             "[v_with_subs]"
-        } else if save_dir.join("subtitle.srt").exists() {
-            filter_parts.push("[v_montage]subtitles=subtitle.srt[v_with_subs]".to_string());
-            log_fn("Subtitles burn-in: subtitle.srt (fallback)");
+        } else if srt_path.exists() {
+            let path_str = ffmpeg_escape_filter_path(&srt_path.to_string_lossy());
+            filter_parts.push(format!("[v_montage]ass=filename='{}'[v_with_subs]", path_str));
+            log_fn("Subtitles burn-in: subtitle.srt (fallback).");
             "[v_with_subs]"
         } else {
             log_fn("Warning: subtitles_enabled=true but no subtitle file found — skipping burn-in.");
@@ -354,6 +358,13 @@ pub fn run_montage(
         .map(|m| m.len())
         .unwrap_or(0);
     Ok(file_size)
+}
+
+/// Екранує шлях для використання всередині FFmpeg filter option у одинарних лапках.
+/// Одинарні лапки в FFmpeg filter syntax захищають вміст (включно з : та пробілами).
+fn ffmpeg_escape_filter_path(path: &str) -> String {
+    // Замінюємо \ на / для сумісності з FFmpeg на всіх платформах
+    path.replace('\\', "/").replace('\'', "'\\''")
 }
 
 /// Повертає назву переходу: конкретну або випадкову з доступних xfade.

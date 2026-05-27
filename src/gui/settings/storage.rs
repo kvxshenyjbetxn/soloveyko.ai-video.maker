@@ -46,6 +46,9 @@ fn default_subtitle_font_size() -> u32 { 24 }
 fn default_subtitle_color() -> [u8; 3] { [255, 255, 255] }
 fn default_subtitle_margin_v() -> u32 { 30 }
 fn default_subtitle_font() -> String { "Arial".to_string() }
+fn default_subtitle_karaoke_fill() -> bool { true }
+fn default_subtitle_karaoke_highlight_color() -> [u8; 3] { [255, 255, 0] }
+fn default_subtitle_karaoke_outline_color() -> [u8; 3] { [0, 0, 0] }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -226,6 +229,18 @@ pub struct AppSettings {
     /// Ефект karaoke: підсвічує слово яке проговорюється (тільки WhisperX/AssemblyAI)
     #[serde(default)]
     pub subtitle_karaoke: bool,
+    /// Стиль karaoke анімації: true = заповнення (\kf), false = миттєвий перехід (\k)
+    #[serde(default = "default_subtitle_karaoke_fill")]
+    pub subtitle_karaoke_fill: bool,
+    /// RGB колір слова що проговорюється (вторинний колір karaoke)
+    #[serde(default = "default_subtitle_karaoke_highlight_color")]
+    pub subtitle_karaoke_highlight_color: [u8; 3],
+    /// RGB колір обводки субтитрів
+    #[serde(default = "default_subtitle_karaoke_outline_color")]
+    pub subtitle_karaoke_outline_color: [u8; 3],
+    /// Жирний текст для karaoke субтитрів
+    #[serde(default)]
+    pub subtitle_karaoke_bold: bool,
     /// Назва шрифту для субтитрів (наприклад "Arial", "Impact")
     #[serde(default = "default_subtitle_font")]
     pub subtitle_font: String,
@@ -327,6 +342,10 @@ impl Default for AppSettings {
             subtitle_color: [255, 255, 255],
             subtitle_margin_v: 30,
             subtitle_karaoke: false,
+            subtitle_karaoke_fill: true,
+            subtitle_karaoke_highlight_color: [255, 255, 0],
+            subtitle_karaoke_outline_color: [0, 0, 0],
+            subtitle_karaoke_bold: false,
             subtitle_font: "Arial".to_string(),
             montage_service: "FFmpeg".to_string(),
             montage_fps: 30,
@@ -551,6 +570,18 @@ pub struct PipelineTemplate {
     /// Ефект karaoke: підсвічує слово яке проговорюється (тільки WhisperX/AssemblyAI)
     #[serde(default)]
     pub subtitle_karaoke: bool,
+    /// Стиль karaoke анімації: true = заповнення (\kf), false = миттєвий перехід (\k)
+    #[serde(default = "default_subtitle_karaoke_fill")]
+    pub subtitle_karaoke_fill: bool,
+    /// RGB колір слова що проговорюється (вторинний колір karaoke)
+    #[serde(default = "default_subtitle_karaoke_highlight_color")]
+    pub subtitle_karaoke_highlight_color: [u8; 3],
+    /// RGB колір обводки субтитрів
+    #[serde(default = "default_subtitle_karaoke_outline_color")]
+    pub subtitle_karaoke_outline_color: [u8; 3],
+    /// Жирний текст для karaoke субтитрів
+    #[serde(default)]
+    pub subtitle_karaoke_bold: bool,
     /// Назва шрифту для субтитрів (наприклад "Arial", "Impact")
     #[serde(default = "default_subtitle_font")]
     pub subtitle_font: String,
@@ -645,6 +676,10 @@ pub fn save_template(
     subtitle_color: [u8; 3],
     subtitle_margin_v: u32,
     subtitle_karaoke: bool,
+    subtitle_karaoke_fill: bool,
+    subtitle_karaoke_highlight_color: [u8; 3],
+    subtitle_karaoke_outline_color: [u8; 3],
+    subtitle_karaoke_bold: bool,
     subtitle_font: &str,
     montage_service: &str,
     montage_fps: u32,
@@ -707,6 +742,10 @@ pub fn save_template(
             subtitle_color,
             subtitle_margin_v,
             subtitle_karaoke,
+            subtitle_karaoke_fill,
+            subtitle_karaoke_highlight_color,
+            subtitle_karaoke_outline_color,
+            subtitle_karaoke_bold,
             subtitle_font: subtitle_font.to_string(),
             montage_service: montage_service.to_string(),
             montage_fps,
