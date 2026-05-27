@@ -329,6 +329,8 @@ pub struct VideoMakerApp {
     pub video_player: Option<crate::gui::gallery::video_player::VideoPlayer>,
     /// Текст промту, який зараз показується у popup-вікні галереї. None = вікно закрите.
     pub gallery_prompt_popup: Option<String>,
+    /// Кешована статистика для текстового редактора сценарію (для оптимізації продуктивності).
+    pub editor_stats: crate::gui::editor::EditorStats,
 }
 
 impl Default for VideoMakerApp {
@@ -490,6 +492,7 @@ impl Default for VideoMakerApp {
             video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_player: None,
             gallery_prompt_popup: None,
+            editor_stats: crate::gui::editor::EditorStats::default(),
         };
 
         crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
@@ -804,6 +807,7 @@ impl VideoMakerApp {
             video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_player: None,
             gallery_prompt_popup: None,
+            editor_stats: crate::gui::editor::EditorStats::default(),
         };
 
         // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
@@ -1145,7 +1149,7 @@ impl eframe::App for VideoMakerApp {
             .show(ctx, |ui| {
                 match self.active_tab {
                     Tab::Main => {
-                        gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit);
+                        gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit, &mut self.editor_stats);
                     }
                     Tab::Gallery => {
                         crate::gui::gallery::draw_gallery_tab(
