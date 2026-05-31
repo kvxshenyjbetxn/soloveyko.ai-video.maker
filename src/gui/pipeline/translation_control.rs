@@ -201,9 +201,11 @@ pub fn draw_translation_control_window(
 
         *control_regen_error = None;
         *loading_arc.lock().unwrap() = true;
+        let save_path_for_regen = job_settings.save_path.clone();
         std::thread::spawn(move || {
             let result = crate::core::llm::call_llm(
                 &service, &key, &model, &prompt, &text, temperature, job_info,
+                Some(save_path_for_regen.as_str()),
             );
             *result_arc.lock().unwrap() = Some(result);
             *loading_arc.lock().unwrap() = false;
@@ -308,9 +310,11 @@ pub fn draw_translation_control_window(
 
             *control_regen_error = None;
             *loading_arc.lock().unwrap() = true;
+            let save_path_ext = job_save_path.clone();
             std::thread::spawn(move || {
                 let result = crate::core::llm::call_llm(
                     &service, &openrouter_key_ext, &model, &prompt, &text_to_translate, temperature, job_info_ext,
+                    Some(save_path_ext.as_str()),
                 );
                 *result_arc.lock().unwrap() = Some(result);
                 *loading_arc.lock().unwrap() = false;

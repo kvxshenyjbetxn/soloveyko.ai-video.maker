@@ -73,6 +73,7 @@ pub fn call_gemini_cli(
     model: &str,
     user_content: &str,
     job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
 ) -> Result<String, String> {
     let _permit = GeminiLimiter::get().acquire();
     let log = |msg: &str| {
@@ -103,6 +104,10 @@ pub fn call_gemini_cli(
         .arg(user_content)
         .arg("--yolo")
         .arg("--skip-trust");
+
+    if let Some(dir) = working_dir {
+        cmd.current_dir(dir);
+    }
 
     log(&format!(
         "Running: gemini --model {} --output-format json --prompt \"[prompt]\" --yolo --skip-trust",

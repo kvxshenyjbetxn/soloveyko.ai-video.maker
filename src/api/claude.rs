@@ -73,6 +73,7 @@ pub fn call_claude_code(
     model: &str,
     user_content: &str,
     job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
 ) -> Result<String, String> {
     let _permit = ClaudeLimiter::get().acquire();
     let log = |msg: &str| {
@@ -98,6 +99,10 @@ pub fn call_claude_code(
         .arg(model)
         .arg("-p")
         .arg(user_content);
+
+    if let Some(dir) = working_dir {
+        cmd.current_dir(dir);
+    }
 
     // Записуємо інформацію про команду у лог
     let debug_command = format!(

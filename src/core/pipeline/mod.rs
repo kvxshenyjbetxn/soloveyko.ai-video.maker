@@ -996,6 +996,7 @@ fn run_video_branch(
             let llm_model        = settings.video_llm_model.clone();
             let video_prompt     = settings.video_prompt.clone();
             let llm_temperature  = settings.video_llm_temperature;
+            let save_path        = settings.save_path.clone();
             let prompts_progress_c = Arc::clone(&prompts_progress);
             let ctx_c            = ctx.clone();
             let job_id_c         = job_id;
@@ -1010,6 +1011,7 @@ fn run_video_branch(
                     &segment,
                     llm_temperature,
                     Some((job_id_c, job_name_c.clone())),
+                    Some(save_path.as_str()),
                 ) {
                     Ok((generated, cost)) => (generated, cost),
                     Err(e) => {
@@ -1213,6 +1215,11 @@ pub fn run_pipeline(
         *status.lock().unwrap() = crate::queue::JobStatus::Running;
         ctx.request_repaint();
 
+        // Гарантуємо існування кінцевої папки з самого початку обробки
+        if let Err(e) = std::fs::create_dir_all(&settings.save_path) {
+            crate::logger::log_job(job_id, &job_name, &format!("Failed to create output dir: {}", e));
+        }
+
         // Текст, який буде передано в озвучку (оригінал або результат перекладу)
         let mut voice_text = settings.text.clone();
 
@@ -1238,6 +1245,7 @@ pub fn run_pipeline(
                 &settings.text,
                 settings.translation_temperature,
                 Some((job_id, job_name.clone())),
+                Some(settings.save_path.as_str()),
             ) {
                 Ok((translated, cost)) => {
                     let dir = std::path::Path::new(&settings.save_path);
