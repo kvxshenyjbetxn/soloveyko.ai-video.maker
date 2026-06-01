@@ -206,6 +206,7 @@ pub fn draw_translation_control_window(
             let result = crate::core::llm::call_llm(
                 &service, &key, &model, &prompt, &text, temperature, job_info,
                 Some(save_path_for_regen.as_str()),
+                false,
             );
             *result_arc.lock().unwrap() = Some(result);
             *loading_arc.lock().unwrap() = false;
@@ -315,6 +316,7 @@ pub fn draw_translation_control_window(
                 let result = crate::core::llm::call_llm(
                     &service, &openrouter_key_ext, &model, &prompt, &text_to_translate, temperature, job_info_ext,
                     Some(save_path_ext.as_str()),
+                    false,
                 );
                 *result_arc.lock().unwrap() = Some(result);
                 *loading_arc.lock().unwrap() = false;

@@ -147,6 +147,8 @@ pub struct VideoMakerApp {
     pub text_split_char_limit: usize,
     /// Промт для генерації зображень відеоряду.
     pub video_prompt: String,
+    /// Системна інструкція агенту для створення timeline.json.
+    pub video_agent_prompt: String,
     /// Сервіс ЛЛМ для генерації промтів відеоряду.
     pub video_llm_service: String,
     /// Активна модель ЛЛМ для відео-промтів.
@@ -400,6 +402,7 @@ impl Default for VideoMakerApp {
             text_split_mode: "paragraphs".to_string(),
             text_split_char_limit: 500,
             video_prompt: String::new(),
+            video_agent_prompt: String::new(),
             video_llm_service: "None".to_string(),
             video_llm_model: String::new(),
             video_llm_model_openrouter: String::new(),
@@ -578,6 +581,7 @@ impl VideoMakerApp {
         let text_split_mode = saved.text_split_mode.clone();
         let text_split_char_limit = saved.text_split_char_limit;
         let video_prompt = saved.video_prompt.clone();
+        let video_agent_prompt = saved.video_agent_prompt.clone();
         let video_llm_service = saved.video_llm_service.clone();
         let mut video_llm_model_openrouter = saved.video_llm_model_openrouter.clone();
         let video_llm_model_claude = saved.video_llm_model_claude.clone();
@@ -715,6 +719,7 @@ impl VideoMakerApp {
             text_split_mode,
             text_split_char_limit,
             video_prompt,
+            video_agent_prompt,
             video_llm_service,
             video_llm_model,
             video_llm_model_openrouter,
@@ -1014,6 +1019,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.text_split_mode,
                         &mut self.text_split_char_limit,
                         &mut self.video_prompt,
+                        &mut self.video_agent_prompt,
                         &mut self.video_llm_service,
                         &mut self.video_llm_model,
                         &mut self.video_llm_model_openrouter,
@@ -1471,6 +1477,7 @@ impl eframe::App for VideoMakerApp {
                 || self.video_service != self.last_saved_settings.video_service
                 || self.video_media_type != self.last_saved_settings.video_media_type
                 || self.video_prompt != self.last_saved_settings.video_prompt
+                || self.video_agent_prompt != self.last_saved_settings.video_agent_prompt
                 || self.video_llm_service != self.last_saved_settings.video_llm_service
                 || self.video_llm_model != self.last_saved_settings.video_llm_model
                 || self.video_llm_model_openrouter != self.last_saved_settings.video_llm_model_openrouter
@@ -1550,6 +1557,7 @@ impl eframe::App for VideoMakerApp {
                     text_split_mode: self.text_split_mode.clone(),
                     text_split_char_limit: self.text_split_char_limit,
                     video_prompt: self.video_prompt.clone(),
+                    video_agent_prompt: self.video_agent_prompt.clone(),
                     video_llm_service: self.video_llm_service.clone(),
                     video_llm_model: self.video_llm_model.clone(),
                     video_llm_model_openrouter: self.video_llm_model_openrouter.clone(),

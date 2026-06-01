@@ -32,6 +32,7 @@ pub fn draw_templates_section(
     text_split_mode: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
+    video_agent_prompt: &mut String,
     video_llm_service: &mut String,
     video_llm_model: &mut String,
     video_llm_model_openrouter: &mut String,
@@ -132,6 +133,7 @@ pub fn draw_templates_section(
                             *text_split_mode = template.text_split_mode;
                             *text_split_char_limit = template.text_split_char_limit;
                             *video_prompt = template.video_prompt;
+                            *video_agent_prompt = template.video_agent_prompt;
                             *video_llm_service = template.video_llm_service.clone();
                             *video_llm_model_openrouter = template.video_llm_model_openrouter.clone();
                             *video_llm_model_claude = if template.video_llm_model_claude.is_empty() { "sonnet".to_string() } else { template.video_llm_model_claude.clone() };

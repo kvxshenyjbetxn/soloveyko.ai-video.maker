@@ -123,6 +123,8 @@ pub fn translate_ru(key: &str) -> &'static str {
         "video_media_type_video" => "Видео",
         "video_prompt_label" => "Промт для видеоряда",
         "video_prompt_hint" => "Введите инструкцию для генерации изображений...",
+        "video_agent_prompt_label" => "Инструкция агента (timeline)",
+        "video_agent_prompt_hint" => "{{srt}} — содержимое subtitle.srt, {{path}} — путь к timeline.json",
         "video_insert_placeholder" => "{{text}}",
         "video_placeholder_hint" => "{{text}} — место куда подставится текст абзаца.",
         "balance_window_title" => "Балансы",

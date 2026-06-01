@@ -35,15 +35,15 @@ src/
 │   ├── voicebot.rs              — fetch_balance (баланс VoiceBot у символах) + VoiceBotLimiter (семафор лімітування запитів, фіксовано 5 потоків)
 │   ├── edgetts.rs               — fetch_voices (завантаження голосів через msedge-tts) + EdgeTTSLimiter (семафор лімітування запитів до Edge TTS) + synthesize (генерація аудіо)
 │   ├── googler.rs               — check_key + fetch_balance (ліміти зображень/відео) + GooglerImageLimiter + GooglerVideoLimiter (локальний підрахунок активних потоків генерації)
-│   ├── claude.rs                — call_claude_code (запуск локального Claude CLI; working_dir: Option<&str> задає CWD процесу — кінцева папка задачі) + ClaudeLimiter (семафор лімітування запитів)
-│   ├── gemini.rs                — call_gemini_cli (запуск локального Gemini CLI; working_dir: Option<&str> задає CWD процесу — кінцева папка задачі) + GeminiLimiter (семафор лімітування запитів)
+│   ├── claude.rs                — call_claude_code (запуск локального Claude CLI; allow_tools: bool додає --allowedTools Bash,Write,Read для агентного режиму; working_dir: Option<&str> задає CWD) + ClaudeLimiter (семафор лімітування запитів)
+│   ├── gemini.rs                — call_gemini_cli (запуск локального Gemini CLI; allow_tools: bool є для сумісності підпису, не змінює поведінку — --yolo вже є; working_dir: Option<&str> задає CWD) + GeminiLimiter (семафор лімітування запитів)
 │   ├── assemblyai.rs            — transcribe (upload → create → poll → SRT), whisperx_words_to_srt (генерація SRT з word-мітками WhisperX), AssemblyAILimiter (семафор, фіксовано 5 потоків), check_key
 │   └── ffmpeg.rs                — FfmpegLimiter (семафор лімітування одночасних процесів FFmpeg, дефолт 2)
 ├── core/
 │   ├── mod.rs                   — реекспорт модулів core
-│   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini); call_openrouter: HTTP запит до OpenRouter Chat completions API з авто-ретраями при порожній відповіді (до 5 спроб); ChatMessageContent.content: Option<String> (null-safe)
+│   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini); allow_tools: bool = true передається тільки з run_agent_timeline щоб дозволити Claude запис файлів; call_openrouter: HTTP запит до OpenRouter Chat completions API з авто-ретраями при порожній відповіді (до 5 спроб); ChatMessageContent.content: Option<String> (null-safe)
 │   └── pipeline/
-│       ├── mod.rs               — run_pipeline: головний потік задачі; після перекладу запускає [Озвучка+Субтитри] та [Відеоряд] паралельно, потім Timeline → Монтаж
+│       ├── mod.rs               — run_pipeline: головний потік задачі; в звичайному режимі запускає [Озвучка+Субтитри] та [Відеоряд] паралельно, в агентному режимі — послідовно (AV → run_agent_timeline → Відеоряд → assign_media_to_timeline) потім Монтаж
 │       ├── voiceover/
 │       │   ├── mod.rs           — реекспорт run_voiceover_sync
 │       │   └── voiceover.rs     — run_voiceover_sync: TTS через VoiceBot API або Microsoft Edge TTS (з розбиттям на чанки, паралельною обробкою та FFmpeg/Direct Binary склеюванням)
@@ -81,7 +81,7 @@ src/
 │   │   ├── translation.rs       — секція перекладу (промт, вибір моделі OpenRouter, температура)
 │   │   ├── translation_control.rs — draw_translation_control_window: вікно контролю перекладу + розширена перегенерація
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
-│   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт)
+│   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт); при виборі Claude Code / Gemini CLI показується додаткове поле video_agent_prompt з кнопками вставки {{srt}} та {{path}}
 │   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI, мова, модель, стиль: шрифт/колір/розмір/відступ/karaoke, вибір шрифту з popup-прев'ю, завантаження ggml-моделі для Whisper, ключ AssemblyAI)
 │   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами)
 │   └── settings/
@@ -223,7 +223,7 @@ src/
 
 #### Переклад
 
-- **`call_llm`** (`src/core/llm.rs`) — єдина точка виклику будь-якого LLM-сервісу. Будує `user_content` з промту + тексту (підстановка `{{text}}`), диспетчеризує на відповідний сервіс (`Claude Code` → `call_claude_code`, `Gemini CLI` → `call_gemini_cli`, інше → `call_openrouter`). Приймає `working_dir: Option<&str>`: для CLI-агентів передається `Some(&settings.save_path)`, щоб агент запускався відносно кінцевої папки задачі; для OpenRouter ігнорується. Повертає `Result<(String, Option<f64>), String>` — текст та вартість (вартість заповнюється тільки для OpenRouter). Використовується і для перекладу, і для генерації відеопромтів.
+- **`call_llm`** (`src/core/llm.rs`) — єдина точка виклику будь-якого LLM-сервісу. Будує `user_content` з промту + тексту (підстановка `{{text}}`), диспетчеризує на відповідний сервіс (`Claude Code` → `call_claude_code`, `Gemini CLI` → `call_gemini_cli`, інше → `call_openrouter`). Приймає `working_dir: Option<&str>`: для CLI-агентів передається `Some(&settings.save_path)`, щоб агент запускався відносно кінцевої папки задачі; для OpenRouter ігнорується. **`allow_tools: bool`** — передається `true` лише з `run_agent_timeline`; при `true` для Claude Code додається `--allowedTools Bash,Write,Read`, що дозволяє агенту записувати файли (без цього `-p` mode блокує інструменти). Для Gemini CLI параметр ігнорується — `--yolo` вже дозволяє всі інструменти. Повертає `Result<(String, Option<f64>), String>` — текст та вартість (вартість заповнюється тільки для OpenRouter). Використовується і для перекладу, і для генерації відеопромтів, і для агентного таймлайну.
 - **`call_openrouter`** (`src/core/llm.rs`) — HTTP виклик до OpenRouter Chat completions API з авто-ретраями. До 5 спроб: якщо відповідь порожня (`content: null` або `""`) — повторює без паузи, логуючи `finish_reason` кожної невдалої спроби. Якщо всі 5 спроб порожні — повертає `Err`. Лімітується через `OpenRouterLimiter::get().acquire()` перед кожною спробою. Повертає текст та `usage.cost`.
 - **Плейсхолдер `{{text}}`:** якщо промт містить `{{text}}` — текст підставляється на місце. Якщо промт є але без плейсхолдера — текст додається після промту через `\n\n`. Якщо промт порожній — надсилається тільки текст. Та сама логіка для перекладу і для відеопромтів.
 - При успіху зберігає результат у `{save_path}/text.txt`. Цей же текст передається в озвучку якщо вона увімкнена.
@@ -294,6 +294,39 @@ src/
 
 #### Відеоряд (`timeline/`)
 
+**Агентний режим (Claude Code / Gemini CLI як LLM-сервіс відеоряду):**
+
+Якщо у секції Відеоряд обрано `Claude Code` або `Gemini CLI`, пайплайн перемикається в агентний режим:
+
+1. **Послідовне виконання:** AV-гілка (Озвучка → Субтитри) виконується першою до кінця, щоб гарантувати наявність `subtitle.srt` до запуску агента.
+2. **`run_agent_timeline`** — читає `subtitle.srt`, підставляє вміст у `{{srt}}` і повний шлях до `timeline.json` у `{{path}}` з `video_agent_prompt`, викликає CLI через `call_llm` з `allow_tools=true` (щоб Claude міг писати файли через `--allowedTools Bash,Write,Read`). Перевіряє що агент справді створив валідний JSON.
+3. **`run_video_branch`** — зчитує сегменти вже зі створеного агентом `timeline.json` (поле `text`) і генерує медіа на їх основі. LLM-генерація промтів пропускається (уже є текст-опис від агента).
+4. **`assign_media_to_timeline`** — після генерації всіх медіафайлів заповнює поле `media` в `timeline.json` реальними шляхами (пропорційний розподіл STRETCH/SPLIT/NORMAL як у `build_timeline`).
+
+**Структура `timeline.json` що генерує агент:**
+```json
+{
+  "total_duration_secs": 45.2,
+  "segments": [
+    {
+      "index": 0,
+      "text": "short visual scene description for image generation",
+      "start_secs": 0.0,
+      "end_secs": 4.5,
+      "duration_secs": 4.5,
+      "confidence": 1.0,
+      "media": null
+    }
+  ]
+}
+```
+`media: null` обов'язкове — програма заповнює після генерації. `text` — опис для Googler, не транскрипція.
+
+**Null-сегменти в `timeline.json` (звичайний і агентний режим):**
+Якщо агент залишає `media: null` на певному сегменті (навмисна пауза), монтаж поглинає цей проміжок у сусідні кліпи зберігаючи синхронізацію з аудіо:
+- null після кліпу → попередній кліп подовжується ("hold last frame")
+- null перед першим кліпом → перший кліп поглинає початковий gap
+
 #### Синхронізація медіа і таймлайн (`timeline/sync.rs`)
 
 **`build_timeline`** (`timeline/sync.rs`) — прив'язує медіафайли з `media/` до часових відрізків з `subtitle.srt`. Результат: `timeline.json` та `sync_debug.txt` (для відлагодження).
@@ -318,8 +351,8 @@ src/
 
 **Логіка:**
 1. Знаходить аудіофайл: спочатку `voice.wav`, потім `voice.mp3`.
-2. Читає `timeline.json` → будує вектор `Clip { file, start_ms, end_ms }`.
-3. **Fallback:** якщо `timeline.json` відсутній — бере всі файли з `media/` і рівномірно розподіляє тривалість (`audio_duration_hint / n_files`).
+2. Читає `timeline.json` → будує вектор `Clip { path, duration, is_video }`. Сегменти з `media: null` **не пропускаються**, а поглинаються у сусідні кліпи: null після кліпу → подовжує попередній (hold last frame); null до першого кліпу → додається до першого. Це гарантує що синхронізація не ламається при навмисних паузах від агента.
+3. **Fallback:** якщо `timeline.json` відсутній або не містить медіа — бере всі файли з `media/` і рівномірно розподіляє тривалість (`audio_duration_hint / n_files`).
 4. Будує **filter graph** для кожного кліпу:
    - **Зображення (jpg/png/webp/gif):** `scale+crop → zoompan` (ефект плавного наближення/відведення). Тривалість — `d=<кількість_кадрів>` відповідно до часового відрізку та `fps`.
    - **Відео (mp4/webm/mov):** `trim → scale+crop → fps` (обрізає до потрібної тривалості).
@@ -639,6 +672,12 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`template_uuid` для VoiceBot опціональний.** Якщо він порожній — задача TTS створюється без `template_uuid`. Валідація перед запуском вимагає лише `voicebot_key`.
 
 - **Діалог назви задачі** (`egui::Window`) рендериться всередині `draw_pipeline_panel`. Авто-назва ("Задача N") рахує `jobs.len()` на момент натискання "Додати".
+
+- **Агентний режим змінює порядок виконання пайплайну.** В звичайному режимі AV-гілка і відеогілка виконуються **паралельно**. В агентному (Claude Code / Gemini CLI у відеоряді) — **послідовно**: спочатку AV-гілка до кінця (щоб отримати `subtitle.srt`), потім агент будує `timeline.json`, потім генерується медіа, потім `assign_media_to_timeline` прописує шляхи у `timeline.json`. Лише після цього запускається Монтаж. Це означає що відеоряд в агентному режимі виконується помітно довше через відсутність паралельності.
+
+- **`--allowedTools Bash,Write,Read` для Claude Code в агентному режимі.** Claude CLI при виклику з `-p` (print mode) за замовчуванням **не має доступу до інструментів** — він лише виводить текст. Без `--allowedTools` агент поверне JSON у відповідь, але не запише файл, і `run_agent_timeline` впаде з "Agent did not create timeline.json". Тому `call_claude_code` приймає `allow_tools: bool` і при `true` додає `--allowedTools Bash,Write,Read` до команди. Для Gemini CLI аналогічна проблема не існує — `--yolo` дозволяє всі інструменти, файл пишеться як side-effect tool call, відповідь у JSON парситься окремо.
+
+- **`video_agent_prompt` і `video_prompt` — два незалежних поля.** `video_prompt` — промт для Googler (генерація медіа), завжди відображається. `video_agent_prompt` — інструкція для CLI-агента (будує timeline.json), відображається лише при Claude Code / Gemini CLI. Зберігаються окремо в `AppSettings`, `PipelineTemplate`, `JobSettings`. `{{srt}}` замінюється на вміст `subtitle.srt`, `{{path}}` — на абсолютний шлях до `timeline.json` у папці задачі.
 
 - **Виклик Claude CLI (`claude`) та Gemini CLI (`gemini`)**:
   Індивідуальні моделі для CLI зберігаються та валідуються окремо. При виклику Gemini CLI критично важливим є використання прапорців `--output-format json` (для отримання чистої відповіді без ANSI та службових рядків), `--yolo` (неінтерактивність) та `--skip-trust` (довіра воркспейсу). На Windows виклики проксуються через `cmd /C`.

@@ -119,6 +119,7 @@ pub fn draw_video_section(
     video_llm_model_claude: &mut String,
     video_llm_model_gemini: &mut String,
     video_llm_temperature: &mut f32,
+    video_agent_prompt: &mut String,
     video_llm_model_search: &mut String,
     openrouter_models: &Arc<Mutex<Option<Result<Vec<crate::gui::pipeline::translation::OpenRouterModel>, String>>>>,
     openrouter_models_loading: &Arc<Mutex<bool>>,
@@ -264,6 +265,64 @@ pub fn draw_video_section(
                 .weak()
                 .size(11.0)
         );
+
+        // Поле інструкції агенту — лише при Claude Code або Gemini CLI
+        let is_agent_mode = video_llm_service == "Claude Code" || video_llm_service == "Gemini CLI";
+        if is_agent_mode {
+            ui.add_space(8.0);
+            ui.label(egui::RichText::new(translate(language, "video_agent_prompt_label")).strong());
+            ui.add_space(4.0);
+            let agent_available_width = ui.available_width();
+            let agent_te_resp = egui::ScrollArea::vertical()
+                .max_height(60.0)
+                .id_salt("video_agent_prompt_scroll")
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::multiline(video_agent_prompt)
+                            .desired_width(agent_available_width)
+                            .hint_text(translate(language, "video_agent_prompt_hint")),
+                    )
+                })
+                .inner;
+
+            ui.add_space(4.0);
+
+            // Кнопки вставки плейсхолдерів
+            ui.horizontal(|ui| {
+                for to_insert in &["{{srt}}", "{{path}}"] {
+                    if ui.button(*to_insert).clicked() {
+                        let te_id = agent_te_resp.id;
+                        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), te_id) {
+                            if let Some(cursor_range) = state.cursor.char_range() {
+                                let cursor_idx = cursor_range.primary.index;
+                                let byte_idx = video_agent_prompt
+                                    .char_indices()
+                                    .map(|(b, _)| b)
+                                    .nth(cursor_idx)
+                                    .unwrap_or(video_agent_prompt.len());
+                                video_agent_prompt.insert_str(byte_idx, to_insert);
+                                let new_char_idx = cursor_idx + to_insert.chars().count();
+                                let new_cursor = egui::text::CCursor::new(new_char_idx);
+                                state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor)));
+                                state.store(ui.ctx(), te_id);
+                            } else {
+                                video_agent_prompt.push_str(to_insert);
+                            }
+                        } else {
+                            video_agent_prompt.push_str(to_insert);
+                        }
+                        agent_te_resp.request_focus();
+                    }
+                }
+            });
+
+            ui.add_space(2.0);
+            ui.label(
+                egui::RichText::new(translate(language, "video_agent_prompt_hint"))
+                    .weak()
+                    .size(11.0)
+            );
+        }
 
         // Розгорнуте вікно редагування промту
         if expand_open {

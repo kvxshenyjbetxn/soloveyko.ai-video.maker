@@ -197,6 +197,9 @@ pub struct AppSettings {
     /// Промт для генерації зображень відеоряду
     #[serde(default)]
     pub video_prompt: String,
+    /// Системна інструкція агенту для створення timeline.json (лише для Claude Code / Gemini CLI)
+    #[serde(default)]
+    pub video_agent_prompt: String,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -341,6 +344,7 @@ impl Default for AppSettings {
             googler_video_max_threads: 5,
             voiceover_convert_to_wav: false,
             video_prompt: String::new(),
+            video_agent_prompt: String::new(),
             googler_image_priority: default_image_priority(),
             googler_video_priority: default_video_priority(),
             video_media_type: "image".to_string(),
@@ -556,6 +560,9 @@ pub struct PipelineTemplate {
     /// Промт для генерації зображень відеоряду
     #[serde(default)]
     pub video_prompt: String,
+    /// Системна інструкція агенту для створення timeline.json (лише для Claude Code / Gemini CLI)
+    #[serde(default)]
+    pub video_agent_prompt: String,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -687,6 +694,7 @@ pub fn save_template(
     googler_video_max_threads: usize,
     voiceover_convert_to_wav: bool,
     video_prompt: &str,
+    video_agent_prompt: &str,
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
     video_media_type: &str,
@@ -756,6 +764,7 @@ pub fn save_template(
             googler_video_max_threads,
             voiceover_convert_to_wav,
             video_prompt: video_prompt.to_string(),
+            video_agent_prompt: video_agent_prompt.to_string(),
             googler_image_priority,
             googler_video_priority,
             video_media_type: video_media_type.to_string(),

@@ -68,12 +68,14 @@ impl<'a> Drop for GeminiPermit<'a> {
 
 /// Викликає Gemini CLI для виконання перекладу сценарію або іншого тексту та повертає результат.
 ///
-/// Використовує прапорці `--model`, `--prompt`, `--yolo` та `--skip-trust` для отримання результату від Gemini CLI.
+/// `allow_tools` — для сумісності з `call_claude_code`; Gemini завжди має `--yolo`, тому параметр
+/// не змінює поведінку, але дозволяє уніфікований виклик через `call_llm`.
 pub fn call_gemini_cli(
     model: &str,
     user_content: &str,
     job_info: Option<(u64, String)>,
     working_dir: Option<&str>,
+    _allow_tools: bool,
 ) -> Result<String, String> {
     let _permit = GeminiLimiter::get().acquire();
     let log = |msg: &str| {

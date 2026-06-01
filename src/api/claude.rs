@@ -68,12 +68,14 @@ impl<'a> Drop for ClaudePermit<'a> {
 
 /// Викликає Claude CLI для виконання перекладу сценарію або іншого тексту та повертає результат.
 ///
-/// Використовує прапорці `--model` та `-p` для отримання результату від Claude Code.
+/// При `allow_tools = true` додає `--allowedTools Bash,Write,Read` — потрібно для агентного режиму,
+/// де Claude має записувати файли на диск.
 pub fn call_claude_code(
     model: &str,
     user_content: &str,
     job_info: Option<(u64, String)>,
     working_dir: Option<&str>,
+    allow_tools: bool,
 ) -> Result<String, String> {
     let _permit = ClaudeLimiter::get().acquire();
     let log = |msg: &str| {
@@ -94,11 +96,15 @@ pub fn call_claude_code(
     #[cfg(not(target_os = "windows"))]
     let mut cmd = Command::new("claude");
 
-    // Запускаємо: claude --model <model> -p "<prompt>"
+    // Запускаємо: claude --model <model> -p "<prompt>" [--allowedTools Bash,Write,Read]
     cmd.arg("--model")
         .arg(model)
         .arg("-p")
         .arg(user_content);
+
+    if allow_tools {
+        cmd.arg("--allowedTools").arg("Bash,Write,Read");
+    }
 
     if let Some(dir) = working_dir {
         cmd.current_dir(dir);

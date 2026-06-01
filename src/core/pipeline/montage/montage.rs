@@ -74,14 +74,23 @@ pub fn run_montage(
         if let Ok(content) = std::fs::read_to_string(&timeline_path) {
             if let Ok(tl) = serde_json::from_str::<Timeline>(&content) {
                 total_dur = tl.total_duration_secs;
+                // null-сегменти поглинаються в сусідні кліпи щоб зберегти синхронізацію:
+                // null після кліпу → подовжуємо попередній (hold last frame);
+                // null перед першим кліпом → додаємо до першого кліпу коли він з'явиться.
+                let mut pending_gap = 0.0f64;
                 for seg in &tl.segments {
+                    let dur = (seg.end_secs - seg.start_secs).max(0.05);
                     if let Some(ref media) = seg.media {
-                        let dur = (seg.end_secs - seg.start_secs).max(0.05);
                         clips.push(Clip {
                             path: media.clone(),
-                            duration: dur,
+                            duration: dur + pending_gap,
                             is_video: is_video_ext(media),
                         });
+                        pending_gap = 0.0;
+                    } else if !clips.is_empty() {
+                        clips.last_mut().unwrap().duration += dur;
+                    } else {
+                        pending_gap += dur;
                     }
                 }
             }
