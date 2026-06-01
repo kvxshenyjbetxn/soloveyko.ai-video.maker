@@ -66,6 +66,128 @@ impl<'a> Drop for GeminiPermit<'a> {
     }
 }
 
+/// Викликає Gemini CLI з новою сесією (--session-id) для агентного контролю.
+pub fn call_gemini_new_session(
+    model: &str,
+    user_content: &str,
+    session_id: &str,
+    job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
+) -> Result<String, String> {
+    let _permit = GeminiLimiter::get().acquire();
+    let log = |msg: &str| {
+        if let Some((id, ref name)) = job_info {
+            crate::logger::log_job(id, name, msg);
+        } else {
+            crate::logger::log(msg);
+        }
+    };
+
+    log(&format!("Starting Gemini CLI agent session. Model: {}, session: {}", model, session_id));
+
+    #[cfg(target_os = "windows")]
+    let mut cmd = Command::new("cmd");
+    #[cfg(target_os = "windows")]
+    cmd.args(&["/C", "gemini"]);
+
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = Command::new("gemini");
+
+    cmd.arg("--model").arg(model)
+        .arg("--output-format").arg("json")
+        .arg("--prompt").arg(user_content)
+        .arg("--yolo")
+        .arg("--skip-trust")
+        .arg("--session-id").arg(session_id);
+
+    if let Some(dir) = working_dir {
+        cmd.current_dir(dir);
+    }
+
+    log(&format!("Running: gemini --model {} --prompt \"[prompt]\" --yolo --session-id {}", model, session_id));
+
+    let output = cmd.output().map_err(|e| {
+        format!("Failed to launch gemini CLI: {}", e)
+    })?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let response = parse_gemini_json_response(&stdout)
+            .ok_or_else(|| "Gemini CLI: failed to parse JSON response".to_string())?;
+        log("Gemini CLI agent session completed successfully.");
+        Ok(response)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let err_msg = format!(
+            "Gemini CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
+            output.status.code(), stderr, stdout
+        );
+        log(&err_msg);
+        Err(format!("Gemini CLI error: {}", stderr))
+    }
+}
+
+/// Продовжує існуючу сесію Gemini CLI (--resume) та повертає відповідь.
+pub fn call_gemini_resume(
+    model: &str,
+    message: &str,
+    session_id: &str,
+    job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
+) -> Result<String, String> {
+    let _permit = GeminiLimiter::get().acquire();
+    let log = |msg: &str| {
+        if let Some((id, ref name)) = job_info {
+            crate::logger::log_job(id, name, msg);
+        } else {
+            crate::logger::log(msg);
+        }
+    };
+
+    log(&format!("Resuming Gemini CLI session: {}", session_id));
+
+    #[cfg(target_os = "windows")]
+    let mut cmd = Command::new("cmd");
+    #[cfg(target_os = "windows")]
+    cmd.args(&["/C", "gemini"]);
+
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = Command::new("gemini");
+
+    cmd.arg("--model").arg(model)
+        .arg("--output-format").arg("json")
+        .arg("--prompt").arg(message)
+        .arg("--yolo")
+        .arg("--skip-trust")
+        .arg("--resume").arg(session_id);
+
+    if let Some(dir) = working_dir {
+        cmd.current_dir(dir);
+    }
+
+    let output = cmd.output().map_err(|e| {
+        format!("Failed to launch gemini CLI: {}", e)
+    })?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let response = parse_gemini_json_response(&stdout)
+            .ok_or_else(|| "Gemini CLI: failed to parse JSON response".to_string())?;
+        log("Gemini CLI resume completed.");
+        Ok(response)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let err_msg = format!(
+            "Gemini CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
+            output.status.code(), stderr, stdout
+        );
+        log(&err_msg);
+        Err(format!("Gemini CLI error: {}", stderr))
+    }
+}
+
 /// Викликає Gemini CLI для виконання перекладу сценарію або іншого тексту та повертає результат.
 ///
 /// `allow_tools` — для сумісності з `call_claude_code`; Gemini завжди має `--yolo`, тому параметр

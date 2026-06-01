@@ -35,15 +35,15 @@ src/
 │   ├── voicebot.rs              — fetch_balance (баланс VoiceBot у символах) + VoiceBotLimiter (семафор лімітування запитів, фіксовано 5 потоків)
 │   ├── edgetts.rs               — fetch_voices (завантаження голосів через msedge-tts) + EdgeTTSLimiter (семафор лімітування запитів до Edge TTS) + synthesize (генерація аудіо)
 │   ├── googler.rs               — check_key + fetch_balance (ліміти зображень/відео) + GooglerImageLimiter + GooglerVideoLimiter (локальний підрахунок активних потоків генерації)
-│   ├── claude.rs                — call_claude_code (запуск локального Claude CLI; allow_tools: bool додає --allowedTools Bash,Write,Read для агентного режиму; working_dir: Option<&str> задає CWD) + ClaudeLimiter (семафор лімітування запитів)
-│   ├── gemini.rs                — call_gemini_cli (запуск локального Gemini CLI; allow_tools: bool є для сумісності підпису, не змінює поведінку — --yolo вже є; working_dir: Option<&str> задає CWD) + GeminiLimiter (семафор лімітування запитів)
+│   ├── claude.rs                — call_claude_code (звичайний виклик CLI; allow_tools: bool) + call_claude_code_new_session (--session-id, для першого запуску агента з контролем) + call_claude_code_resume (--resume, для продовження чату) + ClaudeLimiter (семафор)
+│   ├── gemini.rs                — call_gemini_cli (звичайний виклик CLI; --yolo) + call_gemini_new_session (--session-id) + call_gemini_resume (--resume) + GeminiLimiter (семафор)
 │   ├── assemblyai.rs            — transcribe (upload → create → poll → SRT), whisperx_words_to_srt (генерація SRT з word-мітками WhisperX), AssemblyAILimiter (семафор, фіксовано 5 потоків), check_key
 │   └── ffmpeg.rs                — FfmpegLimiter (семафор лімітування одночасних процесів FFmpeg, дефолт 2)
 ├── core/
 │   ├── mod.rs                   — реекспорт модулів core
 │   ├── llm.rs                   — call_llm: єдина точка виклику будь-якого LLM (OpenRouter/Claude/Gemini); allow_tools: bool = true передається тільки з run_agent_timeline щоб дозволити Claude запис файлів; call_openrouter: HTTP запит до OpenRouter Chat completions API з авто-ретраями при порожній відповіді (до 5 спроб); ChatMessageContent.content: Option<String> (null-safe)
 │   └── pipeline/
-│       ├── mod.rs               — run_pipeline: головний потік задачі; в звичайному режимі запускає [Озвучка+Субтитри] та [Відеоряд] паралельно, в агентному режимі — послідовно (AV → run_agent_timeline → Відеоряд → assign_media_to_timeline) потім Монтаж
+│       ├── mod.rs               — run_pipeline: головний потік задачі; в звичайному режимі запускає [Озвучка+Субтитри] та [Відеоряд] паралельно, в агентному режимі — послідовно (AV → run_agent_timeline → Відеоряд → assign_media_to_timeline) потім Монтаж; call_agent_new_session / call_agent_resume — публічні хелпери для виклику агента з сесією
 │       ├── voiceover/
 │       │   ├── mod.rs           — реекспорт run_voiceover_sync
 │       │   └── voiceover.rs     — run_voiceover_sync: TTS через VoiceBot API або Microsoft Edge TTS (з розбиттям на чанки, паралельною обробкою та FFmpeg/Direct Binary склеюванням)
@@ -57,6 +57,7 @@ src/
 │           └── sync.rs          — build_timeline: прив'язка медіафайлів до часових відрізків SRT (Levenshtein fuzzy match)
 ├── gui/
 │   ├── mod.rs                   — реекспорт субмодулів
+│   ├── agent_chat_window.rs     — draw_agent_chat_window: вікно чату з агентом (история повідомлень, введення, відправка через --resume, кнопка "Продовжити пайплайн")
 │   ├── topbar/
 │   │   ├── mod.rs               — draw_navigation_bar, draw_status_bar, draw_chip, draw_balance_chip, thread_load_color
 │   │   └── balance.rs           — draw_balance_window, draw_threads_window: вікна балансів і лімітів потоків
@@ -75,7 +76,7 @@ src/
 │   ├── pipeline/
 │   │   ├── mod.rs               — draw_pipeline_panel: головна функція панелі + toggle_switch + validate_and_enqueue
 │   │   ├── api.rs               — секція АПІ-ключів (OpenRouter, VoiceBot, Googler)
-│   │   ├── control.rs           — секція "Контроль" (перемикач контролю перекладу + чекбокс авто-відкриття + перемикач контролю зображень)
+│   │   ├── control.rs           — секція "Контроль" (перемикач контролю перекладу + чекбокс авто-відкриття + перемикач контролю зображень + перемикач контролю агента)
 │   │   ├── templates.rs         — секція списку збережених шаблонів (завантаження/видалення)
 │   │   ├── storage.rs           — секція "Шлях збереження" (два поля macOS/Windows + draw_path_row)
 │   │   ├── translation.rs       — секція перекладу (промт, вибір моделі OpenRouter, температура)
@@ -166,9 +167,13 @@ src/
 ### Черга задач (`src/queue.rs`)
 
 - **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`, `montage_transition`, `montage_transition_duration`.
-- **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) / AwaitingMediaControl (пауза для перегляду зображень) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку.
+- **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) / AwaitingMediaControl (пауза для перегляду зображень) / AwaitingAgentControl (пауза для чату з агентом) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку. `AwaitingAgentControl` відображається синім кольором у картці задачі.
 - **`media_control_enabled: bool`** у `JobSettings` — знімок стану перемикача «Контроль зображень» на момент додавання задачі в чергу. Якщо `false` — пайплайн не зупиняється після відеоряду.
-- **`media_control_resume: Arc<(Mutex<bool>, Condvar)>`** у `PipelineJob` — примітив для відновлення пайплайну. Пайплайн блокується на `cvar.wait()`, UI сигналізує `*lock = true; cvar.notify_one()`. Ініціалізується при створенні задачі незалежно від `media_control_enabled`.
+- **`agent_control_enabled: bool`** у `JobSettings` — знімок стану перемикача «Контроль агента» (секція Контроль). Якщо `true` — після успішного створення `timeline.json` агентом пайплайн призупиняється та відкриває можливість чату. Зберігається у `AppSettings` та `PipelineTemplate`.
+- **`media_control_resume: Arc<(Mutex<bool>, Condvar)>`** у `PipelineJob` — примітив для відновлення пайплайну після перегляду зображень.
+- **`agent_control_resume: Arc<(Mutex<bool>, Condvar)>`** у `PipelineJob` — аналогічний примітив для відновлення після чату з агентом. UI сигналізує через кнопку «Продовжити пайплайн» у вікні чату.
+- **`agent_chat: Arc<Mutex<Vec<AgentChatMessage>>>`** — история повідомлень чату з агентом для поточної задачі. Зберігається також у `agent_chat.json` у папці задачі.
+- **`agent_session: Arc<Mutex<Option<AgentSessionInfo>>>`** — активна сесія агента (`session_id`, `service`, `model`). Заповнюється після першого виклику агента з `agent_control_enabled = true`. `None` означає що сесія ще не стартувала або агентний режим без контролю.
 - **`translated_text` та `total_cost`** — додаткові потокобезпечні поля в `PipelineJob`. `translated_text` кешує результат перекладу. `total_cost: Arc<Mutex<Option<f64>>>` накопичує **всі** LLM-витрати задачі (переклад + відеопромти) — значення додається, а не замінюється, тому перегенерації у вікні контролю та паралельні виклики промтів коректно підсумовуються. Скидається в `None` лише при повному retry з Translation-етапу.
 - **`audio_duration: Arc<Mutex<Option<f64>>>`** — тривалість аудіофайлу в секундах, заповнюється після успішного завершення озвучки. `None` до завершення або якщо не вдалось визначити.
 - **`media_progress: Arc<Mutex<Option<(usize, usize)>>>`** — гранулярний лічильник генерації медіа: `(завершено, загалом)`. `None` поки кількість сегментів невідома (до нарізки тексту). Заповнюється на початку відеоряду після `split_text`, інкрементується кожним робочим потоком після збереження файлу. Використовується для точного відображення прогресу як у прогресбарі задачі, так і у мітці відеоряду (`Відеоряд (3/10)`). Значення `(done, total)` зберігається і після завершення (`Done`) — картка показує фінальний лічильник `(10/10)`.
@@ -299,7 +304,7 @@ src/
 Якщо у секції Відеоряд обрано `Claude Code` або `Gemini CLI`, пайплайн перемикається в агентний режим:
 
 1. **Послідовне виконання:** AV-гілка (Озвучка → Субтитри) виконується першою до кінця, щоб гарантувати наявність `subtitle.srt` до запуску агента.
-2. **`run_agent_timeline`** — читає `subtitle.srt`, підставляє вміст у `{{srt}}` і повний шлях до `timeline.json` у `{{path}}` з `video_agent_prompt`, викликає CLI через `call_llm` з `allow_tools=true` (щоб Claude міг писати файли через `--allowedTools Bash,Write,Read`). Перевіряє що агент справді створив валідний JSON.
+2. **`run_agent_timeline`** — читає `subtitle.srt`, підставляє вміст у `{{srt}}` і шлях до `timeline.json` у `{{path}}`. Якщо `agent_control_enabled = false` — звичайний `call_llm` з `allow_tools=true`. Якщо `true` — генерує `uuid_v4()`, запускає `call_agent_new_session` (з `--session-id <uuid>`), зберігає `AgentSessionInfo` і першу відповідь у `agent_chat`, записує `agent_chat.json`, потім переводить задачу в `AwaitingAgentControl` і блокується на `Condvar::wait()`. Після сигналу від UI — продовжує.
 3. **`run_video_branch`** — зчитує сегменти вже зі створеного агентом `timeline.json` (поле `text`) і генерує медіа на їх основі. LLM-генерація промтів пропускається (уже є текст-опис від агента).
 4. **`assign_media_to_timeline`** — після генерації всіх медіафайлів заповнює поле `media` в `timeline.json` реальними шляхами (пропорційний розподіл STRETCH/SPLIT/NORMAL як у `build_timeline`).
 
@@ -321,6 +326,21 @@ src/
 }
 ```
 `media: null` обов'язкове — програма заповнює після генерації. `text` — опис для Googler, не транскрипція.
+
+**Контроль агента (`agent_control_enabled`):**
+
+Якщо у секції «Контроль» увімкнено «Контроль агента», після успішного створення `timeline.json` пайплайн не продовжується автоматично. Замість цього:
+
+1. Програма генерує UUID сесії (`uuid_v4`), запускає агента з `--session-id <uuid>`, зберігає `session_id` у `AgentSessionInfo` і першу відповідь агента в `agent_chat`.
+2. Задача переходить у статус `AwaitingAgentControl` (синій у картці).
+3. При кліку по картці відкривається вікно **«Чат з агентом»** (`draw_agent_chat_window`):
+   - Показує историю повідомлень (роль "user" / "Agent", різні кольори).
+   - Поле введення: **Enter** відправляє, **Shift+Enter** — новий рядок.
+   - Кнопка «Надіслати» викликає `call_agent_resume` (`--resume <session_id>`) у фоні, відповідь додається в историю і в `agent_chat.json`.
+   - Кнопка «Продовжити пайплайн» сигналізує condvar → пайплайн відновлюється з актуальним `timeline.json`.
+4. Якщо під час чату агент скоригував `timeline.json` — монтаж використає вже нову версію.
+
+Сесія зберігається у `{task_dir}/agent_chat.json` (JSON масив `{role, content}`). При закритті вікна без кнопки «Продовжити» пайплайн продовжує чекати.
 
 **Null-сегменти в `timeline.json` (звичайний і агентний режим):**
 Якщо агент залишає `media: null` на певному сегменті (навмисна пауза), монтаж поглинає цей проміжок у сусідні кліпи зберігаючи синхронізацію з аудіо:
@@ -688,6 +708,12 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **Обмеження обсягу логу:** Глобальний логер тримає в пам'яті не більше 1000 записів, автоматично очищаючи старі для оптимізації споживання ОЗП.
 
 - **Фонова валідація CLI-інструментів через `pending_tool_check`:** логіка відстежує зміну `translation_service` під час кожного `update()` та неблокуюче запускає перевірки `gemini`, `claude`. npm більше не перевіряється тут — Gemini залежить лише від самого `gemini` CLI (встановлюється через brew на macOS).
+
+- **Контроль агента використовує `--session-id` / `--resume`, а не `call_llm`.** Для режиму чату потрібно зберегти session_id між викликами. `call_llm` цього не підтримує (один stateless виклик). Тому `run_agent_timeline` при `agent_control_enabled=true` безпосередньо викликає `call_agent_new_session` (перший виклик з `--session-id <uuid>`) і `call_agent_resume` (продовження через `--resume <uuid>`). Ці функції публічні у `crate::core::pipeline` щоб вікно чату могло викликати resume без доступу до внутрішніх деталей CLI.
+
+- **UUID агентної сесії генерується в Rust, не береться від CLI.** `uuid_v4()` у `mod.rs` — власна проста реалізація на основі `SystemTime` + `process::id()`. Передається через `--session-id <uuid>` щоб програма точно знала ID ще до запуску CLI. Альтернатива — парсити JSON-вивід `claude --output-format json` — складніша і потребує зміни формату виводу (що ламає звичайні виклики).
+
+- **`agent_chat_loading` і `agent_chat_result` — глобальні в `App`, не в `PipelineJob`.** История чату (`agent_chat`) і сесія (`agent_session`) живуть у `PipelineJob` (прив'язані до задачі). Натомість UI-стан відправки — `agent_chat_loading: Arc<Mutex<bool>>` та `agent_chat_result: Arc<Mutex<Option<...>>>` — живуть у `VideoMakerApp`. Це означає що одночасно може виконуватись тільки один запит до агента з будь-якого відкритого вікна чату. На практиці вікно відкривається для однієї задачі і не конкурує з іншими.
 
 - **Зворотна сумісність параметрів Edge TTS (`clean_numeric_param`):** Для забезпечення сумісності зі старими шаблонами та файлами `settings.json`, які могли зберігати налаштування з декоративними суфіксами (наприклад, `+0%` чи `+0Hz`), функція `clean_numeric_param` в `src/gui/settings/storage.rs` автоматично очищає завантажені текстові поля під час виклику `load_settings` та `load_template`. Вона видаляє будь-які літери, відсотки чи герци на льоту, перетворюючи старі значення на чисті числові рядки, що запобігає збоям у роботі рушія синтезу.
 

@@ -1,3 +1,4 @@
+pub mod agent_chat_window;
 pub mod editor;
 pub mod gallery;
 pub mod logs;

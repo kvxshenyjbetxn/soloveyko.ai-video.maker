@@ -66,6 +66,122 @@ impl<'a> Drop for ClaudePermit<'a> {
     }
 }
 
+/// Викликає Claude CLI з новою сесією (--session-id) та інструментами для запису файлів.
+/// Повертає текст відповіді. Використовується для першого запуску агента при контролі агента.
+pub fn call_claude_code_new_session(
+    model: &str,
+    user_content: &str,
+    session_id: &str,
+    job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
+) -> Result<String, String> {
+    let _permit = ClaudeLimiter::get().acquire();
+    let log = |msg: &str| {
+        if let Some((id, ref name)) = job_info {
+            crate::logger::log_job(id, name, msg);
+        } else {
+            crate::logger::log(msg);
+        }
+    };
+
+    log(&format!("Starting Claude CLI agent session. Model: {}, session: {}", model, session_id));
+
+    #[cfg(target_os = "windows")]
+    let mut cmd = Command::new("cmd");
+    #[cfg(target_os = "windows")]
+    cmd.args(&["/C", "claude"]);
+
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = Command::new("claude");
+
+    cmd.arg("--model").arg(model)
+        .arg("-p").arg(user_content)
+        .arg("--allowedTools").arg("Bash,Write,Read")
+        .arg("--session-id").arg(session_id);
+
+    if let Some(dir) = working_dir {
+        cmd.current_dir(dir);
+    }
+
+    log(&format!("Running: claude --model {} -p \"[prompt]\" --allowedTools Bash,Write,Read --session-id {}", model, session_id));
+
+    let output = cmd.output().map_err(|e| {
+        format!("Failed to launch claude CLI: {}. Make sure claude CLI is installed and added to PATH.", e)
+    })?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        log("Claude CLI agent session completed successfully.");
+        Ok(stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let err_msg = format!(
+            "Claude CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
+            output.status.code(), stderr, stdout
+        );
+        log(&err_msg);
+        Err(format!("Claude CLI error: {}", stderr))
+    }
+}
+
+/// Продовжує існуючу сесію Claude CLI (--resume) та повертає відповідь.
+/// Використовується для чату з агентом після паузи "Контроль агента".
+pub fn call_claude_code_resume(
+    model: &str,
+    message: &str,
+    session_id: &str,
+    job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
+) -> Result<String, String> {
+    let _permit = ClaudeLimiter::get().acquire();
+    let log = |msg: &str| {
+        if let Some((id, ref name)) = job_info {
+            crate::logger::log_job(id, name, msg);
+        } else {
+            crate::logger::log(msg);
+        }
+    };
+
+    log(&format!("Resuming Claude CLI session: {}", session_id));
+
+    #[cfg(target_os = "windows")]
+    let mut cmd = Command::new("cmd");
+    #[cfg(target_os = "windows")]
+    cmd.args(&["/C", "claude"]);
+
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = Command::new("claude");
+
+    cmd.arg("--model").arg(model)
+        .arg("-p").arg(message)
+        .arg("--allowedTools").arg("Bash,Write,Read")
+        .arg("--resume").arg(session_id);
+
+    if let Some(dir) = working_dir {
+        cmd.current_dir(dir);
+    }
+
+    let output = cmd.output().map_err(|e| {
+        format!("Failed to launch claude CLI: {}", e)
+    })?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        log("Claude CLI resume completed.");
+        Ok(stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let err_msg = format!(
+            "Claude CLI error (exit code: {:?}).\n--- STDERR ---\n{}\n--- STDOUT ---\n{}",
+            output.status.code(), stderr, stdout
+        );
+        log(&err_msg);
+        Err(format!("Claude CLI error: {}", stderr))
+    }
+}
+
 /// Викликає Claude CLI для виконання перекладу сценарію або іншого тексту та повертає результат.
 ///
 /// При `allow_tools = true` додає `--allowedTools Bash,Write,Read` — потрібно для агентного режиму,

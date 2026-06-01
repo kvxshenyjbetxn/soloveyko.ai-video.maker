@@ -8,8 +8,25 @@ pub enum JobStatus {
     AwaitingControl,
     /// Очікує перегляду згенерованих зображень користувачем
     AwaitingMediaControl,
+    /// Очікує підтвердження користувача після завершення агента
+    AwaitingAgentControl,
     Done,
     Failed(String),
+}
+
+/// Одне повідомлення в чаті з агентом.
+#[derive(Clone)]
+pub struct AgentChatMessage {
+    pub role: String, // "user" або "agent"
+    pub content: String,
+}
+
+/// Інформація про активну сесію агента для продовження чату.
+#[derive(Clone)]
+pub struct AgentSessionInfo {
+    pub session_id: String,
+    pub service: String, // "Claude Code" або "Gemini CLI"
+    pub model: String,
 }
 
 /// Ідентифікатор етапу для повтору виконання з цього місця.
@@ -99,6 +116,8 @@ pub struct JobSettings {
     pub montage_transition: String,
     pub montage_transition_duration: f32,
     pub media_control_enabled: bool,
+    /// Чи увімкнено контроль агента (пауза після генерації timeline.json для чату з агентом)
+    pub agent_control_enabled: bool,
     /// Чи увімкнено тригери накладення медіа за ключовими фразами
     pub overlay_triggers_enabled: bool,
     /// Список тригерів накладення медіа
@@ -139,6 +158,12 @@ pub struct PipelineJob {
     pub montage_file_size: Arc<Mutex<Option<u64>>>,
     /// Condvar для відновлення пайплайну після контролю зображень
     pub media_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    /// Condvar для відновлення пайплайну після контролю агента
+    pub agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    /// Повідомлення чату з агентом (зберігається між сесіями)
+    pub agent_chat: Arc<Mutex<Vec<AgentChatMessage>>>,
+    /// Активна сесія агента (session_id для продовження чату)
+    pub agent_session: Arc<Mutex<Option<AgentSessionInfo>>>,
 }
 
 impl PipelineJob {
@@ -161,6 +186,9 @@ impl PipelineJob {
             montage_progress: Arc::new(Mutex::new(None)),
             montage_file_size: Arc::new(Mutex::new(None)),
             media_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
+            agent_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
+            agent_chat: Arc::new(Mutex::new(Vec::new())),
+            agent_session: Arc::new(Mutex::new(None)),
         }
     }
 

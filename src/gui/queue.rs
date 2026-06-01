@@ -27,6 +27,7 @@ pub fn draw_queue_panel(
     whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     active_tab: &mut Tab,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
+    selected_agent_chat: &mut Option<u64>,
 ) {
     ui.add_space(4.0);
 
@@ -113,7 +114,8 @@ pub fn draw_queue_panel(
                             crate::queue::JobStatus::Done => 1.0,
                             crate::queue::JobStatus::Running
                             | crate::queue::JobStatus::AwaitingControl
-                            | crate::queue::JobStatus::AwaitingMediaControl => {
+                            | crate::queue::JobStatus::AwaitingMediaControl
+                            | crate::queue::JobStatus::AwaitingAgentControl => {
                                 let (prog, _, _) = j.calculate_progress();
                                 prog
                             }
@@ -127,7 +129,9 @@ pub fn draw_queue_panel(
 
                 let is_running = jobs.iter().any(|j| {
                     let s = j.status.lock().unwrap().clone();
-                    s == crate::queue::JobStatus::Running || s == crate::queue::JobStatus::AwaitingMediaControl
+                    s == crate::queue::JobStatus::Running
+                        || s == crate::queue::JobStatus::AwaitingMediaControl
+                        || s == crate::queue::JobStatus::AwaitingAgentControl
                 });
 
                 let pct_label = egui::RichText::new(format!("{:.0}%", overall_progress * 100.0))
@@ -200,6 +204,9 @@ pub fn draw_queue_panel(
                     std::sync::Arc::clone(&job.montage_progress),
                     std::sync::Arc::clone(&job.montage_file_size),
                     std::sync::Arc::clone(&job.media_control_resume),
+                    std::sync::Arc::clone(&job.agent_control_resume),
+                    std::sync::Arc::clone(&job.agent_chat),
+                    std::sync::Arc::clone(&job.agent_session),
                     ctx.clone(),
                 );
             }
@@ -248,6 +255,13 @@ pub fn draw_queue_panel(
                                 egui::Color32::from_rgb(230, 126, 34),
                             )
                         }
+                        crate::queue::JobStatus::AwaitingAgentControl => {
+                            let (prog, _, _) = job.calculate_progress();
+                            (
+                                format!("{} ({:.0}%)", translate(language, "queue_status_awaiting_agent"), prog * 100.0),
+                                egui::Color32::from_rgb(52, 152, 219),
+                            )
+                        }
                         crate::queue::JobStatus::Done => (
                             translate(language, "queue_status_done").to_string(),
                             egui::Color32::from_rgb(46, 204, 113),
@@ -264,6 +278,7 @@ pub fn draw_queue_panel(
                         crate::queue::JobStatus::Running
                             | crate::queue::JobStatus::AwaitingControl
                             | crate::queue::JobStatus::AwaitingMediaControl
+                            | crate::queue::JobStatus::AwaitingAgentControl
                     );
 
                     let group_frame = egui::Frame::group(ui.style())
@@ -603,6 +618,8 @@ pub fn draw_queue_panel(
                             }
                         } else if status == crate::queue::JobStatus::AwaitingMediaControl {
                             *active_tab = Tab::Gallery;
+                        } else if status == crate::queue::JobStatus::AwaitingAgentControl {
+                            *selected_agent_chat = Some(job.id);
                         } else {
                             *selected_job_logs = Some((job.id, job.name.clone()));
                         }

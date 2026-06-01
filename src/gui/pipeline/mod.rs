@@ -97,6 +97,7 @@ pub fn draw_pipeline_panel(
     pipeline_translation_control_enabled: &mut bool,
     pipeline_control_auto_open: &mut bool,
     pipeline_media_control_enabled: &mut bool,
+    pipeline_agent_control_enabled: &mut bool,
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
     pipeline_subtitles_enabled: &mut bool,
@@ -202,6 +203,7 @@ pub fn draw_pipeline_panel(
                             *pipeline_translation_control_enabled,
                             *pipeline_control_auto_open,
                             *pipeline_media_control_enabled,
+                            *pipeline_agent_control_enabled,
                             *pipeline_voiceover_enabled,
                             *pipeline_video_enabled,
                             *pipeline_subtitles_enabled,
@@ -327,6 +329,7 @@ pub fn draw_pipeline_panel(
                                     pipeline_translation_control_enabled,
                                     pipeline_control_auto_open,
                                     pipeline_media_control_enabled,
+                                    pipeline_agent_control_enabled,
                                     pipeline_voiceover_enabled,
                                     pipeline_video_enabled,
                                     pipeline_subtitles_enabled,
@@ -458,7 +461,7 @@ pub fn draw_pipeline_panel(
                             if header.inner.clicked() { state.toggle(ui); }
                             state.store(ui.ctx());
                             state.show_body_indented(&header.response, ui, |ui| {
-                                control::draw_control_section(ui, language, pipeline_translation_control_enabled, pipeline_control_auto_open, pipeline_media_control_enabled);
+                                control::draw_control_section(ui, language, pipeline_translation_control_enabled, pipeline_control_auto_open, pipeline_media_control_enabled, pipeline_agent_control_enabled);
                             });
                         }
 
@@ -771,6 +774,7 @@ pub fn draw_pipeline_panel(
                                     *pipeline_translation_enabled,
                                     *pipeline_translation_control_enabled,
                                     *pipeline_media_control_enabled,
+                                    *pipeline_agent_control_enabled,
                                     translation_prompt,
                                     translation_model,
                                     *translation_temperature,
@@ -850,6 +854,7 @@ fn validate_and_enqueue(
     translation_enabled: bool,
     translation_control_enabled: bool,
     media_control_enabled: bool,
+    agent_control_enabled: bool,
     translation_prompt: &str,
     translation_model: &str,
     translation_temperature: f32,
@@ -973,6 +978,7 @@ fn validate_and_enqueue(
         montage_transition: montage_transition.to_string(),
         montage_transition_duration,
         media_control_enabled,
+        agent_control_enabled,
         overlay_triggers_enabled,
         overlay_triggers,
     };

@@ -79,6 +79,8 @@ pub struct VideoMakerApp {
     pub pipeline_control_auto_open: bool,
     /// Чи увімкнено контроль зображень (пауза після відеоряду для перегляду).
     pub pipeline_media_control_enabled: bool,
+    /// Чи увімкнено контроль агента (пауза після timeline.json для чату з агентом).
+    pub pipeline_agent_control_enabled: bool,
     /// Кеш текстур для галереї медіафайлів. None означає помилку завантаження.
     pub gallery_textures: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     /// Зображення, яке зараз відкрите у повноекранному перегляді.
@@ -193,6 +195,16 @@ pub struct VideoMakerApp {
     pub selected_job_control: Option<u64>,
     /// Текстовий буфер для редагування перекладу під час контролю
     pub control_text_input: String,
+    /// Задача, для якої зараз відкрито вікно чату з агентом
+    pub selected_agent_chat: Option<u64>,
+    /// Буфер введення повідомлення для чату з агентом
+    pub agent_chat_input: String,
+    /// Прапорець завантаження відповіді агента у фоні
+    pub agent_chat_loading: std::sync::Arc<std::sync::Mutex<bool>>,
+    /// Результат фонової відповіді агента
+    pub agent_chat_result: std::sync::Arc<std::sync::Mutex<Option<Result<String, String>>>>,
+    /// Помилка чату з агентом
+    pub agent_chat_error: Option<String>,
     /// Чи відкрите вікно розширеної перегенерації
     pub control_regen_extended_open: bool,
     /// Одноразовий сервіс перекладу для перегенерації
@@ -368,6 +380,7 @@ impl Default for VideoMakerApp {
             pipeline_translation_control_enabled: false,
             pipeline_control_auto_open: false,
             pipeline_media_control_enabled: false,
+            pipeline_agent_control_enabled: false,
             gallery_textures: std::collections::HashMap::new(),
             gallery_preview: None,
             gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
@@ -425,6 +438,11 @@ impl Default for VideoMakerApp {
             selected_job_logs: None,
             selected_job_control: None,
             control_text_input: String::new(),
+            selected_agent_chat: None,
+            agent_chat_input: String::new(),
+            agent_chat_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            agent_chat_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            agent_chat_error: None,
             control_regen_extended_open: false,
             control_regen_service: String::new(),
             control_regen_model: String::new(),
@@ -546,6 +564,7 @@ impl VideoMakerApp {
         let pipeline_translation_control_enabled = saved.pipeline_translation_control_enabled;
         let pipeline_control_auto_open = saved.pipeline_control_auto_open;
         let pipeline_media_control_enabled = saved.pipeline_media_control_enabled;
+        let pipeline_agent_control_enabled = saved.pipeline_agent_control_enabled;
         let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
         let pipeline_video_enabled = saved.pipeline_video_enabled;
         let pipeline_subtitles_enabled = saved.pipeline_subtitles_enabled;
@@ -685,6 +704,7 @@ impl VideoMakerApp {
             pipeline_translation_control_enabled,
             pipeline_control_auto_open,
             pipeline_media_control_enabled,
+            pipeline_agent_control_enabled,
             gallery_textures: std::collections::HashMap::new(),
             gallery_preview: None,
             gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
@@ -742,6 +762,11 @@ impl VideoMakerApp {
             selected_job_logs: None,
             selected_job_control: None,
             control_text_input: String::new(),
+            selected_agent_chat: None,
+            agent_chat_input: String::new(),
+            agent_chat_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            agent_chat_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            agent_chat_error: None,
             control_regen_extended_open: false,
             control_regen_service: String::new(),
             control_regen_model: String::new(),
@@ -1002,6 +1027,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.pipeline_translation_control_enabled,
                         &mut self.pipeline_control_auto_open,
                         &mut self.pipeline_media_control_enabled,
+                        &mut self.pipeline_agent_control_enabled,
                         &mut self.pipeline_voiceover_enabled,
                         &mut self.pipeline_video_enabled,
                         &mut self.pipeline_subtitles_enabled,
@@ -1098,6 +1124,7 @@ impl eframe::App for VideoMakerApp {
                         &self.whisper_model_download,
                         &mut self.active_tab,
                         &mut self.retry_request,
+                        &mut self.selected_agent_chat,
                     );
                 });
         }
@@ -1125,6 +1152,9 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&job.montage_progress),
                     std::sync::Arc::clone(&job.montage_file_size),
                     std::sync::Arc::clone(&job.media_control_resume),
+                    std::sync::Arc::clone(&job.agent_control_resume),
+                    std::sync::Arc::clone(&job.agent_chat),
+                    std::sync::Arc::clone(&job.agent_session),
                     ctx.clone(),
                 );
             }
@@ -1432,6 +1462,18 @@ impl eframe::App for VideoMakerApp {
             &self.openrouter_models_loading,
         );
 
+        // Спливаюче вікно чату з агентом
+        crate::gui::agent_chat_window::draw_agent_chat_window(
+            ctx,
+            self.language,
+            &self.jobs,
+            &mut self.selected_agent_chat,
+            &mut self.agent_chat_input,
+            &self.agent_chat_loading,
+            &mut self.agent_chat_error,
+            &self.agent_chat_result,
+        );
+
         // АВТОЗБЕРЕЖЕННЯ:
         // Перевіряємо, чи користувач наразі не перетягує панель (миша відпущена).
         // Це запобігає надмірному навантаженню на диск та гарантує запис файлу лише після відпускання миші.
@@ -1463,6 +1505,7 @@ impl eframe::App for VideoMakerApp {
                 || self.pipeline_translation_control_enabled != self.last_saved_settings.pipeline_translation_control_enabled
                 || self.pipeline_control_auto_open != self.last_saved_settings.pipeline_control_auto_open
                 || self.pipeline_media_control_enabled != self.last_saved_settings.pipeline_media_control_enabled
+                || self.pipeline_agent_control_enabled != self.last_saved_settings.pipeline_agent_control_enabled
                 || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
                 || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
                 || self.pipeline_subtitles_enabled != self.last_saved_settings.pipeline_subtitles_enabled
@@ -1543,6 +1586,7 @@ impl eframe::App for VideoMakerApp {
                     pipeline_translation_control_enabled: self.pipeline_translation_control_enabled,
                     pipeline_control_auto_open: self.pipeline_control_auto_open,
                     pipeline_media_control_enabled: self.pipeline_media_control_enabled,
+                    pipeline_agent_control_enabled: self.pipeline_agent_control_enabled,
                     pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
                     pipeline_video_enabled: self.pipeline_video_enabled,
                     pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,
