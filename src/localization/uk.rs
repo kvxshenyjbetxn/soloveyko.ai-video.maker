@@ -297,6 +297,17 @@ pub fn translate_uk(key: &str) -> &'static str {
         "gallery_prompt_window_title" => "Промт зображення",
         "gallery_prompt_empty" => "Промт не знайдено",
         "gallery_prompt_copy_btn" => "Копіювати",
+        "resume_depends_on_voice" => "(залежить від озвучки)",
+        "resume_dialog_title"   => "Знайдено наявні файли",
+        "resume_dialog_folder"  => "Папка:",
+        "resume_resume_from"    => "Продовжити з:",
+        "resume_all_done"       => "✓ Всі етапи вже завершено",
+        "resume_continue_btn"   => "Продовжити",
+        "resume_fresh_btn"      => "Почати заново",
+        "resume_images"         => "зображень",
+        "resume_videos"         => "відео",
+        "resume_output_video"   => "Готове відео",
+        "resume_timeline"       => "Таймлайн",
         _ => "",
     }
 }

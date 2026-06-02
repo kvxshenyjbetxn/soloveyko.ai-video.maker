@@ -122,6 +122,8 @@ pub struct JobSettings {
     pub overlay_triggers_enabled: bool,
     /// Список тригерів накладення медіа
     pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
+    /// Якщо Some — пайплайн стартує з цього етапу замість повного запуску (режим відновлення)
+    pub resume_from_stage: Option<RetryStage>,
 }
 
 /// Одна задача в черзі пайплайну.

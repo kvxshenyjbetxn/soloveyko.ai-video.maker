@@ -297,6 +297,17 @@ pub fn translate_ru(key: &str) -> &'static str {
         "gallery_prompt_window_title" => "Промт изображения",
         "gallery_prompt_empty" => "Промт не найден",
         "gallery_prompt_copy_btn" => "Копировать",
+        "resume_depends_on_voice" => "(зависит от озвучки)",
+        "resume_dialog_title"   => "Найдены существующие файлы",
+        "resume_dialog_folder"  => "Папка:",
+        "resume_resume_from"    => "Продолжить с:",
+        "resume_all_done"       => "✓ Все этапы уже завершены",
+        "resume_continue_btn"   => "Продолжить",
+        "resume_fresh_btn"      => "Начать заново",
+        "resume_images"         => "изображений",
+        "resume_videos"         => "видео",
+        "resume_output_video"   => "Готовое видео",
+        "resume_timeline"       => "Таймлайн",
         _ => "",
     }
 }

@@ -186,29 +186,57 @@ pub fn draw_queue_panel(
                 if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
                     continue;
                 }
-                crate::core::pipeline::run_pipeline(
-                    job.id,
-                    job.name.clone(),
-                    job.settings.clone(),
-                    std::sync::Arc::clone(&job.status),
-                    std::sync::Arc::clone(&job.translation_stage),
-                    std::sync::Arc::clone(&job.voiceover_stage),
-                    std::sync::Arc::clone(&job.video_stage),
-                    std::sync::Arc::clone(&job.subtitles_stage),
-                    std::sync::Arc::clone(&job.montage_stage),
-                    std::sync::Arc::clone(&job.translated_text),
-                    std::sync::Arc::clone(&job.total_cost),
-                    std::sync::Arc::clone(&job.audio_duration),
-                    std::sync::Arc::clone(&job.prompts_progress),
-                    std::sync::Arc::clone(&job.media_progress),
-                    std::sync::Arc::clone(&job.montage_progress),
-                    std::sync::Arc::clone(&job.montage_file_size),
-                    std::sync::Arc::clone(&job.media_control_resume),
-                    std::sync::Arc::clone(&job.agent_control_resume),
-                    std::sync::Arc::clone(&job.agent_chat),
-                    std::sync::Arc::clone(&job.agent_session),
-                    ctx.clone(),
-                );
+                if let Some(resume_stage) = job.settings.resume_from_stage.clone() {
+                    // Відновлення з конкретного етапу замість повного запуску
+                    crate::core::pipeline::retry_from_stage(
+                        resume_stage,
+                        job.id,
+                        job.name.clone(),
+                        job.settings.clone(),
+                        std::sync::Arc::clone(&job.status),
+                        std::sync::Arc::clone(&job.translation_stage),
+                        std::sync::Arc::clone(&job.voiceover_stage),
+                        std::sync::Arc::clone(&job.video_stage),
+                        std::sync::Arc::clone(&job.subtitles_stage),
+                        std::sync::Arc::clone(&job.montage_stage),
+                        std::sync::Arc::clone(&job.translated_text),
+                        std::sync::Arc::clone(&job.total_cost),
+                        std::sync::Arc::clone(&job.audio_duration),
+                        std::sync::Arc::clone(&job.prompts_progress),
+                        std::sync::Arc::clone(&job.media_progress),
+                        std::sync::Arc::clone(&job.montage_progress),
+                        std::sync::Arc::clone(&job.montage_file_size),
+                        std::sync::Arc::clone(&job.media_control_resume),
+                        std::sync::Arc::clone(&job.agent_control_resume),
+                        std::sync::Arc::clone(&job.agent_chat),
+                        std::sync::Arc::clone(&job.agent_session),
+                        ctx.clone(),
+                    );
+                } else {
+                    crate::core::pipeline::run_pipeline(
+                        job.id,
+                        job.name.clone(),
+                        job.settings.clone(),
+                        std::sync::Arc::clone(&job.status),
+                        std::sync::Arc::clone(&job.translation_stage),
+                        std::sync::Arc::clone(&job.voiceover_stage),
+                        std::sync::Arc::clone(&job.video_stage),
+                        std::sync::Arc::clone(&job.subtitles_stage),
+                        std::sync::Arc::clone(&job.montage_stage),
+                        std::sync::Arc::clone(&job.translated_text),
+                        std::sync::Arc::clone(&job.total_cost),
+                        std::sync::Arc::clone(&job.audio_duration),
+                        std::sync::Arc::clone(&job.prompts_progress),
+                        std::sync::Arc::clone(&job.media_progress),
+                        std::sync::Arc::clone(&job.montage_progress),
+                        std::sync::Arc::clone(&job.montage_file_size),
+                        std::sync::Arc::clone(&job.media_control_resume),
+                        std::sync::Arc::clone(&job.agent_control_resume),
+                        std::sync::Arc::clone(&job.agent_chat),
+                        std::sync::Arc::clone(&job.agent_session),
+                        ctx.clone(),
+                    );
+                }
             }
         }
     });

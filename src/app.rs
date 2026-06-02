@@ -235,6 +235,10 @@ pub struct VideoMakerApp {
     pub job_name_dialog_open: bool,
     /// Поточний текст у полі введення назви задачі.
     pub job_name_input: String,
+    /// Чи відкрите вікно відновлення задачі (знайдені наявні файли).
+    pub resume_dialog_open: bool,
+    /// Дані для діалогу відновлення (задача в очікуванні рішення користувача).
+    pub resume_pending: Option<crate::gui::pipeline::resume::ResumePendingData>,
     /// Максимальна кількість потоків для OpenRouter.
     pub openrouter_max_threads: usize,
     /// Максимальна кількість потоків для Claude Code.
@@ -458,6 +462,8 @@ impl Default for VideoMakerApp {
             control_dismissed: std::collections::HashSet::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
+            resume_dialog_open: false,
+            resume_pending: None,
             openrouter_max_threads: 5,
             claude_max_threads: 5,
             gemini_max_threads: 5,
@@ -782,6 +788,8 @@ impl VideoMakerApp {
             control_dismissed: std::collections::HashSet::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
+            resume_dialog_open: false,
+            resume_pending: None,
             openrouter_max_threads,
             claude_max_threads,
             gemini_max_threads,
@@ -1092,8 +1100,20 @@ impl eframe::App for VideoMakerApp {
                         &mut self.queue_error,
                         &mut self.job_name_dialog_open,
                         &mut self.job_name_input,
+                        &mut self.resume_dialog_open,
+                        &mut self.resume_pending,
                     );
                 });
+
+            // Діалог відновлення задачі (знайдені наявні файли)
+            crate::gui::pipeline::resume::draw_resume_dialog(
+                ctx,
+                self.language,
+                &mut self.resume_dialog_open,
+                &mut self.resume_pending,
+                &mut self.jobs,
+                &mut self.job_counter,
+            );
 
             if self.translation_service != prev_translation_service {
                 if self.translation_service == "Gemini CLI" || self.translation_service == "Claude Code" {

@@ -74,7 +74,8 @@ src/
 │   │   └── video_player.rs      — VideoPlayer, streaming витягування кадрів, hover-анімація, thumbnail першого кадру
 │   ├── subtitle_fonts.rs        — SUBTITLE_FONTS константа (37 шрифтів з fallback-іменами), load_subtitle_fonts(): завантажує системні шрифти у egui FontDefinitions при старті
 │   ├── pipeline/
-│   │   ├── mod.rs               — draw_pipeline_panel: головна функція панелі + toggle_switch + validate_and_enqueue
+│   │   ├── mod.rs               — draw_pipeline_panel: головна функція панелі + toggle_switch + validate_and_enqueue + build_job_settings
+│   │   ├── resume.rs            — FoundFiles, ResumePendingData, draw_resume_dialog: перевірка наявних файлів задачі та діалог відновлення з чекбоксами
 │   │   ├── api.rs               — секція АПІ-ключів (OpenRouter, VoiceBot, Googler)
 │   │   ├── control.rs           — секція "Контроль" (перемикач контролю перекладу + чекбокс авто-відкриття + перемикач контролю зображень + перемикач контролю агента)
 │   │   ├── templates.rs         — секція списку збережених шаблонів (завантаження/видалення)
@@ -152,6 +153,7 @@ src/
   - **Кнопка «⚙ Розширена»**: відкриває окреме вікно «Розширена перегенерація». У ньому повний UI секції Переклад (сервіс, промт, модель, температура) з тимчасовими значеннями, ініціалізованими зі знімку налаштувань задачі. Зміни НЕ впливають на налаштування пайплайну — лише для одноразового запуску. Про це попереджає підказка у верхній частині вікна. UI перекладу у розширеному вікні загорнуто у `ui.push_id("control_regen_translation", ...)` щоб уникнути конфліктів ID з основним пайплайном.
   - Якщо перегенерація завершилась з помилкою — показується текст помилки червоним під статистикою. При закритті вікна контролю розширене вікно також закривається, стан помилки очищається.
 - **`job_name_dialog_open` / `job_name_input`** — стан діалогового вікна назви задачі. Ephemeral, не зберігається у `settings.json`.
+- **`resume_dialog_open` / `resume_pending: Option<ResumePendingData>`** — стан діалогу відновлення задачі. `resume_pending` тримає повний знімок `JobSettings` та знайдені файли поки користувач не зробить вибір. Після вибору `pending.take()` переміщує дані у функцію додавання в чергу. Діалог відображається з `app.rs` через `gui::pipeline::resume::draw_resume_dialog()` — аналогічно іншим системним вікнам (`draw_agent_chat_window` тощо).
 
 ### Текстовий редактор сценарію (`src/gui/editor.rs`)
 
@@ -169,6 +171,7 @@ src/
 - **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`, `montage_transition`, `montage_transition_duration`.
 - **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) / AwaitingMediaControl (пауза для перегляду зображень) / AwaitingAgentControl (пауза для чату з агентом) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку. `AwaitingAgentControl` відображається синім кольором у картці задачі.
 - **`media_control_enabled: bool`** у `JobSettings` — знімок стану перемикача «Контроль зображень» на момент додавання задачі в чергу. Якщо `false` — пайплайн не зупиняється після відеоряду.
+- **`resume_from_stage: Option<RetryStage>`** у `JobSettings` — якщо `Some(stage)`, кнопка «▶ Запустити» викликає `retry_from_stage(stage, ...)` замість `run_pipeline`. Встановлюється автоматично при відновленні задачі через діалог `ResumePendingData`. `None` — звичайний запуск з початку.
 - **`agent_control_enabled: bool`** у `JobSettings` — знімок стану перемикача «Контроль агента» (секція Контроль). Якщо `true` — після успішного створення `timeline.json` агентом пайплайн призупиняється та відкриває можливість чату. Зберігається у `AppSettings` та `PipelineTemplate`.
 - **`media_control_resume: Arc<(Mutex<bool>, Condvar)>`** у `PipelineJob` — примітив для відновлення пайплайну після перегляду зображень.
 - **`agent_control_resume: Arc<(Mutex<bool>, Condvar)>`** у `PipelineJob` — аналогічний примітив для відновлення після чату з агентом. UI сигналізує через кнопку «Продовжити пайплайн» у вікні чату.
@@ -204,8 +207,10 @@ src/
 - **Форма шаблону** завжди видима поза `ScrollArea` — навмисно, щоб не ховалась при скролі. Кнопка "Додати в чергу" також зафіксована внизу панелі.
 - **ScrollArea обмежена по висоті** (`max_height = available_height - bottom_reserve`) — щоб залишити місце для кнопки та помилки внизу.
 - **Всі секції** реалізовані через `CollapsingState` з persist id — egui запам'ятовує чи розкрита секція між кадрами.
-- **Кнопка "Додати в чергу":** спочатку валідує поля (текст, шлях, модель, ключ). Якщо все ок — відкриває `egui::Window` з полем для введення назви задачі. Вікно по центру екрана, підтримує `Enter` для підтвердження.
-- **`validate_and_enqueue`** — більше НЕ запускає обробку. Тільки створює папку `{save_path}/{task_name}/` через `std::fs::create_dir_all` і додає `PipelineJob` зі статусом `Pending`. Реальний запуск — через кнопку "▶ Запустити" в панелі черги.
+- **Кнопка "Додати в чергу":** валідує поля (шлях, модель, ключ). Текст сценарію **не обов'язковий** — можна залишити порожнім, якщо задача відновлюється з наявних файлів. Якщо валідація пройшла — відкриває `egui::Window` з полем назви задачі. При повторному кліку поки відкритий діалог відновлення — ігнорується.
+- **`validate_and_enqueue`** — більше НЕ запускає обробку. Тільки створює папку `{save_path}/{task_name}/` та додає `PipelineJob` зі статусом `Pending`. Реальний запуск — через кнопку "▶ Запустити" в панелі черги.
+- **`build_job_settings`** — виокремлена з `validate_and_enqueue`. Будує `JobSettings` без створення папки і без додавання в чергу. Використовується також діалогом відновлення: якщо папка задачі вже існує і містить файли, `build_job_settings` будує знімок налаштувань, і він зберігається у `ResumePendingData` поки користувач не зробить вибір.
+- **Перевірка файлів при підтвердженні назви:** після введення назви задачі (перед додаванням в чергу) перевіряється чи існує `{save_path}/{task_name}/` і чи є там файли (`text.txt`, `voice.mp3/wav`, `subtitle.srt`, `media/`, `{name}.mp4`). Якщо знайдено — відкривається `draw_resume_dialog`; якщо ні — одразу `validate_and_enqueue`.
 
 ### Пайплайн виконання задачі (`src/core/pipeline/`)
 
@@ -692,6 +697,19 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`template_uuid` для VoiceBot опціональний.** Якщо він порожній — задача TTS створюється без `template_uuid`. Валідація перед запуском вимагає лише `voicebot_key`.
 
 - **Діалог назви задачі** (`egui::Window`) рендериться всередині `draw_pipeline_panel`. Авто-назва ("Задача N") рахує `jobs.len()` на момент натискання "Додати".
+
+- **Діалог відновлення (`gui/pipeline/resume.rs`) — архітектура.**
+  `FoundFiles::scan()` перевіряє конкретні файли: `text.txt`, `voice.mp3` / `voice.wav`, `subtitle.srt`, вміст `media/` (рахує зображення та відео окремо), `{safe_task_name}.mp4`. Файл `timeline.json` **не** є окремим індикатором — він будується заново при кожному монтажі. `safe_task_name` санітайзиться тією самою логікою що й у `montage.rs` (заміна спецсимволів на `_`).
+
+- **`effective_resume_stage()` враховує чекбокси.** Навіть якщо всі файли знайдені, якщо користувач зняв галочку "зберегти субтитри" — метод поверне `Some(Subtitles)`, а не `Some(Montage)`. Логіка: ітерується по прапорах `keep_voiceover`, `keep_subtitles`, `keep_video` зліва направо і повертає перший `RetryStage` у якого прапор `false`. Якщо всі `true` — fallback до `found.resume_stage()` (перший відсутній файл).
+
+- **Залежність Субтитри → Озвучка в діалозі відновлення.** Чекбокс "Субтитри" вимикається (`add_enabled(false, ...)`) якщо `voice_file` знайдено і `keep_voiceover == false`. Якщо озвучка буде перезаписана, стара `subtitle.srt` стане асинхронізованою — тому не можна залишити старі субтитри при новій озвучці. При знятті `keep_voiceover` `keep_subtitles` автоматично скидається в `false` прямо в обробнику `changed()`.
+
+- **Стан чекбоксів зберігається між рендер-кадрами через локальні змінні + write-back.** В egui immediate mode не можна тримати `&mut data` по двох місцях одночасно. Тому: (1) `pending.as_mut()` позичає `data`, (2) значення чекбоксів копіюються в локальні `keep_vo/su/vi`, (3) вікно рендериться з мутабельними локальними змінними, (4) після Window write-back: `data.keep_* = keep_*`, (5) borrow на `data` завершується, (6) `pending.take()` стає доступним для `do_continue`/`do_fresh`. Без `drop(data)` в кінці scope Rust може не відпустити borrow до кінця функції.
+
+- **`pre_mark_stages` — тільки для UI, `retry_from_stage` все одно скидає свої статуси.** При виборі "Продовжити" стадії відразу помічаються як `Done` щоб картка задачі в черзі (в стані `Pending`) показувала правильний стан ще до запуску. Але при натисканні "▶ Запустити" `retry_from_stage` скидає "свої" стадії (від заданого stage і далі) у `SPending` — тому UI коректно оновлюється під час виконання. Стадії до `resume_stage` (тобто ті що `Done`) `retry_from_stage` не чіпає — вони залишаються зеленими.
+
+- **`translated_text` попередньо завантажується з `text.txt`.** Якщо `text.txt` знайдений, при "Продовжити" вміст файлу одразу записується у `job.translated_text` Arc. Це потрібно для озвучки при `retry_from_stage(Voiceover)` — функція `run_av_branch` читає `translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())`. Без попереднього завантаження озвучка отримала б оригінальний ненаписаний текст замість вже перекладеного.
 
 - **Агентний режим змінює порядок виконання пайплайну.** В звичайному режимі AV-гілка і відеогілка виконуються **паралельно**. В агентному (Claude Code / Gemini CLI у відеоряді) — **послідовно**: спочатку AV-гілка до кінця (щоб отримати `subtitle.srt`), потім агент будує `timeline.json`, потім генерується медіа, потім `assign_media_to_timeline` прописує шляхи у `timeline.json`. Лише після цього запускається Монтаж. Це означає що відеоряд в агентному режимі виконується помітно довше через відсутність паралельності.
 

@@ -297,6 +297,17 @@ pub fn translate_en(key: &str) -> &'static str {
         "gallery_prompt_window_title" => "Image prompt",
         "gallery_prompt_empty" => "Prompt not found",
         "gallery_prompt_copy_btn" => "Copy",
+        "resume_depends_on_voice" => "(depends on voiceover)",
+        "resume_dialog_title"   => "Existing Files Found",
+        "resume_dialog_folder"  => "Folder:",
+        "resume_resume_from"    => "Resume from:",
+        "resume_all_done"       => "✓ All stages already completed",
+        "resume_continue_btn"   => "Continue",
+        "resume_fresh_btn"      => "Start Fresh",
+        "resume_images"         => "images",
+        "resume_videos"         => "videos",
+        "resume_output_video"   => "Final Video",
+        "resume_timeline"       => "Timeline",
         _ => "",
     }
 }
