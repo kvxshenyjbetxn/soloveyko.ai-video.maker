@@ -58,6 +58,7 @@ src/
 ├── gui/
 │   ├── mod.rs                   — реекспорт субмодулів
 │   ├── agent_chat_window.rs     — draw_agent_chat_window: вікно чату з агентом (история повідомлень, введення, відправка через --resume, кнопка "Продовжити пайплайн")
+│   ├── task_history.rs          — draw_task_history_panel: ліва фіксована панель (190px) на вкладці Main з историчними задачами; при кліку відновлює налаштування пайплайну і текст сценарію
 │   ├── topbar/
 │   │   ├── mod.rs               — draw_navigation_bar, draw_status_bar, draw_chip, draw_balance_chip, thread_load_color
 │   │   └── balance.rs           — draw_balance_window, draw_threads_window: вікна балансів і лімітів потоків
@@ -154,6 +155,24 @@ src/
   - Якщо перегенерація завершилась з помилкою — показується текст помилки червоним під статистикою. При закритті вікна контролю розширене вікно також закривається, стан помилки очищається.
 - **`job_name_dialog_open` / `job_name_input`** — стан діалогового вікна назви задачі. Ephemeral, не зберігається у `settings.json`.
 - **`resume_dialog_open` / `resume_pending: Option<ResumePendingData>`** — стан діалогу відновлення задачі. `resume_pending` тримає повний знімок `JobSettings` та знайдені файли поки користувач не зробить вибір. Після вибору `pending.take()` переміщує дані у функцію додавання в чергу. Діалог відображається з `app.rs` через `gui::pipeline::resume::draw_resume_dialog()` — аналогічно іншим системним вікнам (`draw_agent_chat_window` тощо).
+- **`task_history: Vec<TaskHistoryEntry>`** — список историчних задач, завантажується при старті з `task_history.json`. Зберігається в лівій панелі вкладки Main. При натисканні "Додати в чергу" новий запис автоматично додається в кінець і зберігається на диск.
+- **`current_pipeline_template()`** — метод `impl VideoMakerApp`, збирає поточний стан усіх налаштувань пайплайну у знімок `PipelineTemplate`. Використовується при записі в `task_history`.
+- **`apply_pipeline_template(t: PipelineTemplate)`** — метод `impl VideoMakerApp`, застосовує знімок до всіх відповідних полів стану програми (ідентична логіка з `templates.rs`). Викликається при кліку на картку в панелі историї.
+
+### Панель историї задач (`src/gui/task_history.rs`)
+
+Ліва фіксована панель (190px, `SidePanel::left("task_history_panel")`, не resizable) на вкладці Main. Відображає список усіх задач що були додані в чергу — нові зверху.
+
+**Кожен запис показує:**
+- Назву задачі (обрізається через `.truncate()`)
+- Дату і час додавання (`DD.MM HH:MM`, UTC→Local через chrono)
+- Іконку шаблону і назву якщо він використовувався (`📄 template_name`)
+- Кольорові чіпи увімкнених етапів: Пер / Озв / Відео / Суб / Монт (зелений = увімкнено, сірий = вимкнено)
+- Кнопку `✕` для видалення запису з историї
+
+**Клік по картці** відновлює одночасно два поля: `apply_pipeline_template(settings)` (всі налаштування пайплайну) і `self.text_input = text` (текст сценарію). Після цього можна одразу натиснути «Додати в чергу» — все вже заповнено.
+
+**Hover-ефект без конфлікту widget ID:** фон картки малюється через `egui::Frame::fill(hover_fill)` — тобто ДО вмісту, тому текст не перекривається. Rect фрейму зберігається у `egui::Memory` після кожного рендеру (`data_mut(|d| d.insert_temp(id, rect))`), а в наступному фреймі перед рендером з нього читається hover-стан (`data(|d| d.get_temp::<Rect>(id))`). Lag одного фрейму непомітний. `frame_resp.response.interact(Sense::click())` не реєструє новий widget ID — лише розширює sense існуючого Response.
 
 ### Текстовий редактор сценарію (`src/gui/editor.rs`)
 
@@ -511,7 +530,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 
 ### Збереження налаштувань (`src/gui/settings/storage.rs`)
 
-Два JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
+Три JSON-файли зберігаються у `<UserConfigDir>/Soloveyko.AI-Video.Maker/`:
+- `task_history.json` — `Vec<TaskHistoryEntry>`: список задач що були додані в чергу (максимум 100 записів, старіші обрізаються). Кожен запис містить `{id, name, created_at: i64 (Unix timestamp), template_name: Option<String>, text: String, settings: PipelineTemplate}`. При завантаженні шаблону записується у `template_name`. Текст сценарію зберігається у `text` щоб відновлювати поле редактора разом з налаштуваннями.
 - `settings.json` — `AppSettings`: весь стан програми (тема, ключі, ширина панелі, стан пайплайну, індивідуальні налаштування Edge TTS, `googler_image_max_threads`, `googler_video_max_threads`, `voiceover_convert_to_wav`, `video_media_type`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `montage_transition`, `montage_transition_duration`, `video_llm_service`, `video_llm_model_openrouter`, `video_llm_model_claude`, `video_llm_model_gemini`, `video_llm_temperature`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`, `overlay_triggers_enabled`, `overlay_triggers`).
 - `templates/<name>.json` — `PipelineTemplate`: набір налаштувань пайплайну для швидкого перемикання між конфігами. Включає всі поля субтитрів (`subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `assemblyai_key`, `subtitle_font_size`, `subtitle_color`, `subtitle_margin_v`, `subtitle_karaoke`, `subtitle_font`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`), налаштування медіа та монтажу. При завантаженні шаблону всі поля відновлюються повністю.
 
@@ -607,6 +627,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **Повзунок температури (`translation_temperature`)** — перед рендерингом зчитується `ui.available_width()` і тимчасово переписує стиль повзунка в межах `scope`, щоб Slider не розтягував SidePanel.
 
 - **Ширина елементів у `ui.horizontal()`:** egui додає `item_spacing.x` між кожною парою елементів. При розрахунку ширини треба відіймати саме `ui.spacing().item_spacing.x` — інакше SidePanel розповзається.
+
+- **Hover-фон для кастомних карток в egui — через Memory, не через `ui.interact()` після Frame.** Якщо малювати `painter.rect_filled(hover_color)` після рендерингу вмісту картки, фон перекриє текст (painter рисує в поточний шар поверх). Правильний підхід: 1) зберігати `frame_resp.response.rect` у `ctx.data_mut(|d| d.insert_temp(id, rect))` після кожного фрейму; 2) на наступному фреймі до рендерингу читати `ctx.data(|d| d.get_temp::<Rect>(id))` і визначати hover через `pointer_pos.map(|p| rect.contains(p))`; 3) передавати hover_fill у `Frame::fill(color)` — він малюється як фон ДО вмісту. Lag одного фрейму непомітний. `ui.interact(same_rect, ...)` після Frame генерує "Second use of widget ID" — замість нього треба `frame_resp.response.interact(Sense::click())` який не реєструє новий ID.
 
 - **Sync drift через прогалини в SRT.** SRT-записи мають паузи між собою (наприклад, entry 0 закінчується на 3.4s, entry 1 починається на 3.8s). Без нормалізації ці паузи потрапляють у тривалості кліпів, і cumulative sum у FFmpeg concat не збігається з absolute start_secs з timeline → sync повільно "з'їжджає". Виправлено в `build_timeline`: після побудови `final_timings` прохід `end[i] = max(end[i], start[i+1])` усуває прогалини перед записом `timeline.json`.
 

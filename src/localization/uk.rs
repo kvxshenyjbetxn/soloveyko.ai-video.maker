@@ -308,6 +308,14 @@ pub fn translate_uk(key: &str) -> &'static str {
         "resume_videos"         => "відео",
         "resume_output_video"   => "Готове відео",
         "resume_timeline"       => "Таймлайн",
+        "task_history_title"          => "Задачі",
+        "task_history_empty"          => "Ще немає задач",
+        "task_history_delete_tooltip" => "Видалити з історії",
+        "task_history_stage_t"        => "Пер",
+        "task_history_stage_v"        => "Озв",
+        "task_history_stage_vid"      => "Відео",
+        "task_history_stage_s"        => "Суб",
+        "task_history_stage_m"        => "Монт",
         _ => "",
     }
 }

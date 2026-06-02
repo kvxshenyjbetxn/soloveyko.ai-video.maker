@@ -308,6 +308,14 @@ pub fn translate_en(key: &str) -> &'static str {
         "resume_videos"         => "videos",
         "resume_output_video"   => "Final Video",
         "resume_timeline"       => "Timeline",
+        "task_history_title"          => "Tasks",
+        "task_history_empty"          => "No tasks yet",
+        "task_history_delete_tooltip" => "Remove from history",
+        "task_history_stage_t"        => "Tr",
+        "task_history_stage_v"        => "Vo",
+        "task_history_stage_vid"      => "Vid",
+        "task_history_stage_s"        => "Sub",
+        "task_history_stage_m"        => "Mon",
         _ => "",
     }
 }

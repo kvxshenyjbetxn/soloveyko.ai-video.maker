@@ -833,6 +833,89 @@ pub fn load_template(name: &str) -> Option<PipelineTemplate> {
     None
 }
 
+/// Запис в історії задач, що були додані в чергу.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(default)]
+pub struct TaskHistoryEntry {
+    /// Унікальний ідентифікатор задачі
+    pub id: u64,
+    /// Назва задачі
+    pub name: String,
+    /// Unix timestamp створення
+    pub created_at: i64,
+    /// Назва шаблону (якщо завантажувався)
+    pub template_name: Option<String>,
+    /// Текст сценарію на момент додавання задачі
+    pub text: String,
+    /// Знімок налаштувань пайплайну
+    pub settings: PipelineTemplate,
+}
+
+impl Default for TaskHistoryEntry {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            name: String::new(),
+            created_at: 0,
+            template_name: None,
+            text: String::new(),
+            settings: PipelineTemplate::default(),
+        }
+    }
+}
+
+/// Повертає шлях до файлу history задач.
+pub fn get_history_path() -> Option<PathBuf> {
+    get_settings_dir().map(|mut p| {
+        p.push("task_history.json");
+        p
+    })
+}
+
+/// Завантажує список задач з файлу task_history.json.
+pub fn load_task_history() -> Vec<TaskHistoryEntry> {
+    if let Some(path) = get_history_path() {
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(path) {
+                if let Ok(entries) = serde_json::from_str::<Vec<TaskHistoryEntry>>(&content) {
+                    return entries;
+                }
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// Зберігає список задач у файл task_history.json.
+pub fn save_task_history(entries: &[TaskHistoryEntry]) {
+    if let Some(dir) = get_settings_dir() {
+        let _ = fs::create_dir_all(&dir);
+        if let Some(path) = get_history_path() {
+            if let Ok(json) = serde_json::to_string_pretty(entries) {
+                let _ = fs::write(path, json);
+            }
+        }
+    }
+}
+
+/// Додає новий запис в кінець history, обрізає до 100 записів, зберігає на диск.
+pub fn append_to_task_history(entries: &mut Vec<TaskHistoryEntry>, new_entry: TaskHistoryEntry) {
+    entries.push(new_entry);
+    if entries.len() > 100 {
+        let drain = entries.len() - 100;
+        entries.drain(0..drain);
+    }
+    save_task_history(entries);
+}
+
+/// Видаляє запис за індексом з history та зберігає.
+pub fn remove_from_task_history(entries: &mut Vec<TaskHistoryEntry>, idx: usize) {
+    if idx < entries.len() {
+        entries.remove(idx);
+        save_task_history(entries);
+    }
+}
+
 /// Сканує папку шаблонів та повертає список імен доступних шаблонів.
 pub fn load_saved_templates() -> Vec<String> {
     let mut templates = Vec::new();

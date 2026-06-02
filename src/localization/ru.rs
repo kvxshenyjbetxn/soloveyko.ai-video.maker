@@ -308,6 +308,14 @@ pub fn translate_ru(key: &str) -> &'static str {
         "resume_videos"         => "видео",
         "resume_output_video"   => "Готовое видео",
         "resume_timeline"       => "Таймлайн",
+        "task_history_title"          => "Задачи",
+        "task_history_empty"          => "Задач ещё нет",
+        "task_history_delete_tooltip" => "Удалить из истории",
+        "task_history_stage_t"        => "Пер",
+        "task_history_stage_v"        => "Озв",
+        "task_history_stage_vid"      => "Видео",
+        "task_history_stage_s"        => "Суб",
+        "task_history_stage_m"        => "Монт",
         _ => "",
     }
 }

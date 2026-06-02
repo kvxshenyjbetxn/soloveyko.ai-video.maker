@@ -349,6 +349,8 @@ pub struct VideoMakerApp {
     pub gallery_prompt_popup: Option<String>,
     /// Кешована статистика для текстового редактора сценарію (для оптимізації продуктивності).
     pub editor_stats: crate::gui::editor::EditorStats,
+    /// Список задач з историчними налаштуваннями пайплайну.
+    pub task_history: Vec<crate::gui::settings::storage::TaskHistoryEntry>,
 }
 
 impl Default for VideoMakerApp {
@@ -520,6 +522,7 @@ impl Default for VideoMakerApp {
             video_player: None,
             gallery_prompt_popup: None,
             editor_stats: crate::gui::editor::EditorStats::default(),
+            task_history: Vec::new(),
         };
 
         crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
@@ -846,6 +849,7 @@ impl VideoMakerApp {
             video_player: None,
             gallery_prompt_popup: None,
             editor_stats: crate::gui::editor::EditorStats::default(),
+            task_history: crate::gui::settings::storage::load_task_history(),
         };
 
         // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
@@ -853,6 +857,152 @@ impl VideoMakerApp {
         crate::api::googler::GooglerVideoLimiter::get().set_max_threads(app.googler_video_max_threads);
 
         app
+    }
+
+    /// Збирає поточний стан усіх налаштувань пайплайну в знімок PipelineTemplate.
+    fn current_pipeline_template(&self) -> crate::gui::settings::storage::PipelineTemplate {
+        crate::gui::settings::storage::PipelineTemplate {
+            openrouter_key: self.openrouter_key.clone(),
+            assemblyai_key: self.assemblyai_key.clone(),
+            voiceover_provider: self.voiceover_provider.clone(),
+            voiceover_template_uuid: self.voiceover_template_uuid.clone(),
+            pipeline_translation_enabled: self.pipeline_translation_enabled,
+            pipeline_translation_control_enabled: self.pipeline_translation_control_enabled,
+            pipeline_control_auto_open: self.pipeline_control_auto_open,
+            pipeline_media_control_enabled: self.pipeline_media_control_enabled,
+            pipeline_agent_control_enabled: self.pipeline_agent_control_enabled,
+            pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
+            pipeline_video_enabled: self.pipeline_video_enabled,
+            pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,
+            pipeline_editing_enabled: self.pipeline_editing_enabled,
+            translation_prompt: self.translation_prompt.clone(),
+            translation_model: self.translation_model.clone(),
+            translation_model_openrouter: self.translation_model_openrouter.clone(),
+            translation_model_claude: self.translation_model_claude.clone(),
+            translation_model_gemini: self.translation_model_gemini.clone(),
+            video_service: self.video_service.clone(),
+            text_split_mode: self.text_split_mode.clone(),
+            text_split_char_limit: self.text_split_char_limit,
+            translation_temperature: self.translation_temperature,
+            translation_service: self.translation_service.clone(),
+            edge_tts_voice: self.edge_tts_voice.clone(),
+            edge_tts_rate: self.edge_tts_rate.clone(),
+            edge_tts_pitch: self.edge_tts_pitch.clone(),
+            edge_tts_volume: self.edge_tts_volume.clone(),
+            googler_image_max_threads: self.googler_image_max_threads,
+            googler_video_max_threads: self.googler_video_max_threads,
+            voiceover_convert_to_wav: self.voiceover_convert_to_wav,
+            video_prompt: self.video_prompt.clone(),
+            video_agent_prompt: self.video_agent_prompt.clone(),
+            googler_image_priority: self.googler_image_priority.clone(),
+            googler_video_priority: self.googler_video_priority.clone(),
+            video_media_type: self.video_media_type.clone(),
+            subtitles_service: self.subtitles_service.clone(),
+            whisper_language: self.whisper_language.clone(),
+            whisper_model: self.whisper_model.clone(),
+            whisper_max_line_width: self.whisper_max_line_width,
+            subtitle_font_size: self.subtitle_font_size,
+            subtitle_color: self.subtitle_color,
+            subtitle_margin_v: self.subtitle_margin_v,
+            subtitle_karaoke: self.subtitle_karaoke,
+            subtitle_karaoke_mode: self.subtitle_karaoke_mode,
+            subtitle_karaoke_highlight_color: self.subtitle_karaoke_highlight_color,
+            subtitle_karaoke_outline_color: self.subtitle_karaoke_outline_color,
+            subtitle_karaoke_bold: self.subtitle_karaoke_bold,
+            subtitle_karaoke_scale: self.subtitle_karaoke_scale,
+            subtitle_font: self.subtitle_font.clone(),
+            montage_service: self.montage_service.clone(),
+            montage_fps: self.montage_fps,
+            montage_preset: self.montage_preset.clone(),
+            montage_bitrate: self.montage_bitrate,
+            montage_transition: self.montage_transition.clone(),
+            montage_transition_duration: self.montage_transition_duration,
+            video_llm_service: self.video_llm_service.clone(),
+            video_llm_model: self.video_llm_model.clone(),
+            video_llm_model_openrouter: self.video_llm_model_openrouter.clone(),
+            video_llm_model_claude: self.video_llm_model_claude.clone(),
+            video_llm_model_gemini: self.video_llm_model_gemini.clone(),
+            video_llm_temperature: self.video_llm_temperature,
+            overlay_triggers_enabled: self.overlay_triggers_enabled,
+            overlay_triggers: self.overlay_triggers.clone(),
+        }
+    }
+
+    /// Застосовує налаштування з PipelineTemplate до поточного стану app (як при завантаженні шаблону).
+    fn apply_pipeline_template(&mut self, t: crate::gui::settings::storage::PipelineTemplate) {
+        self.openrouter_key = t.openrouter_key;
+        self.openrouter_status = None;
+        self.assemblyai_key = t.assemblyai_key;
+        self.assemblyai_status = None;
+        self.voiceover_provider = t.voiceover_provider;
+        self.voiceover_template_uuid = t.voiceover_template_uuid;
+        self.pipeline_translation_enabled = t.pipeline_translation_enabled;
+        self.pipeline_translation_control_enabled = t.pipeline_translation_control_enabled;
+        self.pipeline_control_auto_open = t.pipeline_control_auto_open;
+        self.pipeline_media_control_enabled = t.pipeline_media_control_enabled;
+        self.pipeline_agent_control_enabled = t.pipeline_agent_control_enabled;
+        self.pipeline_voiceover_enabled = t.pipeline_voiceover_enabled;
+        self.pipeline_video_enabled = t.pipeline_video_enabled;
+        self.pipeline_subtitles_enabled = t.pipeline_subtitles_enabled;
+        self.pipeline_editing_enabled = t.pipeline_editing_enabled;
+        self.translation_prompt = t.translation_prompt;
+        self.translation_model = t.translation_model.clone();
+        self.translation_model_openrouter = t.translation_model_openrouter.clone();
+        self.translation_model_claude = if t.translation_model_claude.is_empty() { "sonnet".to_string() } else { t.translation_model_claude.clone() };
+        self.translation_model_gemini = if t.translation_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { t.translation_model_gemini.clone() };
+        if t.translation_service == "OpenRouter" && self.translation_model_openrouter.is_empty() {
+            self.translation_model_openrouter = t.translation_model.clone();
+        }
+        self.translation_temperature = t.translation_temperature;
+        self.translation_service = t.translation_service;
+        self.video_service = t.video_service;
+        self.video_media_type = t.video_media_type;
+        self.text_split_mode = t.text_split_mode;
+        self.text_split_char_limit = t.text_split_char_limit;
+        self.video_prompt = t.video_prompt;
+        self.video_agent_prompt = t.video_agent_prompt;
+        self.video_llm_service = t.video_llm_service.clone();
+        self.video_llm_model_openrouter = t.video_llm_model_openrouter.clone();
+        self.video_llm_model_claude = if t.video_llm_model_claude.is_empty() { "sonnet".to_string() } else { t.video_llm_model_claude.clone() };
+        self.video_llm_model_gemini = if t.video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { t.video_llm_model_gemini.clone() };
+        self.video_llm_temperature = t.video_llm_temperature;
+        self.video_llm_model = match self.video_llm_service.as_str() {
+            "OpenRouter" => self.video_llm_model_openrouter.clone(),
+            "Claude Code" => self.video_llm_model_claude.clone(),
+            "Gemini CLI" => self.video_llm_model_gemini.clone(),
+            _ => t.video_llm_model.clone(),
+        };
+        self.edge_tts_voice = t.edge_tts_voice;
+        self.edge_tts_rate = t.edge_tts_rate;
+        self.edge_tts_pitch = t.edge_tts_pitch;
+        self.edge_tts_volume = t.edge_tts_volume;
+        self.googler_image_max_threads = t.googler_image_max_threads;
+        self.googler_video_max_threads = t.googler_video_max_threads;
+        self.voiceover_convert_to_wav = t.voiceover_convert_to_wav;
+        self.googler_image_priority = t.googler_image_priority;
+        self.googler_video_priority = t.googler_video_priority;
+        self.subtitles_service = t.subtitles_service;
+        self.whisper_language = t.whisper_language;
+        self.whisper_model = t.whisper_model;
+        self.whisper_max_line_width = t.whisper_max_line_width;
+        self.subtitle_font_size = t.subtitle_font_size;
+        self.subtitle_color = t.subtitle_color;
+        self.subtitle_margin_v = t.subtitle_margin_v;
+        self.subtitle_karaoke = t.subtitle_karaoke;
+        self.subtitle_karaoke_mode = t.subtitle_karaoke_mode;
+        self.subtitle_karaoke_highlight_color = t.subtitle_karaoke_highlight_color;
+        self.subtitle_karaoke_outline_color = t.subtitle_karaoke_outline_color;
+        self.subtitle_karaoke_bold = t.subtitle_karaoke_bold;
+        self.subtitle_karaoke_scale = t.subtitle_karaoke_scale;
+        self.subtitle_font = t.subtitle_font;
+        self.montage_service = t.montage_service;
+        self.montage_fps = t.montage_fps;
+        self.montage_preset = t.montage_preset;
+        self.montage_bitrate = t.montage_bitrate;
+        self.montage_transition = t.montage_transition;
+        self.montage_transition_duration = t.montage_transition_duration;
+        self.overlay_triggers_enabled = t.overlay_triggers_enabled;
+        self.overlay_triggers = t.overlay_triggers;
     }
 
     /// Малює вкладку системних логів роботи додатку.
@@ -986,8 +1136,35 @@ impl eframe::App for VideoMakerApp {
             &mut self.threads_window_open,
         );
 
+        // Відображаємо ліву панель историії ТІЛЬКИ на вкладці "Основна"
+        if self.active_tab == Tab::Main {
+            let mut delete_history_idx: Option<usize> = None;
+            let side_frame_left = egui::Frame::side_top_panel(ctx.style().as_ref())
+                .inner_margin(egui::Margin::same(0.0));
+            egui::SidePanel::left("task_history_panel")
+                .frame(side_frame_left)
+                .exact_width(190.0)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    let applied = crate::gui::task_history::draw_task_history_panel(
+                        ui,
+                        self.language,
+                        &self.task_history,
+                        &mut delete_history_idx,
+                    );
+                    if let Some((tmpl, text)) = applied {
+                        self.apply_pipeline_template(tmpl);
+                        self.text_input = text;
+                    }
+                });
+            if let Some(idx) = delete_history_idx {
+                crate::gui::settings::storage::remove_from_task_history(&mut self.task_history, idx);
+            }
+        }
+
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
         if self.active_tab == Tab::Main {
+            let jobs_len_before = self.jobs.len();
             let prev_translation_service = self.translation_service.clone();
 
             // default_width передається лише як початкове значення при першому запуску.
@@ -1114,6 +1291,28 @@ impl eframe::App for VideoMakerApp {
                 &mut self.jobs,
                 &mut self.job_counter,
             );
+
+            // Якщо нова задача була додана в чергу — записуємо в history
+            if self.jobs.len() > jobs_len_before {
+                if let Some(last_job) = self.jobs.last() {
+                    let template_name = if !self.template_name_input.is_empty()
+                        && self.saved_templates.contains(&self.template_name_input)
+                    {
+                        Some(self.template_name_input.clone())
+                    } else {
+                        None
+                    };
+                    let entry = crate::gui::settings::storage::TaskHistoryEntry {
+                        id: last_job.id,
+                        name: last_job.name.clone(),
+                        created_at: chrono::Utc::now().timestamp(),
+                        template_name,
+                        text: self.text_input.clone(),
+                        settings: self.current_pipeline_template(),
+                    };
+                    crate::gui::settings::storage::append_to_task_history(&mut self.task_history, entry);
+                }
+            }
 
             if self.translation_service != prev_translation_service {
                 if self.translation_service == "Gemini CLI" || self.translation_service == "Claude Code" {
