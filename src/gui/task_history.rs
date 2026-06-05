@@ -151,6 +151,8 @@ pub fn draw_task_history_panel(
                 if is_hovered {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                 }
+                let preview: String = entry.text.chars().take(300).collect();
+                let card_resp = card_resp.on_hover_text(preview);
                 if card_resp.clicked() {
                     apply = Some((entry.settings.clone(), entry.text.clone()));
                 }
