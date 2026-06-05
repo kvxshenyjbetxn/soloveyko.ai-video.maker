@@ -1,4 +1,3 @@
-use std::io::Read as IoRead;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -15,10 +14,29 @@ pub enum ClipKind {
     Audio,
 }
 
+// ─── Режим перетягування кліпу ───────────────────────────────────────────────
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DragMode {
+    Move,
+    TrimLeft,
+    TrimRight,
+}
+
+// ─── Стан перетягування кліпу ────────────────────────────────────────────────
+
+pub struct ClipDragState {
+    pub clip_id: String,
+    pub mode: DragMode,
+    pub initial_start: f32,
+    pub initial_duration: f32,
+    pub initial_mouse_x: f32,
+    pub initial_track_idx: usize,
+}
+
 // ─── Кліп на таймлінії ───────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct EditorClip {
     pub id: String,
     pub path: Option<PathBuf>,
@@ -38,7 +56,6 @@ impl EditorClip {
 // ─── Медіа-файл у пулі ───────────────────────────────────────────────────────
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct MediaItem {
     pub id: String,
     pub path: PathBuf,
@@ -57,21 +74,48 @@ impl MediaItem {
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
-        let kind = if matches!(ext.as_str(), "mp4" | "mov" | "avi" | "mkv" | "webm") {
+
+        let is_image = matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp" | "gif" | "bmp");
+        let is_video = matches!(ext.as_str(), "mp4" | "mov" | "avi" | "mkv" | "webm");
+        let is_audio = matches!(ext.as_str(), "mp3" | "wav" | "ogg" | "flac" | "aac");
+
+        let kind = if is_video {
             ClipKind::Video
-        } else if matches!(ext.as_str(), "mp3" | "wav" | "ogg" | "flac" | "aac") {
+        } else if is_audio {
             ClipKind::Audio
         } else {
             ClipKind::Image
         };
+
+        // Зображення завжди 5 секунд; для відео/аудіо пробуємо ffprobe
+        let duration_secs = if is_image {
+            5.0
+        } else if is_video || is_audio {
+            probe_duration(&path).unwrap_or(10.0)
+        } else {
+            5.0
+        };
+
         Self {
             id: uuid_str(),
             path,
             name,
-            duration_secs: 0.0, // заповнюється окремо якщо є
+            duration_secs,
             kind,
         }
     }
+}
+
+/// Отримує тривалість медіафайлу через ffprobe
+fn probe_duration(path: &Path) -> Option<f32> {
+    let out = std::process::Command::new("ffprobe")
+        .args(["-v", "error", "-show_entries", "format=duration",
+               "-of", "default=noprint_wrappers=1:nokey=1"])
+        .arg(path)
+        .output()
+        .ok()?;
+    let s = String::from_utf8_lossy(&out.stdout);
+    s.trim().parse::<f32>().ok()
 }
 
 fn uuid_str() -> String {
@@ -90,7 +134,6 @@ fn rand_u32() -> u32 {
 
 // ─── Стан редактора ───────────────────────────────────────────────────────────
 
-#[allow(dead_code)]
 pub struct MontageEditorState {
     pub job_name: String,
     pub save_path: PathBuf,
@@ -105,14 +148,14 @@ pub struct MontageEditorState {
     pub timeline_zoom: f32,
     pub selected_clip_id: Option<String>,
     pub dragged_media_id: Option<String>,
-    /// Підсвічення доріжки при drag-over (track_idx)
     pub drop_target_track: Option<usize>,
-    // Preview через ffmpeg
-    pub preview_texture: Option<egui::TextureHandle>,
-    pub preview_pending: Arc<Mutex<Option<egui::TextureHandle>>>,
-    pub preview_loading: Arc<Mutex<bool>>,
-    /// Ключ кадру що зараз в preview (щоб не перезапускати той самий)
-    pub preview_key: String,
+    pub clip_drag_state: Option<ClipDragState>,
+    // Preview — LRU кеш текстур + фоновий loader
+    pub frame_cache: std::collections::HashMap<String, egui::TextureHandle>,
+    /// (cache_key, Result) де None = завантаження провалилось
+    pub pending_frame: Arc<Mutex<Option<(String, Option<egui::TextureHandle>)>>>,
+    /// Ключ що зараз завантажується; None = вільно
+    pub loading_key: Option<String>,
 }
 
 impl MontageEditorState {
@@ -137,16 +180,52 @@ impl MontageEditorState {
             selected_clip_id: None,
             dragged_media_id: None,
             drop_target_track: None,
-            preview_texture: None,
-            preview_pending: Arc::new(Mutex::new(None)),
-            preview_loading: Arc::new(Mutex::new(false)),
-            preview_key: String::new(),
+            clip_drag_state: None,
+            frame_cache: std::collections::HashMap::new(),
+            pending_frame: Arc::new(Mutex::new(None)),
+            loading_key: None,
         }
     }
 
     pub fn total_dur(&self) -> f32 {
         let clip_end = self.clips.iter().map(|c| c.end_secs()).fold(0.0f32, f32::max);
         clip_end.max(self.total_duration).max(10.0)
+    }
+
+    /// Зберігає поточний стан кліпів у timeline.json для run_montage
+    pub fn save_to_timeline(&self) -> Result<(), std::io::Error> {
+        // Сортуємо кліпи трека 0 за початком (run_montage використовує тільки трек 0)
+        let mut sorted: Vec<&EditorClip> = self.clips.iter()
+            .filter(|c| c.track_idx == 0 && c.path.is_some())
+            .collect();
+        sorted.sort_by(|a, b| a.start_secs.partial_cmp(&b.start_secs).unwrap_or(std::cmp::Ordering::Equal));
+
+        let total_duration_secs = sorted.iter()
+            .map(|c| c.end_secs() as f64)
+            .fold(0.0f64, f64::max)
+            .max(self.total_dur() as f64);
+
+        let segments: Vec<serde_json::Value> = sorted.iter().map(|clip| {
+            let media_rel = clip.path.as_ref()
+                .and_then(|p| p.strip_prefix(&self.save_path).ok())
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_default();
+            serde_json::json!({
+                "start_secs": clip.start_secs as f64,
+                "end_secs": clip.end_secs() as f64,
+                "media": media_rel,
+            })
+        }).collect();
+
+        let json = serde_json::json!({
+            "total_duration_secs": total_duration_secs,
+            "segments": segments,
+        });
+
+        let timeline_path = self.save_path.join("timeline.json");
+        let content = serde_json::to_string_pretty(&json)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        std::fs::write(timeline_path, content)
     }
 }
 
@@ -227,7 +306,6 @@ fn load_media_pool(save_path: &Path) -> Vec<MediaItem> {
             }
         }
     }
-    // Також аудіо з кореня
     for name in &["voice.wav", "voice.mp3"] {
         let p = save_path.join(name);
         if p.exists() { items.push(MediaItem::from_path(p)); }
@@ -237,8 +315,6 @@ fn load_media_pool(save_path: &Path) -> Vec<MediaItem> {
 
 // ─── Головне вікно редактора ──────────────────────────────────────────────────
 
-/// Малює плаваюче вікно редактора монтажу.
-/// `jobs` потрібний для завантаження стану та отримання `montage_control_resume`.
 pub fn draw_montage_editor_window(
     ctx: &egui::Context,
     language: Language,
@@ -251,7 +327,6 @@ pub fn draw_montage_editor_window(
         None => return,
     };
 
-    // Завантажуємо стан якщо ще не завантажено
     if state.is_none() {
         if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
             *state = Some(MontageEditorState::load(
@@ -269,7 +344,6 @@ pub fn draw_montage_editor_window(
         None => return,
     };
 
-    // Плейбек
     if editor.is_playing {
         let elapsed = editor.last_frame_time.elapsed().as_secs_f32();
         editor.playhead = (editor.playhead + elapsed).min(editor.total_dur());
@@ -287,7 +361,6 @@ pub fn draw_montage_editor_window(
     );
     let mut is_open = true;
 
-    // Перевіряємо чи можна показати кнопку "Продовжити" (пайплайн чекає)
     let is_awaiting = jobs.iter().find(|j| j.id == job_id).map(|j| {
         *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMontageControl
     }).unwrap_or(false);
@@ -300,20 +373,16 @@ pub fn draw_montage_editor_window(
         .min_size([700.0, 480.0])
         .collapsible(false)
         .show(ctx, |ui| {
-            // Топ-бар із транспортом та кнопкою продовжити
             draw_topbar(ui, language, editor, is_awaiting, job_id, jobs);
             ui.separator();
 
-            // Основна область: ліво (пул) + центр (preview) + право (inspector)
             let available = ui.available_size();
-            let bottom_h = 200.0; // Висота таймлінії
-
-            // Верхня частина — три панелі
+            let bottom_h = 200.0;
             let top_h = (available.y - bottom_h - 8.0).max(100.0);
+
             ui.horizontal(|ui| {
                 ui.set_max_height(top_h);
 
-                // Ліво: медіа-пул
                 egui::SidePanel::left("editor_media_pool")
                     .resizable(true)
                     .default_width(220.0)
@@ -323,7 +392,6 @@ pub fn draw_montage_editor_window(
                         draw_media_pool(ui, language, editor);
                     });
 
-                // Право: інспектор
                 egui::SidePanel::right("editor_inspector")
                     .resizable(true)
                     .default_width(240.0)
@@ -333,7 +401,6 @@ pub fn draw_montage_editor_window(
                         draw_inspector(ui, language, editor);
                     });
 
-                // Центр: preview
                 egui::CentralPanel::default()
                     .frame(Frame::none().fill(Color32::from_rgb(10, 10, 12)).inner_margin(6.0))
                     .show_inside(ui, |ui| {
@@ -343,7 +410,6 @@ pub fn draw_montage_editor_window(
 
             ui.separator();
 
-            // Нижня частина: таймлінія
             ui.allocate_ui(Vec2::new(ui.available_width(), bottom_h), |ui| {
                 draw_timeline(ui, language, editor);
             });
@@ -366,34 +432,9 @@ fn draw_topbar(
     jobs: &[crate::queue::PipelineJob],
 ) {
     ui.horizontal(|ui| {
-        // Стоп
-        if ui.button("⏹").on_hover_text(translate(language, "montage_editor_stop")).clicked() {
-            editor.is_playing = false;
-            editor.playhead = 0.0;
-        }
-
-        // Play / Pause
-        let play_label = if editor.is_playing { "⏸" } else { "▶" };
-        if ui.button(play_label).clicked() {
-            editor.is_playing = !editor.is_playing;
-            editor.last_frame_time = Instant::now();
-        }
-
-        // Таймкод
-        let m = (editor.playhead / 60.0) as u32;
-        let s = (editor.playhead % 60.0) as u32;
-        let cs = ((editor.playhead % 1.0) * 100.0) as u32;
-        ui.label(
-            egui::RichText::new(format!("{:02}:{:02}.{:02}", m, s, cs)).monospace()
-        );
-
-        ui.separator();
-
-        // Масштаб
         ui.label(translate(language, "montage_editor_zoom"));
         ui.add(egui::Slider::new(&mut editor.timeline_zoom, 10.0..=300.0).show_value(false));
 
-        // Кількість кліпів / тривалість
         let total_dur = editor.total_dur();
         let dm = (total_dur / 60.0) as u32;
         let ds = (total_dur % 60.0) as u32;
@@ -402,7 +443,6 @@ fn draw_topbar(
                 .weak().size(11.0)
         );
 
-        // Кнопка "Продовжити" — активна тільки якщо пайплайн чекає
         ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
             let btn = ui.add_enabled(
                 is_awaiting,
@@ -414,6 +454,7 @@ fn draw_topbar(
                 .fill(if is_awaiting { Color32::from_rgb(39, 174, 96) } else { Color32::from_rgb(30, 30, 35) })
             );
             if btn.clicked() {
+                let _ = editor.save_to_timeline();
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
                     let (lock, cvar) = &*job.montage_control_resume;
                     *lock.lock().unwrap() = true;
@@ -482,16 +523,17 @@ fn draw_media_pool(ui: &mut egui::Ui, language: Language, editor: &mut MontageEd
                     ClipKind::Image => "🖼",
                     ClipKind::Audio => "🎵",
                 };
-                let display = if media.name.chars().count() > 20 {
-                    format!("{} {}…", icon, media.name.chars().take(17).collect::<String>())
+                let dur_text = format!("{:.1}s", media.duration_secs);
+                let display = if media.name.chars().count() > 16 {
+                    format!("{} {}… {}", icon, media.name.chars().take(13).collect::<String>(), dur_text)
                 } else {
-                    format!("{} {}", icon, media.name)
+                    format!("{} {} {}", icon, media.name, dur_text)
                 };
                 let text_col = if is_dragged { Color32::from_rgb(9, 123, 244) } else { Color32::from_rgb(200, 200, 205) };
                 ui.painter().text(
                     Pos2::new(rect.left() + 6.0, rect.top() + 6.0),
                     Align2::LEFT_TOP, &display,
-                    egui::FontId::proportional(11.5), text_col,
+                    egui::FontId::proportional(11.0), text_col,
                 );
 
                 ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
@@ -507,199 +549,282 @@ fn draw_media_pool(ui: &mut egui::Ui, language: Language, editor: &mut MontageEd
         }
     });
 
-    // Дроп: якщо відпустили drag над таймлінією — додається через drop_target_track
+    // Плаваюча картка при drag
+    if let Some(ref drag_id) = editor.dragged_media_id.clone() {
+        if let Some(media) = editor.media_pool.iter().find(|m| &m.id == drag_id) {
+            if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
+                let layer = egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("drag_card"));
+                let painter = ui.ctx().layer_painter(layer);
+                let card_w = 140.0;
+                let card_h = 28.0;
+                let card_rect = Rect::from_min_size(
+                    Pos2::new(pos.x + 10.0, pos.y - card_h / 2.0),
+                    Vec2::new(card_w, card_h),
+                );
+                painter.rect(card_rect, 4.0,
+                    Color32::from_rgb(28, 36, 52),
+                    Stroke::new(1.5, Color32::from_rgb(9, 123, 244)));
+                let icon = match media.kind { ClipKind::Video => "🎥", ClipKind::Image => "🖼", ClipKind::Audio => "🎵" };
+                let label = if media.name.chars().count() > 12 {
+                    format!("{} {}…", icon, media.name.chars().take(10).collect::<String>())
+                } else {
+                    format!("{} {}", icon, media.name)
+                };
+                painter.text(
+                    card_rect.center(),
+                    Align2::CENTER_CENTER, &label,
+                    egui::FontId::proportional(11.0), Color32::WHITE,
+                );
+            }
+        }
+    }
 }
 
 // ─── Preview ──────────────────────────────────────────────────────────────────
 
+/// Обчислює ключ кешу для поточної позиції плейхеду на кліпі.
+/// Зображення: один ключ на кліп. Відео: ключ з кроком 0.1s.
+fn preview_cache_key(clip: &EditorClip, clip_offset: f32) -> String {
+    match clip.kind {
+        ClipKind::Image => format!("img-{}", clip.id),
+        ClipKind::Video => format!("vid-{}-{}", clip.id, (clip_offset * 10.0) as u32),
+        ClipKind::Audio => String::new(),
+    }
+}
+
 fn draw_preview(ui: &mut egui::Ui, editor: &mut MontageEditorState) {
     let ph = editor.playhead;
 
-    // Знаходимо активний кліп на доріжці 0
-    let active_clip = editor.clips.iter()
+    // Активний кліп трека 0 під плейхедом
+    let active = editor.clips.iter()
         .filter(|c| c.track_idx == 0 && c.start_secs <= ph && ph < c.end_secs())
         .last()
-        .map(|c| (c.id.clone(), c.path.clone(), c.start_secs, c.kind.clone()));
+        .cloned();
 
-    // Ключ кешу: округляємо до 0.25 сек щоб не спамити ffmpeg при smooth playback
-    let new_key = match &active_clip {
-        Some((id, _, start, _)) => {
-            let offset = ((ph - start) * 4.0) as u32; // кратно 0.25 сек
-            format!("{}-{}", id, offset)
-        }
-        None => String::from("empty"),
-    };
+    let cache_key = active.as_ref().map(|c| {
+        let off = (ph - c.start_secs).max(0.0);
+        preview_cache_key(c, off)
+    }).unwrap_or_default();
 
-    // Дренуємо готовий кадр з фонового потоку
+    // ── Дренуємо pending результат із фонового потоку ────────────────────────
     {
-        let mut pending = editor.preview_pending.lock().unwrap();
-        if let Some(tex) = pending.take() {
-            editor.preview_texture = Some(tex);
-            *editor.preview_loading.lock().unwrap() = false;
+        let mut pend = editor.pending_frame.lock().unwrap();
+        if let Some((key, tex_opt)) = pend.take() {
+            if let Some(tex) = tex_opt {
+                // LRU: обмежуємо кеш 100 записами
+                if editor.frame_cache.len() >= 100 {
+                    if let Some(oldest) = editor.frame_cache.keys().next().cloned() {
+                        editor.frame_cache.remove(&oldest);
+                    }
+                }
+                editor.frame_cache.insert(key, tex);
+            }
+            editor.loading_key = None;
         }
     }
 
-    // Запускаємо витягування якщо ключ змінився і кліп є
-    if new_key != editor.preview_key {
-        editor.preview_key = new_key;
-        if let Some((_, Some(path), start, kind)) = active_clip.clone() {
-            let offset_secs = (ph - start).max(0.0);
-            let loading = Arc::clone(&editor.preview_loading);
-            let pending = Arc::clone(&editor.preview_pending);
-            let ctx = ui.ctx().clone();
-            if !*loading.lock().unwrap() {
-                *loading.lock().unwrap() = true;
+    // ── Тригеримо завантаження якщо кліп є, кеш-міс, і не зайняте ──────────
+    if !cache_key.is_empty()
+        && !editor.frame_cache.contains_key(&cache_key)
+        && editor.loading_key.is_none()
+    {
+        if let Some(ref clip) = active {
+            if let Some(path) = clip.path.clone() {
+                let off = (ph - clip.start_secs).max(0.0);
+                let kind = clip.kind.clone();
+                let key = cache_key.clone();
+                let pending = Arc::clone(&editor.pending_frame);
+                let ctx = ui.ctx().clone();
+                editor.loading_key = Some(key.clone());
                 std::thread::spawn(move || {
-                    let tex = extract_frame_at(&path, offset_secs, &ctx, &kind);
-                    *pending.lock().unwrap() = tex;
+                    let tex = load_frame_bg(&path, off, &kind, &ctx);
+                    *pending.lock().unwrap() = Some((key, tex));
                     ctx.request_repaint();
                 });
             }
-        } else {
-            editor.preview_texture = None;
         }
     }
 
-    ui.vertical_centered(|ui| {
-        ui.label(egui::RichText::new("📺 Попередній перегляд").strong().size(12.0));
+    let current_tex = editor.frame_cache.get(&cache_key).cloned();
+    let is_loading = editor.loading_key.is_some();
 
-        let avail = ui.available_size() - Vec2::new(0.0, 40.0);
-        let h = avail.y.max(120.0);
-        let w = (h * 16.0 / 9.0).min(avail.x);
-        let preview_size = Vec2::new(w, w * 9.0 / 16.0);
+    // ── Layout ───────────────────────────────────────────────────────────────
+    const TRANSPORT_H: f32 = 44.0;
+    const LABEL_H: f32 = 18.0;
 
-        let (rect, _) = ui.allocate_exact_size(preview_size, Sense::hover());
-        ui.painter().rect_filled(rect, 4.0, Color32::from_rgb(6, 6, 8));
+    let avail_w = ui.available_width();
+    let avail_h = (ui.available_height() - TRANSPORT_H - LABEL_H - 10.0).max(40.0);
+    let frame_w = (avail_h * 16.0 / 9.0).min(avail_w - 4.0);
+    let frame_h = frame_w * 9.0 / 16.0;
+    let pad_x = ((avail_w - frame_w) / 2.0).max(0.0);
 
-        if let Some(tex) = &editor.preview_texture {
-            // Показуємо реальний кадр
+    // Заголовок
+    ui.label(egui::RichText::new("📺 Попередній перегляд").size(11.0).weak());
+
+    // Відео-фрейм (горизонтальний відступ = center)
+    ui.horizontal(|ui| {
+        ui.add_space(pad_x);
+        let (rect, _) = ui.allocate_exact_size(Vec2::new(frame_w, frame_h), Sense::hover());
+
+        ui.painter_at(rect).rect_filled(rect, 4.0, Color32::from_rgb(5, 5, 7));
+
+        if let Some(ref tex) = current_tex {
             let sz = tex.size_vec2();
             let scale = (rect.width() / sz.x).min(rect.height() / sz.y);
-            let disp = sz * scale;
-            let img_rect = Rect::from_center_size(rect.center(), disp);
-            ui.painter().image(tex.id(), img_rect, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
-        } else if *editor.preview_loading.lock().unwrap() {
-            // Завантажується
-            ui.put(rect, egui::Spinner::new().size(28.0));
+            let img_rect = Rect::from_center_size(rect.center(), sz * scale);
+            ui.painter_at(rect).image(
+                tex.id(), img_rect,
+                Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                Color32::WHITE,
+            );
+            // Маленький індикатор оновлення у куті (не перекриває кадр)
+            if is_loading {
+                let dot = Pos2::new(rect.right() - 10.0, rect.top() + 10.0);
+                ui.painter_at(rect).circle_filled(dot, 5.0, Color32::from_rgba_unmultiplied(9, 123, 244, 220));
+            }
+        } else if is_loading {
+            // Перше завантаження — спіннер у центрі
+            ui.put(rect, egui::Spinner::new().size(36.0));
         } else {
-            // Нема кліпу
-            ui.painter().text(
-                rect.center() - Vec2::new(0.0, 8.0),
-                Align2::CENTER_CENTER, "🎬",
-                egui::FontId::proportional(30.0), Color32::from_rgb(45, 45, 50),
+            // Нема кліпу під плейхедом
+            ui.painter_at(rect).text(
+                rect.center() - Vec2::new(0.0, 12.0), Align2::CENTER_CENTER,
+                "🎬", egui::FontId::proportional(36.0), Color32::from_rgb(40, 40, 52),
             );
-            ui.painter().text(
-                rect.center() + Vec2::new(0.0, 20.0),
-                Align2::CENTER_CENTER, "Немає відео у цей момент",
-                egui::FontId::proportional(10.0), Color32::from_rgb(80, 80, 90),
+            ui.painter_at(rect).text(
+                rect.center() + Vec2::new(0.0, 24.0), Align2::CENTER_CENTER,
+                "Немає медіа під плейхедом",
+                egui::FontId::proportional(10.0), Color32::from_rgb(70, 70, 88),
             );
+        }
+    });
+
+    ui.add_space(4.0);
+
+    // ── Транспортні кнопки (під відео, по центру) ────────────────────────────
+    let total = editor.total_dur();
+    ui.horizontal(|ui| {
+        // Центруємо групу кнопок
+        let group_w = 260.0;
+        ui.add_space(((avail_w - group_w) / 2.0).max(0.0));
+
+        // ⏮ -0.1s
+        if ui.button("⏮").on_hover_text("-0.1s").clicked() {
+            editor.playhead = (editor.playhead - 0.1).max(0.0);
+        }
+        // ⏹ Стоп
+        if ui.button("⏹").clicked() {
+            editor.is_playing = false;
+            editor.playhead = 0.0;
+        }
+        // ▶ / ⏸
+        let play_lbl = egui::RichText::new(if editor.is_playing { "⏸" } else { "▶" }).size(16.0);
+        if ui.button(play_lbl).clicked() {
+            editor.is_playing = !editor.is_playing;
+            editor.last_frame_time = Instant::now();
+        }
+        // ⏭ +0.1s
+        if ui.button("⏭").on_hover_text("+0.1s").clicked() {
+            editor.playhead = (editor.playhead + 0.1).min(total);
         }
 
-        // Спіннер завантаження у куті поверх кадру
-        if *editor.preview_loading.lock().unwrap() && editor.preview_texture.is_some() {
-            ui.painter().rect_filled(
-                Rect::from_min_size(Pos2::new(rect.right() - 26.0, rect.top() + 4.0), Vec2::splat(22.0)),
-                4.0, Color32::from_black_alpha(120),
-            );
-            ui.put(
-                Rect::from_center_size(Pos2::new(rect.right() - 15.0, rect.top() + 15.0), Vec2::splat(14.0)),
-                egui::Spinner::new().size(14.0),
-            );
-        }
+        ui.add_space(8.0);
 
         // Таймкод
-        ui.add_space(4.0);
-        let m = (ph / 60.0) as u32;
-        let s = (ph % 60.0) as u32;
-        let cs = ((ph % 1.0) * 100.0) as u32;
+        let m = (editor.playhead / 60.0) as u32;
+        let s = (editor.playhead % 60.0) as u32;
+        let cs = ((editor.playhead % 1.0) * 100.0) as u32;
         ui.label(
-            egui::RichText::new(format!("{:02}:{:02}.{:02}", m, s, cs)).monospace().size(13.0)
+            egui::RichText::new(format!("{:02}:{:02}.{:02}", m, s, cs))
+                .monospace().size(12.0).color(Color32::from_rgb(210, 210, 230))
         );
+        let tm = (total / 60.0) as u32;
+        let ts = (total % 60.0) as u32;
+        ui.label(egui::RichText::new(format!("/ {:02}:{:02}", tm, ts)).size(10.0).weak());
     });
 }
 
-/// Витягує один кадр через ffmpeg pipe зі вказаного offset_secs.
-/// Для зображень — просто читає як картинку.
-fn extract_frame_at(path: &Path, offset_secs: f32, ctx: &egui::Context, kind: &ClipKind) -> Option<egui::TextureHandle> {
-    const TARGET_W: u32 = 640;
-
+/// Завантажує один кадр у фоновому потоці.
+/// Зображення → `image` crate (без ffmpeg). Відео → ffmpeg PPM.
+fn load_frame_bg(
+    path: &Path,
+    offset_secs: f32,
+    kind: &ClipKind,
+    ctx: &egui::Context,
+) -> Option<egui::TextureHandle> {
     match kind {
         ClipKind::Image => {
-            // Зображення: читаємо через ffmpeg щоб нормалізувати формат → RGBA
-            let out = std::process::Command::new("ffmpeg")
-                .arg("-i").arg(path)
-                .arg("-vf").arg(format!("scale={}:-2", TARGET_W))
-                .arg("-frames:v").arg("1")
-                .arg("-f").arg("rawvideo")
-                .arg("-pix_fmt").arg("rgba")
-                .arg("-loglevel").arg("error")
-                .arg("-")
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
-                .spawn();
-            read_ffmpeg_frame(out, path, ctx, TARGET_W, "img")
+            let img = image::open(path).ok()?;
+            let img = img.thumbnail(800, 800);
+            let rgba = img.to_rgba8();
+            let (w, h) = rgba.dimensions();
+            let ci = egui::ColorImage::from_rgba_unmultiplied(
+                [w as usize, h as usize], &rgba.into_raw(),
+            );
+            Some(ctx.load_texture(
+                format!("img_{}", path.to_string_lossy()),
+                ci, egui::TextureOptions::LINEAR,
+            ))
         }
         ClipKind::Video => {
-            // Відео: seek до потрібної секунди
+            // ffmpeg → PPM (самоописний формат, не потрібно знати розмір заздалегідь)
             let out = std::process::Command::new("ffmpeg")
                 .arg("-ss").arg(format!("{:.3}", offset_secs))
                 .arg("-i").arg(path)
-                .arg("-vf").arg(format!("scale={}:-2", TARGET_W))
+                .arg("-vf").arg("scale=800:-2")
                 .arg("-frames:v").arg("1")
-                .arg("-f").arg("rawvideo")
-                .arg("-pix_fmt").arg("rgba")
+                .arg("-f").arg("image2pipe")
+                .arg("-vcodec").arg("ppm")
                 .arg("-loglevel").arg("error")
                 .arg("-")
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
-                .spawn();
-            read_ffmpeg_frame(out, path, ctx, TARGET_W, "vid")
+                .output()
+                .ok()?;
+            if out.stdout.is_empty() { return None; }
+            let (w, h, offset) = parse_ppm_header(&out.stdout)?;
+            let pixels = &out.stdout[offset..];
+            if pixels.len() < w * h * 3 { return None; }
+            let rgba: Vec<u8> = pixels[..w * h * 3].chunks_exact(3)
+                .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255u8])
+                .collect();
+            let ci = egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba);
+            Some(ctx.load_texture(
+                format!("vid_{}", path.to_string_lossy()),
+                ci, egui::TextureOptions::LINEAR,
+            ))
         }
         ClipKind::Audio => None,
     }
 }
 
-fn read_ffmpeg_frame(
-    child: Result<std::process::Child, std::io::Error>,
-    path: &Path,
-    ctx: &egui::Context,
-    target_w: u32,
-    prefix: &str,
-) -> Option<egui::TextureHandle> {
-    let mut child = child.ok()?;
-
-    // Дізнаємося реальні розміри через ffprobe
-    let (out_w, out_h) = get_preview_dimensions(path, target_w).unwrap_or((target_w, target_w * 9 / 16));
-    let frame_bytes = (out_w * out_h * 4) as usize;
-
-    let mut buf = vec![0u8; frame_bytes];
-    if let Some(mut stdout) = child.stdout.take() {
-        stdout.read_exact(&mut buf).ok()?;
-    }
-    let _ = child.wait();
-
-    let ci = egui::ColorImage::from_rgba_unmultiplied([out_w as usize, out_h as usize], &buf);
-    let name = format!("{}_{}", prefix, path.to_string_lossy());
-    Some(ctx.load_texture(name, ci, egui::TextureOptions::LINEAR))
+fn parse_ppm_header(data: &[u8]) -> Option<(usize, usize, usize)> {
+    let mut i = 0;
+    if data.get(i..i + 2)? != b"P6" { return None; }
+    i += 2;
+    i = ppm_skip(data, i);
+    let (w, ni) = ppm_num(data, i)?; i = ni;
+    i = ppm_skip(data, i);
+    let (h, ni) = ppm_num(data, i)?; i = ni;
+    i = ppm_skip(data, i);
+    let (_, ni) = ppm_num(data, i)?; i = ni;   // max value
+    if i < data.len() { i += 1; }               // один whitespace після max
+    Some((w, h, i))
 }
 
-fn get_preview_dimensions(path: &Path, target_w: u32) -> Option<(u32, u32)> {
-    let output = std::process::Command::new("ffprobe")
-        .args(["-v", "quiet", "-select_streams", "v:0",
-               "-show_entries", "stream=width,height",
-               "-of", "csv=p=0"])
-        .arg(path)
-        .output()
-        .ok()?;
-    let s = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = s.trim().split(',').collect();
-    if parts.len() < 2 { return None; }
-    let w: u32 = parts[0].trim().parse().ok()?;
-    let h: u32 = parts[1].trim().parse().ok()?;
-    if w == 0 || h == 0 { return None; }
-    let scale = target_w as f32 / w as f32;
-    let out_h = ((h as f32 * scale) as u32).max(2) & !1;
-    Some((target_w, out_h))
+fn ppm_skip(data: &[u8], mut i: usize) -> usize {
+    loop {
+        while i < data.len() && data[i].is_ascii_whitespace() { i += 1; }
+        if i < data.len() && data[i] == b'#' {
+            while i < data.len() && data[i] != b'\n' { i += 1; }
+        } else { break; }
+    }
+    i
+}
+
+fn ppm_num(data: &[u8], mut i: usize) -> Option<(usize, usize)> {
+    let s = i;
+    while i < data.len() && data[i].is_ascii_digit() { i += 1; }
+    if i == s { return None; }
+    Some((std::str::from_utf8(&data[s..i]).ok()?.parse().ok()?, i))
 }
 
 // ─── Інспектор ───────────────────────────────────────────────────────────────
@@ -784,7 +909,6 @@ fn draw_timeline(ui: &mut egui::Ui, _language: Language, editor: &mut MontageEdi
                 ui.add_space(2.0);
             }
 
-            // Аудіо трек
             if editor.audio_path.is_some() {
                 ui.add_space(2.0);
                 ui.allocate_ui(Vec2::new(label_w, track_h), |ui| {
@@ -799,16 +923,15 @@ fn draw_timeline(ui: &mut egui::Ui, _language: Language, editor: &mut MontageEdi
             }
         });
 
-        // Горизонтальна область таймлінії
         ScrollArea::horizontal().id_salt("editor_timeline_scroll").auto_shrink([false; 2]).show(ui, |ui| {
             let total_audio_tracks = if editor.audio_path.is_some() { 1 } else { 0 };
             let total_tracks_h = ruler_h + (track_h + 2.0) * (editor.num_tracks + total_audio_tracks) as f32;
-            let timeline_w = (total_dur + 4.0) * zoom;
+            let timeline_w = (total_dur + 10.0) * zoom;
 
             let (rect, resp) = ui.allocate_exact_size(Vec2::new(timeline_w, total_tracks_h), Sense::click_and_drag());
-            let painter = ui.painter();
+            // painter_at повертає owned Painter (не позичає ui), тому ui.allocate_rect() далі не конфліктує
+            let painter = ui.painter_at(rect);
 
-            // Фон
             painter.rect_filled(rect, 0.0, Color32::from_rgb(14, 14, 17));
 
             // Лінійка часу
@@ -834,12 +957,10 @@ fn draw_timeline(ui: &mut egui::Ui, _language: Language, editor: &mut MontageEdi
                 }
             }
 
-            // Фони треків та кліпи
+            // Фони треків
             for track_idx in 0..editor.num_tracks {
                 let track_y = rect.top() + ruler_h + (track_h + 2.0) * track_idx as f32;
                 let track_row = Rect::from_min_size(Pos2::new(rect.left(), track_y), Vec2::new(rect.width(), track_h));
-
-                // Фон доріжки
                 let track_bg = if editor.drop_target_track == Some(track_idx) {
                     Color32::from_rgba_unmultiplied(9, 123, 244, 20)
                 } else {
@@ -850,44 +971,171 @@ fn draw_timeline(ui: &mut egui::Ui, _language: Language, editor: &mut MontageEdi
                     [Pos2::new(rect.left(), track_y + track_h), Pos2::new(rect.right(), track_y + track_h)],
                     Stroke::new(1.0, Color32::from_rgb(28, 28, 33)),
                 );
+            }
 
-                // Кліпи на цій доріжці
-                for clip in editor.clips.iter().filter(|c| c.track_idx == track_idx) {
-                    let cx = rect.left() + clip.start_secs * zoom;
-                    let cw = (clip.duration * zoom).max(4.0);
-                    let clip_rect = Rect::from_min_size(
-                        Pos2::new(cx, track_y + 2.0),
-                        Vec2::new(cw, track_h - 4.0),
-                    );
+            let mouse_pos = ui.input(|i| i.pointer.hover_pos());
 
-                    let is_sel = editor.selected_clip_id.as_deref() == Some(clip.id.as_str());
-                    let (bg, border) = match clip.kind {
-                        ClipKind::Video => (Color32::from_rgb(18, 32, 55), Color32::from_rgb(9, 100, 220)),
-                        ClipKind::Image => (Color32::from_rgb(30, 22, 48), Color32::from_rgb(120, 70, 200)),
-                        ClipKind::Audio => (Color32::from_rgb(20, 40, 28), Color32::from_rgb(39, 160, 80)),
-                    };
-                    let border = if is_sel { Color32::WHITE } else { border };
-                    painter.rect(clip_rect, 3.0, bg, Stroke::new(if is_sel { 2.0 } else { 1.2 }, border));
+            // Ghost-preview при drag з медіа-пулу
+            if let Some(ref drag_id) = editor.dragged_media_id.clone() {
+                if let Some(pos) = mouse_pos {
+                    if rect.contains(pos) && pos.y >= rect.top() + ruler_h {
+                        let click_t = ((pos.x - rect.left()) / zoom).max(0.0);
+                        let rel_y = pos.y - (rect.top() + ruler_h);
+                        let t_idx = ((rel_y / (track_h + 2.0)) as usize).min(editor.num_tracks - 1);
+                        editor.drop_target_track = Some(t_idx);
 
-                    if cw > 18.0 {
-                        let icon = match clip.kind { ClipKind::Video => "🎬", ClipKind::Image => "🖼", ClipKind::Audio => "🎵" };
-                        let label = if clip.name.chars().count() > 16 {
-                            format!("{} {}…", icon, clip.name.chars().take(13).collect::<String>())
-                        } else {
-                            format!("{} {}", icon, clip.name)
-                        };
-                        painter.text(
-                            Pos2::new(clip_rect.left() + 4.0, clip_rect.top() + 5.0),
-                            Align2::LEFT_TOP, &label,
-                            egui::FontId::proportional(10.0), Color32::from_rgb(200, 200, 215),
-                        );
-                        if cw > 40.0 {
+                        if let Some(media) = editor.media_pool.iter().find(|m| &m.id == drag_id) {
+                            let preview_x = rect.left() + click_t * zoom;
+                            let preview_w = (media.duration_secs * zoom).max(4.0);
+                            let preview_y = rect.top() + ruler_h + (track_h + 2.0) * t_idx as f32 + 2.0;
+                            let preview_rect = Rect::from_min_size(
+                                Pos2::new(preview_x, preview_y),
+                                Vec2::new(preview_w, track_h - 4.0),
+                            );
+                            painter.rect_filled(preview_rect, 4.0, Color32::from_rgba_unmultiplied(9, 123, 244, 45));
+                            painter.rect_stroke(preview_rect, 4.0, Stroke::new(1.5, Color32::from_rgb(9, 123, 244)));
                             painter.text(
-                                Pos2::new(clip_rect.left() + 4.0, clip_rect.top() + 19.0),
-                                Align2::LEFT_TOP, format!("{:.1}s", clip.duration),
-                                egui::FontId::proportional(9.0), Color32::from_rgb(120, 120, 130),
+                                Pos2::new(preview_rect.left() + 6.0, preview_rect.top() + 4.0),
+                                Align2::LEFT_TOP,
+                                format!("{:.1}s → V{}", click_t, t_idx + 1),
+                                egui::FontId::proportional(10.0), Color32::WHITE,
                             );
                         }
+                        ui.ctx().request_repaint();
+                    } else {
+                        editor.drop_target_track = None;
+                    }
+                }
+            }
+
+            // Drop з медіа-пулу на таймлінію
+            if ui.input(|i| !i.pointer.any_down()) {
+                if let Some(drag_id) = editor.dragged_media_id.take() {
+                    if let Some(pos) = mouse_pos {
+                        if rect.contains(pos) && pos.y >= rect.top() + ruler_h {
+                            let t_idx = {
+                                let rel_y = pos.y - (rect.top() + ruler_h);
+                                ((rel_y / (track_h + 2.0)) as usize).min(editor.num_tracks - 1)
+                            };
+                            let start = ((pos.x - rect.left()) / zoom).max(0.0);
+                            if let Some(media) = editor.media_pool.iter().find(|m| m.id == drag_id) {
+                                let kind = media.kind.clone();
+                                let name = media.name.clone();
+                                let path = Some(media.path.clone());
+                                let duration = media.duration_secs;
+                                let new_id = uuid_str();
+                                editor.selected_clip_id = Some(new_id.clone());
+                                editor.clips.push(EditorClip {
+                                    id: new_id,
+                                    path,
+                                    name,
+                                    start_secs: start,
+                                    duration,
+                                    track_idx: t_idx,
+                                    kind,
+                                });
+                            }
+                        }
+                    }
+                    editor.drop_target_track = None;
+                }
+            }
+
+            // Обробка перетягування кліпів (move / trim)
+            update_clip_drag(ui.ctx(), editor, rect, ruler_h, track_h, zoom);
+
+            // Кліпи
+            let clips_snapshot: Vec<EditorClip> = editor.clips.clone();
+            for clip in &clips_snapshot {
+                let track_y = rect.top() + ruler_h + (track_h + 2.0) * clip.track_idx as f32;
+                let cx = rect.left() + clip.start_secs * zoom;
+                let cw = (clip.duration * zoom).max(4.0);
+                let clip_rect = Rect::from_min_size(
+                    Pos2::new(cx, track_y + 2.0),
+                    Vec2::new(cw, track_h - 4.0),
+                );
+
+                let is_sel = editor.selected_clip_id.as_deref() == Some(clip.id.as_str());
+                let (bg, accent) = match clip.kind {
+                    ClipKind::Video => (Color32::from_rgb(18, 32, 55), Color32::from_rgb(9, 100, 220)),
+                    ClipKind::Image => (Color32::from_rgb(30, 22, 48), Color32::from_rgb(120, 70, 200)),
+                    ClipKind::Audio => (Color32::from_rgb(20, 40, 28), Color32::from_rgb(39, 160, 80)),
+                };
+                let border = if is_sel { Color32::WHITE } else { accent };
+                painter.rect(clip_rect, 3.0, bg, Stroke::new(if is_sel { 2.0 } else { 1.2 }, border));
+
+                // Trim-ручки (видимі завжди, акцентовані при виділенні)
+                let handle_w = 6.0;
+                let handle_col = if is_sel { Color32::WHITE } else { accent.linear_multiply(0.6) };
+                // Ліва ручка
+                painter.rect_filled(
+                    Rect::from_min_size(clip_rect.min, Vec2::new(handle_w, clip_rect.height())),
+                    2.0, handle_col,
+                );
+                // Права ручка
+                painter.rect_filled(
+                    Rect::from_min_size(
+                        Pos2::new(clip_rect.max.x - handle_w, clip_rect.min.y),
+                        Vec2::new(handle_w, clip_rect.height()),
+                    ),
+                    2.0, handle_col,
+                );
+
+                if cw > 18.0 {
+                    let icon = match clip.kind { ClipKind::Video => "🎬", ClipKind::Image => "🖼", ClipKind::Audio => "🎵" };
+                    let label = if clip.name.chars().count() > 16 {
+                        format!("{} {}…", icon, clip.name.chars().take(13).collect::<String>())
+                    } else {
+                        format!("{} {}", icon, clip.name)
+                    };
+                    painter.text(
+                        Pos2::new(clip_rect.left() + handle_w + 2.0, clip_rect.top() + 5.0),
+                        Align2::LEFT_TOP, &label,
+                        egui::FontId::proportional(10.0), Color32::from_rgb(200, 200, 215),
+                    );
+                    if cw > 50.0 {
+                        painter.text(
+                            Pos2::new(clip_rect.left() + handle_w + 2.0, clip_rect.top() + 19.0),
+                            Align2::LEFT_TOP, format!("{:.1}s", clip.duration),
+                            egui::FontId::proportional(9.0), Color32::from_rgb(120, 120, 130),
+                        );
+                    }
+                }
+
+                // Курсор resize біля країв
+                if let Some(pos) = mouse_pos {
+                    if clip_rect.contains(pos) {
+                        let rx = pos.x - clip_rect.left();
+                        if rx < 8.0 || rx > clip_rect.width() - 8.0 {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                        }
+                    }
+                }
+
+                // Початок перетягування
+                let clip_resp = ui.allocate_rect(clip_rect, Sense::click_and_drag());
+                if clip_resp.clicked() {
+                    editor.selected_clip_id = Some(clip.id.clone());
+                }
+                if clip_resp.drag_started() {
+                    if let Some(pos) = mouse_pos {
+                        let rx = pos.x - clip_rect.left();
+                        let mode = if rx < 8.0 {
+                            DragMode::TrimLeft
+                        } else if rx > clip_rect.width() - 8.0 {
+                            DragMode::TrimRight
+                        } else {
+                            DragMode::Move
+                        };
+                        editor.clip_drag_state = Some(ClipDragState {
+                            clip_id: clip.id.clone(),
+                            mode,
+                            initial_start: clip.start_secs,
+                            initial_duration: clip.duration,
+                            initial_mouse_x: pos.x,
+                            initial_track_idx: clip.track_idx,
+                        });
+                        editor.selected_clip_id = Some(clip.id.clone());
                     }
                 }
             }
@@ -897,7 +1145,6 @@ fn draw_timeline(ui: &mut egui::Ui, _language: Language, editor: &mut MontageEdi
                 let audio_y = rect.top() + ruler_h + (track_h + 2.0) * editor.num_tracks as f32 + 2.0;
                 let audio_row = Rect::from_min_size(Pos2::new(rect.left(), audio_y - 2.0), Vec2::new(rect.width(), track_h));
                 painter.rect_filled(audio_row, 0.0, Color32::from_rgb(14, 22, 16));
-
                 let audio_w = total_dur * zoom;
                 let audio_rect = Rect::from_min_size(Pos2::new(rect.left(), audio_y), Vec2::new(audio_w, track_h - 4.0));
                 painter.rect(audio_rect, 3.0, Color32::from_rgb(20, 48, 30), Stroke::new(1.2, Color32::from_rgb(39, 174, 96)));
@@ -918,77 +1165,125 @@ fn draw_timeline(ui: &mut egui::Ui, _language: Language, editor: &mut MontageEdi
                     [Pos2::new(ph_x, rect.top()), Pos2::new(ph_x, rect.bottom())],
                     Stroke::new(2.0, Color32::from_rgb(9, 123, 244)),
                 );
-                painter.circle_filled(Pos2::new(ph_x, rect.top() + ruler_h - 4.0), 5.0, Color32::from_rgb(9, 123, 244));
+                let ph_top = rect.top() + ruler_h;
+                let p1 = Pos2::new(ph_x - 6.0, ph_top - 6.0);
+                let p2 = Pos2::new(ph_x + 6.0, ph_top - 6.0);
+                let p3 = Pos2::new(ph_x, ph_top);
+                painter.add(egui::Shape::convex_polygon(
+                    vec![p1, p2, p3],
+                    Color32::from_rgb(9, 123, 244),
+                    Stroke::NONE,
+                ));
             }
 
-            // Клік по лінійці — переміщення плейхеда
-            let mouse = ui.input(|i| i.pointer.hover_pos());
-            if let Some(pos) = mouse {
+            // Скраб плейхеда кліком по лінійці
+            if let Some(pos) = mouse_pos {
                 if ruler_rect.contains(pos) && ui.input(|i| i.pointer.primary_down()) {
                     editor.playhead = ((pos.x - rect.left()) / zoom).clamp(0.0, total_dur);
                 }
             }
 
-            // Клік по кліпу — виділення; drop з медіа-пулу
+            // Клік по порожньому місцю — знімаємо виділення
             if resp.clicked() {
                 let pos = resp.interact_pointer_pos().unwrap_or_default();
-                let mut hit = false;
-                for clip in &editor.clips {
+                let hit = editor.clips.iter().any(|clip| {
                     let track_y = rect.top() + ruler_h + (track_h + 2.0) * clip.track_idx as f32;
                     let cx = rect.left() + clip.start_secs * zoom;
                     let cw = clip.duration * zoom;
-                    let clip_rect = Rect::from_min_size(Pos2::new(cx, track_y + 2.0), Vec2::new(cw, track_h - 4.0));
-                    if clip_rect.contains(pos) {
-                        editor.selected_clip_id = Some(clip.id.clone());
-                        hit = true;
-                        break;
-                    }
-                }
+                    let cr = Rect::from_min_size(Pos2::new(cx, track_y + 2.0), Vec2::new(cw, track_h - 4.0));
+                    cr.contains(pos)
+                });
                 if !hit { editor.selected_clip_id = None; }
-            }
-
-            // Drag з медіа-пулу: drop на доріжку
-            if ui.input(|i| !i.pointer.any_down()) {
-                if let Some(drag_id) = editor.dragged_media_id.take() {
-                    if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
-                        if rect.contains(pos) {
-                            let t_idx = {
-                                let rel_y = pos.y - (rect.top() + ruler_h);
-                                let idx = (rel_y / (track_h + 2.0)) as usize;
-                                idx.min(editor.num_tracks - 1)
-                            };
-                            let start = ((pos.x - rect.left()) / zoom).max(0.0);
-                            if let Some(media) = editor.media_pool.iter().find(|m| m.id == drag_id) {
-                                let kind = media.kind.clone();
-                                let name = media.name.clone();
-                                let path = Some(media.path.clone());
-                                editor.clips.push(EditorClip {
-                                    id: uuid_str(),
-                                    path,
-                                    name,
-                                    start_secs: start,
-                                    duration: 5.0,
-                                    track_idx: t_idx,
-                                    kind,
-                                });
-                            }
-                        }
-                    }
-                    editor.drop_target_track = None;
-                }
-            }
-
-            // Підсвічення target при drag-over
-            if editor.dragged_media_id.is_some() {
-                if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
-                    if rect.contains(pos) {
-                        let rel_y = pos.y - (rect.top() + ruler_h);
-                        let idx = (rel_y / (track_h + 2.0)) as usize;
-                        editor.drop_target_track = Some(idx.min(editor.num_tracks - 1));
-                        ui.ctx().request_repaint();
-                    }
-                }
             }
         });
     });
+}
+
+// ─── Логіка перетягування кліпів (move / trim) ───────────────────────────────
+
+fn update_clip_drag(
+    ctx: &egui::Context,
+    editor: &mut MontageEditorState,
+    rect: Rect,
+    ruler_h: f32,
+    track_h: f32,
+    zoom: f32,
+) {
+    if ctx.input(|i| i.pointer.any_released()) {
+        editor.clip_drag_state = None;
+        return;
+    }
+
+    let drag = match &editor.clip_drag_state {
+        Some(d) => ClipDragState {
+            clip_id: d.clip_id.clone(),
+            mode: d.mode,
+            initial_start: d.initial_start,
+            initial_duration: d.initial_duration,
+            initial_mouse_x: d.initial_mouse_x,
+            initial_track_idx: d.initial_track_idx,
+        },
+        None => return,
+    };
+
+    let pos = match ctx.input(|i| i.pointer.hover_pos()) {
+        Some(p) => p,
+        None => return,
+    };
+
+    let dx = (pos.x - drag.initial_mouse_x) / zoom;
+
+    let clip_idx = match editor.clips.iter().position(|c| c.id == drag.clip_id) {
+        Some(idx) => idx,
+        None => return,
+    };
+
+    let dy = pos.y - (rect.top() + ruler_h);
+    let row_idx = (dy / (track_h + 2.0)).max(0.0) as usize;
+    let new_track = row_idx.min(editor.num_tracks - 1);
+
+    let raw_start = (drag.initial_start + dx).max(0.0);
+    let clip_dur = drag.initial_duration;
+    let raw_end = raw_start + clip_dur;
+
+    // Магнітний snap до сусідніх кліпів
+    let snap_threshold = 8.0 / zoom;
+    let mut best_snap: Option<f32> = None;
+    let mut best_dist = snap_threshold;
+
+    for (i, other) in editor.clips.iter().enumerate() {
+        if i == clip_idx { continue; }
+
+        let other_end = other.start_secs + other.duration;
+
+        let d1 = (raw_start - other_end).abs();
+        if d1 < best_dist { best_dist = d1; best_snap = Some(other_end); }
+
+        let d2 = (raw_start - other.start_secs).abs();
+        if d2 < best_dist { best_dist = d2; best_snap = Some(other.start_secs); }
+
+        let d3 = (raw_end - other.start_secs).abs();
+        if d3 < best_dist { best_dist = d3; best_snap = Some((other.start_secs - clip_dur).max(0.0)); }
+    }
+
+    let snapped_start = best_snap.unwrap_or(raw_start);
+
+    let clip = &mut editor.clips[clip_idx];
+    match drag.mode {
+        DragMode::Move => {
+            clip.start_secs = snapped_start;
+            clip.track_idx = new_track;
+        }
+        DragMode::TrimLeft => {
+            let max_dx = drag.initial_duration - 0.1;
+            let bounded_dx = dx.clamp(-drag.initial_start, max_dx);
+            clip.start_secs = drag.initial_start + bounded_dx;
+            clip.duration = drag.initial_duration - bounded_dx;
+        }
+        DragMode::TrimRight => {
+            clip.duration = (drag.initial_duration + dx).max(0.1);
+        }
+    }
+
+    ctx.request_repaint();
 }
