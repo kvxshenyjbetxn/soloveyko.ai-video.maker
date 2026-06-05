@@ -46,6 +46,10 @@ fn default_subtitle_font_size() -> u32 { 24 }
 fn default_subtitle_color() -> [u8; 3] { [255, 255, 255] }
 fn default_subtitle_margin_v() -> u32 { 30 }
 fn default_subtitle_font() -> String { "Arial".to_string() }
+fn default_subtitle_karaoke_mode() -> u8 { 0 }
+fn default_subtitle_karaoke_highlight_color() -> [u8; 3] { [255, 255, 0] }
+fn default_subtitle_karaoke_outline_color() -> [u8; 3] { [0, 0, 0] }
+fn default_subtitle_karaoke_scale() -> u32 { 120 }
 
 /// Очищає текстові параметри (темп, тональність, гучність), прибираючи відсотки, герци та інші букви
 fn clean_numeric_param(s: &str) -> String {
@@ -102,6 +106,9 @@ pub struct AppSettings {
     /// Чи увімкнено контроль зображень (пауза після відеоряду для перегляду)
     #[serde(default)]
     pub pipeline_media_control_enabled: bool,
+    /// Чи увімкнено контроль агента (пауза після timeline.json для чату з агентом)
+    #[serde(default)]
+    pub pipeline_agent_control_enabled: bool,
     /// Чи увімкнено етап "Озвучка" у пайплайні
     #[serde(default = "default_true")]
     pub pipeline_voiceover_enabled: bool,
@@ -193,6 +200,9 @@ pub struct AppSettings {
     /// Промт для генерації зображень відеоряду
     #[serde(default)]
     pub video_prompt: String,
+    /// Системна інструкція агенту для створення timeline.json (лише для Claude Code / Gemini CLI)
+    #[serde(default)]
+    pub video_agent_prompt: String,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -226,6 +236,21 @@ pub struct AppSettings {
     /// Ефект karaoke: підсвічує слово яке проговорюється (тільки WhisperX/AssemblyAI)
     #[serde(default)]
     pub subtitle_karaoke: bool,
+    /// Режим karaoke: 0 = fill (\kf), 1 = switch (\k), 2 = follow (тільки поточне слово)
+    #[serde(default = "default_subtitle_karaoke_mode")]
+    pub subtitle_karaoke_mode: u8,
+    /// RGB колір слова що проговорюється
+    #[serde(default = "default_subtitle_karaoke_highlight_color")]
+    pub subtitle_karaoke_highlight_color: [u8; 3],
+    /// RGB колір обводки субтитрів
+    #[serde(default = "default_subtitle_karaoke_outline_color")]
+    pub subtitle_karaoke_outline_color: [u8; 3],
+    /// Жирний текст для karaoke субтитрів
+    #[serde(default)]
+    pub subtitle_karaoke_bold: bool,
+    /// Масштаб поточного слова у % (режим follow, 100 = без змін)
+    #[serde(default = "default_subtitle_karaoke_scale")]
+    pub subtitle_karaoke_scale: u32,
     /// Назва шрифту для субтитрів (наприклад "Arial", "Impact")
     #[serde(default = "default_subtitle_font")]
     pub subtitle_font: String,
@@ -265,6 +290,12 @@ pub struct AppSettings {
     /// Температура ЛЛМ для відео-промтів (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub video_llm_temperature: f32,
+    /// Чи увімкнено тригери накладення медіа за ключовими фразами
+    #[serde(default)]
+    pub overlay_triggers_enabled: bool,
+    /// Список тригерів накладення медіа
+    #[serde(default)]
+    pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
 }
 
 impl Default for AppSettings {
@@ -285,6 +316,7 @@ impl Default for AppSettings {
             pipeline_translation_control_enabled: false,
             pipeline_control_auto_open: false,
             pipeline_media_control_enabled: false,
+            pipeline_agent_control_enabled: false,
             pipeline_voiceover_enabled: true,
             pipeline_video_enabled: true,
             pipeline_subtitles_enabled: true,
@@ -316,6 +348,7 @@ impl Default for AppSettings {
             googler_video_max_threads: 5,
             voiceover_convert_to_wav: false,
             video_prompt: String::new(),
+            video_agent_prompt: String::new(),
             googler_image_priority: default_image_priority(),
             googler_video_priority: default_video_priority(),
             video_media_type: "image".to_string(),
@@ -327,6 +360,11 @@ impl Default for AppSettings {
             subtitle_color: [255, 255, 255],
             subtitle_margin_v: 30,
             subtitle_karaoke: false,
+            subtitle_karaoke_mode: 0,
+            subtitle_karaoke_highlight_color: [255, 255, 0],
+            subtitle_karaoke_outline_color: [0, 0, 0],
+            subtitle_karaoke_bold: false,
+            subtitle_karaoke_scale: 120,
             subtitle_font: "Arial".to_string(),
             montage_service: "FFmpeg".to_string(),
             montage_fps: 30,
@@ -340,6 +378,8 @@ impl Default for AppSettings {
             video_llm_model_claude: "sonnet".to_string(),
             video_llm_model_gemini: "gemini-2.5-flash".to_string(),
             video_llm_temperature: 0.7,
+            overlay_triggers_enabled: false,
+            overlay_triggers: vec![],
         }
     }
 }
@@ -454,6 +494,9 @@ pub struct PipelineTemplate {
     /// Чи увімкнено контроль зображень
     #[serde(default)]
     pub pipeline_media_control_enabled: bool,
+    /// Чи увімкнено контроль агента
+    #[serde(default)]
+    pub pipeline_agent_control_enabled: bool,
     /// Чи увімкнено етап "Озвучка"
     #[serde(default = "default_true")]
     pub pipeline_voiceover_enabled: bool,
@@ -491,6 +534,12 @@ pub struct PipelineTemplate {
     /// Температура моделі для перекладу (0.0 — 2.0)
     #[serde(default = "default_temperature")]
     pub translation_temperature: f32,
+    /// Чи увімкнено тригери накладення медіа за ключовими фразами
+    #[serde(default)]
+    pub overlay_triggers_enabled: bool,
+    /// Список тригерів накладення медіа
+    #[serde(default)]
+    pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
     /// Обраний сервіс для перекладу ("OpenRouter" або "Claude Code")
     #[serde(default = "default_translation_service")]
     pub translation_service: String,
@@ -518,6 +567,9 @@ pub struct PipelineTemplate {
     /// Промт для генерації зображень відеоряду
     #[serde(default)]
     pub video_prompt: String,
+    /// Системна інструкція агенту для створення timeline.json (лише для Claude Code / Gemini CLI)
+    #[serde(default)]
+    pub video_agent_prompt: String,
     /// Пріоритетний список провайдерів зображень
     #[serde(default = "default_image_priority")]
     pub googler_image_priority: Vec<String>,
@@ -551,6 +603,21 @@ pub struct PipelineTemplate {
     /// Ефект karaoke: підсвічує слово яке проговорюється (тільки WhisperX/AssemblyAI)
     #[serde(default)]
     pub subtitle_karaoke: bool,
+    /// Режим karaoke: 0 = fill (\kf), 1 = switch (\k), 2 = follow (тільки поточне слово)
+    #[serde(default = "default_subtitle_karaoke_mode")]
+    pub subtitle_karaoke_mode: u8,
+    /// RGB колір слова що проговорюється
+    #[serde(default = "default_subtitle_karaoke_highlight_color")]
+    pub subtitle_karaoke_highlight_color: [u8; 3],
+    /// RGB колір обводки субтитрів
+    #[serde(default = "default_subtitle_karaoke_outline_color")]
+    pub subtitle_karaoke_outline_color: [u8; 3],
+    /// Жирний текст для karaoke субтитрів
+    #[serde(default)]
+    pub subtitle_karaoke_bold: bool,
+    /// Масштаб поточного слова у % (режим follow, 100 = без змін)
+    #[serde(default = "default_subtitle_karaoke_scale")]
+    pub subtitle_karaoke_scale: u32,
     /// Назва шрифту для субтитрів (наприклад "Arial", "Impact")
     #[serde(default = "default_subtitle_font")]
     pub subtitle_font: String,
@@ -584,7 +651,7 @@ pub struct PipelineTemplate {
     /// Модель Claude для відео-промтів
     #[serde(default = "default_video_llm_model_claude")]
     pub video_llm_model_claude: String,
-    /// Модель Gemini для відео-промтів
+    /// Модель Gemini для відево-промтів
     #[serde(default = "default_video_llm_model_gemini")]
     pub video_llm_model_gemini: String,
     /// Температура ЛЛМ для відео-промтів
@@ -612,6 +679,7 @@ pub fn save_template(
     pipeline_translation_control_enabled: bool,
     pipeline_control_auto_open: bool,
     pipeline_media_control_enabled: bool,
+    pipeline_agent_control_enabled: bool,
     pipeline_voiceover_enabled: bool,
     pipeline_video_enabled: bool,
     pipeline_subtitles_enabled: bool,
@@ -634,6 +702,7 @@ pub fn save_template(
     googler_video_max_threads: usize,
     voiceover_convert_to_wav: bool,
     video_prompt: &str,
+    video_agent_prompt: &str,
     googler_image_priority: Vec<String>,
     googler_video_priority: Vec<String>,
     video_media_type: &str,
@@ -645,6 +714,11 @@ pub fn save_template(
     subtitle_color: [u8; 3],
     subtitle_margin_v: u32,
     subtitle_karaoke: bool,
+    subtitle_karaoke_mode: u8,
+    subtitle_karaoke_highlight_color: [u8; 3],
+    subtitle_karaoke_outline_color: [u8; 3],
+    subtitle_karaoke_bold: bool,
+    subtitle_karaoke_scale: u32,
     subtitle_font: &str,
     montage_service: &str,
     montage_fps: u32,
@@ -658,6 +732,8 @@ pub fn save_template(
     video_llm_model_claude: &str,
     video_llm_model_gemini: &str,
     video_llm_temperature: f32,
+    overlay_triggers_enabled: bool,
+    overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
 ) -> Result<(), std::io::Error> {
     if let Some(dir) = get_templates_dir() {
         fs::create_dir_all(&dir)?;
@@ -674,6 +750,7 @@ pub fn save_template(
             pipeline_translation_control_enabled,
             pipeline_control_auto_open,
             pipeline_media_control_enabled,
+            pipeline_agent_control_enabled,
             pipeline_voiceover_enabled,
             pipeline_video_enabled,
             pipeline_subtitles_enabled,
@@ -696,6 +773,7 @@ pub fn save_template(
             googler_video_max_threads,
             voiceover_convert_to_wav,
             video_prompt: video_prompt.to_string(),
+            video_agent_prompt: video_agent_prompt.to_string(),
             googler_image_priority,
             googler_video_priority,
             video_media_type: video_media_type.to_string(),
@@ -707,6 +785,11 @@ pub fn save_template(
             subtitle_color,
             subtitle_margin_v,
             subtitle_karaoke,
+            subtitle_karaoke_mode,
+            subtitle_karaoke_highlight_color,
+            subtitle_karaoke_outline_color,
+            subtitle_karaoke_bold,
+            subtitle_karaoke_scale,
             subtitle_font: subtitle_font.to_string(),
             montage_service: montage_service.to_string(),
             montage_fps,
@@ -720,6 +803,8 @@ pub fn save_template(
             video_llm_model_claude: video_llm_model_claude.to_string(),
             video_llm_model_gemini: video_llm_model_gemini.to_string(),
             video_llm_temperature,
+            overlay_triggers_enabled,
+            overlay_triggers,
         };
 
         let json = serde_json::to_string_pretty(&template)?;
@@ -746,6 +831,89 @@ pub fn load_template(name: &str) -> Option<PipelineTemplate> {
         }
     }
     None
+}
+
+/// Запис в історії задач, що були додані в чергу.
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[serde(default)]
+pub struct TaskHistoryEntry {
+    /// Унікальний ідентифікатор задачі
+    pub id: u64,
+    /// Назва задачі
+    pub name: String,
+    /// Unix timestamp створення
+    pub created_at: i64,
+    /// Назва шаблону (якщо завантажувався)
+    pub template_name: Option<String>,
+    /// Текст сценарію на момент додавання задачі
+    pub text: String,
+    /// Знімок налаштувань пайплайну
+    pub settings: PipelineTemplate,
+}
+
+impl Default for TaskHistoryEntry {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            name: String::new(),
+            created_at: 0,
+            template_name: None,
+            text: String::new(),
+            settings: PipelineTemplate::default(),
+        }
+    }
+}
+
+/// Повертає шлях до файлу history задач.
+pub fn get_history_path() -> Option<PathBuf> {
+    get_settings_dir().map(|mut p| {
+        p.push("task_history.json");
+        p
+    })
+}
+
+/// Завантажує список задач з файлу task_history.json.
+pub fn load_task_history() -> Vec<TaskHistoryEntry> {
+    if let Some(path) = get_history_path() {
+        if path.exists() {
+            if let Ok(content) = fs::read_to_string(path) {
+                if let Ok(entries) = serde_json::from_str::<Vec<TaskHistoryEntry>>(&content) {
+                    return entries;
+                }
+            }
+        }
+    }
+    Vec::new()
+}
+
+/// Зберігає список задач у файл task_history.json.
+pub fn save_task_history(entries: &[TaskHistoryEntry]) {
+    if let Some(dir) = get_settings_dir() {
+        let _ = fs::create_dir_all(&dir);
+        if let Some(path) = get_history_path() {
+            if let Ok(json) = serde_json::to_string_pretty(entries) {
+                let _ = fs::write(path, json);
+            }
+        }
+    }
+}
+
+/// Додає новий запис в кінець history, обрізає до 100 записів, зберігає на диск.
+pub fn append_to_task_history(entries: &mut Vec<TaskHistoryEntry>, new_entry: TaskHistoryEntry) {
+    entries.push(new_entry);
+    if entries.len() > 100 {
+        let drain = entries.len() - 100;
+        entries.drain(0..drain);
+    }
+    save_task_history(entries);
+}
+
+/// Видаляє запис за індексом з history та зберігає.
+pub fn remove_from_task_history(entries: &mut Vec<TaskHistoryEntry>, idx: usize) {
+    if idx < entries.len() {
+        entries.remove(idx);
+        save_task_history(entries);
+    }
 }
 
 /// Сканує папку шаблонів та повертає список імен доступних шаблонів.

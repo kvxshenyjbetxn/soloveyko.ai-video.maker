@@ -1,6 +1,7 @@
 pub mod api;
 pub mod control;
 pub mod editing;
+pub mod resume;
 pub mod storage;
 pub mod subtitles;
 pub mod templates;
@@ -97,6 +98,7 @@ pub fn draw_pipeline_panel(
     pipeline_translation_control_enabled: &mut bool,
     pipeline_control_auto_open: &mut bool,
     pipeline_media_control_enabled: &mut bool,
+    pipeline_agent_control_enabled: &mut bool,
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
     pipeline_subtitles_enabled: &mut bool,
@@ -114,6 +116,7 @@ pub fn draw_pipeline_panel(
     text_split_mode: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
+    video_agent_prompt: &mut String,
     video_llm_service: &mut String,
     video_llm_model: &mut String,
     video_llm_model_openrouter: &mut String,
@@ -139,6 +142,11 @@ pub fn draw_pipeline_panel(
     subtitle_color: &mut [u8; 3],
     subtitle_margin_v: &mut u32,
     subtitle_karaoke: &mut bool,
+    subtitle_karaoke_mode: &mut u8,
+    subtitle_karaoke_highlight_color: &mut [u8; 3],
+    subtitle_karaoke_outline_color: &mut [u8; 3],
+    subtitle_karaoke_bold: &mut bool,
+    subtitle_karaoke_scale: &mut u32,
     subtitle_font: &mut String,
     available_subtitle_fonts: &[String],
     montage_service: &mut String,
@@ -147,12 +155,16 @@ pub fn draw_pipeline_panel(
     montage_bitrate: &mut u32,
     montage_transition: &mut String,
     montage_transition_duration: &mut f32,
+    overlay_triggers_enabled: &mut bool,
+    overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
     text_input: &str,
     jobs: &mut Vec<crate::queue::PipelineJob>,
     job_counter: &mut u64,
     queue_error: &mut Option<String>,
     job_name_dialog_open: &mut bool,
     job_name_input: &mut String,
+    resume_dialog_open: &mut bool,
+    resume_pending: &mut Option<resume::ResumePendingData>,
 ) {
     // Забороняємо будь-якому елементу розширювати панель за поточну ширину
     ui.set_max_width(ui.available_width());
@@ -194,6 +206,7 @@ pub fn draw_pipeline_panel(
                             *pipeline_translation_control_enabled,
                             *pipeline_control_auto_open,
                             *pipeline_media_control_enabled,
+                            *pipeline_agent_control_enabled,
                             *pipeline_voiceover_enabled,
                             *pipeline_video_enabled,
                             *pipeline_subtitles_enabled,
@@ -216,6 +229,7 @@ pub fn draw_pipeline_panel(
                             *googler_video_max_threads,
                             *voiceover_convert_to_wav,
                             video_prompt,
+                            video_agent_prompt,
                             googler_image_priority.clone(),
                             googler_video_priority.clone(),
                             video_media_type,
@@ -227,6 +241,11 @@ pub fn draw_pipeline_panel(
                             *subtitle_color,
                             *subtitle_margin_v,
                             *subtitle_karaoke,
+                            *subtitle_karaoke_mode,
+                            *subtitle_karaoke_highlight_color,
+                            *subtitle_karaoke_outline_color,
+                            *subtitle_karaoke_bold,
+                            *subtitle_karaoke_scale,
                             subtitle_font,
                             montage_service,
                             *montage_fps,
@@ -240,6 +259,8 @@ pub fn draw_pipeline_panel(
                             video_llm_model_claude,
                             video_llm_model_gemini,
                             *video_llm_temperature,
+                            *overlay_triggers_enabled,
+                            overlay_triggers.clone(),
                         ) {
                             Ok(_) => {
                                 *template_status = Some(format!("{} ✔", translate(language, "template_status_saved")));
@@ -311,6 +332,7 @@ pub fn draw_pipeline_panel(
                                     pipeline_translation_control_enabled,
                                     pipeline_control_auto_open,
                                     pipeline_media_control_enabled,
+                                    pipeline_agent_control_enabled,
                                     pipeline_voiceover_enabled,
                                     pipeline_video_enabled,
                                     pipeline_subtitles_enabled,
@@ -325,6 +347,7 @@ pub fn draw_pipeline_panel(
                                     text_split_mode,
                                     text_split_char_limit,
                                     video_prompt,
+                                    video_agent_prompt,
                                     video_llm_service,
                                     video_llm_model,
                                     video_llm_model_openrouter,
@@ -350,6 +373,11 @@ pub fn draw_pipeline_panel(
                                     subtitle_color,
                                     subtitle_margin_v,
                                     subtitle_karaoke,
+                                    subtitle_karaoke_mode,
+                                    subtitle_karaoke_highlight_color,
+                                    subtitle_karaoke_outline_color,
+                                    subtitle_karaoke_bold,
+                                    subtitle_karaoke_scale,
                                     subtitle_font,
                                     montage_service,
                                     montage_fps,
@@ -357,6 +385,8 @@ pub fn draw_pipeline_panel(
                                     montage_bitrate,
                                     montage_transition,
                                     montage_transition_duration,
+                                    overlay_triggers_enabled,
+                                    overlay_triggers,
                                 );
                             });
                         }
@@ -434,7 +464,7 @@ pub fn draw_pipeline_panel(
                             if header.inner.clicked() { state.toggle(ui); }
                             state.store(ui.ctx());
                             state.show_body_indented(&header.response, ui, |ui| {
-                                control::draw_control_section(ui, language, pipeline_translation_control_enabled, pipeline_control_auto_open, pipeline_media_control_enabled);
+                                control::draw_control_section(ui, language, pipeline_translation_control_enabled, pipeline_control_auto_open, pipeline_media_control_enabled, pipeline_agent_control_enabled);
                             });
                         }
 
@@ -548,9 +578,12 @@ pub fn draw_pipeline_panel(
                                     video_llm_model_claude,
                                     video_llm_model_gemini,
                                     video_llm_temperature,
+                                    video_agent_prompt,
                                     video_llm_model_search,
                                     openrouter_models,
                                     openrouter_models_loading,
+                                    overlay_triggers_enabled,
+                                    overlay_triggers,
                                 );
                             });
                         }
@@ -586,6 +619,11 @@ pub fn draw_pipeline_panel(
                                     subtitle_color,
                                     subtitle_margin_v,
                                     subtitle_karaoke,
+                                    subtitle_karaoke_mode,
+                                    subtitle_karaoke_highlight_color,
+                                    subtitle_karaoke_outline_color,
+                                    subtitle_karaoke_bold,
+                                    subtitle_karaoke_scale,
                                     subtitle_font,
                                     available_subtitle_fonts,
                                     ui.ctx().clone(),
@@ -651,11 +689,10 @@ pub fn draw_pipeline_panel(
                     egui::Button::new(
                         egui::RichText::new(translate(language, "queue_add_btn")).strong(),
                     ),
-                ).clicked() {
+                ).clicked() && !*resume_dialog_open {
                     // Спочатку валідуємо — лише якщо все ок, відкриваємо діалог назви
-                    let error = if text_input.trim().is_empty() {
-                        Some(translate(language, "queue_error_no_text").to_string())
-                    } else if effective_save_path(save_path_macos, save_path_windows).trim().is_empty() {
+                    // Текст може бути порожнім якщо задача відновлюється з наявних файлів
+                    let error = if effective_save_path(save_path_macos, save_path_windows).trim().is_empty() {
                         Some(translate(language, "queue_error_no_save_path").to_string())
                     } else if *pipeline_translation_enabled && translation_model.is_empty() {
                         Some(translate(language, "queue_error_no_model").to_string())
@@ -731,63 +768,162 @@ pub fn draw_pipeline_panel(
                                 *job_name_dialog_open = false;
                                 job_name_input.clear();
                                 *queue_error = None;
-                                validate_and_enqueue(
-                                    language,
-                                    text_input,
-                                    effective_save_path(save_path_macos, save_path_windows),
+
+                                // Перевіряємо чи є наявні файли в папці
+                                let base = effective_save_path(save_path_macos, save_path_windows)
+                                    .trim_end_matches('/')
+                                    .trim_end_matches('\\');
+                                let actual_path = format!("{}/{}", base, name);
+                                let found = resume::FoundFiles::scan(
+                                    std::path::Path::new(&actual_path),
                                     &name,
-                                    *pipeline_translation_enabled,
-                                    *pipeline_translation_control_enabled,
-                                    *pipeline_media_control_enabled,
-                                    translation_prompt,
-                                    translation_model,
-                                    *translation_temperature,
-                                    openrouter_key,
-                                    jobs,
-                                    job_counter,
-                                    queue_error,
-                                    translation_service,
-                                    *pipeline_voiceover_enabled,
-                                    voicebot_key,
-                                    voiceover_template_uuid,
-                                    voiceover_provider,
-                                    edge_tts_voice,
-                                    edge_tts_rate,
-                                    edge_tts_pitch,
-                                    edge_tts_volume,
-                                    *voiceover_convert_to_wav,
-                                    *pipeline_video_enabled,
-                                    video_service,
-                                    video_media_type,
-                                    video_prompt,
-                                    video_llm_service,
-                                    video_llm_model,
-                                    *video_llm_temperature,
-                                    text_split_mode,
-                                    *text_split_char_limit,
-                                    googler_key,
-                                    googler_image_priority.clone(),
-                                    googler_video_priority.clone(),
-                                    *googler_image_max_threads,
-                                    assemblyai_key,
-                                    *pipeline_subtitles_enabled,
-                                    subtitles_service,
-                                    whisper_language,
-                                    whisper_model,
-                                    *whisper_max_line_width,
-                                    *subtitle_font_size,
-                                    *subtitle_color,
-                                    *subtitle_margin_v,
-                                    *subtitle_karaoke,
-                                    subtitle_font,
-                                    *pipeline_editing_enabled,
-                                    montage_service,
-                                    *montage_fps,
-                                    montage_preset,
-                                    *montage_bitrate,
-                                    montage_transition,
-                                    *montage_transition_duration,
                                 );
+
+                                if found.has_any() {
+                                    // Є наявні файли — показуємо діалог відновлення
+                                    if let Err(e) = std::fs::create_dir_all(&actual_path) {
+                                        *queue_error = Some(format!(
+                                            "{}: {}",
+                                            translate(language, "queue_error_create_dir"),
+                                            e
+                                        ));
+                                    } else {
+                                        let settings = build_job_settings(
+                                            text_input,
+                                            actual_path,
+                                            *pipeline_translation_enabled,
+                                            *pipeline_translation_control_enabled,
+                                            *pipeline_media_control_enabled,
+                                            *pipeline_agent_control_enabled,
+                                            translation_prompt,
+                                            translation_model,
+                                            *translation_temperature,
+                                            translation_service,
+                                            openrouter_key,
+                                            *pipeline_voiceover_enabled,
+                                            voicebot_key,
+                                            voiceover_template_uuid,
+                                            voiceover_provider,
+                                            edge_tts_voice,
+                                            edge_tts_rate,
+                                            edge_tts_pitch,
+                                            edge_tts_volume,
+                                            *voiceover_convert_to_wav,
+                                            *pipeline_video_enabled,
+                                            video_service,
+                                            video_media_type,
+                                            video_prompt,
+                                            video_agent_prompt,
+                                            video_llm_service,
+                                            video_llm_model,
+                                            *video_llm_temperature,
+                                            text_split_mode,
+                                            *text_split_char_limit,
+                                            googler_key,
+                                            googler_image_priority.clone(),
+                                            googler_video_priority.clone(),
+                                            *googler_image_max_threads,
+                                            assemblyai_key,
+                                            *pipeline_subtitles_enabled,
+                                            subtitles_service,
+                                            whisper_language,
+                                            whisper_model,
+                                            *whisper_max_line_width,
+                                            *subtitle_font_size,
+                                            *subtitle_color,
+                                            *subtitle_margin_v,
+                                            *subtitle_karaoke,
+                                            *subtitle_karaoke_mode,
+                                            *subtitle_karaoke_highlight_color,
+                                            *subtitle_karaoke_outline_color,
+                                            *subtitle_karaoke_bold,
+                                            *subtitle_karaoke_scale,
+                                            subtitle_font,
+                                            *pipeline_editing_enabled,
+                                            montage_service,
+                                            *montage_fps,
+                                            montage_preset,
+                                            *montage_bitrate,
+                                            montage_transition,
+                                            *montage_transition_duration,
+                                            *overlay_triggers_enabled,
+                                            overlay_triggers.clone(),
+                                        );
+                                        *resume_dialog_open = true;
+                                        *resume_pending = Some(resume::ResumePendingData::new(
+                                            name,
+                                            found,
+                                            settings,
+                                        ));
+                                    }
+                                } else {
+                                    validate_and_enqueue(
+                                        language,
+                                        text_input,
+                                        effective_save_path(save_path_macos, save_path_windows),
+                                        &name,
+                                        *pipeline_translation_enabled,
+                                        *pipeline_translation_control_enabled,
+                                        *pipeline_media_control_enabled,
+                                        *pipeline_agent_control_enabled,
+                                        translation_prompt,
+                                        translation_model,
+                                        *translation_temperature,
+                                        openrouter_key,
+                                        jobs,
+                                        job_counter,
+                                        queue_error,
+                                        translation_service,
+                                        *pipeline_voiceover_enabled,
+                                        voicebot_key,
+                                        voiceover_template_uuid,
+                                        voiceover_provider,
+                                        edge_tts_voice,
+                                        edge_tts_rate,
+                                        edge_tts_pitch,
+                                        edge_tts_volume,
+                                        *voiceover_convert_to_wav,
+                                        *pipeline_video_enabled,
+                                        video_service,
+                                        video_media_type,
+                                        video_prompt,
+                                        video_agent_prompt,
+                                        video_llm_service,
+                                        video_llm_model,
+                                        *video_llm_temperature,
+                                        text_split_mode,
+                                        *text_split_char_limit,
+                                        googler_key,
+                                        googler_image_priority.clone(),
+                                        googler_video_priority.clone(),
+                                        *googler_image_max_threads,
+                                        assemblyai_key,
+                                        *pipeline_subtitles_enabled,
+                                        subtitles_service,
+                                        whisper_language,
+                                        whisper_model,
+                                        *whisper_max_line_width,
+                                        *subtitle_font_size,
+                                        *subtitle_color,
+                                        *subtitle_margin_v,
+                                        *subtitle_karaoke,
+                                        *subtitle_karaoke_mode,
+                                        *subtitle_karaoke_highlight_color,
+                                        *subtitle_karaoke_outline_color,
+                                        *subtitle_karaoke_bold,
+                                        *subtitle_karaoke_scale,
+                                        subtitle_font,
+                                        *pipeline_editing_enabled,
+                                        montage_service,
+                                        *montage_fps,
+                                        montage_preset,
+                                        *montage_bitrate,
+                                        montage_transition,
+                                        *montage_transition_duration,
+                                        *overlay_triggers_enabled,
+                                        overlay_triggers.clone(),
+                                    );
+                                }
                             }
                         });
                     });
@@ -800,24 +936,20 @@ fn effective_save_path<'a>(save_path_macos: &'a str, save_path_windows: &'a str)
     if cfg!(target_os = "macos") { save_path_macos } else { save_path_windows }
 }
 
-/// Створює папку задачі та додає її в чергу зі статусом Pending.
+/// Будує знімок налаштувань задачі без створення папки та без додавання в чергу.
 #[allow(clippy::too_many_arguments)]
-fn validate_and_enqueue(
-    language: Language,
+fn build_job_settings(
     text_input: &str,
-    save_path: &str,
-    task_name: &str,
+    actual_path: String,
     translation_enabled: bool,
     translation_control_enabled: bool,
     media_control_enabled: bool,
+    agent_control_enabled: bool,
     translation_prompt: &str,
     translation_model: &str,
     translation_temperature: f32,
-    openrouter_key: &str,
-    jobs: &mut Vec<crate::queue::PipelineJob>,
-    job_counter: &mut u64,
-    queue_error: &mut Option<String>,
     translation_service: &str,
+    openrouter_key: &str,
     voiceover_enabled: bool,
     voicebot_key: &str,
     voiceover_template_uuid: &str,
@@ -831,6 +963,7 @@ fn validate_and_enqueue(
     video_service: &str,
     video_media_type: &str,
     video_prompt: &str,
+    video_agent_prompt: &str,
     video_llm_service: &str,
     video_llm_model: &str,
     video_llm_temperature: f32,
@@ -850,6 +983,11 @@ fn validate_and_enqueue(
     subtitle_color: [u8; 3],
     subtitle_margin_v: u32,
     subtitle_karaoke: bool,
+    subtitle_karaoke_mode: u8,
+    subtitle_karaoke_highlight_color: [u8; 3],
+    subtitle_karaoke_outline_color: [u8; 3],
+    subtitle_karaoke_bold: bool,
+    subtitle_karaoke_scale: u32,
     subtitle_font: &str,
     montage_enabled: bool,
     montage_service: &str,
@@ -858,17 +996,10 @@ fn validate_and_enqueue(
     montage_bitrate: u32,
     montage_transition: &str,
     montage_transition_duration: f32,
-) {
-    // Будуємо шлях: {save_path}/{task_name}
-    let base = save_path.trim_end_matches('/').trim_end_matches('\\');
-    let actual_path = format!("{}/{}", base, task_name);
-
-    if let Err(e) = std::fs::create_dir_all(&actual_path) {
-        *queue_error = Some(format!("{}: {}", translate(language, "queue_error_create_dir"), e));
-        return;
-    }
-
-    let settings = crate::queue::JobSettings {
+    overlay_triggers_enabled: bool,
+    overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
+) -> crate::queue::JobSettings {
+    crate::queue::JobSettings {
         text: text_input.to_string(),
         save_path: actual_path,
         translation_enabled,
@@ -891,6 +1022,7 @@ fn validate_and_enqueue(
         video_service: video_service.to_string(),
         video_media_type: video_media_type.to_string(),
         video_prompt: video_prompt.to_string(),
+        video_agent_prompt: video_agent_prompt.to_string(),
         video_llm_service: video_llm_service.to_string(),
         video_llm_model: video_llm_model.to_string(),
         video_llm_temperature,
@@ -910,6 +1042,11 @@ fn validate_and_enqueue(
         subtitle_color,
         subtitle_margin_v,
         subtitle_karaoke,
+        subtitle_karaoke_mode,
+        subtitle_karaoke_highlight_color,
+        subtitle_karaoke_outline_color,
+        subtitle_karaoke_bold,
+        subtitle_karaoke_scale,
         subtitle_font: subtitle_font.to_string(),
         montage_enabled,
         montage_service: montage_service.to_string(),
@@ -919,10 +1056,153 @@ fn validate_and_enqueue(
         montage_transition: montage_transition.to_string(),
         montage_transition_duration,
         media_control_enabled,
-    };
+        agent_control_enabled,
+        overlay_triggers_enabled,
+        overlay_triggers,
+        resume_from_stage: None,
+    }
+}
+
+/// Створює папку задачі та додає її в чергу зі статусом Pending.
+#[allow(clippy::too_many_arguments)]
+fn validate_and_enqueue(
+    language: Language,
+    text_input: &str,
+    save_path: &str,
+    task_name: &str,
+    translation_enabled: bool,
+    translation_control_enabled: bool,
+    media_control_enabled: bool,
+    agent_control_enabled: bool,
+    translation_prompt: &str,
+    translation_model: &str,
+    translation_temperature: f32,
+    openrouter_key: &str,
+    jobs: &mut Vec<crate::queue::PipelineJob>,
+    job_counter: &mut u64,
+    queue_error: &mut Option<String>,
+    translation_service: &str,
+    voiceover_enabled: bool,
+    voicebot_key: &str,
+    voiceover_template_uuid: &str,
+    voiceover_provider: &str,
+    edge_tts_voice: &str,
+    edge_tts_rate: &str,
+    edge_tts_pitch: &str,
+    edge_tts_volume: &str,
+    voiceover_convert_to_wav: bool,
+    video_enabled: bool,
+    video_service: &str,
+    video_media_type: &str,
+    video_prompt: &str,
+    video_agent_prompt: &str,
+    video_llm_service: &str,
+    video_llm_model: &str,
+    video_llm_temperature: f32,
+    text_split_mode: &str,
+    text_split_char_limit: usize,
+    googler_key: &str,
+    googler_image_priority: Vec<String>,
+    googler_video_priority: Vec<String>,
+    googler_image_max_threads: usize,
+    assemblyai_key: &str,
+    subtitles_enabled: bool,
+    subtitles_service: &str,
+    whisper_language: &str,
+    whisper_model: &str,
+    whisper_max_line_width: usize,
+    subtitle_font_size: u32,
+    subtitle_color: [u8; 3],
+    subtitle_margin_v: u32,
+    subtitle_karaoke: bool,
+    subtitle_karaoke_mode: u8,
+    subtitle_karaoke_highlight_color: [u8; 3],
+    subtitle_karaoke_outline_color: [u8; 3],
+    subtitle_karaoke_bold: bool,
+    subtitle_karaoke_scale: u32,
+    subtitle_font: &str,
+    montage_enabled: bool,
+    montage_service: &str,
+    montage_fps: u32,
+    montage_preset: &str,
+    montage_bitrate: u32,
+    montage_transition: &str,
+    montage_transition_duration: f32,
+    overlay_triggers_enabled: bool,
+    overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
+) {
+    // Будуємо шлях: {save_path}/{task_name}
+    let base = save_path.trim_end_matches('/').trim_end_matches('\\');
+    let actual_path = format!("{}/{}", base, task_name);
+
+    if let Err(e) = std::fs::create_dir_all(&actual_path) {
+        *queue_error = Some(format!("{}: {}", translate(language, "queue_error_create_dir"), e));
+        return;
+    }
+
+    let settings = build_job_settings(
+        text_input,
+        actual_path,
+        translation_enabled,
+        translation_control_enabled,
+        media_control_enabled,
+        agent_control_enabled,
+        translation_prompt,
+        translation_model,
+        translation_temperature,
+        translation_service,
+        openrouter_key,
+        voiceover_enabled,
+        voicebot_key,
+        voiceover_template_uuid,
+        voiceover_provider,
+        edge_tts_voice,
+        edge_tts_rate,
+        edge_tts_pitch,
+        edge_tts_volume,
+        voiceover_convert_to_wav,
+        video_enabled,
+        video_service,
+        video_media_type,
+        video_prompt,
+        video_agent_prompt,
+        video_llm_service,
+        video_llm_model,
+        video_llm_temperature,
+        text_split_mode,
+        text_split_char_limit,
+        googler_key,
+        googler_image_priority,
+        googler_video_priority,
+        googler_image_max_threads,
+        assemblyai_key,
+        subtitles_enabled,
+        subtitles_service,
+        whisper_language,
+        whisper_model,
+        whisper_max_line_width,
+        subtitle_font_size,
+        subtitle_color,
+        subtitle_margin_v,
+        subtitle_karaoke,
+        subtitle_karaoke_mode,
+        subtitle_karaoke_highlight_color,
+        subtitle_karaoke_outline_color,
+        subtitle_karaoke_bold,
+        subtitle_karaoke_scale,
+        subtitle_font,
+        montage_enabled,
+        montage_service,
+        montage_fps,
+        montage_preset,
+        montage_bitrate,
+        montage_transition,
+        montage_transition_duration,
+        overlay_triggers_enabled,
+        overlay_triggers,
+    );
 
     let id = *job_counter;
     *job_counter += 1;
-    let job = crate::queue::PipelineJob::new(id, task_name.to_string(), settings);
-    jobs.push(job);
+    jobs.push(crate::queue::PipelineJob::new(id, task_name.to_string(), settings));
 }

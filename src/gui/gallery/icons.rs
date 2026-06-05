@@ -34,6 +34,30 @@ pub fn draw_menu_icon(painter: &egui::Painter, center: egui::Pos2, half_w: f32, 
     }
 }
 
+/// Малює іконку "ока" (перегляд промту) через Painter.
+pub fn draw_eye_icon(painter: &egui::Painter, center: egui::Pos2, size: f32, stroke: egui::Stroke) {
+    // Еліпс-контур ока (ліва та права дуги)
+    let hw = size;        // half-width
+    let hh = size * 0.5; // half-height
+    let segs = 12;
+    for i in 0..segs {
+        let t1 = std::f32::consts::PI * i as f32 / segs as f32;
+        let t2 = std::f32::consts::PI * (i + 1) as f32 / segs as f32;
+        // Верхня дуга
+        painter.line_segment([
+            egui::pos2(center.x + hw * t1.cos(), center.y - hh * t1.sin()),
+            egui::pos2(center.x + hw * t2.cos(), center.y - hh * t2.sin()),
+        ], stroke);
+        // Нижня дуга
+        painter.line_segment([
+            egui::pos2(center.x + hw * t1.cos(), center.y + hh * t1.sin()),
+            egui::pos2(center.x + hw * t2.cos(), center.y + hh * t2.sin()),
+        ], stroke);
+    }
+    // Зіниця
+    painter.circle_filled(center, size * 0.25, stroke.color);
+}
+
 /// Малює трикутник ▶ по центру заданого прямокутника.
 pub fn draw_play_triangle(painter: &egui::Painter, center: egui::Pos2, size: f32) {
     let pts = vec![

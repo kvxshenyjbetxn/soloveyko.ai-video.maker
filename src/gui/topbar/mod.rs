@@ -124,7 +124,6 @@ pub fn draw_status_bar(
     ffmpeg_max_threads: usize,
     googler_image_max_threads: usize,
     googler_video_max_threads: usize,
-    googler_balance: &std::sync::Arc<std::sync::Mutex<Option<crate::api::googler::GooglerBalance>>>,
     threads_window_open: &mut bool,
 ) {
     egui::TopBottomPanel::bottom("status_bar")
@@ -145,14 +144,8 @@ pub fn draw_status_bar(
                 }
                 ui.add_space(4.0);
 
-                if let Ok(guard) = googler_balance.try_lock() {
-                    if let Some(bal) = guard.as_ref() {
-                        if thread_chip(ui, "vid", bal.video_threads_active as usize, googler_video_max_threads) { open_threads = true; }
-                        if thread_chip(ui, "Googler img", bal.img_threads_active as usize, googler_image_max_threads) { open_threads = true; }
-                    } else if draw_chip(ui, "Googler: —", normal).clicked() {
-                        open_threads = true;
-                    }
-                }
+                if thread_chip(ui, "Googler vid", crate::api::googler::GooglerVideoLimiter::get().active_count(), googler_video_max_threads) { open_threads = true; }
+                if thread_chip(ui, "Googler img", crate::api::googler::GooglerImageLimiter::get().active_count(), googler_image_max_threads) { open_threads = true; }
                 ui.separator();
                 if thread_chip(ui, "FFmpeg", crate::api::ffmpeg::FfmpegLimiter::get().active_count(), ffmpeg_max_threads) { open_threads = true; }
                 ui.separator();

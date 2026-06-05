@@ -650,6 +650,11 @@ fn run_subtitles_only(
                 settings.subtitle_font_size,
                 settings.subtitle_color,
                 settings.subtitle_margin_v,
+                settings.subtitle_karaoke_mode,
+                settings.subtitle_karaoke_highlight_color,
+                settings.subtitle_karaoke_outline_color,
+                settings.subtitle_karaoke_bold,
+                settings.subtitle_karaoke_scale,
             ) {
                 Ok(ass_content) => {
                     match std::fs::write(save_dir.join("subtitle.ass"), &ass_content) {
@@ -762,8 +767,9 @@ fn run_av_branch(
     Ok(())
 }
 
-/// Генерує ASS файл з karaoke-ефектом (\kf теги) з word-level timestamps.
+/// Генерує ASS файл з karaoke-ефектом з word-level timestamps.
 /// Підтримує формати WhisperX (секунди) та AssemblyAI (мілісекунди).
+/// karaoke_mode: 0 = fill (\kf), 1 = switch (\k), 2 = follow (підсвітка + повернення).
 fn generate_karaoke_ass(
     json_path: &std::path::Path,
     service: &str,
@@ -771,36 +777,50 @@ fn generate_karaoke_ass(
     font_size: u32,
     color: [u8; 3],
     margin_v: u32,
+    karaoke_mode: u8,
+    highlight_color: [u8; 3],
+    outline_color: [u8; 3],
+    bold: bool,
+    scale: u32,
 ) -> Result<String, String> {
     let content = std::fs::read_to_string(json_path)
         .map_err(|e| format!("Cannot read subtitle.json: {}", e))?;
     let json: serde_json::Value = serde_json::from_str(&content)
         .map_err(|e| format!("Cannot parse subtitle.json: {}", e))?;
 
-    // Формат кольору ASS: &HAABBGGRR (A=00 = непрозорий)
-    let primary = format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
-    // Жовтий для підсвічування вже вимовленого
-    let secondary = "&H0000FFFF".to_string();
-    let outline = "&H00000000".to_string();
-    let back = "&H80000000".to_string();
+    // Формат кольору ASS у заголовку: &H00BBGGRR
+    // Для режимів fill/switch:
+    //   PrimaryColour   = highlight_color (колір ПІСЛЯ активації — слово вже проговорене)
+    //   SecondaryColour = color           (колір ДО активації — слово ще не проговорене)
+    // Для режиму follow — обидва = color (inline \1c теги перекривають)
+    let (header_primary, header_secondary) = if karaoke_mode == 2 {
+        let c = format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
+        (c.clone(), c)
+    } else {
+        (
+            format!("&H00{:02X}{:02X}{:02X}", highlight_color[2], highlight_color[1], highlight_color[0]),
+            format!("&H00{:02X}{:02X}{:02X}", color[2], color[1], color[0]),
+        )
+    };
+    let outline_hex = format!("&H00{:02X}{:02X}{:02X}", outline_color[2], outline_color[1], outline_color[0]);
+    let bold_flag = if bold { 1 } else { 0 };
 
     let header = format!(
         "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n\
          [V4+ Styles]\n\
          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
-         Style: Default,{font_name},{font_size},{primary},{secondary},{outline},{back},0,0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
+         Style: Default,{font_name},{font_size},{primary},{secondary},{outline},&H80000000,{bold},0,0,0,100,100,0,0,1,2,1,2,10,10,{margin_v},1\n\n\
          [Events]\n\
          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n",
         font_name = font_name,
         font_size = font_size,
-        primary = primary,
-        secondary = secondary,
-        outline = outline,
-        back = back,
+        primary = header_primary,
+        secondary = header_secondary,
+        outline = outline_hex,
+        bold = bold_flag,
         margin_v = margin_v,
     );
 
-    // Розбираємо слова залежно від сервісу
     struct Word {
         text: String,
         start_ms: u64,
@@ -808,7 +828,6 @@ fn generate_karaoke_ass(
     }
 
     let words: Vec<Word> = if service == "WhisperX" {
-        // {"language": ..., "words": [{"word": "...", "start": 0.5, "end": 1.0, ...}]}
         let arr = json.get("words").and_then(|w| w.as_array())
             .ok_or("WhisperX subtitle.json: no 'words' array")?;
         arr.iter().filter_map(|w| {
@@ -818,7 +837,6 @@ fn generate_karaoke_ass(
             Some(Word { text, start_ms: (start * 1000.0) as u64, end_ms: (end * 1000.0) as u64 })
         }).collect()
     } else {
-        // AssemblyAI: [{text, start, end, confidence}] в мілісекундах
         let arr = if let Some(arr) = json.as_array() {
             arr.as_slice()
         } else {
@@ -839,49 +857,99 @@ fn generate_karaoke_ass(
     }
 
     // Групуємо слова у рядки по ~5 секунд або по ~50 символів
-    let mut lines: Vec<(u64, u64, Vec<&Word>)> = Vec::new();
+    let mut lines: Vec<(u64, u64, Vec<usize>)> = Vec::new();
     let mut group_start = 0usize;
-
     while group_start < words.len() {
         let mut group_end = group_start;
         let line_start_ms = words[group_start].start_ms;
         let mut char_count = 0usize;
-
         while group_end < words.len() {
             char_count += words[group_end].text.len() + 1;
             let dur_ms = words[group_end].end_ms.saturating_sub(line_start_ms);
             group_end += 1;
-            // Закінчуємо групу якщо перевищено ліміт символів (~50) або тривалість (~5s)
             if char_count >= 50 || dur_ms >= 5000 {
                 break;
             }
         }
-
-        let group = &words[group_start..group_end];
-        let line_end_ms = group.last().map(|w| w.end_ms).unwrap_or(line_start_ms + 1000);
-        lines.push((line_start_ms, line_end_ms, group.iter().collect()));
+        let line_end_ms = words[group_end - 1].end_ms;
+        lines.push((line_start_ms, line_end_ms, (group_start..group_end).collect()));
         group_start = group_end;
     }
 
-    // Генеруємо ASS Dialogue рядки з \kf тегами
     let mut events = String::new();
-    for (start_ms, end_ms, group) in &lines {
-        let start_str = ms_to_ass_time(*start_ms);
-        let end_str = ms_to_ass_time(*end_ms);
 
-        let mut text = String::new();
-        for word in group {
-            let dur_centisecs = (word.end_ms.saturating_sub(word.start_ms) / 10).max(1);
-            text.push_str(&format!("{{\\kf{}}}{} ", dur_centisecs, word.text));
+    // Closure для побудови рядка follow-режиму: current = usize::MAX → всі слова нормальним кольором.
+    let build_follow_text = |indices: &[usize], current: usize, hi_hex: &str, normal_hex: &str,
+                              scale_tag: &str, reset_scale: &str| -> String {
+        let mut s = String::new();
+        for (j, &idx) in indices.iter().enumerate() {
+            if j == current {
+                s.push_str(&format!("{{\\1c&H{}&{}}}{} ", hi_hex, scale_tag, words[idx].text));
+            } else {
+                s.push_str(&format!("{{\\1c&H{}&{}}}{} ", normal_hex, reset_scale, words[idx].text));
+            }
         }
-        events.push_str(&format!(
-            "Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
-            start_str, end_str, text.trim_end()
-        ));
+        s.trim_end().to_string()
+    };
+
+    if karaoke_mode == 2 {
+        // Follow-режим: окрема Dialogue-подія для кожного слова.
+        // Кожна подія показує весь рядок, але лише поточне слово підсвічене.
+        // Після проговорення слово повертається до нормального кольору.
+        let normal_hex = format!("{:02X}{:02X}{:02X}", color[2], color[1], color[0]);
+        let hi_hex = format!("{:02X}{:02X}{:02X}", highlight_color[2], highlight_color[1], highlight_color[0]);
+        let scale_tag = if scale != 100 { format!("\\fscx{}\\fscy{}", scale, scale) } else { String::new() };
+        let reset_scale = if scale != 100 { "\\fscx100\\fscy100" } else { "" };
+
+        for (group_start_ms, group_end_ms, indices) in &lines {
+            let n = indices.len();
+
+            // Пауза до першого слова — всі нормальним кольором
+            let first_word_start = words[indices[0]].start_ms;
+            if first_word_start > *group_start_ms {
+                let text = build_follow_text(indices, usize::MAX, &hi_hex, &normal_hex, &scale_tag, reset_scale);
+                events.push_str(&format!("Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
+                    ms_to_ass_time(*group_start_ms), ms_to_ass_time(first_word_start), text));
+            }
+
+            for (i, &word_idx) in indices.iter().enumerate() {
+                let event_start = words[word_idx].start_ms;
+                let event_end = if i + 1 < n { words[indices[i + 1]].start_ms } else { *group_end_ms };
+                let text = build_follow_text(indices, i, &hi_hex, &normal_hex, &scale_tag, reset_scale);
+                events.push_str(&format!("Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
+                    ms_to_ass_time(event_start), ms_to_ass_time(event_end), text));
+            }
+        }
+    } else {
+        // Режими fill (\kf) та switch (\k): одна Dialogue-подія на групу.
+        // cursor_ms компенсує паузи між словами порожнім {\k{gap}}.
+        let ktag = if karaoke_mode == 0 { "kf" } else { "k" };
+
+        for (start_ms, end_ms, indices) in &lines {
+            let start_str = ms_to_ass_time(*start_ms);
+            let end_str = ms_to_ass_time(*end_ms);
+            let mut text = String::new();
+            let mut cursor_ms = *start_ms;
+
+            for &word_idx in indices {
+                let word = &words[word_idx];
+                if word.start_ms > cursor_ms {
+                    let gap_cs = (word.start_ms - cursor_ms) / 10;
+                    text.push_str(&format!("{{\\k{}}}", gap_cs));
+                }
+                let dur_cs = (word.end_ms.saturating_sub(word.start_ms) / 10).max(1);
+                text.push_str(&format!("{{\\{}{}}}{} ", ktag, dur_cs, word.text));
+                cursor_ms = word.end_ms;
+            }
+
+            events.push_str(&format!("Dialogue: 0,{},{},Default,,0,0,0,,{}\n",
+                start_str, end_str, text.trim_end()));
+        }
     }
 
     Ok(format!("{}{}", header, events))
 }
+
 
 /// Конвертує мілісекунди у формат часу ASS (H:MM:SS.CC).
 fn ms_to_ass_time(ms: u64) -> String {
@@ -967,6 +1035,7 @@ fn run_video_branch(
     video_stage: Arc<Mutex<crate::queue::StageStatus>>,
     prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
+    total_cost: Arc<Mutex<Option<f64>>>,
     ctx: egui::Context,
 ) -> Result<(), String> {
     if !settings.video_enabled {
@@ -978,6 +1047,10 @@ fn run_video_branch(
     *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
     ctx.request_repaint();
 
+    // В агентному режимі сегменти беруться з timeline.json, LLM для промтів не викликається
+    let is_agent_mode = settings.video_llm_service == "Claude Code"
+        || settings.video_llm_service == "Gemini CLI";
+
     // Визначаємо текст: перекладений якщо є, інакше оригінал
     let source_text = if settings.translation_enabled {
         translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
@@ -985,12 +1058,30 @@ fn run_video_branch(
         settings.text.clone()
     };
 
-    // Нарізаємо текст на сегменти
-    let segments = crate::core::pipeline::timeline::text_splitter::split_text(
-        &source_text,
-        &settings.text_split_mode,
-        settings.text_split_char_limit,
-    );
+    // Нарізаємо текст на сегменти: при агентному режимі — з timeline.json
+    let save_dir = std::path::Path::new(&settings.save_path);
+    let segments = if is_agent_mode {
+        match read_segments_from_timeline(save_dir) {
+            Ok(segs) if !segs.is_empty() => {
+                crate::logger::log_job(job_id, &job_name,
+                    &format!("Agent mode: {} segments from timeline.json", segs.len()));
+                segs
+            }
+            _ => {
+                crate::logger::log_job(job_id, &job_name,
+                    "Agent mode: timeline.json not ready, using text split.");
+                crate::core::pipeline::timeline::text_splitter::split_text(
+                    &source_text, &settings.text_split_mode, settings.text_split_char_limit,
+                )
+            }
+        }
+    } else {
+        crate::core::pipeline::timeline::text_splitter::split_text(
+            &source_text,
+            &settings.text_split_mode,
+            settings.text_split_char_limit,
+        )
+    };
 
     let total = segments.len();
     crate::logger::log_job(
@@ -999,7 +1090,6 @@ fn run_video_branch(
     );
 
     // Зберігаємо debug-файл сегментів
-    let save_dir = std::path::Path::new(&settings.save_path);
     let segments_path = save_dir.join("segments.txt");
     {
         let mut content = format!("=== Сегменти тексту: {} ===\n", total);
@@ -1011,7 +1101,8 @@ fn run_video_branch(
     }
 
     // Фаза 1: будуємо промти для всіх сегментів
-    let use_llm = settings.video_llm_service != "None" && !settings.video_llm_service.is_empty();
+    // В агентному режимі LLM не викликається — video_prompt підставляється напряму
+    let use_llm = !is_agent_mode && settings.video_llm_service != "None" && !settings.video_llm_service.is_empty();
     if use_llm {
         crate::logger::log_job(
             job_id, &job_name,
@@ -1029,7 +1120,7 @@ fn run_video_branch(
     if use_llm {
         // Паралельна генерація: кожен сегмент в окремому потоці
         // Обмеження паралельності виконується всередині call_llm через глобальний лімітер
-        let mut handles: Vec<std::thread::JoinHandle<(usize, String)>> = Vec::with_capacity(total);
+        let mut handles: Vec<std::thread::JoinHandle<(usize, String, Option<f64>)>> = Vec::with_capacity(total);
 
         for (i, segment) in segments.iter().enumerate() {
             let segment          = segment.clone();
@@ -1038,13 +1129,14 @@ fn run_video_branch(
             let llm_model        = settings.video_llm_model.clone();
             let video_prompt     = settings.video_prompt.clone();
             let llm_temperature  = settings.video_llm_temperature;
+            let save_path        = settings.save_path.clone();
             let prompts_progress_c = Arc::clone(&prompts_progress);
             let ctx_c            = ctx.clone();
             let job_id_c         = job_id;
             let job_name_c       = job_name.clone();
 
             handles.push(std::thread::spawn(move || {
-                let prompt = match crate::core::llm::call_llm(
+                let (prompt, cost) = match crate::core::llm::call_llm(
                     &llm_service,
                     &openrouter_key,
                     &llm_model,
@@ -1052,21 +1144,24 @@ fn run_video_branch(
                     &segment,
                     llm_temperature,
                     Some((job_id_c, job_name_c.clone())),
+                    Some(save_path.as_str()),
+                    false,
                 ) {
-                    Ok((generated, _)) => generated,
+                    Ok((generated, cost)) => (generated, cost),
                     Err(e) => {
                         crate::logger::log_job(
                             job_id_c, &job_name_c,
                             &format!("LLM prompt {}/{} error: {}. Using fallback.", i + 1, total, e),
                         );
                         // Fallback: проста підстановка
-                        if video_prompt.contains("{{text}}") {
+                        let fallback = if video_prompt.contains("{{text}}") {
                             video_prompt.replace("{{text}}", &segment)
                         } else if video_prompt.is_empty() {
                             segment.clone()
                         } else {
                             format!("{}\n\n{}", video_prompt, segment)
-                        }
+                        };
+                        (fallback, None)
                     }
                 };
 
@@ -1077,14 +1172,18 @@ fn run_video_branch(
                 }
                 ctx_c.request_repaint();
 
-                (i, prompt)
+                (i, prompt, cost)
             }));
         }
 
-        // Збираємо результати, зберігаючи порядок за індексом
+        // Збираємо результати, зберігаючи порядок за індексом; накопичуємо вартість LLM-запитів
         for handle in handles {
-            if let Ok((i, prompt)) = handle.join() {
+            if let Ok((i, prompt, cost)) = handle.join() {
                 prompts[i] = prompt;
+                if let Some(c) = cost {
+                    let mut tc = total_cost.lock().unwrap();
+                    *tc = Some(tc.unwrap_or(0.0) + c);
+                }
             } else {
                 crate::logger::log_job(job_id, &job_name, "LLM prompt thread panicked.");
             }
@@ -1112,7 +1211,7 @@ fn run_video_branch(
     // Фаза 2: паралельна генерація медіа із семафором
     let use_video = settings.video_media_type == "video";
 
-    let media_dir = save_dir.join("media");
+    let media_dir = std::path::Path::new(&settings.save_path).join("media");
     if let Err(e) = std::fs::create_dir_all(&media_dir) {
         crate::logger::log_job(job_id, &job_name, &format!("Cannot create media/ dir: {}", e));
         *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
@@ -1222,6 +1321,222 @@ fn run_video_branch(
     }
 }
 
+/// Читає сегменти тексту з timeline.json (для агентного режиму).
+fn read_segments_from_timeline(save_dir: &std::path::Path) -> Result<Vec<String>, String> {
+    let content = std::fs::read_to_string(save_dir.join("timeline.json"))
+        .map_err(|e| format!("Cannot read timeline.json: {}", e))?;
+    let timeline = serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
+        .map_err(|e| format!("Invalid timeline.json: {}", e))?;
+    Ok(timeline.segments.into_iter().map(|s| s.text).collect())
+}
+
+/// Запускає агента (Claude Code або Gemini CLI) для створення timeline.json на основі subtitle.srt.
+/// Якщо `agent_control_enabled`, зберігає session_id та чекає підтвердження користувача.
+fn run_agent_timeline(
+    job_id: u64,
+    job_name: &str,
+    settings: &crate::queue::JobSettings,
+    status: Arc<Mutex<crate::queue::JobStatus>>,
+    agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
+    agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
+    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    ctx: &egui::Context,
+) -> Result<(), String> {
+    let save_dir = std::path::Path::new(&settings.save_path);
+    let srt_path = save_dir.join("subtitle.srt");
+
+    let srt_content = std::fs::read_to_string(&srt_path)
+        .map_err(|e| format!("subtitle.srt not found (run subtitles stage first): {}", e))?;
+
+    let timeline_path = save_dir.join("timeline.json");
+    let agent_prompt = settings.video_agent_prompt
+        .replace("{{srt}}", &srt_content)
+        .replace("{{path}}", &timeline_path.to_string_lossy());
+
+    crate::logger::log_job(job_id, job_name,
+        &format!("Agent ({}): generating timeline.json...", settings.video_llm_service));
+
+    // Якщо контроль агента увімкнено — використовуємо сесію для можливості продовження чату
+    if settings.agent_control_enabled {
+        let session_id = uuid_v4();
+        crate::logger::log_job(job_id, job_name, &format!("Agent control enabled, session: {}", session_id));
+
+        let response = call_agent_new_session(
+            &settings.video_llm_service,
+            &settings.video_llm_model,
+            &agent_prompt,
+            &session_id,
+            Some((job_id, job_name.to_string())),
+            Some(&settings.save_path),
+        ).map_err(|e| format!("Agent error: {}", e))?;
+
+        // Зберігаємо сесію та початкову историю чату
+        *agent_session.lock().unwrap() = Some(crate::queue::AgentSessionInfo {
+            session_id: session_id.clone(),
+            service: settings.video_llm_service.clone(),
+            model: settings.video_llm_model.clone(),
+        });
+        agent_chat.lock().unwrap().push(crate::queue::AgentChatMessage {
+            role: "agent".to_string(),
+            content: response,
+        });
+        save_agent_chat_to_file(save_dir, &agent_chat.lock().unwrap());
+    } else {
+        crate::core::llm::call_llm(
+            &settings.video_llm_service,
+            &settings.openrouter_key,
+            &settings.video_llm_model,
+            &agent_prompt,
+            "",
+            0.0,
+            Some((job_id, job_name.to_string())),
+            Some(&settings.save_path),
+            true,
+        ).map_err(|e| format!("Agent error: {}", e))?;
+    }
+
+    if !timeline_path.exists() {
+        return Err("Agent did not create timeline.json".to_string());
+    }
+    let content = std::fs::read_to_string(&timeline_path)
+        .map_err(|e| format!("Cannot read agent timeline.json: {}", e))?;
+    serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
+        .map_err(|e| format!("Agent timeline.json is invalid: {}", e))?;
+
+    crate::logger::log_job(job_id, job_name, "Agent timeline.json created and validated.");
+
+    // Пауза для контролю агента — чекаємо підтвердження користувача
+    if settings.agent_control_enabled {
+        crate::logger::log_job(job_id, job_name, "Awaiting agent control confirmation from user...");
+        *status.lock().unwrap() = crate::queue::JobStatus::AwaitingAgentControl;
+        ctx.request_repaint();
+
+        let (lock, cvar) = &*agent_control_resume;
+        let mut resumed = lock.lock().unwrap();
+        while !*resumed {
+            resumed = cvar.wait(resumed).unwrap();
+        }
+        *resumed = false;
+
+        crate::logger::log_job(job_id, job_name, "Agent control confirmed. Resuming pipeline...");
+        *status.lock().unwrap() = crate::queue::JobStatus::Running;
+        ctx.request_repaint();
+    }
+
+    ctx.request_repaint();
+    Ok(())
+}
+
+/// Генерує простий UUID v4.
+fn uuid_v4() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos();
+    // Простий унікальний рядок на основі часу та PID
+    format!("{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
+        nanos,
+        std::process::id() & 0xFFFF,
+        (nanos >> 16) & 0x0FFF,
+        ((nanos >> 8) & 0x3FFF) | 0x8000,
+        (nanos as u64).wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407) & 0xFFFFFFFFFFFF,
+    )
+}
+
+/// Викликає агента з новою сесією (--session-id) залежно від сервісу.
+pub fn call_agent_new_session(
+    service: &str,
+    model: &str,
+    prompt: &str,
+    session_id: &str,
+    job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
+) -> Result<String, String> {
+    if service == "Claude Code" {
+        crate::api::claude::call_claude_code_new_session(model, prompt, session_id, job_info, working_dir)
+    } else if service == "Gemini CLI" {
+        crate::api::gemini::call_gemini_new_session(model, prompt, session_id, job_info, working_dir)
+    } else {
+        Err(format!("Agent sessions not supported for service: {}", service))
+    }
+}
+
+/// Продовжує сесію агента (--resume) залежно від сервісу.
+pub fn call_agent_resume(
+    service: &str,
+    model: &str,
+    message: &str,
+    session_id: &str,
+    job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
+) -> Result<String, String> {
+    if service == "Claude Code" {
+        crate::api::claude::call_claude_code_resume(model, message, session_id, job_info, working_dir)
+    } else if service == "Gemini CLI" {
+        crate::api::gemini::call_gemini_resume(model, message, session_id, job_info, working_dir)
+    } else {
+        Err(format!("Agent sessions not supported for service: {}", service))
+    }
+}
+
+/// Зберігає историю чату агента у файл agent_chat.json у папці задачі.
+fn save_agent_chat_to_file(save_dir: &std::path::Path, chat: &[crate::queue::AgentChatMessage]) {
+    let messages: Vec<serde_json::Value> = chat.iter().map(|m| {
+        serde_json::json!({ "role": m.role, "content": m.content })
+    }).collect();
+    let json = serde_json::to_string_pretty(&messages).unwrap_or_default();
+    let _ = std::fs::write(save_dir.join("agent_chat.json"), json);
+}
+
+/// Після генерації медіафайлів заповнює поле `media` в timeline.json фактичними шляхами.
+fn assign_media_to_timeline(save_dir: &std::path::Path) -> Result<(), String> {
+    let timeline_path = save_dir.join("timeline.json");
+    let content = std::fs::read_to_string(&timeline_path)
+        .map_err(|e| format!("Cannot read timeline.json: {}", e))?;
+    let mut timeline = serde_json::from_str::<crate::core::pipeline::timeline::sync::Timeline>(&content)
+        .map_err(|e| format!("Invalid timeline.json: {}", e))?;
+
+    let media_dir = save_dir.join("media");
+    let mut files: Vec<String> = std::fs::read_dir(&media_dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let name = e.file_name();
+            let s = name.to_string_lossy();
+            let ext = s.rsplit('.').next().unwrap_or("").to_lowercase();
+            matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "webp" | "mp4" | "mov" | "avi" | "mkv" | "webm")
+        })
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    files.sort();
+
+    if files.is_empty() {
+        return Ok(());
+    }
+
+    let n_segs = timeline.segments.len();
+    let n_files = files.len();
+
+    for (i, seg) in timeline.segments.iter_mut().enumerate() {
+        let file_idx = if n_files <= n_segs {
+            (i as f64 * n_files as f64 / n_segs as f64).floor() as usize
+        } else {
+            i.min(n_files - 1)
+        };
+        seg.media = files.get(file_idx).map(|f| format!("media/{}", f));
+    }
+
+    let json = serde_json::to_string_pretty(&timeline)
+        .map_err(|e| format!("JSON error: {}", e))?;
+    std::fs::write(&timeline_path, json)
+        .map_err(|e| format!("Write error: {}", e))?;
+
+    Ok(())
+}
+
 /// Виконує весь пайплайн у фоновому потоці.
 /// Послідовно: Переклад → [Озвучка+Субтитри || Відеоряд] → Timeline → Монтаж.
 /// Озвучка+Субтитри та Відеоряд виконуються паралельно між собою.
@@ -1236,19 +1551,27 @@ pub fn run_pipeline(
     subtitles_stage: Arc<Mutex<crate::queue::StageStatus>>,
     montage_stage: Arc<Mutex<crate::queue::StageStatus>>,
     translated_text: Arc<Mutex<Option<String>>>,
-    translation_cost: Arc<Mutex<Option<f64>>>,
+    total_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
     prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
     montage_progress: Arc<Mutex<Option<f32>>>,
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
+    agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     ctx: egui::Context,
 ) {
     std::thread::spawn(move || {
         crate::logger::log_job(job_id, &job_name, "Job started.");
         *status.lock().unwrap() = crate::queue::JobStatus::Running;
         ctx.request_repaint();
+
+        // Гарантуємо існування кінцевої папки з самого початку обробки
+        if let Err(e) = std::fs::create_dir_all(&settings.save_path) {
+            crate::logger::log_job(job_id, &job_name, &format!("Failed to create output dir: {}", e));
+        }
 
         // Текст, який буде передано в озвучку (оригінал або результат перекладу)
         let mut voice_text = settings.text.clone();
@@ -1275,6 +1598,8 @@ pub fn run_pipeline(
                 &settings.text,
                 settings.translation_temperature,
                 Some((job_id, job_name.clone())),
+                Some(settings.save_path.as_str()),
+                false,
             ) {
                 Ok((translated, cost)) => {
                     let dir = std::path::Path::new(&settings.save_path);
@@ -1284,7 +1609,11 @@ pub fn run_pipeline(
                     crate::logger::log_job(job_id, &job_name, "Translation saved: text.txt");
                     voice_text = translated.clone();
                     *translated_text.lock().unwrap() = Some(translated);
-                    *translation_cost.lock().unwrap() = cost;
+                    // Накопичуємо вартість (враховуючи перегенерацію)
+                    if let Some(c) = cost {
+                        let mut tc = total_cost.lock().unwrap();
+                        *tc = Some(tc.unwrap_or(0.0) + c);
+                    }
                     *translation_stage.lock().unwrap() = crate::queue::StageStatus::Done;
 
                     if settings.translation_control_enabled {
@@ -1310,135 +1639,192 @@ pub fn run_pipeline(
             }
         }
 
-        // Паралельні гілки: [Озвучка + Субтитри] || [Відеоряд]
-        // Озвучка та субтитри залежать одна від одної (субтитри потребують аудіо),
-        // тому вони послідовні всередині гілки AV, але гілка AV паралельна з відеорядом.
-
-        // AV гілка виконується якщо є озвучка (Whisper залежить від аудіо, тому теж тут)
+        // При агентному режимі (Claude Code / Gemini CLI) гілки виконуються послідовно:
+        // AV → Агент → Медіа. В звичайному режимі — паралельно.
         let run_av = settings.voiceover_enabled;
         let run_video = settings.video_enabled;
+        let is_agent_mode = run_video &&
+            (settings.video_llm_service == "Claude Code" || settings.video_llm_service == "Gemini CLI");
 
-        if run_av {
-            crate::logger::log_job(job_id, &job_name, "Starting AV branch (voiceover + subtitles) in parallel with video...");
-        }
-        if run_video {
-            crate::logger::log_job(job_id, &job_name, "Starting video branch in parallel with AV...");
-        }
-
-        // Гілка AV: Озвучка → Субтитри
-        let av_handle: Option<std::thread::JoinHandle<Result<(), String>>> = if run_av {
-            let settings_av = settings.clone();
-            let voice_text_av = voice_text.clone();
-            let voiceover_stage_av = Arc::clone(&voiceover_stage);
-            let subtitles_stage_av = Arc::clone(&subtitles_stage);
-            let audio_duration_av = Arc::clone(&audio_duration);
-            let ctx_av = ctx.clone();
-            let job_id_av = job_id;
-            let job_name_av = job_name.clone();
-
-            Some(std::thread::spawn(move || {
-                run_av_branch(
-                    job_id_av,
-                    job_name_av,
-                    settings_av,
-                    voice_text_av,
-                    voiceover_stage_av,
-                    subtitles_stage_av,
-                    audio_duration_av,
-                    ctx_av,
-                )
-            }))
-        } else {
-            None
-        };
-
-        // Гілка Video: Відеоряд
-        let video_handle: Option<std::thread::JoinHandle<Result<(), String>>> = if run_video {
-            let settings_video = settings.clone();
-            let translated_text_video = Arc::clone(&translated_text);
-            let video_stage_video = Arc::clone(&video_stage);
-            let prompts_progress_video = Arc::clone(&prompts_progress);
-            let media_progress_video = Arc::clone(&media_progress);
-            let ctx_video = ctx.clone();
-            let job_id_video = job_id;
-            let job_name_video = job_name.clone();
-
-            Some(std::thread::spawn(move || {
-                run_video_branch(
-                    job_id_video,
-                    job_name_video,
-                    settings_video,
-                    translated_text_video,
-                    video_stage_video,
-                    prompts_progress_video,
-                    media_progress_video,
-                    ctx_video,
-                )
-            }))
-        } else {
-            None
-        };
-
-        // Спочатку чекаємо відеогілку, щоб мати можливість зробити паузу для контролю зображень
-        // поки гілка AV (озвучка + субтитри) продовжує виконуватись паралельно.
-        let video_result = video_handle.map(|h| h.join().unwrap_or_else(|_| Err("Video thread panicked".to_string())));
-
-        // Пауза для контролю зображень — AV гілка продовжує виконуватись
-        if settings.media_control_enabled && settings.video_enabled {
-            if let Some(Ok(())) = &video_result {
-                crate::logger::log_job(job_id, &job_name, "Video done. Awaiting media review by user...");
-                *status.lock().unwrap() = crate::queue::JobStatus::AwaitingMediaControl;
-                ctx.request_repaint();
-
-                let (lock, cvar) = &*media_control_resume;
-                let mut resumed = lock.lock().unwrap();
-                while !*resumed {
-                    resumed = cvar.wait(resumed).unwrap();
+        if is_agent_mode {
+            // === Агентний режим: послідовно ===
+            if run_av {
+                crate::logger::log_job(job_id, &job_name, "Agent mode: starting AV branch (voiceover + subtitles)...");
+                if let Err(e) = run_av_branch(
+                    job_id, job_name.clone(), settings.clone(), voice_text.clone(),
+                    Arc::clone(&voiceover_stage), Arc::clone(&subtitles_stage),
+                    Arc::clone(&audio_duration), ctx.clone(),
+                ) {
+                    *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                    ctx.request_repaint();
+                    return;
                 }
-                *resumed = false;
-
-                crate::logger::log_job(job_id, &job_name, "Media review confirmed. Resuming pipeline...");
-                *status.lock().unwrap() = crate::queue::JobStatus::Running;
-                ctx.request_repaint();
             }
-        }
 
-        // Тепер чекаємо AV гілку
-        let av_result = av_handle.map(|h| h.join().unwrap_or_else(|_| Err("AV thread panicked".to_string())));
-
-        // Перевіряємо помилки обох гілок
-        if let Some(Err(e)) = av_result {
-            *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+            // Агент створює timeline.json на основі subtitle.srt
+            crate::logger::log_job(job_id, &job_name, "Agent mode: creating timeline.json...");
+            *video_stage.lock().unwrap() = crate::queue::StageStatus::Running;
             ctx.request_repaint();
-            return;
-        }
-        if let Some(Err(e)) = video_result {
-            *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
-            ctx.request_repaint();
-            return;
-        }
 
-        // Генеруємо timeline.json якщо відеоряд увімкнено і є тривалість аудіо
-        // (підготовка для етапу монтажу)
-        if settings.video_enabled {
-            let source_text = if settings.translation_enabled {
-                translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
+            if let Err(e) = run_agent_timeline(
+                job_id, &job_name, &settings,
+                Arc::clone(&status),
+                Arc::clone(&agent_chat),
+                Arc::clone(&agent_session),
+                Arc::clone(&agent_control_resume),
+                &ctx,
+            ) {
+                crate::logger::log_job(job_id, &job_name, &format!("Agent timeline error: {}", e));
+                *video_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+                *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                ctx.request_repaint();
+                return;
+            }
+
+            // Генерація медіа (сегменти читаються з timeline.json)
+            if let Err(e) = run_video_branch(
+                job_id, job_name.clone(), settings.clone(), Arc::clone(&translated_text),
+                Arc::clone(&video_stage), Arc::clone(&prompts_progress),
+                Arc::clone(&media_progress), Arc::clone(&total_cost), ctx.clone(),
+            ) {
+                *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                ctx.request_repaint();
+                return;
+            }
+
+            // Патчимо timeline.json фактичними шляхами медіафайлів
+            let save_dir_agent = std::path::Path::new(&settings.save_path);
+            if let Err(e) = assign_media_to_timeline(save_dir_agent) {
+                crate::logger::log_job(job_id, &job_name, &format!("assign_media warning: {}", e));
             } else {
-                settings.text.clone()
+                crate::logger::log_job(job_id, &job_name, "Timeline patched with media paths.");
+            }
+
+        } else {
+            // === Звичайний режим: паралельно ===
+            if run_av {
+                crate::logger::log_job(job_id, &job_name, "Starting AV branch (voiceover + subtitles) in parallel with video...");
+            }
+            if run_video {
+                crate::logger::log_job(job_id, &job_name, "Starting video branch in parallel with AV...");
+            }
+
+            // Гілка AV: Озвучка → Субтитри
+            let av_handle: Option<std::thread::JoinHandle<Result<(), String>>> = if run_av {
+                let settings_av = settings.clone();
+                let voice_text_av = voice_text.clone();
+                let voiceover_stage_av = Arc::clone(&voiceover_stage);
+                let subtitles_stage_av = Arc::clone(&subtitles_stage);
+                let audio_duration_av = Arc::clone(&audio_duration);
+                let ctx_av = ctx.clone();
+                let job_id_av = job_id;
+                let job_name_av = job_name.clone();
+
+                Some(std::thread::spawn(move || {
+                    run_av_branch(
+                        job_id_av,
+                        job_name_av,
+                        settings_av,
+                        voice_text_av,
+                        voiceover_stage_av,
+                        subtitles_stage_av,
+                        audio_duration_av,
+                        ctx_av,
+                    )
+                }))
+            } else {
+                None
             };
 
-            let segments = crate::core::pipeline::timeline::text_splitter::split_text(
-                &source_text,
-                &settings.text_split_mode,
-                settings.text_split_char_limit,
-            );
+            // Гілка Video: Відеоряд
+            let video_handle: Option<std::thread::JoinHandle<Result<(), String>>> = if run_video {
+                let settings_video = settings.clone();
+                let translated_text_video = Arc::clone(&translated_text);
+                let video_stage_video = Arc::clone(&video_stage);
+                let prompts_progress_video = Arc::clone(&prompts_progress);
+                let media_progress_video = Arc::clone(&media_progress);
+                let total_cost_video = Arc::clone(&total_cost);
+                let ctx_video = ctx.clone();
+                let job_id_video = job_id;
+                let job_name_video = job_name.clone();
 
-            let audio_dur = *audio_duration.lock().unwrap();
-            let save_dir = std::path::Path::new(&settings.save_path);
+                Some(std::thread::spawn(move || {
+                    run_video_branch(
+                        job_id_video,
+                        job_name_video,
+                        settings_video,
+                        translated_text_video,
+                        video_stage_video,
+                        prompts_progress_video,
+                        media_progress_video,
+                        total_cost_video,
+                        ctx_video,
+                    )
+                }))
+            } else {
+                None
+            };
 
-            match crate::core::pipeline::timeline::sync::build_timeline(save_dir, &segments, audio_dur, &job_name) {
-                Ok(_) => crate::logger::log_job(job_id, &job_name, "Timeline saved: timeline.json"),
-                Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Timeline warning: {}", e)),
+            // Спочатку чекаємо відеогілку, щоб мати можливість зробити паузу для контролю зображень
+            // поки гілка AV (озвучка + субтитри) продовжує виконуватись паралельно.
+            let video_result = video_handle.map(|h| h.join().unwrap_or_else(|_| Err("Video thread panicked".to_string())));
+
+            // Пауза для контролю зображень — AV гілка продовжує виконуватись
+            if settings.media_control_enabled && settings.video_enabled {
+                if let Some(Ok(())) = &video_result {
+                    crate::logger::log_job(job_id, &job_name, "Video done. Awaiting media review by user...");
+                    *status.lock().unwrap() = crate::queue::JobStatus::AwaitingMediaControl;
+                    ctx.request_repaint();
+
+                    let (lock, cvar) = &*media_control_resume;
+                    let mut resumed = lock.lock().unwrap();
+                    while !*resumed {
+                        resumed = cvar.wait(resumed).unwrap();
+                    }
+                    *resumed = false;
+
+                    crate::logger::log_job(job_id, &job_name, "Media review confirmed. Resuming pipeline...");
+                    *status.lock().unwrap() = crate::queue::JobStatus::Running;
+                    ctx.request_repaint();
+                }
+            }
+
+            // Тепер чекаємо AV гілку
+            let av_result = av_handle.map(|h| h.join().unwrap_or_else(|_| Err("AV thread panicked".to_string())));
+
+            // Перевіряємо помилки обох гілок
+            if let Some(Err(e)) = av_result {
+                *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                ctx.request_repaint();
+                return;
+            }
+            if let Some(Err(e)) = video_result {
+                *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
+                ctx.request_repaint();
+                return;
+            }
+
+            // Генеруємо timeline.json якщо відеоряд увімкнено і є тривалість аудіо
+            if settings.video_enabled {
+                let source_text = if settings.translation_enabled {
+                    translated_text.lock().unwrap().clone().unwrap_or_else(|| settings.text.clone())
+                } else {
+                    settings.text.clone()
+                };
+
+                let segments = crate::core::pipeline::timeline::text_splitter::split_text(
+                    &source_text,
+                    &settings.text_split_mode,
+                    settings.text_split_char_limit,
+                );
+
+                let audio_dur = *audio_duration.lock().unwrap();
+                let save_dir = std::path::Path::new(&settings.save_path);
+
+                match crate::core::pipeline::timeline::sync::build_timeline(save_dir, &segments, audio_dur, &job_name) {
+                    Ok(_) => crate::logger::log_job(job_id, &job_name, "Timeline saved: timeline.json"),
+                    Err(e) => crate::logger::log_job(job_id, &job_name, &format!("Timeline warning: {}", e)),
+                }
             }
         }
 
@@ -1466,6 +1852,8 @@ pub fn run_pipeline(
                 &settings.montage_transition,
                 settings.montage_transition_duration,
                 settings.subtitles_enabled,
+                settings.overlay_triggers_enabled,
+                &settings.overlay_triggers,
                 |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
                 move |pct| {
                     *montage_progress_arc.lock().unwrap() = Some(pct);
@@ -1542,6 +1930,8 @@ fn run_final_stages(
             settings.montage_fps, &settings.montage_preset, settings.montage_bitrate,
             &settings.montage_transition, settings.montage_transition_duration,
             settings.subtitles_enabled,
+            settings.overlay_triggers_enabled,
+            &settings.overlay_triggers,
             |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
             move |pct| {
                 *montage_progress_arc.lock().unwrap() = Some(pct);
@@ -1579,13 +1969,16 @@ pub fn retry_from_stage(
     subtitles_stage: Arc<Mutex<crate::queue::StageStatus>>,
     montage_stage: Arc<Mutex<crate::queue::StageStatus>>,
     translated_text: Arc<Mutex<Option<String>>>,
-    translation_cost: Arc<Mutex<Option<f64>>>,
+    total_cost: Arc<Mutex<Option<f64>>>,
     audio_duration: Arc<Mutex<Option<f64>>>,
     prompts_progress: Arc<Mutex<Option<(usize, usize)>>>,
     media_progress: Arc<Mutex<Option<(usize, usize)>>>,
     montage_progress: Arc<Mutex<Option<f32>>>,
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
+    agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     ctx: egui::Context,
 ) {
     use crate::queue::RetryStage::*;
@@ -1600,19 +1993,20 @@ pub fn retry_from_stage(
             *subtitles_stage.lock().unwrap() = SPending;
             *montage_stage.lock().unwrap() = SPending;
             *translated_text.lock().unwrap() = None;
-            *translation_cost.lock().unwrap() = None;
+            *total_cost.lock().unwrap() = None;
             *audio_duration.lock().unwrap() = None;
             *prompts_progress.lock().unwrap() = None;
             *media_progress.lock().unwrap() = None;
             *montage_progress.lock().unwrap() = None;
             *montage_file_size.lock().unwrap() = None;
             *media_control_resume.0.lock().unwrap() = false;
+            *agent_control_resume.0.lock().unwrap() = false;
             run_pipeline(
                 job_id, job_name, settings, status,
                 translation_stage, voiceover_stage, video_stage, subtitles_stage, montage_stage,
-                translated_text, translation_cost, audio_duration,
+                translated_text, total_cost, audio_duration,
                 prompts_progress, media_progress, montage_progress, montage_file_size,
-                media_control_resume, ctx,
+                media_control_resume, agent_control_resume, agent_chat, agent_session, ctx,
             );
         }
 
@@ -1676,7 +2070,7 @@ pub fn retry_from_stage(
                 let video_result = run_video_branch(
                     job_id, job_name.clone(), settings.clone(), Arc::clone(&translated_text),
                     Arc::clone(&video_stage), Arc::clone(&prompts_progress),
-                    Arc::clone(&media_progress), ctx.clone(),
+                    Arc::clone(&media_progress), Arc::clone(&total_cost), ctx.clone(),
                 );
 
                 // Пауза для контролю зображень

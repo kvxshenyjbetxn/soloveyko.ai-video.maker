@@ -8,8 +8,25 @@ pub enum JobStatus {
     AwaitingControl,
     /// Очікує перегляду згенерованих зображень користувачем
     AwaitingMediaControl,
+    /// Очікує підтвердження користувача після завершення агента
+    AwaitingAgentControl,
     Done,
     Failed(String),
+}
+
+/// Одне повідомлення в чаті з агентом.
+#[derive(Clone)]
+pub struct AgentChatMessage {
+    pub role: String, // "user" або "agent"
+    pub content: String,
+}
+
+/// Інформація про активну сесію агента для продовження чату.
+#[derive(Clone)]
+pub struct AgentSessionInfo {
+    pub session_id: String,
+    pub service: String, // "Claude Code" або "Gemini CLI"
+    pub model: String,
 }
 
 /// Ідентифікатор етапу для повтору виконання з цього місця.
@@ -60,6 +77,8 @@ pub struct JobSettings {
     #[allow(dead_code)]
     pub video_service: String,
     pub video_prompt: String,
+    /// Системна інструкція агенту для створення timeline.json (Claude Code / Gemini CLI)
+    pub video_agent_prompt: String,
     pub video_llm_service: String,
     pub video_llm_model: String,
     pub video_llm_temperature: f32,
@@ -80,6 +99,13 @@ pub struct JobSettings {
     pub subtitle_color: [u8; 3],
     pub subtitle_margin_v: u32,
     pub subtitle_karaoke: bool,
+    /// 0 = fill (\kf), 1 = switch (\k), 2 = follow (per-word highlight + повернення)
+    pub subtitle_karaoke_mode: u8,
+    pub subtitle_karaoke_highlight_color: [u8; 3],
+    pub subtitle_karaoke_outline_color: [u8; 3],
+    pub subtitle_karaoke_bold: bool,
+    /// Масштаб поточного слова у %, лише для режиму follow (100 = без змін)
+    pub subtitle_karaoke_scale: u32,
     pub subtitle_font: String,
     pub montage_enabled: bool,
     #[allow(dead_code)]
@@ -90,6 +116,14 @@ pub struct JobSettings {
     pub montage_transition: String,
     pub montage_transition_duration: f32,
     pub media_control_enabled: bool,
+    /// Чи увімкнено контроль агента (пауза після генерації timeline.json для чату з агентом)
+    pub agent_control_enabled: bool,
+    /// Чи увімкнено тригери накладення медіа за ключовими фразами
+    pub overlay_triggers_enabled: bool,
+    /// Список тригерів накладення медіа
+    pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
+    /// Якщо Some — пайплайн стартує з цього етапу замість повного запуску (режим відновлення)
+    pub resume_from_stage: Option<RetryStage>,
 }
 
 /// Одна задача в черзі пайплайну.
@@ -112,8 +146,8 @@ pub struct PipelineJob {
     pub settings: JobSettings,
     /// Збережений перекладений текст (заповнюється після перекладу)
     pub translated_text: Arc<Mutex<Option<String>>>,
-    /// Вартість перекладу (якщо використовується OpenRouter)
-    pub translation_cost: Arc<Mutex<Option<f64>>>,
+    /// Загальна вартість всіх LLM-запитів задачі (якщо використовується OpenRouter)
+    pub total_cost: Arc<Mutex<Option<f64>>>,
     /// Тривалість аудіо після озвучки (в секундах)
     pub audio_duration: Arc<Mutex<Option<f64>>>,
     /// Прогрес підготовки промтів: (завершено, загалом). None — поки кількість невідома.
@@ -126,6 +160,12 @@ pub struct PipelineJob {
     pub montage_file_size: Arc<Mutex<Option<u64>>>,
     /// Condvar для відновлення пайплайну після контролю зображень
     pub media_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    /// Condvar для відновлення пайплайну після контролю агента
+    pub agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    /// Повідомлення чату з агентом (зберігається між сесіями)
+    pub agent_chat: Arc<Mutex<Vec<AgentChatMessage>>>,
+    /// Активна сесія агента (session_id для продовження чату)
+    pub agent_session: Arc<Mutex<Option<AgentSessionInfo>>>,
 }
 
 impl PipelineJob {
@@ -141,13 +181,16 @@ impl PipelineJob {
             montage_stage: Arc::new(Mutex::new(StageStatus::Pending)),
             settings,
             translated_text: Arc::new(Mutex::new(None)),
-            translation_cost: Arc::new(Mutex::new(None)),
+            total_cost: Arc::new(Mutex::new(None)),
             audio_duration: Arc::new(Mutex::new(None)),
             prompts_progress: Arc::new(Mutex::new(None)),
             media_progress: Arc::new(Mutex::new(None)),
             montage_progress: Arc::new(Mutex::new(None)),
             montage_file_size: Arc::new(Mutex::new(None)),
             media_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
+            agent_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
+            agent_chat: Arc::new(Mutex::new(Vec::new())),
+            agent_session: Arc::new(Mutex::new(None)),
         }
     }
 

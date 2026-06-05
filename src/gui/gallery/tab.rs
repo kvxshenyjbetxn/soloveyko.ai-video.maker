@@ -1,6 +1,6 @@
 use eframe::egui;
 use crate::localization::translate;
-use super::{RegenAction, icons::{draw_refresh_icon, draw_menu_icon, draw_play_triangle}, preview::load_image_texture};
+use super::{RegenAction, icons::{draw_refresh_icon, draw_menu_icon, draw_play_triangle, draw_eye_icon}, preview::load_image_texture};
 
 /// Малює вкладку галереї медіафайлів із деревом задач.
 pub fn draw_gallery_tab(
@@ -21,6 +21,7 @@ pub fn draw_gallery_tab(
     video_thumbnails: &std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     video_thumb_loading: &std::collections::HashSet<std::path::PathBuf>,
     thumb_requests: &mut Vec<std::path::PathBuf>,
+    prompt_view_request: &mut Option<std::path::PathBuf>,
 ) {
     let awaiting: Vec<_> = jobs.iter()
         .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl)
@@ -202,7 +203,7 @@ pub fn draw_gallery_tab(
                                 ui.painter().rect_filled(img_resp.rect, 0.0, egui::Color32::from_black_alpha(130));
                                 ui.put(img_resp.rect, egui::Spinner::new());
                             } else if !is_video {
-                                // Оверлей іконок перегенерації (тільки для зображень)
+                                // Оверлей іконок (тільки для зображень): ока | refresh | menu
                                 let bw  = 22.0;
                                 let gap = 3.0;
                                 let pad = 4.0;
@@ -214,24 +215,33 @@ pub fn draw_gallery_tab(
                                     egui::pos2(img_resp.rect.right() - bw * 2.0 - gap - pad, img_resp.rect.bottom() - bw - pad),
                                     egui::vec2(bw, bw),
                                 );
+                                let prompt_rect = egui::Rect::from_min_size(
+                                    egui::pos2(img_resp.rect.right() - bw * 3.0 - gap * 2.0 - pad, img_resp.rect.bottom() - bw - pad),
+                                    egui::vec2(bw, bw),
+                                );
 
                                 let same_resp   = ui.interact(same_rect,   egui::Id::new(("gs", *job_id, idx)), egui::Sense::click());
                                 let custom_resp = ui.interact(custom_rect, egui::Id::new(("gc", *job_id, idx)), egui::Sense::click());
+                                let prompt_resp = ui.interact(prompt_rect, egui::Id::new(("gp", *job_id, idx)), egui::Sense::click());
 
                                 let bg_n = egui::Color32::from_black_alpha(150);
                                 let bg_h = egui::Color32::from_black_alpha(220);
                                 let painter = ui.painter();
                                 painter.rect_filled(same_rect,   4.0, if same_resp.hovered()   { bg_h } else { bg_n });
                                 painter.rect_filled(custom_rect, 4.0, if custom_resp.hovered() { bg_h } else { bg_n });
+                                painter.rect_filled(prompt_rect, 4.0, if prompt_resp.hovered() { bg_h } else { bg_n });
 
                                 let col = egui::Color32::WHITE;
                                 draw_refresh_icon(painter, same_rect.center(),   5.5, egui::Stroke::new(1.5, col));
                                 draw_menu_icon(painter,    custom_rect.center(), 5.0, egui::Stroke::new(1.5, col));
+                                draw_eye_icon(painter,     prompt_rect.center(), 5.0, egui::Stroke::new(1.2, col));
 
                                 if same_resp.on_hover_text(translate(language, "gallery_regen_same_tooltip")).clicked() {
                                     *regen_action = Some((file_path.clone(), job_settings.clone(), false, *job_id, job_name.clone()));
                                 } else if custom_resp.on_hover_text(translate(language, "gallery_regen_custom_tooltip")).clicked() {
                                     *regen_action = Some((file_path.clone(), job_settings.clone(), true, *job_id, job_name.clone()));
+                                } else if prompt_resp.on_hover_text(translate(language, "gallery_prompt_tooltip")).clicked() {
+                                    *prompt_view_request = Some(file_path.clone());
                                 } else if img_resp.clicked() {
                                     *gallery_preview = Some(file_path.clone());
                                 }

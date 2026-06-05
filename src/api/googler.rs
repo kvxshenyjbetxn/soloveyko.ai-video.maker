@@ -1,5 +1,5 @@
 use eframe::egui;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 const BASE_URL: &str = "https://googler.fast-gen.ai/api";
 
@@ -195,8 +195,8 @@ fn poll_operation(key: &str, operation_id: &str, agent: &ureq::Agent) -> Result<
 }
 
 /// Спроба генерації зображення через конкретного провайдера.
-#[allow(dead_code)]
 fn try_generate_image(key: &str, prompt: &str, aspect_ratio: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
+    let _permit = GooglerImageLimiter::get().acquire();
     let (url, body) = match provider {
         "flow_IMAGEN_3_5" => (
             format!("{}/v4/flow/image/generate", BASE_URL),
@@ -247,8 +247,8 @@ fn try_generate_image(key: &str, prompt: &str, aspect_ratio: &str, provider: &st
 }
 
 /// Спроба генерації відео через конкретного провайдера.
-#[allow(dead_code)]
 fn try_generate_video(key: &str, prompt: &str, aspect_ratio: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
+    let _permit = GooglerVideoLimiter::get().acquire();
     let (url, body) = match provider {
         "flow" => (
             format!("{}/v4/flow/video/from-text", BASE_URL),
@@ -288,7 +288,6 @@ fn try_generate_video(key: &str, prompt: &str, aspect_ratio: &str, provider: &st
 
 /// Генерує зображення з перебором провайдерів за пріоритетом.
 /// Для кожного провайдера: 3 спроби з паузою 5с між ними.
-#[allow(dead_code)]
 pub fn generate_image_with_priority(
     key: &str,
     prompt: &str,
@@ -325,6 +324,7 @@ pub fn generate_image_with_priority(
 
 /// Спроба анімації зображення (image-to-video) через конкретного провайдера.
 fn try_animate_image(key: &str, image_data_uri: &str, prompt: &str, provider: &str, agent: &ureq::Agent) -> Result<String, String> {
+    let _permit = GooglerVideoLimiter::get().acquire();
     let (url, body) = match provider {
         "flower" => (
             format!("{}/v4/flower/video/from-image", BASE_URL),
@@ -433,6 +433,118 @@ pub fn generate_video_with_priority(
 
     Err("Всі провайдери відео вичерпані".to_string())
 }
+
+// ─── Локальні лімітери потоків ───────────────────────────────────────────────
+
+/// Лімітер одночасних запитів генерації зображень Googler.
+pub struct GooglerImageLimiter {
+    active: Mutex<usize>,
+    condvar: Condvar,
+    max_threads: Mutex<usize>,
+}
+
+impl GooglerImageLimiter {
+    pub fn get() -> &'static Self {
+        static LIMITER: OnceLock<GooglerImageLimiter> = OnceLock::new();
+        LIMITER.get_or_init(|| GooglerImageLimiter {
+            active: Mutex::new(0),
+            condvar: Condvar::new(),
+            max_threads: Mutex::new(5),
+        })
+    }
+
+    pub fn set_max_threads(&self, max: usize) {
+        *self.max_threads.lock().unwrap() = max;
+        self.condvar.notify_all();
+    }
+
+    pub fn acquire(&self) -> GooglerImagePermit<'_> {
+        let mut active = self.active.lock().unwrap();
+        loop {
+            let max = *self.max_threads.lock().unwrap();
+            if *active < max { break; }
+            active = self.condvar.wait(active).unwrap();
+        }
+        *active += 1;
+        GooglerImagePermit { limiter: self }
+    }
+
+    fn release(&self) {
+        let mut active = self.active.lock().unwrap();
+        if *active > 0 { *active -= 1; }
+        self.condvar.notify_one();
+    }
+
+    pub fn active_count(&self) -> usize {
+        *self.active.lock().unwrap()
+    }
+}
+
+pub struct GooglerImagePermit<'a> {
+    limiter: &'a GooglerImageLimiter,
+}
+
+impl Drop for GooglerImagePermit<'_> {
+    fn drop(&mut self) {
+        self.limiter.release();
+    }
+}
+
+/// Лімітер одночасних запитів генерації відео Googler.
+pub struct GooglerVideoLimiter {
+    active: Mutex<usize>,
+    condvar: Condvar,
+    max_threads: Mutex<usize>,
+}
+
+impl GooglerVideoLimiter {
+    pub fn get() -> &'static Self {
+        static LIMITER: OnceLock<GooglerVideoLimiter> = OnceLock::new();
+        LIMITER.get_or_init(|| GooglerVideoLimiter {
+            active: Mutex::new(0),
+            condvar: Condvar::new(),
+            max_threads: Mutex::new(5),
+        })
+    }
+
+    pub fn set_max_threads(&self, max: usize) {
+        *self.max_threads.lock().unwrap() = max;
+        self.condvar.notify_all();
+    }
+
+    pub fn acquire(&self) -> GooglerVideoPermit<'_> {
+        let mut active = self.active.lock().unwrap();
+        loop {
+            let max = *self.max_threads.lock().unwrap();
+            if *active < max { break; }
+            active = self.condvar.wait(active).unwrap();
+        }
+        *active += 1;
+        GooglerVideoPermit { limiter: self }
+    }
+
+    fn release(&self) {
+        let mut active = self.active.lock().unwrap();
+        if *active > 0 { *active -= 1; }
+        self.condvar.notify_one();
+    }
+
+    pub fn active_count(&self) -> usize {
+        *self.active.lock().unwrap()
+    }
+}
+
+pub struct GooglerVideoPermit<'a> {
+    limiter: &'a GooglerVideoLimiter,
+}
+
+impl Drop for GooglerVideoPermit<'_> {
+    fn drop(&mut self) {
+        self.limiter.release();
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /// Фоново завантажує інфо про ліміти Googler і записує результат у `result`.
 pub fn fetch_balance(key: String, result: Arc<Mutex<Option<GooglerBalance>>>, ctx: egui::Context) {

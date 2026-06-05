@@ -1,6 +1,8 @@
 use eframe::egui;
 use crate::localization::{Language, translate};
 
+use std::hash::{Hash, Hasher};
+
 fn get_encoder() -> &'static tiktoken::CoreBpe {
     tiktoken::get_encoding("cl100k_base").unwrap()
 }
@@ -8,6 +10,44 @@ fn get_encoder() -> &'static tiktoken::CoreBpe {
 /// Динамічно рахує токени для вказаного тексту за допомогою кодування cl100k_base.
 pub fn count_tokens(text: &str) -> usize {
     get_encoder().count(text)
+}
+
+/// Допоміжна функція для швидкого обчислення хешу тексту, щоб визначити, чи змінився вміст.
+fn calculate_hash<T: Hash + ?Sized>(t: &T) -> u64 {
+    let mut s = std::collections::hash_map::DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
+}
+
+/// Структура для збереження кешованої статистики тексту сценарію.
+/// Запобігає важким повторним обчисленням tiktoken та split_text на кожному кадрі.
+#[derive(Clone)]
+pub struct EditorStats {
+    pub char_count: usize,
+    pub paragraph_count: usize,
+    pub token_count: usize,
+    pub fragments_paragraphs: usize,
+    pub fragments_sentences: usize,
+    pub fragments_char_limit: usize,
+    
+    // Поля для відстеження змін та інвалідації кешу
+    pub last_text_hash: u64,
+    pub last_char_limit: usize,
+}
+
+impl Default for EditorStats {
+    fn default() -> Self {
+        Self {
+            char_count: 0,
+            paragraph_count: 0,
+            token_count: 0,
+            fragments_paragraphs: 0,
+            fragments_sentences: 0,
+            fragments_char_limit: 0,
+            last_text_hash: 0,
+            last_char_limit: 0,
+        }
+    }
 }
 
 /// Відображає редактор сценарію на всю доступну висоту та ширину.
@@ -20,14 +60,28 @@ pub fn draw_editor(
     text: &mut String,
     language: Language,
     text_split_char_limit: usize,
+    stats: &mut EditorStats,
 ) {
-    // 1. Обчислення статистики
-    let char_count = text.chars().count();
-    let paragraph_count = text.lines().filter(|line| !line.trim().is_empty()).count();
-    let token_count = count_tokens(text);
-    let fragments_paragraphs = crate::core::pipeline::timeline::text_splitter::split_text(text, "paragraphs", 0).len();
-    let fragments_sentences  = crate::core::pipeline::timeline::text_splitter::split_text(text, "sentences",  0).len();
-    let fragments_char_limit = crate::core::pipeline::timeline::text_splitter::split_text(text, "char_limit", text_split_char_limit).len();
+    // 1. Обчислення статистики (виконується ліниво тільки при зміні вмісту тексту або ліміту символів)
+    let current_hash = calculate_hash(text);
+    if stats.last_text_hash != current_hash || stats.last_char_limit != text_split_char_limit {
+        stats.last_text_hash = current_hash;
+        stats.last_char_limit = text_split_char_limit;
+        
+        stats.char_count = text.chars().count();
+        stats.paragraph_count = text.lines().filter(|line| !line.trim().is_empty()).count();
+        stats.token_count = count_tokens(text);
+        stats.fragments_paragraphs = crate::core::pipeline::timeline::text_splitter::split_text(text, "paragraphs", 0).len();
+        stats.fragments_sentences  = crate::core::pipeline::timeline::text_splitter::split_text(text, "sentences",  0).len();
+        stats.fragments_char_limit = crate::core::pipeline::timeline::text_splitter::split_text(text, "char_limit", text_split_char_limit).len();
+    }
+
+    let char_count = stats.char_count;
+    let paragraph_count = stats.paragraph_count;
+    let token_count = stats.token_count;
+    let fragments_paragraphs = stats.fragments_paragraphs;
+    let fragments_sentences = stats.fragments_sentences;
+    let fragments_char_limit = stats.fragments_char_limit;
 
     // 2. Рендеринг панелі статистики (фіксована вгорі)
     ui.add_space(8.0);

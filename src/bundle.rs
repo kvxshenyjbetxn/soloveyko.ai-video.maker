@@ -65,7 +65,8 @@ pub fn bin_dir() -> PathBuf {
         .join("bin")
 }
 
-/// Шлях до ffmpeg: спочатку bin_dir, потім системний PATH.
+/// Перевіряє, чи є бінарник у системному PATH (без запуску процесу).
+/// Шлях до бандлованого ffmpeg.
 pub fn ffmpeg_path() -> String {
     let local = bin_dir().join(FFMPEG_NAME);
     if local.exists() {
@@ -74,7 +75,7 @@ pub fn ffmpeg_path() -> String {
     FFMPEG_NAME.to_string()
 }
 
-/// Шлях до ffprobe: спочатку bin_dir, потім системний PATH.
+/// Шлях до бандлованого ffprobe.
 #[allow(dead_code)]
 pub fn ffprobe_path() -> String {
     let local = bin_dir().join(FFPROBE_NAME);

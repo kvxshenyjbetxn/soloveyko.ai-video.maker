@@ -27,26 +27,19 @@ pub fn draw_queue_panel(
     whisper_model_download: &std::sync::Arc<std::sync::Mutex<crate::gui::welcome::BinaryDownload>>,
     active_tab: &mut Tab,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
+    selected_agent_chat: &mut Option<u64>,
 ) {
     ui.add_space(4.0);
 
     // Загальна вартість всіх OpenRouter запитів у черзі
     let total_cost: f64 = jobs.iter()
-        .filter_map(|j| *j.translation_cost.lock().unwrap())
+        .filter_map(|j| *j.total_cost.lock().unwrap())
         .sum();
 
     // Верхній рядок керування
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new(translate(language, "queue_panel_title")).strong().size(13.0));
         ui.label(egui::RichText::new(format!("({})", jobs.len())).weak().size(11.0));
-
-        if total_cost > 0.0 {
-            ui.label(
-                egui::RichText::new(format!("${:.5}", total_cost))
-                    .size(11.0)
-                    .color(egui::Color32::from_rgb(46, 204, 113)),
-            );
-        }
 
         let has_pending = jobs.iter().any(|j| {
             *j.status.lock().unwrap() == crate::queue::JobStatus::Pending
@@ -121,7 +114,8 @@ pub fn draw_queue_panel(
                             crate::queue::JobStatus::Done => 1.0,
                             crate::queue::JobStatus::Running
                             | crate::queue::JobStatus::AwaitingControl
-                            | crate::queue::JobStatus::AwaitingMediaControl => {
+                            | crate::queue::JobStatus::AwaitingMediaControl
+                            | crate::queue::JobStatus::AwaitingAgentControl => {
                                 let (prog, _, _) = j.calculate_progress();
                                 prog
                             }
@@ -135,7 +129,9 @@ pub fn draw_queue_panel(
 
                 let is_running = jobs.iter().any(|j| {
                     let s = j.status.lock().unwrap().clone();
-                    s == crate::queue::JobStatus::Running || s == crate::queue::JobStatus::AwaitingMediaControl
+                    s == crate::queue::JobStatus::Running
+                        || s == crate::queue::JobStatus::AwaitingMediaControl
+                        || s == crate::queue::JobStatus::AwaitingAgentControl
                 });
 
                 let pct_label = egui::RichText::new(format!("{:.0}%", overall_progress * 100.0))
@@ -144,12 +140,37 @@ pub fn draw_queue_panel(
                 ui.label(pct_label);
                 ui.add_space(4.0);
 
-                let bar_width = ui.available_width() - 8.0;
-                if bar_width > 30.0 {
+                // Резервуємо місце для лейблу вартості зліва від бару
+                let cost_text_opt = if total_cost > 0.0 {
+                    Some(format!("${:.5}", total_cost))
+                } else {
+                    None
+                };
+                let cost_reserve = cost_text_opt.as_deref().map(|text| {
+                    let galley = ui.painter().layout_no_wrap(
+                        text.to_string(),
+                        egui::FontId::proportional(11.0),
+                        egui::Color32::WHITE,
+                    );
+                    galley.size().x + ui.spacing().item_spacing.x + 4.0
+                }).unwrap_or(0.0);
+
+                let bar_width = (ui.available_width() - 8.0 - cost_reserve).max(20.0);
+                if bar_width > 20.0 {
                     let bar = egui::ProgressBar::new(overall_progress)
                         .animate(is_running)
                         .desired_height(6.0);
                     ui.add_sized([bar_width, 6.0], bar);
+                }
+
+                // Вартість всіх задач зліва від прогрес бару
+                if let Some(text) = cost_text_opt {
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new(text)
+                            .size(11.0)
+                            .color(egui::Color32::from_rgb(46, 204, 113)),
+                    );
                 }
             }
         });
@@ -165,26 +186,57 @@ pub fn draw_queue_panel(
                 if *job.status.lock().unwrap() != crate::queue::JobStatus::Pending {
                     continue;
                 }
-                crate::core::pipeline::run_pipeline(
-                    job.id,
-                    job.name.clone(),
-                    job.settings.clone(),
-                    std::sync::Arc::clone(&job.status),
-                    std::sync::Arc::clone(&job.translation_stage),
-                    std::sync::Arc::clone(&job.voiceover_stage),
-                    std::sync::Arc::clone(&job.video_stage),
-                    std::sync::Arc::clone(&job.subtitles_stage),
-                    std::sync::Arc::clone(&job.montage_stage),
-                    std::sync::Arc::clone(&job.translated_text),
-                    std::sync::Arc::clone(&job.translation_cost),
-                    std::sync::Arc::clone(&job.audio_duration),
-                    std::sync::Arc::clone(&job.prompts_progress),
-                    std::sync::Arc::clone(&job.media_progress),
-                    std::sync::Arc::clone(&job.montage_progress),
-                    std::sync::Arc::clone(&job.montage_file_size),
-                    std::sync::Arc::clone(&job.media_control_resume),
-                    ctx.clone(),
-                );
+                if let Some(resume_stage) = job.settings.resume_from_stage.clone() {
+                    // Відновлення з конкретного етапу замість повного запуску
+                    crate::core::pipeline::retry_from_stage(
+                        resume_stage,
+                        job.id,
+                        job.name.clone(),
+                        job.settings.clone(),
+                        std::sync::Arc::clone(&job.status),
+                        std::sync::Arc::clone(&job.translation_stage),
+                        std::sync::Arc::clone(&job.voiceover_stage),
+                        std::sync::Arc::clone(&job.video_stage),
+                        std::sync::Arc::clone(&job.subtitles_stage),
+                        std::sync::Arc::clone(&job.montage_stage),
+                        std::sync::Arc::clone(&job.translated_text),
+                        std::sync::Arc::clone(&job.total_cost),
+                        std::sync::Arc::clone(&job.audio_duration),
+                        std::sync::Arc::clone(&job.prompts_progress),
+                        std::sync::Arc::clone(&job.media_progress),
+                        std::sync::Arc::clone(&job.montage_progress),
+                        std::sync::Arc::clone(&job.montage_file_size),
+                        std::sync::Arc::clone(&job.media_control_resume),
+                        std::sync::Arc::clone(&job.agent_control_resume),
+                        std::sync::Arc::clone(&job.agent_chat),
+                        std::sync::Arc::clone(&job.agent_session),
+                        ctx.clone(),
+                    );
+                } else {
+                    crate::core::pipeline::run_pipeline(
+                        job.id,
+                        job.name.clone(),
+                        job.settings.clone(),
+                        std::sync::Arc::clone(&job.status),
+                        std::sync::Arc::clone(&job.translation_stage),
+                        std::sync::Arc::clone(&job.voiceover_stage),
+                        std::sync::Arc::clone(&job.video_stage),
+                        std::sync::Arc::clone(&job.subtitles_stage),
+                        std::sync::Arc::clone(&job.montage_stage),
+                        std::sync::Arc::clone(&job.translated_text),
+                        std::sync::Arc::clone(&job.total_cost),
+                        std::sync::Arc::clone(&job.audio_duration),
+                        std::sync::Arc::clone(&job.prompts_progress),
+                        std::sync::Arc::clone(&job.media_progress),
+                        std::sync::Arc::clone(&job.montage_progress),
+                        std::sync::Arc::clone(&job.montage_file_size),
+                        std::sync::Arc::clone(&job.media_control_resume),
+                        std::sync::Arc::clone(&job.agent_control_resume),
+                        std::sync::Arc::clone(&job.agent_chat),
+                        std::sync::Arc::clone(&job.agent_session),
+                        ctx.clone(),
+                    );
+                }
             }
         }
     });
@@ -231,6 +283,13 @@ pub fn draw_queue_panel(
                                 egui::Color32::from_rgb(230, 126, 34),
                             )
                         }
+                        crate::queue::JobStatus::AwaitingAgentControl => {
+                            let (prog, _, _) = job.calculate_progress();
+                            (
+                                format!("{} ({:.0}%)", translate(language, "queue_status_awaiting_agent"), prog * 100.0),
+                                egui::Color32::from_rgb(52, 152, 219),
+                            )
+                        }
                         crate::queue::JobStatus::Done => (
                             translate(language, "queue_status_done").to_string(),
                             egui::Color32::from_rgb(46, 204, 113),
@@ -247,6 +306,7 @@ pub fn draw_queue_panel(
                         crate::queue::JobStatus::Running
                             | crate::queue::JobStatus::AwaitingControl
                             | crate::queue::JobStatus::AwaitingMediaControl
+                            | crate::queue::JobStatus::AwaitingAgentControl
                     );
 
                     let group_frame = egui::Frame::group(ui.style())
@@ -295,7 +355,7 @@ pub fn draw_queue_panel(
 
                             if job.settings.translation_enabled {
                                 let translated_opt = job.translated_text.lock().unwrap();
-                                let cost_opt = job.translation_cost.lock().unwrap();
+                                let cost_opt = job.total_cost.lock().unwrap();
 
                                 let cost_str = if let Some(cost) = *cost_opt {
                                     format!(", ${:.5}", cost)
@@ -527,6 +587,9 @@ pub fn draw_queue_panel(
                                 || status == crate::queue::JobStatus::AwaitingMediaControl;
 
                             ui.horizontal(|ui| {
+                                let job_cost = *job.total_cost.lock().unwrap();
+                                let job_cost_text = job_cost.filter(|&c| c > 0.0).map(|c| format!("${:.5}", c));
+
                                 let pct_text = format!("{:.0}%", prog * 100.0);
                                 let pct_galley = ui.painter().layout_no_wrap(
                                     pct_text.clone(),
@@ -534,7 +597,26 @@ pub fn draw_queue_panel(
                                     ui.visuals().weak_text_color(),
                                 );
                                 let pct_width = pct_galley.size().x + 4.0;
-                                let bar_width = (ui.available_width() - pct_width - ui.spacing().item_spacing.x).max(20.0);
+
+                                let cost_reserve = job_cost_text.as_deref().map(|text| {
+                                    let galley = ui.painter().layout_no_wrap(
+                                        text.to_string(),
+                                        egui::FontId::proportional(11.0),
+                                        egui::Color32::WHITE,
+                                    );
+                                    galley.size().x + ui.spacing().item_spacing.x
+                                }).unwrap_or(0.0);
+
+                                let bar_width = (ui.available_width() - pct_width - cost_reserve - ui.spacing().item_spacing.x).max(20.0);
+
+                                // Вартість задачі зліва від прогрес бару
+                                if let Some(ref text) = job_cost_text {
+                                    ui.label(
+                                        egui::RichText::new(text)
+                                            .size(11.0)
+                                            .color(egui::Color32::from_rgb(46, 204, 113)),
+                                    );
+                                }
 
                                 let bar = egui::ProgressBar::new(prog)
                                     .animate(is_job_running)
@@ -564,6 +646,8 @@ pub fn draw_queue_panel(
                             }
                         } else if status == crate::queue::JobStatus::AwaitingMediaControl {
                             *active_tab = Tab::Gallery;
+                        } else if status == crate::queue::JobStatus::AwaitingAgentControl {
+                            *selected_agent_chat = Some(job.id);
                         } else {
                             *selected_job_logs = Some((job.id, job.name.clone()));
                         }

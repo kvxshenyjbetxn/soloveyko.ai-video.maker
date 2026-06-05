@@ -79,6 +79,8 @@ pub struct VideoMakerApp {
     pub pipeline_control_auto_open: bool,
     /// Чи увімкнено контроль зображень (пауза після відеоряду для перегляду).
     pub pipeline_media_control_enabled: bool,
+    /// Чи увімкнено контроль агента (пауза після timeline.json для чату з агентом).
+    pub pipeline_agent_control_enabled: bool,
     /// Кеш текстур для галереї медіафайлів. None означає помилку завантаження.
     pub gallery_textures: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     /// Зображення, яке зараз відкрите у повноекранному перегляді.
@@ -147,6 +149,8 @@ pub struct VideoMakerApp {
     pub text_split_char_limit: usize,
     /// Промт для генерації зображень відеоряду.
     pub video_prompt: String,
+    /// Системна інструкція агенту для створення timeline.json.
+    pub video_agent_prompt: String,
     /// Сервіс ЛЛМ для генерації промтів відеоряду.
     pub video_llm_service: String,
     /// Активна модель ЛЛМ для відео-промтів.
@@ -191,6 +195,16 @@ pub struct VideoMakerApp {
     pub selected_job_control: Option<u64>,
     /// Текстовий буфер для редагування перекладу під час контролю
     pub control_text_input: String,
+    /// Задача, для якої зараз відкрито вікно чату з агентом
+    pub selected_agent_chat: Option<u64>,
+    /// Буфер введення повідомлення для чату з агентом
+    pub agent_chat_input: String,
+    /// Прапорець завантаження відповіді агента у фоні
+    pub agent_chat_loading: std::sync::Arc<std::sync::Mutex<bool>>,
+    /// Результат фонової відповіді агента
+    pub agent_chat_result: std::sync::Arc<std::sync::Mutex<Option<Result<String, String>>>>,
+    /// Помилка чату з агентом
+    pub agent_chat_error: Option<String>,
     /// Чи відкрите вікно розширеної перегенерації
     pub control_regen_extended_open: bool,
     /// Одноразовий сервіс перекладу для перегенерації
@@ -221,6 +235,10 @@ pub struct VideoMakerApp {
     pub job_name_dialog_open: bool,
     /// Поточний текст у полі введення назви задачі.
     pub job_name_input: String,
+    /// Чи відкрите вікно відновлення задачі (знайдені наявні файли).
+    pub resume_dialog_open: bool,
+    /// Дані для діалогу відновлення (задача в очікуванні рішення користувача).
+    pub resume_pending: Option<crate::gui::pipeline::resume::ResumePendingData>,
     /// Максимальна кількість потоків для OpenRouter.
     pub openrouter_max_threads: usize,
     /// Максимальна кількість потоків для Claude Code.
@@ -277,6 +295,16 @@ pub struct VideoMakerApp {
     pub subtitle_margin_v: u32,
     /// Ефект karaoke для субтитрів.
     pub subtitle_karaoke: bool,
+    /// Режим karaoke: 0 = fill (\kf), 1 = switch (\k), 2 = follow.
+    pub subtitle_karaoke_mode: u8,
+    /// RGB колір слова що проговорюється.
+    pub subtitle_karaoke_highlight_color: [u8; 3],
+    /// RGB колір обводки субтитрів.
+    pub subtitle_karaoke_outline_color: [u8; 3],
+    /// Жирний текст для karaoke субтитрів.
+    pub subtitle_karaoke_bold: bool,
+    /// Масштаб поточного слова у % (режим follow).
+    pub subtitle_karaoke_scale: u32,
     /// Обраний шрифт для субтитрів.
     pub subtitle_font: String,
     /// Список шрифтів, завантажених із системи (заповнюється при старті).
@@ -293,6 +321,10 @@ pub struct VideoMakerApp {
     pub montage_transition: String,
     /// Тривалість переходу в секундах.
     pub montage_transition_duration: f32,
+    /// Чи увімкнено тригери накладення медіа за ключовими фразами.
+    pub overlay_triggers_enabled: bool,
+    /// Список тригерів накладення медіа.
+    pub overlay_triggers: Vec<crate::core::pipeline::montage::OverlayTrigger>,
     /// Сповіщення про успішне копіювання (текст, час копіювання).
     pub copied_toast: Option<(String, std::time::Instant)>,
     /// Чи увімкнене автоматичне прокручування логу донизу.
@@ -313,12 +345,18 @@ pub struct VideoMakerApp {
     pub video_thumb_result: std::sync::Arc<std::sync::Mutex<Option<(std::path::PathBuf, Option<egui::TextureHandle>)>>>,
     /// Активний повноекранний відеоплеєр (якщо відео відкрите).
     pub video_player: Option<crate::gui::gallery::video_player::VideoPlayer>,
+    /// Текст промту, який зараз показується у popup-вікні галереї. None = вікно закрите.
+    pub gallery_prompt_popup: Option<String>,
+    /// Кешована статистика для текстового редактора сценарію (для оптимізації продуктивності).
+    pub editor_stats: crate::gui::editor::EditorStats,
+    /// Список задач з историчними налаштуваннями пайплайну.
+    pub task_history: Vec<crate::gui::settings::storage::TaskHistoryEntry>,
 }
 
 impl Default for VideoMakerApp {
     fn default() -> Self {
         let default_settings = AppSettings::default();
-        Self {
+        let app = Self {
             active_tab: Tab::Main,
             text_input: String::new(),
             theme: AppTheme::Dark, // Сучасна темна тема за замовчуванням
@@ -348,6 +386,7 @@ impl Default for VideoMakerApp {
             pipeline_translation_control_enabled: false,
             pipeline_control_auto_open: false,
             pipeline_media_control_enabled: false,
+            pipeline_agent_control_enabled: false,
             gallery_textures: std::collections::HashMap::new(),
             gallery_preview: None,
             gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
@@ -382,6 +421,7 @@ impl Default for VideoMakerApp {
             text_split_mode: "paragraphs".to_string(),
             text_split_char_limit: 500,
             video_prompt: String::new(),
+            video_agent_prompt: String::new(),
             video_llm_service: "None".to_string(),
             video_llm_model: String::new(),
             video_llm_model_openrouter: String::new(),
@@ -404,6 +444,11 @@ impl Default for VideoMakerApp {
             selected_job_logs: None,
             selected_job_control: None,
             control_text_input: String::new(),
+            selected_agent_chat: None,
+            agent_chat_input: String::new(),
+            agent_chat_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            agent_chat_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            agent_chat_error: None,
             control_regen_extended_open: false,
             control_regen_service: String::new(),
             control_regen_model: String::new(),
@@ -419,6 +464,8 @@ impl Default for VideoMakerApp {
             control_dismissed: std::collections::HashSet::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
+            resume_dialog_open: false,
+            resume_pending: None,
             openrouter_max_threads: 5,
             claude_max_threads: 5,
             gemini_max_threads: 5,
@@ -447,6 +494,11 @@ impl Default for VideoMakerApp {
             subtitle_color: [255, 255, 255],
             subtitle_margin_v: 30,
             subtitle_karaoke: false,
+            subtitle_karaoke_mode: 0,
+            subtitle_karaoke_highlight_color: [255, 255, 0],
+            subtitle_karaoke_outline_color: [0, 0, 0],
+            subtitle_karaoke_bold: false,
+            subtitle_karaoke_scale: 120,
             subtitle_font: "Arial".to_string(),
             available_subtitle_fonts: Vec::new(),
             montage_service: "FFmpeg".to_string(),
@@ -455,6 +507,8 @@ impl Default for VideoMakerApp {
             montage_bitrate: 8,
             montage_transition: "none".to_string(),
             montage_transition_duration: 0.5,
+            overlay_triggers_enabled: false,
+            overlay_triggers: vec![],
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: default_settings,
@@ -466,7 +520,15 @@ impl Default for VideoMakerApp {
             video_thumb_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_player: None,
-        }
+            gallery_prompt_popup: None,
+            editor_stats: crate::gui::editor::EditorStats::default(),
+            task_history: Vec::new(),
+        };
+
+        crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
+        crate::api::googler::GooglerVideoLimiter::get().set_max_threads(app.googler_video_max_threads);
+
+        app
     }
 }
 
@@ -511,6 +573,7 @@ impl VideoMakerApp {
         let pipeline_translation_control_enabled = saved.pipeline_translation_control_enabled;
         let pipeline_control_auto_open = saved.pipeline_control_auto_open;
         let pipeline_media_control_enabled = saved.pipeline_media_control_enabled;
+        let pipeline_agent_control_enabled = saved.pipeline_agent_control_enabled;
         let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
         let pipeline_video_enabled = saved.pipeline_video_enabled;
         let pipeline_subtitles_enabled = saved.pipeline_subtitles_enabled;
@@ -546,6 +609,7 @@ impl VideoMakerApp {
         let text_split_mode = saved.text_split_mode.clone();
         let text_split_char_limit = saved.text_split_char_limit;
         let video_prompt = saved.video_prompt.clone();
+        let video_agent_prompt = saved.video_agent_prompt.clone();
         let video_llm_service = saved.video_llm_service.clone();
         let mut video_llm_model_openrouter = saved.video_llm_model_openrouter.clone();
         let video_llm_model_claude = saved.video_llm_model_claude.clone();
@@ -619,7 +683,7 @@ impl VideoMakerApp {
             );
         }
 
-        Self {
+        let app = Self {
             active_tab: Tab::Main,
             text_input: String::new(),
             theme,
@@ -649,6 +713,7 @@ impl VideoMakerApp {
             pipeline_translation_control_enabled,
             pipeline_control_auto_open,
             pipeline_media_control_enabled,
+            pipeline_agent_control_enabled,
             gallery_textures: std::collections::HashMap::new(),
             gallery_preview: None,
             gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
@@ -683,6 +748,7 @@ impl VideoMakerApp {
             text_split_mode,
             text_split_char_limit,
             video_prompt,
+            video_agent_prompt,
             video_llm_service,
             video_llm_model,
             video_llm_model_openrouter,
@@ -705,6 +771,11 @@ impl VideoMakerApp {
             selected_job_logs: None,
             selected_job_control: None,
             control_text_input: String::new(),
+            selected_agent_chat: None,
+            agent_chat_input: String::new(),
+            agent_chat_loading: std::sync::Arc::new(std::sync::Mutex::new(false)),
+            agent_chat_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            agent_chat_error: None,
             control_regen_extended_open: false,
             control_regen_service: String::new(),
             control_regen_model: String::new(),
@@ -720,6 +791,8 @@ impl VideoMakerApp {
             control_dismissed: std::collections::HashSet::new(),
             job_name_dialog_open: false,
             job_name_input: String::new(),
+            resume_dialog_open: false,
+            resume_pending: None,
             openrouter_max_threads,
             claude_max_threads,
             gemini_max_threads,
@@ -748,6 +821,11 @@ impl VideoMakerApp {
             subtitle_color: saved.subtitle_color,
             subtitle_margin_v: saved.subtitle_margin_v,
             subtitle_karaoke: saved.subtitle_karaoke,
+            subtitle_karaoke_mode: saved.subtitle_karaoke_mode,
+            subtitle_karaoke_highlight_color: saved.subtitle_karaoke_highlight_color,
+            subtitle_karaoke_outline_color: saved.subtitle_karaoke_outline_color,
+            subtitle_karaoke_bold: saved.subtitle_karaoke_bold,
+            subtitle_karaoke_scale: saved.subtitle_karaoke_scale,
             subtitle_font: saved.subtitle_font.clone(),
             available_subtitle_fonts: crate::gui::subtitle_fonts::load_subtitle_fonts(&cc.egui_ctx),
             montage_service: saved.montage_service.clone(),
@@ -756,6 +834,8 @@ impl VideoMakerApp {
             montage_bitrate: saved.montage_bitrate,
             montage_transition: saved.montage_transition.clone(),
             montage_transition_duration: saved.montage_transition_duration,
+            overlay_triggers_enabled: saved.overlay_triggers_enabled,
+            overlay_triggers: saved.overlay_triggers.clone(),
             copied_toast: None,
             auto_scroll_logs: true,
             last_saved_settings: saved,
@@ -767,7 +847,162 @@ impl VideoMakerApp {
             video_thumb_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             video_thumb_result: std::sync::Arc::new(std::sync::Mutex::new(None)),
             video_player: None,
+            gallery_prompt_popup: None,
+            editor_stats: crate::gui::editor::EditorStats::default(),
+            task_history: crate::gui::settings::storage::load_task_history(),
+        };
+
+        // Синхронізуємо лімітери потоків зі збереженими налаштуваннями
+        crate::api::googler::GooglerImageLimiter::get().set_max_threads(app.googler_image_max_threads);
+        crate::api::googler::GooglerVideoLimiter::get().set_max_threads(app.googler_video_max_threads);
+
+        app
+    }
+
+    /// Збирає поточний стан усіх налаштувань пайплайну в знімок PipelineTemplate.
+    fn current_pipeline_template(&self) -> crate::gui::settings::storage::PipelineTemplate {
+        crate::gui::settings::storage::PipelineTemplate {
+            openrouter_key: self.openrouter_key.clone(),
+            assemblyai_key: self.assemblyai_key.clone(),
+            voiceover_provider: self.voiceover_provider.clone(),
+            voiceover_template_uuid: self.voiceover_template_uuid.clone(),
+            pipeline_translation_enabled: self.pipeline_translation_enabled,
+            pipeline_translation_control_enabled: self.pipeline_translation_control_enabled,
+            pipeline_control_auto_open: self.pipeline_control_auto_open,
+            pipeline_media_control_enabled: self.pipeline_media_control_enabled,
+            pipeline_agent_control_enabled: self.pipeline_agent_control_enabled,
+            pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
+            pipeline_video_enabled: self.pipeline_video_enabled,
+            pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,
+            pipeline_editing_enabled: self.pipeline_editing_enabled,
+            translation_prompt: self.translation_prompt.clone(),
+            translation_model: self.translation_model.clone(),
+            translation_model_openrouter: self.translation_model_openrouter.clone(),
+            translation_model_claude: self.translation_model_claude.clone(),
+            translation_model_gemini: self.translation_model_gemini.clone(),
+            video_service: self.video_service.clone(),
+            text_split_mode: self.text_split_mode.clone(),
+            text_split_char_limit: self.text_split_char_limit,
+            translation_temperature: self.translation_temperature,
+            translation_service: self.translation_service.clone(),
+            edge_tts_voice: self.edge_tts_voice.clone(),
+            edge_tts_rate: self.edge_tts_rate.clone(),
+            edge_tts_pitch: self.edge_tts_pitch.clone(),
+            edge_tts_volume: self.edge_tts_volume.clone(),
+            googler_image_max_threads: self.googler_image_max_threads,
+            googler_video_max_threads: self.googler_video_max_threads,
+            voiceover_convert_to_wav: self.voiceover_convert_to_wav,
+            video_prompt: self.video_prompt.clone(),
+            video_agent_prompt: self.video_agent_prompt.clone(),
+            googler_image_priority: self.googler_image_priority.clone(),
+            googler_video_priority: self.googler_video_priority.clone(),
+            video_media_type: self.video_media_type.clone(),
+            subtitles_service: self.subtitles_service.clone(),
+            whisper_language: self.whisper_language.clone(),
+            whisper_model: self.whisper_model.clone(),
+            whisper_max_line_width: self.whisper_max_line_width,
+            subtitle_font_size: self.subtitle_font_size,
+            subtitle_color: self.subtitle_color,
+            subtitle_margin_v: self.subtitle_margin_v,
+            subtitle_karaoke: self.subtitle_karaoke,
+            subtitle_karaoke_mode: self.subtitle_karaoke_mode,
+            subtitle_karaoke_highlight_color: self.subtitle_karaoke_highlight_color,
+            subtitle_karaoke_outline_color: self.subtitle_karaoke_outline_color,
+            subtitle_karaoke_bold: self.subtitle_karaoke_bold,
+            subtitle_karaoke_scale: self.subtitle_karaoke_scale,
+            subtitle_font: self.subtitle_font.clone(),
+            montage_service: self.montage_service.clone(),
+            montage_fps: self.montage_fps,
+            montage_preset: self.montage_preset.clone(),
+            montage_bitrate: self.montage_bitrate,
+            montage_transition: self.montage_transition.clone(),
+            montage_transition_duration: self.montage_transition_duration,
+            video_llm_service: self.video_llm_service.clone(),
+            video_llm_model: self.video_llm_model.clone(),
+            video_llm_model_openrouter: self.video_llm_model_openrouter.clone(),
+            video_llm_model_claude: self.video_llm_model_claude.clone(),
+            video_llm_model_gemini: self.video_llm_model_gemini.clone(),
+            video_llm_temperature: self.video_llm_temperature,
+            overlay_triggers_enabled: self.overlay_triggers_enabled,
+            overlay_triggers: self.overlay_triggers.clone(),
         }
+    }
+
+    /// Застосовує налаштування з PipelineTemplate до поточного стану app (як при завантаженні шаблону).
+    fn apply_pipeline_template(&mut self, t: crate::gui::settings::storage::PipelineTemplate) {
+        self.openrouter_key = t.openrouter_key;
+        self.openrouter_status = None;
+        self.assemblyai_key = t.assemblyai_key;
+        self.assemblyai_status = None;
+        self.voiceover_provider = t.voiceover_provider;
+        self.voiceover_template_uuid = t.voiceover_template_uuid;
+        self.pipeline_translation_enabled = t.pipeline_translation_enabled;
+        self.pipeline_translation_control_enabled = t.pipeline_translation_control_enabled;
+        self.pipeline_control_auto_open = t.pipeline_control_auto_open;
+        self.pipeline_media_control_enabled = t.pipeline_media_control_enabled;
+        self.pipeline_agent_control_enabled = t.pipeline_agent_control_enabled;
+        self.pipeline_voiceover_enabled = t.pipeline_voiceover_enabled;
+        self.pipeline_video_enabled = t.pipeline_video_enabled;
+        self.pipeline_subtitles_enabled = t.pipeline_subtitles_enabled;
+        self.pipeline_editing_enabled = t.pipeline_editing_enabled;
+        self.translation_prompt = t.translation_prompt;
+        self.translation_model = t.translation_model.clone();
+        self.translation_model_openrouter = t.translation_model_openrouter.clone();
+        self.translation_model_claude = if t.translation_model_claude.is_empty() { "sonnet".to_string() } else { t.translation_model_claude.clone() };
+        self.translation_model_gemini = if t.translation_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { t.translation_model_gemini.clone() };
+        if t.translation_service == "OpenRouter" && self.translation_model_openrouter.is_empty() {
+            self.translation_model_openrouter = t.translation_model.clone();
+        }
+        self.translation_temperature = t.translation_temperature;
+        self.translation_service = t.translation_service;
+        self.video_service = t.video_service;
+        self.video_media_type = t.video_media_type;
+        self.text_split_mode = t.text_split_mode;
+        self.text_split_char_limit = t.text_split_char_limit;
+        self.video_prompt = t.video_prompt;
+        self.video_agent_prompt = t.video_agent_prompt;
+        self.video_llm_service = t.video_llm_service.clone();
+        self.video_llm_model_openrouter = t.video_llm_model_openrouter.clone();
+        self.video_llm_model_claude = if t.video_llm_model_claude.is_empty() { "sonnet".to_string() } else { t.video_llm_model_claude.clone() };
+        self.video_llm_model_gemini = if t.video_llm_model_gemini.is_empty() { "gemini-2.5-flash".to_string() } else { t.video_llm_model_gemini.clone() };
+        self.video_llm_temperature = t.video_llm_temperature;
+        self.video_llm_model = match self.video_llm_service.as_str() {
+            "OpenRouter" => self.video_llm_model_openrouter.clone(),
+            "Claude Code" => self.video_llm_model_claude.clone(),
+            "Gemini CLI" => self.video_llm_model_gemini.clone(),
+            _ => t.video_llm_model.clone(),
+        };
+        self.edge_tts_voice = t.edge_tts_voice;
+        self.edge_tts_rate = t.edge_tts_rate;
+        self.edge_tts_pitch = t.edge_tts_pitch;
+        self.edge_tts_volume = t.edge_tts_volume;
+        self.googler_image_max_threads = t.googler_image_max_threads;
+        self.googler_video_max_threads = t.googler_video_max_threads;
+        self.voiceover_convert_to_wav = t.voiceover_convert_to_wav;
+        self.googler_image_priority = t.googler_image_priority;
+        self.googler_video_priority = t.googler_video_priority;
+        self.subtitles_service = t.subtitles_service;
+        self.whisper_language = t.whisper_language;
+        self.whisper_model = t.whisper_model;
+        self.whisper_max_line_width = t.whisper_max_line_width;
+        self.subtitle_font_size = t.subtitle_font_size;
+        self.subtitle_color = t.subtitle_color;
+        self.subtitle_margin_v = t.subtitle_margin_v;
+        self.subtitle_karaoke = t.subtitle_karaoke;
+        self.subtitle_karaoke_mode = t.subtitle_karaoke_mode;
+        self.subtitle_karaoke_highlight_color = t.subtitle_karaoke_highlight_color;
+        self.subtitle_karaoke_outline_color = t.subtitle_karaoke_outline_color;
+        self.subtitle_karaoke_bold = t.subtitle_karaoke_bold;
+        self.subtitle_karaoke_scale = t.subtitle_karaoke_scale;
+        self.subtitle_font = t.subtitle_font;
+        self.montage_service = t.montage_service;
+        self.montage_fps = t.montage_fps;
+        self.montage_preset = t.montage_preset;
+        self.montage_bitrate = t.montage_bitrate;
+        self.montage_transition = t.montage_transition;
+        self.montage_transition_duration = t.montage_transition_duration;
+        self.overlay_triggers_enabled = t.overlay_triggers_enabled;
+        self.overlay_triggers = t.overlay_triggers;
     }
 
     /// Малює вкладку системних логів роботи додатку.
@@ -883,7 +1118,6 @@ impl eframe::App for VideoMakerApp {
             &mut self.gemini_max_threads,
             &self.voicebot_balance,
             &mut self.edge_tts_max_threads,
-            &self.googler_balance,
             &mut self.googler_image_max_threads,
             &mut self.googler_video_max_threads,
             &mut self.ffmpeg_max_threads,
@@ -899,12 +1133,38 @@ impl eframe::App for VideoMakerApp {
             self.ffmpeg_max_threads,
             self.googler_image_max_threads,
             self.googler_video_max_threads,
-            &self.googler_balance,
             &mut self.threads_window_open,
         );
 
+        // Відображаємо ліву панель историії ТІЛЬКИ на вкладці "Основна"
+        if self.active_tab == Tab::Main {
+            let mut delete_history_idx: Option<usize> = None;
+            let side_frame_left = egui::Frame::side_top_panel(ctx.style().as_ref())
+                .inner_margin(egui::Margin::same(0.0));
+            egui::SidePanel::left("task_history_panel")
+                .frame(side_frame_left)
+                .exact_width(190.0)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    let applied = crate::gui::task_history::draw_task_history_panel(
+                        ui,
+                        self.language,
+                        &self.task_history,
+                        &mut delete_history_idx,
+                    );
+                    if let Some((tmpl, text)) = applied {
+                        self.apply_pipeline_template(tmpl);
+                        self.text_input = text;
+                    }
+                });
+            if let Some(idx) = delete_history_idx {
+                crate::gui::settings::storage::remove_from_task_history(&mut self.task_history, idx);
+            }
+        }
+
         // Відображаємо бічну панель пайплайну ТІЛЬКИ на вкладці "Основна"
         if self.active_tab == Tab::Main {
+            let jobs_len_before = self.jobs.len();
             let prev_translation_service = self.translation_service.clone();
 
             // default_width передається лише як початкове значення при першому запуску.
@@ -952,6 +1212,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.pipeline_translation_control_enabled,
                         &mut self.pipeline_control_auto_open,
                         &mut self.pipeline_media_control_enabled,
+                        &mut self.pipeline_agent_control_enabled,
                         &mut self.pipeline_voiceover_enabled,
                         &mut self.pipeline_video_enabled,
                         &mut self.pipeline_subtitles_enabled,
@@ -969,6 +1230,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.text_split_mode,
                         &mut self.text_split_char_limit,
                         &mut self.video_prompt,
+                        &mut self.video_agent_prompt,
                         &mut self.video_llm_service,
                         &mut self.video_llm_model,
                         &mut self.video_llm_model_openrouter,
@@ -994,6 +1256,11 @@ impl eframe::App for VideoMakerApp {
                         &mut self.subtitle_color,
                         &mut self.subtitle_margin_v,
                         &mut self.subtitle_karaoke,
+                        &mut self.subtitle_karaoke_mode,
+                        &mut self.subtitle_karaoke_highlight_color,
+                        &mut self.subtitle_karaoke_outline_color,
+                        &mut self.subtitle_karaoke_bold,
+                        &mut self.subtitle_karaoke_scale,
                         &mut self.subtitle_font,
                         &self.available_subtitle_fonts,
                         &mut self.montage_service,
@@ -1002,14 +1269,50 @@ impl eframe::App for VideoMakerApp {
                         &mut self.montage_bitrate,
                         &mut self.montage_transition,
                         &mut self.montage_transition_duration,
+                        &mut self.overlay_triggers_enabled,
+                        &mut self.overlay_triggers,
                         &self.text_input,
                         &mut self.jobs,
                         &mut self.job_counter,
                         &mut self.queue_error,
                         &mut self.job_name_dialog_open,
                         &mut self.job_name_input,
+                        &mut self.resume_dialog_open,
+                        &mut self.resume_pending,
                     );
                 });
+
+            // Діалог відновлення задачі (знайдені наявні файли)
+            crate::gui::pipeline::resume::draw_resume_dialog(
+                ctx,
+                self.language,
+                &mut self.resume_dialog_open,
+                &mut self.resume_pending,
+                &mut self.jobs,
+                &mut self.job_counter,
+            );
+
+            // Якщо нова задача була додана в чергу — записуємо в history
+            if self.jobs.len() > jobs_len_before {
+                if let Some(last_job) = self.jobs.last() {
+                    let template_name = if !self.template_name_input.is_empty()
+                        && self.saved_templates.contains(&self.template_name_input)
+                    {
+                        Some(self.template_name_input.clone())
+                    } else {
+                        None
+                    };
+                    let entry = crate::gui::settings::storage::TaskHistoryEntry {
+                        id: last_job.id,
+                        name: last_job.name.clone(),
+                        created_at: chrono::Utc::now().timestamp(),
+                        template_name,
+                        text: self.text_input.clone(),
+                        settings: self.current_pipeline_template(),
+                    };
+                    crate::gui::settings::storage::append_to_task_history(&mut self.task_history, entry);
+                }
+            }
 
             if self.translation_service != prev_translation_service {
                 if self.translation_service == "Gemini CLI" || self.translation_service == "Claude Code" {
@@ -1040,6 +1343,7 @@ impl eframe::App for VideoMakerApp {
                         &self.whisper_model_download,
                         &mut self.active_tab,
                         &mut self.retry_request,
+                        &mut self.selected_agent_chat,
                     );
                 });
         }
@@ -1060,13 +1364,16 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&job.subtitles_stage),
                     std::sync::Arc::clone(&job.montage_stage),
                     std::sync::Arc::clone(&job.translated_text),
-                    std::sync::Arc::clone(&job.translation_cost),
+                    std::sync::Arc::clone(&job.total_cost),
                     std::sync::Arc::clone(&job.audio_duration),
                     std::sync::Arc::clone(&job.prompts_progress),
                     std::sync::Arc::clone(&job.media_progress),
                     std::sync::Arc::clone(&job.montage_progress),
                     std::sync::Arc::clone(&job.montage_file_size),
                     std::sync::Arc::clone(&job.media_control_resume),
+                    std::sync::Arc::clone(&job.agent_control_resume),
+                    std::sync::Arc::clone(&job.agent_chat),
+                    std::sync::Arc::clone(&job.agent_session),
                     ctx.clone(),
                 );
             }
@@ -1089,6 +1396,7 @@ impl eframe::App for VideoMakerApp {
         let mut animate_all = false;
         let mut hover_extract_request: Option<std::path::PathBuf> = None;
         let mut thumb_requests: Vec<std::path::PathBuf> = Vec::new();
+        let mut prompt_view_request: Option<std::path::PathBuf> = None;
         let hover_loading_snapshot = self.video_hover_loading.lock().unwrap().clone();
         let thumb_loading_snapshot = self.video_thumb_loading.lock().unwrap().clone();
         egui::CentralPanel::default()
@@ -1096,7 +1404,7 @@ impl eframe::App for VideoMakerApp {
             .show(ctx, |ui| {
                 match self.active_tab {
                     Tab::Main => {
-                        gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit);
+                        gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit, &mut self.editor_stats);
                     }
                     Tab::Gallery => {
                         crate::gui::gallery::draw_gallery_tab(
@@ -1115,6 +1423,7 @@ impl eframe::App for VideoMakerApp {
                             &self.video_thumbnails,
                             &thumb_loading_snapshot,
                             &mut thumb_requests,
+                            &mut prompt_view_request,
                         );
                     }
                     Tab::Settings => {
@@ -1172,6 +1481,11 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&self.media_regen_loading),
                 );
             }
+        }
+
+        // Відкриття popup-вікна з промтом для обраного медіафайлу
+        if let Some(file) = prompt_view_request {
+            self.gallery_prompt_popup = Some(crate::core::pipeline::read_prompt_for_file(&file));
         }
 
         // Очищення текстур для видалених файлів (після анімації .jpg → .mp4)
@@ -1284,6 +1598,32 @@ impl eframe::App for VideoMakerApp {
             &self.media_regen_result,
         );
 
+        // Popup-вікно перегляду промту медіафайлу
+        if let Some(ref prompt_text) = self.gallery_prompt_popup.clone() {
+            let mut is_open = true;
+            egui::Window::new(translate(self.language, "gallery_prompt_window_title"))
+                .open(&mut is_open)
+                .resizable(true)
+                .default_width(420.0)
+                .collapsible(false)
+                .show(ctx, |ui| {
+                    if prompt_text.is_empty() {
+                        ui.label(egui::RichText::new(translate(self.language, "gallery_prompt_empty")).weak());
+                    } else {
+                        egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                            ui.label(prompt_text.as_str());
+                        });
+                        ui.add_space(8.0);
+                        if ui.button(translate(self.language, "gallery_prompt_copy_btn")).clicked() {
+                            ui.output_mut(|o| o.copied_text = prompt_text.clone());
+                        }
+                    }
+                });
+            if !is_open {
+                self.gallery_prompt_popup = None;
+            }
+        }
+
         if let Some((job_id, job_name)) = self.selected_job_logs.clone() {
             if !crate::gui::logs::draw_job_logs_window(
                 ctx,
@@ -1341,6 +1681,18 @@ impl eframe::App for VideoMakerApp {
             &self.openrouter_models_loading,
         );
 
+        // Спливаюче вікно чату з агентом
+        crate::gui::agent_chat_window::draw_agent_chat_window(
+            ctx,
+            self.language,
+            &self.jobs,
+            &mut self.selected_agent_chat,
+            &mut self.agent_chat_input,
+            &self.agent_chat_loading,
+            &mut self.agent_chat_error,
+            &self.agent_chat_result,
+        );
+
         // АВТОЗБЕРЕЖЕННЯ:
         // Перевіряємо, чи користувач наразі не перетягує панель (миша відпущена).
         // Це запобігає надмірному навантаженню на диск та гарантує запис файлу лише після відпускання миші.
@@ -1372,6 +1724,7 @@ impl eframe::App for VideoMakerApp {
                 || self.pipeline_translation_control_enabled != self.last_saved_settings.pipeline_translation_control_enabled
                 || self.pipeline_control_auto_open != self.last_saved_settings.pipeline_control_auto_open
                 || self.pipeline_media_control_enabled != self.last_saved_settings.pipeline_media_control_enabled
+                || self.pipeline_agent_control_enabled != self.last_saved_settings.pipeline_agent_control_enabled
                 || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
                 || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
                 || self.pipeline_subtitles_enabled != self.last_saved_settings.pipeline_subtitles_enabled
@@ -1386,6 +1739,7 @@ impl eframe::App for VideoMakerApp {
                 || self.video_service != self.last_saved_settings.video_service
                 || self.video_media_type != self.last_saved_settings.video_media_type
                 || self.video_prompt != self.last_saved_settings.video_prompt
+                || self.video_agent_prompt != self.last_saved_settings.video_agent_prompt
                 || self.video_llm_service != self.last_saved_settings.video_llm_service
                 || self.video_llm_model != self.last_saved_settings.video_llm_model
                 || self.video_llm_model_openrouter != self.last_saved_settings.video_llm_model_openrouter
@@ -1420,6 +1774,11 @@ impl eframe::App for VideoMakerApp {
                 || self.subtitle_color != self.last_saved_settings.subtitle_color
                 || self.subtitle_margin_v != self.last_saved_settings.subtitle_margin_v
                 || self.subtitle_karaoke != self.last_saved_settings.subtitle_karaoke
+                || self.subtitle_karaoke_mode != self.last_saved_settings.subtitle_karaoke_mode
+                || self.subtitle_karaoke_highlight_color != self.last_saved_settings.subtitle_karaoke_highlight_color
+                || self.subtitle_karaoke_outline_color != self.last_saved_settings.subtitle_karaoke_outline_color
+                || self.subtitle_karaoke_bold != self.last_saved_settings.subtitle_karaoke_bold
+                || self.subtitle_karaoke_scale != self.last_saved_settings.subtitle_karaoke_scale
                 || self.subtitle_font != self.last_saved_settings.subtitle_font
                 || self.montage_service != self.last_saved_settings.montage_service
                 || self.montage_fps != self.last_saved_settings.montage_fps
@@ -1427,6 +1786,8 @@ impl eframe::App for VideoMakerApp {
                 || self.montage_bitrate != self.last_saved_settings.montage_bitrate
                 || self.montage_transition != self.last_saved_settings.montage_transition
                 || self.montage_transition_duration != self.last_saved_settings.montage_transition_duration
+                || self.overlay_triggers_enabled != self.last_saved_settings.overlay_triggers_enabled
+                || self.overlay_triggers != self.last_saved_settings.overlay_triggers
             {
                 let new_settings = AppSettings {
                     theme: current_theme_str,
@@ -1444,6 +1805,7 @@ impl eframe::App for VideoMakerApp {
                     pipeline_translation_control_enabled: self.pipeline_translation_control_enabled,
                     pipeline_control_auto_open: self.pipeline_control_auto_open,
                     pipeline_media_control_enabled: self.pipeline_media_control_enabled,
+                    pipeline_agent_control_enabled: self.pipeline_agent_control_enabled,
                     pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
                     pipeline_video_enabled: self.pipeline_video_enabled,
                     pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,
@@ -1458,6 +1820,7 @@ impl eframe::App for VideoMakerApp {
                     text_split_mode: self.text_split_mode.clone(),
                     text_split_char_limit: self.text_split_char_limit,
                     video_prompt: self.video_prompt.clone(),
+                    video_agent_prompt: self.video_agent_prompt.clone(),
                     video_llm_service: self.video_llm_service.clone(),
                     video_llm_model: self.video_llm_model.clone(),
                     video_llm_model_openrouter: self.video_llm_model_openrouter.clone(),
@@ -1491,6 +1854,11 @@ impl eframe::App for VideoMakerApp {
                     subtitle_color: self.subtitle_color,
                     subtitle_margin_v: self.subtitle_margin_v,
                     subtitle_karaoke: self.subtitle_karaoke,
+                    subtitle_karaoke_mode: self.subtitle_karaoke_mode,
+                    subtitle_karaoke_highlight_color: self.subtitle_karaoke_highlight_color,
+                    subtitle_karaoke_outline_color: self.subtitle_karaoke_outline_color,
+                    subtitle_karaoke_bold: self.subtitle_karaoke_bold,
+                    subtitle_karaoke_scale: self.subtitle_karaoke_scale,
                     subtitle_font: self.subtitle_font.clone(),
                     montage_service: self.montage_service.clone(),
                     montage_fps: self.montage_fps,
@@ -1498,6 +1866,8 @@ impl eframe::App for VideoMakerApp {
                     montage_bitrate: self.montage_bitrate,
                     montage_transition: self.montage_transition.clone(),
                     montage_transition_duration: self.montage_transition_duration,
+                    overlay_triggers_enabled: self.overlay_triggers_enabled,
+                    overlay_triggers: self.overlay_triggers.clone(),
                     show_welcome: self.last_saved_settings.show_welcome,
                 };
                 

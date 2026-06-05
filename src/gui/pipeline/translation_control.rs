@@ -42,7 +42,7 @@ pub fn draw_translation_control_window(
     let job_name = jobs[job_idx].name.clone();
     let job_save_path = jobs[job_idx].settings.save_path.clone();
     let translated_text_arc = std::sync::Arc::clone(&jobs[job_idx].translated_text);
-    let translation_cost_arc = std::sync::Arc::clone(&jobs[job_idx].translation_cost);
+    let translation_cost_arc = std::sync::Arc::clone(&jobs[job_idx].total_cost);
     let audio_duration_arc = std::sync::Arc::clone(&jobs[job_idx].audio_duration);
     let status_arc = std::sync::Arc::clone(&jobs[job_idx].status);
     let translation_stage_arc = std::sync::Arc::clone(&jobs[job_idx].translation_stage);
@@ -55,6 +55,9 @@ pub fn draw_translation_control_window(
     let montage_progress_arc = std::sync::Arc::clone(&jobs[job_idx].montage_progress);
     let montage_file_size_arc = std::sync::Arc::clone(&jobs[job_idx].montage_file_size);
     let media_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].media_control_resume);
+    let agent_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].agent_control_resume);
+    let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
+    let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
     let job_settings = jobs[job_idx].settings.clone();
 
     // Перевіряємо результат фонової перегенерації
@@ -201,9 +204,12 @@ pub fn draw_translation_control_window(
 
         *control_regen_error = None;
         *loading_arc.lock().unwrap() = true;
+        let save_path_for_regen = job_settings.save_path.clone();
         std::thread::spawn(move || {
             let result = crate::core::llm::call_llm(
                 &service, &key, &model, &prompt, &text, temperature, job_info,
+                Some(save_path_for_regen.as_str()),
+                false,
             );
             *result_arc.lock().unwrap() = Some(result);
             *loading_arc.lock().unwrap() = false;
@@ -308,9 +314,12 @@ pub fn draw_translation_control_window(
 
             *control_regen_error = None;
             *loading_arc.lock().unwrap() = true;
+            let save_path_ext = job_save_path.clone();
             std::thread::spawn(move || {
                 let result = crate::core::llm::call_llm(
                     &service, &openrouter_key_ext, &model, &prompt, &text_to_translate, temperature, job_info_ext,
+                    Some(save_path_ext.as_str()),
+                    false,
                 );
                 *result_arc.lock().unwrap() = Some(result);
                 *loading_arc.lock().unwrap() = false;
@@ -347,6 +356,9 @@ pub fn draw_translation_control_window(
             montage_progress_arc,
             montage_file_size_arc,
             media_control_resume_arc,
+            agent_control_resume_arc,
+            agent_chat_arc,
+            agent_session_arc,
             ctx_clone,
         );
 

@@ -124,6 +124,8 @@ pub fn call_openrouter(
 }
 
 /// Викликає LLM-сервіс із підстановкою `{{text}}` у промт і повертає текст відповіді та вартість.
+///
+/// `allow_tools` = true потрібно для агентного режиму (Claude Code з `--allowedTools Bash,Write,Read`).
 pub fn call_llm(
     service: &str,
     key: &str,
@@ -132,6 +134,8 @@ pub fn call_llm(
     text: &str,
     temperature: f32,
     job_info: Option<(u64, String)>,
+    working_dir: Option<&str>,
+    allow_tools: bool,
 ) -> Result<(String, Option<f64>), String> {
     let user_content = if prompt.contains("{{text}}") {
         prompt.replace("{{text}}", text)
@@ -142,9 +146,9 @@ pub fn call_llm(
     };
 
     if service == "Claude Code" {
-        crate::api::claude::call_claude_code(model, &user_content, job_info).map(|res| (res, None))
+        crate::api::claude::call_claude_code(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
     } else if service == "Gemini CLI" {
-        crate::api::gemini::call_gemini_cli(model, &user_content, job_info).map(|res| (res, None))
+        crate::api::gemini::call_gemini_cli(model, &user_content, job_info, working_dir, allow_tools).map(|res| (res, None))
     } else {
         call_openrouter(key, model, user_content, temperature, job_info)
     }

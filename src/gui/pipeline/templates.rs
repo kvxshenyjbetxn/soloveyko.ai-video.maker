@@ -18,6 +18,7 @@ pub fn draw_templates_section(
     pipeline_translation_control_enabled: &mut bool,
     pipeline_control_auto_open: &mut bool,
     pipeline_media_control_enabled: &mut bool,
+    pipeline_agent_control_enabled: &mut bool,
     pipeline_voiceover_enabled: &mut bool,
     pipeline_video_enabled: &mut bool,
     pipeline_subtitles_enabled: &mut bool,
@@ -32,6 +33,7 @@ pub fn draw_templates_section(
     text_split_mode: &mut String,
     text_split_char_limit: &mut usize,
     video_prompt: &mut String,
+    video_agent_prompt: &mut String,
     video_llm_service: &mut String,
     video_llm_model: &mut String,
     video_llm_model_openrouter: &mut String,
@@ -57,6 +59,11 @@ pub fn draw_templates_section(
     subtitle_color: &mut [u8; 3],
     subtitle_margin_v: &mut u32,
     subtitle_karaoke: &mut bool,
+    subtitle_karaoke_mode: &mut u8,
+    subtitle_karaoke_highlight_color: &mut [u8; 3],
+    subtitle_karaoke_outline_color: &mut [u8; 3],
+    subtitle_karaoke_bold: &mut bool,
+    subtitle_karaoke_scale: &mut u32,
     subtitle_font: &mut String,
     montage_service: &mut String,
     montage_fps: &mut u32,
@@ -64,6 +71,8 @@ pub fn draw_templates_section(
     montage_bitrate: &mut u32,
     montage_transition: &mut String,
     montage_transition_duration: &mut f32,
+    overlay_triggers_enabled: &mut bool,
+    overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -99,6 +108,7 @@ pub fn draw_templates_section(
                             *pipeline_translation_control_enabled = template.pipeline_translation_control_enabled;
                             *pipeline_control_auto_open = template.pipeline_control_auto_open;
                             *pipeline_media_control_enabled = template.pipeline_media_control_enabled;
+                            *pipeline_agent_control_enabled = template.pipeline_agent_control_enabled;
                             *pipeline_voiceover_enabled = template.pipeline_voiceover_enabled;
                             *pipeline_video_enabled = template.pipeline_video_enabled;
                             *pipeline_subtitles_enabled = template.pipeline_subtitles_enabled;
@@ -125,6 +135,7 @@ pub fn draw_templates_section(
                             *text_split_mode = template.text_split_mode;
                             *text_split_char_limit = template.text_split_char_limit;
                             *video_prompt = template.video_prompt;
+                            *video_agent_prompt = template.video_agent_prompt;
                             *video_llm_service = template.video_llm_service.clone();
                             *video_llm_model_openrouter = template.video_llm_model_openrouter.clone();
                             *video_llm_model_claude = if template.video_llm_model_claude.is_empty() { "sonnet".to_string() } else { template.video_llm_model_claude.clone() };
@@ -155,6 +166,11 @@ pub fn draw_templates_section(
                             *subtitle_color = template.subtitle_color;
                             *subtitle_margin_v = template.subtitle_margin_v;
                             *subtitle_karaoke = template.subtitle_karaoke;
+                            *subtitle_karaoke_mode = template.subtitle_karaoke_mode;
+                            *subtitle_karaoke_highlight_color = template.subtitle_karaoke_highlight_color;
+                            *subtitle_karaoke_outline_color = template.subtitle_karaoke_outline_color;
+                            *subtitle_karaoke_bold = template.subtitle_karaoke_bold;
+                            *subtitle_karaoke_scale = template.subtitle_karaoke_scale;
                             *subtitle_font = template.subtitle_font;
                             *montage_service = template.montage_service;
                             *montage_fps = template.montage_fps;
@@ -162,6 +178,8 @@ pub fn draw_templates_section(
                             *montage_bitrate = template.montage_bitrate;
                             *montage_transition = template.montage_transition;
                             *montage_transition_duration = template.montage_transition_duration;
+                            *overlay_triggers_enabled = template.overlay_triggers_enabled;
+                            *overlay_triggers = template.overlay_triggers;
                             *template_status = Some(format!(
                                 "{}: {} ✔",
                                 translate(language, "template_loaded"),
