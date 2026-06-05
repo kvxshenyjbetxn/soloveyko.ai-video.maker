@@ -304,22 +304,22 @@ pub fn draw_resume_dialog(
                 ui.add_space(10.0);
 
                 ui.horizontal(|ui| {
-                    if resume_stage.is_some() {
-                        if ui.add_sized(
-                            [140.0, 26.0],
-                            egui::Button::new(
-                                egui::RichText::new(translate(language, "resume_continue_btn")).strong(),
-                            ),
-                        ).clicked() {
-                            do_continue = true;
-                        }
+                    if ui.add_sized(
+                        [140.0, 26.0],
+                        egui::Button::new(translate(language, "resume_fresh_btn")),
+                    ).clicked() {
+                        do_fresh = true;
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.add_sized(
-                            [140.0, 26.0],
-                            egui::Button::new(translate(language, "resume_fresh_btn")),
-                        ).clicked() {
-                            do_fresh = true;
+                        if resume_stage.is_some() {
+                            if ui.add_sized(
+                                [140.0, 26.0],
+                                egui::Button::new(
+                                    egui::RichText::new(translate(language, "resume_continue_btn")).strong(),
+                                ),
+                            ).clicked() {
+                                do_continue = true;
+                            }
                         }
                     });
                 });

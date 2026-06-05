@@ -134,10 +134,8 @@ pub fn draw_logs_tab(
     ui.vertical(|ui| {
         ui.add_space(8.0);
 
-        // Заголовок та кнопки керування логом у верхній панелі
+        // Кнопки керування логом у верхній панелі
         ui.horizontal(|ui| {
-            ui.heading(egui::RichText::new(translate(language, "tab_logs")).strong());
-
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 // Кнопка очищення логів
                 let clear_btn = egui::Button::new(
@@ -171,9 +169,7 @@ pub fn draw_logs_tab(
             });
         });
 
-        ui.add_space(8.0);
-        ui.separator();
-        ui.add_space(8.0);
+        ui.add_space(4.0);
 
         let logs = crate::logger::get_logs();
 

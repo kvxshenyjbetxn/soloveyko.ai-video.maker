@@ -22,10 +22,12 @@ pub fn draw_gallery_tab(
     video_thumb_loading: &std::collections::HashSet<std::path::PathBuf>,
     thumb_requests: &mut Vec<std::path::PathBuf>,
     prompt_view_request: &mut Option<std::path::PathBuf>,
-) {
+) -> bool {
     let awaiting: Vec<_> = jobs.iter()
         .filter(|j| *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMediaControl)
         .collect();
+
+    let mut switch_to_main = false;
 
     ui.add_space(8.0);
     ui.horizontal(|ui| {
@@ -39,6 +41,7 @@ pub fn draw_gallery_tab(
                     *lock.lock().unwrap() = true;
                     cvar.notify_one();
                 }
+                switch_to_main = true;
             }
         }
     });
@@ -77,7 +80,7 @@ pub fn draw_gallery_tab(
         ui.centered_and_justified(|ui| {
             ui.label(egui::RichText::new(translate(language, "gallery_empty")).weak().size(14.0));
         });
-        return;
+        return false;
     }
 
     let ctx = ui.ctx().clone();
@@ -257,4 +260,6 @@ pub fn draw_gallery_tab(
                 ui.add_space(4.0);
             }
         });
+
+    switch_to_main
 }

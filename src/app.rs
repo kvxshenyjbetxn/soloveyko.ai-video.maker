@@ -1425,7 +1425,7 @@ impl eframe::App for VideoMakerApp {
                         gui::editor::draw_editor(ui, &mut self.text_input, self.language, self.text_split_char_limit, &mut self.editor_stats);
                     }
                     Tab::Gallery => {
-                        crate::gui::gallery::draw_gallery_tab(
+                        let switch_to_main = crate::gui::gallery::draw_gallery_tab(
                             ui, self.language, &self.jobs,
                             &mut self.gallery_textures,
                             &mut self.gallery_preview,
@@ -1443,6 +1443,9 @@ impl eframe::App for VideoMakerApp {
                             &mut thumb_requests,
                             &mut prompt_view_request,
                         );
+                        if switch_to_main {
+                            self.active_tab = Tab::Main;
+                        }
                     }
                     Tab::Settings => {
                         let welcome_changed = gui::settings::draw_settings(
