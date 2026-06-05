@@ -236,17 +236,17 @@ pub fn run_montage(
     ));
 
     // Якщо burn-in субтитрів увімкнено — шукаємо subtitle.ass, потім subtitle.srt як запасний.
+    // FFmpeg запускається з current_dir=save_dir, тому використовуємо відносний шлях —
+    // це повністю уникає проблем з пробілами та двокрапками у Windows-шляхах.
     let after_subs_label = if burn_subtitles {
         let ass_path = save_dir.join("subtitle.ass");
         let srt_path = save_dir.join("subtitle.srt");
         if ass_path.exists() {
-            let path_str = ffmpeg_escape_filter_path(&ass_path.to_string_lossy());
-            filter_parts.push(format!("[v_montage]ass=filename='{}'[v_with_subs]", path_str));
+            filter_parts.push("[v_montage]ass=filename=subtitle.ass[v_with_subs]".to_string());
             log_fn("Subtitles burn-in: subtitle.ass embedded.");
             "v_with_subs".to_string()
         } else if srt_path.exists() {
-            let path_str = ffmpeg_escape_filter_path(&srt_path.to_string_lossy());
-            filter_parts.push(format!("[v_montage]ass=filename='{}'[v_with_subs]", path_str));
+            filter_parts.push("[v_montage]ass=filename=subtitle.srt[v_with_subs]".to_string());
             log_fn("Subtitles burn-in: subtitle.srt (fallback).");
             "v_with_subs".to_string()
         } else {
@@ -516,12 +516,6 @@ pub fn run_montage(
     Ok(file_size)
 }
 
-/// Екранує шлях для використання всередині FFmpeg filter option у одинарних лапках.
-/// Одинарні лапки в FFmpeg filter syntax захищають вміст (включно з : та пробілами).
-fn ffmpeg_escape_filter_path(path: &str) -> String {
-    // Замінюємо \ на / для сумісності з FFmpeg на всіх платформах
-    path.replace('\\', "/").replace('\'', "'\\''")
-}
 
 /// Повертає назву переходу: конкретну або випадкову з доступних xfade.
 fn pick_transition(transition: &str) -> &'static str {

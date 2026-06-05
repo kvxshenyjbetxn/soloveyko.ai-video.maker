@@ -189,6 +189,7 @@ pub fn translate_en(key: &str) -> &'static str {
         "job_name_cancel_btn" => "Cancel",
         "stage_retry_tooltip" => "Retry this stage and all following",
         "job_retry_tooltip" => "Retry the entire job from scratch",
+        "job_open_folder_tooltip" => "Open job folder",
         "job_logs_title" => "Job Logs",
         "job_logs_empty" => "No logs found for this job.",
         "welcome_title" => "Welcome!",

@@ -2,6 +2,23 @@ use eframe::egui;
 use crate::localization::translate;
 use crate::app::Tab;
 
+/// Відкриває папку у файловому менеджері ОС.
+/// Якщо папки ще немає — створює її перед відкриттям.
+fn open_folder(path: &str) {
+    if path.is_empty() { return; }
+    let _ = std::fs::create_dir_all(path);
+    #[cfg(target_os = "windows")]
+    {
+        // explorer.exe потребує нативних бекслешів; forward-slashes він не завжди приймає
+        let native = path.replace('/', "\\");
+        let _ = std::process::Command::new("explorer").arg(&native).spawn();
+    }
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(path).spawn();
+    #[cfg(target_os = "linux")]
+    let _ = std::process::Command::new("xdg-open").arg(path).spawn();
+}
+
 fn format_file_size(bytes: u64) -> String {
     format!("{:.2} GB", bytes as f64 / 1_000_000_000.0)
 }
@@ -335,13 +352,22 @@ pub fn draw_queue_panel(
                                     card_clicked = true;
                                 }
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    let btn = ui.add_enabled(
+                                    let retry_btn = ui.add_enabled(
                                         can_retry,
                                         egui::Button::new(egui::RichText::new("↺").size(11.0)).small(),
                                     );
-                                    if btn.on_hover_text(translate(language, "job_retry_tooltip")).clicked() {
+                                    if retry_btn.on_hover_text(translate(language, "job_retry_tooltip")).clicked() {
                                         *retry_request = Some((job.id, crate::queue::RetryStage::Translation));
                                         retry_clicked = true;
+                                    }
+
+                                    let folder_path = job.settings.save_path.clone();
+                                    let folder_btn = ui.add_enabled(
+                                        !folder_path.is_empty(),
+                                        egui::Button::new(egui::RichText::new("📂").size(11.0)).small(),
+                                    );
+                                    if folder_btn.on_hover_text(translate(language, "job_open_folder_tooltip")).clicked() {
+                                        open_folder(&folder_path);
                                     }
                                 });
                             });

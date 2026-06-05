@@ -189,6 +189,7 @@ pub fn translate_uk(key: &str) -> &'static str {
         "job_name_cancel_btn" => "Скасувати",
         "stage_retry_tooltip" => "Повторити цей етап і всі наступні",
         "job_retry_tooltip" => "Повторити всю задачу заново",
+        "job_open_folder_tooltip" => "Відкрити папку задачі",
         "job_logs_title" => "Логи завдання",
         "job_logs_empty" => "Логи для цього завдання відсутні.",
         "welcome_title" => "Ласкаво просимо!",
