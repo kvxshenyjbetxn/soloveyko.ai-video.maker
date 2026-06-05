@@ -174,7 +174,7 @@ impl ToolChecks {
         });
     }
 
-    /// Перевіряє whisperx (папка у bin_dir), при відсутності — авто-скачує.
+    /// Перевіряє whisperx (папка у bin_dir), при відсутності — авто-скачує (macOS та Windows).
     fn check_whisperx(
         whisperx_status: Arc<Mutex<ToolStatus>>,
         whisperx_download: Arc<Mutex<BinaryDownload>>,
@@ -187,32 +187,43 @@ impl ToolChecks {
                 return;
             }
 
-            // Не знайдено — починаємо авто-завантаження
+            // Не знайдено — починаємо авто-завантаження (лише macOS та Windows)
             *whisperx_status.lock().unwrap() = ToolStatus::NotInstalled;
-            *whisperx_download.lock().unwrap() = BinaryDownload::Downloading("підготовка...".to_string());
             ctx.request_repaint();
 
-            let dl = Arc::clone(&whisperx_download);
-            let ctx2 = ctx.clone();
-            let result = crate::bundle::download_whisperx(move |label| {
-                *dl.lock().unwrap() = BinaryDownload::Downloading(label);
-                ctx2.request_repaint();
-            });
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
+            {
+                *whisperx_download.lock().unwrap() = BinaryDownload::Downloading("підготовка...".to_string());
+                ctx.request_repaint();
 
-            match result {
-                Ok(()) => {
-                    let new_status = if crate::bundle::whisperx_local_exists() {
-                        ToolStatus::Installed("bundled".to_string())
-                    } else {
-                        ToolStatus::NotInstalled
-                    };
-                    *whisperx_status.lock().unwrap() = new_status;
-                    *whisperx_download.lock().unwrap() = BinaryDownload::Done;
-                }
-                Err(e) => {
-                    *whisperx_download.lock().unwrap() = BinaryDownload::Failed(e);
+                let dl = Arc::clone(&whisperx_download);
+                let ctx2 = ctx.clone();
+                let result = crate::bundle::download_whisperx(move |label| {
+                    *dl.lock().unwrap() = BinaryDownload::Downloading(label);
+                    ctx2.request_repaint();
+                });
+
+                match result {
+                    Ok(()) => {
+                        let new_status = if crate::bundle::whisperx_local_exists() {
+                            ToolStatus::Installed("bundled".to_string())
+                        } else {
+                            ToolStatus::NotInstalled
+                        };
+                        *whisperx_status.lock().unwrap() = new_status;
+                        *whisperx_download.lock().unwrap() = BinaryDownload::Done;
+                    }
+                    Err(e) => {
+                        *whisperx_download.lock().unwrap() = BinaryDownload::Failed(e);
+                    }
                 }
             }
+
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            {
+                let _ = whisperx_download;
+            }
+
             ctx.request_repaint();
         });
     }

@@ -31,11 +31,20 @@ const WHISPER_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/relea
 #[cfg(not(target_os = "windows"))]
 const WHISPER_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper";
 
-/// На macOS — zip-архів з папкою всередині. Windows поки не підтримується.
+#[cfg(target_os = "windows")]
+const WHISPERX_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisperx_win.zip";
 #[cfg(target_os = "macos")]
 const WHISPERX_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisperx_mac.zip";
 
+#[cfg(target_os = "windows")]
+const WHISPERX_DIR_NAME: &str = "whisperx_win";
+#[cfg(not(target_os = "windows"))]
 const WHISPERX_DIR_NAME: &str = "whisperx_mac";
+
+#[cfg(target_os = "windows")]
+const WHISPERX_CLI_NAME: &str = "whisperx_cli.exe";
+#[cfg(not(target_os = "windows"))]
+const WHISPERX_CLI_NAME: &str = "whisperx_cli";
 
 /// Папка для бандлованих бінарників: <UserConfigDir>/Soloveyko.AI-Video.Maker/bin/
 pub fn bin_dir() -> PathBuf {
@@ -83,29 +92,27 @@ pub fn whisperx_local_exists() -> bool {
     bin_dir().join(WHISPERX_DIR_NAME).is_dir()
 }
 
+/// Повний шлях до виконуваного файлу whisperx_cli (платформозалежно).
+pub fn whisperx_cmd_path() -> PathBuf {
+    bin_dir().join(WHISPERX_DIR_NAME).join(WHISPERX_CLI_NAME)
+}
+
 /// Завантажує whisperx у bin_dir (розпаковує папку з zip).
-/// Підтримується лише macOS. На Windows повертає помилку.
-pub fn download_whisperx(mut on_progress: impl FnMut(String)) -> Result<(), String> {
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = on_progress;
-        return Err("WhisperX автоматичне завантаження підтримується лише на macOS".to_string());
+/// Підтримується на macOS та Windows.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub fn download_whisperx(on_progress: impl FnMut(String)) -> Result<(), String> {
+    let mut on_progress = on_progress;
+    let dir = bin_dir();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
+
+    if whisperx_local_exists() {
+        return Ok(());
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        let dir = bin_dir();
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
-
-        if whisperx_local_exists() {
-            return Ok(());
-        }
-
-        let bytes = download_to_bytes(WHISPERX_URL, "whisperx", &mut on_progress)?;
-        extract_folder_from_zip(&bytes, &dir)?;
-        Ok(())
-    }
+    let bytes = download_to_bytes(WHISPERX_URL, "whisperx", &mut on_progress)?;
+    extract_folder_from_zip(&bytes, &dir)?;
+    Ok(())
 }
 
 /// Папка для ggml-моделей whisper.cpp: <bin_dir>/models/
@@ -275,6 +282,7 @@ fn download_to_bytes(
 
 /// Розпаковує всю папку з zip-архіву у вказану папку призначення.
 /// Бере першу папку верхнього рівня в архіві та рекурсивно витягує її вміст.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn extract_folder_from_zip(bytes: &[u8], dest_parent: &PathBuf) -> Result<(), String> {
     use std::io::Read;
 

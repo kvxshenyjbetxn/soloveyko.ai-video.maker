@@ -255,9 +255,8 @@ fn run_whisperx(
         return Err(msg);
     };
 
-    // Знаходимо виконуваний файл whisperx всередині папки bin_dir/whisperx_mac/
-    let whisperx_dir = crate::bundle::bin_dir().join("whisperx_mac");
-    let whisperx_cmd = whisperx_dir.join("whisperx_cli");
+    // Знаходимо виконуваний файл whisperx (платформозалежно: whisperx_win/whisperx_cli.exe або whisperx_mac/whisperx_cli)
+    let whisperx_cmd = crate::bundle::whisperx_cmd_path();
 
     // whisperx_cli --audio <file> --model <model> --output <base_without_ext>
     //              [--language <lang>] [--ffmpeg-path <ffmpeg>]
