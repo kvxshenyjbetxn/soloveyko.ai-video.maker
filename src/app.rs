@@ -1143,7 +1143,7 @@ impl eframe::App for VideoMakerApp {
                 .inner_margin(egui::Margin::same(0.0));
             egui::SidePanel::left("task_history_panel")
                 .frame(side_frame_left)
-                .exact_width(190.0)
+                .exact_width(160.0)
                 .resizable(false)
                 .show(ctx, |ui| {
                     let applied = crate::gui::task_history::draw_task_history_panel(
