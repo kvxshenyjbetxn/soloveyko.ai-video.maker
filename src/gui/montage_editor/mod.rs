@@ -192,9 +192,11 @@ impl MontageEditorState {
         clip_end.max(self.total_duration).max(10.0)
     }
 
-    /// Зберігає поточний стан кліпів у timeline.json для run_montage
+    /// Зберігає поточний стан кліпів у timeline.json для run_montage.
+    /// Вставляє null-сегменти для проміжків між кліпами, щоб run_montage
+    /// правильно відтворював абсолютні позиції (hold last frame для пустих місць).
     pub fn save_to_timeline(&self) -> Result<(), std::io::Error> {
-        // Сортуємо кліпи трека 0 за початком (run_montage використовує тільки трек 0)
+        // Беремо тільки кліпи трека 0 із встановленим шляхом, сортуємо за стартом
         let mut sorted: Vec<&EditorClip> = self.clips.iter()
             .filter(|c| c.track_idx == 0 && c.path.is_some())
             .collect();
@@ -205,17 +207,49 @@ impl MontageEditorState {
             .fold(0.0f64, f64::max)
             .max(self.total_dur() as f64);
 
-        let segments: Vec<serde_json::Value> = sorted.iter().map(|clip| {
+        let mut segments: Vec<serde_json::Value> = Vec::new();
+        // cursor — поточна позиція на таймлінії після останнього записаного сегменту
+        let mut cursor = 0.0f32;
+
+        for clip in &sorted {
+            // Якщо кліп перекриває попередній — починаємо його з кінця попереднього (зберігаємо тривалість)
+            let actual_start = clip.start_secs.max(cursor);
+
+            // Проміжок (gap) між попереднім і поточним кліпом → null-сегмент (run_montage утримає останній кадр)
+            if actual_start > cursor + 0.01 {
+                segments.push(serde_json::json!({
+                    "start_secs": cursor as f64,
+                    "end_secs": actual_start as f64,
+                    "media": serde_json::Value::Null,
+                }));
+            }
+
             let media_rel = clip.path.as_ref()
-                .and_then(|p| p.strip_prefix(&self.save_path).ok())
-                .map(|p| p.to_string_lossy().replace('\\', "/"))
-                .unwrap_or_default();
-            serde_json::json!({
-                "start_secs": clip.start_secs as f64,
-                "end_secs": clip.end_secs() as f64,
+                .and_then(|p| {
+                    // Спочатку пробуємо strip_prefix без канонізації
+                    if let Ok(rel) = p.strip_prefix(&self.save_path) {
+                        return Some(rel.to_string_lossy().replace('\\', "/"));
+                    }
+                    // Fallback: канонізуємо обидва шляхи та пробуємо знову
+                    let canon_clip = std::fs::canonicalize(p).ok();
+                    let canon_save = std::fs::canonicalize(&self.save_path).ok();
+                    if let (Some(cc), Some(cs)) = (canon_clip, canon_save) {
+                        cc.strip_prefix(&cs).ok()
+                            .map(|r| r.to_string_lossy().replace('\\', "/"))
+                    } else {
+                        None
+                    }
+                });
+
+            let actual_end = actual_start + clip.duration;
+            segments.push(serde_json::json!({
+                "start_secs": actual_start as f64,
+                "end_secs": actual_end as f64,
                 "media": media_rel,
-            })
-        }).collect();
+            }));
+
+            cursor = actual_end;
+        }
 
         let json = serde_json::json!({
             "total_duration_secs": total_duration_secs,
@@ -360,6 +394,7 @@ pub fn draw_montage_editor_window(
         editor.job_name, job_id + 1
     );
     let mut is_open = true;
+    let mut close_after = false;
 
     let is_awaiting = jobs.iter().find(|j| j.id == job_id).map(|j| {
         *j.status.lock().unwrap() == crate::queue::JobStatus::AwaitingMontageControl
@@ -373,7 +408,9 @@ pub fn draw_montage_editor_window(
         .min_size([700.0, 480.0])
         .collapsible(false)
         .show(ctx, |ui| {
-            draw_topbar(ui, language, editor, is_awaiting, job_id, jobs);
+            if draw_topbar(ui, language, editor, is_awaiting, job_id, jobs) {
+                close_after = true;
+            }
             ui.separator();
 
             let available = ui.available_size();
@@ -415,7 +452,7 @@ pub fn draw_montage_editor_window(
             });
         });
 
-    if !is_open {
+    if !is_open || close_after {
         *open_job = None;
         *state = None;
     }
@@ -430,7 +467,8 @@ fn draw_topbar(
     is_awaiting: bool,
     job_id: u64,
     jobs: &[crate::queue::PipelineJob],
-) {
+) -> bool {
+    let mut continue_clicked = false;
     ui.horizontal(|ui| {
         ui.label(translate(language, "montage_editor_zoom"));
         ui.add(egui::Slider::new(&mut editor.timeline_zoom, 10.0..=300.0).show_value(false));
@@ -454,15 +492,29 @@ fn draw_topbar(
                 .fill(if is_awaiting { Color32::from_rgb(39, 174, 96) } else { Color32::from_rgb(30, 30, 35) })
             );
             if btn.clicked() {
-                let _ = editor.save_to_timeline();
+                let job_name = editor.job_name.clone();
+                let save_path_str = editor.save_path.display().to_string();
+                let clip_count = editor.clips.iter().filter(|c| c.track_idx == 0).count();
+                match editor.save_to_timeline() {
+                    Ok(_) => crate::logger::log_job(
+                        job_id, &job_name,
+                        &format!("Montage editor: timeline saved ({} clips, path: {})", clip_count, save_path_str),
+                    ),
+                    Err(e) => crate::logger::log_job(
+                        job_id, &job_name,
+                        &format!("Montage editor: SAVE FAILED: {} (path: {})", e, save_path_str),
+                    ),
+                }
                 if let Some(job) = jobs.iter().find(|j| j.id == job_id) {
                     let (lock, cvar) = &*job.montage_control_resume;
                     *lock.lock().unwrap() = true;
                     cvar.notify_one();
                 }
+                continue_clicked = true;
             }
         });
     });
+    continue_clicked
 }
 
 // ─── Медіа-пул ───────────────────────────────────────────────────────────────

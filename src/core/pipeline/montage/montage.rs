@@ -51,8 +51,8 @@ pub fn run_montage(
     }
 
     struct Clip {
-        path: String,  // відносний шлях від save_dir
-        duration: f64, // оригінальна тривалість (без урахування overlap переходу)
+        path: Option<String>, // None = чорна заставка (gap)
+        duration: f64,
         is_video: bool,
     }
 
@@ -74,27 +74,34 @@ pub fn run_montage(
         if let Ok(content) = std::fs::read_to_string(&timeline_path) {
             if let Ok(tl) = serde_json::from_str::<Timeline>(&content) {
                 total_dur = tl.total_duration_secs;
-                // null-сегменти поглинаються в сусідні кліпи щоб зберегти синхронізацію:
-                // null після кліпу → подовжуємо попередній (hold last frame);
-                // null перед першим кліпом → додаємо до першого кліпу коли він з'явиться.
-                let mut pending_gap = 0.0f64;
+                let seg_count = tl.segments.len();
+                // null-сегменти → чорна заставка між кліпами
                 for seg in &tl.segments {
                     let dur = (seg.end_secs - seg.start_secs).max(0.05);
                     if let Some(ref media) = seg.media {
-                        clips.push(Clip {
-                            path: media.clone(),
-                            duration: dur + pending_gap,
-                            is_video: is_video_ext(media),
-                        });
-                        pending_gap = 0.0;
-                    } else if !clips.is_empty() {
-                        clips.last_mut().unwrap().duration += dur;
+                        clips.push(Clip { path: Some(media.clone()), duration: dur, is_video: is_video_ext(media) });
                     } else {
-                        pending_gap += dur;
+                        // Об'єднуємо суміжні null-сегменти в один чорний кліп
+                        if matches!(clips.last(), Some(Clip { path: None, .. })) {
+                            clips.last_mut().unwrap().duration += dur;
+                        } else {
+                            clips.push(Clip { path: None, duration: dur, is_video: false });
+                        }
                     }
                 }
+                log_fn(&format!(
+                    "timeline.json: {} segments → {} clips, total={:.2}s, first={}",
+                    seg_count, clips.len(), total_dur,
+                    clips.first().and_then(|c| c.path.as_deref()).unwrap_or("(black gap)"),
+                ));
+            } else {
+                log_fn("timeline.json: PARSE ERROR — invalid JSON format");
             }
+        } else {
+            log_fn("timeline.json: READ ERROR — cannot open file");
         }
+    } else {
+        log_fn("timeline.json: NOT FOUND");
     }
 
     // ─── Fallback: рівномірний розподіл якщо timeline порожній ───────────────
@@ -129,7 +136,7 @@ pub fn run_montage(
         let clip_dur = total_dur / files.len() as f64;
         for f in files {
             let is_vid = is_video_ext(&f);
-            clips.push(Clip { path: f, duration: clip_dur, is_video: is_vid });
+            clips.push(Clip { path: Some(f), duration: clip_dur, is_video: is_vid });
         }
     }
 
@@ -154,8 +161,13 @@ pub fn run_montage(
 
     // ─── Параметри переходу ───────────────────────────────────────────────────
     let n = clips.len();
-    // Обмежуємо тривалість переходу до половини найкоротшого кліпу
-    let min_clip_dur = clips.iter().map(|c| c.duration).fold(f64::INFINITY, f64::min);
+    // Кількість реальних медіа-файлів (black-кліпи не мають input-файлу)
+    let media_file_count = clips.iter().filter(|c| c.path.is_some()).count();
+    // Обмежуємо тривалість переходу до половини найкоротшого медіа-кліпу
+    let min_clip_dur = clips.iter()
+        .filter(|c| c.path.is_some())
+        .map(|c| c.duration)
+        .fold(f64::INFINITY, f64::min);
     let t = if transition == "none" || n < 2 {
         0.0f64
     } else {
@@ -166,6 +178,7 @@ pub fn run_montage(
     // ─── Будуємо фільтр-граф ─────────────────────────────────────────────────
     let mut filter_parts: Vec<String> = Vec::new();
 
+    let mut file_idx = 0usize; // input-файл index (тільки для media-кліпів, не для black)
     for (i, clip) in clips.iter().enumerate() {
         // При xfade кожен кліп (крім останнього) потрібно подовжити на t,
         // щоб зберегти синхронізацію: cumulative_dur[k] = start_secs[k+1].
@@ -177,15 +190,22 @@ pub fn run_montage(
         let adj_dur = adj_dur.max(0.05);
         let frames = (adj_dur * fps as f64).round().max(1.0) as u64;
 
-        if clip.is_video {
+        if clip.path.is_none() {
+            // Чорна заставка — генерується FFmpeg inline без input-файлу
             filter_parts.push(format!(
-                "[{i}:v]trim=duration={adj_dur:.6},setpts=PTS-STARTPTS,\
+                "color=black:s=1920x1080:r={fps}:d={adj_dur:.6},\
+                format=yuv420p,setsar=1,settb=AVTB[v{i}_final]"
+            ));
+        } else if clip.is_video {
+            filter_parts.push(format!(
+                "[{file_idx}:v]trim=duration={adj_dur:.6},setpts=PTS-STARTPTS,\
                 scale=1920:1080:force_original_aspect_ratio=increase,\
                 crop=1920:1080,format=yuv420p,setsar=1,fps={fps},settb=AVTB[v{i}_final]"
             ));
+            file_idx += 1;
         } else {
             filter_parts.push(format!(
-                "[{i}:v]scale=1920:1080:force_original_aspect_ratio=increase,\
+                "[{file_idx}:v]scale=1920:1080:force_original_aspect_ratio=increase,\
                 crop=1920:1080,format=yuv420p,setsar=1[v{i}_up]"
             ));
             filter_parts.push(format!(
@@ -193,6 +213,7 @@ pub fn run_montage(
                 d={frames}:s=1920x1080:fps={fps},format=yuv420p,setsar=1,settb=AVTB,\
                 trim=duration={adj_dur:.6},setpts=PTS-STARTPTS[v{i}_final]"
             ));
+            file_idx += 1;
         }
     }
 
@@ -336,7 +357,7 @@ pub fn run_montage(
             };
 
             // Індекс цього input у FFmpeg (clips + 1 аудіо + попередні тригери)
-            let input_idx = n + 1 + trigger_input_paths.len();
+            let input_idx = media_file_count + 1 + trigger_input_paths.len();
             trigger_input_paths.push((tr.path.clone(), is_video));
 
             active_triggers.push(ActiveTrigger {
@@ -407,7 +428,7 @@ pub fn run_montage(
 
     // ─── FFmpeg аргументи ─────────────────────────────────────────────────────
     let ffmpeg = crate::bundle::ffmpeg_path();
-    let audio_idx = n;
+    let audio_idx = media_file_count;
     let bitr = format!("{bitrate_mbps}M");
     let bufsize = format!("{}M", bitrate_mbps * 2);
 
@@ -418,7 +439,9 @@ pub fn run_montage(
     ];
 
     for clip in &clips {
-        args.extend(["-i".into(), clip.path.clone()]);
+        if let Some(ref path) = clip.path {
+            args.extend(["-i".into(), path.clone()]);
+        }
     }
     args.extend(["-i".into(), audio_rel]);
 
