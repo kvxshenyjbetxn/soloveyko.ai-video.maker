@@ -64,6 +64,7 @@ pub fn draw_subtitles_section(
             .width(ui.available_width())
             .show_ui(ui, |ui| {
                 ui.selectable_value(subtitles_service, "Whisper".to_string(), "Whisper");
+                ui.selectable_value(subtitles_service, "WhisperAMD".to_string(), "Whisper AMD");
                 ui.selectable_value(subtitles_service, "WhisperX".to_string(), "WhisperX");
                 ui.selectable_value(subtitles_service, "AssemblyAI".to_string(), "AssemblyAI");
             });
@@ -71,6 +72,19 @@ pub fn draw_subtitles_section(
         // Налаштування Whisper
         if subtitles_service == "Whisper" {
             draw_whisper_settings(
+                ui,
+                language,
+                whisper_language,
+                whisper_model,
+                whisper_max_line_width,
+                whisper_model_download,
+                &ctx,
+            );
+        }
+
+        // Налаштування Whisper AMD
+        if subtitles_service == "WhisperAMD" {
+            draw_whisper_amd_settings(
                 ui,
                 language,
                 whisper_language,
@@ -207,6 +221,107 @@ fn draw_whisper_settings(
     ui.add_space(6.0);
 
     // Статус моделі та кнопка завантаження
+    let download_state = whisper_model_download.lock().unwrap().clone();
+    let model_exists = crate::bundle::whisper_model_exists(whisper_model);
+
+    match download_state {
+        BinaryDownload::Downloading(ref progress) => {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(format!("⬇ {}...", progress))
+                        .weak()
+                        .size(11.0),
+                )
+                .wrap(),
+            );
+        }
+        BinaryDownload::Failed(ref err) => {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(format!("{} {}", translate(language, "subtitles_model_failed"), err))
+                        .color(egui::Color32::from_rgb(231, 76, 60))
+                        .size(11.0),
+                )
+                .wrap(),
+            );
+            ui.add_space(4.0);
+            if ui.small_button(translate(language, "subtitles_model_retry")).clicked() {
+                start_model_download(whisper_model, whisper_model_download, ctx);
+            }
+        }
+        _ => {
+            if model_exists {
+                ui.label(
+                    egui::RichText::new(translate(language, "subtitles_model_downloaded"))
+                        .color(egui::Color32::from_rgb(46, 204, 113))
+                        .size(11.0),
+                );
+            } else {
+                let size_mb = crate::bundle::whisper_model_size_mb(whisper_model);
+                let btn_text = if size_mb > 0.0 {
+                    format!("{} (~{:.0} MB)", translate(language, "subtitles_model_download_btn"), size_mb)
+                } else {
+                    translate(language, "subtitles_model_download_btn").to_string()
+                };
+
+                if ui.add_sized(
+                    [ui.available_width(), 22.0],
+                    egui::Button::new(egui::RichText::new(btn_text).size(12.0)),
+                ).clicked() {
+                    start_model_download(whisper_model, whisper_model_download, ctx);
+                }
+            }
+        }
+    }
+}
+
+/// Налаштування Whisper AMD — ті самі ggml-моделі що й у Whisper, AMD GPU оптимізація.
+fn draw_whisper_amd_settings(
+    ui: &mut egui::Ui,
+    language: Language,
+    whisper_language: &mut String,
+    whisper_model: &mut String,
+    whisper_max_line_width: &mut usize,
+    whisper_model_download: &Arc<Mutex<BinaryDownload>>,
+    ctx: &egui::Context,
+) {
+    ui.add_space(8.0);
+
+    // Попередження якщо whisper-amd ще не встановлено
+    if !crate::bundle::whisper_amd_local_exists() {
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(translate(language, "subtitles_whisper_amd_not_installed"))
+                    .color(egui::Color32::from_rgb(255, 200, 0))
+                    .size(11.0),
+            )
+            .wrap(),
+        );
+        ui.add_space(4.0);
+    }
+
+    draw_lang_and_model(
+        ui, language,
+        "whisper_amd_lang_combo", "whisper_amd_model_combo",
+        WHISPER_MODELS,
+        whisper_language, whisper_model,
+    );
+
+    // Максимальна кількість символів на сегмент (--max-len)
+    ui.label(egui::RichText::new(translate(language, "subtitles_whisper_max_len_label")).strong());
+    ui.add_space(4.0);
+    let mut max_len = *whisper_max_line_width;
+    let label_text = if max_len == 0 { "∞".to_string() } else { max_len.to_string() };
+    ui.horizontal(|ui| {
+        if ui.add(egui::Slider::new(&mut max_len, 0..=200).show_value(false)).changed() {
+            *whisper_max_line_width = max_len;
+        }
+        ui.label(egui::RichText::new(label_text).monospace());
+    });
+
+    ui.add_space(6.0);
+
+    // Статус моделі та кнопка завантаження (ті самі ggml-моделі)
     let download_state = whisper_model_download.lock().unwrap().clone();
     let model_exists = crate::bundle::whisper_model_exists(whisper_model);
 

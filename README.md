@@ -81,7 +81,7 @@ src/
 │   │   ├── translation_control.rs — draw_translation_control_window: вікно контролю перекладу + розширена перегенерація
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
 │   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт)
-│   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI, мова, модель, стиль: шрифт/колір/розмір/відступ/karaoke, вибір шрифту з popup-прев'ю, завантаження ggml-моделі для Whisper, ключ AssemblyAI)
+│   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI/Whisper AMD, мова, модель, стиль: шрифт/колір/розмір/відступ/karaoke, вибір шрифту з popup-прев'ю, завантаження ggml-моделі для Whisper/Whisper AMD, ключ AssemblyAI)
 │   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами)
 │   └── settings/
 │       ├── mod.rs               — draw_settings: вкладки налаштувань
@@ -184,7 +184,7 @@ src/
 
 Права бічна панель з 9 секціями у порядку: Шаблони → Шлях збереження → АПІ → Контроль → Переклад → Озвучка → Відеоряд → Субтитри → Монтаж.
 
-- **Секція «Субтитри»** — вибір сервісу (**Whisper**, **WhisperX** або **AssemblyAI**), мови розпізнавання (авто + 14 мов), моделі та повзунок **«Макс. символів на сегмент»** (`whisper_max_line_width`, 0–200, де 0 = ∞). При виборі **Whisper** — відображається список ggml-моделей (`tiny` / `base` / `small` / `medium` / `large-v3` / `large-v3-turbo`) та статус: ✓ завантажено / кнопка завантаження з розміром (~MB) / прогрес / помилка з кнопкою «Повторити». При виборі **WhisperX** — відображається список faster-whisper моделей без кнопки скачування (моделі завантажує сам WhisperX при першому запуску). При виборі **AssemblyAI** — відображається поле API-ключа з кнопкою «Перевірити». Завантаження ggml-моделей відбувається у фоновому потоці через `Arc<Mutex<BinaryDownload>>` — той самий механізм, що й для ffmpeg у вікні привітання.
+- **Секція «Субтитри»** — вибір сервісу (**Whisper**, **WhisperX**, **AssemblyAI** або **Whisper AMD**), мови розпізнавання (авто + 14 мов), моделі та повзунок **«Макс. символів на сегмент»** (`whisper_max_line_width`, 0–200, де 0 = ∞). При виборі **Whisper** — відображається список ggml-моделей (`tiny` / `base` / `small` / `medium` / `large-v3` / `large-v3-turbo`) та статус: ✓ завантажено / кнопка завантаження з розміром (~MB) / прогрес / помилка з кнопкою «Повторити». При виборі **WhisperX** — відображається список faster-whisper моделей без кнопки скачування (моделі завантажує сам WhisperX при першому запуску). При виборі **AssemblyAI** — відображається поле API-ключа з кнопкою «Перевірити». При виборі **Whisper AMD** — відображається той самий список ggml-моделей що й для Whisper (файли спільні); якщо `whisper-amd` не встановлено — показується жовте попередження з інструкцією відкрити вікно привітання. Завантаження ggml-моделей відбувається у фоновому потоці через `Arc<Mutex<BinaryDownload>>` — той самий механізм, що й для ffmpeg у вікні привітання.
 
   **Стиль субтитрів (доступний для всіх сервісів):** вибір шрифту з popup-прев'ю, колір тексту (`egui::color_edit_button_srgb`), розмір шрифту (повзунок, 8–72 px), вертикальний відступ (`margin_v`, 0–200 px). **Karaoke-ефект** (`subtitle_karaoke`) — доступний лише для **WhisperX** та **AssemblyAI** (бо тільки вони надають word-level timestamps). При увімкненому karaoke `subtitle.ass` генерується з `\kf`-тегами — кожне слово підсвічується жовтим у момент вимовляння.
 
@@ -245,12 +245,12 @@ src/
 
 **Джерело тексту:** якщо переклад увімкнено — озвучується перекладений текст. Якщо переклад вимкнено — оригінальний текст (`settings.text`). Картка задачі показує це окремим рядком: "Переклад" (кольоровий за статусом) або "Оригінал" (завжди зелений, бо текст уже є).
 
-#### Субтитри (Whisper / WhisperX / AssemblyAI)
+#### Субтитри (Whisper / WhisperX / AssemblyAI / Whisper AMD)
 
 Реалізовані у `src/core/pipeline/mod.rs` як частина гілки AV після озвучки.
 
 - **`subtitles_enabled` ≠ "виконувати субтитри".** Цей прапорець контролює лише **burn-in** (накладання тексту на відео у монтажі). Генерація субтитрів запускається завжди, якщо є озвучка (`voiceover_enabled`) — бо `subtitle.srt` потрібен для синхронізації відеоряду з аудіо у `build_timeline`.
-- **Відображення в картці задачі:** блок «Субтитри» показується якщо `voiceover_enabled`. Перевірка конкретного сервісу відсутня — всі три сервіси відображаються однаково.
+- **Відображення в картці задачі:** блок «Субтитри» показується якщо `voiceover_enabled`. Перевірка конкретного сервісу відсутня — всі чотири сервіси відображаються однаково.
 - **Єдина схема іменування файлів:** незалежно від сервісу, всі субтитри зберігаються як `subtitle.srt`, `subtitle.ass` та `subtitle.json`. Ніяких `voice.srt`, `voice.ass`, `karaoke.ass`.
 - **Автоматична генерація ASS:** після кожного SRT-файлу одразу генерується `subtitle.ass` через `srt_to_ass(font_name, font_size, color, margin_v)` зі стилем запеченим у заголовку (`FontName`, `FontSize`, `PrimaryColour` у форматі `&H00BBGGRR`, `MarginV`). Шрифт береться з `settings.subtitle_font` і вбудовується у поле `Fontname` ASS Style. Монтаж завжди використовує ASS якщо він є.
 - **Джерело аудіо:** спочатку шукає `voice.wav`, потім `voice.mp3`. Якщо нічого — задача провалюється.
@@ -274,10 +274,16 @@ src/
 - Вихід: `subtitle.srt` → `subtitle.ass`.
 - `AssemblyAILimiter`: семафор, фіксовано 5 одночасних запитів.
 
+**Whisper AMD (`run_whisper_amd`, лише Windows):**
+- Бінарник: `bin/whisper-amd/main.exe`. Аргументи відрізняються від whisper.cpp: `-f <audio>`, `-m <ggml-шлях>`, `-osrt` (ключ без значення), `-l <код>` (без для авто), `-ml N` (якщо `whisper_max_line_width > 0`). **Немає** `-of`, немає `--split-on-word`.
+- SRT виводиться поряд з аудіофайлом (`voice.srt`), Rust перейменовує в `subtitle.srt`. Якщо аудіо — `voice.wav`, очікується `voice.srt`.
+- Використовує ті самі ggml-моделі що й Whisper (`bin/models/ggml-*.bin`) — повторне завантаження не потрібне.
+- Реалізований лише на Windows (`#[cfg(target_os = "windows")]` для завантаження бінарника); на macOS — пропускається.
+
 **Karaoke-ефект:**
 - Якщо `subtitle_karaoke == true` і сервіс WhisperX або AssemblyAI — після генерації `subtitle.ass` він **перезаписується** karaoke-версією через `generate_karaoke_ass()`.
 - Karaoke ASS містить `\kf<centisecs>` теги — кожне слово підсвічується жовтим (`SecondaryColour`) у момент вимовляння. Слова групуються у рядки по ~50 символів або ~5 секунд.
-- Для Whisper karaoke недоступний — немає word-level timestamps.
+- Для Whisper та Whisper AMD karaoke недоступний — немає word-level timestamps.
 
 #### Відеоряд (`timeline/`)
 
@@ -387,6 +393,9 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`download_whisperx(on_progress)`** — завантажує zip-архів WhisperX та розпаковує папку у `bin_dir()` зберігаючи всю внутрішню структуру. Підтримується на macOS (`whisperx_mac.zip` → папка `whisperx_mac/`) та Windows (`whisperx_win.zip` → папка `whisperx_win/`). Рекурсивне розпакування через `extract_folder_from_zip` (#[cfg(any(target_os = "macos", target_os = "windows"))]): ітерує по всіх записах zip, зберігає права виконання з unix_mode архіву (`unix_mode & 0o111 != 0` → chmod 755). **Symlink-підтримка:** unix mode `0o170000 & entry_mode == 0o120000` → замість запису байтів створюється реальний symlink через `std::os::unix::fs::symlink`. Це критично для PyInstaller-бандлів де `_internal/Python` є симлінком на `Python.framework/Versions/3.11/Python` — без цього PyInstaller падав з "slice is not valid mach-o file". На Windows права виконання не встановлюються (`.exe` не потребує). Захист від path traversal: записи з `..` пропускаються.
 - **`whisperx_local_exists()`** — перевіряє наявність папки `whisperx_win/` (Windows) або `whisperx_mac/` (macOS) у `bin_dir()` через `is_dir()`. Константа `WHISPERX_DIR_NAME` є платформозалежною через `#[cfg]`.
 - **`whisperx_cmd_path()`** — повертає повний шлях до виконуваного файлу CLI: `bin_dir/whisperx_win/whisperx_cli.exe` (Windows) або `bin_dir/whisperx_mac/whisperx_cli` (macOS). Використовується в `run_whisperx` замість хардкодованих шляхів.
+- **`whisper_amd_local_exists()`** — перевіряє наявність папки `whisper-amd/` у `bin_dir()` через `is_dir()`. Використовується у welcome.rs (відображення статусу) та `run_whisper_amd` (перевірка перед запуском).
+- **`whisper_amd_cmd_path()`** — повертає `bin_dir/whisper-amd/main.exe` (Windows) або `bin_dir/whisper-amd/main` (macOS). Платформозалежна константа `WHISPER_AMD_CLI_NAME`.
+- **`download_whisper_amd(on_progress)` (Windows-only)** — завантажує `whisper-amd.zip` з GitHub releases та розпаковує через `extract_folder_from_zip` у `bin_dir()`. Захищений через `#[cfg(target_os = "windows")]`. Пропускає якщо папка вже існує. Використовує той самий патерн прогресу що й інші бінарники.
 - **Управління ggml-моделями:**
   - `models_dir()` — `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/models/`
   - `whisper_model_filename(model)` — `ggml-{model}.bin`
@@ -407,6 +416,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 **Whisper перевіряється** (`check_whisper`): на відміну від FFmpeg, не запускає бінарник — лише перевіряє `bundle::whisper_local_exists()`. Якщо файлу нема — запускає `bundle::download_whisper` з прогресом. Після завершення знову перевіряє `whisper_local_exists()`. Результат: `ToolStatus::Installed("bundled")`.
 
 **WhisperX перевіряється** (`check_whisperx`): перевіряє `bundle::whisperx_local_exists()` (наявність папки `whisperx_win/` або `whisperx_mac/` залежно від ОС). Якщо відсутня — запускає `bundle::download_whisperx`. Авто-завантаження підтримується на macOS та Windows через `#[cfg(any(target_os = "macos", target_os = "windows"))]`; на інших платформах (`_whisperx_download` ігнорується, статус залишається `NotInstalled`).
+
+**Whisper AMD — опціональна установка (лише Windows):** на відміну від решти бінарників, Whisper AMD **не перевіряється автоматично** при запуску програми. У вікні привітання є окремий рядок з описом («Whisper AMD — замінник Whisper з підтримкою AMD GPU») та мітками «опційно». Містить кнопку «Встановити» (лише на Windows). Після кліку запускається `start_whisper_amd_download()` у фоновому потоці через `Arc<Mutex<BinaryDownload>>`. `ToolChecks::restart()` **не скидає** `whisper_amd_download` в `Idle` якщо бінарник вже встановлено — уникаючи повторного завантаження при «↺ Перевірити знову».
 
 **`BinaryDownload` (раніше `FfmpegDownload`):** загальний тип для всіх бінарників з авто-завантаженням. `FfmpegDownload` залишений як type alias для зворотної сумісності всередині файлу. Функція `draw_download_row` (раніше `draw_ffmpeg_row`) тепер використовується для обох: FFmpeg та Whisper.
 
@@ -538,6 +549,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **Stderr монтажу читається у окремому потоці.** При `-progress pipe:1` FFmpeg пише прогрес у stdout, а помилки у stderr. Якщо не дренувати stderr — системний pipe-буфер (~64 KB) може переповнитись і FFmpeg зависне. Рішення: `stderr` забирається у `child.stderr.take()` і передається у `std::thread::spawn` перед початком читання stdout.
 
 - **Бандлований whisper — це whisper.cpp, а не openai-whisper.** Аргументи відрізняються критично: openai-whisper приймає `--output_format srt` + ім'я моделі (`-m base`), тоді як whisper.cpp вимагає `-m <шлях до ggml-файлу>`, `--output-srt` (boolean flag), `-of <stem>` (stem без розширення — `subtitle`, не `subtitle.srt`). Підміна формату аргументів призведе до помилки запуску.
+
+- **Whisper AMD має інший CLI ніж whisper.cpp, хоч і використовує ті самі ggml-моделі.** Ключові відмінності: вхідний файл через `-f <шлях>` (не позиційний аргумент), вихідний SRT через `-osrt` без значення (не `--output-srt`), максимальна довжина рядка через `-ml N` (не `--max-len N`), немає прапорця `-of` для вибору stem виводу — SRT завжди записується поряд з аудіофайлом з тим самим ім'ям (`voice.wav` → `voice.srt`), немає `--split-on-word`. Rust після запуску перейменовує `voice.srt` → `subtitle.srt`. Ця відмінність виявлена на практиці — при помилці `unknown argument: -of` CLI виводить довідку з реальним інтерфейсом.
 
 - **Моделі whisper.cpp завантажуються у `bin/models/`.** Ggml-файли `ggml-{model}.bin` розміщуються в `<UserConfigDir>/Soloveyko.AI-Video.Maker/bin/models/`. `large-v3-turbo` (~1.6 GB) доступна для завантаження з HuggingFace. Whisper-бінарник не поставляється з моделями — кожну потрібно завантажувати окремо.
 

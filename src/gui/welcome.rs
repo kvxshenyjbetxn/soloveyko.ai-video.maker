@@ -32,6 +32,8 @@ pub struct ToolChecks {
     pub whisper_download: Arc<Mutex<BinaryDownload>>,
     pub whisperx: Arc<Mutex<ToolStatus>>,
     pub whisperx_download: Arc<Mutex<BinaryDownload>>,
+    /// Опційний AMD-оптимізований whisper — не завантажується автоматично.
+    pub whisper_amd_download: Arc<Mutex<BinaryDownload>>,
 }
 
 impl ToolChecks {
@@ -45,6 +47,7 @@ impl ToolChecks {
             whisper_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
             whisperx: Arc::new(Mutex::new(ToolStatus::Checking)),
             whisperx_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
+            whisper_amd_download: Arc::new(Mutex::new(BinaryDownload::Idle)),
         }
     }
 
@@ -58,6 +61,10 @@ impl ToolChecks {
         *self.whisper_download.lock().unwrap() = BinaryDownload::Idle;
         *self.whisperx.lock().unwrap() = ToolStatus::Checking;
         *self.whisperx_download.lock().unwrap() = BinaryDownload::Idle;
+        // whisper_amd — тільки скидаємо до Idle, не авто-скачуємо
+        if !crate::bundle::whisper_amd_local_exists() {
+            *self.whisper_amd_download.lock().unwrap() = BinaryDownload::Idle;
+        }
         self.start(ctx);
     }
 
@@ -318,6 +325,13 @@ pub fn draw_welcome_dialog(
             draw_download_row(ui, "Whisper", &whisper_status, &whisper_download, translate(language, "welcome_whisper_desc"), language);
             ui.add_space(6.0);
             draw_download_row(ui, "WhisperX", &whisperx_status, &whisperx_download, translate(language, "welcome_whisperx_desc"), language);
+            ui.add_space(6.0);
+
+            let whisper_amd_download = checks.whisper_amd_download.lock().unwrap().clone();
+            draw_whisper_amd_row(
+                ui, language, &whisper_amd_download,
+                Arc::clone(&checks.whisper_amd_download), ctx,
+            );
 
             ui.add_space(10.0);
 
@@ -376,6 +390,101 @@ fn draw_tool_row(
             });
             ui.label(egui::RichText::new(description).weak().size(11.0));
         });
+    });
+}
+
+/// Рядок для опційного встановлення Whisper AMD (тільки Windows, без авто-завантаження).
+fn draw_whisper_amd_row(
+    ui: &mut egui::Ui,
+    language: Language,
+    download: &BinaryDownload,
+    download_arc: Arc<Mutex<BinaryDownload>>,
+    ctx: &egui::Context,
+) {
+    let is_installed = crate::bundle::whisper_amd_local_exists();
+
+    ui.horizontal(|ui| {
+        ui.set_min_height(30.0);
+
+        // Іконка статусу
+        match download {
+            BinaryDownload::Downloading(_) => { ui.spinner(); }
+            _ if is_installed => {
+                ui.label(egui::RichText::new("✓").color(egui::Color32::from_rgb(46, 204, 113)).size(16.0).strong());
+            }
+            BinaryDownload::Failed(_) => {
+                ui.label(egui::RichText::new("✗").color(egui::Color32::from_rgb(231, 76, 60)).size(16.0).strong());
+            }
+            _ => {
+                ui.label(egui::RichText::new("○").color(egui::Color32::GRAY).size(16.0));
+            }
+        }
+
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Whisper AMD").strong());
+
+                match download {
+                    BinaryDownload::Downloading(label) => {
+                        ui.label(egui::RichText::new(label).color(egui::Color32::from_rgb(255, 200, 0)).size(11.0));
+                    }
+                    BinaryDownload::Failed(err) => {
+                        ui.label(egui::RichText::new(err).color(egui::Color32::from_rgb(231, 76, 60)).size(11.0));
+                    }
+                    _ if is_installed => {
+                        ui.label(egui::RichText::new("встановлено").color(egui::Color32::from_rgb(46, 204, 113)).size(11.0));
+                    }
+                    _ => {
+                        ui.label(egui::RichText::new(translate(language, "welcome_whisper_amd_optional")).weak().size(11.0));
+                    }
+                }
+            });
+
+            ui.label(egui::RichText::new(translate(language, "welcome_whisper_amd_desc")).weak().size(11.0));
+
+            // Кнопка встановлення або повтору — тільки на Windows, якщо не встановлено
+            #[cfg(target_os = "windows")]
+            if !is_installed {
+                match download {
+                    BinaryDownload::Idle | BinaryDownload::Done => {
+                        ui.add_space(2.0);
+                        if ui.small_button(translate(language, "welcome_whisper_amd_install_btn")).clicked() {
+                            start_whisper_amd_download(download_arc, ctx.clone());
+                        }
+                    }
+                    BinaryDownload::Failed(_) => {
+                        ui.add_space(2.0);
+                        if ui.small_button(translate(language, "welcome_recheck_btn")).clicked() {
+                            start_whisper_amd_download(download_arc, ctx.clone());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+    });
+}
+
+/// Запускає завантаження whisper-amd у фоновому потоці (тільки Windows).
+#[cfg(target_os = "windows")]
+fn start_whisper_amd_download(download: Arc<Mutex<BinaryDownload>>, ctx: egui::Context) {
+    *download.lock().unwrap() = BinaryDownload::Downloading("підготовка...".to_string());
+    ctx.request_repaint();
+
+    std::thread::spawn(move || {
+        let dl = Arc::clone(&download);
+        let ctx2 = ctx.clone();
+
+        let result = crate::bundle::download_whisper_amd(move |label| {
+            *dl.lock().unwrap() = BinaryDownload::Downloading(label);
+            ctx2.request_repaint();
+        });
+
+        match result {
+            Ok(()) => *download.lock().unwrap() = BinaryDownload::Done,
+            Err(e) => *download.lock().unwrap() = BinaryDownload::Failed(e),
+        }
+        ctx.request_repaint();
     });
 }
 

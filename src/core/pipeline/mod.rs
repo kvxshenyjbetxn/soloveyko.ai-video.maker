@@ -429,6 +429,116 @@ fn run_assemblyai(
     }
 }
 
+/// Транскрибує аудіо через Whisper AMD (AMD GPU-оптимізований whisper.cpp).
+/// Використовує ті самі ggml-моделі що й звичайний Whisper.
+fn run_whisper_amd(
+    settings: &crate::queue::JobSettings,
+    job_id: u64,
+    job_name: &str,
+    subtitles_stage: &std::sync::Arc<std::sync::Mutex<crate::queue::StageStatus>>,
+    ctx: &egui::Context,
+) -> Result<(), String> {
+    let reason = if settings.subtitles_enabled {
+        "Starting subtitle generation via Whisper AMD (burn-in enabled)..."
+    } else {
+        "Starting subtitle generation via Whisper AMD (for timeline sync, burn-in disabled)..."
+    };
+    crate::logger::log_job(job_id, job_name, reason);
+    *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Running;
+    ctx.request_repaint();
+
+    if !crate::bundle::whisper_amd_local_exists() {
+        let msg = "Whisper AMD not found. Install it via the Welcome window.".to_string();
+        crate::logger::log_job(job_id, job_name, &format!("Subtitles error: {}", msg));
+        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        return Err(msg);
+    }
+
+    let save_dir = std::path::Path::new(&settings.save_path);
+    let model_path = crate::bundle::whisper_model_path(&settings.whisper_model);
+    if !model_path.exists() {
+        let msg = format!(
+            "Subtitles error: model '{}' not found. Download it in the subtitles settings.",
+            settings.whisper_model
+        );
+        crate::logger::log_job(job_id, job_name, &msg);
+        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        return Err(msg);
+    }
+
+    let audio_path = if save_dir.join("voice.wav").exists() {
+        save_dir.join("voice.wav")
+    } else if save_dir.join("voice.mp3").exists() {
+        save_dir.join("voice.mp3")
+    } else {
+        let msg = "Subtitles: audio file not found (voice.wav / voice.mp3)".to_string();
+        crate::logger::log_job(job_id, job_name, &format!("Subtitles error: {}", msg));
+        *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+        return Err(msg);
+    };
+
+    // Whisper AMD зберігає SRT поруч з аудіо: voice.srt, потім перейменовуємо у subtitle.srt
+    let audio_stem = audio_path.file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("voice");
+    let generated_srt = save_dir.join(format!("{}.srt", audio_stem));
+
+    let whisper_amd_cmd = crate::bundle::whisper_amd_cmd_path();
+    let mut args: Vec<String> = vec![
+        "-f".to_string(), audio_path.to_str().unwrap_or("voice.wav").to_string(),
+        "-m".to_string(), model_path.to_str().unwrap().to_string(),
+        "-osrt".to_string(),
+    ];
+    if settings.whisper_language != "auto" {
+        args.push("-l".to_string());
+        args.push(settings.whisper_language.clone());
+    }
+    if settings.whisper_max_line_width > 0 {
+        args.push("-ml".to_string());
+        args.push(settings.whisper_max_line_width.to_string());
+    }
+
+    crate::logger::log_job(job_id, job_name, &format!("Running: {} {}", whisper_amd_cmd.display(), args.join(" ")));
+
+    match std::process::Command::new(&whisper_amd_cmd).args(&args).output() {
+        Ok(out) if out.status.success() => {
+            let srt_path = save_dir.join("subtitle.srt");
+
+            // Перейменовуємо voice.srt → subtitle.srt
+            if generated_srt.exists() && generated_srt != srt_path {
+                if let Err(e) = std::fs::rename(&generated_srt, &srt_path) {
+                    crate::logger::log_job(job_id, job_name, &format!("Whisper AMD: failed to rename SRT: {}", e));
+                }
+            }
+
+            crate::logger::log_job(job_id, job_name, "Subtitles saved: subtitle.srt (Whisper AMD)");
+
+            if let Ok(srt) = std::fs::read_to_string(&srt_path) {
+                let ass = srt_to_ass(&srt, &settings.subtitle_font, settings.subtitle_font_size, settings.subtitle_color, settings.subtitle_margin_v);
+                let _ = std::fs::write(save_dir.join("subtitle.ass"), &ass);
+            }
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Done;
+            ctx.request_repaint();
+            Ok(())
+        }
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let msg = if !stderr.is_empty() { stderr.to_string() } else { stdout.to_string() };
+            let short = format!("Whisper AMD error: {}", msg.chars().take(120).collect::<String>());
+            crate::logger::log_job(job_id, job_name, &format!("Whisper AMD error: {}", msg.trim()));
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+            Err(short)
+        }
+        Err(e) => {
+            let msg = format!("Whisper AMD launch error: {}", e);
+            crate::logger::log_job(job_id, job_name, &format!("Whisper AMD not found or failed to start: {}", e));
+            *subtitles_stage.lock().unwrap() = crate::queue::StageStatus::Failed;
+            Err(msg)
+        }
+    }
+}
+
 /// Виконує лише генерацію субтитрів (без озвучки).
 /// Використовується як для основного пайплайну, так і для повтору субтитрів.
 fn run_subtitles_only(
@@ -442,6 +552,8 @@ fn run_subtitles_only(
         run_whisperx(settings, job_id, job_name, subtitles_stage, ctx)?;
     } else if settings.subtitles_service == "AssemblyAI" {
         run_assemblyai(settings, job_id, job_name, subtitles_stage, ctx)?;
+    } else if settings.subtitles_service == "WhisperAMD" {
+        run_whisper_amd(settings, job_id, job_name, subtitles_stage, ctx)?;
     } else if settings.subtitles_service == "Whisper" {
         let reason = if settings.subtitles_enabled {
             "Starting subtitle generation via Whisper (burn-in enabled)..."

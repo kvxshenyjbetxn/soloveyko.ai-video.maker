@@ -46,6 +46,17 @@ const WHISPERX_CLI_NAME: &str = "whisperx_cli.exe";
 #[cfg(not(target_os = "windows"))]
 const WHISPERX_CLI_NAME: &str = "whisperx_cli";
 
+/// Тільки Windows — AMD GPU-оптимізований whisper (zip → папка whisper-amd/).
+#[cfg(target_os = "windows")]
+const WHISPER_AMD_URL: &str = "https://github.com/kvxshenyjbetxn/repo.releases/releases/download/all.bundle/whisper-amd.zip";
+
+const WHISPER_AMD_DIR_NAME: &str = "whisper-amd";
+
+#[cfg(target_os = "windows")]
+const WHISPER_AMD_CLI_NAME: &str = "main.exe";
+#[cfg(not(target_os = "windows"))]
+const WHISPER_AMD_CLI_NAME: &str = "main";
+
 /// Папка для бандлованих бінарників: <UserConfigDir>/Soloveyko.AI-Video.Maker/bin/
 pub fn bin_dir() -> PathBuf {
     dirs::config_dir()
@@ -95,6 +106,34 @@ pub fn whisperx_local_exists() -> bool {
 /// Повний шлях до виконуваного файлу whisperx_cli (платформозалежно).
 pub fn whisperx_cmd_path() -> PathBuf {
     bin_dir().join(WHISPERX_DIR_NAME).join(WHISPERX_CLI_NAME)
+}
+
+/// Перевіряє, чи є папка whisper-amd у локальному bin_dir.
+pub fn whisper_amd_local_exists() -> bool {
+    bin_dir().join(WHISPER_AMD_DIR_NAME).is_dir()
+}
+
+/// Повний шлях до виконуваного файлу whisper-amd (платформозалежно).
+pub fn whisper_amd_cmd_path() -> PathBuf {
+    bin_dir().join(WHISPER_AMD_DIR_NAME).join(WHISPER_AMD_CLI_NAME)
+}
+
+/// Завантажує whisper-amd у bin_dir (розпаковує папку з zip).
+/// Тільки Windows.
+#[cfg(target_os = "windows")]
+pub fn download_whisper_amd(on_progress: impl FnMut(String)) -> Result<(), String> {
+    let mut on_progress = on_progress;
+    let dir = bin_dir();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Не вдалося створити папку bin: {}", e))?;
+
+    if whisper_amd_local_exists() {
+        return Ok(());
+    }
+
+    let bytes = download_to_bytes(WHISPER_AMD_URL, "whisper-amd", &mut on_progress)?;
+    extract_folder_from_zip(&bytes, &dir)?;
+    Ok(())
 }
 
 /// Завантажує whisperx у bin_dir (розпаковує папку з zip).
