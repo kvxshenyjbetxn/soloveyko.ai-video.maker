@@ -58,6 +58,8 @@ src/
 ├── gui/
 │   ├── mod.rs                   — реекспорт субмодулів
 │   ├── agent_chat_window.rs     — draw_agent_chat_window: вікно чату з агентом (история повідомлень, введення, відправка через --resume, кнопка "Продовжити пайплайн")
+│   ├── montage_editor/
+│   │   └── mod.rs               — draw_montage_editor_window: повноцінний редактор монтажу (медіа пул, прев'ю через ffmpeg pipe, інспектор кліпу, таймлінія, кнопка "Продовжити рендер")
 │   ├── task_history.rs          — draw_task_history_panel: ліва фіксована панель (190px) на вкладці Main з историчними задачами; при кліку відновлює налаштування пайплайну і текст сценарію
 │   ├── topbar/
 │   │   ├── mod.rs               — draw_navigation_bar, draw_status_bar, draw_chip, draw_balance_chip, thread_load_color
@@ -78,7 +80,7 @@ src/
 │   │   ├── mod.rs               — draw_pipeline_panel: головна функція панелі + toggle_switch + validate_and_enqueue + build_job_settings
 │   │   ├── resume.rs            — FoundFiles, ResumePendingData, draw_resume_dialog: перевірка наявних файлів задачі та діалог відновлення з чекбоксами
 │   │   ├── api.rs               — секція АПІ-ключів (OpenRouter, VoiceBot, Googler)
-│   │   ├── control.rs           — секція "Контроль" (перемикач контролю перекладу + чекбокс авто-відкриття + перемикач контролю зображень + перемикач контролю агента)
+│   │   ├── control.rs           — секція "Контроль" (перемикач контролю перекладу + чекбокс авто-відкриття + перемикач контролю зображень + перемикач контролю агента + перемикач контролю монтажу)
 │   │   ├── templates.rs         — секція списку збережених шаблонів (завантаження/видалення)
 │   │   ├── storage.rs           — секція "Шлях збереження" (два поля macOS/Windows + draw_path_row)
 │   │   ├── translation.rs       — секція перекладу (промт, вибір моделі OpenRouter, температура)
@@ -174,6 +176,21 @@ src/
 
 **Hover-ефект без конфлікту widget ID:** фон картки малюється через `egui::Frame::fill(hover_fill)` — тобто ДО вмісту, тому текст не перекривається. Rect фрейму зберігається у `egui::Memory` після кожного рендеру (`data_mut(|d| d.insert_temp(id, rect))`), а в наступному фреймі перед рендером з нього читається hover-стан (`data(|d| d.get_temp::<Rect>(id))`). Lag одного фрейму непомітний. `frame_resp.response.interact(Sense::click())` не реєструє новий widget ID — лише розширює sense існуючого Response.
 
+### Редактор монтажу (`src/gui/montage_editor/mod.rs`)
+
+З'являється коли у секції «Контроль» увімкнено «Контроль монтажу» і задача зупиняється в стані `AwaitingMontageControl`. Відкривається через кнопку `✂` у картці задачі або кліком по картці задачі у статусі `AwaitingMontageControl`.
+
+**5 панелей:**
+- **Медіа пул** (ліворуч) — сканує `{save_path}/media/` та кореневі аудіофайли (`voice.mp3`/`voice.wav`). Кнопка «+ Додати» відкриває `rfd::FileDialog` для додавання файлів ззовні. Перетягування файлу з пулу на таймлінію додає кліп.
+- **Прев'ю** (центр) — показує кадр з кліпу на поточній позиції відтворення через FFmpeg pipe (`ffmpeg -ss {offset} -i {path} -vf scale=640:-2 -frames:v 1 -f rawvideo -pix_fmt rgba -`). Кешується за ключем `{clip_id}-{round(offset*4)}` (гранулярність 0.25с). Вилучення кадру відбувається у фоновому потоці через `Arc<Mutex<Option<TextureHandle>>>`, щоб не блокувати UI.
+- **Інспектор** (праворуч) — DragValue для `start_secs`, `duration`, `track_idx` виділеного кліпу. Кнопки «🗑 Видалити кліп» та «+ Доріжка». Показує шлях до файлу.
+- **Таймлінія** (знизу) — горизонтальний ScollArea; лінійка з мажорними тіками кожні 5с; N відеодоріжок + опційна аудіодоріжка; кольорові блоки (синій=відео, фіолетовий=зображення, зелений=аудіо); лінія відтворення; drag з медіа пулу.
+- **Топбар** (зверху) — кнопки Play/Pause, назва задачі, повзунок масштабу таймлінії, кнопка «▶ Продовжити рендер».
+
+**«▶ Продовжити рендер»** активна тільки коли задача в статусі `AwaitingMontageControl`. По кліку сигналізує `montage_control_resume` condvar (`*lock = true; cvar.notify_one()`) — пайплайн продовжується до `run_montage`.
+
+**Важливо:** редактор зараз є **переглядачем** — він дозволяє переглянути медіа та схвалити монтаж, але зміни кліпів у таймлінії редактора **не передаються** у `run_montage`. `run_montage` завжди читає `timeline.json` з диска — редактор для нього інтерактивний preview, не джерело даних.
+
 ### Текстовий редактор сценарію (`src/gui/editor.rs`)
 
 Центральна панель програми з безрамковим редактором сценарію (`frame(false)`), що забезпечує ефект "чистого аркуша" на всю висоту робочої області.
@@ -188,12 +205,14 @@ src/
 ### Черга задач (`src/queue.rs`)
 
 - **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`, `montage_transition`, `montage_transition_duration`.
-- **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) / AwaitingMediaControl (пауза для перегляду зображень) / AwaitingAgentControl (пауза для чату з агентом) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку. `AwaitingAgentControl` відображається синім кольором у картці задачі.
+- **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) / AwaitingMediaControl (пауза для перегляду зображень) / AwaitingAgentControl (пауза для чату з агентом) / AwaitingMontageControl (пауза перед монтажем для редактора) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку. `AwaitingAgentControl` відображається синім кольором у картці задачі. `AwaitingMontageControl` відображається зеленим.
 - **`media_control_enabled: bool`** у `JobSettings` — знімок стану перемикача «Контроль зображень» на момент додавання задачі в чергу. Якщо `false` — пайплайн не зупиняється після відеоряду.
 - **`resume_from_stage: Option<RetryStage>`** у `JobSettings` — якщо `Some(stage)`, кнопка «▶ Запустити» викликає `retry_from_stage(stage, ...)` замість `run_pipeline`. Встановлюється автоматично при відновленні задачі через діалог `ResumePendingData`. `None` — звичайний запуск з початку.
 - **`agent_control_enabled: bool`** у `JobSettings` — знімок стану перемикача «Контроль агента» (секція Контроль). Якщо `true` — після успішного створення `timeline.json` агентом пайплайн призупиняється та відкриває можливість чату. Зберігається у `AppSettings` та `PipelineTemplate`.
+- **`montage_control_enabled: bool`** у `JobSettings` — знімок стану перемикача «Контроль монтажу» (секція Контроль). Якщо `true` — пайплайн зупиняється перед запуском `run_montage` (усередині `run_final_stages`), переводить задачу в `AwaitingMontageControl` і чекає сигналу `montage_control_resume`. Зберігається у `AppSettings` та `PipelineTemplate`.
 - **`media_control_resume: Arc<(Mutex<bool>, Condvar)>`** у `PipelineJob` — примітив для відновлення пайплайну після перегляду зображень.
 - **`agent_control_resume: Arc<(Mutex<bool>, Condvar)>`** у `PipelineJob` — аналогічний примітив для відновлення після чату з агентом. UI сигналізує через кнопку «Продовжити пайплайн» у вікні чату.
+- **`montage_control_resume: Arc<(Mutex<bool>, Condvar)>`** у `PipelineJob` — примітив для відновлення після редактора монтажу. UI сигналізує через кнопку «▶ Продовжити рендер» у вікні `draw_montage_editor_window`.
 - **`agent_chat: Arc<Mutex<Vec<AgentChatMessage>>>`** — история повідомлень чату з агентом для поточної задачі. Зберігається також у `agent_chat.json` у папці задачі.
 - **`agent_session: Arc<Mutex<Option<AgentSessionInfo>>>`** — активна сесія агента (`session_id`, `service`, `model`). Заповнюється після першого виклику агента з `agent_control_enabled = true`. `None` означає що сесія ще не стартувала або агентний режим без контролю.
 - **`translated_text` та `total_cost`** — додаткові потокобезпечні поля в `PipelineJob`. `translated_text` кешує результат перекладу. `total_cost: Arc<Mutex<Option<f64>>>` накопичує **всі** LLM-витрати задачі (переклад + відеопромти) — значення додається, а не замінюється, тому перегенерації у вікні контролю та паралельні виклики промтів коректно підсумовуються. Скидається в `None` лише при повному retry з Translation-етапу.
@@ -246,7 +265,7 @@ src/
 
 **`run_subtitles_only`** (`mod.rs`) — хелпер, виокремлений з `run_av_branch`. Диспетчеризує генерацію субтитрів (Whisper/WhisperX/AssemblyAI + karaoke) без озвучки. Використовується і в `run_av_branch`, і в `retry_from_stage(Subtitles)`.
 
-**`run_final_stages`** (`mod.rs`) — хелпер для спільної фінальної частини: `build_timeline` (якщо `video_enabled`) → `run_montage` (якщо `montage_enabled`). Використовується у всіх retry-гілках щоб не дублювати логіку.
+**`run_final_stages`** (`mod.rs`) — хелпер для спільної фінальної частини: `build_timeline` (якщо `video_enabled`) → **пауза контролю монтажу** (якщо `montage_enabled && montage_control_enabled`) → `run_montage` (якщо `montage_enabled`). Використовується у всіх retry-гілках щоб не дублювати логіку. Пауза: встановлює статус `AwaitingMontageControl`, блокується на `Condvar::wait()`, після сигналу повертається в `Running`. Приймає `&status` і `&montage_control_resume` як параметри — однакові Arc що й у `run_pipeline`.
 
 **Контроль зображень (Media Control):** якщо `settings.media_control_enabled && settings.video_enabled` і відеогілка завершилась успішно (`Some(Ok(()))`), пайплайн встановлює статус `AwaitingMediaControl` та блокується на `Condvar::wait()`. AV-гілка в цей час продовжує виконуватись у власному потоці. Після сигналу від UI (`*lock = true; cvar.notify_one()`) статус повертається в `Running` і пайплайн продовжує до Timeline → Монтаж. Важливо: налаштування `media_control_enabled` знімається на момент додавання задачі в чергу — зміна перемикача після цього не впливає на вже додані задачі.
 
@@ -629,6 +648,8 @@ xfade накладає кліп `i+1` поверх кліпу `i` протяго
 - **`draw_chip` — єдина база для обох типів чіпів.** `draw_balance_chip` та чіпи нижнього рядка побудовані на одній функції. Це гарантує ідентичний hover-ефект та padding між топбаром і нижнім рядком.
 
 - **Потоки Googler рахуються локально, а не з сервера.** `GooglerImageLimiter::get().active_count()` та `GooglerVideoLimiter::get().active_count()` — єдине джерело даних у вікні потоків та нижньому рядку. Раніше ці числа брались з `googler_balance` (запит до API `/v3/account/usage`) і були умовними (не відображались доки баланс не завантажено). Тепер чіпи `Googler img` / `Googler vid` у нижньому рядку **завжди видимі** (починаючи з 0/N, як і решта сервісів). Слайдери у вікні потоків тепер додатково викликають `set_max_threads()` при зміні — реакція миттєва.
+
+- **`has_active` у `draw_queue_panel` — включає всі «waiting» статуси.** Кнопка «🗑 Очистити» блокується якщо `has_active == true`. Перевірка охоплює: `Running | AwaitingControl | AwaitingMediaControl | AwaitingAgentControl | AwaitingMontageControl`. Якщо не включити `AwaitingMontageControl`, можна очистити чергу поки пайплайн заблокований на Condvar — condvar більше ніхто не розблокує і задача зависне в фоновому потоці.
 
 - **`windows_subsystem = "windows"`** у `main.rs` — приховує консоль у release-білді на Windows. У debug-режимі консоль є.
 

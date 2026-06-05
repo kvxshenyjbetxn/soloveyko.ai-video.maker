@@ -9,6 +9,7 @@ pub fn draw_control_section(
     pipeline_control_auto_open: &mut bool,
     pipeline_media_control_enabled: &mut bool,
     pipeline_agent_control_enabled: &mut bool,
+    pipeline_montage_control_enabled: &mut bool,
 ) {
     ui.vertical(|ui| {
         ui.add_space(2.0);
@@ -40,6 +41,15 @@ pub fn draw_control_section(
             ui.label(translate(language, "control_agent"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 super::toggle_switch(ui, pipeline_agent_control_enabled);
+            });
+        });
+
+        ui.add_space(4.0);
+
+        ui.horizontal(|ui| {
+            ui.label(translate(language, "control_montage"));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                super::toggle_switch(ui, pipeline_montage_control_enabled);
             });
         });
 

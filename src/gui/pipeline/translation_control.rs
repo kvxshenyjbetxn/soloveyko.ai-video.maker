@@ -56,6 +56,7 @@ pub fn draw_translation_control_window(
     let montage_file_size_arc = std::sync::Arc::clone(&jobs[job_idx].montage_file_size);
     let media_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].media_control_resume);
     let agent_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].agent_control_resume);
+    let montage_control_resume_arc = std::sync::Arc::clone(&jobs[job_idx].montage_control_resume);
     let agent_chat_arc = std::sync::Arc::clone(&jobs[job_idx].agent_chat);
     let agent_session_arc = std::sync::Arc::clone(&jobs[job_idx].agent_session);
     let job_settings = jobs[job_idx].settings.clone();
@@ -357,6 +358,7 @@ pub fn draw_translation_control_window(
             montage_file_size_arc,
             media_control_resume_arc,
             agent_control_resume_arc,
+            montage_control_resume_arc,
             agent_chat_arc,
             agent_session_arc,
             ctx_clone,

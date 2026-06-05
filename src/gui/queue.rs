@@ -45,6 +45,7 @@ pub fn draw_queue_panel(
     active_tab: &mut Tab,
     retry_request: &mut Option<(u64, crate::queue::RetryStage)>,
     selected_agent_chat: &mut Option<u64>,
+    open_montage_editor: &mut Option<u64>,
 ) {
     ui.add_space(4.0);
 
@@ -89,6 +90,8 @@ pub fn draw_queue_panel(
                 crate::queue::JobStatus::Running
                     | crate::queue::JobStatus::AwaitingControl
                     | crate::queue::JobStatus::AwaitingMediaControl
+                    | crate::queue::JobStatus::AwaitingAgentControl
+                    | crate::queue::JobStatus::AwaitingMontageControl
             )
         });
         let can_clear = !jobs.is_empty() && !has_active;
@@ -225,6 +228,7 @@ pub fn draw_queue_panel(
                         std::sync::Arc::clone(&job.montage_file_size),
                         std::sync::Arc::clone(&job.media_control_resume),
                         std::sync::Arc::clone(&job.agent_control_resume),
+                        std::sync::Arc::clone(&job.montage_control_resume),
                         std::sync::Arc::clone(&job.agent_chat),
                         std::sync::Arc::clone(&job.agent_session),
                         ctx.clone(),
@@ -249,6 +253,7 @@ pub fn draw_queue_panel(
                         std::sync::Arc::clone(&job.montage_file_size),
                         std::sync::Arc::clone(&job.media_control_resume),
                         std::sync::Arc::clone(&job.agent_control_resume),
+                        std::sync::Arc::clone(&job.montage_control_resume),
                         std::sync::Arc::clone(&job.agent_chat),
                         std::sync::Arc::clone(&job.agent_session),
                         ctx.clone(),
@@ -307,6 +312,13 @@ pub fn draw_queue_panel(
                                 egui::Color32::from_rgb(52, 152, 219),
                             )
                         }
+                        crate::queue::JobStatus::AwaitingMontageControl => {
+                            let (prog, _, _) = job.calculate_progress();
+                            (
+                                format!("{} ({:.0}%)", translate(language, "queue_status_awaiting_montage"), prog * 100.0),
+                                egui::Color32::from_rgb(39, 174, 96),
+                            )
+                        }
                         crate::queue::JobStatus::Done => (
                             translate(language, "queue_status_done").to_string(),
                             egui::Color32::from_rgb(46, 204, 113),
@@ -324,6 +336,7 @@ pub fn draw_queue_panel(
                             | crate::queue::JobStatus::AwaitingControl
                             | crate::queue::JobStatus::AwaitingMediaControl
                             | crate::queue::JobStatus::AwaitingAgentControl
+                            | crate::queue::JobStatus::AwaitingMontageControl
                     );
 
                     let group_frame = egui::Frame::group(ui.style())
@@ -368,6 +381,16 @@ pub fn draw_queue_panel(
                                     );
                                     if folder_btn.on_hover_text(translate(language, "job_open_folder_tooltip")).clicked() {
                                         open_folder(&folder_path);
+                                    }
+
+                                    if job.settings.montage_control_enabled {
+                                        let editor_btn = ui.button(
+                                            egui::RichText::new("✂").size(11.0),
+                                        );
+                                        if editor_btn.on_hover_text(translate(language, "montage_editor_open_btn")).clicked() {
+                                            *open_montage_editor = Some(job.id);
+                                            retry_clicked = true;
+                                        }
                                     }
                                 });
                             });
@@ -674,6 +697,8 @@ pub fn draw_queue_panel(
                             *active_tab = Tab::Gallery;
                         } else if status == crate::queue::JobStatus::AwaitingAgentControl {
                             *selected_agent_chat = Some(job.id);
+                        } else if status == crate::queue::JobStatus::AwaitingMontageControl {
+                            *open_montage_editor = Some(job.id);
                         } else {
                             *selected_job_logs = Some((job.id, job.name.clone()));
                         }

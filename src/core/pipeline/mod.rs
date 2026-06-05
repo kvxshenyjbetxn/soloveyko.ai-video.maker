@@ -1559,6 +1559,7 @@ pub fn run_pipeline(
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     ctx: egui::Context,
@@ -1828,6 +1829,24 @@ pub fn run_pipeline(
             }
         }
 
+        // Пауза контролю монтажу перед рендером
+        if settings.montage_control_enabled {
+            crate::logger::log_job(job_id, &job_name, "Awaiting montage control confirmation from user...");
+            *status.lock().unwrap() = crate::queue::JobStatus::AwaitingMontageControl;
+            ctx.request_repaint();
+
+            let (lock, cvar) = &*montage_control_resume;
+            let mut resumed = lock.lock().unwrap();
+            while !*resumed {
+                resumed = cvar.wait(resumed).unwrap();
+            }
+            *resumed = false;
+
+            crate::logger::log_job(job_id, &job_name, "Montage control confirmed. Resuming pipeline...");
+            *status.lock().unwrap() = crate::queue::JobStatus::Running;
+            ctx.request_repaint();
+        }
+
         // Етап 5: Монтаж
         if settings.montage_enabled {
             crate::logger::log_job(job_id, &job_name, "Starting montage stage...");
@@ -1889,9 +1908,11 @@ fn run_final_stages(
     settings: &crate::queue::JobSettings,
     translated_text: &Arc<Mutex<Option<String>>>,
     audio_duration: &Arc<Mutex<Option<f64>>>,
+    status: &Arc<Mutex<crate::queue::JobStatus>>,
     montage_stage: &Arc<Mutex<crate::queue::StageStatus>>,
     montage_progress: &Arc<Mutex<Option<f32>>>,
     montage_file_size: &Arc<Mutex<Option<u64>>>,
+    montage_control_resume: &Arc<(Mutex<bool>, Condvar)>,
     ctx: &egui::Context,
 ) -> Result<(), String> {
     // Timeline
@@ -1910,6 +1931,24 @@ fn run_final_stages(
             Ok(_) => crate::logger::log_job(job_id, job_name, "Timeline saved: timeline.json"),
             Err(e) => crate::logger::log_job(job_id, job_name, &format!("Timeline warning: {}", e)),
         }
+    }
+
+    // Пауза контролю монтажу перед рендером (якщо увімкнено)
+    if settings.montage_enabled && settings.montage_control_enabled {
+        crate::logger::log_job(job_id, job_name, "Awaiting montage control confirmation from user...");
+        *status.lock().unwrap() = crate::queue::JobStatus::AwaitingMontageControl;
+        ctx.request_repaint();
+
+        let (lock, cvar) = &**montage_control_resume;
+        let mut resumed = lock.lock().unwrap();
+        while !*resumed {
+            resumed = cvar.wait(resumed).unwrap();
+        }
+        *resumed = false;
+
+        crate::logger::log_job(job_id, job_name, "Montage control confirmed. Resuming pipeline...");
+        *status.lock().unwrap() = crate::queue::JobStatus::Running;
+        ctx.request_repaint();
     }
 
     // Монтаж
@@ -1977,6 +2016,7 @@ pub fn retry_from_stage(
     montage_file_size: Arc<Mutex<Option<u64>>>,
     media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
     agent_chat: Arc<Mutex<Vec<crate::queue::AgentChatMessage>>>,
     agent_session: Arc<Mutex<Option<crate::queue::AgentSessionInfo>>>,
     ctx: egui::Context,
@@ -2001,12 +2041,14 @@ pub fn retry_from_stage(
             *montage_file_size.lock().unwrap() = None;
             *media_control_resume.0.lock().unwrap() = false;
             *agent_control_resume.0.lock().unwrap() = false;
+            *montage_control_resume.0.lock().unwrap() = false;
             run_pipeline(
                 job_id, job_name, settings, status,
                 translation_stage, voiceover_stage, video_stage, subtitles_stage, montage_stage,
                 translated_text, total_cost, audio_duration,
                 prompts_progress, media_progress, montage_progress, montage_file_size,
-                media_control_resume, agent_control_resume, agent_chat, agent_session, ctx,
+                media_control_resume, agent_control_resume, montage_control_resume,
+                agent_chat, agent_session, ctx,
             );
         }
 
@@ -2039,7 +2081,7 @@ pub fn retry_from_stage(
 
                 if let Err(e) = run_final_stages(
                     job_id, &job_name, &settings, &translated_text, &audio_duration,
-                    &montage_stage, &montage_progress, &montage_file_size, &ctx,
+                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &ctx,
                 ) {
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
@@ -2097,7 +2139,7 @@ pub fn retry_from_stage(
 
                 if let Err(e) = run_final_stages(
                     job_id, &job_name, &settings, &translated_text, &audio_duration,
-                    &montage_stage, &montage_progress, &montage_file_size, &ctx,
+                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &ctx,
                 ) {
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
@@ -2130,7 +2172,7 @@ pub fn retry_from_stage(
 
                 if let Err(e) = run_final_stages(
                     job_id, &job_name, &settings, &translated_text, &audio_duration,
-                    &montage_stage, &montage_progress, &montage_file_size, &ctx,
+                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &ctx,
                 ) {
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();
@@ -2156,7 +2198,7 @@ pub fn retry_from_stage(
                 crate::logger::log_job(job_id, &job_name, "Retry: montage...");
                 if let Err(e) = run_final_stages(
                     job_id, &job_name, &settings, &translated_text, &audio_duration,
-                    &montage_stage, &montage_progress, &montage_file_size, &ctx,
+                    &status, &montage_stage, &montage_progress, &montage_file_size, &montage_control_resume, &ctx,
                 ) {
                     *status.lock().unwrap() = crate::queue::JobStatus::Failed(e);
                     ctx.request_repaint();

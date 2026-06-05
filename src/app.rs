@@ -81,6 +81,12 @@ pub struct VideoMakerApp {
     pub pipeline_media_control_enabled: bool,
     /// Чи увімкнено контроль агента (пауза після timeline.json для чату з агентом).
     pub pipeline_agent_control_enabled: bool,
+    /// Чи увімкнено контроль монтажу (показує кнопку редактора монтажу в карточці задачі).
+    pub pipeline_montage_control_enabled: bool,
+    /// ID задачі, для якої відкрито редактор монтажу. None = редактор закрито.
+    pub montage_editor_open_job: Option<u64>,
+    /// Стан редактора монтажу (завантажений timeline, аудіо тощо).
+    pub montage_editor_state: Option<crate::gui::montage_editor::MontageEditorState>,
     /// Кеш текстур для галереї медіафайлів. None означає помилку завантаження.
     pub gallery_textures: std::collections::HashMap<std::path::PathBuf, Option<egui::TextureHandle>>,
     /// Зображення, яке зараз відкрите у повноекранному перегляді.
@@ -387,6 +393,9 @@ impl Default for VideoMakerApp {
             pipeline_control_auto_open: false,
             pipeline_media_control_enabled: false,
             pipeline_agent_control_enabled: false,
+            pipeline_montage_control_enabled: false,
+            montage_editor_open_job: None,
+            montage_editor_state: None,
             gallery_textures: std::collections::HashMap::new(),
             gallery_preview: None,
             gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
@@ -574,6 +583,7 @@ impl VideoMakerApp {
         let pipeline_control_auto_open = saved.pipeline_control_auto_open;
         let pipeline_media_control_enabled = saved.pipeline_media_control_enabled;
         let pipeline_agent_control_enabled = saved.pipeline_agent_control_enabled;
+        let pipeline_montage_control_enabled = saved.pipeline_montage_control_enabled;
         let pipeline_voiceover_enabled = saved.pipeline_voiceover_enabled;
         let pipeline_video_enabled = saved.pipeline_video_enabled;
         let pipeline_subtitles_enabled = saved.pipeline_subtitles_enabled;
@@ -714,6 +724,9 @@ impl VideoMakerApp {
             pipeline_control_auto_open,
             pipeline_media_control_enabled,
             pipeline_agent_control_enabled,
+            pipeline_montage_control_enabled,
+            montage_editor_open_job: None,
+            montage_editor_state: None,
             gallery_textures: std::collections::HashMap::new(),
             gallery_preview: None,
             gallery_anim_loading: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
@@ -871,6 +884,7 @@ impl VideoMakerApp {
             pipeline_control_auto_open: self.pipeline_control_auto_open,
             pipeline_media_control_enabled: self.pipeline_media_control_enabled,
             pipeline_agent_control_enabled: self.pipeline_agent_control_enabled,
+            pipeline_montage_control_enabled: self.pipeline_montage_control_enabled,
             pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
             pipeline_video_enabled: self.pipeline_video_enabled,
             pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,
@@ -941,6 +955,7 @@ impl VideoMakerApp {
         self.pipeline_control_auto_open = t.pipeline_control_auto_open;
         self.pipeline_media_control_enabled = t.pipeline_media_control_enabled;
         self.pipeline_agent_control_enabled = t.pipeline_agent_control_enabled;
+        self.pipeline_montage_control_enabled = t.pipeline_montage_control_enabled;
         self.pipeline_voiceover_enabled = t.pipeline_voiceover_enabled;
         self.pipeline_video_enabled = t.pipeline_video_enabled;
         self.pipeline_subtitles_enabled = t.pipeline_subtitles_enabled;
@@ -1213,6 +1228,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.pipeline_control_auto_open,
                         &mut self.pipeline_media_control_enabled,
                         &mut self.pipeline_agent_control_enabled,
+                        &mut self.pipeline_montage_control_enabled,
                         &mut self.pipeline_voiceover_enabled,
                         &mut self.pipeline_video_enabled,
                         &mut self.pipeline_subtitles_enabled,
@@ -1344,6 +1360,7 @@ impl eframe::App for VideoMakerApp {
                         &mut self.active_tab,
                         &mut self.retry_request,
                         &mut self.selected_agent_chat,
+                        &mut self.montage_editor_open_job,
                     );
                 });
         }
@@ -1372,6 +1389,7 @@ impl eframe::App for VideoMakerApp {
                     std::sync::Arc::clone(&job.montage_file_size),
                     std::sync::Arc::clone(&job.media_control_resume),
                     std::sync::Arc::clone(&job.agent_control_resume),
+                    std::sync::Arc::clone(&job.montage_control_resume),
                     std::sync::Arc::clone(&job.agent_chat),
                     std::sync::Arc::clone(&job.agent_session),
                     ctx.clone(),
@@ -1693,6 +1711,15 @@ impl eframe::App for VideoMakerApp {
             &self.agent_chat_result,
         );
 
+        // Редактор монтажу
+        crate::gui::montage_editor::draw_montage_editor_window(
+            ctx,
+            self.language,
+            &mut self.montage_editor_open_job,
+            &mut self.montage_editor_state,
+            &self.jobs,
+        );
+
         // АВТОЗБЕРЕЖЕННЯ:
         // Перевіряємо, чи користувач наразі не перетягує панель (миша відпущена).
         // Це запобігає надмірному навантаженню на диск та гарантує запис файлу лише після відпускання миші.
@@ -1725,6 +1752,7 @@ impl eframe::App for VideoMakerApp {
                 || self.pipeline_control_auto_open != self.last_saved_settings.pipeline_control_auto_open
                 || self.pipeline_media_control_enabled != self.last_saved_settings.pipeline_media_control_enabled
                 || self.pipeline_agent_control_enabled != self.last_saved_settings.pipeline_agent_control_enabled
+                || self.pipeline_montage_control_enabled != self.last_saved_settings.pipeline_montage_control_enabled
                 || self.pipeline_voiceover_enabled != self.last_saved_settings.pipeline_voiceover_enabled
                 || self.pipeline_video_enabled != self.last_saved_settings.pipeline_video_enabled
                 || self.pipeline_subtitles_enabled != self.last_saved_settings.pipeline_subtitles_enabled
@@ -1806,6 +1834,7 @@ impl eframe::App for VideoMakerApp {
                     pipeline_control_auto_open: self.pipeline_control_auto_open,
                     pipeline_media_control_enabled: self.pipeline_media_control_enabled,
                     pipeline_agent_control_enabled: self.pipeline_agent_control_enabled,
+                    pipeline_montage_control_enabled: self.pipeline_montage_control_enabled,
                     pipeline_voiceover_enabled: self.pipeline_voiceover_enabled,
                     pipeline_video_enabled: self.pipeline_video_enabled,
                     pipeline_subtitles_enabled: self.pipeline_subtitles_enabled,

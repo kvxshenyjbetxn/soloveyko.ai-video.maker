@@ -10,6 +10,8 @@ pub enum JobStatus {
     AwaitingMediaControl,
     /// Очікує підтвердження користувача після завершення агента
     AwaitingAgentControl,
+    /// Очікує підтвердження монтажу від користувача
+    AwaitingMontageControl,
     Done,
     Failed(String),
 }
@@ -118,6 +120,8 @@ pub struct JobSettings {
     pub media_control_enabled: bool,
     /// Чи увімкнено контроль агента (пауза після генерації timeline.json для чату з агентом)
     pub agent_control_enabled: bool,
+    /// Чи увімкнено контроль монтажу (показує кнопку редактора монтажу в карточці задачі)
+    pub montage_control_enabled: bool,
     /// Чи увімкнено тригери накладення медіа за ключовими фразами
     pub overlay_triggers_enabled: bool,
     /// Список тригерів накладення медіа
@@ -162,6 +166,8 @@ pub struct PipelineJob {
     pub media_control_resume: Arc<(Mutex<bool>, Condvar)>,
     /// Condvar для відновлення пайплайну після контролю агента
     pub agent_control_resume: Arc<(Mutex<bool>, Condvar)>,
+    /// Condvar для відновлення пайплайну після контролю монтажу
+    pub montage_control_resume: Arc<(Mutex<bool>, Condvar)>,
     /// Повідомлення чату з агентом (зберігається між сесіями)
     pub agent_chat: Arc<Mutex<Vec<AgentChatMessage>>>,
     /// Активна сесія агента (session_id для продовження чату)
@@ -189,6 +195,7 @@ impl PipelineJob {
             montage_file_size: Arc::new(Mutex::new(None)),
             media_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
             agent_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
+            montage_control_resume: Arc::new((Mutex::new(false), Condvar::new())),
             agent_chat: Arc::new(Mutex::new(Vec::new())),
             agent_session: Arc::new(Mutex::new(None)),
         }
