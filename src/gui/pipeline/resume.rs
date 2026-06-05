@@ -91,20 +91,19 @@ impl FoundFiles {
     }
 
     pub fn has_any(&self) -> bool {
+        // Фінальне відео не рахується — перевіряємо лише проміжні файли
         self.text_txt
             || self.voice_file
             || self.subtitle_srt
             || self.media_images > 0
             || self.media_videos > 0
-            || self.output_video
     }
 
     /// Визначає з якого етапу продовжити виходячи лише з наявних файлів
     /// (без урахування чекбоксів — для початкового стану).
     pub fn resume_stage(&self) -> Option<crate::queue::RetryStage> {
-        if self.output_video {
-            None
-        } else if self.media_images > 0 || self.media_videos > 0 {
+        // output_video не враховується — навіть якщо є готове відео, визначаємо етап по проміжних файлах
+        if self.media_images > 0 || self.media_videos > 0 {
             Some(crate::queue::RetryStage::Montage)
         } else if self.subtitle_srt {
             Some(crate::queue::RetryStage::Video)
