@@ -117,6 +117,12 @@ pub struct JobSettings {
     pub montage_bitrate: u32,
     pub montage_transition: String,
     pub montage_transition_duration: f32,
+    pub montage_image_zoom_enabled: bool,
+    pub montage_image_zoom_intensity: f32,
+    pub montage_image_zoom_mode: String,
+    pub montage_image_zoom_scale: f32,
+    pub montage_image_shake_enabled: bool,
+    pub montage_image_shake_intensity: f32,
     pub media_control_enabled: bool,
     /// Чи увімкнено контроль агента (пауза після генерації timeline.json для чату з агентом)
     pub agent_control_enabled: bool,

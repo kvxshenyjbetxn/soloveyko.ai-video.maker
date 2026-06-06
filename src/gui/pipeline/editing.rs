@@ -29,6 +29,11 @@ pub fn draw_editing_section(
     montage_bitrate: &mut u32,
     montage_transition: &mut String,
     montage_transition_duration: &mut f32,
+    montage_image_zoom_enabled: &mut bool,
+    montage_image_zoom_mode: &mut String,
+    montage_image_zoom_scale: &mut f32,
+    montage_image_shake_enabled: &mut bool,
+    montage_image_shake_intensity: &mut f32,
 ) {
     ui.vertical(|ui| {
         ui.add_space(4.0);
@@ -120,6 +125,64 @@ pub fn draw_editing_section(
                             .suffix(" s"),
                     );
                 });
+            }
+
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(4.0);
+
+            // Підказка про те, що ефекти тільки для зображень
+            ui.label(
+                egui::RichText::new(translate(language, "montage_image_effects_note"))
+                    .size(11.0)
+                    .color(ui.visuals().weak_text_color()),
+            );
+
+            ui.add_space(8.0);
+
+            // Ефект зуму
+            ui.horizontal(|ui| {
+                crate::gui::pipeline::toggle_switch(ui, montage_image_zoom_enabled);
+                ui.label(egui::RichText::new(translate(language, "montage_image_zoom_label")).strong());
+            });
+
+            if *montage_image_zoom_enabled {
+                ui.add_space(4.0);
+                ui.label(translate(language, "montage_image_zoom_mode_label"));
+                ui.horizontal(|ui| {
+                    let is_alternate = montage_image_zoom_mode == "alternate";
+                    if ui.selectable_label(is_alternate, translate(language, "montage_image_zoom_mode_alternate")).clicked() {
+                        *montage_image_zoom_mode = "alternate".to_string();
+                    }
+                    if ui.selectable_label(!is_alternate, translate(language, "montage_image_zoom_mode_oscillate")).clicked() {
+                        *montage_image_zoom_mode = "oscillate".to_string();
+                    }
+                });
+                ui.add_space(4.0);
+                ui.label(translate(language, "montage_image_zoom_scale_label"));
+                ui.add(
+                    egui::Slider::new(montage_image_zoom_scale, 1.1..=2.0)
+                        .step_by(0.05)
+                        .show_value(true),
+                );
+            }
+
+            ui.add_space(8.0);
+
+            // Ефект покачування
+            ui.horizontal(|ui| {
+                crate::gui::pipeline::toggle_switch(ui, montage_image_shake_enabled);
+                ui.label(egui::RichText::new(translate(language, "montage_image_shake_label")).strong());
+            });
+
+            if *montage_image_shake_enabled {
+                ui.add_space(4.0);
+                ui.label(translate(language, "montage_image_shake_intensity_label"));
+                ui.add(
+                    egui::Slider::new(montage_image_shake_intensity, 0.1..=1.0)
+                        .step_by(0.05)
+                        .show_value(true),
+                );
             }
 
         }

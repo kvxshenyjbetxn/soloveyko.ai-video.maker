@@ -88,7 +88,7 @@ src/
 │   │   ├── voiceover.rs         — секція озвучки (провайдер "Voice Bot" / "Edge TTS", вибір голосу, темп/тональність/гучність)
 │   │   ├── video.rs             — секція відеоряду (сервіс Googler, вибір LLM для генерації промтів, режим нарізання тексту, пріоритети зображень, промт); при виборі Claude Code / Gemini CLI показується додаткове поле video_agent_prompt з кнопками вставки {{srt}} та {{path}}
 │   │   ├── subtitles.rs         — секція субтитрів (вибір сервісу Whisper/WhisperX/AssemblyAI/Whisper AMD, мова, модель, стиль: шрифт/колір/розмір/відступ/karaoke, вибір шрифту з popup-прев'ю, завантаження ggml-моделі для Whisper/Whisper AMD, ключ AssemblyAI)
-│   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами)
+│   │   └── editing.rs           — секція монтажу (FPS, кодек-preset, бітрейт, перехід між кліпами, ефект зуму та покачування для зображень)
 │   └── settings/
 │       ├── mod.rs               — draw_settings: вкладки налаштувань
 │       ├── general.rs           — вкладка "Основні" (тема, акцент, мова, відкрити папку)
@@ -230,7 +230,7 @@ pub struct ClipDragState {
 
 ### Черга задач (`src/queue.rs`)
 
-- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`, `montage_transition`, `montage_transition_duration`.
+- **`JobSettings`** — знімок усіх налаштувань пайплайну на момент додавання задачі. Зберігається в `PipelineJob` для можливого майбутнього перезапуску. Додаткові поля: `translation_control_enabled`, `voiceover_enabled`, `voicebot_key`, `voiceover_template_uuid`, `voiceover_provider`, `edge_tts_voice`, `edge_tts_rate`, `edge_tts_pitch`, `edge_tts_volume`. Поля відеоряду: `video_enabled`, `video_media_type`, `video_prompt`, `text_split_mode`, `text_split_char_limit`, `googler_key`, `googler_image_priority`, `googler_video_priority`, `googler_image_max_threads`. Поля субтитрів: `subtitles_enabled`, `subtitles_service`, `whisper_language`, `whisper_model`, `whisper_max_line_width`, `subtitle_karaoke_mode`, `subtitle_karaoke_highlight_color`, `subtitle_karaoke_outline_color`, `subtitle_karaoke_bold`, `subtitle_karaoke_scale`. Поля монтажу: `montage_enabled`, `montage_service`, `montage_fps`, `montage_preset`, `montage_bitrate`, `montage_transition`, `montage_transition_duration`, `montage_image_zoom_enabled`, `montage_image_zoom_mode` (`"alternate"` / `"oscillate"`), `montage_image_zoom_scale` (1.1..2.0), `montage_image_shake_enabled`, `montage_image_shake_intensity`.
 - **`JobStatus`** — `Pending → Running / AwaitingControl (пауза для контролю перекладу) / AwaitingMediaControl (пауза для перегляду зображень) / AwaitingAgentControl (пауза для чату з агентом) / AwaitingMontageControl (пауза перед монтажем для редактора) → Done / Failed(String)`. Обгорнутий у `Arc<Mutex<T>>`, бо змінюється з фонового потоку. `AwaitingAgentControl` відображається синім кольором у картці задачі. `AwaitingMontageControl` відображається зеленим.
 - **`media_control_enabled: bool`** у `JobSettings` — знімок стану перемикача «Контроль зображень» на момент додавання задачі в чергу. Якщо `false` — пайплайн не зупиняється після відеоряду.
 - **`resume_from_stage: Option<RetryStage>`** у `JobSettings` — якщо `Some(stage)`, кнопка «▶ Запустити» викликає `retry_from_stage(stage, ...)` замість `run_pipeline`. Встановлюється автоматично при відновленні задачі через діалог `ResumePendingData`. `None` — звичайний запуск з початку.
@@ -445,7 +445,7 @@ pub struct ClipDragState {
 **Логіка:**
 1. Знаходить аудіофайл: спочатку `voice.wav`, потім `voice.mp3`.
 2. Читає `timeline.json` → будує вектор `Clip { path: Option<String>, duration, is_video }`. `path = None` — чорна заставка (gap), `path = Some(...)` — медіафайл. Сегменти з `media: null` перетворюються на `Clip { path: None, ... }`. Сусідні null-сегменти об'єднуються в один чорний кліп. Fallback якщо `timeline.json` відсутній або порожній — рівномірний розподіл усіх файлів з `media/`.
-4. Будує **filter graph** для кожного кліпу:   - **Чорний кліп** (`path = None`): FFmpeg inline-генератор `color=black:s=1920x1080:r=fps:d=duration` — не потребує вхідного файлу. Індекс `-i` не виділяється.   - **Зображення (jpg/png/webp/gif):** `scale+crop → zoompan` (ефект плавного наближення/відведення). Тривалість — `d=<кількість_кадрів>` відповідно до часового відрізку та `fps`.
+4. Будує **filter graph** для кожного кліпу:   - **Чорний кліп** (`path = None`): FFmpeg inline-генератор `color=black:s=1920x1080:r=fps:d=duration` — не потребує вхідного файлу. Індекс `-i` не виділяється.   - **Зображення (jpg/png/webp/gif):** `scale+crop → zoompan` (ефект зуму та/або покачування). Тривалість — `d=<кількість_кадрів>` відповідно до часового відрізку та `fps`. Деталі — у `build_image_filter_parts`.
    - **Відео (mp4/webm/mov):** `trim → scale+crop → fps` (обрізає до потрібної тривалості).
 5. Після filter graph — `concat` (склеювання кліпів) → `tpad` (дотяжка до тривалості аудіо) → `trim` (обрізка хвоста).
 5.5. **Burn-in субтитрів:** якщо `burn_subtitles == true`, монтаж шукає `subtitle.ass` (стиль запечений у заголовку). Фільтр: `[v_montage]ass=filename=subtitle.ass[v_with_subs]` — використовується **відносний шлях** без жодного екранування, бо FFmpeg запускається з `current_dir(save_dir)`. Це єдиний надійний підхід: FFmpeg filter parser не підтримує коректне екранування пробілів і двокрапок Windows-шляхів ні через лапки `'...'`, ні через `\:`. Потребує FFmpeg з `libass`. Якщо файл не знайдено — логується попередження, монтаж продовжується без субтитрів.
@@ -472,6 +472,19 @@ pub struct ClipDragState {
 - Filter chain: `[N:v]format=yuva420p,scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setpts=PTS-STARTPTS+{start}/TB[overlayN]` → `overlay=x={x}:y={y}:enable='between(t,{start},{end})'`.
 - `format=yuva420p` зберігає альфа-канал відео — `overlay` фільтр FFmpeg автоматично використовує A-план для прозорості.
 - `force_original_aspect_ratio=increase,crop` — гарантує що зображення заповнює задану область без чорних смуг.
+
+**Ефекти для зображень (`build_image_filter_parts`):**
+
+Функція будує ланцюжок FFmpeg-фільтрів для кожного зображення. Приймає `img_idx` (порядковий індекс зображення, без відеофайлів), `zoom_mode`, `zoom_scale`, `shake_intensity`.
+
+**Зум (`image_zoom_enabled`)** — два режими:
+
+- **`"oscillate"` (Туди-сюди):** плавна косинусоїдна осциляція протягом усього кліпу. Формула: `z = 1.0 + zAmp*(1-cos(2π*on/fps/duration))/2`, де `on` — номер вихідного кадру zoompan. Зум іде від 1.0 → `zoom_scale` → 1.0 за один цикл. Ніяких розривів і скидань — безперервна математика.
+- **`"alternate"` (Чергування):** парні зображення зумуються вперед (1.0 → `zoom_scale`), непарні — назад (`zoom_scale` → 1.0). Лінійна формула через `on`: `1.0 + zAmp*on/fps/duration` та `zoom_scale - zAmp*on/fps/duration`. Використовується `on`, а не `pzoom/zoom` — тому стабільна ініціалізація без хаків `eq(zoom,0)`.
+
+**Чому `on`, а не `zoom`/`pzoom`:** `pzoom` відстає на 2 кадри при ініціалізації. `zoom` як вхідна змінна починає з 0 до першого виразу, але zoompan затискає *результат* до `[1..10]`, тому для zoom-out першого кадру ми не можемо надійно виявити "frame 0" через `eq(zoom,0)`. `on` — чистий лічильник що завжди починається з 0.
+
+**Покачування (`image_shake_enabled`):** реалізоване через `crop` (а не zoompan), бо `crop` підтримує змінну `t` (секунди). Зображення попередньо масштабується до `(1920+2*amp)×(1080+2*amp)`, потім `crop=1920:1080: amp+amp*sin(π*0.7*t): amp+amp*sin(π*0.53*t)` зміщує вікно синусоїдально з різними частотами по X і Y.
 
 **Переходи між кліпами (xfade):**
 

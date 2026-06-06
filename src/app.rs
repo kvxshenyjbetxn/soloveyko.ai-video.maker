@@ -327,6 +327,18 @@ pub struct VideoMakerApp {
     pub montage_transition: String,
     /// Тривалість переходу в секундах.
     pub montage_transition_duration: f32,
+    /// Чи увімкнено ефект зуму для зображень.
+    pub montage_image_zoom_enabled: bool,
+    /// Інтенсивність зуму для зображень (0.1..1.0).
+    pub montage_image_zoom_intensity: f32,
+    /// Режим зуму: "alternate" або "oscillate".
+    pub montage_image_zoom_mode: String,
+    /// Кратність зуму (1.1..2.0).
+    pub montage_image_zoom_scale: f32,
+    /// Чи увімкнено ефект покачування для зображень.
+    pub montage_image_shake_enabled: bool,
+    /// Інтенсивність покачування для зображень (0.1..1.0).
+    pub montage_image_shake_intensity: f32,
     /// Чи увімкнено тригери накладення медіа за ключовими фразами.
     pub overlay_triggers_enabled: bool,
     /// Список тригерів накладення медіа.
@@ -516,6 +528,12 @@ impl Default for VideoMakerApp {
             montage_bitrate: 8,
             montage_transition: "none".to_string(),
             montage_transition_duration: 0.5,
+            montage_image_zoom_enabled: false,
+            montage_image_zoom_intensity: 0.5,
+            montage_image_zoom_mode: "alternate".to_string(),
+            montage_image_zoom_scale: 1.3,
+            montage_image_shake_enabled: false,
+            montage_image_shake_intensity: 0.5,
             overlay_triggers_enabled: false,
             overlay_triggers: vec![],
             copied_toast: None,
@@ -847,6 +865,12 @@ impl VideoMakerApp {
             montage_bitrate: saved.montage_bitrate,
             montage_transition: saved.montage_transition.clone(),
             montage_transition_duration: saved.montage_transition_duration,
+            montage_image_zoom_enabled: saved.montage_image_zoom_enabled,
+            montage_image_zoom_intensity: saved.montage_image_zoom_intensity,
+            montage_image_zoom_mode: saved.montage_image_zoom_mode.clone(),
+            montage_image_zoom_scale: saved.montage_image_zoom_scale,
+            montage_image_shake_enabled: saved.montage_image_shake_enabled,
+            montage_image_shake_intensity: saved.montage_image_shake_intensity,
             overlay_triggers_enabled: saved.overlay_triggers_enabled,
             overlay_triggers: saved.overlay_triggers.clone(),
             copied_toast: None,
@@ -931,6 +955,12 @@ impl VideoMakerApp {
             montage_bitrate: self.montage_bitrate,
             montage_transition: self.montage_transition.clone(),
             montage_transition_duration: self.montage_transition_duration,
+            montage_image_zoom_enabled: self.montage_image_zoom_enabled,
+            montage_image_zoom_intensity: self.montage_image_zoom_intensity,
+            montage_image_zoom_mode: self.montage_image_zoom_mode.clone(),
+            montage_image_zoom_scale: self.montage_image_zoom_scale,
+            montage_image_shake_enabled: self.montage_image_shake_enabled,
+            montage_image_shake_intensity: self.montage_image_shake_intensity,
             video_llm_service: self.video_llm_service.clone(),
             video_llm_model: self.video_llm_model.clone(),
             video_llm_model_openrouter: self.video_llm_model_openrouter.clone(),
@@ -1016,6 +1046,12 @@ impl VideoMakerApp {
         self.montage_bitrate = t.montage_bitrate;
         self.montage_transition = t.montage_transition;
         self.montage_transition_duration = t.montage_transition_duration;
+        self.montage_image_zoom_enabled = t.montage_image_zoom_enabled;
+        self.montage_image_zoom_intensity = t.montage_image_zoom_intensity;
+        self.montage_image_zoom_mode = t.montage_image_zoom_mode;
+        self.montage_image_zoom_scale = t.montage_image_zoom_scale;
+        self.montage_image_shake_enabled = t.montage_image_shake_enabled;
+        self.montage_image_shake_intensity = t.montage_image_shake_intensity;
         self.overlay_triggers_enabled = t.overlay_triggers_enabled;
         self.overlay_triggers = t.overlay_triggers;
     }
@@ -1285,6 +1321,12 @@ impl eframe::App for VideoMakerApp {
                         &mut self.montage_bitrate,
                         &mut self.montage_transition,
                         &mut self.montage_transition_duration,
+                        &mut self.montage_image_zoom_enabled,
+                        &mut self.montage_image_zoom_intensity,
+                        &mut self.montage_image_zoom_mode,
+                        &mut self.montage_image_zoom_scale,
+                        &mut self.montage_image_shake_enabled,
+                        &mut self.montage_image_shake_intensity,
                         &mut self.overlay_triggers_enabled,
                         &mut self.overlay_triggers,
                         &self.text_input,
@@ -1817,6 +1859,12 @@ impl eframe::App for VideoMakerApp {
                 || self.montage_bitrate != self.last_saved_settings.montage_bitrate
                 || self.montage_transition != self.last_saved_settings.montage_transition
                 || self.montage_transition_duration != self.last_saved_settings.montage_transition_duration
+                || self.montage_image_zoom_enabled != self.last_saved_settings.montage_image_zoom_enabled
+                || (self.montage_image_zoom_intensity - self.last_saved_settings.montage_image_zoom_intensity).abs() > 0.001
+                || self.montage_image_zoom_mode != self.last_saved_settings.montage_image_zoom_mode
+                || (self.montage_image_zoom_scale - self.last_saved_settings.montage_image_zoom_scale).abs() > 0.001
+                || self.montage_image_shake_enabled != self.last_saved_settings.montage_image_shake_enabled
+                || (self.montage_image_shake_intensity - self.last_saved_settings.montage_image_shake_intensity).abs() > 0.001
                 || self.overlay_triggers_enabled != self.last_saved_settings.overlay_triggers_enabled
                 || self.overlay_triggers != self.last_saved_settings.overlay_triggers
             {
@@ -1898,6 +1946,12 @@ impl eframe::App for VideoMakerApp {
                     montage_bitrate: self.montage_bitrate,
                     montage_transition: self.montage_transition.clone(),
                     montage_transition_duration: self.montage_transition_duration,
+                    montage_image_zoom_enabled: self.montage_image_zoom_enabled,
+                    montage_image_zoom_intensity: self.montage_image_zoom_intensity,
+                    montage_image_zoom_mode: self.montage_image_zoom_mode.clone(),
+                    montage_image_zoom_scale: self.montage_image_zoom_scale,
+                    montage_image_shake_enabled: self.montage_image_shake_enabled,
+                    montage_image_shake_intensity: self.montage_image_shake_intensity,
                     overlay_triggers_enabled: self.overlay_triggers_enabled,
                     overlay_triggers: self.overlay_triggers.clone(),
                     show_welcome: self.last_saved_settings.show_welcome,

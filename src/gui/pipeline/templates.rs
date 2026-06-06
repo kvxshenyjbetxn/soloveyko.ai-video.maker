@@ -72,6 +72,12 @@ pub fn draw_templates_section(
     montage_bitrate: &mut u32,
     montage_transition: &mut String,
     montage_transition_duration: &mut f32,
+    montage_image_zoom_enabled: &mut bool,
+    montage_image_zoom_intensity: &mut f32,
+    montage_image_zoom_mode: &mut String,
+    montage_image_zoom_scale: &mut f32,
+    montage_image_shake_enabled: &mut bool,
+    montage_image_shake_intensity: &mut f32,
     overlay_triggers_enabled: &mut bool,
     overlay_triggers: &mut Vec<crate::core::pipeline::montage::OverlayTrigger>,
 ) {
@@ -180,6 +186,12 @@ pub fn draw_templates_section(
                             *montage_bitrate = template.montage_bitrate;
                             *montage_transition = template.montage_transition;
                             *montage_transition_duration = template.montage_transition_duration;
+                            *montage_image_zoom_enabled = template.montage_image_zoom_enabled;
+                            *montage_image_zoom_intensity = template.montage_image_zoom_intensity;
+                            *montage_image_zoom_mode = template.montage_image_zoom_mode;
+                            *montage_image_zoom_scale = template.montage_image_zoom_scale;
+                            *montage_image_shake_enabled = template.montage_image_shake_enabled;
+                            *montage_image_shake_intensity = template.montage_image_shake_intensity;
                             *overlay_triggers_enabled = template.overlay_triggers_enabled;
                             *overlay_triggers = template.overlay_triggers;
                             *template_status = Some(format!(

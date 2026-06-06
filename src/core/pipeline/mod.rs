@@ -1873,6 +1873,12 @@ pub fn run_pipeline(
                 settings.subtitles_enabled,
                 settings.overlay_triggers_enabled,
                 &settings.overlay_triggers,
+                settings.montage_image_zoom_enabled,
+                settings.montage_image_zoom_intensity,
+                &settings.montage_image_zoom_mode,
+                settings.montage_image_zoom_scale,
+                settings.montage_image_shake_enabled,
+                settings.montage_image_shake_intensity,
                 |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
                 move |pct| {
                     *montage_progress_arc.lock().unwrap() = Some(pct);
@@ -1971,6 +1977,12 @@ fn run_final_stages(
             settings.subtitles_enabled,
             settings.overlay_triggers_enabled,
             &settings.overlay_triggers,
+            settings.montage_image_zoom_enabled,
+            settings.montage_image_zoom_intensity,
+            &settings.montage_image_zoom_mode,
+            settings.montage_image_zoom_scale,
+            settings.montage_image_shake_enabled,
+            settings.montage_image_shake_intensity,
             |msg| crate::logger::log_job(job_id_log, &job_name_log, msg),
             move |pct| {
                 *montage_progress_arc.lock().unwrap() = Some(pct);

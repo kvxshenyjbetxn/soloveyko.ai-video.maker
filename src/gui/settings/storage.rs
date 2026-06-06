@@ -42,6 +42,10 @@ fn default_montage_preset() -> String { "medium".to_string() }
 fn default_montage_bitrate() -> u32 { 8 }
 fn default_montage_transition() -> String { "none".to_string() }
 fn default_montage_transition_duration() -> f32 { 0.5 }
+fn default_montage_image_zoom_intensity() -> f32 { 0.5 }
+fn default_montage_image_zoom_mode() -> String { "alternate".to_string() }
+fn default_montage_image_zoom_scale() -> f32 { 1.3 }
+fn default_montage_image_shake_intensity() -> f32 { 0.5 }
 fn default_subtitle_font_size() -> u32 { 24 }
 fn default_subtitle_color() -> [u8; 3] { [255, 255, 255] }
 fn default_subtitle_margin_v() -> u32 { 30 }
@@ -275,6 +279,24 @@ pub struct AppSettings {
     /// Тривалість переходу в секундах
     #[serde(default = "default_montage_transition_duration")]
     pub montage_transition_duration: f32,
+    /// Чи увімкнено ефект зуму для зображень
+    #[serde(default)]
+    pub montage_image_zoom_enabled: bool,
+    /// Інтенсивність зуму для зображень (0.1..1.0)
+    #[serde(default = "default_montage_image_zoom_intensity")]
+    pub montage_image_zoom_intensity: f32,
+    /// Режим зуму: "alternate" (чергування) або "oscillate" (туди-сюди)
+    #[serde(default = "default_montage_image_zoom_mode")]
+    pub montage_image_zoom_mode: String,
+    /// Кратність зуму (1.1..2.0)
+    #[serde(default = "default_montage_image_zoom_scale")]
+    pub montage_image_zoom_scale: f32,
+    /// Чи увімкнено ефект покачування для зображень
+    #[serde(default)]
+    pub montage_image_shake_enabled: bool,
+    /// Інтенсивність покачування для зображень (0.1..1.0)
+    #[serde(default = "default_montage_image_shake_intensity")]
+    pub montage_image_shake_intensity: f32,
     /// Сервіс ЛЛМ для генерації промтів відеоряду ("None", "OpenRouter", "Claude Code", "Gemini CLI")
     #[serde(default = "default_video_llm_service")]
     pub video_llm_service: String,
@@ -376,6 +398,12 @@ impl Default for AppSettings {
             montage_bitrate: 8,
             montage_transition: "none".to_string(),
             montage_transition_duration: 0.5,
+            montage_image_zoom_enabled: false,
+            montage_image_zoom_intensity: 0.5,
+            montage_image_zoom_mode: "alternate".to_string(),
+            montage_image_zoom_scale: 1.3,
+            montage_image_shake_enabled: false,
+            montage_image_shake_intensity: 0.5,
             video_llm_service: "None".to_string(),
             video_llm_model: String::new(),
             video_llm_model_openrouter: String::new(),
@@ -646,6 +674,24 @@ pub struct PipelineTemplate {
     /// Тривалість переходу в секундах
     #[serde(default = "default_montage_transition_duration")]
     pub montage_transition_duration: f32,
+    /// Чи увімкнено ефект зуму для зображень
+    #[serde(default)]
+    pub montage_image_zoom_enabled: bool,
+    /// Інтенсивність зуму для зображень (0.1..1.0)
+    #[serde(default = "default_montage_image_zoom_intensity")]
+    pub montage_image_zoom_intensity: f32,
+    /// Режим зуму: "alternate" (чергування) або "oscillate" (туди-сюди)
+    #[serde(default = "default_montage_image_zoom_mode")]
+    pub montage_image_zoom_mode: String,
+    /// Кратність зуму (1.1..2.0)
+    #[serde(default = "default_montage_image_zoom_scale")]
+    pub montage_image_zoom_scale: f32,
+    /// Чи увімкнено ефект покачування для зображень
+    #[serde(default)]
+    pub montage_image_shake_enabled: bool,
+    /// Інтенсивність покачування для зображень (0.1..1.0)
+    #[serde(default = "default_montage_image_shake_intensity")]
+    pub montage_image_shake_intensity: f32,
     /// Сервіс ЛЛМ для генерації промтів відеоряду
     #[serde(default = "default_video_llm_service")]
     pub video_llm_service: String,
@@ -734,6 +780,12 @@ pub fn save_template(
     montage_bitrate: u32,
     montage_transition: &str,
     montage_transition_duration: f32,
+    montage_image_zoom_enabled: bool,
+    montage_image_zoom_intensity: f32,
+    montage_image_zoom_mode: &str,
+    montage_image_zoom_scale: f32,
+    montage_image_shake_enabled: bool,
+    montage_image_shake_intensity: f32,
     video_llm_service: &str,
     video_llm_model: &str,
     video_llm_model_openrouter: &str,
@@ -806,6 +858,12 @@ pub fn save_template(
             montage_bitrate,
             montage_transition: montage_transition.to_string(),
             montage_transition_duration,
+            montage_image_zoom_enabled,
+            montage_image_zoom_intensity,
+            montage_image_zoom_mode: montage_image_zoom_mode.to_string(),
+            montage_image_zoom_scale,
+            montage_image_shake_enabled,
+            montage_image_shake_intensity,
             video_llm_service: video_llm_service.to_string(),
             video_llm_model: video_llm_model.to_string(),
             video_llm_model_openrouter: video_llm_model_openrouter.to_string(),

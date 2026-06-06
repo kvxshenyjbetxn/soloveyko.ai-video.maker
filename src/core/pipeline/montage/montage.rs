@@ -31,6 +31,12 @@ pub fn run_montage(
     burn_subtitles: bool,
     overlay_triggers_enabled: bool,
     overlay_triggers: &[super::trigger::OverlayTrigger],
+    image_zoom_enabled: bool,
+    _image_zoom_intensity: f32,
+    image_zoom_mode: &str,
+    image_zoom_scale: f32,
+    image_shake_enabled: bool,
+    image_shake_intensity: f32,
     log_fn: impl Fn(&str),
     on_progress: impl Fn(f32),
 ) -> Result<u64, String> {
@@ -179,6 +185,7 @@ pub fn run_montage(
     let mut filter_parts: Vec<String> = Vec::new();
 
     let mut file_idx = 0usize; // input-файл index (тільки для media-кліпів, не для black)
+    let mut img_idx = 0usize;  // лічильник зображень для режиму "alternate"
     for (i, clip) in clips.iter().enumerate() {
         // При xfade кожен кліп (крім останнього) потрібно подовжити на t,
         // щоб зберегти синхронізацію: cumulative_dur[k] = start_secs[k+1].
@@ -204,16 +211,15 @@ pub fn run_montage(
             ));
             file_idx += 1;
         } else {
-            filter_parts.push(format!(
-                "[{file_idx}:v]scale=1920:1080:force_original_aspect_ratio=increase,\
-                crop=1920:1080,format=yuv420p,setsar=1[v{i}_up]"
-            ));
-            filter_parts.push(format!(
-                "[v{i}_up]zoompan=z='1':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':\
-                d={frames}:s=1920x1080:fps={fps},format=yuv420p,setsar=1,settb=AVTB,\
-                trim=duration={adj_dur:.6},setpts=PTS-STARTPTS[v{i}_final]"
-            ));
+            // Зображення — застосовуємо ефекти зуму та покачування
+            let img_parts = build_image_filter_parts(
+                i, file_idx, frames, adj_dur, fps,
+                image_zoom_enabled, image_zoom_scale, image_zoom_mode, img_idx,
+                image_shake_enabled, image_shake_intensity,
+            );
+            filter_parts.extend(img_parts);
             file_idx += 1;
+            img_idx += 1;
         }
     }
 
@@ -539,6 +545,108 @@ pub fn run_montage(
     Ok(file_size)
 }
 
+
+/// Будує ланцюжок FFmpeg-фільтрів для зображення з ефектами зуму та/або покачування.
+///
+/// Zoom:
+///   - "alternate": парні зображення збільшуються (1.0→scale), непарні — зменшуються (scale→1.0)
+///   - "oscillate": одне зображення зумується туди-сюди (split → zoom-in half + zoom-out half → concat)
+///   Крок розраховується автоматично з кількості кадрів, щоб заповнити весь кліп.
+/// Shake реалізований через crop з sin(t) — crop підтримує змінну `t` (час у секундах),
+/// на відміну від zoompan де `t` та `n` недоступні.
+/// При shake зображення попередньо масштабується більшим на величину амплітуди.
+fn build_image_filter_parts(
+    i: usize,
+    file_idx: usize,
+    frames: u64,
+    adj_dur: f64,
+    fps: u32,
+    zoom_enabled: bool,
+    zoom_scale: f32,
+    zoom_mode: &str,
+    img_idx: usize,
+    shake_enabled: bool,
+    shake_intensity: f32,
+) -> Vec<String> {
+    let mut parts = Vec::new();
+
+    // ─── Розмір canvas (більший при shake, стандартний інакше) ───
+    let (canvas_w, canvas_h, amp_f) = if shake_enabled {
+        let a_px = (40.0 * shake_intensity) as u32;
+        let a_f = 40.0 * shake_intensity;
+        (1920 + 2 * a_px, 1080 + 2 * a_px, a_f)
+    } else {
+        (1920u32, 1080u32, 0.0f32)
+    };
+
+    // ─── Scale → canvas ───────────────────────────────────────────
+    parts.push(format!(
+        "[{file_idx}:v]scale={canvas_w}:{canvas_h}:force_original_aspect_ratio=increase,\
+        crop={canvas_w}:{canvas_h},format=yuv420p,setsar=1[v{i}_up]"
+    ));
+
+    // ─── Zoom (zoompan) ───────────────────────────────────────────
+    // Важливо: zoompan затискає zoom до [1..10], тому zoom=0 на першому кадрі
+    // автоматично стає 1.0. Для zoom-out початкове значення задається через eq(zoom,0).
+    // Змінна `zoom` (а не `pzoom`) дає актуальне значення поточного кадру.
+    if zoom_enabled && zoom_mode == "oscillate" {
+        // Режим "туди-сюди": косинусоїдна осциляція — плавно наближується до max_z
+        // і плавно повертається до 1.0 за один цикл протягом усього кліпу.
+        // Формула: z = 1.0 + zAmp*(1-cos(2π*t/duration))/2, де t = on/fps.
+        // `on` — номер вихідного кадру (доступна змінна zoompan).
+        let z_amp = zoom_scale - 1.0;
+        let z_expr = format!(
+            "1.0+{z_amp:.4}*(1-cos(6.2832*(on/{fps}/{adj_dur:.6})))/2"
+        );
+        parts.push(format!(
+            "[v{i}_up]zoompan=z='{z_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':\
+            d={frames}:s={canvas_w}x{canvas_h}:fps={fps},\
+            format=yuv420p,setsar=1,settb=AVTB[v{i}_zoomed]"
+        ));
+    } else if zoom_enabled {
+        // Режим "чергування" (alternate): парні збільшуються, непарні зменшуються.
+        // Використовуємо `on` (номер вихідного кадру) — лінійний зум без хаків ініціалізації.
+        let max_z = zoom_scale;
+        let z_amp = max_z - 1.0;
+        let z_expr = if img_idx % 2 == 0 {
+            // Zoom in: від 1.0 до max_z лінійно
+            format!("min(1.0+{z_amp:.4}*on/{fps}/{adj_dur:.6},{max_z:.4})")
+        } else {
+            // Zoom out: від max_z до 1.0 лінійно
+            format!("max({max_z:.4}-{z_amp:.4}*on/{fps}/{adj_dur:.6},1.0)")
+        };
+        parts.push(format!(
+            "[v{i}_up]zoompan=z='{z_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':\
+            d={frames}:s={canvas_w}x{canvas_h}:fps={fps},\
+            format=yuv420p,setsar=1,settb=AVTB[v{i}_zoomed]"
+        ));
+    } else {
+        // Без зуму — статичний zoompan z=1 для контролю fps/тривалості
+        parts.push(format!(
+            "[v{i}_up]zoompan=z='1':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':\
+            d={frames}:s={canvas_w}x{canvas_h}:fps={fps},\
+            format=yuv420p,setsar=1,settb=AVTB[v{i}_zoomed]"
+        ));
+    }
+
+    // ─── Shake (crop) або фінальне обрізання до 1920x1080 ────────
+    if shake_enabled {
+        // crop підтримує змінну t (час у секундах) — ідеально для sin-хвиль
+        // Центр: x=amp, y=amp; зміщення ±amp через sin із різними частотами
+        parts.push(format!(
+            "[v{i}_zoomed]crop=1920:1080:\
+            {amp_f:.1}+{amp_f:.1}*sin(PI*0.7*t):\
+            {amp_f:.1}+{amp_f:.1}*sin(PI*0.53*t),\
+            trim=duration={adj_dur:.6},setpts=PTS-STARTPTS[v{i}_final]"
+        ));
+    } else {
+        parts.push(format!(
+            "[v{i}_zoomed]trim=duration={adj_dur:.6},setpts=PTS-STARTPTS[v{i}_final]"
+        ));
+    }
+
+    parts
+}
 
 /// Повертає назву переходу: конкретну або випадкову з доступних xfade.
 fn pick_transition(transition: &str) -> &'static str {
